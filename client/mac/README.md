@@ -59,6 +59,15 @@ Runtime data is directed to the Electron user data directory instead of the inst
 
 This keeps the installed program files read-only and lets first-run configuration continue through the existing Noobot UI.
 
+Trusted host directories are configured in `<app userData>/config/global.config.json` (or the
+file selected by `NOOBOT_GLOBAL_CONFIG_PATH`):
+
+```json
+{ "security": { "trusted_directories": ["/absolute/project/path"] } }
+```
+
+Use `["*"]` to trust every non-protected host directory, or `[]` to trust none. This changes file-tool risk classification only and does not grant file access.
+
 ## Development
 
 Start the web UI separately:

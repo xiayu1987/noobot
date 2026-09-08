@@ -15,18 +15,6 @@ import {
   createTestResolveModelMessages,
 } from "../helpers/public-runtime-fixtures.js";
 
-function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks =
-    ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
-      ? ctx.modelContext.messageBlocks
-      : {};
-  return resolveMainModelFinalMessages({
-    systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
-    historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
-    incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
-  }).messages;
-}
-
 test("dynamic harness main-flow system injections stay in system block", () => {
   const ctx = createTestHookContext();
   const result = injectMessageWithPolicy(ctx, {

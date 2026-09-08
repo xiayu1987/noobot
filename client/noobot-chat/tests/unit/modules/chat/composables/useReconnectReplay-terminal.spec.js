@@ -4,16 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createCanonicalAssistant,
-  createFixture,
-  createFakeProcessStore,
-} from "../helpers/useReconnectReplayHelper.js";
+import { createCanonicalAssistant, createFixture } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import {
-  FrontendRunState,
-  SESSION_RUN_EVENT,
-} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -24,7 +16,13 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-e" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-e", turnScopeId: "turn-e", content: "", pending: true },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-e",
+        turnScopeId: "turn-e",
+        content: "",
+        pending: true,
+      },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.ERROR, {
@@ -56,7 +54,13 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done-only" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done-only", turnScopeId: "turn-done-only", content: "A", pending: true },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-done-only",
+        turnScopeId: "turn-done-only",
+        content: "A",
+        pending: true,
+      },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.DONE, {
@@ -67,7 +71,8 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages.find(
-      (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done-only",
+      (message) =>
+        message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done-only",
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
@@ -80,7 +85,13 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-done", turnScopeId: "turn-done", content: "A", pending: true },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-done",
+        turnScopeId: "turn-done",
+        content: "A",
+        pending: true,
+      },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.DONE, {
@@ -155,7 +166,13 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-stopped" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-stopped", turnScopeId: "turn-stopped", content: "A", pending: true },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-stopped",
+        turnScopeId: "turn-stopped",
+        content: "A",
+        pending: true,
+      },
     ];
 
     await api.applyReconnectEvent(StreamEventEnum.USER_STOPPED, {

@@ -11,7 +11,6 @@ import {
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
   UPSTREAM_CLOSE_REASON,
-  WS_ACTION,
 } from "../../shared/constants.js";
 import { normalizeApiKey, createChannelKey, buildFingerprint } from "../../shared/utils.js";
 import { writeAgentProxyRouteDebugEvent } from "../../runtime-events/route-debug-runtime-events.js";
@@ -20,9 +19,6 @@ import { AGENT_COMMAND, RUN_COMMAND_TYPES } from "@noobot/agent-transport-protoc
 
 class ChannelFlowMethods {
   resolveChannelFromSocketMessage(socket, payload = {}) {
-    const action = String(payload?.action || "")
-      .trim()
-      .toLowerCase();
     const commandType = String(payload?.commandType || "")
       .trim()
       .toLowerCase();

@@ -25,7 +25,6 @@ import {
   selectTurnMessageRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
   it("commits a child terminal notification even when terminal materialization is unavailable", async () => {
@@ -450,7 +449,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         },
       });
     });
-    const { engine, activeSession, sending, canStop, deps } = createHarness({
+    const { engine, activeSession, sending, deps } = createHarness({
       sessionId: "local-x",
       stream,
       deps: {
@@ -496,7 +495,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         seq: 2,
       });
     });
-    const { engine, activeSession, sending, deps } = createHarness({
+    const { engine, activeSession, sending } = createHarness({
       sessionId: "local-state-only",
       stream,
       deps: {

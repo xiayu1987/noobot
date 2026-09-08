@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../../../interfaces/can-persistence.js';
-import IActionNodeState from '../../../modelstate/interfaces/action-node-state.js';
-import IStepState from '../../../modelstate/interfaces/step-state.js';
-
 class IAddStepStateProcess {
   setIndex(index) {}
   getIndex() {}
@@ -19,4 +15,4 @@ class IAddStepStateProcess {
   getHandleStepState() {}
 }
 
-export default  IAddStepStateProcess;
+export default IAddStepStateProcess;

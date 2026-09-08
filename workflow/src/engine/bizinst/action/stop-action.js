@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IBizinst from '../interfaces/bizinst.js';
-import IStepState from '../state/modelstate/interfaces/step-state.js';
-import BizinstFlowEngine from '../../bizinstcontrolcenter/bizinst-flow-engine.js';
-import IFlowListener from '../../bizinstcontrolcenter/interfaces/flow-listener.js';
-import FlowException from '../../exception/flow-exception.js';
-import ActionBase from './action-base.js';
+import BizinstFlowEngine from "../../bizinstcontrolcenter/bizinst-flow-engine.js";
+import ActionBase from "./action-base.js";
 
 class StopAction extends ActionBase {
   constructor() {
@@ -23,4 +19,4 @@ class StopAction extends ActionBase {
   }
 }
 
-export default  StopAction;
+export default StopAction;

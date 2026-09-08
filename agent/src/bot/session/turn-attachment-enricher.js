@@ -5,7 +5,6 @@
  */
 import { readAttachIndex } from "../../artifacts/index.js";
 import { findAttachmentByIdentity } from "@noobot/attachment-protocol";
-import { safeStr } from "../../shared/utils/shared-utils.js";
 
 export async function resolveExistingUserMessageAttachments(
   engine,

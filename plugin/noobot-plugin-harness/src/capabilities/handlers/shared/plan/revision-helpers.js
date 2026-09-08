@@ -10,10 +10,7 @@ import {
   renderPlanDocument,
 } from "./text-protocol.js";
 import { executePlanMutation } from "./mutation-facade.js";
-import {
-  emitPlanMutationApplied,
-  emitPlanMutationRejected,
-} from "./mutation-observability.js";
+import { emitPlanMutationApplied, emitPlanMutationRejected } from "./mutation-observability.js";
 import {
   buildPlanningRefinementPromptText,
   getPlanningRefinementMarker,
@@ -22,22 +19,28 @@ import { resetPlanAcceptanceStatusForPlanChange } from "./acceptance-status.js";
 
 function formatSubPlansText(subPlans = [], targetId = 0) {
   if (!Array.isArray(subPlans) || !subPlans.length) return "\uff08\u7a7a\uff09";
-  return subPlans
-    .filter((item = {}) => Number(item.mainId) === Number(targetId))
-    .map((item = {}) => `${item.id} ${String(item.content || "").trim()}`)
-    .join("\n") || "\uff08\u7a7a\uff09";
+  return (
+    subPlans
+      .filter((item = {}) => Number(item.mainId) === Number(targetId))
+      .map((item = {}) => `${item.id} ${String(item.content || "").trim()}`)
+      .join("\n") || "\uff08\u7a7a\uff09"
+  );
 }
 
 function normalizeMainStepIndexes(indexes = []) {
-  return [...new Set(
-    (Array.isArray(indexes) ? indexes : [])
-      .map((item) => Number(item))
-      .filter((item) => Number.isFinite(item) && item > 0),
-  )].sort((a, b) => a - b);
+  return [
+    ...new Set(
+      (Array.isArray(indexes) ? indexes : [])
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item) && item > 0),
+    ),
+  ].sort((a, b) => a - b);
 }
 
 export function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {}) {
-  const previousMainPlans = Array.isArray(previousDocument?.mainPlans) ? previousDocument.mainPlans : [];
+  const previousMainPlans = Array.isArray(previousDocument?.mainPlans)
+    ? previousDocument.mainPlans
+    : [];
   const nextMainPlans = Array.isArray(nextDocument?.mainPlans) ? nextDocument.mainPlans : [];
   const previousMap = new Map(
     previousMainPlans
@@ -59,22 +62,6 @@ export function extractChangedMainStepIndexes(previousDocument = {}, nextDocumen
   return [...changed].sort((a, b) => a - b);
 }
 
-function cloneSubPlansForMainId(subPlans = [], mainId = 0) {
-  return (Array.isArray(subPlans) ? subPlans : [])
-    .map((item = {}) => {
-      const subIndex = Number(item?.subIndex);
-      const content = String(item?.content || "").trim();
-      if (!Number.isFinite(subIndex) || subIndex <= 0 || !content) return null;
-      return {
-        id: `${mainId}.${subIndex}`,
-        mainId: Number(mainId),
-        subIndex,
-        content,
-      };
-    })
-    .filter(Boolean);
-}
-
 export function createPlanRevisionHelpers({
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -85,19 +72,27 @@ export function createPlanRevisionHelpers({
     if (!bucket || typeof bucket !== "object") return {};
     if (typeof bucket.planText !== "string") bucket.planText = "";
     if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
-    if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes)) bucket.lastRevisionChangedMainStepIndexes = [];
+    if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes))
+      bucket.lastRevisionChangedMainStepIndexes = [];
     if (!bucket.planDocument || typeof bucket.planDocument !== "object") {
       bucket.planDocument = parsePlanDocumentFromText(bucket.planText);
     }
     return bucket;
   }
 
-  function resolveRefinementTargetMainSteps(bucket = {}, state = {}, { preferredTargetMainStepIndexes = [] } = {}) {
+  function resolveRefinementTargetMainSteps(
+    bucket = {},
+    state = {},
+    { preferredTargetMainStepIndexes = [] } = {},
+  ) {
     const normalizedBucket = ensurePlanTextBucket(bucket);
     const mainPlans = parseMainPlansFromPlanText(normalizedBucket.planText);
     if (!mainPlans.length) return [];
     const mainPlanMap = new Map(
-      mainPlans.map((item = {}) => [Number(item.id), { index: Number(item.id), task: String(item.content || "").trim() }]),
+      mainPlans.map((item = {}) => [
+        Number(item.id),
+        { index: Number(item.id), task: String(item.content || "").trim() },
+      ]),
     );
     const preferredTargets = Array.isArray(preferredTargetMainStepIndexes)
       ? preferredTargetMainStepIndexes
@@ -109,7 +104,9 @@ export function createPlanRevisionHelpers({
       return normalizedPreferredTargets.map((item) => mainPlanMap.get(item));
     }
 
-    const pendingTargetIndexes = Array.isArray(state?.pending?.planRefinementContext?.targetMainStepIndexes)
+    const pendingTargetIndexes = Array.isArray(
+      state?.pending?.planRefinementContext?.targetMainStepIndexes,
+    )
       ? state.pending.planRefinementContext.targetMainStepIndexes
       : [];
     const normalizedPendingTargets = pendingTargetIndexes
@@ -133,7 +130,9 @@ export function createPlanRevisionHelpers({
     const targetsWithoutSubPlans = mainPlans
       .filter((item = {}) => {
         const id = Number(item?.id);
-        const subPlans = Array.isArray(doc?.subPlansByMainId?.[String(id)]) ? doc.subPlansByMainId[String(id)] : [];
+        const subPlans = Array.isArray(doc?.subPlansByMainId?.[String(id)])
+          ? doc.subPlansByMainId[String(id)]
+          : [];
         return subPlans.length === 0;
       })
       .map((item = {}) => ({ index: Number(item.id), task: String(item.content || "").trim() }));
@@ -157,7 +156,12 @@ export function createPlanRevisionHelpers({
   function applyRevisedPlanFromText(
     ctx = {},
     text = "",
-    { summary = "", source = "planning_revision", stage = "revision", targetMainStepIndexes = [] } = {},
+    {
+      summary = "",
+      source = "planning_revision",
+      stage = "revision",
+      targetMainStepIndexes = [],
+    } = {},
   ) {
     const holder = ensureHarnessBucket?.(ctx);
     if (!holder) return false;
@@ -166,10 +170,11 @@ export function createPlanRevisionHelpers({
     const payloadText = String(text || "").trim();
     if (!payloadText) return false;
 
-    const normalizedStage =
-      String(stage || source || "revision").toLowerCase().includes("refinement")
-        ? "refinement"
-        : "revision";
+    const normalizedStage = String(stage || source || "revision")
+      .toLowerCase()
+      .includes("refinement")
+      ? "refinement"
+      : "revision";
     const normalizedTargetMainStepIndexes = normalizeMainStepIndexes(targetMainStepIndexes);
     let applied = false;
     const previousDocument = parsePlanDocumentFromText(bucket.planText);
@@ -243,7 +248,10 @@ export function createPlanRevisionHelpers({
       { stage: normalizedStage, reason: "plan_mutation_changed_item" },
     );
     if (normalizedStage === "revision") {
-      bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, nextDocument);
+      bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(
+        previousDocument,
+        nextDocument,
+      );
     }
     state.flags.planningCaptured = String(bucket.planText || "").trim().length > 0;
     if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
@@ -255,7 +263,8 @@ export function createPlanRevisionHelpers({
       planText: bucket.planText,
       checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
     });
-    if (bucket.planRevisions.length > 20) bucket.planRevisions.splice(0, bucket.planRevisions.length - 20);
+    if (bucket.planRevisions.length > 20)
+      bucket.planRevisions.splice(0, bucket.planRevisions.length - 20);
     appendCapabilityLog?.(ctx, {
       domain: CAPABILITY_DOMAIN?.PLANNING,
       event:
@@ -312,7 +321,10 @@ export function createPlanRevisionHelpers({
       .trim();
     const existingSubPlansSections = targetIds
       .map((id) => {
-        const existingSubPlans = formatSubPlansText(parseSubPlansFromPlanText(bucket.planText, Number(id)), Number(id));
+        const existingSubPlans = formatSubPlansText(
+          parseSubPlansFromPlanText(bucket.planText, Number(id)),
+          Number(id),
+        );
         return `\u4e3b\u8ba1\u5212 ${id}:\n${existingSubPlans}`;
       })
       .join("\n\n")
@@ -330,7 +342,11 @@ export function createPlanRevisionHelpers({
 
   function buildNextPhaseRelayContent(bucket = {}, locale = LOCALE?.ZH_CN, stage = "revision") {
     const normalizedStage =
-      String(stage || "revision").trim().toLowerCase() === "refinement" ? "refinement" : "revision";
+      String(stage || "revision")
+        .trim()
+        .toLowerCase() === "refinement"
+        ? "refinement"
+        : "revision";
     const title =
       normalizedStage === "refinement"
         ? locale === LOCALE?.EN_US

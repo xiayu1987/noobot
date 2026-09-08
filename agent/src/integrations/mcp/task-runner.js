@@ -3,8 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { normalizeToolCalls } from "../../models/index.js";
+import { HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { getMcpServerByName, createMcpClient } from "./client-factory.js";
@@ -12,22 +11,6 @@ import { buildLangChainMcpTools } from "./tool-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-
-function toText(content) {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item?.type === "text" && typeof item?.text === "string") return item.text;
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-  if (content === null || content === undefined) return "";
-  return JSON.stringify(content);
-}
 
 export async function createMcpAgentTools({
   globalConfig = {},

@@ -12,7 +12,6 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/
 
 import {
   saveStoppedModelMessageSnapshot,
-  saveStoppedModelMessageSnapshotCandidate,
   loadStoppedModelMessageSnapshot,
   clearStoppedModelMessageSnapshot,
 } from "../../../src/runtime/resume/model-message-snapshot-store.js";
@@ -139,7 +138,13 @@ test("stopped snapshot round trip preserves Anthropic thinking blocks and OpenAI
     response_metadata: {
       output: [
         { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
-        { id: "fc_1", type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}" },
+        {
+          id: "fc_1",
+          type: "function_call",
+          call_id: "call_1",
+          name: "read_file",
+          arguments: "{}",
+        },
       ],
     },
   });
@@ -147,9 +152,16 @@ test("stopped snapshot round trip preserves Anthropic thinking blocks and OpenAI
   await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
-    messageBlocks: { system: [], history: [anthropicAi, anthropicResult, openAiAi, openAiResult], incremental: [] },
+    messageBlocks: {
+      system: [],
+      history: [anthropicAi, anthropicResult, openAiAi, openAiResult],
+      incremental: [],
+    },
   });
-  const loaded = await loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
+  const loaded = await loadStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity,
+  });
   const loadedAnthropic = loaded.messageBlocks.history[0];
   assert.deepEqual(loadedAnthropic.content, anthropicAi.content);
   assert.equal(loaded.messageBlocks.history[1].tool_call_id, "tool_1");

@@ -9,11 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
-import {
-  buildLibreOfficeUserInstallationUrl,
-  resolveLibreOfficeOutputFormat,
-  resolveBrowserProxyFromEnv,
-} from "../../src/tools/execution/native-script-runtime.js";
+
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import {
   IDENTITY,

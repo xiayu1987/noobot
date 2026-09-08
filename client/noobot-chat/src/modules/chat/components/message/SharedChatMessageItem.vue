@@ -81,7 +81,6 @@ const {
   attachmentPreviewTextContent,
   canPreviewAttachment,
   canPreviewParsedResult,
-  canPreviewFile,
   openAttachmentPreview,
   openParsedResultPreview,
   openResolvedAttachmentPreview,
@@ -361,16 +360,7 @@ watch(
   },
   { immediate: true },
 );
-const preContentMessageActionRenderers = computed(() =>
-  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS, {
-    messageItem: props.messageItem,
-  }),
-);
-const postContentMessageActionRenderers = computed(() =>
-  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_POST_CONTENT, {
-    messageItem: props.messageItem,
-  }),
-);
+
 const hideMessageMarkdownForInlineEditor = computed(
   () =>
     getMessageRole(props.messageItem) === "user" && props.messageItem?.__monotonicEditing === true,
@@ -383,7 +373,7 @@ function resolveRendererContext() {
   const selectSessionMessages = (sessionId = "") => {
     const id = String(sessionId || "").trim();
     if (!id) return null;
-    const workflowPayload = props.messageItem?.pluginMeta?.payload || {};
+
     const subSession = chatStore.selectSubSessionMessages?.(id);
     if (subSession) {
       return {

@@ -67,7 +67,6 @@ const {
   isThinkingRuntimeRunning,
   getLatestPluginAnalysisLog,
   getLatestMainModelContentLog,
-  getExecutionLogs,
   currentExecutionLogs,
   latestTaskCheckReceipt,
   taskCheckReceipts,
@@ -75,15 +74,16 @@ const {
   getExecutionLogCount,
   getThinkingDetailLabel,
   openThinkingDetailDrawer,
-  collapseThinkingPanel,
   isMessageRuntimeRunning,
-  groupExecutionLogs,
-  getThinkingDetailCount,
   getThinkingTreePrefix,
   getThinkingDetailItemKey,
   isThinkingDetailExpanded,
   toggleThinkingDetailExpanded,
 } = panel;
+defineExpose({
+  groupExecutionLogs: panel.groupExecutionLogs,
+  getThinkingDetailCount: panel.getThinkingDetailCount,
+});
 </script>
 
 <template>

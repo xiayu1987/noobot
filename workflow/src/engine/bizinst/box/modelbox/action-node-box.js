@@ -4,16 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IActionNode from '../../../../design/model/node/interfaces/action-node.js';
-import WorkFlowContext from '../../../work-flow-context.js';
-import IActionNodeStateBox from '../modelstatebox/interfaces/action-node-state-box.js';
-import IModelStateBoxFactory from '../modelstatebox/interfaces/model-state-box-factory.js';
-import ActionNodeState from '../../state/modelstate/action-node-state.js';
-import IActionNodeState from '../../state/modelstate/interfaces/action-node-state.js';
-import IBizinstModel from '../../state/modelstate/interfaces/bizinst-model.js';
-import IStepState from '../../state/modelstate/interfaces/step-state.js';
-import ModelStateBoxFactory from '../modelstatebox/model-state-box-factory.js';
-import NodeBoxBase from './node-box-base.js';
+import WorkFlowContext from "../../../work-flow-context.js";
+import ActionNodeState from "../../state/modelstate/action-node-state.js";
+import ModelStateBoxFactory from "../modelstatebox/model-state-box-factory.js";
+import NodeBoxBase from "./node-box-base.js";
 
 class ActionNodeBox extends NodeBoxBase {
   constructor() {
@@ -24,7 +18,8 @@ class ActionNodeBox extends NodeBoxBase {
     result.setNode(this.getNode());
     result.setBizinstModel(bizinstModel);
     const modelStateBoxFactory =
-      WorkFlowContext.getInstance().getContextBean(WorkFlowContext.MODELSTATEBOXFACTORYNAME) || ModelStateBoxFactory.getInstance();
+      WorkFlowContext.getInstance().getContextBean(WorkFlowContext.MODELSTATEBOXFACTORYNAME) ||
+      ModelStateBoxFactory.getInstance();
     const actionNodeStateBox = modelStateBoxFactory.getActionNodeStateBox(result);
     const stepStates = [];
     stepStates.push(actionNodeStateBox.createStepState());
@@ -33,4 +28,4 @@ class ActionNodeBox extends NodeBoxBase {
   }
 }
 
-export default  ActionNodeBox;
+export default ActionNodeBox;

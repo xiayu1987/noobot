@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import EModelStateType from '../../modelstate/enums/model-state-type.js';
-import IModelState from '../../modelstate/interfaces/model-state.js';
-
 class NoteInfo {
   constructor() {
     this.modelStateType = null;
@@ -33,4 +30,4 @@ class NoteInfo {
   }
 }
 
-export default  NoteInfo;
+export default NoteInfo;

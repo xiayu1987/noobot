@@ -37,7 +37,6 @@ export {
   resolvePlanningGuidanceMode,
 } from "../shared/model/utils.js";
 
-export { extractRawTextContent } from "../shared/message/utils.js";
 export { buildCapabilityProtocolModelMessages } from "../shared/model/message-factory.js";
 export { invokeCapabilityModel } from "../shared/model/invocation-utils.js";
 

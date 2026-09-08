@@ -5,7 +5,7 @@
  */
 import { ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { normalizeTimePair, nowMs } from "../model/timeFields.js";
+import { normalizeTimePair } from "../model/timeFields.js";
 import {
   buildChatWebSocketUrl,
   buildLogWebSocketUrl,
@@ -21,7 +21,6 @@ import {
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { encryptPayloadBySessionId } from "../../../shared/utils/sessionCrypto.js";
 import { listUserConnectors } from "../../../infrastructure/api/connectors/connectorApi.js";
-import { RoleEnum } from "../model/chatConstants.js";
 import {
   createConnectorPanelState,
   generateSessionId,
@@ -39,20 +38,8 @@ import { useChatStore } from "../stores/useChatStore.js";
 import { useProcessStore } from "../stores/useProcessStore.js";
 import { hydrateSessionDetailExtensions } from "../../../extensions/session-detail-hydrator.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
-import {
-  getMessageDialogProcessId,
-  getMessageRole,
-  getMessageTurnScopeId,
-} from "../model/messageIdentity.js";
-import {
-  BackendChannelState,
-  clearRememberedStopRequests,
-  evaluateSessionRunState,
-  FrontendRunState,
-  SESSION_RUN_EVENT,
-  isAuthoritativeTerminalState,
-  isLegacyTerminalDiscoveryState,
-} from "../runtime/sessionRunStateMachine.js";
+
+import { SESSION_RUN_EVENT } from "../runtime/sessionRunStateMachine.js";
 import {
   logStateMachineDebug,
   setStateMachineDebugLogSink,
@@ -76,7 +63,6 @@ import { setMessageMutationDiagnosticsLogSink } from "../../debug/loggers/messag
 import {
   resolveSessionTurnRuntime,
   resolveLatestContinuableStoppedTurn,
-  sessionRuntimeId,
   isTurnRuntimeDeleted,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
@@ -317,7 +303,6 @@ export function useChatSession({
         isTurnRuntimeDeleted,
       },
     );
-    const terminalTurn = null;
   }
 
   const { input, uploadFiles, appendUploads, clearUploads, removeUpload, serializeAttachments } =
@@ -440,7 +425,6 @@ export function useChatSession({
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     submitInteractionResponse,
-    markInteractionRequestHandled,
     isInteractionRequestHandled,
   } = useAgentInteraction({
     encryptPayloadBySessionId,

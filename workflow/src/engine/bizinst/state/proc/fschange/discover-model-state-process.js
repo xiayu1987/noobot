@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import EModelStateType from '../../modelstate/enums/model-state-type.js';
-import IModelState from '../../modelstate/interfaces/model-state.js';
-
 class DiscoverModelStateProcess {
-  constructor() {
-  }
+  constructor() {}
   getModelState() {
     return this.modelState;
   }
@@ -24,4 +20,4 @@ class DiscoverModelStateProcess {
   }
 }
 
-export default  DiscoverModelStateProcess;
+export default DiscoverModelStateProcess;

@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IActor from '../actor/interfaces/actor.js';
-import IContent from '../content/interfaces/content.js';
-
 class IActionNode {
   setNodeContent(nodeContent) {}
   getNodeContent() {}
@@ -14,4 +11,4 @@ class IActionNode {
   getNodeActor() {}
 }
 
-export default  IActionNode;
+export default IActionNode;

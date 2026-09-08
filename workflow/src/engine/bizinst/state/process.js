@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../can-persistence-base.js';
-import FlowProcess from './proc/fschange/flow-process.js';
-import IFlowProcess from './proc/fschange/interfaces/flow-process.js';
-import BizinstModelChangeProcess from './proc/mschange/bizinst-model-change-process.js';
-import IBizinstModelChangeProcess from './proc/mschange/interfaces/bizinst-model-change-process.js';
+import CanPersistenceBase from "../../../can-persistence-base.js";
+import FlowProcess from "./proc/fschange/flow-process.js";
+import BizinstModelChangeProcess from "./proc/mschange/bizinst-model-change-process.js";
 
 class Process extends CanPersistenceBase {
   constructor() {
@@ -39,4 +37,4 @@ class Process extends CanPersistenceBase {
   }
 }
 
-export default  Process;
+export default Process;

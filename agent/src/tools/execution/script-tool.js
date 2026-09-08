@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir } from "node:fs/promises";
-import {
-  filePath as path,
-  resolveRuntimePathContext,
-  TOOL_PATH_CONTRACTS,
-} from "@noobot/path-resolver";
+import { resolveRuntimePathContext, TOOL_PATH_CONTRACTS } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {

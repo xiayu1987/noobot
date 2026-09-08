@@ -7,7 +7,7 @@
 import { Close } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 
-const props = defineProps({
+defineProps({
   selectedConnectorNames: { type: Array, default: () => [] },
   selectedScenarioLabel: { type: String, default: "" },
   selectedPluginLabels: { type: Array, default: () => [] },
@@ -24,7 +24,12 @@ function onRemoveUpload(draftAttachmentId) {
 
 <template>
   <div
-    v-if="selectedConnectorNames.length || selectedScenarioLabel || selectedPluginLabels.length || uploadFiles.length"
+    v-if="
+      selectedConnectorNames.length ||
+      selectedScenarioLabel ||
+      selectedPluginLabels.length ||
+      uploadFiles.length
+    "
     class="selected-connectors-row"
   >
     <span

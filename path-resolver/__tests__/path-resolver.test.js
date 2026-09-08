@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  PATH_CAPABILITIES,
   PATH_PLATFORMS,
   PATH_VIEWS,
   TOOL_PATH_VIEWS,
@@ -16,7 +17,9 @@ import {
   detectPathPlatform,
   normalizePathForPlatform,
   isPathWithinRoot,
+  isTrustedDirectoryPath,
   PLATFORM_PROTECTED_ROOTS,
+  resolveTrustedDirectories,
   resolvePathUnderRoot,
   TASK_PATH_KINDS,
   TASK_PATH_VIEW,
@@ -210,7 +213,7 @@ test("logical path contracts keep sandbox as execution view only", () => {
 test("built-in path policy is complete and aligned with every tool contract", () => {
   assert.equal(Object.isFrozen(BUILTIN_PATH_POLICY), true);
   assert.equal(Object.isFrozen(BUILTIN_PATH_POLICY.roles.superAdmin.host.deniedRoots), true);
-  assert.deepEqual(resolvePathPolicy({}, { platform: "windows" }), BUILTIN_PATH_POLICY);
+  assert.deepEqual(resolvePathPolicy({ platform: "windows" }), BUILTIN_PATH_POLICY);
   assert.deepEqual(PLATFORM_PROTECTED_ROOTS.linux, ["/proc", "/sys", "/dev"]);
   assert.deepEqual(BUILTIN_PATH_POLICY.display, {
     fileTools: "logical",
@@ -229,52 +232,87 @@ test("built-in path policy is complete and aligned with every tool contract", ()
 });
 
 test("built-in protected roots follow the service execution platform", () => {
-  assert.deepEqual(resolvePathPolicy({}, { platform: "linux" }).roles.superAdmin.host.deniedRoots, [
+  assert.deepEqual(resolvePathPolicy({ platform: "linux" }).roles.superAdmin.host.deniedRoots, [
     "/proc",
     "/sys",
     "/dev",
   ]);
+  assert.deepEqual(resolvePathPolicy({ platform: "win32" }).roles.superAdmin.host.deniedRoots, []);
+  assert.deepEqual(resolvePathPolicy({ platform: "darwin" }).roles.superAdmin.host.deniedRoots, [
+    "/dev",
+  ]);
   assert.deepEqual(
-    resolvePathPolicy({}, { platform: "win32" }).roles.superAdmin.host.deniedRoots,
-    [],
-  );
-  assert.deepEqual(
-    resolvePathPolicy({}, { platform: "darwin" }).roles.superAdmin.host.deniedRoots,
-    ["/dev"],
-  );
-  assert.deepEqual(
-    resolvePathPolicy(
-      {
-        security: {
-          pathPolicy: {
-            roles: { superAdmin: { host: { deniedRoots: ["C:/Windows/System32"] } } },
-          },
-        },
+    resolvePathPolicy({
+      platform: "windows",
+      policyOverride: {
+        roles: { superAdmin: { host: { deniedRoots: ["C:/Windows/System32"] } } },
       },
-      { platform: "windows" },
-    ).roles.superAdmin.host.deniedRoots,
+    }).roles.superAdmin.host.deniedRoots,
     ["C:/Windows/System32"],
+  );
+  assert.throws(
+    () => resolvePathPolicy({ platform: "unknown" }),
+    /unsupported path policy platform/,
   );
 });
 
-test("global path policy recursively overrides only configured values", () => {
-  const policy = resolvePathPolicy(
-    {
-      security: {
-        path_policy: {
-          roles: {
-            regular_user: { workspace: { others: "read_only" } },
-            super_admin: { host: { allowed_roots: ["/srv/shared"] } },
-          },
-          capabilities: {
-            "file.read": { host_requires_role: "deny" },
-          },
-          display: { file_tools: "none" },
-        },
-      },
+test("trusted directories default to wildcard while protected roots remain untrusted", () => {
+  const policy = resolvePathPolicy({ platform: "linux" });
+  assert.deepEqual(resolveTrustedDirectories(), ["*"]);
+  assert.equal(isTrustedDirectoryPath("/home/user/project/file.js", policy), true);
+  assert.equal(isTrustedDirectoryPath("/proc/1/status", policy), false);
+  assert.equal(isTrustedDirectoryPath("/sys/kernel", policy), false);
+  assert.equal(isTrustedDirectoryPath("/dev/null", policy), false);
+});
+
+test("concrete trusted directories trust only themselves and their descendants", () => {
+  const trustedDirectories = ["/srv/project", "/opt/shared"];
+  const policy = resolvePathPolicy({ trustedDirectories, platform: "linux" });
+  assert.deepEqual(resolveTrustedDirectories(trustedDirectories), trustedDirectories);
+  assert.equal(isTrustedDirectoryPath("/srv/project", policy), true);
+  assert.equal(isTrustedDirectoryPath("/srv/project/src/index.js", policy), true);
+  assert.equal(isTrustedDirectoryPath("/srv/project-other/index.js", policy), false);
+  assert.equal(isTrustedDirectoryPath("/home/user/project/index.js", policy), false);
+});
+
+test("custom protected roots override wildcard and concrete trust entries", () => {
+  const policy = resolvePathPolicy({
+    platform: "linux",
+    trustedDirectories: ["*"],
+    policyOverride: {
+      roles: { superAdmin: { host: { deniedRoots: ["/private"] } } },
     },
-    { platform: "linux" },
+  });
+  assert.equal(isTrustedDirectoryPath("/private/project/file.js", policy), false);
+  assert.equal(isTrustedDirectoryPath("/srv/project/file.js", policy), true);
+  assert.equal(isTrustedDirectoryPath("/proc/1/status", policy), false);
+  assert.deepEqual(resolveTrustedDirectories([]), []);
+});
+
+test("trusted-directory protocol rejects ambiguous or relative declarations", () => {
+  assert.throws(() => resolveTrustedDirectories(["relative/project"]), /must be absolute/);
+  assert.throws(() => resolveTrustedDirectories(["*", "/srv/project"]), /cannot be combined/);
+  assert.throws(() => isTrustedDirectoryPath("relative/file.js"), /must be an absolute path/);
+  assert.throws(
+    () => isTrustedDirectoryPath("/srv/project/file.js", BUILTIN_PATH_POLICY),
+    /must be created by resolvePathPolicy/,
   );
+});
+
+test("path policy recursively applies only the canonical override", () => {
+  const policy = resolvePathPolicy({
+    platform: "linux",
+    policyOverride: {
+      roles: {
+        regularUser: { workspace: { others: "read_only" } },
+        superAdmin: { host: { allowedRoots: ["/srv/shared"] } },
+      },
+      capabilities: {
+        "file.read": { hostRequiresRole: "deny" },
+      },
+      display: { fileTools: "none" },
+    },
+  });
 
   assert.equal(policy.roles.regularUser.workspace.own, "read_write");
   assert.equal(policy.roles.regularUser.workspace.others, "read_only");
@@ -285,8 +323,58 @@ test("global path policy recursively overrides only configured values", () => {
   assert.equal(policy.capabilities["file.write"].hostRequiresRole, "super_admin");
   assert.equal(policy.display.fileTools, "none");
   assert.equal(policy.display.scriptTools, "logical");
-  assert.equal(Object.hasOwn(policy.capabilities["file.read"], "host_requires_role"), false);
-  assert.equal(Object.hasOwn(policy.roles.superAdmin.host, "allowed_roots"), false);
+  assert.throws(
+    () => resolvePathPolicy({ policyOverride: { roles: { super_admin: {} } } }),
+    /unsupported path policy.roles field: super_admin/,
+  );
+  assert.throws(
+    () =>
+      resolvePathPolicy({
+        policyOverride: { capabilities: { "file.read": { hostRequiresRole: "any" } } },
+      }),
+    /hostRequiresRole must be one of/,
+  );
+  assert.throws(
+    () => resolvePathPolicy({ policyOverride: { compatibilityMode: true } }),
+    /unsupported path policy field: compatibilityMode/,
+  );
+});
+
+test("path authorization accepts only resolved policy and enforces read-only access", () => {
+  const pathRef = resolvePathRef({
+    input: { view: "workspace", path: "report.txt", owner: "other" },
+  });
+  assert.throws(
+    () =>
+      authorizePathRef({
+        pathRef,
+        principal: { userId: "u1", role: "regular_user" },
+        capability: PATH_CAPABILITIES.FILE_READ,
+        pathPolicy: { roles: {} },
+      }),
+    /must be created by resolvePathPolicy/,
+  );
+  const policy = resolvePathPolicy({
+    policyOverride: { roles: { regularUser: { workspace: { others: "read_only" } } } },
+  });
+  assert.equal(
+    authorizePathRef({
+      pathRef,
+      principal: { userId: "u1", role: "regular_user" },
+      capability: PATH_CAPABILITIES.FILE_READ,
+      pathPolicy: policy,
+    }).allowed,
+    true,
+  );
+  assert.equal(
+    authorizePathRef({
+      pathRef,
+      principal: { userId: "u1", role: "regular_user" },
+      capability: PATH_CAPABILITIES.FILE_WRITE,
+      pathPolicy: policy,
+    }).allowed,
+    false,
+  );
 });
 
 test("path authorization defaults to the built-in policy when callers omit it", () => {
@@ -301,12 +389,22 @@ test("path authorization defaults to the built-in policy when callers omit it", 
   assert.equal(result.code, "workspace_owner_not_authorized");
 });
 
-test("global path policy expands host access only for super administrators", () => {
-  const pathPolicy = resolvePathPolicy({}, { platform: "linux" });
+test("path policy expands host access only for super administrators", () => {
+  const pathPolicy = resolvePathPolicy({ platform: "linux" });
   const hostRef = resolvePathRef({
     input: "/data/report.txt",
     workspaceRoot: "/srv/workspaces/u1",
   });
+  assert.throws(
+    () =>
+      authorizePathRef({
+        pathRef: hostRef,
+        principal: { role: "super_admin" },
+        capability: "file.read",
+        pathPolicy,
+      }),
+    /requires an absolute execution path/,
+  );
   assert.equal(
     authorizePathRef({
       pathRef: hostRef,
@@ -349,15 +447,13 @@ test("global path policy expands host access only for super administrators", () 
     false,
   );
   const customPolicy = resolvePathPolicy({
-    security: {
-      pathPolicy: {
-        roles: {
-          superAdmin: {
-            host: {
-              access: "allow",
-              allowedRoots: ["<host-filesystem>"],
-              deniedRoots: ["/private"],
-            },
+    policyOverride: {
+      roles: {
+        superAdmin: {
+          host: {
+            access: "allow",
+            allowedRoots: ["<host-filesystem>"],
+            deniedRoots: ["/private"],
           },
         },
       },

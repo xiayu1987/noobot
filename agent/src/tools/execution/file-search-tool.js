@@ -27,11 +27,13 @@ import {
   searchInText,
 } from "./file-search.js";
 import {
+  RESOURCE_OPERATION,
+  RESOURCE_SCOPE,
   SECURITY_EVIDENCE_SOURCE,
   classifyResourceRisk,
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
-import { buildFileToolDescription } from "./file-tool-shared.js";
+import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-tool-shared.js";
 
 function buildSearchSchema(agentContext) {
   return z.object({
@@ -85,7 +87,10 @@ async function searchTextSource({
     declaredRiskLevel: riskLevel,
     serverEvidence: {
       source: SECURITY_EVIDENCE_SOURCE.NORMALIZED_RESOURCE,
-      riskLevel: classifyResourceRisk({ operation: "search", scope: "workspace" }),
+      riskLevel: classifyResourceRisk({
+        operation: RESOURCE_OPERATION.SEARCH,
+        scope: RESOURCE_SCOPE.WORKSPACE,
+      }),
     },
     toolName: TOOL_NAME.SEARCH,
     operation: "search provided text",
@@ -152,18 +157,14 @@ async function collectFallbackMatches({
   return { matches, truncated: matches.length >= maxCount };
 }
 
-async function resolveSearchMatches({
-  matches,
-  searchRoot,
-  searchPathRef,
-  agentContext,
-}) {
+async function resolveSearchMatches({ matches, searchRoot, searchPathRef, agentContext }) {
   const resolvedMatches = await Promise.all(
     matches.map(async (match) => {
       const relativeMatchPath = String(match?.filePath || "").trim();
-      const matchedPath = searchPathRef.view === "host"
-        ? path.resolve(searchRoot, relativeMatchPath)
-        : path.join(searchPathRef.path, relativeMatchPath);
+      const matchedPath =
+        searchPathRef.view === "host"
+          ? path.resolve(searchRoot, relativeMatchPath)
+          : path.join(searchPathRef.path, relativeMatchPath);
       if (!matchedPath) return { match, resolution: null };
       const resolution = await resolveAuthorizedUserWorkspaceFilePath({
         filePath: matchedPath,
@@ -219,13 +220,21 @@ async function searchFilesSource({
     capability: PATH_CAPABILITIES.FILE_SEARCH,
   });
   const searchRoot = searchResolution.executionPath;
+  const searchResourcePath = searchResolution.resourcePath;
   const searchPathRef = searchResolution.pathRef;
   await confirmToolOperation({
     runtime,
     declaredRiskLevel: riskLevel,
     serverEvidence: {
       source: SECURITY_EVIDENCE_SOURCE.NORMALIZED_RESOURCE,
-      riskLevel: classifyResourceRisk({ operation: "search", scope: searchPathRef.view }),
+      riskLevel: classifyResourceRisk({
+        operation: RESOURCE_OPERATION.SEARCH,
+        scope: resolveFileResourceRiskScope({
+          pathRef: searchPathRef,
+          resourcePath: searchResourcePath,
+          runtime,
+        }),
+      }),
     },
     toolName: TOOL_NAME.SEARCH,
     operation: "search local files",

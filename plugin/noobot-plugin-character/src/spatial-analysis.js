@@ -101,10 +101,6 @@ function colliderWorldTransform(collider, character, time, options = {}) {
   };
 }
 
-function colliderWorldCenter(collider, character, time, options = {}) {
-  return colliderWorldTransform(collider, character, time, options).position;
-}
-
 function distanceSquaredToSegment(point, start, end) {
   const direction = end.map((value, index) => value - start[index]);
   const lengthSquared = direction.reduce((sum, value) => sum + value * value, 0);

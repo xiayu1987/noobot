@@ -68,15 +68,6 @@ export function createSessionLogWebSocketClient({
   });
   const isSuspended = () => transport.status().phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED;
 
-  function scheduleReconnect() {
-    if (disposed || isSuspended()) return;
-    if (!reliableQueue.length && !debugQueue.length && !inFlight.length) return;
-    transport.scheduleReconnect(() => {
-      connect();
-      flush();
-    });
-  }
-
   function recoverAuthentication() {
     void transport.recover({
       reconnect: () => {

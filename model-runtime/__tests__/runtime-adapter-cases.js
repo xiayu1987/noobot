@@ -7,7 +7,6 @@ import assert from "node:assert/strict";
 import {
   bindOpenAiCompatibleTools,
   compileProviderModelKwargs,
-  createModelRequestExecutor,
   createOpenAiCompatibleClient,
   createProviderAdapterRegistry,
   applyPromptCacheMessages,
@@ -16,38 +15,13 @@ import {
   convertTools,
   responseFromAnthropic,
   anthropicMessagesAdapter,
-  classifyTransportError,
   orderOpenAiResponsesRequestBody,
   normalizeModelOutput,
 } from "../src/index.js";
-import {
-  MODEL_CONTEXT_SEQUENCE_POLICY,
-  MODEL_ERROR_KIND,
-  MODEL_OPERATION_KIND,
-} from "@noobot/model-protocol";
+
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-
-const invocation = {
-  requestId: "r",
-  invocationId: "i",
-  sessionId: "s",
-  parentSessionId: "",
-  dialogProcessId: "d",
-  turnScopeId: "t",
-  runId: "run",
-  flow: "test",
-  purpose: "test",
-  domain: "test",
-  contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-};
-const model = {
-  model: "m",
-  operatorId: "test",
-  adapterId: "test",
-  capabilities: { web_search: true },
-};
 
 const sdkTool = {
   type: "function",

@@ -17,11 +17,8 @@ import {
 import {
   buildGuidanceSummarySelectionProfileText,
   resolveGuidanceSummaryInstructionSelection,
-  resolveGuidanceSummaryPromptProtocolSelection,
 } from "./summary-matrix.js";
-import {
-  isTextScenarioText,
-} from "./matrix-resolver.js";
+import { isTextScenarioText } from "./matrix-resolver.js";
 import {
   DYNAMIC_POLICY_PROMPT_BLOCK,
   buildDynamicPolicyPromptProtocolInstruction,
@@ -42,11 +39,13 @@ const PLAN_UPDATE_POLICY = Object.freeze({
   MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
 });
 
-
 function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
   const data = source.data && typeof source.data === "object" ? source.data : {};
-  const programmingMode = source.programmingMode === true || source.isProgrammingMode === true || data.programmingMode === true;
+  const programmingMode =
+    source.programmingMode === true ||
+    source.isProgrammingMode === true ||
+    data.programmingMode === true;
   const textMode = !programmingMode && resolveTextModeFromPromptSource(source, data);
   return {
     locale: source.locale || LOCALE.ZH_CN,
@@ -54,12 +53,15 @@ function normalizePromptOptions(options = {}) {
     data,
     programmingMode,
     textMode,
-    dynamicPolicyPrompt: String(source.dynamicPolicyPrompt || data.dynamicPolicyPrompt || "").trim(),
+    dynamicPolicyPrompt: String(
+      source.dynamicPolicyPrompt || data.dynamicPolicyPrompt || "",
+    ).trim(),
   };
 }
 
 function resolveTextModeFromPromptSource(source = {}, data = {}) {
-  return source.textMode === true ||
+  return (
+    source.textMode === true ||
     source.isTextMode === true ||
     data.textMode === true ||
     data.isTextMode === true ||
@@ -70,7 +72,8 @@ function resolveTextModeFromPromptSource(source = {}, data = {}) {
     isTextScenarioText(data.scenario) ||
     isTextScenarioText(data.scenarioKey) ||
     isTextScenarioText(data?.scenarioProfile?.key) ||
-    isTextScenarioText(data?.scenarioProfile?.name);
+    isTextScenarioText(data?.scenarioProfile?.name)
+  );
 }
 
 export function getPlanningPromptMarker(locale = LOCALE.ZH_CN) {
@@ -84,15 +87,24 @@ export function getPlanningToolContextMarker(locale = LOCALE.ZH_CN) {
 }
 
 export function getPlanningPromptToolsHeader(locale = LOCALE.ZH_CN) {
-  return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_PROMPT_TOOLS_HEADER);
+  return translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_PROMPT_TOOLS_HEADER,
+  );
 }
 
 export function getPlanningContextSummaryHeader(locale = LOCALE.ZH_CN) {
-  return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_CONTEXT_SUMMARY_HEADER);
+  return translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_CONTEXT_SUMMARY_HEADER,
+  );
 }
 
 export function getPlanningSeparateModelEmptyRelay(locale = LOCALE.ZH_CN) {
-  return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_SEPARATE_MODEL_EMPTY_RELAY);
+  return translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_SEPARATE_MODEL_EMPTY_RELAY,
+  );
 }
 
 export function buildPostPlanUserFollowupPrompt(
@@ -100,7 +112,9 @@ export function buildPostPlanUserFollowupPrompt(
   stage = "planning",
   options = {},
 ) {
-  const normalizedStage = String(stage || "planning").trim().toLowerCase();
+  const normalizedStage = String(stage || "planning")
+    .trim()
+    .toLowerCase();
   const promptOptions = normalizePromptOptions(options);
   const stageKey = normalizedStage.includes("refinement")
     ? "refinement"
@@ -130,7 +144,8 @@ function resolveScenarioPolicyScenario({ programmingMode = false, textMode = fal
 
 export function buildDefaultScenarioPolicyText(locale = LOCALE.ZH_CN, options = {}) {
   const scenario = resolveScenarioPolicyScenario(options);
-  const key = SCENARIO_POLICY_I18N_KEY_BY_SCENARIO[scenario] || SCENARIO_POLICY_I18N_KEY_BY_SCENARIO.general;
+  const key =
+    SCENARIO_POLICY_I18N_KEY_BY_SCENARIO[scenario] || SCENARIO_POLICY_I18N_KEY_BY_SCENARIO.general;
   return translateI18nText(locale, key);
 }
 
@@ -140,15 +155,12 @@ function buildDefaultScenarioPolicyBody(locale = LOCALE.ZH_CN, options = {}) {
 
 function buildScenarioPolicyText(
   locale = LOCALE.ZH_CN,
-  {
-    programmingMode = false,
-    textMode = false,
-    dynamicPolicyPrompt = "",
-  } = {},
+  { programmingMode = false, textMode = false, dynamicPolicyPrompt = "" } = {},
 ) {
   const scenario = resolveScenarioPolicyScenario({ programmingMode, textMode });
   const dynamicPrompt = String(dynamicPolicyPrompt || "").trim();
-  const body = dynamicPrompt || buildDefaultScenarioPolicyBody(locale, { programmingMode, textMode });
+  const body =
+    dynamicPrompt || buildDefaultScenarioPolicyBody(locale, { programmingMode, textMode });
   if (!body) return "";
   return [
     "[HARNESS_SCENARIO_POLICY]",
@@ -156,7 +168,9 @@ function buildScenarioPolicyText(
     `source = ${dynamicPrompt ? "dynamic" : "default"}`,
     "[/HARNESS_SCENARIO_POLICY]",
     body,
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildScenarioPolicyPromptText(locale = LOCALE.ZH_CN, options = {}) {
@@ -169,7 +183,9 @@ export function buildScenarioPolicySystemMessages(locale = LOCALE.ZH_CN, options
 }
 
 function shouldIncludeScenarioMismatchProtocol(stage = "") {
-  const normalized = String(stage || "").trim().toLowerCase();
+  const normalized = String(stage || "")
+    .trim()
+    .toLowerCase();
   return normalized === "planning" || normalized.includes("revision");
 }
 
@@ -186,20 +202,32 @@ export function buildWorkflowResponsibilityConstraintUserPrompt(
   stage = "planning",
   options = {},
 ) {
-  const normalizedStage = String(stage || "planning").trim().toLowerCase();
+  const normalizedStage = String(stage || "planning")
+    .trim()
+    .toLowerCase();
   let stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_PLANNING;
-  if (normalizedStage.includes("revision")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_REVISION;
-  else if (normalizedStage.includes("refinement")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_REFINEMENT;
-  else if (normalizedStage.includes("summary")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_SUMMARY;
-  else if (normalizedStage.includes("analysis")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_ANALYSIS;
-  else if (normalizedStage.includes("phase_acceptance")) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_PHASE_ACCEPTANCE;
+  if (normalizedStage.includes("revision"))
+    stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_REVISION;
+  else if (normalizedStage.includes("refinement"))
+    stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_REFINEMENT;
+  else if (normalizedStage.includes("summary"))
+    stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_SUMMARY;
+  else if (normalizedStage.includes("analysis"))
+    stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_ANALYSIS;
+  else if (normalizedStage.includes("phase_acceptance"))
+    stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_PHASE_ACCEPTANCE;
   else if (
     normalizedStage.includes("acceptance_semantic_validation") ||
     normalizedStage.includes("final_acceptance")
-  ) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_FINAL_ACCEPTANCE;
+  )
+    stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_FINAL_ACCEPTANCE;
   const stageLabel = translateI18nText(locale, stageKey);
   const baseParts = [
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_CONSTRAINT_TEMPLATE, { stage: stageLabel }),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_CONSTRAINT_TEMPLATE,
+      { stage: stageLabel },
+    ),
     shouldIncludeScenarioMismatchProtocol(normalizedStage)
       ? buildScenarioMismatchResponsibilityText(locale)
       : "",
@@ -242,14 +270,13 @@ export function getGuidanceAnalysisMarker(locale = LOCALE.ZH_CN) {
   return "<!-- harness-guidance-analysis -->";
 }
 
-export function buildGuidanceAnalysisPromptText({
-  locale = LOCALE.ZH_CN,
-  marker = "",
-} = {}) {
+export function buildGuidanceAnalysisPromptText({ locale = LOCALE.ZH_CN, marker = "" } = {}) {
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_ANALYSIS_PROMPT_GOAL),
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildGuidanceFailurePromptText({
@@ -261,18 +288,26 @@ export function buildGuidanceFailurePromptText({
   dynamicPolicyPrompt = "",
   includeWorkflowPolicy = false,
 } = {}) {
-  const message = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_FAILURE_PROMPT_TEMPLATE, {
-    reason: String(reason || "").trim(),
-  });
+  const message = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_FAILURE_PROMPT_TEMPLATE,
+    {
+      reason: String(reason || "").trim(),
+    },
+  );
   return [
     String(marker || "").trim(),
     message,
-    includeWorkflowPolicy === false ? "" : buildScenarioPolicyText(locale, {
-      programmingMode,
-      textMode,
-      dynamicPolicyPrompt,
-    }),
-  ].filter(Boolean).join("\n");
+    includeWorkflowPolicy === false
+      ? ""
+      : buildScenarioPolicyText(locale, {
+          programmingMode,
+          textMode,
+          dynamicPolicyPrompt,
+        }),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function getAcceptanceSemanticValidationMarker(locale = LOCALE.ZH_CN) {
@@ -302,7 +337,9 @@ export function getAllSummaryReportsMarker(locale = LOCALE.ZH_CN) {
 
 export function buildAcceptancePatchProtocolText(options = {}) {
   const { locale, data } = normalizePromptOptions(options);
-  const mode = String(data.mode || options?.mode || "final").trim().toLowerCase();
+  const mode = String(data.mode || options?.mode || "final")
+    .trim()
+    .toLowerCase();
   return buildAcceptancePatchProtocolCoreText({
     locale,
     mode,
@@ -310,17 +347,16 @@ export function buildAcceptancePatchProtocolText(options = {}) {
 }
 
 export function buildPlanningMainPrompt(options = {}) {
-  const {
-    locale,
-    marker,
-    data,
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = normalizePromptOptions(options);
+  const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
+    normalizePromptOptions(options);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
   const userGoal = String(data.userGoal || options?.userGoal || "").trim();
-  const goal = String(userGoal || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
+  const goal =
+    String(userGoal || "").trim() ||
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK,
+    );
   const currentTaskGoalProtocol = translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL,
@@ -341,7 +377,9 @@ export function buildPlanningMainPrompt(options = {}) {
     "",
     currentTaskGoalProtocol,
     "",
-    includeWorkflowPolicy ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt }) : "",
+    includeWorkflowPolicy
+      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      : "",
     "",
     buildDynamicPolicyPromptProtocolInstruction(locale),
     "",
@@ -349,19 +387,33 @@ export function buildPlanningMainPrompt(options = {}) {
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_EXAMPLE_HEADER),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_EXAMPLE_ADD),
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildPlanningRevisionPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const globalRevisionCount = data.globalRevisionCount ?? options?.globalRevisionCount ?? 0;
   const currentMainPlansText = data.currentMainPlansText ?? options?.currentMainPlansText ?? "";
-  const includeCurrentMainPlans = data.includeCurrentMainPlans ?? options?.includeCurrentMainPlans ?? true;
-  const mainPlansText = String(currentMainPlansText || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
-  const revisionCount = Number.isFinite(Number(globalRevisionCount)) ? Number(globalRevisionCount) : 0;
-  const currentPlanSection = includeCurrentMainPlans === false
-    ? []
-    : [translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_CURRENT_PLAN_LABEL), mainPlansText];
+  const includeCurrentMainPlans =
+    data.includeCurrentMainPlans ?? options?.includeCurrentMainPlans ?? true;
+  const mainPlansText =
+    String(currentMainPlansText || "").trim() ||
+    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
+  const revisionCount = Number.isFinite(Number(globalRevisionCount))
+    ? Number(globalRevisionCount)
+    : 0;
+  const currentPlanSection =
+    includeCurrentMainPlans === false
+      ? []
+      : [
+          translateI18nText(
+            locale,
+            HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_CURRENT_PLAN_LABEL,
+          ),
+          mainPlansText,
+        ];
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_PROMPT_GOAL),
@@ -378,10 +430,18 @@ export function buildPlanningRevisionPromptText(options = {}) {
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_CONSTRAINT),
     "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_HEADER),
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_UPDATE),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_HEADER,
+    ),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_UPDATE,
+    ),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_EXAMPLE_ADD),
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildPlanningRefinementPromptText(options = {}) {
@@ -402,44 +462,65 @@ export function buildPlanningRefinementPromptText(options = {}) {
   const content = String(targetContent || "").trim();
   const targetIdListText = targetIds.length ? `[${targetIds.join(",")}]` : `[${id}]`;
   const targetPlans = String(targetPlansText || "").trim() || `${id}. ${content}`.trim();
-  const subPlans = String(existingSubPlansText || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
+  const subPlans =
+    String(existingSubPlansText || "").trim() ||
+    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_PROMPT_GOAL),
     "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_TARGETS_HEADER),
-    targetPlans || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_TARGETS_HEADER,
+    ),
+    targetPlans ||
+      translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT),
     "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_TARGET_IDS_HEADER),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_TARGET_IDS_HEADER,
+    ),
     targetIdListText,
     "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_TARGET_ONLY_CONSTRAINT),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_TARGET_ONLY_CONSTRAINT,
+    ),
     "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXISTING_SUBSTEPS_LABEL),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXISTING_SUBSTEPS_LABEL,
+    ),
     subPlans,
     "",
     buildPlanningRefinementPatchProtocolCoreText(locale),
     "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_HEADER),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_HEADER,
+    ),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_ADD),
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_UPDATE),
-  ].filter(Boolean).join("\n");
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_UPDATE,
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildGuidanceSummaryInstructionPromptText(options = {}) {
-  const {
-    locale,
-    marker,
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = normalizePromptOptions(options);
+  const { locale, marker, programmingMode, textMode, dynamicPolicyPrompt } =
+    normalizePromptOptions(options);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
   const selection = resolveGuidanceSummaryInstructionSelection({ programmingMode, textMode });
   const overviewSample = programmingMode
     ? "1. [plan=2][status=done][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ..."
     : textMode
-      ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_OVERVIEW_SAMPLE)
+      ? translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_OVERVIEW_SAMPLE,
+        )
       : "1. [plan=2][status=done][evidence=...][file=-][line=-] ...";
   const nextSuggestionSample = translateI18nText(
     locale,
@@ -452,9 +533,13 @@ export function buildGuidanceSummaryInstructionPromptText(options = {}) {
   const riskSampleKey = programmingMode
     ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH_PROGRAMMING
     : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH;
-  const riskSample = textMode && !programmingMode
-    ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_RISK_SAMPLE)
-    : translateI18nText(locale, riskSampleKey);
+  const riskSample =
+    textMode && !programmingMode
+      ? translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_RISK_SAMPLE,
+        )
+      : translateI18nText(locale, riskSampleKey);
   return [
     String(marker || "").trim(),
     "[HARNESS_SUMMARY_INSTRUCTION]",
@@ -473,25 +558,52 @@ export function buildGuidanceSummaryInstructionPromptText(options = {}) {
     nextSuggestionSample,
     "[SUMMARY_END]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_RULES),
-    programmingMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_RULES) : "",
-    textMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_SCENARIO_RULES) : "",
-    programmingMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_RULES) : "",
-    !programmingMode && textMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_RULES) : "",
-    !programmingMode && !textMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_ACTION_NEXT_ACTION_RULES) : "",
-    includeWorkflowPolicy ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt }) : "",
-  ].filter(Boolean).join("\n");
+    programmingMode
+      ? translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_RULES,
+        )
+      : "",
+    textMode
+      ? translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_SCENARIO_RULES,
+        )
+      : "",
+    programmingMode
+      ? translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_RULES,
+        )
+      : "",
+    !programmingMode && textMode
+      ? translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_RULES,
+        )
+      : "",
+    !programmingMode && !textMode
+      ? translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_ACTION_NEXT_ACTION_RULES,
+        )
+      : "",
+    includeWorkflowPolicy
+      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildGuidanceSummaryProtocolPromptText(options = {}) {
-  const {
-    locale,
-    programmingMode,
-    textMode,
-  } = normalizePromptOptions(options);
+  const { locale, programmingMode, textMode } = normalizePromptOptions(options);
   return [
     buildGuidanceSummarySelectionProfileText(options),
     buildSummaryPatchProtocolCoreText({ locale, programmingMode, textMode }),
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildGuidanceSummaryPromptText(options = {}) {
@@ -500,7 +612,9 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     buildGuidanceSummarySelectionProfileText(options),
     buildGuidanceSummaryInstructionPromptText(options),
     buildSummaryPatchProtocolCoreText({ locale, programmingMode, textMode }),
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildPreviousSummaryContextContent({
@@ -551,32 +665,39 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
   })();
   return [
     String(marker || "").trim(),
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER,
+    ),
     planChecklistText,
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildPhaseAcceptanceRequestPromptText(options = {}) {
-  const {
-    locale,
-    marker,
-    data,
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = normalizePromptOptions(options);
-  const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? {};
+  const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
+    normalizePromptOptions(options);
+  const payload =
+    data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? {};
   const payloadText = JSON.stringify(payload || {}, null, 2);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
   const includeProtocol = options?.includeProtocol !== false;
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_GOAL),
-    includeWorkflowPolicy ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt }) : "",
+    includeWorkflowPolicy
+      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      : "",
     includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "phase" }) : "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_CONSTRAINT),
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_CONSTRAINT,
+    ),
     payloadText,
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildAllPhaseAcceptanceReportsPromptText(options = {}) {
@@ -586,7 +707,11 @@ export function buildAllPhaseAcceptanceReportsPromptText(options = {}) {
     : Array.isArray(options?.phaseAcceptanceReports)
       ? options.phaseAcceptanceReports
       : [];
-  const parts = buildAllPhaseAcceptanceReportSystemContents({ locale, marker, data: { phaseAcceptanceReports: reports } });
+  const parts = buildAllPhaseAcceptanceReportSystemContents({
+    locale,
+    marker,
+    data: { phaseAcceptanceReports: reports },
+  });
   return parts.join("\n\n").trim();
 }
 
@@ -604,13 +729,20 @@ export function buildAllPhaseAcceptanceReportSystemContents(options = {}) {
     const total = reports.length;
     return [
       String(marker || "").trim(),
-      translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_CHECKLIST_TITLE, {
-        index: index + 1,
-        total,
-      }),
+      translateI18nText(
+        locale,
+        HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_CHECKLIST_TITLE,
+        {
+          index: index + 1,
+          total,
+        },
+      ),
       `#${index + 1}${acceptedAt ? ` @ ${acceptedAt}` : ""}`,
-      content || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT),
-    ].filter(Boolean).join("\n");
+      content ||
+        translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT),
+    ]
+      .filter(Boolean)
+      .join("\n");
   });
 }
 
@@ -627,31 +759,35 @@ export function buildAllSummaryReportSystemContents(options = {}) {
   return [
     [
       String(marker || "").trim(),
-      translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SUMMARY_CHECKLIST_TITLE, { index: 1, total: 1 }),
+      translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SUMMARY_CHECKLIST_TITLE, {
+        index: 1,
+        total: 1,
+      }),
       "#1",
       reportText,
-    ].filter(Boolean).join("\n"),
+    ]
+      .filter(Boolean)
+      .join("\n"),
   ];
 }
 
 export function buildAcceptanceValidationRequestPromptText(options = {}) {
-  const {
-    locale,
-    marker,
-    data,
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = normalizePromptOptions(options);
-  const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? null;
+  const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
+    normalizePromptOptions(options);
+  const payload =
+    data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? null;
   const payloadText = JSON.stringify(payload || {}, null, 2);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
   const includeProtocol = options?.includeProtocol !== false;
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.FINAL_ACCEPTANCE_REQUEST_GOAL),
-    includeWorkflowPolicy ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt }) : "",
+    includeWorkflowPolicy
+      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      : "",
     includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "final" }) : "",
     payloadText,
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

@@ -10,17 +10,9 @@ import {
   os,
   path,
   createFileTool,
-  executeToolCall,
-  transferSemanticContent,
-  LENGTH_THRESHOLDS,
-  buildExecutionWorkspaceMeta,
-  buildScriptExecutionMeta,
-  createScriptTool,
   buildAgentContext,
   parseToolResult,
-  buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
-import { parseUnifiedDiff } from "../../src/tools/execution/file-patch.js";
 
 test("patch_file: schema path hints only describe the active path view", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-schema-workspace-root-"));

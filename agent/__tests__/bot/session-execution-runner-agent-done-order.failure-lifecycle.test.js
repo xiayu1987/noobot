@@ -6,15 +6,9 @@
 import test from "node:test";
 import {
   assert,
-  fs,
-  os,
-  path,
   createRunner,
-  finalizeAgentTurn,
   AGENT_LIFECYCLE_BRANCH_STATE,
-  AGENT_LIFECYCLE_EVENT,
   AGENT_LIFECYCLE_STATE,
-  loadStoppedModelMessageSnapshot,
   collectLifecycleStates,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 

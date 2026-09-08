@@ -8,9 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 
-import { createSessionServices } from "../../src/session/index.js";
 import {
   readSessionArtifact,
   writeSessionArtifact,
@@ -26,15 +25,6 @@ async function withTempWorkspace(fn) {
     return await fn(workspaceRoot);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
-  }
-}
-
-async function exists(filePath) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
   }
 }
 

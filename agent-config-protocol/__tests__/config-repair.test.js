@@ -93,6 +93,22 @@ test("default user template is the user-scope source of truth for system-owned n
   }
 });
 
+test("global config delegates path-policy content without creating a second schema", () => {
+  const pathPolicy = {
+    roles: {
+      super_admin: {
+        host: { denied_roots: ["/private"] },
+      },
+    },
+  };
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    baseValues: { security: { trusted_directories: ["*"] } },
+    target: { security: { trusted_directories: ["/srv/project"], path_policy: pathPolicy } },
+  });
+  assert.deepEqual(repaired.document.security.path_policy, pathPolicy);
+});
+
 test("config repair recursively adds template nodes through one protocol", () => {
   const synchronized = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,

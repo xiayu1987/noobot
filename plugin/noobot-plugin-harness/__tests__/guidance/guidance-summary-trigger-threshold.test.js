@@ -9,26 +9,12 @@ import assert from "node:assert/strict";
 import {
   createGuidanceHandler,
   createPlanningHandler,
-  canAttemptPlanRevision,
-  runPlanUpdateAfterSummary,
   LLM_SUMMARY_THRESHOLD,
   LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  MAX_PLAN_UPDATE_ATTEMPTS,
   FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
   FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  createAgentContext,
   createPlanningAgentContext,
-  WORKFLOW_PARAMS,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("guidance summary threshold by turns is independent from plan update attempts", async () => {
@@ -39,7 +25,12 @@ test("guidance summary threshold by turns is independent from plan update attemp
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_turn_threshold"), true);
+  assert.equal(
+    agentContext.payload.harness.logs.guidance.some(
+      (item = {}) => item?.event === "summary_scheduled_by_turn_threshold",
+    ),
+    true,
+  );
   agentContext.payload.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
@@ -83,12 +74,14 @@ test("task acceptance pauses planning and guidance only while its review is runn
   assert.equal(state.pending.analysis, false);
   assert.equal(
     agentContext.payload.harness.logs.guidance.some((item = {}) =>
-      String(item?.event || "").includes("scheduled_by_turn_threshold")),
+      String(item?.event || "").includes("scheduled_by_turn_threshold"),
+    ),
     false,
   );
   assert.equal(
     agentContext.payload.harness.logs.planning.some((item = {}) =>
-      String(item?.event || "").includes("scheduled_by_turn_threshold")),
+      String(item?.event || "").includes("scheduled_by_turn_threshold"),
+    ),
     false,
   );
 
@@ -96,8 +89,10 @@ test("task acceptance pauses planning and guidance only while its review is runn
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(
-    [...agentContext.payload.harness.logs.guidance, ...agentContext.payload.harness.logs.planning]
-      .some((item = {}) => String(item?.event || "").includes("scheduled_by_turn_threshold")),
+    [
+      ...agentContext.payload.harness.logs.guidance,
+      ...agentContext.payload.harness.logs.planning,
+    ].some((item = {}) => String(item?.event || "").includes("scheduled_by_turn_threshold")),
     true,
   );
 });
@@ -135,7 +130,12 @@ test("guidance summary threshold by chars is independent from plan update attemp
     agentContext,
   };
   await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_char_threshold"), true);
+  assert.equal(
+    agentContext.payload.harness.logs.guidance.some(
+      (item = {}) => item?.event === "summary_scheduled_by_char_threshold",
+    ),
+    true,
+  );
   agentContext.payload.harness.state.pending.summary = false;
   await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
@@ -214,7 +214,6 @@ test("guidance schedules summary after a single model tool burst reaches summary
   );
 });
 
-
 test("planning does not schedule tool-burst summary by default", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
@@ -283,10 +282,7 @@ test("planning does not schedule tool-burst summary when summary is already pend
     point: "agent.after_tool_calls",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
-      calls: [
-        { id: "summary_call", name: "task_summary", args: {} },
-        ...burstCalls.slice(1),
-      ],
+      calls: [{ id: "summary_call", name: "task_summary", args: {} }, ...burstCalls.slice(1)],
       agentContext: taskSummaryContext,
     },
     meta: { harness: { summaryOnToolBurstThreshold: true } },

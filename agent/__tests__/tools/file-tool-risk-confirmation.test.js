@@ -13,6 +13,10 @@ import {
   buildAgentContext,
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
+import { PATH_CAPABILITIES, resolvePathRef } from "@noobot/path-resolver";
+import { RESOURCE_OPERATION, classifyResourceRisk } from "@noobot/security-assessment-protocol";
+import { resolveAuthorizedUserWorkspaceFilePath } from "../../src/tools/core/check-tool-input.js";
+import { resolveFileResourceRiskScope } from "../../src/tools/execution/file-tool-shared.js";
 function createContext(
   basePath,
   { safeConfirm = true, safeConfirmLevel = "low", confirmed = true, requests = [] } = {},
@@ -47,6 +51,86 @@ test("model-declared critical risk raises a server-classified workspace read", a
   await tool.invoke({ filePath: "a.txt", riskLevel: "critical" });
   assert.equal(requests.length, 1);
   assert.match(requests[0].content, /critical/);
+});
+
+test("host file risk honors wildcard and concrete trusted directories", () => {
+  const pathRef = resolvePathRef({ input: "/srv/project/file.js" });
+  assert.equal(
+    classifyResourceRisk({
+      operation: RESOURCE_OPERATION.READ,
+      scope: resolveFileResourceRiskScope({
+        pathRef,
+        resourcePath: "/srv/project/file.js",
+        runtime: { globalConfig: {} },
+      }),
+    }),
+    "low",
+  );
+  assert.equal(
+    classifyResourceRisk({
+      operation: RESOURCE_OPERATION.WRITE,
+      scope: resolveFileResourceRiskScope({
+        pathRef,
+        resourcePath: "/srv/project/file.js",
+        runtime: { globalConfig: { security: { trustedDirectories: ["/opt/trusted"] } } },
+      }),
+    }),
+    "critical",
+  );
+  assert.equal(
+    classifyResourceRisk({
+      operation: RESOURCE_OPERATION.WRITE,
+      scope: resolveFileResourceRiskScope({
+        pathRef,
+        resourcePath: "/srv/project/file.js",
+        runtime: { globalConfig: { security: { trustedDirectories: ["/srv/project"] } } },
+      }),
+    }),
+    "medium",
+  );
+});
+
+test("host file risk uses the canonical resource path behind directory symlinks", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-workspace-"));
+  const trustedPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-trusted-link-"));
+  const untrustedPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-untrusted-target-"));
+  try {
+    await fs.writeFile(path.join(untrustedPath, "secret.txt"), "secret", "utf8");
+    await fs.symlink(untrustedPath, path.join(trustedPath, "link"));
+    const agentContext = buildAgentContext(workspacePath, "u-risk", {
+      runtime: {
+        globalConfig: {
+          security: {
+            trustedDirectories: [trustedPath],
+            executionIsolation: { mode: "host" },
+          },
+        },
+        systemRuntime: { isSuperUser: true },
+      },
+    });
+    const resolution = await resolveAuthorizedUserWorkspaceFilePath({
+      filePath: path.join(trustedPath, "link", "secret.txt"),
+      agentContext,
+      capability: PATH_CAPABILITIES.FILE_READ,
+      mustExist: true,
+    });
+    assert.equal(resolution.resourcePath, path.join(untrustedPath, "secret.txt"));
+    assert.equal(
+      classifyResourceRisk({
+        operation: RESOURCE_OPERATION.READ,
+        scope: resolveFileResourceRiskScope({
+          pathRef: resolution.pathRef,
+          resourcePath: resolution.resourcePath,
+          runtime: agentContext.bindings.runtime,
+        }),
+      }),
+      "high",
+    );
+  } finally {
+    await fs.rm(workspacePath, { recursive: true, force: true });
+    await fs.rm(trustedPath, { recursive: true, force: true });
+    await fs.rm(untrustedPath, { recursive: true, force: true });
+  }
 });
 
 function getTool(context, name) {

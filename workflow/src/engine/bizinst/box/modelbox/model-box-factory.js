@@ -4,20 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IModel from '../../../../design/model/interfaces/model.js';
-import IFlowto from '../../../../design/model/flowto/interfaces/flowto.js';
-import IActionNode from '../../../../design/model/node/interfaces/action-node.js';
-import ICompositeNode from '../../../../design/model/node/interfaces/composite-node.js';
-import IStateNode from '../../../../design/model/node/interfaces/state-node.js';
-import ModelBox from './model-box.js';
-import FlowtoBox from './flowto-box.js';
-import ActionNodeBox from './action-node-box.js';
-import CompositeNodeBox from './composite-node-box.js';
-import StateNodeBox from './state-node-box.js';
+import ModelBox from "./model-box.js";
+import FlowtoBox from "./flowto-box.js";
+import ActionNodeBox from "./action-node-box.js";
+import CompositeNodeBox from "./composite-node-box.js";
+import StateNodeBox from "./state-node-box.js";
 
 class ModelBoxFactory {
-  constructor() {
-  }
+  constructor() {}
   static getInstance() {
     if (!ModelBoxFactory.instance) ModelBoxFactory.instance = new ModelBoxFactory();
     return ModelBoxFactory.instance;
@@ -50,4 +44,4 @@ class ModelBoxFactory {
 }
 ModelBoxFactory.instance = new ModelBoxFactory();
 
-export default  ModelBoxFactory;
+export default ModelBoxFactory;

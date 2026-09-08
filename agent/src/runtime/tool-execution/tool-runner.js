@@ -3,9 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { emitEvent } from "../../events/index.js";
 import { Buffer } from "node:buffer";
-import { currentAssistantMessageId, emitMessageEvent } from "../../events/message-event-stream.js";
+import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { isFatalError } from "../../shared/errors/index.js";
 import {
   parseToolOutputArtifacts,

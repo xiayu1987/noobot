@@ -4,19 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IModelStateChangeAction from '../bizinst/action/interfaces/model-state-change-action.js';
-import IBizinstTreeBox from '../bizinst/box/bizinstbox/interfaces/bizinst-tree-box.js';
-import IStepState from '../bizinst/state/modelstate/interfaces/step-state.js';
-import ModelStateListener from './model-state-listener.js';
+import ModelStateListener from "./model-state-listener.js";
 
 class BizinstTreeModelChangeControler {
-  constructor() {
-  }
+  constructor() {}
   execAction(modelStateChangeAction, bizinstTreeBox, stepState) {
     var modelStateListener = new ModelStateListener();
     modelStateListener.setBizinstTreeBox(bizinstTreeBox);
-    modelStateChangeAction.exec(bizinstTreeBox.getCurrentBizinst(stepState), stepState, modelStateListener);
+    modelStateChangeAction.exec(
+      bizinstTreeBox.getCurrentBizinst(stepState),
+      stepState,
+      modelStateListener,
+    );
   }
 }
 
-export default  BizinstTreeModelChangeControler;
+export default BizinstTreeModelChangeControler;

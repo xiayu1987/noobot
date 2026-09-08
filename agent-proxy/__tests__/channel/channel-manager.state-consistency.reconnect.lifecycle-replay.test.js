@@ -14,15 +14,9 @@ import {
   canonicalMessageEvent,
   FakeUpstreamWebSocket,
   getEvent,
-  listEvents,
-  sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
-import {
-  createTurnLifecycleEnvelope,
-  TURN_EVENT,
-  TURN_LIFECYCLE_PROTOCOL_VERSION,
-} from "@noobot/session-protocol";
+import { TURN_EVENT } from "@noobot/session-protocol";
 import {
   authoritativeLifecycle,
   authoritativeSnapshot,

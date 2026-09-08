@@ -85,13 +85,6 @@ export function createMacDependencyInstallerTools({
     return `https://download.documentfoundation.org/libreoffice/stable/${version}/mac/${arch}/LibreOffice_${version}_MacOS_${arch}.dmg`;
   }
 
-  function getMacLibreOfficeDmgUrl(spec) {
-    const configuredUrl = String(spec.darwinDmg?.url || "").trim();
-    if (configuredUrl) return configuredUrl;
-    const version = String(spec.darwinDmg?.version || "").trim();
-    return version ? getMacLibreOfficeDmgUrlForVersion(version) : "";
-  }
-
   async function fetchLibreOfficeStableVersions() {
     const indexUrl = "https://download.documentfoundation.org/libreoffice/stable/";
     writeDependencyLog("dmg:versions:start", { url: indexUrl });

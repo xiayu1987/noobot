@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../../interfaces/can-persistence.js';
-import INode from '../../../../../design/model/node/interfaces/node.js';
-
 class INodeState {
   setNode(node) {}
   getNode() {}

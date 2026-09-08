@@ -5,10 +5,16 @@
  */
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 
-export function createRuntimeEventProjector({ sessions, activeSession, turnRuntimeRegistry, chatStore, resolveActiveSessionIdentity }) {
+export function createRuntimeEventProjector({
+  sessions,
+  activeSession,
+  turnRuntimeRegistry,
+  chatStore,
+  resolveActiveSessionIdentity,
+}) {
   const submitTurnRuntimeEvent = (event) => {
     const requestedSessionId = String(event?.sessionId || "").trim();
-    const requestedTurnScopeId = String(event?.turnScopeId || "").trim();
+
     const result = chatStore.applyTurnRuntimeEvent(event);
     const selectedSessionId = resolveActiveSessionIdentity();
     const activeBucket = turnRuntimeRegistry.value?.sessions?.[selectedSessionId] || null;
@@ -22,7 +28,9 @@ export function createRuntimeEventProjector({ sessions, activeSession, turnRunti
       eventState: String(event?.state || event?.backendState || "").trim(),
       resultApplied: result?.applied === true,
       resultReason: String(result?.reason || "").trim(),
-      canonicalSessionId: String(result?.canonicalSessionId || result?.turn?.sessionId || "").trim(),
+      canonicalSessionId: String(
+        result?.canonicalSessionId || result?.turn?.sessionId || "",
+      ).trim(),
       canonicalTurnScopeId: String(result?.turn?.turnScopeId || "").trim(),
       canonicalState: String(result?.turn?.state || "").trim(),
       canonicalTerminal: result?.turn?.terminal || null,
@@ -37,7 +45,6 @@ export function createRuntimeEventProjector({ sessions, activeSession, turnRunti
       },
     };
   };
-
 
   return submitTurnRuntimeEvent;
 }

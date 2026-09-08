@@ -4,13 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IBizinst from '../bizinst/interfaces/bizinst.js';
-import IBizinstTreeBox from '../bizinst/box/bizinstbox/interfaces/bizinst-tree-box.js';
-import IProcess from '../bizinst/state/interfaces/process.js';
-import IActionNodeState from '../bizinst/state/modelstate/interfaces/action-node-state.js';
-import IStepState from '../bizinst/state/modelstate/interfaces/step-state.js';
-import AddStepStateProcess from '../bizinst/state/proc/mschange/add-step-state-process.js';
-import IAddStepStateProcess from '../bizinst/state/proc/mschange/interfaces/add-step-state-process.js';
+import AddStepStateProcess from "../bizinst/state/proc/mschange/add-step-state-process.js";
 
 class ModelStateListener {
   constructor() {
@@ -29,7 +23,10 @@ class ModelStateListener {
     process.setStepState(stepState);
     process.setIndex(index);
     process.setHandleStepState(handleStepState);
-    this.getRealTimeProcess(bizinst).getBizinstModelChangeProcess().getAddStepStateProcesses().push(process);
+    this.getRealTimeProcess(bizinst)
+      .getBizinstModelChangeProcess()
+      .getAddStepStateProcesses()
+      .push(process);
     this.bizinstTreeBox.saveState(bizinst, process);
   }
   getRealTimeProcess(bizinst) {
@@ -37,4 +34,4 @@ class ModelStateListener {
   }
 }
 
-export default  ModelStateListener;
+export default ModelStateListener;

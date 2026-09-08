@@ -11,14 +11,11 @@ import {
   assert,
   assertFlatCapabilityMessages,
   createAgentHookManager,
-  exists,
   fs,
   os,
   path,
-  readJsonl,
   registerHarnessCore,
   test,
-  waitForFile,
 } from "../helpers/harness-planning-helper.js";
 
 test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
@@ -155,9 +152,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   assert.equal(toolResult?.status, "completed");
   assert.equal(agentContext.payload.harness.state.flags.planRefinementRequested, true);
   assert.equal(
-    agentContext.payload.tools.registry.some(
-      (tool) => tool?.name === "request_plan_refinement",
-    ),
+    agentContext.payload.tools.registry.some((tool) => tool?.name === "request_plan_refinement"),
     false,
   );
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);

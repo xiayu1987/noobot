@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { activate } from "../index.js";
 
 describe("Harness frontend registration", () => {
@@ -20,7 +20,9 @@ describe("Harness frontend registration", () => {
       services: {},
     });
 
-    const modelExtension = contributions.find(({ point }) => point === "composer-options-model")?.contribution;
+    const modelExtension = contributions.find(
+      ({ point }) => point === "composer-options-model",
+    )?.contribution;
     expect(modelExtension).toBeDefined();
 
     const selectedPluginKeySet = new Set(["harness"]);
@@ -48,6 +50,8 @@ describe("Harness frontend registration", () => {
     });
 
     expect(contributions.filter(({ point }) => point === "message-card-post")).toEqual([]);
-    expect(contributions.some(({ contribution }) => contribution.suppressDefaultAssets === true)).toBe(false);
+    expect(
+      contributions.some(({ contribution }) => contribution.suppressDefaultAssets === true),
+    ).toBe(false);
   });
 });

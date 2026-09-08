@@ -4,14 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import {
-  createHarness,
-  makeSession,
-  makeTurnReplacementResponse,
-  assistantMessage,
-  emitChannelState,
-} from "../helpers/useChatEngineHarness.js";
-import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { createHarness, makeTurnReplacementResponse } from "../helpers/useChatEngineHarness.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { isTurnRuntimeDeleted } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 describe("useChatEngine.resend scoped pruning", () => {

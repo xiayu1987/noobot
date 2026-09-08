@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { lstat, readdir } from "node:fs/promises";
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { filePath as path } from "@noobot/path-resolver";
 import { promisify } from "node:util";
@@ -90,7 +90,13 @@ function throwIfAborted(abortSignal = null) {
   throw abortSignal.reason || new DOMException("The operation was aborted", "AbortError");
 }
 
-export async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = "", maxFiles = DEFAULT_MAX_SEARCH_FILES, abortSignal = null } = {}) {
+export async function collectSearchFiles({
+  rootPath = "",
+  workspacePath = "",
+  glob = "",
+  maxFiles = DEFAULT_MAX_SEARCH_FILES,
+  abortSignal = null,
+} = {}) {
   const files = [];
   async function walk(currentPath) {
     throwIfAborted(abortSignal);
@@ -217,7 +223,6 @@ function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }
     });
   });
 }
-
 
 export async function searchFilesWithRipgrep({
   rootPath = "",

@@ -15,12 +15,7 @@ import {
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import {
-  createAcceptanceHandler,
-  createGuidanceHandler,
-} from "../helpers/context-aware-handler-fixtures.js";
-import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 
 function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);

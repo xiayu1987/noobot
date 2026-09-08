@@ -5,28 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import {
   createMockBotHookManager,
-  workflowDsl,
-  simpleActionWorkflowDsl,
-  createCapabilityModelInvoker,
-  createNodeResult,
-  createRecordingSubSessionRunner,
-  createAttachmentPersister,
-  createSemanticTransferTool,
-  createBaseContext,
-  createContextWithSharedTools,
   getBeforeDispatch,
-  runWorkflowHook,
-  callsByNodeName,
-  workflowTurn,
   createRegisterWorkflowHooks,
-  WORKFLOW_PLUGIN_DEFAULTS,
-  resolveWorkflowNodeDialogProcessId,
-  collectWorkflowDialogProcessIds,
-  resolveWorkflowDialogProcessId,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook passes planned user attachments to node sub-session", async () => {

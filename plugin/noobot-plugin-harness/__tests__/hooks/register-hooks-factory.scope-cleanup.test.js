@@ -7,24 +7,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
-import { appendMessage } from "../../src/core/message-store.js";
-import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
-
-function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object" ? ctx.modelContext.messageBlocks : {};
-  return resolveMainModelFinalMessages({
-    systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
-    historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
-    incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
-  }).messages;
-}
-
-const capabilityRuntimeWithBootstrap = {
-  async runHook(_point, _ctx, payload = {}) {
-    await payload?.harness?.globalBootstrap?.();
-  },
-};
-
 
 test("createRegisterHarnessHooks skips non-primary execution scope", async () => {
   const calls = [];

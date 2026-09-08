@@ -10,8 +10,6 @@ import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } fro
 import {
   getWorkflowTransferPayloadFromResult,
   mergeAttachmentReferences,
-  mergeAttachments,
-  normalizeAttachmentRefs,
   normalizeWorkflowTransferPayload,
   resolveNodeInputAttachments,
   resolveWorkflowTransferAttachmentReferences,

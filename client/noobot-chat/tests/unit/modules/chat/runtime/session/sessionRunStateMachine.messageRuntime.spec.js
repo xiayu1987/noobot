@@ -4,26 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { ref } from "vue";
 import {
   BackendChannelState,
-  BackendTerminalStates,
   FrontendRunState,
-  FrontendTerminalStates,
-  SESSION_RUN_EVENT,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
-  SESSION_RUN_TRANSITION_DECISION_REASON,
-  SESSION_RUN_TRANSITION_GUARDS,
-  SESSION_RUN_TRANSITION_TABLE,
-  clearRememberedStopRequests,
   createInitialSessionRunState,
-  evaluateSessionRunState,
-  normalizeSessionRunEvent,
-  rememberStopRequestedEvent,
-  resolveEventScope,
-  resolveRememberedStopRequestedEvent,
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,
   isMessageRunning,
@@ -84,42 +71,63 @@ describe("sessionRunStateMachine message runtime", () => {
 
   it("does not resolve message runtime from the identity-free global lock", () => {
     const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1" };
-    expect(resolveSessionRunStateForMessage({ stateSnapshot: createInitialSessionRunState({ state: FrontendRunState.ACTION_REQUESTING }), messageItem: assistant, activeSession: { id: "s1", messages: [assistant] } })).toBeNull();
+    expect(
+      resolveSessionRunStateForMessage({
+        stateSnapshot: createInitialSessionRunState({ state: FrontendRunState.ACTION_REQUESTING }),
+        messageItem: assistant,
+        activeSession: { id: "s1", messages: [assistant] },
+      }),
+    ).toBeNull();
   });
 
   it("does not resolve terminal or different-session run state for a message", () => {
-    const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };
+    const assistant = {
+      role: "assistant",
+      dialogProcessId: "d1",
+      turnScopeId: "turn-1",
+      content: "",
+    };
     const activeSession = {
       id: "s1",
       sessionId: "s1",
       messages: [{ role: "user", content: "q" }, assistant],
     };
 
-    expect(resolveSessionRunStateForMessage({
-      stateSnapshot: createInitialSessionRunState({
-        state: FrontendRunState.FRONTEND_COMPLETED,
-        sessionId: "s1",
-        dialogProcessId: "d1",
-        priority: 100,
+    expect(
+      resolveSessionRunStateForMessage({
+        stateSnapshot: createInitialSessionRunState({
+          state: FrontendRunState.FRONTEND_COMPLETED,
+          sessionId: "s1",
+          dialogProcessId: "d1",
+          priority: 100,
+        }),
+        messageItem: assistant,
+        activeSession,
       }),
-      messageItem: assistant,
-      activeSession,
-    })).toBeNull();
-    expect(resolveSessionRunStateForMessage({
-      stateSnapshot: createInitialSessionRunState({
-        state: BackendChannelState.SENDING,
-        sessionId: "s2",
-        dialogProcessId: "d1",
-        priority: 40,
+    ).toBeNull();
+    expect(
+      resolveSessionRunStateForMessage({
+        stateSnapshot: createInitialSessionRunState({
+          state: BackendChannelState.SENDING,
+          sessionId: "s2",
+          dialogProcessId: "d1",
+          priority: 40,
+        }),
+        messageItem: assistant,
+        activeSession,
       }),
-      messageItem: assistant,
-      activeSession,
-    })).toBeNull();
+    ).toBeNull();
   });
 
   it("does not patch message runtime from the identity-free global lock", () => {
     const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1" };
-    expect(resolveSessionRunMessageRuntimePatch({ stateSnapshot: createInitialSessionRunState({ state: FrontendRunState.ACTION_REQUESTING }), messageItem: assistant, activeSession: { id: "s1", messages: [assistant] } })).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
+    expect(
+      resolveSessionRunMessageRuntimePatch({
+        stateSnapshot: createInitialSessionRunState({ state: FrontendRunState.ACTION_REQUESTING }),
+        messageItem: assistant,
+        activeSession: { id: "s1", messages: [assistant] },
+      }),
+    ).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
   });
 
   it("does not clear active message runtime from another session terminal state", () => {
@@ -144,32 +152,36 @@ describe("sessionRunStateMachine message runtime", () => {
       messages: [{ role: "user", content: "q" }, assistant],
     };
 
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: createInitialSessionRunState({
-        state: FrontendRunState.FRONTEND_COMPLETED,
-        sessionId: "s-other",
-        dialogProcessId: "d-other",
-        turnScopeId: "turn-other",
-        priority: 100,
+    expect(
+      resolveSessionRunMessageRuntimePatch({
+        stateSnapshot: createInitialSessionRunState({
+          state: FrontendRunState.FRONTEND_COMPLETED,
+          sessionId: "s-other",
+          dialogProcessId: "d-other",
+          turnScopeId: "turn-other",
+          priority: 100,
+        }),
+        messageItem: assistant,
+        activeSession,
       }),
-      messageItem: assistant,
-      activeSession,
-    })).toMatchObject({
+    ).toMatchObject({
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE,
     });
 
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: createInitialSessionRunState({
-        state: FrontendRunState.USER_STOP_COMPLETED,
-        backendState: BackendChannelState.USER_STOPPED,
-        sessionId: "s-other",
-        dialogProcessId: "d-other",
-        turnScopeId: "turn-other",
-        priority: 100,
+    expect(
+      resolveSessionRunMessageRuntimePatch({
+        stateSnapshot: createInitialSessionRunState({
+          state: FrontendRunState.USER_STOP_COMPLETED,
+          backendState: BackendChannelState.USER_STOPPED,
+          sessionId: "s-other",
+          dialogProcessId: "d-other",
+          turnScopeId: "turn-other",
+          priority: 100,
+        }),
+        messageItem: assistant,
+        activeSession,
       }),
-      messageItem: assistant,
-      activeSession,
-    })).toMatchObject({
+    ).toMatchObject({
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE,
     });
   });
@@ -180,7 +192,11 @@ describe("sessionRunStateMachine message runtime", () => {
       pending: false,
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
-      channelState: { state: BackendChannelState.USER_STOPPED, dialogProcessId: "d1", turnScopeId: "turn-1" },
+      channelState: {
+        state: BackendChannelState.USER_STOPPED,
+        dialogProcessId: "d1",
+        turnScopeId: "turn-1",
+      },
       statusLabel: "已停止",
     };
     const activeSession = {
@@ -189,24 +205,45 @@ describe("sessionRunStateMachine message runtime", () => {
       messages: [{ role: "user", content: "q" }, assistant],
     };
 
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: createInitialSessionRunState({
-        state: FrontendRunState.USER_STOPPING,
-        backendState: BackendChannelState.STOPPING,
-        sessionId: "s1",
-        dialogProcessId: "d1",
-        turnScopeId: "turn-1",
-        sourceEvent: "user_stop_requested_registry",
-        priority: 70,
+    expect(
+      resolveSessionRunMessageRuntimePatch({
+        stateSnapshot: createInitialSessionRunState({
+          state: FrontendRunState.USER_STOPPING,
+          backendState: BackendChannelState.STOPPING,
+          sessionId: "s1",
+          dialogProcessId: "d1",
+          turnScopeId: "turn-1",
+          sourceEvent: "user_stop_requested_registry",
+          priority: 70,
+        }),
+        messageItem: assistant,
+        activeSession,
       }),
-      messageItem: assistant,
-      activeSession,
-    })).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
+    ).toMatchObject({ action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE });
   });
 
   it("applies persisted stopped turn status to a refreshed pending assistant", () => {
-    const assistant = { role: "assistant", pending: true, dialogProcessId: "d1", turnScopeId: "turn-1", channelState: { state: "sending" } };
-    expect(resolveTurnRuntimeView({ messageItem: assistant, turnStatus: { status: BackendChannelState.USER_STOPPED, dialogProcessId: "d1", turnScopeId: "turn-1" } })).toMatchObject({ state: BackendChannelState.USER_STOPPED, running: false, source: "persisted" });
+    const assistant = {
+      role: "assistant",
+      pending: true,
+      dialogProcessId: "d1",
+      turnScopeId: "turn-1",
+      channelState: { state: "sending" },
+    };
+    expect(
+      resolveTurnRuntimeView({
+        messageItem: assistant,
+        turnStatus: {
+          status: BackendChannelState.USER_STOPPED,
+          dialogProcessId: "d1",
+          turnScopeId: "turn-1",
+        },
+      }),
+    ).toMatchObject({
+      state: BackendChannelState.USER_STOPPED,
+      running: false,
+      source: "persisted",
+    });
   });
 
   it("resolves obsolete previous pending assistant as clear_runtime", () => {
@@ -228,14 +265,16 @@ describe("sessionRunStateMachine message runtime", () => {
       ],
     };
 
-    expect(resolveSessionRunMessageRuntimePatch({
-      stateSnapshot: createInitialSessionRunState({
-        state: BackendChannelState.SENDING,
-        sessionId: "s1",
+    expect(
+      resolveSessionRunMessageRuntimePatch({
+        stateSnapshot: createInitialSessionRunState({
+          state: BackendChannelState.SENDING,
+          sessionId: "s1",
+        }),
+        messageItem: oldAssistant,
+        activeSession,
       }),
-      messageItem: oldAssistant,
-      activeSession,
-    })).toMatchObject({
+    ).toMatchObject({
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.OBSOLETE_PENDING_ASSISTANT,
       patch: {
@@ -265,9 +304,11 @@ describe("sessionRunStateMachine message runtime", () => {
       dialogProcessId: "d1",
       turnScopeId: "turn-1",
     });
-    expect(resolveSessionRunMessageRuntimeView(sendingMessage, {
-      thinkingStartedAt: "2026-01-01T00:00:00.000Z",
-    })).toMatchObject({
+    expect(
+      resolveSessionRunMessageRuntimeView(sendingMessage, {
+        thinkingStartedAt: "2026-01-01T00:00:00.000Z",
+      }),
+    ).toMatchObject({
       state: BackendChannelState.SENDING,
       pending: true,
       running: true,
@@ -278,41 +319,49 @@ describe("sessionRunStateMachine message runtime", () => {
     expect(isMessageRunning(sendingMessage)).toBe(true);
     expect(isMessageInFlightAssistant(sendingMessage)).toBe(true);
 
-    expect(resolveSessionRunMessageRuntimeView({
-      role: "assistant",
-      channelState: { status: "reconnecting" },
-    })).toMatchObject({
+    expect(
+      resolveSessionRunMessageRuntimeView({
+        role: "assistant",
+        channelState: { status: "reconnecting" },
+      }),
+    ).toMatchObject({
       state: BackendChannelState.RECONNECTING,
       running: true,
       inFlightAssistant: true,
       canStopTarget: false,
     });
 
-    expect(resolveSessionRunMessageRuntimeView({
-      role: "assistant",
-      channelState: "interaction_pending",
-    })).toMatchObject({
+    expect(
+      resolveSessionRunMessageRuntimeView({
+        role: "assistant",
+        channelState: "interaction_pending",
+      }),
+    ).toMatchObject({
       state: BackendChannelState.INTERACTION_PENDING,
       running: true,
       inFlightAssistant: true,
       canStopTarget: false,
     });
 
-    expect(resolveSessionRunMessageRuntimeView({
-      role: "assistant",
-      status: FrontendRunState.USER_STOPPING,
-      pending: true,
-    })).toMatchObject({
+    expect(
+      resolveSessionRunMessageRuntimeView({
+        role: "assistant",
+        status: FrontendRunState.USER_STOPPING,
+        pending: true,
+      }),
+    ).toMatchObject({
       state: FrontendRunState.USER_STOPPING,
       running: true,
       inFlightAssistant: true,
       canStopTarget: false,
     });
 
-    expect(resolveSessionRunMessageRuntimeView({
-      role: "user",
-      pending: true,
-    })).toMatchObject({
+    expect(
+      resolveSessionRunMessageRuntimeView({
+        role: "user",
+        pending: true,
+      }),
+    ).toMatchObject({
       running: true,
       inFlightAssistant: false,
       canStopTarget: false,

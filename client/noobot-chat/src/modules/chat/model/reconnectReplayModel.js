@@ -11,21 +11,14 @@ import {
 } from "./transferEnvelopes.js";
 import { getMessageAttachments } from "./messageModel.js";
 import {
-  canUseTurnScopedAssets,
   clearTurnScopedAssets,
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-  hasMessageTurnScopeConflict,
 } from "./messageIdentity.js";
 import { parseTimeMs } from "./timeFields.js";
-import {
-  isAuthoritativeTerminalState,
-  resolveSessionRunMessageRuntimeView,
-} from "../runtime/sessionRunStateMachine.js";
-import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { isAuthoritativeTerminalState } from "../runtime/sessionRunStateMachine.js";
 import { hydrateTurnSnapshot } from "../runtime/engine/turnProjectionStore.js";
-import { isPendingInteractionReplay } from "@noobot/event-protocol";
 
 function isSessionEntryRunning(sessionEntry = {}) {
   const sessionId = String(sessionEntry?.sessionId || "").trim();
@@ -99,12 +92,6 @@ function findLatestPendingAssistantAfterLastUser(messages = []) {
 function normalizeMessageContentForCompare(content = "") {
   return String(content || "").trim();
 }
-
-function getArrayItems(value = null) {
-  return Array.isArray(value) ? value : [];
-}
-
-const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
 function hasArrayItems(value = null) {
   return Array.isArray(value) && value.length > 0;
@@ -225,7 +212,7 @@ function patchMessageObjectPreservingUiState(
 ) {
   const sourceRole = getMessageRole(sourceMessage);
   const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
-  const sourceCanUseTurnScopedAssets = canUseTurnScopedAssets(sourceMessage);
+
   const sourceAssistantWithoutTurnScope = sourceRole === RoleEnum.ASSISTANT && !sourceTurnScopeId;
   const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
   if (sourceAssistantWithoutTurnScope && existingTurnScopeId) return targetMessage;

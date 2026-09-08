@@ -48,6 +48,19 @@ export const PLATFORM_PROTECTED_ROOTS = deepFreeze({
   [PLATFORM.WINDOWS]: [],
 });
 
+export const TRUST_ALL_DIRECTORIES = "*";
+
+const HOST_FILESYSTEM_ROOT = "<host-filesystem>";
+const WORKSPACE_ACCESS_LEVELS = Object.freeze(["deny", "read_only", "read_write"]);
+const HOST_ACCESS_LEVELS = Object.freeze(["deny", "allow"]);
+const HOST_ROLE_REQUIREMENTS = Object.freeze(["deny", "super_admin"]);
+const DISPLAY_PATH_POLICIES = Object.freeze([
+  ...Object.values(DISPLAY_PATH_VIEWS),
+  "identity",
+  "execution",
+]);
+const RESOLVED_PATH_POLICIES = new WeakSet();
+
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const item of Object.values(value)) deepFreeze(item);
@@ -97,13 +110,14 @@ const DEFAULT_CAPABILITIES = {
 };
 
 export const BUILTIN_PATH_POLICY = deepFreeze({
+  trustedDirectories: [TRUST_ALL_DIRECTORIES],
   roles: {
-    regularUser: { workspace: { own: "read_write", others: "deny" }, host: { access: "deny" } },
+    regularUser: { workspace: { own: "read_write", others: "deny" } },
     superAdmin: {
       workspace: { own: "read_write", others: "read_write" },
       host: {
         access: "allow",
-        allowedRoots: ["<host-filesystem>"],
+        allowedRoots: [HOST_FILESYSTEM_ROOT],
         deniedRoots: [],
       },
     },
@@ -111,10 +125,6 @@ export const BUILTIN_PATH_POLICY = deepFreeze({
   capabilities: DEFAULT_CAPABILITIES,
   resolution: {
     followSymbolicLinks: false,
-    requireRealPathForExistingTargets: true,
-    validateWriteParentRealPath: true,
-    rejectAmbiguousVirtualPaths: true,
-    caseSensitivity: "platform",
   },
   display: {
     fileTools: "logical",
@@ -125,82 +135,6 @@ export const BUILTIN_PATH_POLICY = deepFreeze({
     audit: "execution",
   },
 });
-
-function canonicalRule(value = {}) {
-  const acceptedViews = value.acceptedViews || value.accepted_views;
-  const hostRequiresRole = value.hostRequiresRole || value.host_requires_role;
-  const canonical = Object.fromEntries(
-    Object.entries(value).filter(
-      ([key]) => !["accepted_views", "host_requires_role"].includes(key),
-    ),
-  );
-  return {
-    ...canonical,
-    ...(acceptedViews ? { acceptedViews } : {}),
-    ...(hostRequiresRole ? { hostRequiresRole } : {}),
-  };
-}
-
-function canonicalHostRule(value = {}) {
-  const allowedRoots = value.allowedRoots || value.allowed_roots;
-  const deniedRoots = value.deniedRoots || value.denied_roots;
-  const canonical = Object.fromEntries(
-    Object.entries(value).filter(([key]) => !["allowed_roots", "denied_roots"].includes(key)),
-  );
-  return {
-    ...canonical,
-    ...(allowedRoots ? { allowedRoots } : {}),
-    ...(deniedRoots ? { deniedRoots } : {}),
-  };
-}
-
-function canonicalResolution(value = {}) {
-  const fields = {
-    followSymbolicLinks: value.followSymbolicLinks ?? value.follow_symbolic_links,
-    requireRealPathForExistingTargets:
-      value.requireRealPathForExistingTargets ?? value.require_real_path_for_existing_targets,
-    validateWriteParentRealPath:
-      value.validateWriteParentRealPath ?? value.validate_write_parent_real_path,
-    rejectAmbiguousVirtualPaths:
-      value.rejectAmbiguousVirtualPaths ?? value.reject_ambiguous_virtual_paths,
-    caseSensitivity: value.caseSensitivity || value.case_sensitivity,
-  };
-  const canonical = Object.fromEntries(
-    Object.entries(value).filter(
-      ([key]) =>
-        ![
-          "follow_symbolic_links",
-          "require_real_path_for_existing_targets",
-          "validate_write_parent_real_path",
-          "reject_ambiguous_virtual_paths",
-          "case_sensitivity",
-        ].includes(key),
-    ),
-  );
-  return {
-    ...canonical,
-    ...Object.fromEntries(Object.entries(fields).filter(([, item]) => item !== undefined)),
-  };
-}
-
-function canonicalDisplay(value = {}) {
-  const fields = {
-    fileTools: value.fileTools ?? value.file_tools,
-    scriptTools: value.scriptTools ?? value.script_tools,
-    nativeScript: value.nativeScript ?? value.native_script,
-  };
-  const canonical = Object.fromEntries(
-    Object.entries(value).filter(
-      ([key]) => !["file_tools", "script_tools", "native_script"].includes(key),
-    ),
-  );
-  const normalizedFields = Object.fromEntries(
-    Object.entries(fields)
-      .filter(([, item]) => item !== undefined)
-      .map(([key, item]) => [key, item === "task_local" ? "task-local" : item]),
-  );
-  return { ...canonical, ...normalizedFields };
-}
 
 export const TOOL_PATH_CONTRACTS = Object.freeze({
   fileRead: Object.freeze({
@@ -307,80 +241,210 @@ export function isPathWithinRoot(root, candidate) {
   );
 }
 
-export function resolvePathPolicy(globalConfig = {}, { platform = process.platform } = {}) {
-  const configured =
-    globalConfig?.security?.pathPolicy || globalConfig?.security?.path_policy || {};
-  const configuredRoles = configured.roles || {};
-  const configuredSuperAdmin = configuredRoles.superAdmin || configuredRoles.super_admin || {};
-  const configuredCapabilities = Object.fromEntries(
-    Object.entries(configured.capabilities || {}).map(([key, value]) => [
-      key,
-      canonicalRule(value),
-    ]),
+function assertPolicyOverrideShape(value, contract, path = "path policy") {
+  if (!isPlainObject(value)) throw new TypeError(`${path} must be an object`);
+  for (const [key, item] of Object.entries(value)) {
+    if (!Object.hasOwn(contract, key)) throw new TypeError(`unsupported ${path} field: ${key}`);
+    const contractItem = contract[key];
+    const itemPath = `${path}.${key}`;
+    if (isPlainObject(contractItem)) {
+      assertPolicyOverrideShape(item, contractItem, itemPath);
+    } else if (Array.isArray(contractItem)) {
+      if (!Array.isArray(item)) throw new TypeError(`${itemPath} must be an array`);
+    } else if (typeof item !== typeof contractItem) {
+      throw new TypeError(`${itemPath} must be a ${typeof contractItem}`);
+    }
+  }
+}
+
+function assertEnum(value, accepted, path) {
+  if (!accepted.includes(value)) {
+    throw new TypeError(`${path} must be one of: ${accepted.join(", ")}`);
+  }
+}
+
+function assertStringArray(value, path, validateItem = null) {
+  if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
+  for (const item of value) {
+    if (typeof item !== "string" || !item.trim()) {
+      throw new TypeError(`${path} entries must be non-empty strings`);
+    }
+    if (typeof validateItem === "function") validateItem(item.trim());
+  }
+}
+
+function assertAbsoluteRoot(root, path) {
+  if (!isAbsolutePathAnyPlatform(root)) throw new TypeError(`${path} must be absolute: ${root}`);
+}
+
+function assertResolvedPathPolicy(policy) {
+  for (const role of ["regularUser", "superAdmin"]) {
+    const workspace = policy.roles[role].workspace;
+    assertEnum(workspace.own, WORKSPACE_ACCESS_LEVELS, `path policy.roles.${role}.workspace.own`);
+    assertEnum(
+      workspace.others,
+      WORKSPACE_ACCESS_LEVELS,
+      `path policy.roles.${role}.workspace.others`,
+    );
+  }
+  assertEnum(
+    policy.roles.superAdmin.host.access,
+    HOST_ACCESS_LEVELS,
+    "path policy.roles.superAdmin.host.access",
   );
-  const configuredRegularUser = configuredRoles.regularUser || configuredRoles.regular_user || {};
+  assertStringArray(
+    policy.roles.superAdmin.host.allowedRoots,
+    "path policy.roles.superAdmin.host.allowedRoots",
+    (root) => {
+      if (root !== HOST_FILESYSTEM_ROOT) assertAbsoluteRoot(root, "allowed host root");
+    },
+  );
+  assertStringArray(
+    policy.roles.superAdmin.host.deniedRoots,
+    "path policy.roles.superAdmin.host.deniedRoots",
+    (root) => assertAbsoluteRoot(root, "denied host root"),
+  );
+  for (const [capability, rule] of Object.entries(policy.capabilities)) {
+    assertStringArray(
+      rule.acceptedViews,
+      `path policy.capabilities.${capability}.acceptedViews`,
+      (view) => assertEnum(view, Object.values(PATH_REF_VIEWS), `path policy capability view`),
+    );
+    assertEnum(
+      rule.hostRequiresRole,
+      HOST_ROLE_REQUIREMENTS,
+      `path policy.capabilities.${capability}.hostRequiresRole`,
+    );
+  }
+  if (typeof policy.resolution.followSymbolicLinks !== "boolean") {
+    throw new TypeError("path policy.resolution.followSymbolicLinks must be a boolean");
+  }
+  for (const [field, value] of Object.entries(policy.display)) {
+    assertEnum(value, DISPLAY_PATH_POLICIES, `path policy.display.${field}`);
+  }
+}
+
+function requireResolvedPathPolicy(pathPolicy) {
+  const policy = pathPolicy === undefined ? resolvePathPolicy() : pathPolicy;
+  if (!RESOLVED_PATH_POLICIES.has(policy)) {
+    throw new TypeError("path policy must be created by resolvePathPolicy");
+  }
+  return policy;
+}
+
+export function resolvePathPolicy({
+  policyOverride = {},
+  trustedDirectories = undefined,
+  platform = process.platform,
+} = {}) {
+  if (!isPlainObject(policyOverride)) throw new TypeError("path policy override must be an object");
+  if (Object.hasOwn(policyOverride, "trustedDirectories")) {
+    throw new TypeError("trusted directories must use the trustedDirectories contract field");
+  }
+  assertPolicyOverrideShape(policyOverride, BUILTIN_PATH_POLICY);
   const executionPlatform = normalizePlatform(platform);
+  if (!Object.hasOwn(PLATFORM_PROTECTED_ROOTS, executionPlatform)) {
+    throw new TypeError(`unsupported path policy platform: ${String(platform || "<empty>")}`);
+  }
+  const platformProtectedRoots = PLATFORM_PROTECTED_ROOTS[executionPlatform];
   const platformDefaults = mergePolicy(BUILTIN_PATH_POLICY, {
     roles: {
       superAdmin: {
         host: {
-          deniedRoots: PLATFORM_PROTECTED_ROOTS[executionPlatform] || [],
+          deniedRoots: platformProtectedRoots,
         },
       },
     },
   });
-  const override = {
-    ...configured,
-    roles: {
-      ...configuredRoles,
-      regularUser: configuredRegularUser,
-      superAdmin: {
-        ...configuredSuperAdmin,
-        ...(configuredSuperAdmin.host
-          ? { host: canonicalHostRule(configuredSuperAdmin.host) }
-          : {}),
-      },
-    },
-    capabilities: configuredCapabilities,
-    resolution: canonicalResolution(configured.resolution || {}),
-    display: canonicalDisplay(configured.display || {}),
-  };
-  delete override.roles.regular_user;
-  delete override.roles.super_admin;
-  return deepFreeze(mergePolicy(platformDefaults, override));
+  const merged = mergePolicy(platformDefaults, policyOverride);
+  merged.trustedDirectories = [...resolveTrustedDirectories(trustedDirectories)];
+  merged.roles.superAdmin.host.deniedRoots = Array.from(
+    new Set([...platformProtectedRoots, ...merged.roles.superAdmin.host.deniedRoots]),
+  );
+  assertResolvedPathPolicy(merged);
+  const resolved = deepFreeze(merged);
+  RESOLVED_PATH_POLICIES.add(resolved);
+  return resolved;
+}
+
+/**
+ * Resolve the global trusted-directory list used by host resource risk classification.
+ * Missing configuration deliberately means every non-protected directory is trusted.
+ * An explicitly configured empty list means no host directory is trusted.
+ */
+export function resolveTrustedDirectories(configured = undefined) {
+  if (configured === undefined) return BUILTIN_PATH_POLICY.trustedDirectories;
+  if (!Array.isArray(configured)) throw new TypeError("trusted directories must be an array");
+  const normalized = configured.map((item) => {
+    if (typeof item !== "string" || !item.trim()) {
+      throw new TypeError("trusted directory entries must be non-empty strings");
+    }
+    const directory = item.trim();
+    if (directory !== TRUST_ALL_DIRECTORIES && !isAbsolutePathAnyPlatform(directory)) {
+      throw new TypeError(`trusted directory must be absolute: ${directory}`);
+    }
+    return directory;
+  });
+  const unique = Array.from(new Set(normalized));
+  if (unique.includes(TRUST_ALL_DIRECTORIES) && unique.length !== 1) {
+    throw new TypeError('trusted directory wildcard "*" cannot be combined with concrete paths');
+  }
+  return Object.freeze(unique);
+}
+
+/**
+ * A protected path is never trusted, even when the wildcard is configured.
+ * Concrete trusted entries include the directory itself and all descendants.
+ */
+export function isTrustedDirectoryPath(candidatePath = "", pathPolicy = undefined) {
+  if (typeof candidatePath !== "string") {
+    throw new TypeError("trusted-directory candidate must be a string");
+  }
+  const candidate = candidatePath.trim();
+  if (!candidate || !isAbsolutePathAnyPlatform(candidate)) {
+    throw new TypeError("trusted-directory candidate must be an absolute path");
+  }
+  const policy = requireResolvedPathPolicy(pathPolicy);
+  const resolvedCandidate = filePath.resolve(candidate);
+  if (
+    policy.roles.superAdmin.host.deniedRoots.some((root) =>
+      isPathWithinRoot(root, resolvedCandidate),
+    )
+  ) {
+    return false;
+  }
+  const trustedDirectories = policy.trustedDirectories;
+  if (trustedDirectories.includes(TRUST_ALL_DIRECTORIES)) return true;
+  return trustedDirectories.some((root) => isPathWithinRoot(root, resolvedCandidate));
 }
 
 export function authorizePathRef({
   pathRef,
   principal = {},
   capability = "",
-  pathPolicy = {},
+  pathPolicy = undefined,
   executionPath = "",
   workspaceRoot = "",
   executionRoots = [],
 } = {}) {
-  const effectivePolicy =
-    isPlainObject(pathPolicy) && Object.keys(pathPolicy).length
-      ? mergePolicy(BUILTIN_PATH_POLICY, pathPolicy)
-      : BUILTIN_PATH_POLICY;
-  const rule =
-    effectivePolicy?.capabilities?.[capability] || BUILTIN_PATH_POLICY.capabilities[capability];
+  const effectivePolicy = requireResolvedPathPolicy(pathPolicy);
+  const rule = effectivePolicy.capabilities[capability];
   if (!rule) throw new Error(`unknown path capability: ${capability}`);
   if (!rule.acceptedViews?.includes(pathRef?.view))
     return Object.freeze({ allowed: false, code: "path_view_not_accepted", pathRef, capability });
-  const isSuperAdmin = principal?.isSuperUser === true || principal?.role === "super_admin";
+  const isSuperAdmin = principal?.role === "super_admin";
   if (pathRef.view === "workspace") {
     const owner = String(pathRef.owner || principal?.userId || "").trim();
     const principalId = String(principal?.userId || "").trim();
-    const defaultWorkspaceRule = isSuperAdmin
-      ? BUILTIN_PATH_POLICY.roles.superAdmin.workspace
-      : BUILTIN_PATH_POLICY.roles.regularUser.workspace;
     const workspaceRule = isSuperAdmin
-      ? effectivePolicy?.roles?.superAdmin?.workspace || defaultWorkspaceRule
-      : effectivePolicy?.roles?.regularUser?.workspace || defaultWorkspaceRule;
+      ? effectivePolicy.roles.superAdmin.workspace
+      : effectivePolicy.roles.regularUser.workspace;
     const access =
-      owner && principalId && owner !== principalId ? workspaceRule?.others : workspaceRule?.own;
-    if (access === "deny")
+      owner && principalId && owner !== principalId ? workspaceRule.others : workspaceRule.own;
+    const writeCapability = [PATH_CAPABILITIES.FILE_WRITE, PATH_CAPABILITIES.FILE_PATCH].includes(
+      capability,
+    );
+    if (access === "deny" || (access === "read_only" && writeCapability))
       return Object.freeze({
         allowed: false,
         code: "workspace_owner_not_authorized",
@@ -389,6 +453,9 @@ export function authorizePathRef({
       });
   }
   if (pathRef.view === "host") {
+    if (!executionPath || !isAbsolutePathAnyPlatform(executionPath)) {
+      throw new TypeError("host path authorization requires an absolute execution path");
+    }
     if (
       rule.hostRequiresRole === "deny" ||
       (rule.hostRequiresRole === "super_admin" && !isSuperAdmin)
@@ -399,8 +466,7 @@ export function authorizePathRef({
         pathRef,
         capability,
       });
-    const hostRule =
-      effectivePolicy?.roles?.superAdmin?.host || BUILTIN_PATH_POLICY.roles.superAdmin.host;
+    const hostRule = effectivePolicy.roles.superAdmin.host;
     if (hostRule.access !== "allow")
       return Object.freeze({
         allowed: false,
@@ -408,10 +474,10 @@ export function authorizePathRef({
         pathRef,
         capability,
       });
-    const candidate = executionPath || pathRef.path;
-    const denied = (hostRule.deniedRoots || []).some((root) => isPathWithinRoot(root, candidate));
-    const allowed = (hostRule.allowedRoots || []).some(
-      (root) => root === "<host-filesystem>" || isPathWithinRoot(root, candidate),
+    const candidate = executionPath;
+    const denied = hostRule.deniedRoots.some((root) => isPathWithinRoot(root, candidate));
+    const allowed = hostRule.allowedRoots.some(
+      (root) => root === HOST_FILESYSTEM_ROOT || isPathWithinRoot(root, candidate),
     );
     if (denied || !allowed)
       return Object.freeze({

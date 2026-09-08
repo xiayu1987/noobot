@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../can-persistence-base.js';
-import IBizinst from '../interfaces/bizinst.js';
+import CanPersistenceBase from "../../../can-persistence-base.js";
 
 class ProcessChain extends CanPersistenceBase {
   constructor() {
@@ -28,4 +27,4 @@ class ProcessChain extends CanPersistenceBase {
   }
 }
 
-export default  ProcessChain;
+export default ProcessChain;

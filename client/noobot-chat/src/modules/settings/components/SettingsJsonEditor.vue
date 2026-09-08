@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-const props = defineProps({
+defineProps({
   modelValue: { type: String, default: "" },
   parseError: { type: String, default: "" },
   placeholder: { type: String, default: "" },

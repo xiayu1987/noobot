@@ -11,7 +11,10 @@ import {
   SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
 } from "./session-log-protocol.js";
-import { isWorkspaceSessionDeleted, isWorkspaceSessionPersisted } from "./session-deletion-guard.js";
+import {
+  isWorkspaceSessionDeleted,
+  isWorkspaceSessionPersisted,
+} from "./session-deletion-guard.js";
 import { normalizeOptionalSessionId, resolveOptionalSessionId } from "./session-id.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
@@ -39,19 +42,18 @@ export const MAX_SESSION_CHANNEL_MESSAGE_BYTES = LENGTH_THRESHOLDS.sessionLog.ma
 export const MAX_SESSION_CHANNEL_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
 export const MAX_SESSION_CHANNEL_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 
-function envFlag(name, fallback = false) {
-  const raw = String(process.env[name] || "").trim().toLowerCase();
-  if (!raw) return fallback;
-  return ["1", "true", "yes", "on"].includes(raw);
-}
-
 function envMs(name, fallback, min = TIME_THRESHOLDS.service.sessionLogMinIntervalMs) {
   const parsed = Number(process.env[name]);
   return Number.isFinite(parsed) ? Math.max(min, parsed) : fallback;
 }
 
 export function safeSessionChannelSegment(value = "unknown") {
-  return String(value || "unknown").trim().replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 120) || "unknown";
+  return (
+    String(value || "unknown")
+      .trim()
+      .replace(/[^a-zA-Z0-9_.-]/g, "_")
+      .slice(0, 120) || "unknown"
+  );
 }
 
 export function resolveSessionChannelConfig(options = {}) {
@@ -59,32 +61,56 @@ export function resolveSessionChannelConfig(options = {}) {
   return {
     root: explicitRoot ? path.resolve(String(explicitRoot)) : "",
     logRoot: explicitRoot ? path.resolve(String(explicitRoot)) : "",
-    workspaceRoot: path.resolve(String(options.workspaceRoot || process.env.NOOBOT_WORKSPACE_ROOT || DEFAULT_WORKSPACE_ROOT)),
-    dirName: safeSessionChannelSegment(options.dirName || options.logDirName || process.env.NOOBOT_SESSION_LOG_DIR_NAME || "logs"),
-    logDirName: safeSessionChannelSegment(options.dirName || options.logDirName || process.env.NOOBOT_SESSION_LOG_DIR_NAME || "logs"),
-    retentionMs: envMs("NOOBOT_SESSION_LOG_RETENTION_MS", Number(options.retentionMs || DEFAULT_RETENTION_MS)),
-    cleanupIntervalMs: envMs("NOOBOT_SESSION_LOG_CLEANUP_INTERVAL_MS", Number(options.cleanupIntervalMs || TIME_THRESHOLDS.service.sessionLogCleanupIntervalMs)),
+    workspaceRoot: path.resolve(
+      String(options.workspaceRoot || process.env.NOOBOT_WORKSPACE_ROOT || DEFAULT_WORKSPACE_ROOT),
+    ),
+    dirName: safeSessionChannelSegment(
+      options.dirName || options.logDirName || process.env.NOOBOT_SESSION_LOG_DIR_NAME || "logs",
+    ),
+    logDirName: safeSessionChannelSegment(
+      options.dirName || options.logDirName || process.env.NOOBOT_SESSION_LOG_DIR_NAME || "logs",
+    ),
+    retentionMs: envMs(
+      "NOOBOT_SESSION_LOG_RETENTION_MS",
+      Number(options.retentionMs || DEFAULT_RETENTION_MS),
+    ),
+    cleanupIntervalMs: envMs(
+      "NOOBOT_SESSION_LOG_CLEANUP_INTERVAL_MS",
+      Number(options.cleanupIntervalMs || TIME_THRESHOLDS.service.sessionLogCleanupIntervalMs),
+    ),
     sessionLogControls: options.sessionLogControls,
   };
 }
 
 export function resolveSessionChannelStorageSessionId(event = {}) {
-  return safeSessionChannelSegment(resolveOptionalSessionId(
-    event.storageSessionId,
-    event.rootSessionId,
-    event.parentSessionId,
-    event.data?.storageSessionId,
-    event.data?.rootSessionId,
-    event.data?.parentSessionId,
-    event.sessionId,
-  ));
+  return safeSessionChannelSegment(
+    resolveOptionalSessionId(
+      event.storageSessionId,
+      event.rootSessionId,
+      event.parentSessionId,
+      event.data?.storageSessionId,
+      event.data?.rootSessionId,
+      event.data?.parentSessionId,
+      event.sessionId,
+    ),
+  );
 }
 
-export function resolveSessionChannelDir({ sessionId, storageSessionId, userId }, config = resolveSessionChannelConfig()) {
+export function resolveSessionChannelDir(
+  { sessionId, storageSessionId, userId },
+  config = resolveSessionChannelConfig(),
+) {
   const root = config.root || config.logRoot || "";
   if (root) return path.join(root, sessionId);
   const safeUserId = safeSessionChannelSegment(userId || "unknown-user");
-  return path.join(config.workspaceRoot, safeUserId, "runtime", "session", storageSessionId || sessionId, config.dirName || config.logDirName || "logs");
+  return path.join(
+    config.workspaceRoot,
+    safeUserId,
+    "runtime",
+    "session",
+    storageSessionId || sessionId,
+    config.dirName || config.logDirName || "logs",
+  );
 }
 
 export function buildSessionChannelRecord(event = {}, options = {}) {
@@ -95,12 +121,15 @@ export function buildSessionChannelRecord(event = {}, options = {}) {
     includeTimestamp: options.includeTimestamp !== false,
     source: options.source,
   });
-  if (options.channel || event.channel) record.channel = safeSessionChannelSegment(event.channel || options.channel);
+  if (options.channel || event.channel)
+    record.channel = safeSessionChannelSegment(event.channel || options.channel);
   return record;
 }
 
 export async function writeSessionChannelEvent(event = {}, config = resolveSessionChannelConfig()) {
-  const sessionId = safeSessionChannelSegment(event.sessionId || event.data?.sessionId || "unknown-session");
+  const sessionId = safeSessionChannelSegment(
+    event.sessionId || event.data?.sessionId || "unknown-session",
+  );
   const userId = safeSessionChannelSegment(event.userId || event.data?.userId || "unknown-user");
   const record = buildSessionChannelRecord(event, {
     defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
@@ -112,7 +141,8 @@ export async function writeSessionChannelEvent(event = {}, config = resolveSessi
   record.userId = userId;
   const parentSessionId = normalizeOptionalSessionId(event.parentSessionId);
   if (parentSessionId) record.parentSessionId = safeSessionChannelSegment(parentSessionId);
-  if (event.dialogProcessId) record.dialogProcessId = safeSessionChannelSegment(event.dialogProcessId);
+  if (event.dialogProcessId)
+    record.dialogProcessId = safeSessionChannelSegment(event.dialogProcessId);
   if (event.turnScopeId) record.turnScopeId = safeSessionChannelSegment(event.turnScopeId);
   record.source = safeSessionChannelSegment(record.source || "unknown");
   if (!shouldRecordSessionLog(record, config)) return { ok: true, skipped: true };
@@ -121,19 +151,24 @@ export async function writeSessionChannelEvent(event = {}, config = resolveSessi
   if (!(config.root || config.logRoot)) {
     const sessionIds = [...new Set([sessionId, storageSessionId].filter(Boolean))];
     for (const candidateSessionId of sessionIds) {
-      if (await isWorkspaceSessionDeleted({
-        workspaceRoot: config.workspaceRoot,
-        userId,
-        sessionId: candidateSessionId,
-      })) {
+      if (
+        await isWorkspaceSessionDeleted({
+          workspaceRoot: config.workspaceRoot,
+          userId,
+          sessionId: candidateSessionId,
+        })
+      ) {
         return { ok: true, skipped: true, deleted: true };
       }
     }
-    if (storageSessionId === sessionId && !await isWorkspaceSessionPersisted({
-      workspaceRoot: config.workspaceRoot,
-      userId,
-      sessionId: storageSessionId,
-    })) {
+    if (
+      storageSessionId === sessionId &&
+      !(await isWorkspaceSessionPersisted({
+        workspaceRoot: config.workspaceRoot,
+        userId,
+        sessionId: storageSessionId,
+      }))
+    ) {
       return { ok: true, skipped: true, missingSession: true };
     }
   }
@@ -143,7 +178,10 @@ export async function writeSessionChannelEvent(event = {}, config = resolveSessi
   return { ok: true, file };
 }
 
-export async function cleanupSessionChannelRecords(config = resolveSessionChannelConfig(), now = Date.now()) {
+export async function cleanupSessionChannelRecords(
+  config = resolveSessionChannelConfig(),
+  now = Date.now(),
+) {
   const root = config.root || config.logRoot || "";
   if (!root) return { ok: true, removed: 0, skipped: true };
   await fs.mkdir(root, { recursive: true });
@@ -161,26 +199,40 @@ export async function cleanupSessionChannelRecords(config = resolveSessionChanne
   return { ok: true, removed };
 }
 
-export function createSessionChannelWebSocketClient({ WebSocketImpl, resolveWebSocketUrl, source = "agent-proxy", defaultCategory = SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY, defaultEvent = "agentProxy.log", defaultSessionId = "agent-proxy", channel = SESSION_CHANNELS.AGENT_PROXY_WEB_SOCKET } = {}) {
+export function createSessionChannelWebSocketClient({
+  WebSocketImpl,
+  resolveWebSocketUrl,
+  source = "agent-proxy",
+  defaultCategory = SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
+  defaultEvent = "agentProxy.log",
+  defaultSessionId = "agent-proxy",
+  channel = SESSION_CHANNELS.AGENT_PROXY_WEB_SOCKET,
+} = {}) {
   const sockets = new Map();
   const queues = new Map();
   const inFlights = new Map();
   const reconnectTimers = new Map();
 
   const getQueue = (key = "") => (queues.has(key) ? queues.get(key) : queues.set(key, []).get(key));
-  const getInFlight = (key = "") => (inFlights.has(key) ? inFlights.get(key) : inFlights.set(key, []).get(key));
+  const getInFlight = (key = "") =>
+    inFlights.has(key) ? inFlights.get(key) : inFlights.set(key, []).get(key);
 
   function restoreInFlight(key = "") {
     const queue = getQueue(key);
     const inFlight = getInFlight(key);
     if (!inFlight.length) return;
     queue.unshift(...inFlight.splice(0));
-    if (queue.length > MAX_SESSION_CHANNEL_QUEUE_SIZE) queue.splice(0, queue.length - MAX_SESSION_CHANNEL_QUEUE_SIZE);
+    if (queue.length > MAX_SESSION_CHANNEL_QUEUE_SIZE)
+      queue.splice(0, queue.length - MAX_SESSION_CHANNEL_QUEUE_SIZE);
   }
 
   function handleAck(key = "", raw = {}) {
     let parsed = null;
-    try { parsed = JSON.parse(String(raw?.data || raw || "{}")); } catch { return; }
+    try {
+      parsed = JSON.parse(String(raw?.data || raw || "{}"));
+    } catch {
+      return;
+    }
     if (parsed?.event !== "ack") return;
     const inFlight = getInFlight(key);
     const ackCount = Math.max(0, Math.min(Number(parsed.count || 1), inFlight.length));
@@ -201,14 +253,23 @@ export function createSessionChannelWebSocketClient({ WebSocketImpl, resolveWebS
   function connect(key = "") {
     if (!key || !WebSocketImpl) return null;
     const current = sockets.get(key);
-    if (current && [WebSocketImpl.OPEN, WebSocketImpl.CONNECTING].includes(current.readyState)) return current;
+    if (current && [WebSocketImpl.OPEN, WebSocketImpl.CONNECTING].includes(current.readyState))
+      return current;
     const url = resolveWebSocketUrl?.(key);
     if (!url) return null;
     const socket = new WebSocketImpl(url);
     socket.onopen = () => flush(key);
     socket.onmessage = (raw) => handleAck(key, raw);
-    socket.onclose = () => { restoreInFlight(key); sockets.delete(key); scheduleReconnect(key); };
-    socket.onerror = () => { restoreInFlight(key); sockets.delete(key); scheduleReconnect(key); };
+    socket.onclose = () => {
+      restoreInFlight(key);
+      sockets.delete(key);
+      scheduleReconnect(key);
+    };
+    socket.onerror = () => {
+      restoreInFlight(key);
+      sockets.delete(key);
+      scheduleReconnect(key);
+    };
     sockets.set(key, socket);
     return socket;
   }
@@ -226,18 +287,36 @@ export function createSessionChannelWebSocketClient({ WebSocketImpl, resolveWebS
   }
 
   function log(key = "", event = {}) {
-    const record = buildSessionChannelRecord(event, { source, defaultCategory, defaultEvent, defaultSessionId, includeTimestamp: false, channel });
+    const record = buildSessionChannelRecord(event, {
+      source,
+      defaultCategory,
+      defaultEvent,
+      defaultSessionId,
+      includeTimestamp: false,
+      channel,
+    });
     const queue = getQueue(key);
     queue.push(record);
-    if (queue.length > MAX_SESSION_CHANNEL_QUEUE_SIZE) queue.splice(0, queue.length - MAX_SESSION_CHANNEL_QUEUE_SIZE);
+    if (queue.length > MAX_SESSION_CHANNEL_QUEUE_SIZE)
+      queue.splice(0, queue.length - MAX_SESSION_CHANNEL_QUEUE_SIZE);
     connect(key);
     flush(key);
     return true;
   }
 
   function status(key = "") {
-    return { queueLength: getQueue(key).length, inFlightLength: getInFlight(key).length, readyState: sockets.get(key)?.readyState ?? WebSocketImpl?.CLOSED, hasReconnectTimer: reconnectTimers.has(key) };
+    return {
+      queueLength: getQueue(key).length,
+      inFlightLength: getInFlight(key).length,
+      readyState: sockets.get(key)?.readyState ?? WebSocketImpl?.CLOSED,
+      hasReconnectTimer: reconnectTimers.has(key),
+    };
   }
 
-  return { connect, log, debug: (key, event = {}) => log(key, { ...event, category: SESSION_CHANNEL_CATEGORIES.DEBUG }), status };
+  return {
+    connect,
+    log,
+    debug: (key, event = {}) => log(key, { ...event, category: SESSION_CHANNEL_CATEGORIES.DEBUG }),
+    status,
+  };
 }

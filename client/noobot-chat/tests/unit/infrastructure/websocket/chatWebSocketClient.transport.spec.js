@@ -8,7 +8,6 @@ import { createChatWebSocketClient } from "../../../../src/infrastructure/websoc
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
   emitCommandReceipt,
-  flushPromises,
   MockWebSocket,
   setupWebSocketTestHooks,
   streamCommand,

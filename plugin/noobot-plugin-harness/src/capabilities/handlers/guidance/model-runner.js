@@ -6,7 +6,6 @@
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
-  HARNESS_I18N_KEYSET,
   LOCALE,
   PROMPT_ENVELOPE,
   appendCapabilityLog,
@@ -14,7 +13,6 @@ import {
   buildCapabilityModelMessages,
   buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
-  extractRawTextContent,
   normalizeTransferPayload,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
@@ -23,7 +21,6 @@ import {
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
-  translateI18nText,
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";

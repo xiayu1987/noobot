@@ -71,9 +71,11 @@ export async function resolveFileInput({
     capability,
   });
   const executionPath = resolution.executionPath;
+  const resourcePath = resolution.resourcePath;
   if (!mustExist && !(await stat(executionPath).catch(() => null))) {
     return {
       executionPath,
+      resourcePath,
       displayInput: normalizedSource,
       resourceRef: null,
       pathRef: resolution.pathRef,
@@ -91,6 +93,7 @@ export async function resolveFileInput({
   });
   return {
     executionPath,
+    resourcePath,
     displayInput: sourceAttachmentMeta
       ? normalizedSource
       : String(resourceRef.logical?.path || authorizationInput || "").trim(),

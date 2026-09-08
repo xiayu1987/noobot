@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IModel from '../../../../design/model/interfaces/model.js';
-import INode from '../../../../design/model/node/interfaces/node.js';
-import IStateNode from '../../../../design/model/node/interfaces/state-node.js';
-
 class ModelBox {
   constructor() {
     this.model = null;
@@ -21,7 +17,7 @@ class ModelBox {
   getStartNode() {
     const nodes = this.getModel().getNodes() || [];
     for (const node of nodes) {
-      if (typeof node.getStateType === 'function') {
+      if (typeof node.getStateType === "function") {
         const stateType = node.getStateType();
         if (stateType === 0 || stateType === 2) return node;
       }
@@ -31,7 +27,7 @@ class ModelBox {
   getEndNode() {
     const nodes = this.getModel().getNodes() || [];
     for (const node of nodes) {
-      if (typeof node.getStateType === 'function') {
+      if (typeof node.getStateType === "function") {
         const stateType = node.getStateType();
         if (stateType === 1 || stateType === 3) return node;
       }
@@ -40,4 +36,4 @@ class ModelBox {
   }
 }
 
-export default  ModelBox;
+export default ModelBox;

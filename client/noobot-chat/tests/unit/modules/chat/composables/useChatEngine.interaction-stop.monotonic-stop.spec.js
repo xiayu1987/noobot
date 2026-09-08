@@ -5,13 +5,13 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, activateRuntimeTurn } from "../helpers/useChatEngineHarness.js";
-import { BackendChannelState, createInitialSessionRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { BackendChannelState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: monotonic-stop", () => {
   it("prepareMonotonicMessageAction treats stop completion timeout as a precondition failure", async () => {
     vi.useFakeTimers();
-    const { engine, deps, sending, canStop, activeSession, activeTurnRuntime, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-monotonic-stop",
       deps: {
         monotonicActionStopTimeoutMs: 500,
@@ -23,7 +23,12 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
       content: "question",
       turnScopeId: "turn-stop",
     });
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-monotonic-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-monotonic-stop",
+      turnScopeId: "turn-stop",
+      dialogProcessId: "dp-stop",
+    });
     activeSession.value.messages.push({
       role: RoleEnum.ASSISTANT,
       content: "partial",
@@ -39,7 +44,9 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     const actionPromise = engine.prepareMonotonicMessageAction();
-    const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
+    const rejectionExpectation = expect(actionPromise).rejects.toThrow(
+      "chat.monotonicActionStopTimeout",
+    );
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(510);
@@ -68,7 +75,12 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
         },
       },
     ];
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-stale-stop-timeout", turnScopeId: "turn-new", dialogProcessId: "dp-new" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-stale-stop-timeout",
+      turnScopeId: "turn-new",
+      dialogProcessId: "dp-new",
+    });
     deps.chatWebSocketClient.requestStop.mockImplementation((...args) => {
       expect(args).toHaveLength(1);
       return true;
@@ -89,7 +101,7 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
   it("prepareMonotonicMessageAction warns and rejects when stop does not settle", async () => {
     vi.useFakeTimers();
     const notify = vi.fn();
-    const { engine, deps, activeSession, sending, activeTurnRuntime, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, activeSession, sending, turnRuntimeRegistry } = createHarness({
       sessionId: "local-monotonic-timeout",
       deps: {
         notify,

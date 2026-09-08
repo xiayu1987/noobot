@@ -10,7 +10,6 @@ import os from "node:os";
 import path from "node:path";
 import { createModelContext } from "@noobot/context-protocol";
 import {
-  compileAnimationScript,
   hasSpatiallyReachableEvents,
   analyzeAnimationSpatial,
   parseAnimationProtocol,

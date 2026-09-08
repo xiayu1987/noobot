@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IStateNode from '../../../../../design/model/node/interfaces/state-node.js';
+class IStateNodeState {}
 
-class IStateNodeState {
-}
-
-export default  IStateNodeState;
+export default IStateNodeState;

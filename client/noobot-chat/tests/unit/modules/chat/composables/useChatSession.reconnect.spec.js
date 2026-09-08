@@ -12,7 +12,7 @@ import {
 import { useChatSession } from "../../../../../src/modules/chat/composables/useChatSession.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { nextTick, ref, toRef } from "vue";
+import { ref } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessageState.js";
 import {
@@ -25,11 +25,7 @@ import {
   selectToolTimelineLogs,
 } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
-import {
-  BackendChannelState,
-  FrontendRunState,
-  SESSION_RUN_EVENT,
-} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { confirmTurnRuntimeDeletion } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";

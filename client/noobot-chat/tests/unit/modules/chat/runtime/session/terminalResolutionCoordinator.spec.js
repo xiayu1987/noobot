@@ -6,8 +6,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { createTerminalResolutionCoordinator } from "../../../../../../src/modules/chat/runtime/terminalResolutionCoordinator.js";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/session-protocol";
+import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import {
+  createTurnLifecycleEnvelope,
+  createTurnTerminalResolution,
+} from "@noobot/session-protocol";
 import {
   applyTurnRuntimeEvent,
   applyTurnLifecycleEnvelope,
@@ -74,10 +77,17 @@ describe("terminalResolutionCoordinator", () => {
 
   it("treats terminal notifications as query triggers and unwraps reactive user identity", async () => {
     let release;
-    const fetcher = vi.fn(() => new Promise((resolve) => { release = resolve; }));
+    const fetcher = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
-      userId: ref("u-1"), fetcher, applyTurnTerminalResolution: apply,
+      userId: ref("u-1"),
+      fetcher,
+      applyTurnTerminalResolution: apply,
     });
     const event = {
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
@@ -100,7 +110,10 @@ describe("terminalResolutionCoordinator", () => {
     const fetcher = vi.fn(async () => response({ resolved: false }));
     const apply = vi.fn();
     const coordinator = createTerminalResolutionCoordinator({
-      userId: "u-1", fetcher, applyTurnTerminalResolution: apply, maxRetries: 0,
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
+      maxRetries: 0,
     });
     await expect(coordinator.resolve("s-1", "t-1")).resolves.toMatchObject({
       applied: false,
@@ -142,7 +155,9 @@ describe("terminalResolutionCoordinator", () => {
     const fetcher = vi.fn(async () => response());
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
-      userId: "u-1", fetcher, applyTurnTerminalResolution: apply,
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
     });
 
     await coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 });
@@ -166,28 +181,45 @@ describe("terminalResolutionCoordinator", () => {
 
   it("re-applies a cached authoritative response after a temporary local projection failure", async () => {
     const fetcher = vi.fn(async () => response());
-    const apply = vi.fn()
-      .mockReturnValueOnce({ applied: false, retryable: true, reason: "terminal_materialization_apply_failed" })
+    const apply = vi
+      .fn()
+      .mockReturnValueOnce({
+        applied: false,
+        retryable: true,
+        reason: "terminal_materialization_apply_failed",
+      })
       .mockReturnValueOnce({ applied: true });
     const coordinator = createTerminalResolutionCoordinator({
-      userId: "u-1", fetcher, applyTurnTerminalResolution: apply,
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
     });
 
-    await expect(coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 }))
-      .resolves.toMatchObject({ applied: false, retryable: true });
-    await expect(coordinator.resolve("s-1", "t-1"))
-      .resolves.toEqual({ applied: true });
+    await expect(
+      coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 }),
+    ).resolves.toMatchObject({ applied: false, retryable: true });
+    await expect(coordinator.resolve("s-1", "t-1")).resolves.toEqual({ applied: true });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(2);
   });
 
   it("coalesces a newer in-flight notification into one follow-up read", async () => {
     let release;
-    const fetcher = vi.fn()
-      .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }))
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      )
       .mockResolvedValueOnce(response({ revision: 3, sequence: 4 }));
     const apply = vi.fn(() => ({ applied: true }));
-    const coordinator = createTerminalResolutionCoordinator({ userId: "u-1", fetcher, applyTurnTerminalResolution: apply });
+    const coordinator = createTerminalResolutionCoordinator({
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
+    });
 
     const first = coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 });
     expect(coordinator.resolve("s-1", "t-1", { revision: 3, sequence: 4 })).toBe(first);
@@ -201,16 +233,20 @@ describe("terminalResolutionCoordinator", () => {
 
   it("does not refetch or reapply an authoritative commit after a rejected local commit", async () => {
     const fetcher = vi.fn(async () => response());
-    const apply = vi.fn()
-      .mockReturnValue({ applied: false, reason: "terminal_commit_rejected" });
+    const apply = vi.fn().mockReturnValue({ applied: false, reason: "terminal_commit_rejected" });
     const coordinator = createTerminalResolutionCoordinator({
-      userId: "u-1", fetcher, applyTurnTerminalResolution: apply,
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
     });
 
-    await expect(coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 }))
-      .resolves.toMatchObject({ applied: false, reason: "terminal_commit_rejected" });
-    await expect(coordinator.resolve("s-1", "t-1"))
-      .resolves.toMatchObject({ applied: false, reason: "terminal_commit_rejected" });
+    await expect(
+      coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 }),
+    ).resolves.toMatchObject({ applied: false, reason: "terminal_commit_rejected" });
+    await expect(coordinator.resolve("s-1", "t-1")).resolves.toMatchObject({
+      applied: false,
+      reason: "terminal_commit_rejected",
+    });
 
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(1);
@@ -220,7 +256,9 @@ describe("terminalResolutionCoordinator", () => {
     const fetcher = vi.fn(async () => response());
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
-      userId: "u-1", fetcher, applyTurnTerminalResolution: apply,
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
     });
 
     await coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 });
@@ -235,7 +273,9 @@ describe("terminalResolutionCoordinator", () => {
     const fetcher = vi.fn(async () => response());
     const apply = vi.fn(() => ({ applied: true }));
     const coordinator = createTerminalResolutionCoordinator({
-      userId: "u-1", fetcher, applyTurnTerminalResolution: apply,
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
     });
 
     await coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 });
@@ -254,22 +294,48 @@ describe("terminalResolutionCoordinator", () => {
       dialogProcessId: "dp-1",
       source: "test",
     });
-    applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
-      eventType: "turn.action_accepted", eventId: "event-t-1-accepted",
-      commandId: "command-t-1", userId: "u-1", sessionId: "s-1", turnScopeId: "t-1",
-      messageId: "event-message-t-1", presentationMessageId: "message-t-1",
-      dialogProcessId: "dp-1", revision: 1, sequence: 1,
-      phase: "action", state: "action_requesting", action: "send", executionState: "accepted",
-      capabilities: { actionLocked: true, canStop: false },
-    }));
-    applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
-      eventType: "turn.processing_started", eventId: "event-t-1-processing",
-      commandId: "command-t-1", userId: "u-1", sessionId: "s-1", turnScopeId: "t-1",
-      messageId: "event-message-t-1", presentationMessageId: "message-t-1",
-      dialogProcessId: "dp-1", revision: 2, sequence: 2,
-      phase: "processing", state: "processing", action: "send", executionState: "sending",
-      capabilities: { actionLocked: true, canStop: true },
-    }));
+    applyTurnLifecycleEnvelope(
+      registry,
+      createTurnLifecycleEnvelope({
+        eventType: "turn.action_accepted",
+        eventId: "event-t-1-accepted",
+        commandId: "command-t-1",
+        userId: "u-1",
+        sessionId: "s-1",
+        turnScopeId: "t-1",
+        messageId: "event-message-t-1",
+        presentationMessageId: "message-t-1",
+        dialogProcessId: "dp-1",
+        revision: 1,
+        sequence: 1,
+        phase: "action",
+        state: "action_requesting",
+        action: "send",
+        executionState: "accepted",
+        capabilities: { actionLocked: true, canStop: false },
+      }),
+    );
+    applyTurnLifecycleEnvelope(
+      registry,
+      createTurnLifecycleEnvelope({
+        eventType: "turn.processing_started",
+        eventId: "event-t-1-processing",
+        commandId: "command-t-1",
+        userId: "u-1",
+        sessionId: "s-1",
+        turnScopeId: "t-1",
+        messageId: "event-message-t-1",
+        presentationMessageId: "message-t-1",
+        dialogProcessId: "dp-1",
+        revision: 2,
+        sequence: 2,
+        phase: "processing",
+        state: "processing",
+        action: "send",
+        executionState: "sending",
+        capabilities: { actionLocked: true, canStop: true },
+      }),
+    );
     expect(selectSessionTurnRuntime(registry, "s-1")).toMatchObject({
       sending: true,
       canStop: true,
@@ -304,13 +370,17 @@ describe("terminalResolutionCoordinator", () => {
     });
     const fetcher = vi.fn(async () => authoritativeResponse);
     const apply = vi.fn((authoritativeResponse) =>
-      applyTurnTerminalResolution(registry, authoritativeResponse));
+      applyTurnTerminalResolution(registry, authoritativeResponse),
+    );
     const coordinator = createTerminalResolutionCoordinator({
-      userId: "u-1", fetcher, applyTurnTerminalResolution: apply,
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
     });
 
-    await expect(coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 }))
-      .resolves.toMatchObject({ applied: true });
+    await expect(
+      coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 }),
+    ).resolves.toMatchObject({ applied: true });
 
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(1);
@@ -336,7 +406,8 @@ describe("terminalResolutionCoordinator", () => {
   });
 
   it("does not hide a conflicting commit behind a cached revision watermark", async () => {
-    const fetcher = vi.fn()
+    const fetcher = vi
+      .fn()
       .mockResolvedValueOnce(response({ completionCommitId: "commit-a" }))
       .mockResolvedValueOnce(response({ completionCommitId: "commit-b" }));
     const coordinator = createTerminalResolutionCoordinator({
@@ -346,10 +417,16 @@ describe("terminalResolutionCoordinator", () => {
     });
 
     await coordinator.resolve("s-1", "t-1", {
-      completionCommitId: "commit-a", summaryVersion: 2, revision: 2, sequence: 3,
+      completionCommitId: "commit-a",
+      summaryVersion: 2,
+      revision: 2,
+      sequence: 3,
     });
     await coordinator.resolve("s-1", "t-1", {
-      completionCommitId: "commit-b", summaryVersion: 2, revision: 2, sequence: 3,
+      completionCommitId: "commit-b",
+      summaryVersion: 2,
+      revision: 2,
+      sequence: 3,
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
@@ -359,7 +436,9 @@ describe("terminalResolutionCoordinator", () => {
     try {
       const fetcher = vi.fn(async () => response({ resolved: false, retryable: true }));
       const coordinator = createTerminalResolutionCoordinator({
-        userId: "u-1", fetcher, maxRetries: 1,
+        userId: "u-1",
+        fetcher,
+        maxRetries: 1,
       });
       const first = coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 });
       await vi.runAllTimersAsync();
@@ -370,7 +449,9 @@ describe("terminalResolutionCoordinator", () => {
       expect(fetcher).toHaveBeenCalledTimes(2);
 
       const forced = coordinator.resolve("s-1", "t-1", {
-        revision: 2, sequence: 3, force: true,
+        revision: 2,
+        sequence: 3,
+        force: true,
       });
       await vi.runAllTimersAsync();
       await forced;
@@ -382,20 +463,36 @@ describe("terminalResolutionCoordinator", () => {
 
   it("does not reproject a resolved response after the single authoritative commit is rejected", async () => {
     const fetcher = vi.fn(async () => response());
-    const apply = vi.fn(() => ({ applied: false, reason: "terminal_materialization_apply_failed" }));
-    const coordinator = createTerminalResolutionCoordinator({ userId: "u-1", fetcher, applyTurnTerminalResolution: apply });
+    const apply = vi.fn(() => ({
+      applied: false,
+      reason: "terminal_materialization_apply_failed",
+    }));
+    const coordinator = createTerminalResolutionCoordinator({
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: apply,
+    });
 
-    await expect(coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 }))
-      .resolves.toEqual({ applied: false, reason: "terminal_materialization_apply_failed" });
-    await expect(coordinator.resolve("s-1", "t-1"))
-      .resolves.toEqual({ applied: false, reason: "terminal_materialization_apply_failed" });
+    await expect(coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3 })).resolves.toEqual({
+      applied: false,
+      reason: "terminal_materialization_apply_failed",
+    });
+    await expect(coordinator.resolve("s-1", "t-1")).resolves.toEqual({
+      applied: false,
+      reason: "terminal_materialization_apply_failed",
+    });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(1);
   });
 
   it("opens a cooldown after a 429 instead of retrying duplicate notifications", async () => {
-    const headers = { get: (name) => name === "retry-after" ? "2" : null };
-    const fetcher = vi.fn(async () => ({ ok: false, status: 429, headers, json: async () => ({ ok: false, error: "Too Many Requests" }) }));
+    const headers = { get: (name) => (name === "retry-after" ? "2" : null) };
+    const fetcher = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      headers,
+      json: async () => ({ ok: false, error: "Too Many Requests" }),
+    }));
     const coordinator = createTerminalResolutionCoordinator({ userId: "u-1", fetcher });
 
     const first = await coordinator.resolve("s-1", "t-1");
@@ -414,8 +511,9 @@ describe("terminalResolutionCoordinator", () => {
       applyTurnTerminalResolution: apply,
     });
 
-    await expect(coordinator.resolve("s-1", "historical-turn"))
-      .resolves.toEqual(expect.objectContaining({ applied: true }));
+    await expect(coordinator.resolve("s-1", "historical-turn")).resolves.toEqual(
+      expect.objectContaining({ applied: true }),
+    );
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(1);
   });
@@ -429,14 +527,16 @@ describe("terminalResolutionCoordinator", () => {
       applyTurnTerminalResolution: apply,
     });
 
-    await expect(coordinator.observe({
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      eventType: "turn.completed",
-      sessionId: "s-1",
-      turnScopeId: "t-1",
-      revision: 2,
-      sequence: 3,
-    })).resolves.toMatchObject({ applied: true });
+    await expect(
+      coordinator.observe({
+        type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+        eventType: "turn.completed",
+        sessionId: "s-1",
+        turnScopeId: "t-1",
+        revision: 2,
+        sequence: 3,
+      }),
+    ).resolves.toMatchObject({ applied: true });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(1);
   });

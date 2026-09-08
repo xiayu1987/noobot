@@ -8,7 +8,6 @@ import {
   createAuthoritativeMessageEnvelope,
   createCanonicalAssistant,
   createFixture,
-  createFakeProcessStore,
   createInteractionEnvelope,
   createWorkflowEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";

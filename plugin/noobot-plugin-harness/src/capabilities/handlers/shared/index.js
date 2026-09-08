@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { relaySeparateModelOutputAsUserMessage } from "./relay-model-output.js";
 
 export {
   ACCEPTANCE_MODE,
@@ -56,11 +55,7 @@ export {
   shouldProcessPrimaryToolHooks,
 } from "./tool-utils.js";
 
-export {
-  extractRawTextContent,
-  isMessageSummarized,
-  safeJsonStringify,
-} from "./message/utils.js";
+export { extractRawTextContent, isMessageSummarized, safeJsonStringify } from "./message/utils.js";
 
 export {
   buildPlanSnapshot,

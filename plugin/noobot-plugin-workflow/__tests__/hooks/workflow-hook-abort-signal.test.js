@@ -5,29 +5,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import {
   createMockBotHookManager,
-  workflowDsl,
-  simpleActionWorkflowDsl,
-  createCapabilityModelInvoker,
-  createNodeResult,
-  createRecordingSubSessionRunner,
-  createAttachmentPersister,
-  createSemanticTransferTool,
-  createBaseContext,
   installTurnMessageEventRuntimeFixture,
-  createContextWithSharedTools,
   getBeforeDispatch,
-  runWorkflowHook,
-  callsByNodeName,
-  workflowTurn,
   createRegisterWorkflowHooks,
-  WORKFLOW_PLUGIN_DEFAULTS,
-  resolveWorkflowNodeDialogProcessId,
-  collectWorkflowDialogProcessIds,
-  resolveWorkflowDialogProcessId,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook aborts node sub-session when parent stop signal fires", async () => {
@@ -45,15 +28,17 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
       semanticPrompt: "emit workflow dsl",
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=act type=action name="节点A" task="执行当前请求"',
-          'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=act',
-          'EDGE from=act to=end',
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=act type=action name="节点A" task="执行当前请求"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=act",
+            "EDGE from=act to=end",
+            "END",
+          ].join("\n"),
+        },
       }),
       subSessionRunner: async ({ abortSignal } = {}) => {
         receivedAbortSignal = abortSignal;
@@ -120,25 +105,29 @@ test("workflow waits for every parallel node sub-session to stop before planner 
       maxParallelNodeAgents: 2,
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=a type=action name="节点A" task="执行A"',
-          'NODE id=b type=action name="节点B" task="执行B"',
-          'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=a',
-          'EDGE from=start to=b',
-          'EDGE from=a to=end',
-          'EDGE from=b to=end',
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=a type=action name="节点A" task="执行A"',
+            'NODE id=b type=action name="节点B" task="执行B"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=a",
+            "EDGE from=start to=b",
+            "EDGE from=a to=end",
+            "EDGE from=b to=end",
+            "END",
+          ].join("\n"),
+        },
       }),
       subSessionRunner: async ({ abortSignal, metadata } = {}) => {
         startedNodes += 1;
         if (startedNodes === 2) {
           queueMicrotask(() => abortController.abort({ type: "user_stop", reason: "test stop" }));
         }
-        await new Promise((resolve) => abortSignal?.addEventListener("abort", resolve, { once: true }));
+        await new Promise((resolve) =>
+          abortSignal?.addEventListener("abort", resolve, { once: true }),
+        );
         const nodeName = String(metadata?.nodeName || "");
         await new Promise((resolve) => setTimeout(resolve, nodeName === "节点A" ? 10 : 30));
         settledNodes.push(nodeName);
@@ -160,7 +149,10 @@ test("workflow waits for every parallel node sub-session to stop before planner 
     runConfig: { locale: "zh-CN" },
     abortSignal: abortController.signal,
   });
-  await assert.rejects(() => beforeDispatch.handler(context), (error) => error?.name === "AbortError");
+  await assert.rejects(
+    () => beforeDispatch.handler(context),
+    (error) => error?.name === "AbortError",
+  );
 
   assert.equal(startedNodes, 2);
   assert.deepEqual(new Set(settledNodes), new Set(["节点A", "节点B"]));

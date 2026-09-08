@@ -8,14 +8,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import {
-  readSessionArtifact,
-  writeSessionArtifact,
-} from "../../src/session/session-artifact-store.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -23,15 +19,6 @@ async function withTempWorkspace(fn) {
     return await fn(workspaceRoot);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
-  }
-}
-
-async function exists(filePath) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
   }
 }
 

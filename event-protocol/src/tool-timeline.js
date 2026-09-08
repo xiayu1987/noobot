@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { MESSAGE_EVENT_TYPE, projectMessageEventToolFacets } from "./message-event.js";
+import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 

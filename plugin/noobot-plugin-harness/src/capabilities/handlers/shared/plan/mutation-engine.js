@@ -10,13 +10,12 @@ import {
   parsePlanDocumentFromText,
   renderPlanDocument,
 } from "./text-protocol.js";
-import {
-  isSyntheticMainPlanPlaceholder,
-  resolvePlanMutationPolicy,
-} from "./mutation-policy.js";
+import { isSyntheticMainPlanPlaceholder, resolvePlanMutationPolicy } from "./mutation-policy.js";
 
 function normalizeStage(stage = "") {
-  const value = String(stage || "").trim().toLowerCase();
+  const value = String(stage || "")
+    .trim()
+    .toLowerCase();
   if (value === "planning_capture" || value === "capture" || value === "planning") {
     return "planning_capture";
   }
@@ -63,7 +62,7 @@ function parsePlanMutation(text = "") {
 
 function classifyPlanMutation(stage = "", parsed = {}) {
   const normalizedStage = normalizeStage(stage);
-  const hasCommands = parsed?.hasCommands === true;
+
   const hasMainPlans = parsed?.hasMainPlans === true;
   const hasSubPatchCommands = parsed?.hasSubPatchCommands === true;
   const hasMainPatchCommands = parsed?.hasMainPatchCommands === true;
@@ -84,11 +83,7 @@ function classifyPlanMutation(stage = "", parsed = {}) {
   return { stage: normalizedStage, type: "invalid" };
 }
 
-function validatePlanInvariants({
-  beforeDocument = {},
-  afterDocument = {},
-  policy = {},
-} = {}) {
+function validatePlanInvariants({ beforeDocument = {}, afterDocument = {}, policy = {} } = {}) {
   if (!policy?.rejectSyntheticMainPlaceholderCollapse) return { ok: true };
   const beforeMainPlans = Array.isArray(beforeDocument?.mainPlans) ? beforeDocument.mainPlans : [];
   const afterMainPlans = Array.isArray(afterDocument?.mainPlans) ? afterDocument.mainPlans : [];
@@ -148,12 +143,24 @@ export function runPlanMutationEngine({
   }
 
   if (normalizedStage === "refinement") {
-    const refinementPatchApplied = applyPatchCommandsToPlanDocument(nextDocument, parsedMutation.text, { stage: "refinement" });
-    const revisionPatchApplied = applyPatchCommandsToPlanDocument(nextDocument, parsedMutation.text, { stage: "revision" });
+    const refinementPatchApplied = applyPatchCommandsToPlanDocument(
+      nextDocument,
+      parsedMutation.text,
+      { stage: "refinement" },
+    );
+    const revisionPatchApplied = applyPatchCommandsToPlanDocument(
+      nextDocument,
+      parsedMutation.text,
+      { stage: "revision" },
+    );
     if (!refinementPatchApplied.changed && !revisionPatchApplied.changed) {
       return rejected("refinement_patch_not_applied");
     }
-    const invariant = validatePlanInvariants({ beforeDocument: currentDocument, afterDocument: nextDocument, policy });
+    const invariant = validatePlanInvariants({
+      beforeDocument: currentDocument,
+      afterDocument: nextDocument,
+      policy,
+    });
     if (!invariant.ok) return rejected(invariant.reason || "invariant_blocked");
     return {
       applied: true,
@@ -172,13 +179,23 @@ export function runPlanMutationEngine({
   }
 
   if (classification.type === "patch") {
-    const revisionPatchApplied = applyPatchCommandsToPlanDocument(nextDocument, parsedMutation.text, { stage: "revision" });
+    const revisionPatchApplied = applyPatchCommandsToPlanDocument(
+      nextDocument,
+      parsedMutation.text,
+      { stage: "revision" },
+    );
     let refinementPatchApplied = { changed: false };
     if (policy.allowRevisionSubPatchCompatibility && parsedMutation.hasSubPatchCommands) {
-      refinementPatchApplied = applyPatchCommandsToPlanDocument(nextDocument, parsedMutation.text, { stage: "refinement" });
+      refinementPatchApplied = applyPatchCommandsToPlanDocument(nextDocument, parsedMutation.text, {
+        stage: "refinement",
+      });
     }
     if (revisionPatchApplied.changed || refinementPatchApplied.changed) {
-      const invariant = validatePlanInvariants({ beforeDocument: currentDocument, afterDocument: nextDocument, policy });
+      const invariant = validatePlanInvariants({
+        beforeDocument: currentDocument,
+        afterDocument: nextDocument,
+        policy,
+      });
       if (!invariant.ok) return rejected(invariant.reason || "invariant_blocked");
       return {
         applied: true,
@@ -210,7 +227,11 @@ export function runPlanMutationEngine({
       const copiedSubPlans = cloneSubPlansForMainId(previousSubPlansByMainId[key], mainId);
       if (copiedSubPlans.length) replaced.subPlansByMainId[key] = copiedSubPlans;
     }
-    const invariant = validatePlanInvariants({ beforeDocument: currentDocument, afterDocument: replaced, policy });
+    const invariant = validatePlanInvariants({
+      beforeDocument: currentDocument,
+      afterDocument: replaced,
+      policy,
+    });
     if (!invariant.ok) return rejected(invariant.reason || "invariant_blocked");
     return {
       applied: true,

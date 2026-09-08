@@ -10,17 +10,9 @@ import {
   os,
   path,
   createFileTool,
-  executeToolCall,
-  transferSemanticContent,
-  LENGTH_THRESHOLDS,
-  buildExecutionWorkspaceMeta,
-  buildScriptExecutionMeta,
-  createScriptTool,
   buildAgentContext,
   parseToolResult,
-  buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
-import { parseUnifiedDiff } from "../../src/tools/execution/file-patch.js";
 
 test("patch_file: 不填 format 时仍自动识别旧 apply_patch 格式", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-autodetect-"));

@@ -6,7 +6,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useWorkflowLocale } from "../../i18n/index.js";
-import { BaseEmptyHint, BaseZoomControls } from "noobot-chat/plugin-api/ui";
+import { BaseZoomControls } from "noobot-chat/plugin-api/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
@@ -302,17 +302,6 @@ const flattenedNodes = computed(() => {
   return result;
 });
 
-function resolveNodeKey(nodeItem = {}) {
-  return String(
-    nodeItem?.nodeId ||
-      nodeItem?.id ||
-      resolveDialogProcessId(nodeItem) ||
-      nodeItem?.sessionId ||
-      nodeItem?._index ||
-      "",
-  ).trim();
-}
-
 function resolveRuntimeBoxes(nodeItem = {}) {
   return Array.isArray(nodeItem?.actionNodeStates)
     ? nodeItem.actionNodeStates
@@ -409,14 +398,6 @@ function getNodeStyle(nodeItem = {}) {
     width: `${nodeWidth.value}px`,
     height: `${nodeHeight.value}px`,
   };
-}
-
-function resolveStatusLabel(nodeItem = {}) {
-  const status = String(nodeItem?._status || "").trim();
-  if (status === "success") return translate("workflow.statusSuccess");
-  if (status === "failed" || status === "error") return translate("workflow.statusFailed");
-  if (status === "running") return translate("workflow.statusRunning");
-  return translate("workflow.statusPending");
 }
 
 function resolveStatusClass(nodeItem = {}) {
@@ -575,28 +556,10 @@ function zoomReset() {
   zoomScale.value = 1;
 }
 
-function stepHasSession(stepItem = {}) {
-  return Boolean(
-    String(stepItem?.activeChildExecutionId || stepItem?.childExecutionId || "").trim() ||
-    (Array.isArray(stepItem?.attemptExecutionIds) && stepItem.attemptExecutionIds.some(Boolean)) ||
-    resolveDialogProcessId(stepItem),
-  );
-}
-
 function handleNodeClick(nodeItem = {}) {
   if (nodeItem?._virtualBoundary) return;
   if (!isActionNode(nodeItem)) return;
   emit("node-click", nodeItem);
-}
-
-function handleStepClick(stepItem = {}) {
-  if (!stepHasSession(stepItem)) return;
-  const dialogProcessId = resolveDialogProcessId(stepItem);
-  if (dialogProcessId) {
-    innerSelectedDialogProcessId.value = dialogProcessId;
-    emit("update:selected-dialog-process-id", dialogProcessId);
-  }
-  emit("step-click", stepItem);
 }
 </script>
 

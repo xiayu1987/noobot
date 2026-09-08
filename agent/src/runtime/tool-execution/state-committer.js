@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { emitEvent } from "../../events/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
@@ -16,12 +15,6 @@ import {
 } from "../../events/message-event-stream.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-
-const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime =

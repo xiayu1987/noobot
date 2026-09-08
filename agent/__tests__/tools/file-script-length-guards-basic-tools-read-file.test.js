@@ -10,17 +10,9 @@ import {
   os,
   path,
   createFileTool,
-  executeToolCall,
-  transferSemanticContent,
-  LENGTH_THRESHOLDS,
-  buildExecutionWorkspaceMeta,
-  buildScriptExecutionMeta,
-  createScriptTool,
   buildAgentContext,
   parseToolResult,
-  buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
-import { parseUnifiedDiff } from "../../src/tools/execution/file-patch.js";
 
 test("read_file: reads a model attachment through its canonical identity", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-attachment-"));

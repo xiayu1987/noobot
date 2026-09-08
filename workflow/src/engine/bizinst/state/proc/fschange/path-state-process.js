@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../../../can-persistence-base.js';
-import IPathState from '../../modelstate/interfaces/path-state.js';
+import CanPersistenceBase from "../../../../../can-persistence-base.js";
 
 class PathStateProcess extends CanPersistenceBase {
   constructor() {
@@ -27,4 +26,4 @@ class PathStateProcess extends CanPersistenceBase {
   }
 }
 
-export default  PathStateProcess;
+export default PathStateProcess;

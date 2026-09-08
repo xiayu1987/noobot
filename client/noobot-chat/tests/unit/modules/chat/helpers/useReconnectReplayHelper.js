@@ -29,10 +29,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
-import {
-  WORKFLOW_RUNTIME_EVENT,
-  workflowSequenceDomainForEvent,
-} from "@noobot/event-protocol/workflow-runtime-event";
+import { workflowSequenceDomainForEvent } from "@noobot/event-protocol/workflow-runtime-event";
 import { classifyRealtimeLog } from "../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
 
 function createSession(id) {

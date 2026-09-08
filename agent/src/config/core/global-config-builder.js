@@ -15,6 +15,7 @@ import {
   resolveConfigTemplates,
   validateEffectiveConfig,
 } from "@noobot/agent-config-protocol";
+import { resolveConfiguredPathPolicy } from "./path-policy-adapter.js";
 
 function cloneConfig(value) {
   if (value === null || value === undefined) return value;
@@ -93,6 +94,7 @@ export function createGlobalConfigBuilder({
     const resolvedConfig = resolveConfigTemplatesFn(migratedRawConfig, {
       lookup: createConfigValueLookup(configParams, env),
     });
+    resolveConfiguredPathPolicy(resolvedConfig);
     const warnings = await validateEffectiveConfig({
       rawConfig: migratedRawConfig,
       persistedConfig,

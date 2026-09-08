@@ -7,23 +7,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
-import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
   canonicalMessageEvent,
-  FakeUpstreamWebSocket,
   getEvent,
   listEvents,
-  sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
-import {
-  createTurnLifecycleEnvelope,
-  TURN_EVENT,
-  TURN_LIFECYCLE_PROTOCOL_VERSION,
-} from "@noobot/session-protocol";
-import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 
 test("data-plane events do not create channel business state from start payload", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -40,16 +31,18 @@ test("data-plane events do not create channel business state from start payload"
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
 
-  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
-    sessionId: "session-turn-scope",
-    turnScopeId: "turn-scope-1",
-  }));
+  manager.pushChannelEvent(
+    channel,
+    MESSAGE_EVENT_WIRE_EVENT,
+    canonicalMessageEvent({
+      sessionId: "session-turn-scope",
+      turnScopeId: "turn-scope-1",
+    }),
+  );
 
   assert.equal(listEvents(client, "channel_state").length, 0);
   assert.equal(channel.conversationStateByDialogProcessId.has("dp-turn-scope"), false);
 });
-
-
 
 test("reconnect does not derive authoritative sending state from a running transport", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -162,7 +155,6 @@ test("reconnect keeps transport status separate from authoritative running state
   assert.equal("currentRun" in sessionEntry, false);
 });
 
-
 test("reconnect does not infer a running Turn from same-user transport identity", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-user-fallback" });
@@ -189,4 +181,3 @@ test("reconnect does not infer a running Turn from same-user transport identity"
   assert.equal("currentRun" in sessionEntry, false);
   assert.equal("conversationStates" in sessionEntry, false);
 });
-

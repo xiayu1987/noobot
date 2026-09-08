@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeWorkflowTransferPayload } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 

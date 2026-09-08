@@ -7,12 +7,8 @@ import { computed, ref } from "vue";
 import { vi } from "vitest";
 import { createTurnLifecycleEnvelope, createTurnReplacementCommit } from "@noobot/session-protocol";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
-import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import {
-  BackendChannelState,
-  SESSION_RUN_EVENT,
-} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   applyTurnLifecycleEnvelope,
   applyTurnRuntimeEvent,

@@ -8,10 +8,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import {
-  FrontendRunState,
-  SESSION_RUN_EVENT,
-} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   applyTurnRuntimeEvent,
   selectSessionTurnRuntime,
@@ -26,7 +23,6 @@ import {
 import { lifecycle } from "../runtime/run-state-machine/turnRuntimeRegistryTestFixtures.js";
 import {
   detailPayload,
-  detailResponse,
   routeAwareFetcher,
   terminalLifecycleSnapshot,
   terminalResolution,

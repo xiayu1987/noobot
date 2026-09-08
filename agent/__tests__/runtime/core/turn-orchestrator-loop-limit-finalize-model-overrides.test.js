@@ -24,10 +24,6 @@ function runFunctionCallLoop(args = {}) {
   return runFunctionCallLoopProduction(args);
 }
 
-function delay(ms = 0) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
-}
-
 function createToolCallingModelPort(responses = []) {
   const capturedInvocations = [];
   const capturedNoToolInvokeOptions = [];

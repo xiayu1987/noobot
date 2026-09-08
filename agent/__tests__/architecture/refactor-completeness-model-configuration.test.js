@@ -496,7 +496,6 @@ describe("7. 模型切换测试", () => {
       const userConfig = createBaseUserConfig({});
       const skillConfig = { provider: "openai", temperature: 0.2, maxTokens: 1024 };
 
-      const defaultSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
       const skillSpec = resolveSkillModelSpec({ skillConfig, globalConfig, userConfig });
 
       assert.ok(skillSpec.temperature === 0.2, "skill temperature 应生效");

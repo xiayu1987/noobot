@@ -11,14 +11,8 @@ import {
   path,
   createFileTool,
   executeToolCall,
-  transferSemanticContent,
-  LENGTH_THRESHOLDS,
-  buildExecutionWorkspaceMeta,
-  buildScriptExecutionMeta,
-  createScriptTool,
   buildAgentContext,
   parseToolResult,
-  buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
 
 test("read_file: reads own workspace through the logical workspace view", async () => {

@@ -5,29 +5,14 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import {
   createMockBotHookManager,
-  workflowDsl,
-  simpleActionWorkflowDsl,
-  createCapabilityModelInvoker,
-  createNodeResult,
-  createRecordingSubSessionRunner,
-  createAttachmentPersister,
   createSemanticTransferTool,
-  createV2AttachmentTransferEnvelope,
-  createBaseContext,
-  createContextWithSharedTools,
   getBeforeDispatch,
-  runWorkflowHook,
   callsByNodeName,
-  workflowTurn,
   createRegisterWorkflowHooks,
   WORKFLOW_PLUGIN_DEFAULTS,
-  resolveWorkflowNodeDialogProcessId,
-  collectWorkflowDialogProcessIds,
-  resolveWorkflowDialogProcessId,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook injects upstream node result attachments into downstream sub-session system messages", async () => {
@@ -35,7 +20,6 @@ test("workflow hook injects upstream node result attachments into downstream sub
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
   const semanticTransferCalls = [];
-  const artifactCounter = 0;
 
   registerWorkflowHooks({
     hookManager,
@@ -154,7 +138,6 @@ test("workflow hook injects one upstream action attachments into multiple direct
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
-  const artifactCounter = 0;
 
   registerWorkflowHooks({
     hookManager,

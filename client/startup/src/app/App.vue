@@ -75,7 +75,6 @@ const {
   modelOptions,
   selectedDependencies,
   superAdminForm,
-  dependencies,
   missingDependencies,
   installingDependencies,
   skippingDependencies,

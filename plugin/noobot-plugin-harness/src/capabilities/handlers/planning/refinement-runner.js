@@ -12,7 +12,6 @@ import {
   appendCapabilityModelTraceLog,
   buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
-  extractRawTextContent,
   normalizeTransferPayload,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,

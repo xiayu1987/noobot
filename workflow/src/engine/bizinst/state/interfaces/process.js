@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../interfaces/can-persistence.js';
-import IFlowProcess from '../proc/fschange/interfaces/flow-process.js';
-import IBizinstModelChangeProcess from '../proc/mschange/interfaces/bizinst-model-change-process.js';
-
 class IProcess {
   setProcessChain(processChain) {}
   getProcessChain() {}
@@ -17,4 +13,4 @@ class IProcess {
   getBizinstModelChangeProcess() {}
 }
 
-export default  IProcess;
+export default IProcess;

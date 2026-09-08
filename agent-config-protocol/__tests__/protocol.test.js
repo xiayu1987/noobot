@@ -6,7 +6,6 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import {
   applyPrimaryModelReferencesToConfigFile,
   assertConfigParamsDocumentKeys,
@@ -32,40 +31,9 @@ import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_NODE_POLICY,
   CONFIG_REPAIR_ACTION,
-  CONFIG_PATH_REPRESENTATION,
-  listConfigNodePathsByPolicy,
   repairConfigDocument,
-  sanitizeUserConfig,
-  mergeConfig,
 } from "../src/index.js";
 
-function readJsonFixture(relativePath) {
-  return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
-}
-
-function collectObjectOnlyPaths(source, reference, prefix = "") {
-  const paths = [];
-  for (const key of Object.keys(source || {})) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (!Object.prototype.hasOwnProperty.call(reference || {}, key)) {
-      paths.push(path);
-      continue;
-    }
-    const sourceValue = source[key];
-    const referenceValue = reference[key];
-    if (
-      sourceValue &&
-      typeof sourceValue === "object" &&
-      !Array.isArray(sourceValue) &&
-      referenceValue &&
-      typeof referenceValue === "object" &&
-      !Array.isArray(referenceValue)
-    ) {
-      paths.push(...collectObjectOnlyPaths(sourceValue, referenceValue, path));
-    }
-  }
-  return paths;
-}
 test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
   assert.equal(snapshot.protocol, "noobot.agent-config");

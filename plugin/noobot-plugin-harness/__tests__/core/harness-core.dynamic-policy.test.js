@@ -14,19 +14,13 @@ import {
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import {
-  injectPrompt,
-  lockPolicyPromptForMainFlow,
-  resolvePolicyPromptSelection,
-} from "../../src/tracing/buffer-manager.js";
+import { injectPrompt, lockPolicyPromptForMainFlow } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
   applyDynamicPolicyPromptFromText,
   buildDynamicPolicyPromptProtocolInstruction,
 } from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
 import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
 test("dynamic policy prompt protocol instruction is localized", () => {
   const zh = buildDynamicPolicyPromptProtocolInstruction("zh-CN");
@@ -59,10 +53,16 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(en, /Optional dynamic policy prompt protocol/);
   assert.match(en, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
   assert.match(en, /<policy prompt replacing the default scenario prompt>/);
-  assert.match(en, /Judge from the user's actual intent whether the handling style should be adjusted/);
+  assert.match(
+    en,
+    /Judge from the user's actual intent whether the handling style should be adjusted/,
+  );
   assert.match(en, /scenario must match the user's actual intent/);
   assert.match(en, /describe only the handling style\/execution policy/);
-  assert.match(en, /not the concrete task, task conclusions, plan items, file names, or business content/);
+  assert.match(
+    en,
+    /not the concrete task, task conclusions, plan items, file names, or business content/,
+  );
   assert.match(en, /Keep it concise/);
   assert.match(en, /Text example:/);
   assert.match(en, /Text-scenario dynamic policy/);
@@ -75,7 +75,10 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(en, /quickly locate the issue and impact scope/);
   assert.match(en, /reusing existing structures, methods, fields/);
   assert.match(en, /for complex tasks/);
-  assert.match(en, /remove leftovers such as old entry points, legacy fields, compatibility branches, duplicate storage, and deprecated logic/);
+  assert.match(
+    en,
+    /remove leftovers such as old entry points, legacy fields, compatibility branches, duplicate storage, and deprecated logic/,
+  );
   assert.match(en, /multiple smallest slices/);
   assert.match(en, /temporary patch-style bypasses/);
   assert.match(en, /do not stop after only one tiny change/);
@@ -83,28 +86,34 @@ test("dynamic policy prompt protocol instruction is localized", () => {
 });
 
 test("dynamic policy prompt overrides default scenario policy prompt", async () => {
-  const ctx = createTestHookContext({
-    agentContext: {
-      payload: {
-        harness: {
-          dynamicPolicyPrompt: {
-            scenario: "text",
-            source: "planning",
-            stage: "planning",
-            reason: "task-specific text delivery policy",
-            prompt: "Dynamic output policy: produce deliverable batches and preserve citations.",
-            updatedAt: "2026-06-19T00:00:00.000Z",
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        payload: {
+          harness: {
+            dynamicPolicyPrompt: {
+              scenario: "text",
+              source: "planning",
+              stage: "planning",
+              reason: "task-specific text delivery policy",
+              prompt: "Dynamic output policy: produce deliverable batches and preserve citations.",
+              updatedAt: "2026-06-19T00:00:00.000Z",
+            },
           },
         },
       },
     },
-  }, { messages: [{ role: "user", content: "continue" }] });
+    { messages: [{ role: "user", content: "continue" }] },
+  );
 
   const prompt = buildDefaultPolicyPrompt("en-US", ctx, {});
   assert.match(prompt, /\[HARNESS_POLICY_SELECTION\]/);
   assert.match(prompt, /scenario = text/);
-    assert.match(prompt, /policy_prompt = harness_policy\/dynamic\/text/);
-  assert.match(prompt, /Dynamic output policy: produce deliverable batches and preserve citations\./);
+  assert.match(prompt, /policy_prompt = harness_policy\/dynamic\/text/);
+  assert.match(
+    prompt,
+    /Dynamic output policy: produce deliverable batches and preserve citations\./,
+  );
   assert.doesNotMatch(prompt, /source = planning/);
   assert.doesNotMatch(prompt, /reason = task-specific text delivery policy/);
   assert.doesNotMatch(prompt, /updated_at/);
@@ -130,18 +139,25 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
 });
 
 test("dynamic policy changes cannot rewrite the main-flow system prefix after first response", async () => {
-  const ctx = createTestHookContext({
-    agentContext: { payload: { harness: {} } },
-  }, { messages: [{ role: "user", content: "continue" }] });
+  const ctx = createTestHookContext(
+    {
+      agentContext: { payload: { harness: {} } },
+    },
+    { messages: [{ role: "user", content: "continue" }] },
+  );
 
-  applyDynamicPolicyPromptFromText(ctx, [
-    "[HARNESS_DYNAMIC_POLICY_PROMPT]",
-    "scenario = text",
-    "reason = first policy",
-    "prompt:",
-    "Dynamic policy one",
-    "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
-  ].join("\n"), { source: "planning", stage: "planning" });
+  applyDynamicPolicyPromptFromText(
+    ctx,
+    [
+      "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+      "scenario = text",
+      "reason = first policy",
+      "prompt:",
+      "Dynamic policy one",
+      "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+    ].join("\n"),
+    { source: "planning", stage: "planning" },
+  );
 
   await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
@@ -151,20 +167,26 @@ test("dynamic policy changes cannot rewrite the main-flow system prefix after fi
     writePrompts: false,
   });
   assert.equal(
-    ctx.modelContext.messages.filter((item = {}) => /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || ""))).length,
+    ctx.modelContext.messages.filter((item = {}) =>
+      /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || "")),
+    ).length,
     1,
   );
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /Dynamic policy one/);
   assert.equal(lockPolicyPromptForMainFlow(ctx), true);
 
-  applyDynamicPolicyPromptFromText(ctx, [
-    "[HARNESS_DYNAMIC_POLICY_PROMPT]",
-    "scenario = programming",
-    "reason = changed policy",
-    "prompt:",
-    "Dynamic policy two",
-    "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
-  ].join("\n"), { source: "planning_revision", stage: "revision" });
+  applyDynamicPolicyPromptFromText(
+    ctx,
+    [
+      "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+      "scenario = programming",
+      "reason = changed policy",
+      "prompt:",
+      "Dynamic policy two",
+      "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+    ].join("\n"),
+    { source: "planning_revision", stage: "revision" },
+  );
   await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
@@ -208,14 +230,14 @@ test("harness policy prompt survives agent-side system message compaction", asyn
   await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(
-    ctx.modelContext.messages.filter((item = {}) =>
-      item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ctx.modelContext.messages.filter(
+      (item = {}) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
   );
   assert.equal(
-    ctx.modelContext.messageBlocks.system.filter((item = {}) =>
-      item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ctx.modelContext.messageBlocks.system.filter(
+      (item = {}) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
   );
@@ -238,7 +260,12 @@ test("harness policy preservation ignores ordinary system text that only mention
     sessionId: "s-policy-false-positive",
     dialogProcessId: "dp-policy-false-positive",
     messageBlocks: {
-      system: [{ role: "system", content: "ordinary docs mention <!-- noobot-harness-policy --> but not a prompt marker" }],
+      system: [
+        {
+          role: "system",
+          content: "ordinary docs mention <!-- noobot-harness-policy --> but not a prompt marker",
+        },
+      ],
       history: [],
       incremental: [{ role: "user", content: "hello" }],
     },

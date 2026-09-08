@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IModel from '../../interfaces/model.js';
+class ICompositeNode {}
 
-class ICompositeNode {
-}
-
-export default  ICompositeNode;
+export default ICompositeNode;

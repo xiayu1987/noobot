@@ -10,7 +10,6 @@ import { buildPlanningMessagePlan, resolveLatestUserMessageText } from "./prompt
 import { renderMessagePlanForSeparateModel } from "../shared/model/message-plan.js";
 import {
   CAPABILITY_DOMAIN,
-  HARNESS_I18N_KEYSET,
   LOCALE,
   PROMPT_ENVELOPE,
   appendCapabilityLog,
@@ -25,7 +24,6 @@ import {
   resolveCapabilityModelMessages,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
-  translateI18nText,
 } from "./deps.js";
 import {
   buildPostPlanUserFollowupPrompt,
@@ -44,7 +42,7 @@ import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/m
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 const PLANNING_RAW_OUTPUT_LIMIT = WORKFLOW_PARAMS.planning.capture.rawOutputLimit;
-const PLANNING_SUMMARY_MAX_ITEMS = WORKFLOW_PARAMS.planning.capture.summaryMaxItems;
+
 const PLANNING_COMPACT_TEXT_MAX_CHARS = WORKFLOW_PARAMS.planning.capture.compactTextMaxChars;
 const PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS =
   WORKFLOW_PARAMS.planning.capture.rawOutputPreviewMaxChars;
@@ -130,27 +128,6 @@ function collectAgentStyleHistoryMessages(ctx = {}) {
       return { role, content };
     })
     .filter((msg) => msg.role && msg.content);
-}
-
-function summarizePlanningMessages(messages = [], maxItems = PLANNING_SUMMARY_MAX_ITEMS) {
-  const source = Array.isArray(messages) ? messages : [];
-  const simplified = source
-    .filter((item) => {
-      const role = String(item?.role || "")
-        .trim()
-        .toLowerCase();
-      return role === "user" || role === "assistant" || role === "tool" || role === "system";
-    })
-    .slice(-maxItems)
-    .map((item = {}) => ({
-      role: String(item?.role || "").trim(),
-      content: compactText(
-        extractRawTextContent(item?.content ?? item),
-        PLANNING_COMPACT_TEXT_MAX_CHARS,
-      ),
-    }))
-    .filter((item) => item.content);
-  return simplified;
 }
 
 function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {

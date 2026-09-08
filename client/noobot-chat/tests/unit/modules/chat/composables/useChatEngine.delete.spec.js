@@ -9,7 +9,10 @@ import {
   activateRuntimeTurn,
   makeSession,
 } from "../helpers/useChatEngineHarness.js";
-import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import {
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import {
   applyTurnRuntimeEvent,
@@ -17,48 +20,59 @@ import {
   resolveSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
-import {
-  RoleEnum,
-} from "../../../../../src/modules/chat/model/chatConstants.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
   const revision = 100;
   const sequence = 100;
   const completionCommitId = `commit-${turnScopeId}-${revision}`;
-  return applyTurnTerminalResolution(turnRuntimeRegistry.value, createTurnTerminalResolution({
-    commandId: `resolve-${turnScopeId}-${revision}`,
-    sessionId,
-    turnScopeId,
-    resolved: true,
-    aggregateVersion: 1,
-    turn: {
+  return applyTurnTerminalResolution(
+    turnRuntimeRegistry.value,
+    createTurnTerminalResolution({
+      commandId: `resolve-${turnScopeId}-${revision}`,
       sessionId,
       turnScopeId,
-      state: "stop_completed",
-      phase: "stop",
-      revision,
-      sequence,
-      completionCommitId,
-      summaryVersion: revision,
-      capabilities: { actionLocked: false, canStop: false },
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    },
-    materialization: {
-      completionCommitId,
-      summaryVersion: revision,
-      revision,
-      sequence,
-      terminalStatus: { status: "stop_completed" },
-      messages,
-    },
-  }));
+      resolved: true,
+      aggregateVersion: 1,
+      turn: {
+        sessionId,
+        turnScopeId,
+        state: "stop_completed",
+        phase: "stop",
+        revision,
+        sequence,
+        completionCommitId,
+        summaryVersion: revision,
+        capabilities: { actionLocked: false, canStop: false },
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      materialization: {
+        completionCommitId,
+        summaryVersion: revision,
+        revision,
+        sequence,
+        terminalStatus: { status: "stop_completed" },
+        messages,
+      },
+    }),
+  );
 }
 
 describe("useChatEngine.delete", () => {
   it("cascadeDeleteMessagesFrom resolves assistant target to user message and removes the user turn", () => {
     const { engine, activeSession } = createHarness({ sessionId: "local-cascade" });
-    const first = { turnScopeId: "scope-old", dialogProcessId: "dp-old", role: RoleEnum.USER, content: "first" };
-    const target = { turnScopeId: "scope-old", dialogProcessId: "dp-old", role: RoleEnum.ASSISTANT, content: "target" };
+    const first = {
+      turnScopeId: "scope-old",
+      dialogProcessId: "dp-old",
+      role: RoleEnum.USER,
+      content: "first",
+    };
+    const target = {
+      turnScopeId: "scope-old",
+      dialogProcessId: "dp-old",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+    };
     const tail = { id: "m3", role: RoleEnum.USER, content: "tail" };
     activeSession.value.messages = [first, target, tail];
     activeSession.value.rawMessages = [first, target, tail];
@@ -75,15 +89,29 @@ describe("useChatEngine.delete", () => {
 
   it("cascadeDeleteMessagesFrom removes matching rawMessages even when they are not the same objects", () => {
     const { engine, activeSession } = createHarness({ sessionId: "local-cascade-raw-copy" });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
-    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
-    const tail = { id: "m3", role: RoleEnum.USER, content: "tail", turnScopeId: "turn-2", dialogProcessId: "dp-2" };
+    const first = {
+      id: "m1",
+      role: RoleEnum.USER,
+      content: "first",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dp-1",
+    };
+    const target = {
+      id: "m2",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+      turnScopeId: "turn-1",
+      dialogProcessId: "dp-1",
+    };
+    const tail = {
+      id: "m3",
+      role: RoleEnum.USER,
+      content: "tail",
+      turnScopeId: "turn-2",
+      dialogProcessId: "dp-2",
+    };
     activeSession.value.messages = [first, target, tail];
-    activeSession.value.rawMessages = [
-      { ...first },
-      { ...target },
-      { ...tail },
-    ];
+    activeSession.value.rawMessages = [{ ...first }, { ...target }, { ...tail }];
     activeSession.value.messageCount = 3;
     activeSession.value.lastMessage = tail;
 
@@ -95,12 +123,29 @@ describe("useChatEngine.delete", () => {
   });
 
   it("deleteMonotonicMessage waits for confirmed stop before cascading deletion from resolved user message", async () => {
-    const { engine, activeSession, sending, canStop, deps, turnRuntimeRegistry } = createHarness({ sessionId: "local-delete" });
-    const first = { id: "m1", turnScopeId: "client-turn:resend-stale", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", turnScopeId: "client-turn:resend-stale", role: RoleEnum.ASSISTANT, content: "target", pending: true };
+    const { engine, activeSession, deps, turnRuntimeRegistry } = createHarness({
+      sessionId: "local-delete",
+    });
+    const first = {
+      id: "m1",
+      turnScopeId: "client-turn:resend-stale",
+      role: RoleEnum.USER,
+      content: "first",
+    };
+    const target = {
+      id: "m2",
+      turnScopeId: "client-turn:resend-stale",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+      pending: true,
+    };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-delete", turnScopeId: target.turnScopeId });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-delete",
+      turnScopeId: target.turnScopeId,
+    });
     deps.chatWebSocketClient.requestStop.mockImplementation(() => {
       queueMicrotask(() => {
         target.stopState = "user_stopped";
@@ -130,15 +175,31 @@ describe("useChatEngine.delete", () => {
       sessionId: "local-resend",
       stream,
     });
-    const first = { id: "m1", turnScopeId: "client-turn:resend-no-flicker", role: RoleEnum.USER, content: "first" };
-    const target = { id: "m2", turnScopeId: "client-turn:resend-no-flicker", role: RoleEnum.ASSISTANT, content: "target", pending: true };
+    const first = {
+      id: "m1",
+      turnScopeId: "client-turn:resend-no-flicker",
+      role: RoleEnum.USER,
+      content: "first",
+    };
+    const target = {
+      id: "m2",
+      turnScopeId: "client-turn:resend-no-flicker",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+      pending: true,
+    };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-resend", turnScopeId: target.turnScopeId });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-resend",
+      turnScopeId: target.turnScopeId,
+    });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
-    await expect(engine.resendMonotonicMessage(target, "edited question"))
-      .rejects.toThrow("chat.monotonicActionStopTimeout");
+    await expect(engine.resendMonotonicMessage(target, "edited question")).rejects.toThrow(
+      "chat.monotonicActionStopTimeout",
+    );
 
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
     expect(stream).not.toHaveBeenCalled();
@@ -169,7 +230,11 @@ describe("useChatEngine.delete", () => {
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
     });
     const first = { turnScopeId: "client-turn:delete-1", role: RoleEnum.USER, content: "first" };
-    const target = { turnScopeId: "client-turn:delete-1", role: RoleEnum.ASSISTANT, content: "target" };
+    const target = {
+      turnScopeId: "client-turn:delete-1",
+      role: RoleEnum.ASSISTANT,
+      content: "target",
+    };
     const tail = { id: "m3", role: RoleEnum.USER, content: "tail" };
     activeSession.value.messages = [first, target, tail];
     activeSession.value.rawMessages = [first, target, tail];
@@ -177,20 +242,28 @@ describe("useChatEngine.delete", () => {
 
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
-    expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(expect.objectContaining({
-      anchor: { turnScopeId: "client-turn:delete-1" },
-      expectedAggregateVersion: 2,
-    }), expect.any(Object));
-    expect(applySessionDetail).toHaveBeenCalledWith(expect.objectContaining({
-      sessionId: "local-delete-api",
-      sessions: [expect.objectContaining({
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchor: { turnScopeId: "client-turn:delete-1" },
+        expectedAggregateVersion: 2,
+      }),
+      expect.any(Object),
+    );
+    expect(applySessionDetail).toHaveBeenCalledWith(
+      expect.objectContaining({
         sessionId: "local-delete-api",
-        messages: backendSession.messages,
-      })],
-    }), {
-      mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-      deletedTurnScopeIds: ["client-turn:delete-1"],
-    });
+        sessions: [
+          expect.objectContaining({
+            sessionId: "local-delete-api",
+            messages: backendSession.messages,
+          }),
+        ],
+      }),
+      {
+        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+        deletedTurnScopeIds: ["client-turn:delete-1"],
+      },
+    );
     expect(activeSession.value.messages).toHaveLength(1);
   });
 
@@ -210,13 +283,16 @@ describe("useChatEngine.delete", () => {
     }));
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
-      const detailTurnScopeIds = new Set((mainSession.messages || []).map((message) => message.turnScopeId).filter(Boolean));
-      const shouldPreserveStoppedTail = activeSession.value.messages.some((message) => (
-        message.role === RoleEnum.ASSISTANT &&
-        message.turnScopeId &&
-        !detailTurnScopeIds.has(message.turnScopeId) &&
-        (message.pending === true || message.channelState?.state === "stopping")
-      ));
+      const detailTurnScopeIds = new Set(
+        (mainSession.messages || []).map((message) => message.turnScopeId).filter(Boolean),
+      );
+      const shouldPreserveStoppedTail = activeSession.value.messages.some(
+        (message) =>
+          message.role === RoleEnum.ASSISTANT &&
+          message.turnScopeId &&
+          !detailTurnScopeIds.has(message.turnScopeId) &&
+          (message.pending === true || message.channelState?.state === "stopping"),
+      );
       if (shouldPreserveStoppedTail) return;
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
@@ -224,7 +300,12 @@ describe("useChatEngine.delete", () => {
       sessionId: "local-delete-stopped-tail",
       deps: { deleteSessionMessagesFromApi, applySessionDetail },
     });
-    const first = { id: "u1", turnScopeId: "turn-stopped-tail", role: RoleEnum.USER, content: "first" };
+    const first = {
+      id: "u1",
+      turnScopeId: "turn-stopped-tail",
+      role: RoleEnum.USER,
+      content: "first",
+    };
     const target = {
       id: "a1",
       turnScopeId: "turn-stopped-tail",
@@ -317,17 +398,23 @@ describe("useChatEngine.delete", () => {
       source: "test",
     });
 
-    await expect(engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 })).resolves.toBe(true);
+    await expect(
+      engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 }),
+    ).resolves.toBe(true);
 
     expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
-    expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, "local-delete-stopped-sending"))
-      .toBe(null);
-    expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(expect.objectContaining({
-      anchor: { turnScopeId: "turn-stopped-sending" },
-      expectedAggregateVersion: 7,
-    }), expect.any(Object));
+    expect(
+      resolveSessionTurnRuntime(turnRuntimeRegistry.value, "local-delete-stopped-sending"),
+    ).toBe(null);
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchor: { turnScopeId: "turn-stopped-sending" },
+        expectedAggregateVersion: 7,
+      }),
+      expect.any(Object),
+    );
     expect(activeSession.value.messages).toEqual([]);
   });
 
@@ -354,8 +441,15 @@ describe("useChatEngine.delete", () => {
 
   it("deleteMonotonicMessage does not delete when stop precondition fails", async () => {
     vi.useFakeTimers();
-    const { engine, activeSession, deps, sending, activeTurnRuntime, turnRuntimeRegistry } = createHarness({ sessionId: "local-delete-fail" });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-delete-fail" };
+    const { engine, activeSession, deps, turnRuntimeRegistry } = createHarness({
+      sessionId: "local-delete-fail",
+    });
+    const first = {
+      id: "m1",
+      role: RoleEnum.USER,
+      content: "first",
+      turnScopeId: "turn-delete-fail",
+    };
     const target = {
       id: "m2",
       role: RoleEnum.ASSISTANT,
@@ -366,10 +460,19 @@ describe("useChatEngine.delete", () => {
     };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-delete-fail", turnScopeId: "turn-delete-fail" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-delete-fail",
+      turnScopeId: "turn-delete-fail",
+    });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
-    const actionPromise = engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 });
-    const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
+    const actionPromise = engine.deleteMonotonicMessage(target, {
+      timeoutMs: 20,
+      pollIntervalMs: 5,
+    });
+    const rejectionExpectation = expect(actionPromise).rejects.toThrow(
+      "chat.monotonicActionStopTimeout",
+    );
     await vi.advanceTimersByTimeAsync(25);
     await rejectionExpectation;
     expect(activeSession.value.messages).toEqual([first, target]);
@@ -379,8 +482,16 @@ describe("useChatEngine.delete", () => {
   it("resendMonotonicMessage does not delete or send when stop precondition fails", async () => {
     vi.useFakeTimers();
     const stream = vi.fn(async () => {});
-    const { engine, activeSession, deps, sending, input, activeTurnRuntime, turnRuntimeRegistry } = createHarness({ sessionId: "local-resend-fail", stream });
-    const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-resend-fail" };
+    const { engine, activeSession, deps, input, turnRuntimeRegistry } = createHarness({
+      sessionId: "local-resend-fail",
+      stream,
+    });
+    const first = {
+      id: "m1",
+      role: RoleEnum.USER,
+      content: "first",
+      turnScopeId: "turn-resend-fail",
+    };
     const target = {
       id: "m2",
       role: RoleEnum.ASSISTANT,
@@ -391,10 +502,19 @@ describe("useChatEngine.delete", () => {
     };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-resend-fail", turnScopeId: "turn-resend-fail" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-resend-fail",
+      turnScopeId: "turn-resend-fail",
+    });
     deps.chatWebSocketClient.requestStop.mockReturnValue(true);
-    const actionPromise = engine.resendMonotonicMessage(target, "edited", { timeoutMs: 20, pollIntervalMs: 5 });
-    const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
+    const actionPromise = engine.resendMonotonicMessage(target, "edited", {
+      timeoutMs: 20,
+      pollIntervalMs: 5,
+    });
+    const rejectionExpectation = expect(actionPromise).rejects.toThrow(
+      "chat.monotonicActionStopTimeout",
+    );
     await vi.advanceTimersByTimeAsync(25);
     await rejectionExpectation;
     expect(activeSession.value.messages).toEqual([first, target]);
@@ -407,7 +527,11 @@ describe("useChatEngine.delete", () => {
     const sessionId = "local-delete-stopped-registry";
     const turnScopeId = "turn-stopped-registry";
     const backendSession = makeSession(sessionId, { messages: [], rawMessages: [], version: 5 });
-    const deleteSessionMessagesFromApi = vi.fn(async () => ({ ok: true, session: backendSession, version: 5 }));
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: backendSession,
+      version: 5,
+    }));
     const applySessionDetail = vi.fn();
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId,
@@ -430,7 +554,9 @@ describe("useChatEngine.delete", () => {
       turnScopeId,
       messages: [first, target],
     });
-    expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)?.terminal).toBe("user_stopped");
+    expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)?.terminal).toBe(
+      "user_stopped",
+    );
 
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 

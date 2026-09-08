@@ -19,7 +19,7 @@ import SessionListPanel from "./SessionListPanel.vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { sharedSidebarProps } from "../model/sidebarProps.js";
 
-const props = defineProps(sharedSidebarProps);
+defineProps(sharedSidebarProps);
 
 const emit = defineEmits([
   "toggle-sidebar",

@@ -6,10 +6,7 @@
 import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer.js";
 import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity.js";
-import {
-  initializeMessageEventState,
-  resolveMessageEventLaneState,
-} from "../../model/messageEventState.js";
+import { resolveMessageEventLaneState } from "../../model/messageEventState.js";
 import { mergeToolTimelines } from "./toolTimeline.js";
 import { mergeActivityTimelines } from "./activityTimeline.js";
 import { createTurnObservation } from "./turnObservation.js";

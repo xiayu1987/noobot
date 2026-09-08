@@ -20,8 +20,6 @@ import {
 
 const contextHeading = "Character animation assets:";
 const content = (message = {}) => String(message?.content ?? message?.lc_kwargs?.content ?? "");
-const facingGuidance =
-  " Face-to-face placement: left character facing +X uses rotation [0,-0.7071068,0,0.7071068]; right character facing -X uses [0,0.7071068,0,0.7071068].";
 
 export async function injectAnimationContext(context = {}, config = {}) {
   const assets = await readSelectedCharacterAssets(config);

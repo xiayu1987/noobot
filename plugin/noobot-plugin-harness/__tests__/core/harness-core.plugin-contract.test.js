@@ -11,15 +11,8 @@ import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
-import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
-import {
-  applyDynamicPolicyPromptFromText,
-  buildDynamicPolicyPromptProtocolInstruction,
-} from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
+
 import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
 test("harness plugin injects prompt into before_llm_call messages", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
@@ -82,16 +75,7 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
     manifest?.capabilities?.hookMap?.acceptance?.includes("agent.before_llm_call"),
     true,
   );
-  assert.equal(
-    manifest?.capabilities?.hookMap?.acceptance?.includes("agent.after_llm_call"),
-    true,
-  );
-  assert.equal(
-    manifest?.capabilities?.hookMap?.guidance?.includes("agent.after_llm_call"),
-    true,
-  );
-  assert.equal(
-    manifest?.capabilities?.hookMap?.guidance?.includes("agent.after_tool_calls"),
-    true,
-  );
+  assert.equal(manifest?.capabilities?.hookMap?.acceptance?.includes("agent.after_llm_call"), true);
+  assert.equal(manifest?.capabilities?.hookMap?.guidance?.includes("agent.after_llm_call"), true);
+  assert.equal(manifest?.capabilities?.hookMap?.guidance?.includes("agent.after_tool_calls"), true);
 });

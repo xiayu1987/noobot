@@ -7,7 +7,7 @@ import { StreamEventEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope.js";
-import { hasDialogProcessConflictForTurn, isEventForCurrentTurn } from "./sendFlowSupport.js";
+import { isEventForCurrentTurn } from "./sendFlowSupport.js";
 import { handleBasicStreamEvent, handleInteractionRequestStreamEvent } from "./streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../../extensions/runtime-stream-router.js";
 import {
@@ -24,25 +24,15 @@ import { logPluginRuntimeDiagnostics } from "../../../debug/loggers/pluginRuntim
 function routePostProjectionEvent(event, data, context) {
   const {
     activeSession,
-    activeSessionId,
-    applyConversationState,
     applyConversationStateFromEvent,
-    applyRunStateEvent,
     botMessage,
     classifyRealtimeLog,
     clearMissingInteractionPayloadTimer,
     clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
-    doneTurnFinalizer,
-    foldMessagesForView,
-    locateDoneMessage,
     locateSendingStartedMessageOnce,
     makeViewMessage,
     mergeAssistantAttachments,
     navigateOnFirstResponseOnce,
-    requestedTextStreaming,
-    startFinalDoneSessionDetailOnce,
-    streamState,
     tryAutoResolveInteraction,
     setPendingInteractionRequest,
     logSessionEvent,

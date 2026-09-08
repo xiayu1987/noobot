@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../interfaces/can-persistence.js';
-import IProcess from '../state/interfaces/process.js';
-
 class IProcessRecord {
   setProcess(process) {}
   getProcess() {}
@@ -14,4 +11,4 @@ class IProcessRecord {
   getBizinst() {}
 }
 
-export default  IProcessRecord;
+export default IProcessRecord;

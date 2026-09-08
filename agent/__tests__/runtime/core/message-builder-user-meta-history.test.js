@@ -6,13 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  buildContextMessages,
-  buildContextMessageBlocks,
-} from "../../../src/context/assembly/message-builder.js";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 
-const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";

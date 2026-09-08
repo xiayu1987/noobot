@@ -3,12 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON } from "../core/constants.js";
 import {
-  DEFAULT_TRANSFER_MIME_TYPE,
-  TRANSFER_REASON,
-} from "../core/constants.js";
-import {
-  createTransferEnvelope,
   decideTransfer,
   directTransfer,
   TRANSFER_DIRECTION,
@@ -54,9 +50,7 @@ function resolveToolInputOverflowFromCall(call = {}) {
   const forceAttachment = policy.forceAttachment === true;
   if (!exceeded && !forceAttachment) return null;
   const policyMeta =
-    toolName === "write_file"
-      ? { targetPath: normalizeString(args?.filePath) }
-      : {};
+    toolName === "write_file" ? { targetPath: normalizeString(args?.filePath) } : {};
   return {
     toolName,
     field: policy.field,
@@ -65,10 +59,7 @@ function resolveToolInputOverflowFromCall(call = {}) {
     exceeded,
     forceAttachment,
     message: policy.message,
-    name:
-      typeof policy.name === "function"
-        ? policy.name({ call, args })
-        : "tool-input.txt",
+    name: typeof policy.name === "function" ? policy.name({ call, args }) : "tool-input.txt",
     mimeType: policy.mimeType || DEFAULT_TRANSFER_MIME_TYPE,
     source: TRANSFER_SOURCE.TOOL,
     reason: policy.reason,
@@ -91,9 +82,7 @@ function buildToolInputTransferMeta({
   const textLength = String(normalizedText || "").length;
   const isExceeded = exceeded === true || callOverflow?.exceeded === true;
   return {
-    ...(baseMeta && typeof baseMeta === "object" && !Array.isArray(baseMeta)
-      ? baseMeta
-      : {}),
+    ...(baseMeta && typeof baseMeta === "object" && !Array.isArray(baseMeta) ? baseMeta : {}),
     source: intent.source,
     reason: intent.reason,
     mimeType: resolvedMimeType,
@@ -117,9 +106,7 @@ function buildToolInputTransferMeta({
 
 async function buildTransferResponse({ transferEnvelopes = [] } = {}) {
   return {
-    transferEnvelopes: Array.isArray(transferEnvelopes)
-      ? transferEnvelopes
-      : [],
+    transferEnvelopes: Array.isArray(transferEnvelopes) ? transferEnvelopes : [],
   };
 }
 
@@ -156,11 +143,7 @@ export async function transferToolOutput({
   const maxInline =
     inlineMaxChars == null
       ? resolveToolResultInlineTextLimit(runtime)
-      : toSafePositiveInt(
-          inlineMaxChars,
-          resolveToolResultInlineTextLimit(runtime),
-          0,
-        );
+      : toSafePositiveInt(inlineMaxChars, resolveToolResultInlineTextLimit(runtime), 0);
   const materialized = await materializeTextForToolResult({
     runtime,
     agentContext,
@@ -183,9 +166,7 @@ export async function transferToolOutput({
     forcePreview,
   });
 
-  const persistedTransferEnvelopes = Array.isArray(
-    materialized?.transferEnvelopes,
-  )
+  const persistedTransferEnvelopes = Array.isArray(materialized?.transferEnvelopes)
     ? materialized.transferEnvelopes
     : [];
   const transferEnvelopes = persistedTransferEnvelopes;
@@ -215,16 +196,13 @@ export async function transferToolInput({
   identity = null,
 } = {}) {
   const hasExplicitText = text !== "" || content !== "";
-  const callOverflow =
-    !hasExplicitText && call ? resolveToolInputOverflowFromCall(call) : null;
+  const callOverflow = !hasExplicitText && call ? resolveToolInputOverflowFromCall(call) : null;
   if (!hasExplicitText && call && !callOverflow) {
     return {
       transferEnvelopes: [],
     };
   }
-  const normalizedText = callOverflow
-    ? callOverflow.text
-    : String(text || content || "");
+  const normalizedText = callOverflow ? callOverflow.text : String(text || content || "");
   const resolvedName = callOverflow?.name || name;
   const resolvedMimeType = callOverflow?.mimeType || mimeType;
   const resolvedSource = callOverflow?.source || source;
@@ -256,18 +234,9 @@ export async function transferToolInput({
     forceAttachment: forceAttachment === true || callOverflow?.forceAttachment === true,
     policy: { maxDirectChars: maxInline },
   });
-  const inputExceeded =
-    callOverflow?.exceeded === true || decision.reason === "threshold_exceeded";
+  const inputExceeded = callOverflow?.exceeded === true || decision.reason === "threshold_exceeded";
 
   if (decision.mode === TRANSFER_MODE.DIRECT) {
-    const envelopeMeta = buildToolInputTransferMeta({
-      baseMeta: resolvedMeta,
-      normalizedText,
-      resolvedMimeType,
-      intent,
-      callOverflow,
-      exceeded: inputExceeded,
-    });
     const envelope = directTransfer({
       transferId: identity.transferId,
       messageId: identity.messageId,
@@ -296,10 +265,7 @@ export async function transferToolInput({
     agentContext,
     content: normalizedText,
     name: firstNormalizedString(resolvedName, "tool-input.txt"),
-    mimeType: firstNormalizedString(
-      resolvedMimeType,
-      DEFAULT_TRANSFER_MIME_TYPE,
-    ),
+    mimeType: firstNormalizedString(resolvedMimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
     generationSource: intent.generationSource,
     source: intent.source,

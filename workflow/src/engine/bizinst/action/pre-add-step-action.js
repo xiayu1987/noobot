@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IBizinst from '../interfaces/bizinst.js';
-import IActionNodeState from '../state/modelstate/interfaces/action-node-state.js';
-import IStepState from '../state/modelstate/interfaces/step-state.js';
-import BizinstModelEngine from '../../bizinstcontrolcenter/bizinst-model-engine.js';
-import IModelStateListener from '../../bizinstcontrolcenter/interfaces/model-state-listener.js';
-import ActionBase from './action-base.js';
+import BizinstModelEngine from "../../bizinstcontrolcenter/bizinst-model-engine.js";
+import ActionBase from "./action-base.js";
 
 class PreAddStepAction extends ActionBase {
   constructor() {
@@ -21,8 +17,14 @@ class PreAddStepAction extends ActionBase {
   exec(bizinst, currentStepState, modelStateListener) {
     var actionNodeState = currentStepState.getActionNodeState();
     var index = actionNodeState.getStepStates().indexOf(currentStepState) - 1;
-    BizinstModelEngine.getInstance().addStepState(bizinst, currentStepState.getActionNodeState(), currentStepState, index, modelStateListener);
+    BizinstModelEngine.getInstance().addStepState(
+      bizinst,
+      currentStepState.getActionNodeState(),
+      currentStepState,
+      index,
+      modelStateListener,
+    );
   }
 }
 
-export default  PreAddStepAction;
+export default PreAddStepAction;

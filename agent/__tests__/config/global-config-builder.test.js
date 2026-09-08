@@ -144,6 +144,46 @@ test("createGlobalConfigBuilder: source 原始 snake_case 配置应由 builder �
   assert.equal(built.rawConfig.defaultProvider, "openai");
 });
 
+test("createGlobalConfigBuilder: 可信目录只由配置协议规范化并由路径协议校验", async () => {
+  const valid = createGlobalConfigBuilder({
+    source: async () => ({
+      security: {
+        trusted_directories: ["/srv/project"],
+        path_policy: { roles: { super_admin: { host: { denied_roots: ["/private"] } } } },
+      },
+    }),
+  });
+  const built = await valid.build();
+  assert.deepEqual(built.resolvedConfig.security.trustedDirectories, ["/srv/project"]);
+  assert.deepEqual(built.resolvedConfig.security.pathPolicy.roles.superAdmin.host.deniedRoots, [
+    "/private",
+  ]);
+
+  const relative = createGlobalConfigBuilder({
+    source: async () => ({ security: { trusted_directories: ["relative/path"] } }),
+  });
+  await assert.rejects(() => relative.build(), /must be absolute/);
+
+  const ambiguous = createGlobalConfigBuilder({
+    source: async () => ({ security: { trusted_directories: ["*", "/srv/project"] } }),
+  });
+  await assert.rejects(() => ambiguous.build(), /cannot be combined/);
+});
+
+test("createGlobalConfigBuilder: 错误安全配置��得被静默替换", async () => {
+  const invalidSecurity = createGlobalConfigBuilder({
+    source: async () => ({ security: "disabled" }),
+  });
+  await assert.rejects(() => invalidSecurity.build(), /security config must be an object/);
+
+  const invalidPathPolicy = createGlobalConfigBuilder({
+    source: async () => ({
+      security: { path_policy: { capabilities: { "file.read": { host_requires_role: "any" } } } },
+    }),
+  });
+  await assert.rejects(() => invalidPathPolicy.build(), /hostRequiresRole must be one of/);
+});
+
 test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化入口", async () => {
   const builder = createGlobalConfigBuilder({
     source: async () => ({

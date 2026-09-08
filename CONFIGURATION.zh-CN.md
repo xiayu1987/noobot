@@ -117,6 +117,7 @@ Session 日志 WebSocket：
 | `tools.execute_native_script.enabled`                       | boolean      | 启用受控 Playwright、LibreOffice、FFmpeg 和 FFprobe 执行能力（默认 `true`，支持用户配置） |
 | `tools.execute_script.enabled`                              | boolean      | 启用脚本执行工具                                                                          |
 | `tools.execute_script.script_timeout_ms`                    | number       | 脚本超时                                                                                  |
+| `security.trusted_directories`                              | string[]     | 文件工具风险判定使用的可信宿主目录；默认 `["*"]`                                          |
 | `security.execution_isolation.mode`                         | enum         | `sandbox` 在 Docker 中隔离可编程工作区计算；固定文件 I/O 仍由宿主受控执行                 |
 | `security.execution_isolation.sandbox.provider`             | enum         | 工作区沙箱提供者（`docker`）                                                              |
 | `security.execution_isolation.sandbox.scope`                | enum         | 容器范围（`user`）                                                                        |
@@ -132,6 +133,8 @@ Session 日志 WebSocket：
 `execute_native_script` 注入受控的 Playwright、LibreOffice、FFmpeg/FFprobe、声明输入文件和任务输出能力。文件唯一协议为 `files.input`、`files.readText`、`files.readJson`、`files.writeText`、`files.writeJson`、`output.file`、`output.tempFile` 和 `output.directory`。读取接受 `input://`、`output://`、`temp://`，写入只接受 `output://`，能力 wrapper 在内部解析任务路径；不暴露 import、Shell 命令、环境变量、可执行文件选择或任意宿主路径。浏览器只允许访问 loopback HTTP(S)，输出统一通过 semantic-transfer 持久化。该宿主受限模式用于受信任的本地/管理员自动化，不是面向恶意代码的操作系统安全沙箱。
 
 执行隔离规范由 `@noobot/execution-isolation-protocol` workspace 唯一维护。额外挂载只能通过全局管理员配置声明；挂载源、目标或只读状态变化后，托管 Docker 容器会在下一次脚本执行前重建。额外挂载不会扩大文件工具授权，也不能覆盖 `/workspace`。
+
+`security.trusted_directories` 只能由全局管理员配置，并且只影响风险等级，不授予任何文件访问权限。未配置时等效于 `["*"]`，即除平台系统保护目录和 `security.path_policy.roles.super_admin.host.denied_roots` 外，所有宿主目录均可信。配置具体绝对路径后，只信任这些目录及其子目录；配置空数组表示不信任任何宿主目录。相对路径以及同时包含 `"*"` 和具体路径的配置会被路径协议拒绝。即使配置了 `"*"` 或系统目录的父目录，系统保护目录和拒绝目录也始终不可信。可信宿主文件的读取/搜索采用与 workspace 相同的风险等级，写入/补丁为 `medium`。任意宿主 Shell 仍保持 `critical`，因为仅靠路径判定无法保证 Shell 命令只访问可信目录。
 | `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
 | `tools.max_output_chars` | number | 工具输出清洗与截断的统一长度上限 |
 | `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |

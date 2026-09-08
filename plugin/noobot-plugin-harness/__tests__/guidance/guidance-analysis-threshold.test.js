@@ -9,23 +9,8 @@ import assert from "node:assert/strict";
 import {
   createGuidanceHandler,
   createPlanningHandler,
-  canAttemptPlanRevision,
-  runPlanUpdateAfterSummary,
-  LLM_SUMMARY_THRESHOLD,
-  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  MAX_PLAN_UPDATE_ATTEMPTS,
-  FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
   FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
   PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
   createPlanningAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
@@ -73,7 +58,10 @@ test("planning does not schedule guidance analysis", async () => {
   await handler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
 
   assert.notEqual(agentContext.payload.harness.state.pending.analysis, true);
-  assert.equal(agentContext.payload.harness.state.counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
+  assert.equal(
+    agentContext.payload.harness.state.counters.analysisTurns,
+    FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1,
+  );
 });
 
 test("planning counters consume skipped agent turns without owning analysis turns", async () => {

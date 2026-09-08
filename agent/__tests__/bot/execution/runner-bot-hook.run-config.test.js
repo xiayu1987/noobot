@@ -5,15 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  createRunner,
-  createTestBotHookManager,
-  createCanonicalHandledResult,
-  HOOK_POINT,
-  createAgentCapabilityModelInvoker,
-  createBotDispatchHandled,
-  createTestAgentExecutionScope,
-} from "./runner-bot-hook.fixtures.js";
+import { createRunner, createTestAgentExecutionScope } from "./runner-bot-hook.fixtures.js";
 
 test("SessionExecutionRunner does not let currentSessionModelAlias override selectedModel", async () => {
   let capturedRunConfig = null;

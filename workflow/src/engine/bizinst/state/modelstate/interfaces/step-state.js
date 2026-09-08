@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../../interfaces/can-persistence.js';
-
 class IStepState {
   setActionNodeState(actionNodeState) {}
   getActionNodeState() {}
@@ -13,4 +11,4 @@ class IStepState {
   getIndex() {}
 }
 
-export default  IStepState;
+export default IStepState;

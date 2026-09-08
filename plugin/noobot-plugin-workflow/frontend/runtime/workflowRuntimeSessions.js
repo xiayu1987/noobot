@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
+import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessId.js";
 
 function normalizeRuntimeStatusInput(item = {}) {
   const canonical = item && typeof item === "object" ? item : {};
@@ -49,9 +49,7 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
         : [],
     status: String(item?.status || "").trim(),
     stepFailure:
-      item?.stepFailure && typeof item.stepFailure === "object"
-        ? item.stepFailure
-        : null,
+      item?.stepFailure && typeof item.stepFailure === "object" ? item.stepFailure : null,
     parallelWave: Number(item?.parallelWave || 0),
     waveOrder: Number(item?.waveOrder || 0),
   };
@@ -85,15 +83,20 @@ function normalizeCommittedNodeFact(item = {}) {
     parentSessionId: String(item?.parentSessionId || "").trim(),
     dialogProcessId: String(item?.dialogProcessId || "").trim(),
     turnScopeId: String(item?.turnScopeId || "").trim(),
-    activeChildExecutionId: String(item?.activeChildExecutionId || item?.childExecutionId || "").trim(),
+    activeChildExecutionId: String(
+      item?.activeChildExecutionId || item?.childExecutionId || "",
+    ).trim(),
     childExecutionId: String(item?.childExecutionId || item?.activeChildExecutionId || "").trim(),
-    attemptExecutionIds: Array.isArray(item?.attemptExecutionIds) ? item.attemptExecutionIds.map(String) : [],
+    attemptExecutionIds: Array.isArray(item?.attemptExecutionIds)
+      ? item.attemptExecutionIds.map(String)
+      : [],
     status: String(item?.status || "").trim(),
-    stepFailure: item?.failure && typeof item.failure === "object"
-      ? item.failure
-      : item?.stepFailure && typeof item.stepFailure === "object"
-        ? item.stepFailure
-        : null,
+    stepFailure:
+      item?.failure && typeof item.failure === "object"
+        ? item.failure
+        : item?.stepFailure && typeof item.stepFailure === "object"
+          ? item.stepFailure
+          : null,
     revision: Number(item?.revision || 0),
     sequence: Number(item?.sequence || 0),
     eventId: String(item?.eventId || "").trim(),
@@ -111,18 +114,29 @@ function mergeCommittedNodeFact(base = {}, fact = {}) {
     status: String(canonicalFact.status || canonicalBase.status || "").trim(),
     stepFailure: canonicalFact.stepFailure || canonicalBase.stepFailure || null,
   };
-  if (!canonicalFact.sessionId) merged.sessionId = String(canonicalBase.sessionId || canonicalBase.nodeSessionId || "").trim();
-  if (!canonicalFact.dialogProcessId) merged.dialogProcessId = String(canonicalBase.dialogProcessId || "").trim();
-  if (!canonicalFact.turnScopeId) merged.turnScopeId = String(canonicalBase.turnScopeId || "").trim();
+  if (!canonicalFact.sessionId)
+    merged.sessionId = String(canonicalBase.sessionId || canonicalBase.nodeSessionId || "").trim();
+  if (!canonicalFact.dialogProcessId)
+    merged.dialogProcessId = String(canonicalBase.dialogProcessId || "").trim();
+  if (!canonicalFact.turnScopeId)
+    merged.turnScopeId = String(canonicalBase.turnScopeId || "").trim();
   if (!canonicalFact.nodeId) merged.nodeId = String(canonicalBase.nodeId || "").trim();
-  if (!canonicalFact.nodeName) merged.nodeName = String(canonicalBase.nodeName || canonicalBase.nodeId || "").trim();
-  if (!canonicalFact.actionNodeStateId) merged.actionNodeStateId = String(canonicalBase.actionNodeStateId || canonicalBase.nodeStateId || "").trim();
+  if (!canonicalFact.nodeName)
+    merged.nodeName = String(canonicalBase.nodeName || canonicalBase.nodeId || "").trim();
+  if (!canonicalFact.actionNodeStateId)
+    merged.actionNodeStateId = String(
+      canonicalBase.actionNodeStateId || canonicalBase.nodeStateId || "",
+    ).trim();
   if (!canonicalFact.stepId) merged.stepId = String(canonicalBase.stepId || "").trim();
   if (!canonicalFact.activeChildExecutionId) {
-    merged.activeChildExecutionId = String(canonicalBase.activeChildExecutionId || canonicalBase.childExecutionId || "").trim();
+    merged.activeChildExecutionId = String(
+      canonicalBase.activeChildExecutionId || canonicalBase.childExecutionId || "",
+    ).trim();
   }
   if (!canonicalFact.childExecutionId) {
-    merged.childExecutionId = String(canonicalBase.childExecutionId || canonicalBase.activeChildExecutionId || "").trim();
+    merged.childExecutionId = String(
+      canonicalBase.childExecutionId || canonicalBase.activeChildExecutionId || "",
+    ).trim();
   }
   return merged;
 }
@@ -151,28 +165,39 @@ function findRuntimeEntryIndex(entryIndexByKey, item = {}) {
     item?.nodeSessionId,
     item?.stepId,
     item?.actionNodeStateId,
-  ].map((value) => String(value || "").trim()).filter(Boolean);
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
   for (const key of keys) {
     if (entryIndexByKey.has(key)) return entryIndexByKey.get(key);
   }
   return -1;
 }
 
-export function createRuntimeNodeSessions({ workflowPayload, nodeSessions, executionMeta, workflowNodeStateRegistry = null }) {
+export function createRuntimeNodeSessions({
+  workflowPayload,
+  nodeSessions,
+  executionMeta,
+  workflowNodeStateRegistry = null,
+}) {
   return computed(() => {
     const entries = [];
     const entryIndexByKey = new Map();
     const workflowRunId = resolveWorkflowRunId(workflowPayload);
     const registry = getRegistryValue(workflowNodeStateRegistry);
-    const committedNodes = workflowRunId
-      ? registry?.workflows?.[workflowRunId]?.nodes || {}
-      : {};
+    const committedNodes = workflowRunId ? registry?.workflows?.[workflowRunId]?.nodes || {} : {};
 
     for (const item of nodeSessions.value) {
       const canonicalItem = normalizeRuntimeStatusInput(item);
       const nodeExecutionId = String(canonicalItem?.nodeExecutionId || "").trim();
-      const committed = nodeExecutionId ? normalizeCommittedNodeFact(committedNodes[nodeExecutionId]) : null;
-      entries.push(committed?.nodeExecutionId ? mergeCommittedNodeFact(canonicalItem, committed) : canonicalItem);
+      const committed = nodeExecutionId
+        ? normalizeCommittedNodeFact(committedNodes[nodeExecutionId])
+        : null;
+      entries.push(
+        committed?.nodeExecutionId
+          ? mergeCommittedNodeFact(canonicalItem, committed)
+          : canonicalItem,
+      );
       rememberRuntimeEntryKeys(entryIndexByKey, canonicalItem, entries.length - 1);
     }
 

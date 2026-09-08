@@ -8,12 +8,7 @@ import { runBestEffort } from "@noobot/shared/best-effort";
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from "node:url";
-import {
-  appendEarlyLog,
-  createStartupLogger,
-  desktopAppName,
-  installEarlyDiagnostics,
-} from "./runtime/logging.js";
+import { appendEarlyLog, createStartupLogger, installEarlyDiagnostics } from "./runtime/logging.js";
 import { createDesktopConfigManager } from "./runtime/config.js";
 import { registerFileIpcHandlers } from "./ipc/files.js";
 import { createDesktopDependencyManager } from "./dependencies/manager.js";

@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IStateNode from '../../../../design/model/node/interfaces/state-node.js';
-import IBizinst from '../../interfaces/bizinst.js';
-import IBizinstModel from '../../state/modelstate/interfaces/bizinst-model.js';
-import IStateNodeState from '../../state/modelstate/interfaces/state-node-state.js';
-import StateNodeState from '../../state/modelstate/state-node-state.js';
-import NodeBoxBase from './node-box-base.js';
+import StateNodeState from "../../state/modelstate/state-node-state.js";
+import NodeBoxBase from "./node-box-base.js";
 
 class StateNodeBox extends NodeBoxBase {
   constructor() {
@@ -37,4 +33,4 @@ class StateNodeBox extends NodeBoxBase {
   }
 }
 
-export default  StateNodeBox;
+export default StateNodeBox;

@@ -8,10 +8,7 @@ import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { normalizeReplayCacheKey } from "./replayCache.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../engine/turnTransportEnvelope.js";
-import {
-  logStateMachineDebug,
-  summarizeTurnLifecycleSnapshot,
-} from "../../../debug/loggers/stateMachineLogger.js";
+import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 
 export async function applyReconnectEventReplay({

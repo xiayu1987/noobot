@@ -121,10 +121,6 @@ function ownsMessageOperation(messageOperationStore, operation = null) {
   return messageOperationStore.getActiveOperation(operation.sessionId)?.opId === operation.opId;
 }
 
-function getMessageText(message = {}) {
-  return String(message?.content || message?.text || message?.message || "");
-}
-
 function findReplacementUserMessageById({ session, messageId }) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const expectedMessageId = normalizeTrimmedString(messageId);

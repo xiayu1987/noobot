@@ -116,6 +116,12 @@ const SANDBOX_MOUNT_STRUCTURE = object({
 
 const SECURITY_STRUCTURE = object(
   {
+    trusted_directories: array({
+      item: string({ nonEmpty: true }),
+      policy: GLOBAL_ONLY,
+    }),
+    // The path protocol owns this policy's internal structure and semantics.
+    path_policy: object({}, builtin({ open: true, scopes: GLOBAL_SCOPE_ONLY })),
     execution_isolation: object({
       mode: string({ nonEmpty: true }),
       sandbox: object({

@@ -34,7 +34,6 @@ import {
   installRunningThinkingElapsedCapture,
   observeRealtimeThinkingChanges,
   readFirstCapturedThinkingElapsedSeconds,
-  readThinkingElapsedSeconds,
   readRealtimeToolProjection,
   toolEventsForTurn,
   waitForThinkingElapsedSeconds,

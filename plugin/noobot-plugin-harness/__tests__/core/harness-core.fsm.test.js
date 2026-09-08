@@ -11,23 +11,13 @@ import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
-import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
-import {
-  applyDynamicPolicyPromptFromText,
-  buildDynamicPolicyPromptProtocolInstruction,
-} from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+
+import { waitForFile, readJsonl } from "../test-helpers.js";
 
 test("harness plugin rejects illegal FSM transitions and audits state commits", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerHarnessCore(
-    { hookManager },
-    { basePath, promptPolicy: false, manifestDebounceMs: 0 },
-  );
+  registerHarnessCore({ hookManager }, { basePath, promptPolicy: false, manifestDebounceMs: 0 });
 
   await hookManager.emit("agent.before_tool_calls", {
     userId: "u-fsm",
@@ -47,8 +37,16 @@ test("harness plugin rejects illegal FSM transitions and audits state commits", 
   assert.equal(manifest.fsmStatus, "failed");
 
   const commits = await readJsonl(path.join(runDir, "events.jsonl"));
-  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition_rejected"), true);
-  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "failed"), true);
+  assert.equal(
+    commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition_rejected"),
+    true,
+  );
+  assert.equal(
+    commits.some(
+      (item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "failed",
+    ),
+    true,
+  );
 });
 
 test("harness plugin can resume FSM from manifest checkpoint", async () => {
@@ -71,10 +69,7 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
 
   {
     const hookManager = createAgentHookManager();
-    registerHarnessCore(
-      { hookManager },
-      { basePath, promptPolicy: false, manifestDebounceMs: 0 },
-    );
+    registerHarnessCore({ hookManager }, { basePath, promptPolicy: false, manifestDebounceMs: 0 });
     await hookManager.emit("agent.after_llm_call", {
       userId: "u-resume",
       sessionId: "s-resume",
@@ -95,8 +90,16 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
 
   await waitForFile(path.join(runDir, "events.jsonl"));
   const commits = await readJsonl(path.join(runDir, "events.jsonl"));
-  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_resume"), true);
-  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "planned"), true);
+  assert.equal(
+    commits.some((item) => item.kind === "fsm" && item.type === "fsm_resume"),
+    true,
+  );
+  assert.equal(
+    commits.some(
+      (item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "planned",
+    ),
+    true,
+  );
 });
 
 test("harness FSM transition matrix (table-driven)", async () => {
@@ -187,7 +190,9 @@ test("harness FSM transition matrix (table-driven)", async () => {
     await waitForFile(eventsPath);
     const commits = await readJsonl(eventsPath);
     assert.equal(commits.length > seenCommits, true, `${item.name}: no new state commit`);
-    const last = commits.findLast((commit) => commit.kind === "fsm" && commit.type === item.expectedCommitType);
+    const last = commits.findLast(
+      (commit) => commit.kind === "fsm" && commit.type === item.expectedCommitType,
+    );
     seenCommits = commits.length;
 
     assert.ok(last, `${item.name}: missing ${item.expectedCommitType}`);
@@ -240,5 +245,10 @@ test("harness FSM remains planning when checklist is absent", async () => {
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(manifest.fsmStatus, "planning");
   const commits = await readJsonl(path.join(runDir, "events.jsonl"));
-  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "planned"), false);
+  assert.equal(
+    commits.some(
+      (item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "planned",
+    ),
+    false,
+  );
 });

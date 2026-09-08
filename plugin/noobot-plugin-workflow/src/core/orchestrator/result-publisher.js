@@ -21,7 +21,7 @@ export async function publishWorkflowResult({
   beforeDispatchMode = false,
 } = {}) {
   agentResult.workflow = workflowPayload;
-  const workflowMessage = await publishWorkflowFinalMessage({
+  await publishWorkflowFinalMessage({
     options,
     agentResult,
     ctx,

@@ -5,11 +5,20 @@
  */
 import { expect } from "@playwright/test";
 import { assertModelMessageSnapshot } from "./snapshot-assertions.js";
-import { addAttachment, editLatestUserMessage, sendMessage, stopActiveTurn } from "./browser-actions.js";
+import {
+  addAttachment,
+  editLatestUserMessage,
+  sendMessage,
+  stopActiveTurn,
+} from "./browser-actions.js";
 import { readSnapshots } from "./persistence-audit.js";
 import {
-  assertCommandChain, assertContinuation, assertTurnLifecycle, commandsForSession,
-  lifecycleForSession, waitForCommand, waitForLifecycle,
+  assertCommandChain,
+  assertContinuation,
+  assertTurnLifecycle,
+  commandsForSession,
+  waitForCommand,
+  waitForLifecycle,
 } from "./scenario-assertions.js";
 
 export function uniquePrompt(testInfo, purpose = "protocol") {
@@ -21,8 +30,17 @@ export async function sendAndStop({ page, capture, sessionId, prompt, attachment
   if (attachment) await addAttachment(page, attachment);
   await sendMessage(page, prompt);
   const send = await waitForCommand(capture, sessionId, "turn.send", beforeCommands);
-  const processing = await waitForLifecycle(capture, sessionId, "turn.processing_started", 0, send.identity.turnScopeId);
-  const authoritativeSend = { ...send, identity: { ...send.identity, dialogProcessId: processing.dialogProcessId } };
+  const processing = await waitForLifecycle(
+    capture,
+    sessionId,
+    "turn.processing_started",
+    0,
+    send.identity.turnScopeId,
+  );
+  const authoritativeSend = {
+    ...send,
+    identity: { ...send.identity, dialogProcessId: processing.dialogProcessId },
+  };
   await stopActiveTurn(page);
   const stop = await waitForCommand(capture, sessionId, "turn.stop", beforeCommands);
   await waitForLifecycle(capture, sessionId, "turn.stop_completed", 0, send.identity.turnScopeId);
@@ -37,7 +55,13 @@ export async function continueAndStop({ page, capture, sessionId, previous, prom
   await sendMessage(page, prompt);
   const next = await waitForCommand(capture, sessionId, "turn.continue", beforeCommands);
   assertContinuation(previous, next);
-  const processing = await waitForLifecycle(capture, sessionId, "turn.processing_started", 0, next.identity.turnScopeId);
+  const processing = await waitForLifecycle(
+    capture,
+    sessionId,
+    "turn.processing_started",
+    0,
+    next.identity.turnScopeId,
+  );
   await stopActiveTurn(page);
   await waitForCommand(capture, sessionId, "turn.stop", beforeCommands);
   await waitForLifecycle(capture, sessionId, "turn.stop_completed", 0, next.identity.turnScopeId);
@@ -52,11 +76,24 @@ export async function assertPersistedSnapshots(userId, sessionId, count) {
   return snapshots;
 }
 
-export async function resendAndStop({ page, capture, sessionId, content, attachment = null, removeAttachments = false }) {
+export async function resendAndStop({
+  page,
+  capture,
+  sessionId,
+  content,
+  attachment = null,
+  removeAttachments = false,
+}) {
   const beforeCommands = commandsForSession(capture, sessionId).length;
   await editLatestUserMessage(page, content, { attachment, removeAttachments });
   const resend = await waitForCommand(capture, sessionId, "turn.resend", beforeCommands);
-  const processing = await waitForLifecycle(capture, sessionId, "turn.processing_started", 0, resend.identity.turnScopeId);
+  const processing = await waitForLifecycle(
+    capture,
+    sessionId,
+    "turn.processing_started",
+    0,
+    resend.identity.turnScopeId,
+  );
   expect(resend.identity.dialogProcessId).toBeTruthy();
   expect(processing.dialogProcessId).toBe(resend.identity.dialogProcessId);
   await stopActiveTurn(page);

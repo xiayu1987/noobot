@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import { createFixture } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 afterEach(() => {
@@ -15,8 +15,9 @@ describe("useReconnectReplay", () => {
   it("rejects the removed cache-expiration reconnect branch", async () => {
     const { api, mocks } = createFixture();
 
-    await expect(api.applyReconnectData({ sessions: [], cacheExpired: true }))
-      .rejects.toThrow("unsupported_reconnect_cache_branch");
+    await expect(api.applyReconnectData({ sessions: [], cacheExpired: true })).rejects.toThrow(
+      "unsupported_reconnect_cache_branch",
+    );
     expect(mocks.chatList.fetchSessions).not.toHaveBeenCalled();
   });
 
@@ -47,30 +48,29 @@ describe("useReconnectReplay", () => {
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 
-  it.each([
-    StreamEventEnum.DONE,
-    StreamEventEnum.USER_STOPPED,
-    StreamEventEnum.ERROR,
-  ])("FN-01: %s duplicate replay does not trigger terminal cleanup without channel_state", async (terminalEvent) => {
-    const { api, refs, mocks } = createFixture();
-    refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-once", content: "A", pending: true },
-    ];
+  it.each([StreamEventEnum.DONE, StreamEventEnum.USER_STOPPED, StreamEventEnum.ERROR])(
+    "FN-01: %s duplicate replay does not trigger terminal cleanup without channel_state",
+    async (terminalEvent) => {
+      const { api, refs, mocks } = createFixture();
+      refs.activeSession.value.messages = [
+        { role: RoleEnum.USER, content: "q" },
+        { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-once", content: "A", pending: true },
+      ];
 
-    await api.applyReconnectEvent(terminalEvent, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-once",
-      seq: 2,
-      ...(terminalEvent === StreamEventEnum.ERROR ? { error: "boom" } : {}),
-    });
-    await api.applyReconnectEvent(terminalEvent, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-once",
-      seq: 2,
-      ...(terminalEvent === StreamEventEnum.ERROR ? { error: "boom" } : {}),
-    });
+      await api.applyReconnectEvent(terminalEvent, {
+        sessionId: "s-1",
+        dialogProcessId: "dp-once",
+        seq: 2,
+        ...(terminalEvent === StreamEventEnum.ERROR ? { error: "boom" } : {}),
+      });
+      await api.applyReconnectEvent(terminalEvent, {
+        sessionId: "s-1",
+        dialogProcessId: "dp-once",
+        seq: 2,
+        ...(terminalEvent === StreamEventEnum.ERROR ? { error: "boom" } : {}),
+      });
 
-    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-  });
+      expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
+    },
+  );
 });

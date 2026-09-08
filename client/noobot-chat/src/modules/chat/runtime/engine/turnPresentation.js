@@ -11,7 +11,10 @@ import {
 } from "../../model/messageIdentity.js";
 import { isTurnRuntimeDeleted } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import { getMessageTransferEnvelopes, mergeTransferEnvelopes } from "../../model/transferEnvelopes.js";
+import {
+  getMessageTransferEnvelopes,
+  mergeTransferEnvelopes,
+} from "../../model/transferEnvelopes.js";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -59,16 +62,6 @@ export function isWorkflowPresentationMessage(message = {}) {
     (text(message?.pluginMeta?.source).toLowerCase() === "workflow-plugin" &&
       text(message?.pluginMeta?.kind).toLowerCase() === "workflow") ||
     text(payload?.workflowRunId),
-  );
-}
-
-function workflowRunIdFromMessage(message = {}) {
-  const payload = workflowPayload(message);
-  return text(
-    payload?.workflowRunId ||
-      payload?.execution?.workflowRunId ||
-      payload?.execution?.instanceId ||
-      message?.workflowRunId,
   );
 }
 

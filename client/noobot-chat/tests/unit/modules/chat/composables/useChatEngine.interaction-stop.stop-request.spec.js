@@ -5,7 +5,10 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, activateRuntimeTurn } from "../helpers/useChatEngineHarness.js";
-import { BackendChannelState, FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import {
+  BackendChannelState,
+  FrontendRunState,
+} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyExecutionSnapshot,
@@ -15,9 +18,12 @@ import {
 describe("useChatEngine.interaction-stop: stop-request", () => {
   it("send enables stop while stream is active", async () => {
     let releaseStream;
-    const stream = vi.fn(() => new Promise((resolve) => {
-      releaseStream = resolve;
-    }));
+    const stream = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseStream = resolve;
+        }),
+    );
     const { engine, sending, canStop, activeTurnRuntime, turnRuntimeRegistry } = createHarness({
       sessionId: "local-active-stop",
       stream,
@@ -42,11 +48,16 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
   });
 
   it("stopSending disables repeated stop and sends stable channel identity payload", async () => {
-    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, canStop, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "backend-stop-payload",
     });
     activeSession.value.parentSessionId = "parent-session";
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-payload", turnScopeId: "turn-stop-payload", dialogProcessId: "dp-stop-payload" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "backend-stop-payload",
+      turnScopeId: "turn-stop-payload",
+      dialogProcessId: "dp-stop-payload",
+    });
     activeSession.value.messages.push({
       role: RoleEnum.ASSISTANT,
       content: "partial answer",
@@ -85,21 +96,28 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         },
       },
     });
-    expect(resolveSessionTurnRuntime(
-      turnRuntimeRegistry.value,
-      "backend-stop-payload",
-      "turn-stop-payload",
-    )).toMatchObject({
+    expect(
+      resolveSessionTurnRuntime(
+        turnRuntimeRegistry.value,
+        "backend-stop-payload",
+        "turn-stop-payload",
+      ),
+    ).toMatchObject({
       action: "stop",
       commandId: "stop:turn-stop-payload",
     });
   });
 
   it("stopSending can stop a refreshed in-flight assistant with channelState but no pending flag", async () => {
-    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "backend-stop-refreshed",
     });
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-refreshed", turnScopeId: "turn-refreshed", dialogProcessId: "dp-refreshed" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "backend-stop-refreshed",
+      turnScopeId: "turn-refreshed",
+      dialogProcessId: "dp-refreshed",
+    });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "edited", turnScopeId: "turn-refreshed" },
       {
@@ -117,17 +135,32 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:turn-refreshed",
-        identity: expect.objectContaining({ sessionId: "backend-stop-refreshed", dialogProcessId: "dp-refreshed", turnScopeId: "turn-refreshed" }),
-        stop: expect.objectContaining({ partialAssistant: expect.objectContaining({ content: "partial after refresh", dialogProcessId: "dp-refreshed", turnScopeId: "turn-refreshed" }) }),
+        identity: expect.objectContaining({
+          sessionId: "backend-stop-refreshed",
+          dialogProcessId: "dp-refreshed",
+          turnScopeId: "turn-refreshed",
+        }),
+        stop: expect.objectContaining({
+          partialAssistant: expect.objectContaining({
+            content: "partial after refresh",
+            dialogProcessId: "dp-refreshed",
+            turnScopeId: "turn-refreshed",
+          }),
+        }),
       }),
     );
   });
 
   it("stopSending uses Registry identity when the message has no direct turn identity", async () => {
-    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "backend-stop-channel-identity",
     });
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-channel-identity", turnScopeId: "turn-channel-identity", dialogProcessId: "dp-channel-identity" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "backend-stop-channel-identity",
+      turnScopeId: "turn-channel-identity",
+      dialogProcessId: "dp-channel-identity",
+    });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "running", turnScopeId: "turn-channel-identity" },
       {
@@ -147,8 +180,18 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:turn-channel-identity",
-        identity: expect.objectContaining({ sessionId: "backend-stop-channel-identity", dialogProcessId: "dp-channel-identity", turnScopeId: "turn-channel-identity" }),
-        stop: expect.objectContaining({ partialAssistant: expect.objectContaining({ content: "", dialogProcessId: "dp-channel-identity", turnScopeId: "turn-channel-identity" }) }),
+        identity: expect.objectContaining({
+          sessionId: "backend-stop-channel-identity",
+          dialogProcessId: "dp-channel-identity",
+          turnScopeId: "turn-channel-identity",
+        }),
+        stop: expect.objectContaining({
+          partialAssistant: expect.objectContaining({
+            content: "",
+            dialogProcessId: "dp-channel-identity",
+            turnScopeId: "turn-channel-identity",
+          }),
+        }),
       }),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
@@ -158,10 +201,15 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
   });
 
   it("stopSending can recover turnScopeId from the latest matching user message after refresh", async () => {
-    const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
+    const { engine, deps, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "backend-stop-user-turn-fallback",
     });
-    activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-user-turn-fallback", turnScopeId: "turn-user-fallback", dialogProcessId: "dp-user-turn-fallback" });
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "backend-stop-user-turn-fallback",
+      turnScopeId: "turn-user-fallback",
+      dialogProcessId: "dp-user-turn-fallback",
+    });
     activeSession.value.messages = [
       {
         role: RoleEnum.USER,
@@ -183,8 +231,17 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:turn-user-fallback",
-        identity: expect.objectContaining({ sessionId: "backend-stop-user-turn-fallback", dialogProcessId: "dp-user-turn-fallback", turnScopeId: "turn-user-fallback" }),
-        stop: expect.objectContaining({ partialAssistant: expect.objectContaining({ dialogProcessId: "dp-user-turn-fallback", turnScopeId: "turn-user-fallback" }) }),
+        identity: expect.objectContaining({
+          sessionId: "backend-stop-user-turn-fallback",
+          dialogProcessId: "dp-user-turn-fallback",
+          turnScopeId: "turn-user-fallback",
+        }),
+        stop: expect.objectContaining({
+          partialAssistant: expect.objectContaining({
+            dialogProcessId: "dp-user-turn-fallback",
+            turnScopeId: "turn-user-fallback",
+          }),
+        }),
       }),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
@@ -216,7 +273,12 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:child-turn",
-        identity: expect.objectContaining({ sessionId: "child-session", parentSessionId: "main-session", dialogProcessId: "child-dialog", turnScopeId: "child-turn" }),
+        identity: expect.objectContaining({
+          sessionId: "child-session",
+          parentSessionId: "main-session",
+          dialogProcessId: "child-dialog",
+          turnScopeId: "child-turn",
+        }),
         concurrency: { expectedTurnRevision: 7 },
         stop: expect.objectContaining({ executionId: "child-execution" }),
       }),
@@ -225,19 +287,20 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
 
   it("stopSending rejects unknown, terminal, and non-stoppable executions", () => {
     const { engine, deps, turnRuntimeRegistry } = createHarness({ sessionId: "main-session" });
-    const add = (executionId, overrides = {}) => applyExecutionSnapshot(turnRuntimeRegistry.value, {
-      executionId,
-      executionKind: "agent",
-      rootExecutionId: executionId,
-      sessionId: `${executionId}-session`,
-      turnScopeId: `${executionId}-turn`,
-      state: "processing",
-      terminal: false,
-      revision: 1,
-      sequence: 1,
-      capabilities: { canStop: true },
-      ...overrides,
-    });
+    const add = (executionId, overrides = {}) =>
+      applyExecutionSnapshot(turnRuntimeRegistry.value, {
+        executionId,
+        executionKind: "agent",
+        rootExecutionId: executionId,
+        sessionId: `${executionId}-session`,
+        turnScopeId: `${executionId}-turn`,
+        state: "processing",
+        terminal: false,
+        revision: 1,
+        sequence: 1,
+        capabilities: { canStop: true },
+        ...overrides,
+      });
     add("terminal-execution", { state: "completed", terminal: true });
     add("locked-execution", { capabilities: { canStop: false } });
 

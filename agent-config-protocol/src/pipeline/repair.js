@@ -6,8 +6,6 @@
 import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
   resolveDefaultModelLibraryProvider,
-  resolveModelLibraryProvider,
-  resolveModelLibraryProviderByModel,
   supportsModelMultimodalGeneration,
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
@@ -196,7 +194,9 @@ function repairContractNode({
       if (repaired !== REMOVE_NODE) output[key] = repaired;
       continue;
     }
-    throw new TypeError(`config value source contains unsupported node: ${pathText([...path, key])}`);
+    throw new TypeError(
+      `config value source contains unsupported node: ${pathText([...path, key])}`,
+    );
   }
   for (const [key, child] of Object.entries(target)) {
     if (properties[key] || Object.prototype.hasOwnProperty.call(output, key)) continue;
@@ -403,25 +403,6 @@ function validatesStructureLeaf(value, node) {
   if (typeof value === "number" && node.minimum !== undefined && value < node.minimum) return false;
   if (typeof value === "number" && node.maximum !== undefined && value > node.maximum) return false;
   return true;
-}
-
-function removePath(root, path, changes = null) {
-  const parts = path.split(".").filter(Boolean);
-  let node = root;
-  for (let index = 0; index < parts.length - 1; index += 1) {
-    node = isPlainObject(node?.[parts[index]]) ? node[parts[index]] : null;
-    if (!node) return;
-  }
-  const key = parts.at(-1);
-  if (!node || !Object.prototype.hasOwnProperty.call(node, key)) return;
-  delete node[key];
-  if (!Array.isArray(changes)) return;
-  recordChange(
-    changes,
-    parts,
-    CONFIG_REPAIR_ACTION.REMOVE_SCOPE_FORBIDDEN,
-    "system_owned_node_in_user_config",
-  );
 }
 
 function valueAt(root, path) {
