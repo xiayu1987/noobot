@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { z } from "zod";
-import { HOOK_POINT_DESCRIPTORS } from "@noobot/hook-protocol";
+import {
+  HOOK_POINT_DESCRIPTORS,
+  HOOK_POINT_DOMAIN,
+  requireHookPointDomain,
+} from "@noobot/hook-protocol";
 import {
   PLUGIN_HOST_PORT,
   PLUGIN_PERMISSION,
@@ -200,9 +204,10 @@ export const pluginManifestSchema = z
         ...(contributes?.hooks?.registers || []).map((item) => item.point),
         ...(contributes?.hooks?.emits || []),
       ]) {
-        const ownerSurface = point.startsWith("service.")
-          ? PLUGIN_SURFACE.SERVICE
-          : PLUGIN_SURFACE.AGENT;
+        const ownerSurface =
+          requireHookPointDomain(point) === HOOK_POINT_DOMAIN.SERVICE
+            ? PLUGIN_SURFACE.SERVICE
+            : PLUGIN_SURFACE.AGENT;
         if (ownerSurface !== surface) {
           context.addIssue({
             code: "custom",

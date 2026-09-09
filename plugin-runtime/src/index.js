@@ -244,7 +244,10 @@ export function listPluginsContributingHook(runtime = null, point = "") {
 
 export function resolvePluginExecutionIntent(runtime = null, pluginId = "") {
   const plugin = resolveLoadedNoobotPlugin(runtime, pluginId);
-  const declaration = plugin?.manifest?.contributes?.agent?.executionIntent;
+  const declaration = contributionsForSurface(
+    plugin?.manifest,
+    PLUGIN_SURFACE.AGENT,
+  )?.executionIntent;
   if (!declaration) return null;
   return Object.freeze({ ...declaration, pluginId: plugin.pluginId });
 }

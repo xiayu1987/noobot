@@ -3,9 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createHookManager } from "@noobot/hook-protocol";
+import {
+  createHookManager,
+  hookPointDomain,
+  HOOK_POINT_DOMAIN,
+  isHookPointInDomain,
+} from "@noobot/hook-protocol";
 import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import {
+  contributionsForSurface,
   PLUGIN_HOST_PORT,
   PLUGIN_SURFACE,
   requireDeclaredPluginHook,
@@ -59,8 +65,8 @@ function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
 }
 
 function managerForPoint(point = "", agentHooks, orchestrationHooks) {
-  const normalized = String(point || "").trim();
-  return normalized.startsWith("bot.") || normalized.startsWith("workflow.")
+  const domain = hookPointDomain(point);
+  return domain === HOOK_POINT_DOMAIN.BOT || domain === HOOK_POINT_DOMAIN.WORKFLOW
     ? orchestrationHooks
     : agentHooks;
 }
@@ -156,9 +162,12 @@ export class RunConfigPluginPreparer {
       (this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : "");
     const next = { ...options, enabled: true, mode: "on", basePath };
     next.frontendThresholdsEnabled = runConfig?.frontendThresholdsEnabled === true;
-    const registeredHooks = entry.manifest.contributes.agent?.hooks?.registers || [];
-    const hasAgentLifecycle = registeredHooks.some(({ point }) => point.startsWith("agent."));
-    const hasExecutionIntent = Boolean(entry.manifest.contributes.agent?.executionIntent);
+    const agentContributions = contributionsForSurface(entry.manifest, PLUGIN_SURFACE.AGENT);
+    const registeredHooks = agentContributions?.hooks?.registers || [];
+    const hasAgentLifecycle = registeredHooks.some(({ point }) =>
+      isHookPointInDomain(point, HOOK_POINT_DOMAIN.AGENT),
+    );
+    const hasExecutionIntent = Boolean(agentContributions?.executionIntent);
 
     if (hasAgentLifecycle) {
       next.resolveModelMessages = this.createPluginResolveModelMessages?.({

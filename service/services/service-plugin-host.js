@@ -8,6 +8,7 @@ import {
   collectSessionDeletionHookResult,
   createHookManager,
   HOOK_POINT,
+  mergeSessionDeletionIds,
 } from "@noobot/hook-protocol";
 import {
   PLUGIN_HOST_PORT,
@@ -281,12 +282,8 @@ export function createServicePluginHost({
       const hookResult = await activeHookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
-        deletedSessionIds: Array.isArray(deletedSessionIds)
-          ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
-          : [],
-        remainingSessionIds: Array.isArray(remainingSessionIds)
-          ? remainingSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
-          : [],
+        deletedSessionIds: mergeSessionDeletionIds(deletedSessionIds),
+        remainingSessionIds: mergeSessionDeletionIds(remainingSessionIds),
         basePath,
         executionScope: "primary",
       });

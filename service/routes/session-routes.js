@@ -84,9 +84,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
   function resolveDeletedSessionIds(result = {}, fallbackSessionId = "") {
-    const fromResult = Array.isArray(result?.deletedSessionIds)
-      ? result.deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
-      : [];
+    const fromResult = mergeSessionDeletionIds(result?.deletedSessionIds);
     if (fromResult.length) return fromResult;
     const fallback = String(fallbackSessionId || "").trim();
     return fallback ? [fallback] : [];

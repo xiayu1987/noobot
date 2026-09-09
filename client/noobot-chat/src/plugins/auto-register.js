@@ -12,6 +12,7 @@ import {
 import {
   EXTENSION_POINTS,
   PLUGIN_HOST_PORT,
+  PLUGIN_SURFACE,
   requireDeclaredFrontendContribution,
 } from "@noobot/plugin-protocol";
 import {
@@ -38,7 +39,7 @@ function loadedFrontendEntries() {
     return {
       pluginId,
       manifest: item.manifest,
-      surface: "frontend",
+      surface: PLUGIN_SURFACE.FRONTEND,
       item,
       async activate(host, config) {
         const pluginModule =
