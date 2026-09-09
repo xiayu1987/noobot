@@ -5,8 +5,11 @@
  */
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
 import { normalizeSessionRunEvent } from "./eventNormalization.js";
-import { deriveTurnEventType, TURN_EVENT, TURN_STATE } from "@noobot/session-protocol";
-import { projectAuthoritativeTurnState } from "./authoritativeTurnProjection.js";
+import { deriveTurnEventType, TURN_EVENT } from "@noobot/session-protocol";
+import {
+  projectAuthoritativeTerminalTurnState,
+  projectAuthoritativeTurnState,
+} from "./authoritativeTurnProjection.js";
 
 export const TURN_TRANSITION_REASON = Object.freeze({
   APPLIED: "applied",
@@ -91,14 +94,7 @@ export function deriveTurnCapabilities(state = "", { canStop = false } = {}) {
 function targetState(current, event) {
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return (
-      {
-        [TURN_STATE.COMPLETED]: FrontendRunState.FRONTEND_COMPLETED,
-        [TURN_STATE.STOP_COMPLETED]: FrontendRunState.USER_STOP_COMPLETED,
-        [TURN_STATE.ACTION_FAILED]: FrontendRunState.ACTION_REQUEST_ERROR,
-        [TURN_STATE.PROCESSING_FAILED]: FrontendRunState.PROCESSING_ERROR,
-        [TURN_STATE.COMPLETION_FAILED]: FrontendRunState.COMPLETION_ERROR,
-        [TURN_STATE.STOP_FAILED]: FrontendRunState.STOP_ERROR,
-      }[text(event.authoritativeTurnState)] || text(current.state)
+      projectAuthoritativeTerminalTurnState(event.authoritativeTurnState) || text(current.state)
     );
   }
   if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {

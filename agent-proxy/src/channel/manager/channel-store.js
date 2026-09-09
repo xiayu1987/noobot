@@ -14,6 +14,9 @@ import {
 } from "../../shared/constants.js";
 import { normalizeApiKey, nowMs } from "../../shared/utils.js";
 import {
+  isFailedTurnState,
+  isTerminalTurnEvent,
+  isTerminalTurnState,
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_STATE,
@@ -26,20 +29,6 @@ import {
   validateProtocolEvent,
 } from "@noobot/event-protocol";
 import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
-
-const TERMINAL_TURN_EVENTS = new Set([
-  TURN_EVENT.COMPLETED,
-  TURN_EVENT.STOP_COMPLETED,
-  TURN_EVENT.FAILED,
-]);
-const TERMINAL_TURN_STATES = new Set([
-  TURN_STATE.COMPLETED,
-  TURN_STATE.STOP_COMPLETED,
-  TURN_STATE.ACTION_FAILED,
-  TURN_STATE.PROCESSING_FAILED,
-  TURN_STATE.COMPLETION_FAILED,
-  TURN_STATE.STOP_FAILED,
-]);
 
 function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
   const sequence = Number(knownSequence || 0);
@@ -417,7 +406,7 @@ class ChannelStoreMethods {
     const lifecycle = latest.payload;
     const eventType = String(lifecycle?.eventType || "").trim();
     const lifecycleState = String(lifecycle?.state || "").trim();
-    if (TERMINAL_TURN_EVENTS.has(eventType) || TERMINAL_TURN_STATES.has(lifecycleState)) {
+    if (isTerminalTurnEvent(eventType) || isTerminalTurnState(lifecycleState)) {
       return null;
     }
     const turnScopeId = String(latest?.identity?.turnScopeId || "").trim();
@@ -535,13 +524,8 @@ class ChannelStoreMethods {
       nextState = CONVERSATION_STATE.SENDING;
     } else if (lifecycleState === TURN_STATE.STOPPING) {
       nextState = CONVERSATION_STATE.STOPPING;
-    } else if (TERMINAL_TURN_EVENTS.has(eventName) || TERMINAL_TURN_STATES.has(lifecycleState)) {
-      nextState = [
-        TURN_STATE.ACTION_FAILED,
-        TURN_STATE.PROCESSING_FAILED,
-        TURN_STATE.COMPLETION_FAILED,
-        TURN_STATE.STOP_FAILED,
-      ].includes(lifecycleState)
+    } else if (isTerminalTurnEvent(eventName) || isTerminalTurnState(lifecycleState)) {
+      nextState = isFailedTurnState(lifecycleState)
         ? CONVERSATION_STATE.ERROR
         : lifecycleState === TURN_STATE.STOP_COMPLETED || eventName === TURN_EVENT.STOP_COMPLETED
           ? CONVERSATION_STATE.USER_STOPPED

@@ -5,7 +5,7 @@
  */
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { snapshotTurn } from "./turn-projection.js";
-import { TURN_STATE, TURN_TERMINAL_STATES } from "./turn-state.js";
+import { TURN_FAILED_STATES, TURN_TERMINAL_STATES } from "./turn-state.js";
 import {
   collectPositiveIntegerErrors,
   collectRequiredFieldErrors,
@@ -16,12 +16,7 @@ export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 2;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
 
 const TERMINAL_STATE_VALUES = new Set(TURN_TERMINAL_STATES);
-const FAILED_TERMINAL_STATES = new Set([
-  TURN_STATE.ACTION_FAILED,
-  TURN_STATE.PROCESSING_FAILED,
-  TURN_STATE.COMPLETION_FAILED,
-  TURN_STATE.STOP_FAILED,
-]);
+const FAILED_TERMINAL_STATES = new Set(TURN_FAILED_STATES);
 
 export function createTurnTerminalResolution({
   commandId = "",

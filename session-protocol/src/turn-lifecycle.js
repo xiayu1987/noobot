@@ -13,19 +13,28 @@ import {
   collectTurnScopeIdErrors,
 } from "./lifecycle/turn-field-assertions.js";
 import { normalizeTurnContinuationSource } from "./lifecycle/turn-continuation.js";
-import { TURN_COMMAND, TURN_EVENT, TURN_EVENT_VALUES } from "./lifecycle/turn-event.js";
+import {
+  isTerminalTurnEvent,
+  TURN_COMMAND,
+  TURN_EVENT,
+  TURN_EVENT_VALUES,
+  TURN_TERMINAL_EVENTS,
+} from "./lifecycle/turn-event.js";
 import { TURN_EVENT_STATE, TURN_FAILED_PHASE_STATE } from "./lifecycle/turn-transition-policy.js";
-import { TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
+import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
 import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
 import { text as clean } from "./normalize.js";
 
 export {
   deriveAuthoritativeTurnCapabilities,
+  isTerminalTurnEvent,
+  isTerminalTurnState,
   normalizeTurnContinuationSource,
   TURN_COMMAND,
   TURN_EVENT,
   TURN_PHASE,
   TURN_STATE,
+  TURN_TERMINAL_EVENTS,
 };
 
 export {

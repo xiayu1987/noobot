@@ -4,14 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveTurnTerminalStateApi } from "../../../infrastructure/api/chat/chatApi.js";
+import { isTerminalTurnEvent } from "@noobot/session-protocol";
 import { SESSION_RUN_EVENT } from "./run-state-machine/constants.js";
 import { terminalResolutionMetadata } from "./terminalResolutionMetadata.js";
-
-const TERMINAL_NOTIFICATION_TYPES = new Set([
-  "turn.completed",
-  "turn.stop_completed",
-  "turn.failed",
-]);
 
 function clean(input) {
   return String(input || "").trim();
@@ -76,7 +71,7 @@ function maxVersion(left = {}, right = {}) {
 function isTerminalNotification(event = {}) {
   return (
     event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
-    TERMINAL_NOTIFICATION_TYPES.has(clean(event.eventType || event.raw?.eventType).toLowerCase())
+    isTerminalTurnEvent(clean(event.eventType || event.raw?.eventType).toLowerCase())
   );
 }
 
