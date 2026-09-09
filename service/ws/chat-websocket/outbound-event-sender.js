@@ -37,34 +37,23 @@ function validateOutboundProtocolEnvelope(protocolEnvelope, eventName, logConnec
   return false;
 }
 
-function getAuthoritativeMessageEvent(data) {
-  return data?.channelKind === "message_event" && data?.event && typeof data.event === "object"
-    ? data.event
-    : null;
-}
-
-function resolveEventType(protocolEnvelope, authoritativeEvent, data) {
+function resolveEventType(protocolEnvelope, data) {
   if (protocolEnvelope) return text(protocolEnvelope.identity?.eventType);
-  return text(authoritativeEvent?.eventType || data?.eventType || data?.messageEvent?.eventType);
+  return text(data?.eventType || data?.messageEvent?.eventType);
 }
 
 function createTransportDiagnostic({
   protocolEnvelope,
-  authoritativeEvent,
   data,
   eventType,
   transportContext,
   webSocket,
 }) {
   return {
-    eventId: text(
-      protocolEnvelope?.identity?.eventId || authoritativeEvent?.eventId || data?.eventId,
-    ),
+    eventId: text(protocolEnvelope?.identity?.eventId || data?.eventId),
     eventType: eventType || text(protocolEnvelope?.identity?.eventType),
-    messageId: text(authoritativeEvent?.messageId || data?.messageId),
-    presentationMessageId: text(
-      authoritativeEvent?.presentationMessageId || data?.presentationMessageId,
-    ),
+    messageId: text(data?.messageId),
+    presentationMessageId: text(data?.presentationMessageId),
     runHandleId: text(transportContext?.runHandleId),
     bindingId: text(transportContext?.bindingId),
     readyState: webSocket.readyState,
@@ -87,15 +76,11 @@ function logRejectedTransport({
   eventType,
   data,
   readyState,
-  authoritativeEvent,
   transportDiagnostic,
   toolFrame,
   terminalLifecycle,
   authorityEnvelope,
 }) {
-  if (authoritativeEvent) {
-    logConnection("service.websocket.messageEvent.sendRejected", transportDiagnostic);
-  }
   if (toolFrame) {
     logConnection("service.websocket.toolFrame.dropped", {
       eventName,
@@ -126,7 +111,7 @@ function logRejectedTransport({
   }
 }
 
-function enrichTransportData(eventName, data, protocolEnvelope, authoritativeEvent, sequence) {
+function enrichTransportData(eventName, data, protocolEnvelope, sequence) {
   if (
     protocolEnvelope ||
     eventName === ATTACHMENT_LIFECYCLE_WIRE_EVENT ||
@@ -137,9 +122,9 @@ function enrichTransportData(eventName, data, protocolEnvelope, authoritativeEve
   return {
     ...(data && typeof data === "object" ? data : {}),
     seq: sequence,
-    dialogProcessId: text(authoritativeEvent?.dialogProcessId || data?.dialogProcessId),
-    sessionId: text(authoritativeEvent?.sessionId || data?.route?.sessionId || data?.sessionId),
-    turnScopeId: text(authoritativeEvent?.turnScopeId || data?.turnScopeId),
+    dialogProcessId: text(data?.dialogProcessId),
+    sessionId: text(data?.sessionId),
+    turnScopeId: text(data?.turnScopeId),
   };
 }
 
@@ -150,19 +135,11 @@ function logSuccessfulTransport({
   enrichedData,
   sequence,
   readyState,
-  authoritativeEvent,
   transportDiagnostic,
   toolFrame,
   terminalLifecycle,
   authorityEnvelope,
 }) {
-  if (authoritativeEvent) {
-    logConnection("service.websocket.messageEvent.sendCompleted", {
-      ...transportDiagnostic,
-      transportSequence: sequence,
-      readyState,
-    });
-  }
   if (toolFrame) {
     logConnection("service.websocket.toolFrame.sent", {
       eventName,
@@ -211,12 +188,6 @@ function sendPacket(context, packet, eventContext) {
   return new Promise((resolve) => {
     context.webSocket.send(packet, (error) => {
       if (error) {
-        if (eventContext.authoritativeEvent) {
-          context.logConnection("service.websocket.messageEvent.sendFailed", {
-            ...eventContext.transportDiagnostic,
-            error: error?.message || String(error || "websocket_send_failed"),
-          });
-        }
         recordSendFailure({ ...context, ...eventContext, error });
         resolve(false);
         return;
@@ -236,19 +207,14 @@ export function createOutboundEventSender({ webSocket, state, logConnection, ses
   return function sendEvent(eventName, data = {}, transportContext = {}) {
     const protocolEnvelope = getProtocolEnvelope(data);
     if (!validateOutboundProtocolEnvelope(protocolEnvelope, eventName, logConnection)) return false;
-    const authoritativeEvent = getAuthoritativeMessageEvent(data);
-    const eventType = resolveEventType(protocolEnvelope, authoritativeEvent, data);
+    const eventType = resolveEventType(protocolEnvelope, data);
     const transportDiagnostic = createTransportDiagnostic({
       protocolEnvelope,
-      authoritativeEvent,
       data,
       eventType,
       transportContext,
       webSocket,
     });
-    if (authoritativeEvent) {
-      logConnection("service.websocket.messageEvent.sendStarted", transportDiagnostic);
-    }
     const classification = {
       ...classifyOutboundEvent(eventName, eventType),
       authorityEnvelope: Boolean(protocolEnvelope),
@@ -260,26 +226,18 @@ export function createOutboundEventSender({ webSocket, state, logConnection, ses
         eventType,
         data,
         readyState: webSocket.readyState,
-        authoritativeEvent,
         transportDiagnostic,
         ...classification,
       });
       return false;
     }
     sequence += 1;
-    const enrichedData = enrichTransportData(
-      eventName,
-      data,
-      protocolEnvelope,
-      authoritativeEvent,
-      sequence,
-    );
+    const enrichedData = enrichTransportData(eventName, data, protocolEnvelope, sequence);
     const eventContext = {
       eventName,
       eventType,
       enrichedData,
       sequence,
-      authoritativeEvent,
       transportDiagnostic,
       ...classification,
     };

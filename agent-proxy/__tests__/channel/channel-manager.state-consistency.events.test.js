@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { TRANSPORT_TRACE_PROTOCOL_KIND } from "../../src/shared/constants.js";
 import {
   createChannelKey,
   ensureConnectionId,
@@ -200,7 +201,7 @@ test("connection ids are stable per socket and isolated between sockets", () => 
 test("message event tracing only accepts the shared authoritative envelope", () => {
   const authoritative = messageEnvelope({ sequence: 7 });
   assert.deepEqual(resolveMessageEventTrace(MESSAGE_EVENT_WIRE_EVENT, authoritative, 9), {
-    protocolKind: "message_event",
+    protocolKind: TRANSPORT_TRACE_PROTOCOL_KIND.MESSAGE_EVENT,
     transportEvent: "message_event",
     transportSequence: 9,
     eventId: "event-7",
@@ -213,15 +214,15 @@ test("message event tracing only accepts the shared authoritative envelope", () 
   });
   assert.equal(
     resolveMessageEventTrace("subagent_message_event", authoritative, 11).protocolKind,
-    "non_message_event",
+    TRANSPORT_TRACE_PROTOCOL_KIND.NON_MESSAGE_EVENT,
   );
   assert.equal(
     resolveMessageEventTrace("thinking", authoritative, 9).protocolKind,
-    "non_message_event",
+    TRANSPORT_TRACE_PROTOCOL_KIND.NON_MESSAGE_EVENT,
   );
   assert.equal(
     resolveMessageEventTrace(MESSAGE_EVENT_WIRE_EVENT, { eventId: "loose" }, 9).protocolKind,
-    "non_message_event",
+    TRANSPORT_TRACE_PROTOCOL_KIND.NON_MESSAGE_EVENT,
   );
 });
 
