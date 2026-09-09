@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@noobot/context-protocol": "file:../context-protocol",
+    "@noobot/path-resolver": "file:../path-resolver",
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "@noobot/session-protocol": "file:../session-protocol"
   }

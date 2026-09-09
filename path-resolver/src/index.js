@@ -11,4 +11,5 @@ export * from "./runtime-context.js";
 export * from "./task-path.js";
 export * from "./path-contract.js";
 export * from "./resource-ref.js";
+export * from "./scoped-artifact-path.js";
 export { filePath as default } from "./platform.js";

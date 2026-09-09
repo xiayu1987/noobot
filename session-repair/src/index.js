@@ -6,6 +6,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { cp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 import {
   assertTransferEnvelope,
   isTransferEnvelopeField,
@@ -21,24 +22,14 @@ import {
 export const SESSION_REPAIR_PROTOCOL_VERSION = 1;
 
 function resolveRepairArtifactPath(sessionDir, relativeFile, expectedRoot, extensions) {
-  const reference = String(relativeFile || "").replaceAll("\\", "/");
-  const normalized = path.normalize(reference);
-  const root = path.resolve(sessionDir, expectedRoot);
-  const resolved = path.resolve(sessionDir, normalized);
-  if (
-    !reference ||
-    path.isAbsolute(reference) ||
-    reference.includes("\0") ||
-    normalized === "." ||
-    normalized.startsWith(`..${path.sep}`) ||
-    (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) ||
-    !extensions.includes(path.extname(resolved))
-  ) {
-    throw Object.assign(new Error(`invalid Session repair artifact reference: ${reference}`), {
-      code: "SESSION_REPAIR_ARTIFACT_PATH_INVALID",
-    });
-  }
-  return resolved;
+  return resolveScopedArtifactPath({
+    baseDir: sessionDir,
+    reference: relativeFile,
+    scopeDir: expectedRoot,
+    extensions,
+    errorCode: "SESSION_REPAIR_ARTIFACT_PATH_INVALID",
+    errorLabel: "Session repair artifact reference",
+  });
 }
 
 async function readRepairJson(file) {

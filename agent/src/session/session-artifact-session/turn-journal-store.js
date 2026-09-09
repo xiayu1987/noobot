@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
+import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
@@ -16,24 +16,14 @@ export function journalPath(sessionDir, turnId) {
 }
 
 function resolveSummarySnapshotPath(sessionDir = "", file = "") {
-  const reference = String(file || "").replaceAll("\\", "/");
-  const normalized = path.normalize(reference);
-  const snapshotsRoot = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir);
-  const resolved = path.resolve(sessionDir, normalized);
-  if (
-    !reference ||
-    path.isAbsolute(reference) ||
-    reference.includes("\0") ||
-    normalized === "." ||
-    normalized.startsWith(`..${path.sep}`) ||
-    (resolved !== snapshotsRoot && !resolved.startsWith(`${snapshotsRoot}${path.sep}`)) ||
-    path.extname(resolved) !== ".json"
-  ) {
-    const error = new Error(`invalid session summary snapshot reference: ${reference}`);
-    error.code = "SESSION_SUMMARY_SNAPSHOT_PATH_INVALID";
-    throw error;
-  }
-  return resolved;
+  return resolveScopedArtifactPath({
+    baseDir: sessionDir,
+    reference: file,
+    scopeDir: SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir,
+    extensions: [".json"],
+    errorCode: "SESSION_SUMMARY_SNAPSHOT_PATH_INVALID",
+    errorLabel: "session summary snapshot reference",
+  });
 }
 
 export function messageHash(message) {

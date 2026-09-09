@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
+import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 
@@ -79,22 +79,12 @@ export function splitSessionMessages(messages = [], dialogOrder = []) {
 }
 
 export function resolveTurnArtifactPath(sessionDir = "", file = "") {
-  const reference = String(file || "").replaceAll("\\", "/");
-  const normalized = path.normalize(reference);
-  const turnsRoot = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir);
-  const resolved = path.resolve(sessionDir, normalized);
-  if (
-    !reference ||
-    path.isAbsolute(reference) ||
-    reference.includes("\0") ||
-    normalized === "." ||
-    normalized.startsWith(`..${path.sep}`) ||
-    (resolved !== turnsRoot && !resolved.startsWith(`${turnsRoot}${path.sep}`)) ||
-    ![".json", ".jsonl"].includes(path.extname(resolved))
-  ) {
-    const error = new Error(`invalid session turn artifact reference: ${reference}`);
-    error.code = "SESSION_TURN_ARTIFACT_PATH_INVALID";
-    throw error;
-  }
-  return resolved;
+  return resolveScopedArtifactPath({
+    baseDir: sessionDir,
+    reference: file,
+    scopeDir: SESSION_ARTIFACT_FILE_NAMES.turnsDir,
+    extensions: [".json", ".jsonl"],
+    errorCode: "SESSION_TURN_ARTIFACT_PATH_INVALID",
+    errorLabel: "session turn artifact reference",
+  });
 }
