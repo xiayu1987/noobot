@@ -243,7 +243,7 @@ export function createChatWebSocketClient({
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
           }));
-          if (event === "transport_ready") {
+          if (event === AGENT_TRANSPORT_EVENT.READY) {
             transport.markReady(ws, { nextServerInstanceId: data?.serverInstanceId });
             return;
           }
@@ -538,7 +538,7 @@ export function createChatWebSocketClient({
           try {
             const { event, data } = transportEvent;
             const channelSessionId = getAgentTransportEventSessionId(transportEvent);
-            if (event === "transport_ready") return;
+            if (event === AGENT_TRANSPORT_EVENT.READY) return;
             const eventMatchesCurrentStream = isEventForStreamScope(
               data,
               payload,
@@ -586,7 +586,9 @@ export function createChatWebSocketClient({
           };
           const pending = pendingStreamEvents.splice(0, pendingStreamEvents.length);
           for (const packet of pending) {
-            if (isEventForStreamScope(packet.data, payload, packet.channelSessionId)) {
+            if (
+              isEventForStreamScope(packet.data, payload, getAgentTransportEventSessionId(packet))
+            ) {
               handleProtocolEvent(packet);
             } else pendingStreamEvents.push(packet);
           }
@@ -677,7 +679,7 @@ export function createChatWebSocketClient({
       };
       const handleReconnectProtocolEvent = ({ event, data }) => {
         try {
-          if (event === "transport_ready") return;
+          if (event === AGENT_TRANSPORT_EVENT.READY) return;
 
           if (
             event === AGENT_TRANSPORT_EVENT.ERROR &&

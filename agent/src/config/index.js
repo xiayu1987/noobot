@@ -49,25 +49,15 @@ export {
   validateConfigSnapshot,
 } from "@noobot/agent-config-protocol";
 export {
-  DOCKER_CONTAINER_SCOPE,
-  EXECUTION_ISOLATION_DEFAULTS,
-  EXECUTION_ISOLATION_MODE,
   SANDBOX_PROVIDER,
-  SANDBOX_PROVIDER_EXECUTABLE,
   TOOL_EXECUTION_CLASS,
   TOOL_EXECUTION_VIEW,
   WORKSPACE_SANDBOX_PATHS,
   isHostIsolationMode,
-  isRestrictedHostExecutionView,
   isSandboxExecutionView,
   isSandboxIsolationMode,
-  normalizeDockerContainerScope,
-  normalizeSandboxMounts,
-  normalizeSandboxProvider,
   resolveExecutionIsolation,
-  resolveSandboxMountMappings,
   resolveSandboxProviderExecutable,
-  resolveToolExecutionClass,
   resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
 export { resolveLocalizedBuiltinScenarios } from "./core/scenario-localization-adapter.js";

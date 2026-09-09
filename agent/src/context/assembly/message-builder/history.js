@@ -21,6 +21,7 @@ import {
   shouldSkipSummarizedHistoryMessage,
 } from "./task-summary.js";
 import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import {
   buildHumanMessageContent,
   buildHumanMessagesForUser,
@@ -149,7 +150,7 @@ export function buildHistoryMessages({
         new HumanMessage({
           content: String(msg?.content || ""),
           additional_kwargs: {
-            noobotInternalMessageType: "phase_summary_memory",
+            noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY,
           },
         }),
       );
@@ -179,7 +180,7 @@ export function buildHistoryMessages({
 
           additional_kwargs: {
             ...projectContextMessageIdentityMetadata(meta),
-            noobotInternalMessageType: "user_meta",
+            noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META,
           },
         }),
       );

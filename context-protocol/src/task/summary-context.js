@@ -14,6 +14,7 @@ import {
   resolveContextToolCallId,
   readContextMessageField,
 } from "../message/codec.js";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
 import { TASK_SUMMARY_PROTOCOL_VERSION, parseTaskSummaryReceipt } from "./summary.js";
 
@@ -56,7 +57,7 @@ export function recoverContextTaskSummaryToolResult(message = {}) {
     ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),
     additional_kwargs: {
       ...identity,
-      noobotInternalMessageType: "phase_summary_memory",
+      noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY,
       recoveredFromUnpairedTaskSummary: true,
       ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),
     },

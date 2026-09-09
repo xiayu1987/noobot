@@ -5,6 +5,7 @@
  */
 import { SystemMessage } from "@langchain/core/messages";
 import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/policy/block";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { resolveRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
 import {
@@ -85,7 +86,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
       new SystemMessage({
         content: typeof content === "string" ? content : String(content?.content || ""),
         additional_kwargs: {
-          noobotInternalMessageType: "system_context",
+          noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT,
         },
       }),
     );
