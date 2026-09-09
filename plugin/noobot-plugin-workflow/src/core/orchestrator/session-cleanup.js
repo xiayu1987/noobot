@@ -9,21 +9,17 @@ import {
   cleanupWorkflowBySessionIds,
   collectWorkflowRelatedSessionIds,
 } from "../../utils/cleanup.js";
-import { createSessionDeletionHookResult, HOOK_POINT } from "@noobot/hook-protocol";
+import {
+  createSessionDeletionHookResult,
+  HOOK_POINT,
+  resolveSessionDeletionTargets,
+} from "@noobot/hook-protocol";
 
 export function registerWorkflowSessionCleanupHook({ hookManager, options = {} } = {}) {
   return hookManager.on(
     HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
     async (ctx = {}) => {
-      const deletedSessionIds = Array.isArray(ctx?.deletedSessionIds)
-        ? ctx.deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
-        : [];
-      const fallbackSessionId = String(ctx?.sessionId || "").trim();
-      const sessionIds = deletedSessionIds.length
-        ? deletedSessionIds
-        : fallbackSessionId
-          ? [fallbackSessionId]
-          : [];
+      const sessionIds = resolveSessionDeletionTargets(ctx);
       if (!sessionIds.length) return createSessionDeletionHookResult();
       const basePath = String(ctx?.basePath || "").trim();
       if (!basePath) return createSessionDeletionHookResult();

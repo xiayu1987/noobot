@@ -21,6 +21,13 @@ export const HOOK_CANCELLATION_MODE = Object.freeze({
   DETACHED: "detached",
 });
 
+export const HOOK_POINT_DOMAIN = Object.freeze({
+  AGENT: "agent",
+  BOT: "bot",
+  SERVICE: "service",
+  WORKFLOW: "workflow",
+});
+
 export const HOOK_POINT = Object.freeze({
   AGENT: Object.freeze({
     BEFORE_TURN: "agent.before_turn",
@@ -85,6 +92,27 @@ const detachedCancellationPoints = new Set([
 
 const allHookPoints = Object.values(HOOK_POINT).flatMap((domain) => Object.values(domain));
 
+const hookPointDomains = Object.freeze(new Set(Object.values(HOOK_POINT_DOMAIN)));
+
+export function hookPointDomain(point = "") {
+  const normalized = String(point || "").trim();
+  const separatorIndex = normalized.indexOf(".");
+  if (separatorIndex <= 0 || separatorIndex === normalized.length - 1) return "";
+  const domain = normalized.slice(0, separatorIndex);
+  return hookPointDomains.has(domain) ? domain : "";
+}
+
+export function requireHookPointDomain(point = "") {
+  const domain = hookPointDomain(point);
+  if (!domain) throw new TypeError(`unknown hook point domain: ${String(point || "<empty>")}`);
+  return domain;
+}
+
+export function isHookPointInDomain(point = "", domain = "") {
+  const normalizedDomain = String(domain || "").trim();
+  return Boolean(normalizedDomain) && hookPointDomain(point) === normalizedDomain;
+}
+
 export const HOOK_POINT_DESCRIPTORS = Object.freeze(
   Object.fromEntries(
     allHookPoints.map((point) => [
@@ -92,6 +120,7 @@ export const HOOK_POINT_DESCRIPTORS = Object.freeze(
       Object.freeze({
         protocolVersion: HOOK_PROTOCOL_VERSION,
         point,
+        domain: requireHookPointDomain(point),
         execution: HOOK_EXECUTION.SEQUENTIAL,
         failureMode: failFlowPoints.has(point)
           ? HOOK_FAILURE_MODE.FAIL_FLOW

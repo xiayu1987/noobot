@@ -44,3 +44,10 @@ export function collectSessionDeletionHookResult(hookResult = {}) {
 export function mergeSessionDeletionIds(...sessionIdGroups) {
   return normalizeSessionIds(sessionIdGroups.flat());
 }
+
+export function resolveSessionDeletionTargets(context = {}) {
+  const deletedSessionIds = normalizeSessionIds(context?.deletedSessionIds);
+  if (deletedSessionIds.length) return deletedSessionIds;
+  const fallbackSessionId = String(context?.sessionId || "").trim();
+  return fallbackSessionId ? [fallbackSessionId] : [];
+}

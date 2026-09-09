@@ -8,7 +8,7 @@ import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
 import { injectPrompt, lockPolicyPromptForMainFlow, traceHook } from "../tracing/buffer-manager.js";
 import { safeError } from "../data/record-builders.js";
 import { emitHarnessHookProgress, extractBasePath, isPrimaryExecutionScope } from "./context.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_POINT, resolveSessionDeletionTargets } from "@noobot/hook-protocol";
 import { applyAgentResolvedModelMessages } from "./model-message-context.js";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 import { migrateHarnessBucket } from "./bucket-migration.js";
@@ -172,15 +172,7 @@ export function createRegisterHarnessHooks(deps = {}) {
         hookManager.on(
           point,
           async (ctx = {}) => {
-            const deletedSessionIds = Array.isArray(ctx?.deletedSessionIds)
-              ? ctx.deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
-              : [];
-            const fallbackSessionId = String(ctx?.sessionId || "").trim();
-            const sessionIds = deletedSessionIds.length
-              ? deletedSessionIds
-              : fallbackSessionId
-                ? [fallbackSessionId]
-                : [];
+            const sessionIds = resolveSessionDeletionTargets(ctx);
             if (!sessionIds.length) return;
 
             await flushAllManifestsFn();
