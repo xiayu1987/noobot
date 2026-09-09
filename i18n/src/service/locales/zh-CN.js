@@ -52,9 +52,6 @@ export default {
   "bot.invalidCaller": "caller 无效",
   "bot.invalidParentSessionIdFormat": "parentSessionId 格式无效",
   "bot.invalidSessionIdFormat": "sessionId 格式无效（必须是 UUID）",
-  "bot.scenarioConfigContextObjectRequired": "Scenario 配置项 context 必须是对象",
-  "bot.scenarioConfigObjectRequired": "Scenario 配置必须是有效对象",
-  "bot.scenarioConfigToolsArrayRequired": "Scenario 配置项 tools 必须是数组",
   "bot.sharedTaskSpecPrefix": "共享任务说明",
   "common.attachmentNotFound": "附件不存在",
   "common.basePathRequired": "basePath 必填",
@@ -113,7 +110,8 @@ export default {
   "connect.failed": "连接失败",
   "connect.userIdConnectCodeRequired": "必须提供 userId/connectCode",
   "context.contextBuilderRequired": "contextBuilder 必填",
-  "context.builderContainerInputRequired": "ContextBuilder 需要容器输入: { config, serviceContainer, sessionContext }",
+  "context.builderContainerInputRequired":
+    "ContextBuilder 需要容器输入: { config, serviceContainer, sessionContext }",
   "init.invalidResetSections": "无效的 reset sections",
   "init.userWorkspacePathNotDirectory": "用户 workspace 路径不是目录",
   "init.workspaceTemplateMissing": "workspace 模板不存在",
@@ -128,7 +126,8 @@ export default {
   "session.parentSessionNotFoundPossiblyDeleted": "未找到父会话（可能已删除）",
   "session.workspaceNotInitialized": "工作区未初始化",
   "status.disconnectedFromHistory": "已断开历史连接",
-  "web2img.readabilityNotInstalledWarn": "@mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom",
+  "web2img.readabilityNotInstalledWarn":
+    "@mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom",
   "web2img.contentTruncated": "内容过长，已截断",
   "web2img.descriptionLabel": "描述",
   "web2img.mainContentTitle": "正文",
@@ -136,7 +135,8 @@ export default {
   "web2img.textCleanAppendixTitle": "文本清洗附录",
   "web2img.noReadableTextExtracted": "未提取到 trafilatura/readability 文本",
   "web2img.resultIndex": "结果索引",
-  "web2img.sharpNotInstalledRawWarn": "sharp 未安装，无法做图片缩放/切分/转码，将返回原始截图。请执行: npm i sharp",
+  "web2img.sharpNotInstalledRawWarn":
+    "sharp 未安装，无法做图片缩放/切分/转码，将返回原始截图。请执行: npm i sharp",
   "web2img.sharpNotInstalledSplitWarn": "sharp 未安装，图片后处理/分切不可用。可执行: npm i sharp",
   "ws.badRequest": "请求无效",
   "ws.dialogStoppedByUser": "对话已被用户停止",
@@ -147,7 +147,9 @@ export default {
   "ws.unauthorized": "未授权",
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
-  "agent.phaseSummaryPrompt": "上下文已达到阶段小结阈值。本轮只能调用 task_summary，summaryContent 必须严格使用唯一文本协议：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n已完成阶段的简短事实摘要\n[DETAILS]\n整合之前小结后的权威阶段状态，明确区分已完成事项、关键结果、剩余事项和阻塞；编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n尚未完成且紧接着要执行的唯一明确动作。所有段落必须非空，不得增加、重复或调整段落。尚有任务可执行时使用 CONTINUE，后续只从 NEXT_ACTION 继续且不得重做已完成事项；任务已完成时使用 COMPLETE，确实无法继续时使用 BLOCKED。",
-  "agent.taskCheckPrompt": "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
-  "agent.abortError": "对话已被用户停止"
+  "agent.phaseSummaryPrompt":
+    "上下文已达到阶段小结阈值。本轮只能调用 task_summary，summaryContent 必须严格使用唯一文本协议：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n已完成阶段的简短事实摘要\n[DETAILS]\n整合之前小结后的权威阶段状态，明确区分已完成事项、关键结果、剩余事项和阻塞；编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n尚未完成且紧接着要执行的唯一明确动作。所有段落必须非空，不得增加、重复或调整段落。尚有任务可执行时使用 CONTINUE，后续只从 NEXT_ACTION 继续且不得重做已完成事项；任务已完成时使用 COMPLETE，确实无法继续时使用 BLOCKED。",
+  "agent.taskCheckPrompt":
+    "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
+  "agent.abortError": "对话已被用户停止",
 };

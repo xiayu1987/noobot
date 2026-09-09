@@ -45,6 +45,11 @@ import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
+import {
+  normalizeClampedPositiveInteger,
+  normalizePositiveInteger,
+  resolveGatedThresholdWithSource,
+} from "../shared/threshold-utils.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -61,23 +66,11 @@ function resolveUnsummarizedMessageChars(messages = []) {
   }, 0);
 }
 
-function normalizePositiveInteger(value = 0, fallback = 0) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return fallback;
-  return Math.floor(num);
-}
-
-function normalizeGuidanceAnalysisTurnsThreshold(value = undefined) {
-  const normalized = normalizePositiveInteger(value, 0);
-  if (!normalized) return 0;
-  return Math.min(10, Math.max(1, normalized));
-}
-
 function resolveGuidanceAnalysisTurnsThreshold(ctx = {}, meta = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
-  const runtimeThreshold = normalizeGuidanceAnalysisTurnsThreshold(
+  const runtimeThreshold = normalizeClampedPositiveInteger(
     meta?.harness?.guidance?.analysis?.turnsThreshold,
   );
   return {
@@ -97,19 +90,16 @@ function resolveGuidanceSummaryThresholds(ctx = {}, meta = {}) {
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
   const scoped = scopedMode?.guidance?.summary || {};
-  const runtimeThreshold =
-    meta?.harness?.frontendThresholdsEnabled === true
-      ? normalizePositiveInteger(meta?.harness?.guidance?.summary?.turnsThreshold, 0)
-      : 0;
+  const summary = resolveGatedThresholdWithSource({
+    meta,
+    runtimeValue: meta?.harness?.guidance?.summary?.turnsThreshold,
+    scopedValue: scoped?.turnsThreshold,
+    defaultValue: WORKFLOW_PARAMS.guidance.summary.turnsThreshold,
+  });
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    turnsThreshold:
-      runtimeThreshold ||
-      normalizePositiveInteger(
-        scoped?.turnsThreshold,
-        WORKFLOW_PARAMS.guidance.summary.turnsThreshold,
-      ),
-    source: runtimeThreshold ? "runtime" : "workflow_params",
+    turnsThreshold: summary.value,
+    source: summary.source,
   };
 }
 

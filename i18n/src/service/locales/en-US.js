@@ -35,7 +35,8 @@ export default {
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",
   "attach.fileTooLarge": "attachment too large",
-  "attach.hintAddExtensionToAllowedExtensions": "extension is not allowed by built-in attachment policy",
+  "attach.hintAddExtensionToAllowedExtensions":
+    "extension is not allowed by built-in attachment policy",
   "attach.hintIncreaseMaxFileCountOrReduceFiles": "reduce uploaded files",
   "attach.hintIncreaseMaxFileSizeOrUploadSmaller": "upload a smaller file",
   "attach.hintIncreaseMaxTotalSizeOrReduceUpload": "reduce upload size",
@@ -52,9 +53,6 @@ export default {
   "bot.invalidCaller": "invalid caller",
   "bot.invalidParentSessionIdFormat": "invalid parentSessionId format",
   "bot.invalidSessionIdFormat": "invalid sessionId format (UUID required)",
-  "bot.scenarioConfigContextObjectRequired": "scenario config 'context' must be an object",
-  "bot.scenarioConfigObjectRequired": "scenario config must be a valid object",
-  "bot.scenarioConfigToolsArrayRequired": "scenario config 'tools' must be an array",
   "bot.sharedTaskSpecPrefix": "Shared task spec",
   "common.attachmentNotFound": "attachment not found",
   "common.basePathRequired": "basePath required",
@@ -113,7 +111,8 @@ export default {
   "connect.failed": "connect failed",
   "connect.userIdConnectCodeRequired": "userId/connectCode required",
   "context.contextBuilderRequired": "contextBuilder is required",
-  "context.builderContainerInputRequired": "ContextBuilder requires container input: { config, serviceContainer, sessionContext }",
+  "context.builderContainerInputRequired":
+    "ContextBuilder requires container input: { config, serviceContainer, sessionContext }",
   "init.invalidResetSections": "invalid reset sections",
   "init.userWorkspacePathNotDirectory": "user workspace path is not a directory",
   "init.workspaceTemplateMissing": "workspace template missing",
@@ -128,7 +127,8 @@ export default {
   "session.parentSessionNotFoundPossiblyDeleted": "parent session not found (possibly deleted)",
   "session.workspaceNotInitialized": "workspace not initialized",
   "status.disconnectedFromHistory": "disconnected from history",
-  "web2img.readabilityNotInstalledWarn": "@mozilla/readability/jsdom not installed; fallback to DOM extraction. Run: npm i @mozilla/readability jsdom",
+  "web2img.readabilityNotInstalledWarn":
+    "@mozilla/readability/jsdom not installed; fallback to DOM extraction. Run: npm i @mozilla/readability jsdom",
   "web2img.contentTruncated": "content too long, truncated",
   "web2img.descriptionLabel": "Description",
   "web2img.mainContentTitle": "Main Content",
@@ -136,8 +136,10 @@ export default {
   "web2img.textCleanAppendixTitle": "Text Cleaning Appendix",
   "web2img.noReadableTextExtracted": "no trafilatura/readability text extracted",
   "web2img.resultIndex": "Result index",
-  "web2img.sharpNotInstalledRawWarn": "sharp not installed, cannot post-process images; raw screenshot will be returned. Run: npm i sharp",
-  "web2img.sharpNotInstalledSplitWarn": "sharp not installed; image post-processing/splitting unavailable. Run: npm i sharp",
+  "web2img.sharpNotInstalledRawWarn":
+    "sharp not installed, cannot post-process images; raw screenshot will be returned. Run: npm i sharp",
+  "web2img.sharpNotInstalledSplitWarn":
+    "sharp not installed; image post-processing/splitting unavailable. Run: npm i sharp",
   "ws.badRequest": "Bad Request",
   "ws.dialogStoppedByUser": "dialog stopped by user",
   "ws.interactionEncryptedRequired": "encrypted interaction response required",
@@ -147,7 +149,9 @@ export default {
   "ws.unauthorized": "Unauthorized",
   "ws.unknownError": "unknown error",
   "ws.userInteractionTimeout": "user interaction timeout",
-  "agent.phaseSummaryPrompt": "The context has reached the phase-summary threshold. This turn must call only task_summary. summaryContent must strictly use the single text protocol: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort factual summary of the completed phase\n[DETAILS]\nAuthoritative phase state integrated with prior summaries, clearly distinguishing completed work, key results, remaining work, and blockers; in programming mode include file paths, function names, and line numbers\n[NEXT_ACTION]\nThe single specific unfinished action to execute next. Every section must be non-empty; do not add, repeat, or reorder sections. Use CONTINUE while executable work remains; subsequent work must resume only from NEXT_ACTION without repeating completed work. Use COMPLETE when the task is finished and BLOCKED only when progress is impossible.",
-  "agent.taskCheckPrompt": "The periodic task-check threshold has been reached. For this model call, you may call task_check to leave a task-check slice, but the call is optional; this prompt appears only for this call. If called, checkContent must strictly use the single text protocol: NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort task-check abstract\n[DETAILS]\nCurrent goal, progress, drift risks, and omissions\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections.",
-  "agent.abortError": "dialog stopped by user"
+  "agent.phaseSummaryPrompt":
+    "The context has reached the phase-summary threshold. This turn must call only task_summary. summaryContent must strictly use the single text protocol: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort factual summary of the completed phase\n[DETAILS]\nAuthoritative phase state integrated with prior summaries, clearly distinguishing completed work, key results, remaining work, and blockers; in programming mode include file paths, function names, and line numbers\n[NEXT_ACTION]\nThe single specific unfinished action to execute next. Every section must be non-empty; do not add, repeat, or reorder sections. Use CONTINUE while executable work remains; subsequent work must resume only from NEXT_ACTION without repeating completed work. Use COMPLETE when the task is finished and BLOCKED only when progress is impossible.",
+  "agent.taskCheckPrompt":
+    "The periodic task-check threshold has been reached. For this model call, you may call task_check to leave a task-check slice, but the call is optional; this prompt appears only for this call. If called, checkContent must strictly use the single text protocol: NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort task-check abstract\n[DETAILS]\nCurrent goal, progress, drift risks, and omissions\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections.",
+  "agent.abortError": "dialog stopped by user",
 };

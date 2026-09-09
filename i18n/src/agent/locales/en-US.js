@@ -53,9 +53,6 @@ export default {
   "bot.invalidCaller": "invalid caller",
   "bot.invalidParentSessionIdFormat": "invalid parentSessionId format",
   "bot.invalidSessionIdFormat": "invalid sessionId format (UUID required)",
-  "bot.scenarioConfigContextObjectRequired": "scenario config 'context' must be an object",
-  "bot.scenarioConfigObjectRequired": "scenario config must be a valid object",
-  "bot.scenarioConfigToolsArrayRequired": "scenario config 'tools' must be an array",
   "bot.sharedTaskSpecPrefix": "Shared task spec",
   "common.attachmentNotFound": "attachment not found",
   "common.basePathRequired": "basePath required",
@@ -146,8 +143,7 @@ export default {
     "The current principal cannot access host absolute paths.",
   "tools.file.pathErrorSandboxNotAllowed":
     "The current execution view does not accept sandbox absolute paths.",
-  "tools.file.pathErrorSandboxNotMapped":
-    "The sandbox path is not mapped to a shared file root.",
+  "tools.file.pathErrorSandboxNotMapped": "The sandbox path is not mapped to a shared file root.",
   "tools.file.pathErrorVirtualRelativeAmbiguous": (params = {}) => {
     const relative = String(params.suggestedPath || "");
     const sandbox = String(params.suggestedSandboxPath || "");
@@ -157,8 +153,7 @@ export default {
   },
   "tools.file.pathErrorWorkspaceOutOfScope":
     "The workspace-relative path resolves outside the workspace root.",
-  "tools.file.writeAlreadyExists":
-    "The file already exists; set overwrite to true to replace it.",
+  "tools.file.writeAlreadyExists": "The file already exists; set overwrite to true to replace it.",
   "tools.file.readRiskLevelField":
     "Operation risk level: low, medium, high, or critical. Reads that may involve privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
   "tools.file.writeOverwriteField": "Whether to overwrite when file exists.",
@@ -194,7 +189,8 @@ export default {
     "Usually omit; if set, use only a workspace-relative child directory, never an absolute path or .. .",
   "tools.patch_file.fieldRootPathHintSandbox":
     "Usually omit root; sandbox absolute paths are not allowed.",
-  "tools.patch_file.fieldRootPathHintHost": "Usually omit root; use only a workspace-relative child directory.",
+  "tools.patch_file.fieldRootPathHintHost":
+    "Usually omit root; use only a workspace-relative child directory.",
   "tools.patch_file.fieldRootPathHintSuperHost":
     "Usually omit root; host absolute paths are not allowed.",
   "tools.patch_file.rootInvalidHintHost":

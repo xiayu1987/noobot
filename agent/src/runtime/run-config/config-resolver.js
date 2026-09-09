@@ -4,25 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
-import { selectModelAlias } from "@noobot/agent-config-protocol";
 import {
-  resolveModelSpecByName,
-  resolveModelSpecOrConfiguredDefault,
-} from "../../models/index.js";
+  isRuntimeThresholdGateEnabled,
+  resolveGatedThresholdValue,
+  selectModelAlias,
+} from "@noobot/agent-config-protocol";
+import { resolveModelSpecByName, resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
-  const runtimeThreshold = Number(runConfig?.summaryPolicy?.phaseSummaryLoopTurns);
-  if (runConfig?.frontendThresholdsEnabled === true && Number.isInteger(runtimeThreshold) && runtimeThreshold > 0) {
-    return runtimeThreshold;
-  }
-  return BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns;
+  return resolveGatedThresholdValue({
+    enabled: isRuntimeThresholdGateEnabled(runConfig),
+    runtimeValue: runConfig?.summaryPolicy?.phaseSummaryLoopTurns,
+    defaultValue: BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
+    requireInteger: true,
+  });
 }
 
 export function resolveTaskCheckLoopTurns({ runConfig = {} } = {}) {
-  const runtimeThreshold = Number(runConfig?.summaryPolicy?.taskCheckLoopTurns);
-  if (runConfig?.frontendThresholdsEnabled === true && Number.isInteger(runtimeThreshold) && runtimeThreshold > 0) {
-    return runtimeThreshold;
-  }
-  return BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns;
+  return resolveGatedThresholdValue({
+    enabled: isRuntimeThresholdGateEnabled(runConfig),
+    runtimeValue: runConfig?.summaryPolicy?.taskCheckLoopTurns,
+    defaultValue: BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns,
+    requireInteger: true,
+  });
 }
 
 export function resolvePhaseSummaryMessageCharsThreshold(_effectiveConfig = {}) {
@@ -37,7 +40,10 @@ export function resolveToolFailureHelpCount(_effectiveConfig = {}) {
   return BUILTIN_THRESHOLDS.requestHelp.toolFailureHelpCount;
 }
 
-export function resolveMaxToolLoopTurns({ systemRuntime: _systemRuntime = {}, effectiveConfig: _effectiveConfig = {} } = {}) {
+export function resolveMaxToolLoopTurns({
+  systemRuntime: _systemRuntime = {},
+  effectiveConfig: _effectiveConfig = {},
+} = {}) {
   return BUILTIN_THRESHOLDS.maxToolLoopTurns;
 }
 

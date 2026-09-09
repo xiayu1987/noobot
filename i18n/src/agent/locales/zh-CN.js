@@ -52,9 +52,6 @@ export default {
   "bot.invalidCaller": "caller 无效",
   "bot.invalidParentSessionIdFormat": "parentSessionId 格式无效",
   "bot.invalidSessionIdFormat": "sessionId 格式无效（必须是 UUID）",
-  "bot.scenarioConfigContextObjectRequired": "Scenario 配置项 context 必须是对象",
-  "bot.scenarioConfigObjectRequired": "Scenario 配置必须是有效对象",
-  "bot.scenarioConfigToolsArrayRequired": "Scenario 配置项 tools 必须是数组",
   "bot.sharedTaskSpecPrefix": "共享任务说明",
   "common.attachmentNotFound": "附件不存在",
   "common.basePathRequired": "basePath 必填",
@@ -135,8 +132,7 @@ export default {
   "tools.file.readMaxLinesField": "最大返回行数。",
   "tools.file.readLineRangeOutOfBounds": (params = {}) =>
     `读取行范围无效：请求 ${Number(params.startLine || 0)}-${Number(params.endLine || 0)}，文件共 ${Number(params.totalLines || 0)} 行`,
-  "tools.file.pathErrorRequired": (params = {}) =>
-    `必须提供 ${String(params.field || "filePath")}`,
+  "tools.file.pathErrorRequired": (params = {}) => `必须提供 ${String(params.field || "filePath")}`,
   "tools.file.pathErrorHostAbsoluteNotAllowed": "当前身份不允许访问宿主绝对路径。",
   "tools.file.pathErrorSandboxNotAllowed": "当前执行视角不接受沙箱绝对路径。",
   "tools.file.pathErrorSandboxNotMapped": "该沙箱路径未映射到共享文件根目录。",
@@ -176,8 +172,7 @@ export default {
     "普通用户必须原样使用 read_file/search 返回的 workspace path，不要改写或添加前缀。",
   "tools.patch_file.fieldPatchPathHintSuperHost":
     "超级管理员也必须原样使用 read_file/search 返回的 path；host 绝对路径同样不得改写或添加前缀。",
-  "tools.patch_file.fieldStrip":
-    "路径含 a/、b/ 前缀时才设置对应 strip；使用完整 path 时设为 0。",
+  "tools.patch_file.fieldStrip": "路径含 a/、b/ 前缀时才设置对应 strip；使用完整 path 时设为 0。",
   "tools.patch_file.fieldRoot": "通常省略；填写时只能是工作区相对子目录，不要用绝对路径或 ..。",
   "tools.patch_file.fieldRootPathHintSandbox": "通常省略 root；不得填写沙箱绝对路径。",
   "tools.patch_file.fieldRootPathHintHost": "通常省略 root；填写时只能是工作区相对子目录。",

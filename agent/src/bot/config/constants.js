@@ -93,13 +93,3 @@ export const DEFAULT_ASYNC_JOB_CONFIG = {
   maxWaitTime: TIME_THRESHOLDS.async.defaultMaxWaitTimeMs,
   retentionMs: ASYNC_JOB_RETENTION_MS,
 };
-
-export const SCENARIO_CONFIG_KEYS = [
-  "tools",
-  "context",
-  "model",
-  "scenarioConfig",
-  "systemPrompt",
-  "temperature",
-  "maxTokens",
-];

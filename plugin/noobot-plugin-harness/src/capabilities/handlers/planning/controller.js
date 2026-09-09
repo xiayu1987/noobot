@@ -24,6 +24,7 @@ import { translateI18nText } from "../shared/i18n.js";
 import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
+import { resolveGatedThresholdWithSource } from "../shared/threshold-utils.js";
 
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
@@ -34,40 +35,29 @@ const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
 const PLANNING_THRESHOLD_SNAPSHOT_EVENT = "planning_threshold_snapshot";
 
-function normalizePositiveInteger(value = 0, fallback = 0) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return fallback;
-  return Math.floor(num);
-}
-
 function resolvePlanningTurnThresholds(ctx = {}, meta = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full;
   const scoped = scopedMode?.planning || {};
-  const frontendThresholdsEnabled = meta?.harness?.frontendThresholdsEnabled === true;
-  const runtimePlanUpdateThreshold = frontendThresholdsEnabled
-    ? normalizePositiveInteger(meta?.harness?.planning?.planUpdate?.triggerTurnsThreshold, 0)
-    : 0;
-  const runtimePhaseAcceptanceThreshold = frontendThresholdsEnabled
-    ? normalizePositiveInteger(meta?.harness?.acceptance?.phase?.triggerTurnsThreshold, 0)
-    : 0;
+  const planUpdate = resolveGatedThresholdWithSource({
+    meta,
+    runtimeValue: meta?.harness?.planning?.planUpdate?.triggerTurnsThreshold,
+    scopedValue: scoped?.planUpdate?.triggerTurnsThreshold,
+    defaultValue: DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+  });
+  const phaseAcceptance = resolveGatedThresholdWithSource({
+    meta,
+    runtimeValue: meta?.harness?.acceptance?.phase?.triggerTurnsThreshold,
+    scopedValue: scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
+    defaultValue: DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+  });
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    planUpdateTriggerTurnsThreshold:
-      runtimePlanUpdateThreshold ||
-      normalizePositiveInteger(
-        scoped?.planUpdate?.triggerTurnsThreshold,
-        DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-      ),
-    phaseAcceptanceTriggerTurnsThreshold:
-      runtimePhaseAcceptanceThreshold ||
-      normalizePositiveInteger(
-        scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
-        DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-      ),
-    planUpdateThresholdSource: runtimePlanUpdateThreshold ? "runtime" : "workflow_params",
-    phaseAcceptanceThresholdSource: runtimePhaseAcceptanceThreshold ? "runtime" : "workflow_params",
+    planUpdateTriggerTurnsThreshold: planUpdate.value,
+    phaseAcceptanceTriggerTurnsThreshold: phaseAcceptance.value,
+    planUpdateThresholdSource: planUpdate.source,
+    phaseAcceptanceThresholdSource: phaseAcceptance.source,
   };
 }
 
