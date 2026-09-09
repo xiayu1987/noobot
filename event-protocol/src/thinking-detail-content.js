@@ -5,8 +5,7 @@
 
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "./normalize.js";
 
 const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
   new Set([

@@ -7,7 +7,7 @@
 export const TURN_REPLACEMENT_PROTOCOL_VERSION = 1;
 export const TURN_REPLACEMENT_EVENT = "turn.replaced";
 
-const text = (value) => String(value || "").trim();
+import { text } from "../normalize.js";
 
 export function createTurnReplacementCommit({
   commandId,

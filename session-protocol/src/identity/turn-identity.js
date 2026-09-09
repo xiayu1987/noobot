@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./turn-scope-identity.js";
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export function normalizeTurnIdentity({ turnScopeId = "", dialogProcessId = "" } = {}) {
   return Object.freeze({

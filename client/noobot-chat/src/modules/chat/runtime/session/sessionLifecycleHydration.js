@@ -7,6 +7,7 @@ import { watch } from "vue";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
+import { isLegacyTerminalDiscoveryState } from "../run-state-machine/constants.js";
 
 export function installSessionLifecycleHydration({
   sessions,
@@ -48,14 +49,7 @@ export function installSessionLifecycleHydration({
       const activeTurnScopeId = String(
         activeTurn?.turnScopeId || snapshot.activeTurnScopeId || "",
       ).trim();
-      const isTerminal = [
-        "completed",
-        "stop_completed",
-        "failed",
-        "processing_failed",
-        "action_failed",
-        "stopped",
-      ].includes(activeTurnState);
+      const isTerminal = isLegacyTerminalDiscoveryState(activeTurnState);
 
       if (result?.applied === true && activeTurn && activeTurnScopeId && !isTerminal) {
         scheduleTerminalResolution?.(sessionId, activeTurnScopeId, {

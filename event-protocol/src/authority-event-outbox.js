@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { validateEventEnvelope } from "./envelope.js";
-
-const clean = (value) => String(value || "").trim();
+import { text } from "./normalize.js";
 
 function validateAuthorityEnvelope(envelope = {}) {
   return validateEventEnvelope(envelope).valid;
@@ -17,17 +16,17 @@ export const AUTHORITY_EVENT_DELIVERY_STATUS = Object.freeze({
 });
 
 function normalizeDelivery(item = {}) {
-  const deliveredAt = clean(item.deliveredAt || item.delivery?.deliveredAt);
+  const deliveredAt = text(item.deliveredAt || item.delivery?.deliveredAt);
   return {
     status: deliveredAt
       ? AUTHORITY_EVENT_DELIVERY_STATUS.DELIVERED
       : AUTHORITY_EVENT_DELIVERY_STATUS.PENDING,
     attempts: Math.max(0, Number(item.deliveryAttempts ?? item.delivery?.attempts) || 0),
-    lastAttemptAt: clean(item.lastAttemptAt || item.delivery?.lastAttemptAt),
+    lastAttemptAt: text(item.lastAttemptAt || item.delivery?.lastAttemptAt),
     deliveredAt,
-    consumerId: clean(item.consumerId || item.delivery?.consumerId),
-    orderingDomain: clean(item.orderingDomain || item.delivery?.orderingDomain),
-    orderingScopeId: clean(item.orderingScopeId || item.delivery?.orderingScopeId),
+    consumerId: text(item.consumerId || item.delivery?.consumerId),
+    orderingDomain: text(item.orderingDomain || item.delivery?.orderingDomain),
+    orderingScopeId: text(item.orderingScopeId || item.delivery?.orderingScopeId),
     sequence: Number(item.sequence ?? item.delivery?.sequence) || 0,
   };
 }
@@ -37,14 +36,14 @@ export function normalizeAuthorityEventOutbox(source = []) {
   const eventIds = new Set();
   for (const item of Array.isArray(source) ? source : []) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-    const eventId = clean(item.eventId);
+    const eventId = text(item.eventId);
     const envelope =
       item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
         ? item.envelope
         : null;
     if (
       !eventId ||
-      eventId !== clean(envelope?.identity?.eventId) ||
+      eventId !== text(envelope?.identity?.eventId) ||
       eventIds.has(eventId) ||
       !validateAuthorityEnvelope(envelope)
     )
@@ -53,7 +52,7 @@ export function normalizeAuthorityEventOutbox(source = []) {
     normalized.push({
       eventId,
       envelope,
-      committedAt: clean(item.committedAt || envelope.occurredAt),
+      committedAt: text(item.committedAt || envelope.occurredAt),
       delivery: normalizeDelivery(item),
     });
   }
@@ -71,7 +70,7 @@ export function recordAuthorityEventDeliveryAttempt(
   source = [],
   { eventId = "", attemptedAt = "" } = {},
 ) {
-  const normalizedEventId = clean(eventId);
+  const normalizedEventId = text(eventId);
   let found = false;
   const outbox = normalizeAuthorityEventOutbox(source).map((item) => {
     if (item.eventId !== normalizedEventId || item.delivery.deliveredAt) return item;
@@ -81,7 +80,7 @@ export function recordAuthorityEventDeliveryAttempt(
       delivery: {
         ...item.delivery,
         attempts: item.delivery.attempts + 1,
-        lastAttemptAt: clean(attemptedAt),
+        lastAttemptAt: text(attemptedAt),
       },
     };
   });
@@ -99,10 +98,10 @@ export function acknowledgeAuthorityEventDelivery(
     deliveredAt = "",
   } = {},
 ) {
-  const normalizedEventId = clean(eventId);
-  const normalizedConsumerId = clean(consumerId);
-  const normalizedDomain = clean(orderingDomain);
-  const normalizedScopeId = clean(orderingScopeId);
+  const normalizedEventId = text(eventId);
+  const normalizedConsumerId = text(consumerId);
+  const normalizedDomain = text(orderingDomain);
+  const normalizedScopeId = text(orderingScopeId);
   const normalizedSequence = Number(sequence);
   if (
     !normalizedConsumerId ||
@@ -136,7 +135,7 @@ export function acknowledgeAuthorityEventDelivery(
       delivery: {
         ...item.delivery,
         status: AUTHORITY_EVENT_DELIVERY_STATUS.DELIVERED,
-        deliveredAt: clean(deliveredAt),
+        deliveredAt: text(deliveredAt),
         consumerId: normalizedConsumerId,
         orderingDomain: normalizedDomain,
         orderingScopeId: normalizedScopeId,
@@ -157,9 +156,9 @@ export function compactAuthorityEventOutbox(
     retainDeliveredAfter = "",
   } = {},
 ) {
-  const normalizedConsumerId = clean(consumerId);
-  const normalizedDomain = clean(orderingDomain);
-  const normalizedScopeId = clean(orderingScopeId);
+  const normalizedConsumerId = text(consumerId);
+  const normalizedDomain = text(orderingDomain);
+  const normalizedScopeId = text(orderingScopeId);
   const watermark = Number(deliveredThroughSequence);
   if (
     !normalizedConsumerId ||
@@ -175,7 +174,7 @@ export function compactAuthorityEventOutbox(
       outbox: normalizeAuthorityEventOutbox(source),
     };
   }
-  const cutoff = clean(retainDeliveredAfter);
+  const cutoff = text(retainDeliveredAfter);
   if (!cutoff || !Number.isFinite(Date.parse(cutoff))) {
     return {
       compacted: false,

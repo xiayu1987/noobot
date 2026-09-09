@@ -6,15 +6,15 @@
 import { isPendingInteractionReplay } from "./interaction.js";
 import { validateProtocolEvent } from "./event-registry.js";
 
-const clean = (value) => String(value || "").trim();
 const eventSequence = (event = {}) => Number(event?.ordering?.sequence || 0);
-const eventOrderingDomain = (event = {}) => clean(event?.ordering?.domain);
-const eventOrderingScopeId = (event = {}) => clean(event?.ordering?.scopeId);
-const eventSessionId = (event = {}) => clean(event?.identity?.sessionId);
-const eventParentSessionId = (event = {}) => clean(event?.payload?.parentSessionId);
-const eventId = (event = {}) => clean(event?.identity?.eventId);
+const eventOrderingDomain = (event = {}) => text(event?.ordering?.domain);
+const eventOrderingScopeId = (event = {}) => text(event?.ordering?.scopeId);
+const eventSessionId = (event = {}) => text(event?.identity?.sessionId);
+const eventParentSessionId = (event = {}) => text(event?.payload?.parentSessionId);
+const eventId = (event = {}) => text(event?.identity?.eventId);
 
 import { EVENT_PROTOCOL_NAME, EVENT_PROTOCOL_VERSION } from "./envelope.js";
+import { text } from "./normalize.js";
 export const REPLAY_BATCH_SCHEMA = "replay.batch";
 
 export const EVENT_CATEGORY = Object.freeze({
@@ -35,8 +35,8 @@ export function createReplayBatch({
   events = [],
   pendingInteractions = [],
 } = {}) {
-  const normalizedOrderingDomain = clean(orderingDomain);
-  const normalizedOrderingScopeId = clean(orderingScopeId);
+  const normalizedOrderingDomain = text(orderingDomain);
+  const normalizedOrderingScopeId = text(orderingScopeId);
   if (!normalizedOrderingDomain || !normalizedOrderingScopeId) {
     throw new TypeError("replay batch requires one explicit ordering stream");
   }
@@ -63,9 +63,9 @@ export function createReplayBatch({
       version: EVENT_PROTOCOL_VERSION,
       schema: REPLAY_BATCH_SCHEMA,
     },
-    sessionId: clean(sessionId),
-    streamId: clean(streamId),
-    requestId: clean(requestId),
+    sessionId: text(sessionId),
+    streamId: text(streamId),
+    requestId: text(requestId),
     snapshot,
     snapshotSequence: sequence,
     ordering: Object.freeze({
@@ -94,9 +94,9 @@ export function validateReplayBatch(batch = {}) {
   if (batch?.protocol?.schema !== REPLAY_BATCH_SCHEMA) errors.push("invalid_schema");
   if ("cacheExpired" in batch) errors.push("unsupported_cache_expired_branch");
   if ("expiredDialogProcessIds" in batch) errors.push("unsupported_dialog_replay_cursor");
-  if (!clean(batch.sessionId)) errors.push("missing_session_id");
-  const orderingDomain = clean(batch?.ordering?.domain);
-  const orderingScopeId = clean(batch?.ordering?.scopeId);
+  if (!text(batch.sessionId)) errors.push("missing_session_id");
+  const orderingDomain = text(batch?.ordering?.domain);
+  const orderingScopeId = text(batch?.ordering?.scopeId);
   if (!orderingDomain) errors.push("missing_ordering_domain");
   if (!orderingScopeId) errors.push("missing_ordering_scope");
   if (!Number.isInteger(Number(batch.snapshotSequence)) || Number(batch.snapshotSequence) < 0) {
@@ -109,7 +109,7 @@ export function validateReplayBatch(batch = {}) {
     const snapshotEventSequence = eventSequence(batch.snapshot);
     if (snapshotEventSequence !== snapshotSequence) errors.push("snapshot_sequence_mismatch");
     const snapshotSessionId = eventSessionId(batch.snapshot);
-    if (snapshotSessionId && snapshotSessionId !== clean(batch.sessionId)) {
+    if (snapshotSessionId && snapshotSessionId !== text(batch.sessionId)) {
       errors.push("snapshot_session_mismatch");
     }
   }
@@ -134,7 +134,7 @@ export function validateReplayBatch(batch = {}) {
     }
     if (id) seenEventIds.set(id, event);
     const sessionId = eventSessionId(event);
-    if (sessionId && sessionId !== clean(batch.sessionId)) errors.push("event_session_mismatch");
+    if (sessionId && sessionId !== text(batch.sessionId)) errors.push("event_session_mismatch");
     if (!Number.isInteger(sequence) || sequence !== previous + 1)
       errors.push("invalid_event_sequence");
     previous = sequence;
@@ -147,8 +147,8 @@ export function validateReplayBatch(batch = {}) {
       continue;
     }
     if (
-      eventSessionId(interaction) !== clean(batch.sessionId) &&
-      eventParentSessionId(interaction) !== clean(batch.sessionId)
+      eventSessionId(interaction) !== text(batch.sessionId) &&
+      eventParentSessionId(interaction) !== text(batch.sessionId)
     ) {
       errors.push("pending_interaction_session_mismatch");
     }
@@ -202,8 +202,8 @@ export function replayEventTail({
   apply,
 } = {}) {
   const base = Number(snapshotSequence || 0);
-  const normalizedDomain = clean(orderingDomain);
-  const normalizedScopeId = clean(orderingScopeId);
+  const normalizedDomain = text(orderingDomain);
+  const normalizedScopeId = text(orderingScopeId);
   if (!normalizedDomain || !normalizedScopeId) {
     return { applied: false, reason: "missing_ordering_stream" };
   }

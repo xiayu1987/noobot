@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { canonicalAttachmentIdentities, createCommandRequestHash } from "./command-fingerprint.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export function createTurnAttachmentBindFingerprint({
   turnScopeId = "",

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createEventEnvelope } from "./envelope.js";
+import { nullishText as text } from "./normalize.js";
 
 export const PLUGIN_ARTIFACT_EVENT = "plugin.artifact.committed";
 export const PLUGIN_ARTIFACT_FAMILY = "plugin.artifact";
@@ -17,7 +18,6 @@ export const PLUGIN_ARTIFACT_ERROR_CODE = Object.freeze({
   NOT_FOUND: "ARTIFACT_NOT_FOUND",
 });
 
-const text = (value) => String(value ?? "").trim();
 const tokenPattern = /^[A-Za-z][A-Za-z0-9_.-]{0,159}$/;
 
 export function createPluginArtifactEnvelope({

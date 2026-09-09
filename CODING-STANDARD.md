@@ -270,7 +270,32 @@ function myFunction({ ..., errorLogger = null }) {
 
 ---
 
-## 9. Pre-Merge Checklist / 提交前检查
+## 9. Module Exports / 模块导出规范
+
+### EN
+
+- **A barrel must not let two `export *` sources own the same symbol name.**
+  ESM drops a name exported by more than one star source instead of raising a
+  conflict, so the symbol disappears from the barrel silently. Resolve it with an
+  explicit `export { name } from "./owner.js";` or rename so a single module owns
+  the name. `npm run check:barrel-star-exports` enforces this.
+- **A package subpath does not have to be aggregated into the main entry.**
+  Keep a module out of the main entry when importing it would pull in heavy or
+  side-effecting dependencies; that exclusion is a real load boundary. Do not add
+  or remove aggregation only for symmetry.
+
+### 中文
+
+- **同一 barrel 中禁止两个 `export *` 源拥有同名符号。** ESM 对多个星号源导出的
+  同名符号既不报错也不导出，符号会静默消失。必须用显式
+  `export { name } from "./owner.js";` 消歧，或重命名使符号归属单一模块。
+  由 `npm run check:barrel-star-exports` 强制校验。
+- **包子路径不必汇总进主入口。** 当汇总会引入重依赖或带副作用的模块时，应将其
+  排除在主入口之外，这属于真实的加载边界；不要仅为对称性增删汇总。
+
+---
+
+## 10. Pre-Merge Checklist / 提交前检查
 
 ### EN
 

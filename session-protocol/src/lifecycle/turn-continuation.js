@@ -5,8 +5,7 @@
  */
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { TURN_STATE } from "./turn-state.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export function normalizeTurnContinuationSource(source = null) {
   if (!source || typeof source !== "object" || Array.isArray(source)) return null;

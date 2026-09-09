@@ -7,8 +7,7 @@ import {
   canonicalizeTurnScopeId,
   isCanonicalTurnScopeId,
 } from "../identity/turn-scope-identity.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export function collectTurnScopeIdErrors(
   turnScopeId,

@@ -7,8 +7,7 @@ import { EXECUTION_KIND, normalizeExecutionIdentity } from "../execution-lifecyc
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
 import { normalizeTurnContinuationSource } from "./turn-continuation.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export function snapshotTurn(turn = {}) {
   const executionIdentity = normalizeExecutionIdentity({

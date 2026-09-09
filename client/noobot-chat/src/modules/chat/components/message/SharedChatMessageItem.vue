@@ -51,6 +51,7 @@ import {
   summarizeWorkflowMessage,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { chatMessageItemProps } from "../../model/messageItemProps.js";
+import { isWorkflowNodeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import FileMutationPreview from "../thinking/FileMutationPreview.vue";
 import MutationDiffSplit from "../thinking/MutationDiffSplit.vue";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
@@ -293,7 +294,7 @@ const unifiedRuntimePanelsRunning = computed(
 const workflowChildRenderDiagnosticsSignature = computed(() => {
   const turnScopeId = getMessageTurnScopeId(props.messageItem);
   const parentSessionId = String(props.messageItem?.parentSessionId || "").trim();
-  if (!parentSessionId && !turnScopeId.startsWith("workflow-node:")) return "";
+  if (!parentSessionId && !isWorkflowNodeTurnScopeId(turnScopeId)) return "";
   const runtime = messageRuntime.value || {};
   return JSON.stringify({
     sessionId: getMessageSessionId(props.messageItem),

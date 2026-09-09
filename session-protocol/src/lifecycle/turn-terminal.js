@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isSettledTurn, TURN_STATE } from "./turn-state.js";
+import { positiveInteger, text as clean } from "../normalize.js";
 
 export const TURN_TERMINAL_COMMAND = Object.freeze({
   COMPLETED: "completed",
@@ -41,10 +42,6 @@ const commandContract = Object.freeze({
   [TURN_TERMINAL_COMMAND.ABORTED]: [TURN_TERMINAL_STATUS.ERROR, TURN_TERMINAL_REASON.RUN_ABORTED],
   [TURN_TERMINAL_COMMAND.TIMEOUT]: [TURN_TERMINAL_STATUS.TIMEOUT, TURN_TERMINAL_REASON.RUN_TIMEOUT],
 });
-
-const clean = (value) => String(value || "").trim();
-const positiveInteger = (value) =>
-  Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : 0;
 
 function normalizeError(error = null) {
   if (!error) return null;

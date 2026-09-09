@@ -93,4 +93,39 @@ describe("session message view", () => {
       }),
     ).toBe(true);
   });
+  it("hides workflow node messages in both canonical and transport turn scope encodings", () => {
+    const activeSession = { value: { sessionId: "session-1", messages: [] } };
+    const view = createSessionMessageView({
+      sessions: { value: [] },
+      activeSession,
+      activeSessionId: { value: "session-1" },
+      userId: { value: "admin" },
+      isImageMime: () => false,
+    });
+
+    expect(
+      view.shouldRenderMessageInChat({
+        role: "assistant",
+        type: "message",
+        turnScopeId: "workflow-node:run-1_n1_1",
+        content: "节点输出",
+      }),
+    ).toBe(false);
+    expect(
+      view.shouldRenderMessageInChat({
+        role: "assistant",
+        type: "message",
+        turnScopeId: "workflow-node_run-1_n1_1",
+        content: "节点输出",
+      }),
+    ).toBe(false);
+    expect(
+      view.shouldRenderMessageInChat({
+        role: "assistant",
+        type: "message",
+        turnScopeId: "client-turn:abc",
+        content: "主会话输出",
+      }),
+    ).toBe(true);
+  });
 });

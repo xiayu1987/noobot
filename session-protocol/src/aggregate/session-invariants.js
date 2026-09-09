@@ -5,8 +5,7 @@
  */
 import { isSettledTurn } from "../lifecycle/turn-state.js";
 import { normalizeCommandReceipt } from "../command/command-receipt.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export function validateSessionAggregateInvariants(session = {}) {
   const errors = [];
