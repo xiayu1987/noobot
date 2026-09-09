@@ -15,16 +15,18 @@ export function isChildRunEventData(eventData = {}, { rootSessionId = "" } = {})
   const parentSessionId = normalizeWsText(eventData?.parentSessionId);
   return Boolean(
     eventData?.subAgentCall ||
-      (eventSessionId && normalizedRootSessionId && eventSessionId !== normalizedRootSessionId) ||
-      (subAgentSessionId && normalizedRootSessionId && subAgentSessionId !== normalizedRootSessionId) ||
-      (parentSessionId && normalizedRootSessionId && parentSessionId === normalizedRootSessionId),
+    (eventSessionId && normalizedRootSessionId && eventSessionId !== normalizedRootSessionId) ||
+    (subAgentSessionId &&
+      normalizedRootSessionId &&
+      subAgentSessionId !== normalizedRootSessionId) ||
+    (parentSessionId && normalizedRootSessionId && parentSessionId === normalizedRootSessionId),
   );
 }
 
-export function parentOwnsChildRunEventData(eventData = {}, {
-  rootSessionId = "",
-  parentDialogProcessId = "",
-} = {}) {
+export function parentOwnsChildRunEventData(
+  eventData = {},
+  { rootSessionId = "", parentDialogProcessId = "" } = {},
+) {
   const childSessionId = normalizeWsText(eventData?.sessionId || eventData?.subAgentSessionId);
   const childDialogProcessId = normalizeWsText(eventData?.dialogProcessId);
   const resolvedParentDialogProcessId = normalizeWsText(
@@ -42,10 +44,11 @@ export function parentOwnsChildRunEventData(eventData = {}, {
   };
 }
 
-export function buildParentOwnedChildRunPayload(normalizedData = {}, parentOwnedData = {}, {
-  rootSessionId = "",
-  turnScopeId = "",
-} = {}) {
+export function buildParentOwnedChildRunPayload(
+  normalizedData = {},
+  parentOwnedData = {},
+  { rootSessionId = "", turnScopeId = "" } = {},
+) {
   return {
     ...(normalizedData && typeof normalizedData === "object" ? normalizedData : {}),
     sessionId: normalizeWsText(rootSessionId),
@@ -59,11 +62,10 @@ export function buildParentOwnedChildRunPayload(normalizedData = {}, parentOwned
   };
 }
 
-export function buildSubSessionWirePayload(eventData = {}, {
-  rootSessionId = "",
-  parentDialogProcessId = "",
-  turnScopeId = "",
-} = {}) {
+export function buildSubSessionWirePayload(
+  eventData = {},
+  { rootSessionId = "", parentDialogProcessId = "", turnScopeId = "" } = {},
+) {
   const sessionId = normalizeWsText(eventData?.sessionId || eventData?.subAgentSessionId);
   return {
     ...(eventData && typeof eventData === "object" ? eventData : {}),
@@ -80,28 +82,5 @@ export function buildSubSessionWirePayload(eventData = {}, {
     nodeExecutionId: normalizeWsText(eventData?.nodeExecutionId),
     conversationStateOwner: "sub_session",
     subAgentCall: true,
-  };
-}
-
-export function buildAuthoritativeMessagePacket(event = {}, {
-  rootSessionId = "",
-  parentDialogProcessId = "",
-  scope = "sub_session",
-} = {}) {
-  const sessionId = normalizeWsText(event?.sessionId);
-  const routeScope = scope === "main_session" ? "main_session" : "sub_session";
-  return {
-    channelKind: "message_event",
-    channelVersion: 1,
-    route: {
-      scope: routeScope,
-      sessionId,
-      ...(routeScope === "sub_session" ? { subSessionId: sessionId } : {}),
-      parentSessionId: normalizeWsText(event?.parentSessionId || rootSessionId),
-      parentDialogProcessId: normalizeWsText(event?.parentDialogProcessId || parentDialogProcessId),
-      workflowRunId: normalizeWsText(event?.workflowRunId),
-      nodeExecutionId: normalizeWsText(event?.nodeExecutionId),
-    },
-    event,
   };
 }

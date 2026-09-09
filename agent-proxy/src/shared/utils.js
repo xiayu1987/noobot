@@ -5,7 +5,11 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { CHANNEL_TERMINAL_STATUSES, CLIENT_ROLE } from "./constants.js";
+import {
+  CHANNEL_TERMINAL_STATUSES,
+  CLIENT_ROLE,
+  TRANSPORT_TRACE_PROTOCOL_KIND,
+} from "./constants.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
@@ -20,14 +24,18 @@ export function ensureConnectionId(socket = null) {
 
 export function resolveMessageEventTrace(eventName = "", data = {}, transportSequence = 0) {
   const normalizedEventName = String(eventName || "").trim();
-  const validation = normalizedEventName === MESSAGE_EVENT_WIRE_EVENT
-    ? validateProtocolEvent(data)
-    : { valid: false };
-  const authoritative = validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
-    ? data
-    : null;
+  const validation =
+    normalizedEventName === MESSAGE_EVENT_WIRE_EVENT
+      ? validateProtocolEvent(data)
+      : { valid: false };
+  const authoritative =
+    validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
+      ? data
+      : null;
   return {
-    protocolKind: authoritative ? "message_event" : "non_message_event",
+    protocolKind: authoritative
+      ? TRANSPORT_TRACE_PROTOCOL_KIND.MESSAGE_EVENT
+      : TRANSPORT_TRACE_PROTOCOL_KIND.NON_MESSAGE_EVENT,
     transportEvent: normalizedEventName,
     transportSequence: Number(transportSequence || 0),
     eventId: String(authoritative?.identity?.eventId || "").trim(),
@@ -44,11 +52,11 @@ export function messageEventHasContent(eventName = "", data = {}) {
   const normalizedEventName = String(eventName || "").trim();
   if (normalizedEventName !== MESSAGE_EVENT_WIRE_EVENT) return false;
   const validation = validateProtocolEvent(data);
-  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) return false;
+  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE)
+    return false;
   const payload = data.payload;
   return Boolean(
-    payload?.content || payload?.text ||
-    payload?.delta?.content || payload?.delta?.text,
+    payload?.content || payload?.text || payload?.delta?.content || payload?.delta?.text,
   );
 }
 
@@ -93,8 +101,7 @@ export function parseRequestPathname(request = null) {
 }
 
 export function buildClientPermissions(role = CLIENT_ROLE.USER) {
-  const normalizedRole =
-    String(role || CLIENT_ROLE.USER).trim() || CLIENT_ROLE.USER;
+  const normalizedRole = String(role || CLIENT_ROLE.USER).trim() || CLIENT_ROLE.USER;
   const isSuperAdmin = normalizedRole === CLIENT_ROLE.SUPER_ADMIN;
   return {
     role: normalizedRole,

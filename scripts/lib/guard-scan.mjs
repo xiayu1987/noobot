@@ -76,7 +76,9 @@ export function collectSourceFiles(directories, options = {}) {
 export function createRelativeSourceCollector(options = {}) {
   const { root, extensions, ignoredDirectories = null } = options;
   if (typeof root !== "string" || !root) {
-    throw new TypeError("createRelativeSourceCollector requires options.root as a non-empty string");
+    throw new TypeError(
+      "createRelativeSourceCollector requires options.root as a non-empty string",
+    );
   }
   if (!(extensions instanceof Set)) {
     throw new TypeError("createRelativeSourceCollector requires options.extensions as a Set");
@@ -84,7 +86,9 @@ export function createRelativeSourceCollector(options = {}) {
   const ignored = ignoredDirectories instanceof Set ? ignoredDirectories : null;
   const collect = async (relativeDirectory) => {
     const collected = [];
-    for (const entry of await readdir(path.join(root, relativeDirectory), { withFileTypes: true })) {
+    for (const entry of await readdir(path.join(root, relativeDirectory), {
+      withFileTypes: true,
+    })) {
       const relative = path.join(relativeDirectory, entry.name);
       if (entry.isDirectory()) {
         if (ignored?.has(entry.name)) continue;

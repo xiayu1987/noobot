@@ -64,6 +64,11 @@ export const CONVERSATION_SOURCE_EVENT = {
 
 export const CONVERSATION_SCOPE_KEY = "__session__";
 
+export const TRANSPORT_TRACE_PROTOCOL_KIND = Object.freeze({
+  MESSAGE_EVENT: "message_event",
+  NON_MESSAGE_EVENT: "non_message_event",
+});
+
 export const UPSTREAM_CLOSE_REASON = {
   CLOSED: "closed",
   SEND_FAILED: "send_failed",
