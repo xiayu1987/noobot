@@ -5,7 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 import { mergeConfig } from "../../config/index.js";
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -247,7 +247,7 @@ export function createWebSearchTool({ agentContext }) {
               flow: WEB_SEARCH_FLOW_NAME,
               purpose: WEB_SEARCH_PURPOSE_NAME,
               domain: WEB_SEARCH_DOMAIN_NAME,
-              contextSequencePolicy: "independent_request",
+              contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
             },
           });
           const searchResult = response.result;

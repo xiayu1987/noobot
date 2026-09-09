@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MODEL_CONTEXT_SEQUENCE_POLICY, validateModelResponse } from "@noobot/model-protocol";
+import {
+  MODEL_ATTEMPT_KIND,
+  MODEL_CONTEXT_SEQUENCE_POLICY,
+  validateModelResponse,
+} from "@noobot/model-protocol";
 import {
   AUXILIARY_SEQUENCE_MESSAGE_KIND,
   declareAuxiliarySequenceIdentity,
@@ -43,7 +47,8 @@ function appendReasoningAttemptsToBucket(ctx = {}, { purpose = "", response = nu
   const attempts = Array.isArray(response?.execution?.attempts) ? response.execution.attempts : [];
   const reasoningAttempts = attempts.filter(
     (attempt = {}) =>
-      attempt.kind === "reasoning_only" && String(attempt?.output?.reasoning || "").trim(),
+      attempt.kind === MODEL_ATTEMPT_KIND.REASONING_ONLY &&
+      String(attempt?.output?.reasoning || "").trim(),
   );
   if (!reasoningAttempts.length) return false;
   const holder = ensureHarnessBucket(ctx);
