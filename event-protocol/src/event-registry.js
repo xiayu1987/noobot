@@ -31,8 +31,9 @@ import { text } from "./normalize.js";
 import {
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_RUNTIME_FAMILY,
 } from "./workflow-runtime-event.js";
-import { validateTurnSnapshotEnvelope } from "./turn-snapshot.js";
+import { TURN_SNAPSHOT_EVENT_FAMILY, validateTurnSnapshotEnvelope } from "./turn-snapshot.js";
 import {
   PLUGIN_ARTIFACT_EVENT,
   PLUGIN_ARTIFACT_FAMILY,
@@ -56,7 +57,7 @@ export const EVENT_REDUCER_INPUT = Object.freeze({
 });
 export const EVENT_FAMILY = Object.freeze({
   TURN_LIFECYCLE: "turn.lifecycle",
-  TURN_SNAPSHOT: "turn.snapshot",
+  TURN_SNAPSHOT: TURN_SNAPSHOT_EVENT_FAMILY,
   EXECUTION_LIFECYCLE: "execution.lifecycle",
   EXECUTION_SNAPSHOT: "execution.snapshot",
   EXECUTION_CHILDREN: "execution.children",
@@ -65,7 +66,7 @@ export const EVENT_FAMILY = Object.freeze({
   INTERACTION_REQUEST: "interaction.request",
   INTERACTION_RESPONSE: "interaction.response",
   MESSAGE_TIMELINE: "message.timeline",
-  WORKFLOW_RUNTIME: "workflow.runtime",
+  WORKFLOW_RUNTIME: WORKFLOW_RUNTIME_FAMILY,
   PLUGIN_ARTIFACT: PLUGIN_ARTIFACT_FAMILY,
 });
 

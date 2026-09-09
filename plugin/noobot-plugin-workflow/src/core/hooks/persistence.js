@@ -13,6 +13,7 @@ import { resolveWorkflowParentRunConfig, resolveWorkflowRuntimeFromContext } fro
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
+import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
 
 export function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -471,7 +472,7 @@ export async function commitWorkflowRuntimeEvent({
   const committed = await sessionManager.commitAuthorityEvent({
     userId,
     sessionId,
-    family: "workflow.runtime",
+    family: WORKFLOW_RUNTIME_FAMILY,
     identity: {
       eventType: String(eventType || "").trim(),
       turnScopeId,

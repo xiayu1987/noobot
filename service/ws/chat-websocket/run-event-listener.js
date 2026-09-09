@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS, validateProtocolEvent } from "#agent/event";
+import {
+  AGENT_RUN_EVENT,
+  AGENT_RUN_EVENTS,
+  asEventProtocolEnvelope,
+  validateProtocolEvent,
+} from "#agent/event";
 import { isChildRunEventData } from "./child-run-events.js";
 import {
   TURN_COMMITTED_WIRE_EVENT,
@@ -15,8 +20,7 @@ import {
 } from "@noobot/session-protocol/turn-attachment-bind";
 
 function buildEventAudit(eventName, eventData, sessionId, turnScopeId) {
-  const canonicalEnvelope =
-    eventData?.protocol?.name === "@noobot/event-protocol" ? eventData : null;
+  const canonicalEnvelope = asEventProtocolEnvelope(eventData);
   const identity = canonicalEnvelope?.identity || {};
   const ordering = canonicalEnvelope?.ordering || {};
   const payload = canonicalEnvelope?.payload || eventData;

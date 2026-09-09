@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isEventProtocolEnvelope } from "@noobot/event-protocol";
+
 const text = (value) => String(value || "").trim();
 const TURN_KEY_PREFIX = "__turn__";
 
@@ -17,7 +19,7 @@ export function createTurnIdentity({ sessionId = "", turnScopeId = "", dialogPro
 }
 
 export function resolveTurnIdentity(value = {}, fallback = {}) {
-  if (value?.protocol?.name === "@noobot/event-protocol") {
+  if (isEventProtocolEnvelope(value)) {
     return createTurnIdentity({
       sessionId: value?.identity?.sessionId,
       turnScopeId: value?.identity?.turnScopeId,
