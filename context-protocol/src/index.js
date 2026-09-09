@@ -20,6 +20,7 @@ export * from "./assembly/hook-context.js";
 export * from "./assembly/model-runtime.js";
 export * from "./message/codec.js";
 export * from "./message/identity.js";
+export * from "./message/internal-types.js";
 export * from "./message/store.js";
 export * from "./message/session-projection.js";
 export * from "./mutation/context.js";

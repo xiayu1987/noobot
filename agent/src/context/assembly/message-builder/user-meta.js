@@ -18,6 +18,7 @@ import {
   resolveContextMessageRole,
   resolveContextUserMetaMaterialized,
 } from "@noobot/context-protocol/message/codec";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 
 export function resolveAttachments(msg = {}, fallbackAttachments = []) {
   const transferAttachments = getTransferAttachments(
@@ -121,7 +122,7 @@ export function buildHumanMessagesForUser(
     additional_kwargs: {
       ...identityKwargs,
       ...(userMetaMessageId ? { noobotMessageId: userMetaMessageId } : {}),
-      noobotInternalMessageType: "user_meta",
+      noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META,
     },
   });
   return [contentMessage, metaMessage];
@@ -141,7 +142,10 @@ export function shouldBuildUserMetaForHistoryMessage(msg = {}, runtime = {}) {
 }
 
 export function isDerivedUserMetaMessage(msg = {}) {
-  return readContextMessageField(msg, "noobotInternalMessageType") === "user_meta";
+  return (
+    readContextMessageField(msg, "noobotInternalMessageType") ===
+    CONTEXT_INTERNAL_MESSAGE_TYPE.USER_META
+  );
 }
 
 export function resolveMessageTurnScopeId(msg = {}) {

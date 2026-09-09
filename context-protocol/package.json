@@ -23,6 +23,7 @@
     "./message/codec": "./src/message/codec.js",
     "./message/identity": "./src/message/identity.js",
     "./message/injected-types": "./src/message/injected-types.js",
+    "./message/internal-types": "./src/message/internal-types.js",
     "./message/session-projection": "./src/message/session-projection.js",
     "./message/store": "./src/message/store.js",
     "./mutation/context": "./src/mutation/context.js",

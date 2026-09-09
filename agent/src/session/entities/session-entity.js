@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import {
+  readContextMessageField,
+  resolveContextMessageDialogProcessId,
+  resolveContextMessageOrigin,
+  resolveContextUserMetaMaterialized,
+} from "@noobot/context-protocol/message/codec";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
@@ -172,12 +177,7 @@ function applyMessageArtifacts(target, message, attachments) {
 
 function applyMessageInjection(target, message) {
   if (message?.injectedMessage === true) target.injectedMessage = true;
-  const internalType = String(
-    message?.noobotInternalMessageType ||
-      message?.additional_kwargs?.noobotInternalMessageType ||
-      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      "",
-  ).trim();
+  const internalType = readContextMessageField(message, "noobotInternalMessageType");
   if (internalType) target.noobotInternalMessageType = internalType;
   const injectedBy = String(message?.injectedBy || "").trim();
   const injectedMessageType = String(message?.injectedMessageType || "").trim();
@@ -186,14 +186,13 @@ function applyMessageInjection(target, message) {
 }
 
 function applyMessageOrigin(target, message) {
-  const origin = String(message?.messageOrigin || "")
-    .trim()
-    .toLowerCase();
+  const origin = resolveContextMessageOrigin(message);
   if (origin === "natural" || origin === "internal") target.messageOrigin = origin;
 }
 
 function applyUserMetaMaterialized(target, message) {
-  if (target.role === "user") target.userMetaMaterialized = message?.userMetaMaterialized === true;
+  if (target.role === "user")
+    target.userMetaMaterialized = resolveContextUserMetaMaterialized(message);
 }
 
 function applyPresentationIdentity(target, message) {

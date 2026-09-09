@@ -16,6 +16,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   createAgentTransportError,
   createAgentTransportEvent,
+  getAgentTransportEventSessionId,
 } from "@noobot/agent-transport-protocol";
 
 const isAcceptedChannelDelivery = (result = {}) =>
@@ -471,13 +472,12 @@ class SubscriberBroadcastMethods {
       return { result: "skipped", reason: "backpressure_limit" };
     }
     try {
+      const envelopeSessionId = getAgentTransportEventSessionId(envelope);
       targetSocket.send(
         JSON.stringify({
           event: envelope.event,
           data: envelope.data,
-          ...(String(envelope.channelSessionId || "").trim()
-            ? { channelSessionId: String(envelope.channelSessionId).trim() }
-            : {}),
+          ...(envelopeSessionId ? { channelSessionId: envelopeSessionId } : {}),
         }),
       );
       return { result: "sent", reason: "" };

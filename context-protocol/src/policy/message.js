@@ -15,6 +15,7 @@ import {
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
 import { recoverContextTaskSummaryToolResult } from "../task/summary-context.js";
 
 function text(value) {
@@ -36,7 +37,10 @@ export function isSystemLikeMessageRole(role = "") {
 }
 
 export function isCurrentSystemContextMessage(message = {}) {
-  return readContextMessageField(message, "noobotInternalMessageType") === "system_context";
+  return (
+    readContextMessageField(message, "noobotInternalMessageType") ===
+    CONTEXT_INTERNAL_MESSAGE_TYPE.SYSTEM_CONTEXT
+  );
 }
 
 export function isInjectedMessage(message = {}) {

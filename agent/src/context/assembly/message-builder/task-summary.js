@@ -12,6 +12,7 @@ import {
   hasCheckpointBoundaryToolCall,
   isCheckpointBoundaryToolMessage,
 } from "@noobot/context-protocol/policy/summary";
+import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
 
 export function isCheckpointBoundaryToolResultMessage(msg = {}) {
   return isCheckpointBoundaryToolMessage(msg);
@@ -24,7 +25,7 @@ export function buildTaskSummaryFallbackHumanMessage(msg = {}) {
     content: `[阶段小结]
 ${summaryText}`,
     additional_kwargs: {
-      noobotInternalMessageType: "phase_summary_memory",
+      noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY,
       recoveredFromUnpairedTaskSummary: true,
     },
   });
