@@ -4,19 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { validateTurnUserMessageEventData } from "./transport/turn-user-message-event.js";
+import { createTurnUserMessageEventProtocol } from "./transport/turn-user-message-event.js";
 
 export const TURN_COMMITTED_WIRE_EVENT = "turn_committed";
 
+const protocol = createTurnUserMessageEventProtocol({
+  wireEvent: TURN_COMMITTED_WIRE_EVENT,
+  attachmentMode: "forbidden",
+  errorCode: "TURN_COMMITTED_PROTOCOL_INVALID",
+});
+
 export function validateTurnCommittedEventData(data = {}) {
-  return validateTurnUserMessageEventData(data, { attachmentMode: "forbidden" });
+  return protocol.validate(data);
 }
 
 export function assertTurnCommittedEventData(data = {}) {
-  const validation = validateTurnCommittedEventData(data);
-  if (validation.ok) return data;
-  const error = new TypeError(`invalid turn_committed event: ${validation.errors.join(",")}`);
-  error.code = "TURN_COMMITTED_PROTOCOL_INVALID";
-  error.validationErrors = validation.errors;
-  throw error;
+  return protocol.assert(data);
 }

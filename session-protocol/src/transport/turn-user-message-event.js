@@ -53,3 +53,20 @@ export function validateTurnUserMessageEventData(data = {}, { attachmentMode } =
   }
   return { ok: errors.length === 0, errors };
 }
+
+export function createTurnUserMessageEventProtocol({
+  wireEvent = "",
+  attachmentMode,
+  errorCode = "",
+} = {}) {
+  const validate = (data = {}) => validateTurnUserMessageEventData(data, { attachmentMode });
+  const assert = (data = {}) => {
+    const validation = validate(data);
+    if (validation.ok) return data;
+    const error = new TypeError(`invalid ${wireEvent} event: ${validation.errors.join(",")}`);
+    error.code = errorCode;
+    error.validationErrors = validation.errors;
+    throw error;
+  };
+  return { validate, assert };
+}

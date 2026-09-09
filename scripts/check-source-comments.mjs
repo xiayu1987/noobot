@@ -100,7 +100,9 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   const violations = [];
   for (const relativeFile of sourceFiles()) {
-    const currentSource = fs.readFileSync(path.join(root, relativeFile), "utf8");
+    const file = path.join(root, relativeFile);
+    if (!fs.existsSync(file)) continue;
+    const currentSource = fs.readFileSync(file, "utf8");
     for (const comment of sourceComments(currentSource, relativeFile)) {
       if (
         comment.type === "Shebang" ||
