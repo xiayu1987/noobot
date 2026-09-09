@@ -44,7 +44,7 @@
   },
   "scripts": {
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(error=>{console.error(error);process.exit(1)})\"",
-    "test": "node --test __tests__/**/*.test.js"
+    "test": "node --test \"__tests__/**/*.test.js\""
   },
   "dependencies": {
     "@noobot/hook-protocol": "file:../hook-protocol",

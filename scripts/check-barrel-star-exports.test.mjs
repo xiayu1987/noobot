@@ -60,6 +60,26 @@ test("accepts disjoint star sources", async () => {
   assert.deepEqual(violations, []);
 });
 
+test("analyzes a barrel whose source has named Vue component re-exports", async () => {
+  const root = fixture({
+    "src/index.js": ['export * from "./ui.js";', 'export * from "./domain.js";'].join("\n"),
+    "src/ui.js": 'export { default as Widget } from "./Widget.vue";\n',
+    "src/domain.js": "export const value = 1;\n",
+    "src/Widget.vue": "<template><div /></template>\n",
+  });
+  const { violations } = await checkRepository({ root });
+  assert.deepEqual(violations, []);
+});
+
+test("fails when a star-export source cannot be analyzed", async () => {
+  const root = fixture({
+    "src/index.js": ['export * from "./broken.js";', 'export * from "./valid.js";'].join("\n"),
+    "src/broken.js": "export const = ;\n",
+    "src/valid.js": "export const value = 1;\n",
+  });
+  await assert.rejects(checkRepository({ root }), /unable to analyze/);
+});
+
 test("collects only files with at least two star re-exports and skips ignored directories", () => {
   const root = fixture({
     "src/index.js": ['export * from "./a.js";', 'export * from "./b.js";'].join("\n"),

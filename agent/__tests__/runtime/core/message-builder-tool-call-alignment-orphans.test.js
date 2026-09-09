@@ -15,6 +15,10 @@ import {
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
 } from "@noobot/context-protocol/task/summary";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
   const messages = buildContextMessages(
@@ -85,6 +89,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
     "继续执行",
   ].join("\n");
   const summary = createTaskSummaryReceipt(parseTaskSummaryContent(summaryContent));
+  const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
       {},
@@ -106,6 +111,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
                 summary,
               }),
               tool_call_id: "call_orphan_summary",
+              contextPolicy,
               dialogProcessId: "dlg-summary",
               turnScopeId: "turn-summary",
             },

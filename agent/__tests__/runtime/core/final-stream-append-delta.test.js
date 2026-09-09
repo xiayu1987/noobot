@@ -20,12 +20,23 @@ import {
   FINAL_STREAMING_RESULT_META_KEY,
 } from "../../../src/runtime/turn/turn-result-aggregator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function createTurnMessageStore(messages = []) {
   return createCurrentTurnMessagesStore(messages);
 }
 
+function committedMessageEvents(events = []) {
+  return events
+    .filter((item) => item?.event === "authority_event_committed")
+    .map((item) => item?.data?.envelope)
+    .filter(Boolean);
+}
+
 function bindTestTurn(runtime = {}, suffix = "1") {
+  runtime.sessionManager = createCanonicalMessageEventSessionManager({
+    producerId: `final-stream-${suffix}`,
+  });
   bindAssistantMessageEventStream(runtime, {
     messageId: `turn-message-${suffix}`,
     presentationMessageId: `presentation-${suffix}`,
@@ -33,7 +44,7 @@ function bindTestTurn(runtime = {}, suffix = "1") {
   return runtime;
 }
 
-test("final streaming append delta: emits only hook-appended suffix after final output mutation", () => {
+test("final streaming append delta: emits only hook-appended suffix after final output mutation", async () => {
   const events = [];
   const result = buildLoopResult({
     output: "模型最终回答",
@@ -65,16 +76,18 @@ test("final streaming append delta: emits only hook-appended suffix after final 
   };
   bindTestTurn(runtime);
   beginAssistantMessageEventStream(runtime);
-  const emitted = emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
+  const emitted = await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
 
   assert.equal(emitted, true);
-  const delta = events.find((item) => item?.event === "llm_delta");
+  const delta = committedMessageEvents(events).find(
+    (item) => item?.payload?.eventType === "llm_delta",
+  );
   assert.ok(delta);
-  assert.equal(delta.data.text, "\n\n---\n[Plugin-验收] 通过");
-  assert.equal(delta.data.type, "final_output_append_delta");
+  assert.equal(delta.payload.text, "\n\n---\n[Plugin-验收] 通过");
+  assert.equal(delta.payload.source, "before_final_output_append");
 });
 
-test("final streaming append delta: tolerates finalizer trim before appending", () => {
+test("final streaming append delta: tolerates finalizer trim before appending", async () => {
   const events = [];
   const result = buildLoopResult({
     output: "模型最终回答   ",
@@ -99,13 +112,13 @@ test("final streaming append delta: tolerates finalizer trim before appending", 
   };
   bindTestTurn(runtime);
   beginAssistantMessageEventStream(runtime);
-  const emitted = emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
+  const emitted = await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
 
   assert.equal(emitted, true);
-  assert.equal(events.find((item) => item?.event === "llm_delta")?.data?.text, "\n\n---\n验收");
+  assert.equal(committedMessageEvents(events)[0]?.payload?.text, "\n\n---\n验收");
 });
 
-test("final content commit follows hook-appended streaming delta", () => {
+test("final content commit follows hook-appended streaming delta", async () => {
   const events = [];
   const runtime = {
     eventListener: { onEvent: (payload = {}) => events.push(payload) },
@@ -149,29 +162,27 @@ test("final content commit follows hook-appended streaming delta", () => {
   result.output = "draft plus hook";
 
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
-  assert.equal(emitFinalStreamingAppendDeltaAfterHooks({ result, runtime }), true);
+  assert.equal(await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime }), true);
   assert.equal(
-    emitAuthoritativeFinalMessageContent({ result, runtime })?.type,
+    (await emitAuthoritativeFinalMessageContent({ result, runtime }))?.payload?.eventType,
     "authoritative_final_content",
   );
-  const messageEvents = events.filter((item) =>
-    ["llm_delta", "authoritative_final_content"].includes(item?.event),
-  );
+  const messageEvents = committedMessageEvents(events);
   assert.deepEqual(
-    messageEvents.map((item) => item.event),
+    messageEvents.map((item) => item.payload.eventType),
     ["llm_delta", "authoritative_final_content"],
   );
   assert.deepEqual(
-    messageEvents.map((item) => item.data.sequence),
+    messageEvents.map((item) => item.ordering.sequence),
     [1, 2],
   );
-  assert.equal(messageEvents[1].data.text, "draft plus hook");
-  assert.equal(messageEvents[1].data.messageId, "turn-message-1");
+  assert.equal(messageEvents[1].payload.text, "draft plus hook");
+  assert.equal(messageEvents[1].identity.messageId, "turn-message-1");
   assert.equal(result.turnMessages[0].messageId, messageId);
   assert.equal(result.turnMessages[0].content, "draft plus hook");
 });
 
-test("final content uses the result message identity after active stream changes", () => {
+test("final content uses the result message identity after active stream changes", async () => {
   const events = [];
   const runtime = {
     eventListener: { onEvent: (payload = {}) => events.push(payload) },
@@ -213,15 +224,16 @@ test("final content uses the result message identity after active stream changes
   assert.notEqual(laterActiveMessageId, finalMessageId);
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
   assert.equal(
-    emitAuthoritativeFinalMessageContent({ result, runtime })?.type,
+    (await emitAuthoritativeFinalMessageContent({ result, runtime }))?.payload?.eventType,
     "authoritative_final_content",
   );
-  assert.equal(events.at(-1)?.data?.messageId, "turn-message-1");
-  assert.equal(events.at(-1)?.data?.text, "authoritative final answer");
+  const committed = committedMessageEvents(events).at(-1);
+  assert.equal(committed?.identity?.messageId, "turn-message-1");
+  assert.equal(committed?.payload?.text, "authoritative final answer");
   assert.equal(result.turnMessages[0].content, "authoritative final answer");
 });
 
-test("final streaming append delta: skips when hook rewrites instead of appends", () => {
+test("final streaming append delta: skips when hook rewrites instead of appends", async () => {
   const events = [];
   const result = buildLoopResult({
     output: "旧回答",
@@ -236,7 +248,7 @@ test("final streaming append delta: skips when hook rewrites instead of appends"
   });
   result.output = "新回答\n\n---\n验收";
 
-  const emitted = emitFinalStreamingAppendDeltaAfterHooks({
+  const emitted = await emitFinalStreamingAppendDeltaAfterHooks({
     result,
     runtime: {
       eventListener: {

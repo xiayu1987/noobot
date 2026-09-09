@@ -326,7 +326,7 @@ test("buildContextMessageBlocks removes current turn user residue from history",
     .filter((content) => typeof content === "string");
 
   assert.equal(visibleContents.filter((content) => content === "全仓回归测试").length, 1);
-  assert.equal(blocks.history.length, 3);
+  assert.equal(blocks.history.length, 2);
   assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
   assert.equal(blocks.incremental[0]?.additional_kwargs?.messageOrigin, "natural");
   assert.equal(blocks.incremental[0]?.additional_kwargs?.userMetaMaterialized, true);

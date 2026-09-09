@@ -33,3 +33,9 @@ jobs:
 
       - name: Run lightweight code quality checks
         run: npm run check:quality
+
+      - name: Run repository regression tests
+        run: npm test
+
+      - name: Build production clients
+        run: npm run build
