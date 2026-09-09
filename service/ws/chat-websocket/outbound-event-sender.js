@@ -6,7 +6,7 @@
 import { asEventProtocolEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
 import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
-import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import { isTerminalTurnEvent, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import { recordServiceWebSocketSendFailure } from "./runtime-events.js";
 
 function text(value) {
@@ -64,9 +64,7 @@ function classifyOutboundEvent(eventName, eventType) {
   return {
     authorityEnvelope: false,
     toolFrame: eventType === "tool_call_start" || eventType === "tool_call_end",
-    terminalLifecycle:
-      eventName === TURN_LIFECYCLE_WIRE_EVENT &&
-      [TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED, TURN_EVENT.FAILED].includes(eventType),
+    terminalLifecycle: eventName === TURN_LIFECYCLE_WIRE_EVENT && isTerminalTurnEvent(eventType),
   };
 }
 

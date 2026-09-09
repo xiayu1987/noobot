@@ -14,6 +14,7 @@ import {
   TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
   validateTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
+import { isTerminalTurnEvent } from "@noobot/session-protocol/turn-lifecycle";
 
 const TURN_USER_MESSAGE_EVENTS = Object.freeze({
   [TURN_COMMITTED_WIRE_EVENT]: {
@@ -62,7 +63,7 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
     });
     if (isChildLifecycle) {
       const result = applyTurnLifecycleEnvelope?.(data);
-      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"].includes(
+      const terminalLifecycle = isTerminalTurnEvent(
         normalizeTrimmedString(data?.eventType).toLowerCase(),
       );
       const logReduction = (reduction = {}) => {
@@ -137,9 +138,7 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     const result = applyTurnLifecycleEnvelope?.(data);
     const logReduction = (reduction = {}) => {
       const rejected = reduction?.applied !== true;
-      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"].includes(
-        lifecycleEventType,
-      );
+      const terminalLifecycle = isTerminalTurnEvent(lifecycleEventType);
       logSessionEvent?.({
         category: terminalLifecycle || rejected ? "state" : "debug",
         level: rejected ? "warn" : terminalLifecycle ? "info" : "debug",

@@ -28,6 +28,18 @@ export const TURN_EVENT = Object.freeze({
 
 export const TURN_EVENT_VALUES = Object.freeze(Object.values(TURN_EVENT));
 
+export const TURN_TERMINAL_EVENTS = Object.freeze([
+  TURN_EVENT.COMPLETED,
+  TURN_EVENT.STOP_COMPLETED,
+  TURN_EVENT.FAILED,
+]);
+
+const terminalEvents = new Set(TURN_TERMINAL_EVENTS);
+
+export function isTerminalTurnEvent(eventType = "") {
+  return terminalEvents.has(clean(eventType));
+}
+
 export function createTurnLifecycleCommandId({ commandId, eventType, phase = "" } = {}) {
   const rootCommandId = clean(commandId);
   const lifecycleEventType = clean(eventType);

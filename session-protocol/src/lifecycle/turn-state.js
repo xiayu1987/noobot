@@ -33,16 +33,28 @@ export const TURN_TERMINAL_STATES = Object.freeze([
   TURN_STATE.STOP_FAILED,
 ]);
 
+export const TURN_FAILED_STATES = Object.freeze([
+  TURN_STATE.ACTION_FAILED,
+  TURN_STATE.PROCESSING_FAILED,
+  TURN_STATE.COMPLETION_FAILED,
+  TURN_STATE.STOP_FAILED,
+]);
+
 export const TURN_FINALIZE_FAILURE_STATES = Object.freeze([
   TURN_STATE.COMPLETION_FAILED,
   TURN_STATE.STOP_FAILED,
 ]);
 
 const terminalStates = new Set(TURN_TERMINAL_STATES);
+const failedStates = new Set(TURN_FAILED_STATES);
 const finalizeFailureStates = new Set(TURN_FINALIZE_FAILURE_STATES);
 
 export function isTerminalTurnState(state = "") {
   return terminalStates.has(String(state || "").trim());
+}
+
+export function isFailedTurnState(state = "") {
+  return failedStates.has(String(state || "").trim());
 }
 
 export function isRetryableFinalizeFailure(turn = {}) {

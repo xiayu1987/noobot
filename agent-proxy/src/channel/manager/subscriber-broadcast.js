@@ -8,7 +8,7 @@ import { config } from "../../shared/config.js";
 import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 import {
-  TURN_EVENT,
+  isTerminalTurnEvent,
   TURN_LIFECYCLE_WIRE_EVENT,
   validateTurnLifecycleReceipt,
 } from "@noobot/session-protocol";
@@ -17,12 +17,6 @@ import {
   createAgentTransportError,
   createAgentTransportEvent,
 } from "@noobot/agent-transport-protocol";
-
-const TERMINAL_TURN_EVENTS = new Set([
-  TURN_EVENT.COMPLETED,
-  TURN_EVENT.STOP_COMPLETED,
-  TURN_EVENT.FAILED,
-]);
 
 const isAcceptedChannelDelivery = (result = {}) =>
   result.result === "sent" || result.result === "queued";
@@ -92,7 +86,7 @@ class SubscriberBroadcastMethods {
     queue.shift();
     if (!queue.length) deliveryQueues.delete(delivery.queueKey);
     this.recordSuccessfulDataPlaneOperation("lifecycleReceipts");
-    if (TERMINAL_TURN_EVENTS.has(delivery.eventType)) {
+    if (isTerminalTurnEvent(delivery.eventType)) {
       this.logSessionEvent(delivery.channel, {
         category: "transport",
         event: "agentProxy.channel.terminalLifecycle.receipt",
@@ -258,7 +252,7 @@ class SubscriberBroadcastMethods {
       }
       return false;
     }
-    if (TERMINAL_TURN_EVENTS.has(delivery.eventType)) {
+    if (isTerminalTurnEvent(delivery.eventType)) {
       this.logSessionEvent(delivery.channel, {
         category: "transport",
         level: "warn",
@@ -314,8 +308,7 @@ class SubscriberBroadcastMethods {
     const eventData = envelope?.data || {};
     const lifecycle = eventData?.payload || {};
     const terminalLifecycle =
-      envelope?.event === TURN_LIFECYCLE_WIRE_EVENT &&
-      TERMINAL_TURN_EVENTS.has(String(lifecycle?.eventType || "").trim());
+      envelope?.event === TURN_LIFECYCLE_WIRE_EVENT && isTerminalTurnEvent(lifecycle?.eventType);
     if (!channel.subscribers.size && terminalLifecycle) {
       this.logSessionEvent(channel, {
         category: "transport",
