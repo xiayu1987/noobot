@@ -104,6 +104,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     turnScopeId: "turn-1",
     messages: loopState.modelContext.messages,
     messageBlocks: loopState.modelContext.messageBlocks,
+    userMetaBackwrites: [],
   });
   const contextIdentityEvents = identityEvents.filter((event) =>
     event.event.startsWith("agent.contextIdentity."),

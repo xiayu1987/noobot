@@ -11,6 +11,7 @@ import {
   resolveCurrentModelInfo,
   createStreamingCallbacks,
 } from "../../../src/models/runtime/model-manager.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 test("resolveCurrentModelInfo should return trimmed alias/name", () => {
   const result = resolveCurrentModelInfo({
@@ -32,6 +33,7 @@ test("createStreamingCallbacks should emit llm_delta event", async () => {
       },
     },
     {
+      sessionManager: createCanonicalMessageEventSessionManager({ producerId: "model-manager" }),
       systemRuntime: {
         sessionId: "session-1",
         dialogProcessId: "dialog-1",
@@ -43,13 +45,15 @@ test("createStreamingCallbacks should emit llm_delta event", async () => {
   assert.equal(Array.isArray(callbacks), true);
   await callbacks[0].handleLLMNewToken("hello");
   assert.equal(events.length, 1);
-  assert.equal(events[0]?.event, "llm_delta");
-  assert.equal(events[0]?.data?.text, "hello");
+  assert.equal(events[0]?.event, "authority_event_committed");
+  assert.equal(events[0]?.data?.envelope?.payload?.eventType, "llm_delta");
+  assert.equal(events[0]?.data?.envelope?.payload?.text, "hello");
 });
 
 test("stream visibility filtering happens before authoritative sequence allocation", async () => {
   const events = [];
   const runtime = {
+    sessionManager: createCanonicalMessageEventSessionManager({ producerId: "model-filter" }),
     systemRuntime: {
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
@@ -77,9 +81,8 @@ test("stream visibility filtering happens before authoritative sequence allocati
   await callback.handleLLMEnd();
 
   assert.equal(events.length, 1);
-  assert.equal(events[0]?.data?.text, "visible");
-  assert.equal(events[0]?.data?.sequence, 1);
-  assert.equal(runtime.systemRuntime.messageEventStream.sequence, 1);
+  assert.equal(events[0]?.data?.envelope?.payload?.text, "visible");
+  assert.equal(events[0]?.data?.envelope?.ordering?.sequence, 1);
 });
 
 test("resolveLlmForTurn should switch model by runtimeModel and emit model_switched", () => {

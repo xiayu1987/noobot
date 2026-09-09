@@ -72,5 +72,5 @@ test("non-model hook context and diagnostics use the canonical runtime turn iden
   assert.equal(diagnostic.data.dialogProcessId, "d1");
   assert.equal(diagnostic.data.turnScopeId, "t1");
   assert.equal(diagnostic.data.hasModelContext, true);
-  assert.equal(diagnostic.data.modelContextProtocolVersion, 2);
+  assert.equal(diagnostic.data.modelContextProtocolVersion, modelContext.protocolVersion);
 });

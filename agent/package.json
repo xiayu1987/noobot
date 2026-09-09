@@ -35,7 +35,7 @@
     "check:api": "node -e \"Promise.all([import('./src/index.js'),import('./src/system-core/index.js'),import('./src/models/index.js'),import('./src/tools/index.js')]).then(()=>console.log('api ok')).catch(e=>{console.error(e);process.exit(1);})\"",
     "check:tool-schema": "node scripts/check-openai-tool-schema.js --userId admin",
     "check:tool-schema:live:gemini:admin": "node scripts/check-openai-tool-schema.js --live --model gemini_3_flash --userId admin",
-    "test": "node --test --test-force-exit __tests__/**/*.test.js",
+    "test": "node --test --test-force-exit \"__tests__/**/*.test.js\"",
     "test:e2e:execution-isolation": "node --test --test-force-exit __tests__/e2e/execution-isolation.e2e.js",
     "test:bot-manage": "node --test --test-force-exit __tests__/bot/*.test.js",
     "test:tools": "node --test --test-force-exit __tests__/tools/*.test.js",

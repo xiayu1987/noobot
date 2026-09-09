@@ -403,11 +403,14 @@ test("buildContextMessages keeps complete metadata per historical user turn with
   );
 });
 
-test("buildContextMessages rebuilds metadata beside every legacy stopped/resend user turn", () => {
+test("buildContextMessages rebuilds metadata beside every persisted stopped/resend user turn", () => {
   const history = [
     {
       role: "user",
       content: "你好",
+      messageUid: "stopped-user-1",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       attachments: [],
@@ -416,6 +419,9 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
     {
       role: "user",
       content: "你好",
+      messageUid: "stopped-user-2",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       dialogProcessId: "dialog-2",
       turnScopeId: "turn-2",
       attachments: [],
@@ -424,6 +430,9 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
     {
       role: "user",
       content: "你好",
+      messageUid: "stopped-user-3",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       dialogProcessId: "dialog-3",
       turnScopeId: "turn-3",
       attachments: [

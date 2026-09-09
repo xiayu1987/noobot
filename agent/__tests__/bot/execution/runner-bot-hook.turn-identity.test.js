@@ -300,6 +300,6 @@ test("SessionExecutionRunner rejects reused Turn execution without a precommitte
         turnScopeId: "client-turn:edited",
       },
     }),
-    (error) => error?.errorCode === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID",
+    (error) => error?.cause?.errorCode === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID",
   );
 });

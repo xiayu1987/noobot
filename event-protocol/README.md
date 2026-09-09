@@ -34,7 +34,7 @@ module-loading cost over the main entry.
     `src/plugin-artifact-event.js` depends on this for token validation.
   - `collapsedText` additionally collapses internal whitespace runs.
     `src/tool-presentation.js` depends on this for display output.
-  Merging these variants changes observable behaviour and is not a refactor.
+    Merging these variants changes observable behaviour and is not a refactor.
 - `src/event-registry-validators.js` defines the attachment, execution,
   interaction and message envelope validators plus the shared `domainResult`
   helper.

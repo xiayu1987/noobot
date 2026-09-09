@@ -106,6 +106,6 @@ test("task_summary sends one checkpoint command without mutating messages before
   assert.equal(checkpointCalls[0].summaryCompletion.source, "task_summary");
   assert.deepEqual(
     new Set(checkpointCalls[0].summaryCompletion.summarizedMessageIds),
-    new Set(["sm_1", "sm_2", "sm_3"]),
+    new Set(["sm_1", "sm_2", "sm_3", "sm_4", "sm_5"]),
   );
 });

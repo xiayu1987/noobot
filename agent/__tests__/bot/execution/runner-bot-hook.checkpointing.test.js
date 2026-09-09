@@ -87,6 +87,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
       activityTimeline: [
         {
           eventId: "activity-checkpoint-1",
+          eventType: "",
           activityKind: "",
           sequence: 0,
           sequenceDomain: "",

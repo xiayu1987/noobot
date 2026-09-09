@@ -134,6 +134,10 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
           {
             role: "user",
             content: "历史附件问题",
+            messageUid: "history-user-with-attachment",
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
+            sessionId: "s-history",
             dialogProcessId: "dlg-history",
             turnScopeId: "client-turn:history",
             attachments: [

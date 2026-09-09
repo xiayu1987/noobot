@@ -61,6 +61,7 @@ function buildAgentContext({
         userId,
         sessionId: "session:e2e:execution-isolation",
         rootSessionId: "session:e2e:execution-isolation",
+        sessionDir: path.join(basePath, "runtime/session", "session:e2e:execution-isolation"),
         isSuperUser,
         config: { safeConfirm: false },
       },
@@ -94,6 +95,9 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     aliceRoot = path.join(workspaceRoot, "alice");
     const bobRoot = path.join(workspaceRoot, "bob");
     await fs.mkdir(path.join(aliceRoot, "runtime/ops_workdir"), { recursive: true });
+    await fs.mkdir(path.join(aliceRoot, "runtime/session", "session:e2e:execution-isolation"), {
+      recursive: true,
+    });
     await fs.mkdir(path.join(bobRoot, "runtime/ops_workdir"), { recursive: true });
     await fs.writeFile(path.join(bobRoot, "runtime/ops_workdir/secret.txt"), "BOB-SECRET", "utf8");
     containerBase = `noobot-isolation-e2e-${randomUUID()}`;
@@ -243,9 +247,6 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.execution?.view, "workspace_sandbox");
     assert.deepEqual(result.workspace, { view: "workspace", path: "." });
-    assert.equal(
-      result.stdout,
-      "SANDBOX-PWD=/workspace/alice\nOTHER-USER=BOB-SECRET",
-    );
+    assert.equal(result.stdout, "SANDBOX-PWD=/workspace/alice\nOTHER-USER=BOB-SECRET");
   });
 });

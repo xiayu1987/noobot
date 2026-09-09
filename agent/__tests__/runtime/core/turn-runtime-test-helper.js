@@ -11,6 +11,7 @@ import { bindAssistantMessageEventStream } from "../../../src/events/message-eve
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 import { createModelContext } from "@noobot/context-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 export function createTestTurnMessagesStore(messages = []) {
   return createCurrentTurnMessagesStore(messages);
@@ -116,6 +117,8 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
     ...(runtime.runConfig && typeof runtime.runConfig === "object" ? runtime.runConfig : {}),
     executionId: String(runtime?.runConfig?.executionId || `run-${identity}`),
   };
+  runtime.sessionManager =
+    runtime.sessionManager || createCanonicalMessageEventSessionManager({ producerId: identity });
   bindTestTurnMessageEventDomain(runtime, identity);
   if (!String(loopState.modelContext?.activeTurnIdentity?.turnScopeId || "").trim()) {
     loopState.modelContext.activeTurnIdentity = {

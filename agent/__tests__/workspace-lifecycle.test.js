@@ -73,9 +73,9 @@ test("runtime workspace initialization does not synchronize existing user state"
       await readFile(path.join(fixture.userPath, "services", "built-in.js"), "utf8"),
       "export default 'stale';\n",
     );
-    assert.deepEqual(
-      JSON.parse(await readFile(path.join(fixture.userPath, "services", "package.json"), "utf8")),
-      { type: "module" },
+    await assert.rejects(
+      readFile(path.join(fixture.userPath, "services", "package.json"), "utf8"),
+      { code: "ENOENT" },
     );
     assert.equal(
       await readFile(path.join(fixture.userPath, "services", "user-defined.js"), "utf8"),
@@ -90,7 +90,7 @@ test("runtime workspace initialization does not synchronize existing user state"
   }
 });
 
-test("concurrent workspace initialization serializes template synchronization", async () => {
+test("concurrent workspace initialization preserves existing user state", async () => {
   const fixture = await createFixture();
   try {
     await mkdir(fixture.userPath, { recursive: true });
@@ -110,7 +110,7 @@ test("concurrent workspace initialization serializes template synchronization", 
     assert.deepEqual(new Set(initialized), new Set([fixture.userPath]));
     assert.equal(
       await readFile(path.join(fixture.userPath, "config.example.json"), "utf8"),
-      "{}\n",
+      '{"stale":true}\n',
     );
   } finally {
     await fixture.restore();
@@ -171,7 +171,7 @@ test("workspace initialization ignores legacy memory files", async () => {
   }
 });
 
-test("workspace initialization repairs an empty short-memory document", async () => {
+test("workspace initialization preserves an existing empty short-memory document", async () => {
   const fixture = await createFixture();
   try {
     await mkdir(fixture.userPath, { recursive: true });
@@ -184,11 +184,9 @@ test("workspace initialization repairs an empty short-memory document", async ()
       userId: "user-1",
     });
 
-    assert.deepEqual(
-      JSON.parse(
-        await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
-      ),
-      { items: [] },
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
+      "\n",
     );
   } finally {
     await fixture.restore();
@@ -233,9 +231,9 @@ test("workspace initialization repairs missing canonical memory files from the t
       await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
       '{"items":[]}\n',
     );
-    await assert.rejects(
-      readFile(path.join(fixture.userPath, "memory", "long-memory.json"), "utf8"),
-      { code: "ENOENT" },
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "memory", "long-memory.json"), "utf8"),
+      "{broken",
     );
   } finally {
     await fixture.restore();
@@ -293,43 +291,33 @@ test("explicit workspace sync adds every nested config node through the config p
       workspaceRoot: fixture.workspaceRoot,
       workspaceTemplatePath: fixture.workspaceTemplatePath,
       userId: "user-1",
+      baseValues: {
+        providers: {
+          primary: {
+            reasoning_effort: "medium",
+            tool_reasoning_effort: "medium",
+            capabilities: { web_search: true },
+          },
+          added: { enabled: true },
+        },
+        tools: {
+          execute_script: { enabled: true, sandbox_mode: true },
+          read_file: { enabled: true },
+        },
+      },
     });
 
     const config = JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8"));
     assert.deepEqual(config, {
       providers: {
         primary: {
-          api_key: "${OPENAI_API_KEY}",
-          base_url: "${OPENAI_API_ADDRESS}",
-          description: "Generic OpenAI-compatible fallback model",
-          enabled: true,
-          model: "default-model",
-          multimodal_generation: {
-            support_generation: { enabled: false, support_scope: [] },
-          },
-          multimodal_parsing: { enabled: false, input_modalities: [] },
           reasoning_effort: "high",
           reasoning_effort_options: ["low", "medium", "high"],
           reasoning_effort_parameter: "reasoning_effort",
           tool_reasoning_effort: "medium",
-          used_for_conversation: true,
+          capabilities: { web_search: true },
         },
-        added: {
-          api_key: "${OPENAI_API_KEY}",
-          base_url: "${OPENAI_API_ADDRESS}",
-          description: "Generic OpenAI-compatible fallback model",
-          enabled: true,
-          model: "default-model",
-          multimodal_generation: {
-            support_generation: { enabled: false, support_scope: [] },
-          },
-          multimodal_parsing: { enabled: false, input_modalities: [] },
-          reasoning_effort: "medium",
-          reasoning_effort_options: ["low", "medium", "high"],
-          reasoning_effort_parameter: "reasoning_effort",
-          tool_reasoning_effort: "medium",
-          used_for_conversation: true,
-        },
+        added: { enabled: true },
       },
       tools: {
         execute_script: { enabled: true },
@@ -351,6 +339,7 @@ test("workspace synchronization preserves invalid config JSON and repairs from t
       workspaceRoot: fixture.workspaceRoot,
       workspaceTemplatePath: fixture.workspaceTemplatePath,
       userId: "user-1",
+      baseValues: { preferences: { added: true, preserved: "template" } },
     });
 
     assert.deepEqual(

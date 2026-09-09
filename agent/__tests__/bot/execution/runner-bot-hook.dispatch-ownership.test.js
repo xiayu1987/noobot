@@ -114,7 +114,8 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const committedEvent = events.find(
     (item = {}) =>
       item.event === "authority_event_committed" &&
-      item?.data?.envelope?.payload?.event === "workflow_semantic_response",
+      item?.data?.envelope?.payload?.eventType === "thinking" &&
+      item?.data?.envelope?.payload?.activityKind === "workflow_semantic",
   );
   const envelope = committedEvent?.data?.envelope;
   assert.equal(envelope?.identity?.messageId, "message-workflow-semantic");
@@ -280,7 +281,7 @@ test("a handled workflow failure terminates the root Turn without Agent fallback
   await assert.rejects(
     () =>
       runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
-    (error) => error?.code === "WORKFLOW_NODE_FAILED" && error?.dispatchOwner === "workflow",
+    (error) => error?.code === "WORKFLOW_NODE_FAILED" && error?.cause?.dispatchOwner === "workflow",
   );
   assert.equal(rootAgentCalls, 0);
 });

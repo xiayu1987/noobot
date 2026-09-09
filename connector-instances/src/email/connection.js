@@ -10,11 +10,12 @@ export function normalizeEmailConnectionInfo(connectionInfo = {}) {
   const password = String(info?.password || "").trim();
   const smtpHost = String(info?.smtp_host || "").trim();
   const imapHost = String(info?.imap_host || "").trim();
-  const smtpPort = Number(info.smtp_port);
-  const imapPort = Number(info.imap_port);
+  const smtpPort = Number(info.smtp_port || 587);
+  const imapPort = Number(info.imap_port || 993);
   const smtpSecure = info.smtp_secure === true;
-  const imapSecure = info.imap_secure === true;
+  const imapSecure = info.imap_secure !== false;
   const fromEmail = String(info?.from_email || username).trim();
+  const toEmail = String(info?.to_email || "").trim();
 
   if (!username || !password) {
     throw new Error("Email username and password are required");
@@ -33,5 +34,6 @@ export function normalizeEmailConnectionInfo(connectionInfo = {}) {
     imapPort,
     imapSecure,
     fromEmail,
+    toEmail,
   };
 }
