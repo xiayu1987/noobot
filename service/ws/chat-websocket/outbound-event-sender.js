@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateProtocolEvent } from "@noobot/event-protocol";
+import { asEventProtocolEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
 import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
 import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import { recordServiceWebSocketSendFailure } from "./runtime-events.js";
@@ -13,7 +13,7 @@ function text(value) {
 }
 
 function getProtocolEnvelope(data) {
-  return data?.protocol?.name === "@noobot/event-protocol" ? data : null;
+  return asEventProtocolEnvelope(data);
 }
 
 function validateOutboundProtocolEnvelope(protocolEnvelope, eventName, logConnection) {

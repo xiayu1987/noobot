@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { publishRunEvent, registerActiveRun } from "../run-registry.js";
 import { createRunEventListener } from "../run-event-listener.js";
 import {
@@ -62,8 +63,8 @@ function onEventReceived(context, command, run, eventData = {}) {
     return;
   }
   if (
-    eventType === "workflow_planning_message_prepared" ||
-    eventType === "workflow_node_state_committed"
+    eventType === WORKFLOW_RUNTIME_EVENT.PLANNING ||
+    eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE
   ) {
     void recordServiceWebSocketLifecycle({
       sessionLogConfig: context.sessionLogConfig,

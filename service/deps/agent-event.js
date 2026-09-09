@@ -4,5 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { validateProtocolEvent } from "@noobot/event-protocol";
+export { asEventProtocolEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
 export { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "noobot-agent/event";

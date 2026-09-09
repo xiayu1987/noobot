@@ -8,6 +8,8 @@ import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createEventEnvelope } from "./envelope.js";
 import { isRecord, text } from "./normalize.js";
 
+export const WORKFLOW_RUNTIME_FAMILY = "workflow.runtime";
+
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
   PLANNING: "workflow_planning_message_prepared",
   NODE_STATE: "workflow_node_state_committed",
@@ -45,7 +47,7 @@ export function createWorkflowRuntimeEnvelope({
   payload = {},
 } = {}) {
   const envelope = createEventEnvelope({
-    family: "workflow.runtime",
+    family: WORKFLOW_RUNTIME_FAMILY,
     identity: {
       eventId: text(eventId),
       eventType: text(eventType),
