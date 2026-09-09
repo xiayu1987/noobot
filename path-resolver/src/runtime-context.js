@@ -7,8 +7,8 @@ import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.js";
 import { resolveSandboxPathMappings, resolveRuntimeUserId } from "./sandbox-mapping.js";
 import {
   WORKSPACE_SANDBOX_PATHS,
-  TOOL_EXECUTION_VIEW,
   assertToolExecutionPolicy,
+  isSandboxExecutionView,
   resolveWorkspaceSandboxLayout,
 } from "@noobot/execution-isolation-protocol";
 
@@ -81,7 +81,7 @@ export function resolveRuntimePathContext({
     : objectOrEmpty(runtime?.globalConfig);
   const resolvedExecutionPolicy = assertToolExecutionPolicy(executionPolicy);
   const isolation = resolvedExecutionPolicy.isolation;
-  const sandboxEnabled = resolvedExecutionPolicy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
+  const sandboxEnabled = isSandboxExecutionView(resolvedExecutionPolicy.view);
   const sandboxProvider = sandboxEnabled ? isolation.sandbox.provider : "";
   const mappingRuntime = {
     ...runtime,

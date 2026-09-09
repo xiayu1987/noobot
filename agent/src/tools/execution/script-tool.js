@@ -9,7 +9,8 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
   BUILTIN_THRESHOLDS,
-  TOOL_EXECUTION_VIEW,
+  isSandboxExecutionView,
+  resolveSandboxProviderExecutable,
   resolveToolExecutionPolicy,
 } from "../../config/index.js";
 import { resolveToolExecutionAuthorization } from "@noobot/execution-isolation-protocol";
@@ -22,7 +23,6 @@ import { tTool } from "../core/tool-i18n.js";
 import {
   EXECUTE_SCRIPT_TOOL_NAME,
   ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
-  SANDBOX_COMMAND,
   SANDBOX_PROVIDER_NAME,
   SCRIPT_EXECUTION_MODE,
 } from "./script-tool/constants.js";
@@ -67,7 +67,7 @@ export function createScriptTool({ agentContext }) {
     isSuperAdmin: isSuperUserAgentContext(agentContext),
   });
   if (!executionAuthorization.allowed) return [];
-  const sandboxEnabled = executionPolicy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
+  const sandboxEnabled = isSandboxExecutionView(executionPolicy.view);
   const sandboxConfig = executionPolicy.isolation.sandbox;
   const sandboxProvider = sandboxConfig.provider;
   const lockWaitTimeoutMs = sandboxConfig.lockWaitTimeoutMs || ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS;
@@ -196,9 +196,10 @@ export function createScriptTool({ agentContext }) {
         agentContext,
         pathContext,
       });
-      const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
+      const sandboxExecutable = resolveSandboxProviderExecutable(sandboxProvider);
+      const dockerInstalled = await hasCommand(sandboxExecutable);
       if (!dockerInstalled) {
-        throw missingCommandError(SANDBOX_PROVIDER_NAME.DOCKER, SANDBOX_COMMAND.DOCKER, runtime);
+        throw missingCommandError(SANDBOX_PROVIDER_NAME.DOCKER, sandboxExecutable, runtime);
       }
       const { result: runResult, docker: built } = await runDockerCommand({
         userRoot,

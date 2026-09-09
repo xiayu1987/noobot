@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import {
   assertExecutionIsolationProtocol,
+  resolveSandboxProviderExecutable,
   resolveWorkspaceSandboxMountProjection,
   resolveWorkspaceSandboxLayout,
 } from "@noobot/execution-isolation-protocol";
@@ -17,7 +18,7 @@ export function buildDockerCommand({ userRoot, userId = "", command, isolation, 
     isolation: resolvedIsolation,
     userId: userId || path.basename(userRoot),
   });
-  const { scope, image, mounts } = resolvedIsolation.sandbox;
+  const { scope, image, mounts, provider } = resolvedIsolation.sandbox;
   const containerName = layout.containerName;
   const workspaceMount = resolveWorkspaceSandboxMountProjection({
     isolation: resolvedIsolation,
@@ -62,7 +63,7 @@ export function buildDockerCommand({ userRoot, userId = "", command, isolation, 
   ];
 
   return {
-    executable: "docker",
+    executable: resolveSandboxProviderExecutable(provider),
     createArgs,
     inspectArgs: ["container", "inspect", containerName],
     inspectMountsArgs: ["inspect", "--format", "{{json .Mounts}}", containerName],

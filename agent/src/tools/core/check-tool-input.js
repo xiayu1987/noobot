@@ -27,7 +27,8 @@ import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
 import {
-  EXECUTION_ISOLATION_MODE,
+  isHostIsolationMode,
+  isSandboxIsolationMode,
   resolveExecutionIsolation,
 } from "@noobot/execution-isolation-protocol";
 import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapter.js";
@@ -115,7 +116,7 @@ export function canUseHostPathsForWorkspaceTools(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   return (
     isSuperUserAgentContext(agentContext) &&
-    resolveRuntimeIsolation(runtime).mode === EXECUTION_ISOLATION_MODE.HOST
+    isHostIsolationMode(resolveRuntimeIsolation(runtime).mode)
   );
 }
 
@@ -297,7 +298,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
     workspaceRoot,
     agentContext,
     allowHostAbsolute: true,
-    allowSandbox: isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX,
+    allowSandbox: isSandboxIsolationMode(isolation.mode),
     allowVirtualRelative: false,
   });
   if (!resolvedToolPath.ok) {

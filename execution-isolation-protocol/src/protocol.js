@@ -6,9 +6,17 @@
 
 import path from "node:path";
 import { SHELL, resolveHostShell } from "@noobot/platform-compatibility/platform";
-import { TOOL_EXECUTION_VIEW } from "./execution-views.js";
+import {
+  TOOL_EXECUTION_VIEW,
+  isRestrictedHostExecutionView,
+  isSandboxExecutionView,
+} from "./execution-views.js";
 
-export { TOOL_EXECUTION_VIEW } from "./execution-views.js";
+export {
+  TOOL_EXECUTION_VIEW,
+  isRestrictedHostExecutionView,
+  isSandboxExecutionView,
+} from "./execution-views.js";
 
 export const EXECUTION_ISOLATION_PROTOCOL_NAME = "noobot.execution-isolation";
 export const EXECUTION_ISOLATION_PROTOCOL_VERSION = 1;
@@ -20,6 +28,10 @@ export const EXECUTION_ISOLATION_MODE = Object.freeze({
 
 export const SANDBOX_PROVIDER = Object.freeze({
   DOCKER: "docker",
+});
+
+export const SANDBOX_PROVIDER_EXECUTABLE = Object.freeze({
+  [SANDBOX_PROVIDER.DOCKER]: "docker",
 });
 
 export const DOCKER_CONTAINER_SCOPE = Object.freeze({
@@ -51,9 +63,23 @@ export const WORKSPACE_SANDBOX_PATHS = Object.freeze({
 
 export { SHELL as COMMAND_SHELL } from "@noobot/platform-compatibility/platform";
 
+function normalizeIsolationMode(input = "") {
+  return String(input || "")
+    .trim()
+    .toLowerCase();
+}
+
+export function isSandboxIsolationMode(mode = "") {
+  return normalizeIsolationMode(mode) === EXECUTION_ISOLATION_MODE.SANDBOX;
+}
+
+export function isHostIsolationMode(mode = "") {
+  return normalizeIsolationMode(mode) === EXECUTION_ISOLATION_MODE.HOST;
+}
+
 export function resolveCommandShell({ executionView, platform = process.platform } = {}) {
-  if (executionView === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX) return SHELL.BASH;
-  if (executionView === TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED) {
+  if (isSandboxExecutionView(executionView)) return SHELL.BASH;
+  if (isRestrictedHostExecutionView(executionView)) {
     return resolveHostShell(platform);
   }
   throw new Error(`execution view does not support shell commands: ${executionView}`);
@@ -164,6 +190,13 @@ export function normalizeSandboxProvider(input = SANDBOX_PROVIDER.DOCKER) {
   return provider;
 }
 
+export function resolveSandboxProviderExecutable(provider = SANDBOX_PROVIDER.DOCKER) {
+  const normalized = normalizeSandboxProvider(provider);
+  const executable = SANDBOX_PROVIDER_EXECUTABLE[normalized];
+  if (!executable) throw new Error(`sandbox provider executable is not registered: ${normalized}`);
+  return executable;
+}
+
 export function normalizeDockerContainerScope(input = DOCKER_CONTAINER_SCOPE.USER) {
   const scope = String(input || "")
     .trim()
@@ -256,7 +289,7 @@ function resolveExecutionView({ executionClass, isolation }) {
     return TOOL_EXECUTION_VIEW.NATIVE_HOST_RESTRICTED;
   }
   if (executionClass === TOOL_EXECUTION_CLASS.WORKSPACE_COMPUTE) {
-    return isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX
+    return isSandboxIsolationMode(isolation.mode)
       ? TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX
       : TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED;
   }
@@ -282,7 +315,7 @@ export function resolveToolExecutionAuthorization({ policy, isSuperAdmin = false
   const resolved = assertToolExecutionPolicy(policy);
   const unrestrictedHostCompute =
     resolved.executionClass === TOOL_EXECUTION_CLASS.WORKSPACE_COMPUTE &&
-    resolved.view === TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED;
+    isRestrictedHostExecutionView(resolved.view);
   if (unrestrictedHostCompute && isSuperAdmin !== true) {
     return Object.freeze({
       allowed: false,
@@ -359,7 +392,7 @@ export function resolveToolExecutionPolicy({ toolName = "", globalConfig = {} } 
 
 export function projectToolExecutionMeta({ policy } = {}) {
   const resolved = assertToolExecutionPolicy(policy);
-  const sandboxed = resolved.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
+  const sandboxed = isSandboxExecutionView(resolved.view);
   return Object.freeze({
     view: resolved.view,
     provider: sandboxed ? resolved.isolation.sandbox.provider : "host",

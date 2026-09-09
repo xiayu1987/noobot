@@ -41,10 +41,10 @@ for pgid in $pgids; do
 done
 `;
 
-function signalDockerExecution({ containerName, executionToken }, signal) {
+function signalDockerExecution({ containerName, executionToken, executable }, signal) {
   return new Promise((resolve) => {
     execFile(
-      "docker",
+      executable,
       [
         "exec",
         containerName,
@@ -101,7 +101,9 @@ async function ensureDockerContainer(built) {
       ),
     );
     if (!matches || actual.length !== expected.length) {
-      await execFileAsync(built.executable, built.removeArgs, { windowsHide: true }).catch(() => undefined);
+      await execFileAsync(built.executable, built.removeArgs, { windowsHide: true }).catch(
+        () => undefined,
+      );
       exists = false;
     }
   }
