@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import {
   assertToolExecutionPolicy,
   projectToolExecutionMeta,
@@ -113,7 +114,7 @@ async function persistBackgroundScriptOutput({
     agentContext,
     userId,
     artifacts,
-    attachmentSource: "model",
+    attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: "execute_script_background",
     source: "tool",
     reason: "execute_script_background",

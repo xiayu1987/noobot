@@ -4,11 +4,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
+import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
+import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const guard = createGuardViolations({ root: ROOT, label: "agent-transport-protocol-boundary" });
+const { violations } = guard;
 const TARGET_DIRS = [
   "client/noobot-chat/src/modules/chat",
   "client/noobot-chat/src/infrastructure/websocket",
@@ -19,21 +22,13 @@ const TARGET_DIRS = [
 ];
 const TRANSPORT_DIRS = TARGET_DIRS.filter((directory) => directory !== "agent/src");
 
-async function sourceFiles(relativeDirectory) {
-  const absoluteDirectory = path.join(ROOT, relativeDirectory);
-  const entries = await readdir(absoluteDirectory, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const relative = path.join(relativeDirectory, entry.name);
-    if (entry.isDirectory()) files.push(...await sourceFiles(relative));
-    else if (/\.(?:js|mjs|vue)$/.test(entry.name)) files.push(relative);
-  }
-  return files;
-}
+const sourceFiles = createRelativeSourceCollector({
+  root: ROOT,
+  extensions: new Set([".js", ".mjs", ".vue"]),
+});
 
 const allFiles = [...new Set((await Promise.all(TARGET_DIRS.map(sourceFiles))).flat())];
 const transportFiles = new Set((await Promise.all(TRANSPORT_DIRS.map(sourceFiles))).flat());
-const violations = [];
 const commonForbidden = [
   [/\bpayload\?*\.config\b/, "payload.config compatibility read"],
   [/\brunConfig\?*\.config\b/, "runConfig.config compatibility read"],
@@ -50,15 +45,11 @@ for (const file of allFiles) {
       if (pattern.test(line)) violations.push(`${file}:${index + 1}: ${label}`);
     }
     if (transportFiles.has(file) && legacyAgentActions.test(line)) {
-      violations.push(`${file}:${index + 1}: legacy Agent action; use @noobot/agent-transport-protocol`);
+      violations.push(
+        `${file}:${index + 1}: legacy Agent action; use @noobot/agent-transport-protocol`,
+      );
     }
   }
 }
 
-if (violations.length) {
-  console.error("[agent-transport-protocol-boundary] failed");
-  console.error(violations.join("\n"));
-  process.exitCode = 1;
-} else {
-  console.log("[agent-transport-protocol-boundary] ok");
-}
+guard.report();

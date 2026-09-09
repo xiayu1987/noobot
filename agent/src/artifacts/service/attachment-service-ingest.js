@@ -8,6 +8,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 import { fsMkdir, fsWriteFile } from "../../shared/storage/fs-adapter.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
@@ -270,7 +271,7 @@ export async function ingestEmailArtifacts(
   return ingestGeneratedArtifacts(service, {
     userId,
     sessionId,
-    attachmentSource: "email",
+    attachmentSource: ATTACHMENT_SOURCE.EMAIL,
     artifacts,
     generationSource: "email_connector_read",
   });

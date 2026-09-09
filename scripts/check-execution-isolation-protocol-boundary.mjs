@@ -4,26 +4,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const violations = [];
+const guard = createGuardViolations({ root: ROOT, label: "execution-isolation-protocol-boundary" });
+const { violations } = guard;
 
 async function source(relativePath) {
   return readFile(path.join(ROOT, relativePath), "utf8");
 }
 
-async function assertAbsent(relativePath) {
-  try {
-    await access(path.join(ROOT, relativePath));
-    violations.push(
-      `${relativePath}: obsolete duplicate execution-isolation protocol is forbidden`,
-    );
-  } catch {
-    void 0;
-  }
-}
+const assertAbsent = (relativePath) =>
+  guard.assertAbsent(relativePath, "obsolete duplicate execution-isolation protocol is forbidden");
 
 await assertAbsent("agent-config-protocol/src/execution-isolation.js");
 await assertAbsent("agent/src/tools/execution/script-tool/sandbox-config.js");
@@ -100,9 +94,4 @@ for (const relativePath of [
   }
 }
 
-if (violations.length) {
-  console.error(`[execution-isolation-protocol-boundary] failed\n${violations.join("\n")}`);
-  process.exitCode = 1;
-} else {
-  console.log("[execution-isolation-protocol-boundary] ok");
-}
+guard.report();

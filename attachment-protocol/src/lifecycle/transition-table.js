@@ -31,13 +31,29 @@ export const ATTACHMENT_EVENT_STATUS = Object.freeze({
   [ATTACHMENT_EVENT_TYPE.DELETED]: ATTACHMENT_LIFECYCLE.DELETED,
 });
 const ALLOWED = Object.freeze({
-  received: new Set(["persisted", "invalid", "deleted"]),
-  generated: new Set(["persisted", "invalid", "deleted"]),
-  persisted: new Set(["parsing", "invalid", "deleted"]),
-  parsing: new Set(["parsed", "invalid", "deleted"]),
-  parsed: new Set(["deleted"]),
-  invalid: new Set(["deleted"]),
-  deleted: new Set(),
+  [ATTACHMENT_LIFECYCLE.RECEIVED]: new Set([
+    ATTACHMENT_LIFECYCLE.PERSISTED,
+    ATTACHMENT_LIFECYCLE.INVALID,
+    ATTACHMENT_LIFECYCLE.DELETED,
+  ]),
+  [ATTACHMENT_LIFECYCLE.GENERATED]: new Set([
+    ATTACHMENT_LIFECYCLE.PERSISTED,
+    ATTACHMENT_LIFECYCLE.INVALID,
+    ATTACHMENT_LIFECYCLE.DELETED,
+  ]),
+  [ATTACHMENT_LIFECYCLE.PERSISTED]: new Set([
+    ATTACHMENT_LIFECYCLE.PARSING,
+    ATTACHMENT_LIFECYCLE.INVALID,
+    ATTACHMENT_LIFECYCLE.DELETED,
+  ]),
+  [ATTACHMENT_LIFECYCLE.PARSING]: new Set([
+    ATTACHMENT_LIFECYCLE.PARSED,
+    ATTACHMENT_LIFECYCLE.INVALID,
+    ATTACHMENT_LIFECYCLE.DELETED,
+  ]),
+  [ATTACHMENT_LIFECYCLE.PARSED]: new Set([ATTACHMENT_LIFECYCLE.DELETED]),
+  [ATTACHMENT_LIFECYCLE.INVALID]: new Set([ATTACHMENT_LIFECYCLE.DELETED]),
+  [ATTACHMENT_LIFECYCLE.DELETED]: new Set(),
 });
 export function isTerminalAttachmentLifecycle(s) {
   return s === ATTACHMENT_LIFECYCLE.DELETED;

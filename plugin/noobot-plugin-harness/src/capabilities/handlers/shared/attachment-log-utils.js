@@ -13,6 +13,7 @@ import {
   mergeTransferEnvelopes,
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 function isPlainObject(value) {
@@ -194,7 +195,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         detail: text,
         name: normalizeString(name) || buildCapabilityArtifactName({ purpose }),
         mimeType: normalizeString(mimeType) || "text/markdown",
-        attachmentSource: "model",
+        attachmentSource: ATTACHMENT_SOURCE.MODEL,
         generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
         source: "plugin",
         reason: String(purpose || "harness_capability_output").trim(),

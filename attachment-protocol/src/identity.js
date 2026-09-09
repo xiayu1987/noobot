@@ -12,6 +12,15 @@ import {
 } from "./protocol-utils.js";
 const FIELDS = new Set(["attachmentId", "sessionId", "attachmentSource"]);
 export const ATTACHMENT_IDENTITY_REF_PREFIX = "attachment:v1:";
+export const ATTACHMENT_SOURCE = Object.freeze({
+  USER: "user",
+  MODEL: "model",
+  EMAIL: "email",
+  SUBTASK: "subtask",
+});
+export function isKnownAttachmentSource(value) {
+  return Object.values(ATTACHMENT_SOURCE).includes(value);
+}
 export function parseAttachmentIdentity(value) {
   const source = requirePlainObject(value, "invalid_attachment_identity");
   assertKnownFields(source, FIELDS, "unknown_attachment_identity_field");

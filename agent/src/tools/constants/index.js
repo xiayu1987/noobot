@@ -60,11 +60,6 @@ export const TOOL_CALLER = Object.freeze({
   BOT: "bot",
 });
 
-export const TOOL_ATTACHMENT_SOURCE = Object.freeze({
-  MODEL: "model",
-  EMAIL: "email",
-});
-
 export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",
   MULTIMODAL_PARSE_TOOL: "multimodal_parse_tool",

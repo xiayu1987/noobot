@@ -5,6 +5,7 @@
  */
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import {
   compactSessionAttachmentRef,
   compactTransferEnvelopes,
@@ -24,8 +25,7 @@ function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
   const attachmentSource = String(attachmentItem?.attachmentSource || "").trim();
   return (
     attachmentItem?.generatedByModel === true ||
-    attachmentSource === "model" ||
-    attachmentSource === "model_generated" ||
+    attachmentSource === ATTACHMENT_SOURCE.MODEL ||
     Boolean(generationSource)
   );
 }

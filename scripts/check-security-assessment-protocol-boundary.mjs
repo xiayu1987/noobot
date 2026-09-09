@@ -4,24 +4,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
+import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const violations = [];
+const guard = createGuardViolations({
+  root: ROOT,
+  label: "security-assessment-protocol-boundary",
+});
+const { violations } = guard;
 
 async function source(relativePath) {
   return readFile(path.join(ROOT, relativePath), "utf8");
 }
 
-async function assertAbsent(relativePath) {
-  try {
-    await access(path.join(ROOT, relativePath));
-    violations.push(`${relativePath}: obsolete duplicate risk protocol is forbidden`);
-  } catch {
-    void 0;
-  }
-}
+const assertAbsent = (relativePath) =>
+  guard.assertAbsent(relativePath, "obsolete duplicate risk protocol is forbidden");
 
 await assertAbsent("event-protocol/src/tool-risk.js");
 
@@ -56,33 +56,23 @@ for (const [relativePath, marker] of [
   }
 }
 
-async function sourceFiles(relativeDirectory) {
-  const directory = path.join(ROOT, relativeDirectory);
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const relativePath = path.join(relativeDirectory, entry.name);
-    if (
-      entry.isDirectory() &&
-      !new Set([
-        ".git",
-        "__tests__",
-        "build",
-        "dist",
-        "i18n",
-        "node_modules",
-        "scripts",
-        "security-assessment-protocol",
-        "test",
-        "tests",
-        "vendor",
-      ]).has(entry.name)
-    )
-      files.push(...(await sourceFiles(relativePath)));
-    else if (/\.(?:js|mjs|vue)$/.test(entry.name)) files.push(relativePath);
-  }
-  return files;
-}
+const sourceFiles = createRelativeSourceCollector({
+  root: ROOT,
+  extensions: new Set([".js", ".mjs", ".vue"]),
+  ignoredDirectories: new Set([
+    ".git",
+    "__tests__",
+    "build",
+    "dist",
+    "i18n",
+    "node_modules",
+    "scripts",
+    "security-assessment-protocol",
+    "test",
+    "tests",
+    "vendor",
+  ]),
+});
 
 const productionRoots = [
   "agent-config-protocol/src",
@@ -134,9 +124,4 @@ for (const relativePath of (await Promise.all(productionRoots.map(sourceFiles)))
   }
 }
 
-if (violations.length) {
-  console.error(`[security-assessment-protocol-boundary] failed\n${violations.join("\n")}`);
-  process.exitCode = 1;
-} else {
-  console.log("[security-assessment-protocol-boundary] ok");
-}
+guard.report();

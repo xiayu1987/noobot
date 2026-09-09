@@ -5,38 +5,25 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
-import {
-  persistSnapshotJsonFiles,
-} from "./session-execution-engine-utils.js";
+import { persistSnapshotJsonFiles } from "./session-execution-engine-utils.js";
 
 export class ScopedArtifactPersistenceHelpers {
-  constructor({
-    session = null,
-    attach = null,
-    workspaceService = null,
-    now = null,
-  } = {}) {
+  constructor({ session = null, attach = null, workspaceService = null, now = null } = {}) {
     this.session = session;
     this.attach = attach;
     this.workspaceService = workspaceService;
     this.now = typeof now === "function" ? now : () => new Date().toISOString();
   }
 
-  resolveScopedDir({
-    userId = "",
-    relativeDir = "",
-    absoluteDir = "",
-  } = {}) {
+  resolveScopedDir({ userId = "", relativeDir = "", absoluteDir = "" } = {}) {
     const workspacePath = this.workspaceService.getWorkspacePath(userId);
     const resolvedWorkspacePath = path.resolve(workspacePath);
     if (absoluteDir && String(absoluteDir || "").trim()) {
       const resolvedAbsoluteDir = path.resolve(String(absoluteDir || "").trim());
-      const relativeFromWorkspace = path.relative(
-        resolvedWorkspacePath,
-        resolvedAbsoluteDir,
-      );
+      const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedAbsoluteDir);
       if (
         !relativeFromWorkspace ||
         relativeFromWorkspace.startsWith("..") ||
@@ -46,7 +33,9 @@ export class ScopedArtifactPersistenceHelpers {
       }
       return resolvedAbsoluteDir;
     }
-    const normalizedRelativeDir = String(relativeDir || "").trim().replaceAll("\\", "/");
+    const normalizedRelativeDir = String(relativeDir || "")
+      .trim()
+      .replaceAll("\\", "/");
     if (!normalizedRelativeDir) return "";
     const resolvedDir = path.resolve(resolvedWorkspacePath, normalizedRelativeDir);
     const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedDir);
@@ -104,30 +93,35 @@ export class ScopedArtifactPersistenceHelpers {
       userId,
       sessionId,
     });
-    const session = sessionBundle?.session && typeof sessionBundle.session === "object"
-      ? sessionBundle.session
-      : null;
+    const session =
+      sessionBundle?.session && typeof sessionBundle.session === "object"
+        ? sessionBundle.session
+        : null;
     const tasks = Array.isArray(sessionBundle?.turnTasks) ? sessionBundle.turnTasks : [];
-    const execution = executionBundle && typeof executionBundle === "object"
-      ? executionBundle
-      : { sessionId, logs: [] };
-    const sessionRepo = this.session?.repositories?.sessionRepository
-      || this.session?.sessionRepo
-      || this.session?.sessionRepository
-      || this.session?.repo
-      || null;
+    const execution =
+      executionBundle && typeof executionBundle === "object"
+        ? executionBundle
+        : { sessionId, logs: [] };
+    const sessionRepo =
+      this.session?.repositories?.sessionRepository ||
+      this.session?.sessionRepo ||
+      this.session?.sessionRepository ||
+      this.session?.repo ||
+      null;
     return persistSnapshotJsonFiles({
       outputDir,
       sessionPayload: session || { sessionId, messages: [] },
       taskPayload: { sessionId, currentTaskId: "", tasks, updatedAt: this.now() },
       executionPayload: execution,
       metadata,
-      mutationLockDir: typeof sessionRepo?._sessionLifecycleLockDir === "function"
-        ? sessionRepo._sessionLifecycleLockDir(userId, sessionId)
-        : "",
-      assertSessionWritable: typeof sessionRepo?.assertSessionWritable === "function"
-        ? () => sessionRepo.assertSessionWritable(userId, sessionId)
-        : null,
+      mutationLockDir:
+        typeof sessionRepo?._sessionLifecycleLockDir === "function"
+          ? sessionRepo._sessionLifecycleLockDir(userId, sessionId)
+          : "",
+      assertSessionWritable:
+        typeof sessionRepo?.assertSessionWritable === "function"
+          ? () => sessionRepo.assertSessionWritable(userId, sessionId)
+          : null,
     });
   }
 
@@ -220,7 +214,8 @@ export class ScopedArtifactPersistenceHelpers {
       const records = await attachmentService.ingestGeneratedArtifacts({
         userId: normalizedUserId,
         sessionId: normalizedSessionId,
-        attachmentSource: String(attachmentSource || "model").trim() || "model",
+        attachmentSource:
+          String(attachmentSource || ATTACHMENT_SOURCE.MODEL).trim() || ATTACHMENT_SOURCE.MODEL,
         generationSource: normalizedGenerationSource,
         artifacts: artifactList,
       });

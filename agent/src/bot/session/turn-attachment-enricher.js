@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readAttachIndex } from "../../artifacts/index.js";
-import { findAttachmentByIdentity } from "@noobot/attachment-protocol";
+import { ATTACHMENT_SOURCE, findAttachmentByIdentity } from "@noobot/attachment-protocol";
 
 export async function resolveExistingUserMessageAttachments(
   engine,
@@ -44,7 +44,7 @@ export async function enrichUserInputAttachmentsFromIndex(
   if (basePath && normalizedSessionId) {
     index = await readAttachIndex(basePath, {
       sessionId: normalizedSessionId,
-      attachmentSource: "user",
+      attachmentSource: ATTACHMENT_SOURCE.USER,
     });
   }
   const indexedAttachments = Object.values(index?.attachments || {}).filter(

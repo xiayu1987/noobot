@@ -12,17 +12,13 @@ import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/meta-ops.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tToolDescription, tToolParamDescription } from "../core/tool-schema-i18n.js";
-import {
-  ARTIFACT_GENERATION_SOURCE,
-  TOOL_ATTACHMENT_SOURCE,
-  TOOL_NAME,
-  TOOL_RESULT_STATUS,
-} from "../constants/index.js";
+import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 
 function assertSelectedConnector(selectedConnectorIds = [], connectorId = "") {
   const normalizedId = String(connectorId || "").trim();
@@ -47,7 +43,7 @@ function createArtifactSink(runtime = {}) {
     const records = await attachmentService.ingestGeneratedArtifacts({
       userId,
       sessionId,
-      attachmentSource: TOOL_ATTACHMENT_SOURCE.EMAIL,
+      attachmentSource: ATTACHMENT_SOURCE.EMAIL,
       generationSource,
       artifacts,
     });

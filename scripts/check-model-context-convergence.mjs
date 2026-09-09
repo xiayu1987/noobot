@@ -4,8 +4,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { collectSourceFiles, ignorePathParts, walkSourceFiles } from "./lib/guard-scan.mjs";
 import { auditSourcePolicies } from "./quality/model-context-convergence/source-policy-audit.mjs";
 import { validateRequestLogOrder } from "./quality/model-context-convergence/request-log-audit.mjs";
 
@@ -45,17 +46,7 @@ const SOURCE_ROOTS = [
   path.join(ROOT, "plugin", "noobot-plugin-workflow", "src"),
 ];
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
-const IGNORE_PATH_PARTS = [
-  `${path.sep}node_modules${path.sep}`,
-  `${path.sep}.git${path.sep}`,
-  `${path.sep}dist${path.sep}`,
-  `${path.sep}build${path.sep}`,
-  `${path.sep}coverage${path.sep}`,
-  `${path.sep}report${path.sep}`,
-  `${path.sep}workspace${path.sep}`,
-  `${path.sep}logs${path.sep}`,
-  `${path.sep}__tests__${path.sep}`,
-];
+const IGNORE_PATH_PARTS = ignorePathParts(["report", "workspace", "logs", "__tests__"]);
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
@@ -68,23 +59,6 @@ function rel(filePath) {
 function readRel(relPath) {
   const fullPath = path.join(ROOT, relPath);
   return readFileSync(fullPath, "utf8");
-}
-
-function walk(dir, out = []) {
-  if (!existsSync(dir)) return out;
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (IGNORE_PATH_PARTS.some((part) => full.includes(part))) continue;
-    if (entry.isDirectory()) {
-      walk(full, out);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (!CODE_EXT.has(path.extname(entry.name).toLowerCase())) continue;
-    out.push(full);
-  }
-  return out;
 }
 
 function lineOf(text, index) {
@@ -128,14 +102,19 @@ function assertFileContains(relPath, checks = []) {
   return text;
 }
 
-const sourceFiles = SOURCE_ROOTS.flatMap((dir) => walk(dir));
+const sourceFiles = collectSourceFiles(SOURCE_ROOTS, {
+  extensions: CODE_EXT,
+  ignoredPathParts: IGNORE_PATH_PARTS,
+});
+const walkSources = (directory) =>
+  walkSourceFiles(directory, { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS });
 if (!sourceFiles.length)
   fail("no source files found for convergence scan", SOURCE_ROOTS.map(rel).join("\n"));
 
 auditSourcePolicies({
   root: ROOT,
   sourceFiles,
-  walk,
+  walk: walkSources,
   relativePath: rel,
   lineOf,
   snippetAt,

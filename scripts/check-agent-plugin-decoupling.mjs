@@ -4,8 +4,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { ignorePathParts, MISSING_DIRECTORY_POLICY, walkSourceFiles } from "./lib/guard-scan.mjs";
 
 function resolveRepoRoot() {
   const cwd = process.cwd();
@@ -31,13 +32,7 @@ const ROOT = resolveRepoRoot();
 const TARGET_ROOT = path.join(ROOT, "agent", "src");
 const PLUGIN_ROOT = path.join(ROOT, "plugin");
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
-const IGNORE_PATH_PARTS = [
-  `${path.sep}node_modules${path.sep}`,
-  `${path.sep}.git${path.sep}`,
-  `${path.sep}dist${path.sep}`,
-  `${path.sep}build${path.sep}`,
-  `${path.sep}coverage${path.sep}`,
-];
+const IGNORE_PATH_PARTS = ignorePathParts();
 
 const IMPORT_SPECIFIER_REGEX = /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g;
 
@@ -45,22 +40,13 @@ function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
 }
 
-function walk(dir, out = []) {
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (IGNORE_PATH_PARTS.some((part) => full.includes(part))) continue;
-    if (entry.isDirectory()) {
-      walk(full, out);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (!CODE_EXT.has(path.extname(entry.name).toLowerCase())) continue;
-    out.push(full);
-  }
-  return out;
+function walk(dir) {
+  return walkSourceFiles(dir, {
+    extensions: CODE_EXT,
+    ignoredPathParts: IGNORE_PATH_PARTS,
+    missingDirectory: MISSING_DIRECTORY_POLICY.REQUIRE,
+  });
 }
-
 function collectImportMatches(text = "", isViolation = () => false) {
   const matches = [];
   for (const match of text.matchAll(IMPORT_SPECIFIER_REGEX)) {
@@ -79,9 +65,11 @@ const violations = [];
 for (const file of walk(TARGET_ROOT)) {
   const relPath = toPosix(path.relative(ROOT, file));
   const text = readFileSync(file, "utf8");
-  const matches = collectImportMatches(text, (specifier) =>
-    /(?:^|[/@])noobot-plugin-(?:harness|workflow)(?:[/]|$)/i.test(specifier) ||
-    /(?:^|\/)plugin\/noobot-plugin-(?:harness|workflow)(?:\/|$)/i.test(specifier),
+  const matches = collectImportMatches(
+    text,
+    (specifier) =>
+      /(?:^|[/@])noobot-plugin-(?:harness|workflow)(?:[/]|$)/i.test(specifier) ||
+      /(?:^|\/)plugin\/noobot-plugin-(?:harness|workflow)(?:\/|$)/i.test(specifier),
   );
   const count = matches.reduce((sum, item) => sum + item.terms.length, 0);
   if (!count) continue;
@@ -92,7 +80,9 @@ if (statExists(PLUGIN_ROOT)) {
   for (const file of walk(PLUGIN_ROOT)) {
     const relPath = toPosix(path.relative(ROOT, file));
     const text = readFileSync(file, "utf8");
-    const matches = collectImportMatches(text, (specifier) => /(?:^|\/)agent\/src\//.test(specifier));
+    const matches = collectImportMatches(text, (specifier) =>
+      /(?:^|\/)agent\/src\//.test(specifier),
+    );
     if (matches.length) violations.push({ relPath, count: matches.length, matches });
   }
 }
@@ -104,9 +94,12 @@ if (violations.length) {
     for (const match of item.matches.slice(0, 8)) {
       console.error(`  ${match.line}: ${match.text}`);
     }
-    if (item.matches.length > 8) console.error(`  ... ${item.matches.length - 8} more matching lines`);
+    if (item.matches.length > 8)
+      console.error(`  ... ${item.matches.length - 8} more matching lines`);
   }
-  console.error("\nAgent core has no concrete-plugin compatibility allowlist; remove the coupling.");
+  console.error(
+    "\nAgent core has no concrete-plugin compatibility allowlist; remove the coupling.",
+  );
   process.exit(1);
 }
 

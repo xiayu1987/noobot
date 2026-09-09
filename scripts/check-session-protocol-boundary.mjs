@@ -5,28 +5,29 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
+import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
+const guard = createGuardViolations({ root, label: "session-protocol-boundary" });
+const { violations } = guard;
 const productionRoots = [
   "agent/src",
   "service",
   "client/noobot-chat/src",
   "authoritative-state/src",
 ];
-const ignored = new Set(["vendor", "dist", "node_modules", "__tests__", "tests"]);
-const violations = [];
+const collectProductionSources = createRelativeSourceCollector({
+  root,
+  extensions: new Set([".js", ".mjs", ".vue"]),
+  ignoredDirectories: new Set(["vendor", "dist", "node_modules", "__tests__", "tests"]),
+});
+const collectProtocolSources = createRelativeSourceCollector({
+  root,
+  extensions: new Set([".js"]),
+});
 const canonicalTurnCommitProtocol = "session-protocol/src/turn-commit.js";
 const canonicalTurnScopeIdentityProtocol = "session-protocol/src/identity/turn-scope-identity.js";
-
-function visit(relative) {
-  const absolute = path.join(root, relative);
-  for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
-    if (ignored.has(entry.name)) continue;
-    const child = path.join(relative, entry.name);
-    if (entry.isDirectory()) visit(child);
-    else if (/\.(?:js|mjs|vue)$/.test(entry.name)) inspect(child);
-  }
-}
 
 function inspect(relative) {
   const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -50,7 +51,9 @@ function inspect(relative) {
     if (pattern.test(source)) violations.push(`${relative}: ${message}`);
 }
 
-for (const relative of productionRoots) visit(relative);
+for (const relative of productionRoots) {
+  for (const file of await collectProductionSources(relative)) inspect(file);
+}
 
 function inspectTurnCommitProtocolDefinitions(relative) {
   const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -70,19 +73,8 @@ function inspectTurnCommitProtocolDefinitions(relative) {
   }
 }
 
-function visitSessionProtocol(relative) {
-  const absolute = path.join(root, relative);
-  for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
-    const child = path.join(relative, entry.name);
-    if (entry.isDirectory()) visitSessionProtocol(child);
-    else if (/\.js$/.test(entry.name)) inspectTurnCommitProtocolDefinitions(child);
-  }
+for (const file of await collectProtocolSources("session-protocol/src")) {
+  inspectTurnCommitProtocolDefinitions(file);
 }
 
-visitSessionProtocol("session-protocol/src");
-if (violations.length) {
-  console.error(violations.join("\n"));
-  process.exitCode = 1;
-} else {
-  console.log("Session protocol boundary passed");
-}
+guard.report();

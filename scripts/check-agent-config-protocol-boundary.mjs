@@ -4,30 +4,21 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
+import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const violations = [];
+const guard = createGuardViolations({ root: ROOT, label: "agent-config-protocol-boundary" });
+const { violations } = guard;
+const filesUnder = createRelativeSourceCollector({
+  root: ROOT,
+  extensions: new Set([".js", ".mjs"]),
+});
 
-async function filesUnder(relativeDirectory) {
-  const files = [];
-  for (const entry of await readdir(path.join(ROOT, relativeDirectory), { withFileTypes: true })) {
-    const relative = path.join(relativeDirectory, entry.name);
-    if (entry.isDirectory()) files.push(...(await filesUnder(relative)));
-    else if (/\.(?:js|mjs)$/.test(entry.name)) files.push(relative);
-  }
-  return files;
-}
-
-async function assertAbsent(relativePath) {
-  try {
-    await access(path.join(ROOT, relativePath));
-    violations.push(`${relativePath}: obsolete duplicate config implementation must be removed`);
-  } catch {
-    void 0;
-  }
-}
+const assertAbsent = (relativePath) =>
+  guard.assertAbsent(relativePath, "obsolete duplicate config implementation must be removed");
 
 const obsoleteProtocolFiles = [
   "protocol.js",
@@ -114,11 +105,4 @@ for (const file of protocolConsumerFiles) {
   }
 }
 
-if (violations.length) {
-  console.error(`[agent-config-protocol-boundary] failed\n${violations.join("\n")}`);
-  process.exitCode = 1;
-} else {
-  console.log(
-    `[agent-config-protocol-boundary] ok (${protocolFiles.length + protocolConsumerFiles.length} files)`,
-  );
-}
+guard.report(`${protocolFiles.length + protocolConsumerFiles.length} files`);

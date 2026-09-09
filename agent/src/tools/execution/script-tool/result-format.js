@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { toToolJsonResult } from "../../core/tool-json-result.js";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { formatLinesWithNumbers, splitLines } from "../file-utils.js";
 import { EXECUTE_SCRIPT_TOOL_NAME } from "./constants.js";
-import {
-  persistTransferArtifacts,
-} from "../../../transfer-adapter/index.js";
+import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { readFile } from "node:fs/promises";
 
 export function formatCommandOutputWithLineNumbers(value = "") {
@@ -41,27 +40,30 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
   const normalizedResult = normalizeExecOutput(publicResult, { includeLineNumbers });
   const runtime = options?.runtime || {};
   const agentContext = options?.agentContext || null;
-  const overflowFiles = r?.outputOverflow === true
-    ? [
-        { role: "stdout", filePath: r.stdoutPath, bytes: r.stdoutBytes },
-        { role: "stderr", filePath: r.stderrPath, bytes: r.stderrBytes },
-      ].filter((item) => Number(item.bytes || 0) > 0)
-    : [];
+  const overflowFiles =
+    r?.outputOverflow === true
+      ? [
+          { role: "stdout", filePath: r.stdoutPath, bytes: r.stdoutBytes },
+          { role: "stderr", filePath: r.stderrPath, bytes: r.stderrBytes },
+        ].filter((item) => Number(item.bytes || 0) > 0)
+      : [];
   let transferEnvelopes = [];
   if (overflowFiles.length) {
     if (!options?.identity) throw new Error("semantic_transfer_script_identity_required");
-    const artifacts = await Promise.all(overflowFiles.map(async (item) => ({
-      name: `execute-script-${item.role}.txt`,
-      mimeType: "text/plain",
-      contentBase64: (await readFile(item.filePath)).toString("base64"),
-      meta: { role: item.role },
-    })));
+    const artifacts = await Promise.all(
+      overflowFiles.map(async (item) => ({
+        name: `execute-script-${item.role}.txt`,
+        mimeType: "text/plain",
+        contentBase64: (await readFile(item.filePath)).toString("base64"),
+        meta: { role: item.role },
+      })),
+    );
     const persisted = await persistTransferArtifacts({
       runtime,
       agentContext,
       userId: String(runtime?.userId || runtime?.systemRuntime?.userId || "").trim(),
       artifacts,
-      attachmentSource: "model",
+      attachmentSource: ATTACHMENT_SOURCE.MODEL,
       generationSource: "execute_script_output_overflow",
       source: "tool",
       reason: "execute_script_output_overflow",
@@ -81,11 +83,14 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     mode,
     ...extra,
     ...normalizedResult,
-    ...(r?.outputOverflow === true ? {
-      message: "Command output exceeded the inline limit; full stdout/stderr remain available through the returned file references.",
-      outputOverflow: true,
-      transferEnvelopes,
-    } : {}),
+    ...(r?.outputOverflow === true
+      ? {
+          message:
+            "Command output exceeded the inline limit; full stdout/stderr remain available through the returned file references.",
+          outputOverflow: true,
+          transferEnvelopes,
+        }
+      : {}),
     includeLineNumbers,
   });
 }

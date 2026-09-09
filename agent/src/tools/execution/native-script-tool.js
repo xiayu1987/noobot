@@ -7,6 +7,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import os from "node:os";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import {
   TASK_PATH_KINDS,
   PATH_CAPABILITIES,
@@ -348,7 +349,7 @@ export function createNativeScriptTool({ agentContext }) {
             agentContext,
             userId: String(runtime?.userId || ""),
             artifacts,
-            attachmentSource: "model",
+            attachmentSource: ATTACHMENT_SOURCE.MODEL,
             generationSource: "execute_native_script",
             source: "tool",
             reason: "execute_native_script_output",
