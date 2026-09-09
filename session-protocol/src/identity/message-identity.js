@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 export function normalizeMessageIdentity(value = {}) {
   return Object.freeze({
     messageUid: clean(value.messageUid),

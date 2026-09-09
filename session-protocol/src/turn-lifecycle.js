@@ -17,6 +17,7 @@ import { TURN_COMMAND, TURN_EVENT, TURN_EVENT_VALUES } from "./lifecycle/turn-ev
 import { TURN_EVENT_STATE, TURN_FAILED_PHASE_STATE } from "./lifecycle/turn-transition-policy.js";
 import { TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
 import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
+import { text as clean } from "./normalize.js";
 
 export {
   deriveAuthoritativeTurnCapabilities,
@@ -55,8 +56,6 @@ const EVENT_PHASE = Object.freeze({
 });
 
 const FAILED_PHASE_STATE = TURN_FAILED_PHASE_STATE;
-
-const clean = (value) => String(value || "").trim();
 
 export function createTurnLifecycleReceipt({
   eventId = "",

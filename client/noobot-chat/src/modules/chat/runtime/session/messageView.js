@@ -13,6 +13,7 @@ import {
 } from "../../model/messageModel.js";
 import { nowIso } from "../../model/timeFields.js";
 import { RoleEnum } from "../../model/chatConstants.js";
+import { isWorkflowNodeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import {
   getMessageInternalType,
   getMessageRole,
@@ -161,7 +162,7 @@ export function createSessionMessageView({
   function shouldRenderMessageInChat(messageItem) {
     const messageRole = getMessageRole(messageItem);
     const messageTurnScopeId = getMessageTurnScopeId(messageItem);
-    const childWorkflowMessage = messageTurnScopeId.startsWith("workflow-node:");
+    const childWorkflowMessage = isWorkflowNodeTurnScopeId(messageTurnScopeId);
     const shouldRender =
       messageRole !== RoleEnum.TOOL &&
       !isPluginInjectedMessage(messageItem) &&

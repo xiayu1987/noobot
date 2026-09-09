@@ -5,8 +5,7 @@
  */
 import { createSessionScope, validateSessionScope } from "../identity.js";
 import { SESSION_PROTOCOL_VERSION } from "../version.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export const SESSION_COMMAND = Object.freeze({
   TURN_COMMIT: "session.turn.commit",

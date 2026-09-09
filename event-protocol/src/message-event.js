@@ -7,6 +7,7 @@ import {
   normalizeSecurityRiskLevel,
   validateSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
+import { text } from "./normalize.js";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
@@ -36,8 +37,6 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
   APPEND: "append",
   REPLACE: "replace",
 });
-
-const text = (value) => String(value || "").trim();
 
 function validatePresentationMessage(message, expectedRole, value) {
   const errors = [];

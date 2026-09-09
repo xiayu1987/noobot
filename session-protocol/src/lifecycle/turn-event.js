@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "../normalize.js";
 
 export const TURN_COMMAND = Object.freeze({
   SEND: "turn.send",
@@ -26,8 +27,6 @@ export const TURN_EVENT = Object.freeze({
 });
 
 export const TURN_EVENT_VALUES = Object.freeze(Object.values(TURN_EVENT));
-
-const clean = (value) => String(value || "").trim();
 
 export function createTurnLifecycleCommandId({ commandId, eventType, phase = "" } = {}) {
   const rootCommandId = clean(commandId);

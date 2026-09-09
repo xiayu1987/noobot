@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHookManager } from "@noobot/hook-protocol";
+import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import {
   PLUGIN_HOST_PORT,
   PLUGIN_SURFACE,
@@ -43,7 +44,10 @@ function plainObject(value) {
 
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
   const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
-  const executionId = String(runConfig?.executionId || `agent:${scopeId}`).trim();
+  const executionId = deriveAgentExecutionId({
+    executionId: runConfig?.executionId,
+    turnScopeId: scopeId,
+  });
   return Object.freeze({
     executionId,
     executionKind: "agent",

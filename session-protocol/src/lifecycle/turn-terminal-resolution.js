@@ -10,8 +10,7 @@ import {
   collectPositiveIntegerErrors,
   collectRequiredFieldErrors,
 } from "./turn-field-assertions.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 2;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";

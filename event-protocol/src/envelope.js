@@ -4,17 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isRecord, selectFields, text } from "./normalize.js";
+
 export const EVENT_PROTOCOL_NAME = "@noobot/event-protocol";
 export const EVENT_PROTOCOL_VERSION = 3;
-
-const text = (value) => String(value || "").trim();
-const isRecord = (value) => Boolean(value && typeof value === "object" && !Array.isArray(value));
-const select = (source, keys) =>
-  Object.freeze(
-    Object.fromEntries(
-      keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]),
-    ),
-  );
 
 export function validateEventEnvelope(value = {}) {
   const errors = [];
@@ -72,7 +65,7 @@ export function createEventEnvelope({
         family: text(family),
         schemaVersion: Number(schemaVersion),
       }),
-      identity: select(identity, [
+      identity: selectFields(identity, [
         "eventId",
         "eventType",
         "sessionId",
@@ -80,9 +73,15 @@ export function createEventEnvelope({
         "messageId",
         "executionId",
       ]),
-      causality: select(causality, ["commandId", "causationId", "correlationId"]),
-      ordering: select(ordering, ["domain", "scopeId", "sequence", "revision", "aggregateVersion"]),
-      producer: select(producer, ["type", "id"]),
+      causality: selectFields(causality, ["commandId", "causationId", "correlationId"]),
+      ordering: selectFields(ordering, [
+        "domain",
+        "scopeId",
+        "sequence",
+        "revision",
+        "aggregateVersion",
+      ]),
+      producer: selectFields(producer, ["type", "id"]),
       occurredAt: text(occurredAt),
       payload,
     }),

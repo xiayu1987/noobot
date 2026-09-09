@@ -6,6 +6,7 @@
 
 import { WORKFLOW_ACTION, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   getWorkflowTransferPayloadFromResult,
@@ -423,7 +424,10 @@ function resolveNodeAgentIdentity({ nodeIdentity, instanceId, pendingStep, ctx }
     commandId: firstText(nodeIdentity.commandId),
     dialogProcessId,
     turnScopeId,
-    childExecutionId: firstText(nodeIdentity.childExecutionId, `agent:${turnScopeId}`),
+    childExecutionId: firstText(
+      nodeIdentity.childExecutionId,
+      deriveAgentExecutionId({ turnScopeId }),
+    ),
     sessionId: firstText(nodeIdentity.sessionId),
     nodeId: firstText(nodeIdentity.nodeId, pendingStep?.nodeId),
     nodeName: firstText(nodeIdentity.nodeName, pendingStep?.nodeName),

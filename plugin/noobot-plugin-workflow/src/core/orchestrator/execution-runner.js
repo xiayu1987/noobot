@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import {
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
@@ -396,9 +397,10 @@ export async function runWorkflowExecution({
                 sessionId: String(planningNodeIdentity?.sessionId || "").trim() || randomUUID(),
               }
             : null;
-          const childExecutionId = String(
-            nodeIdentity?.childExecutionId || `agent:${nodeIdentity?.turnScopeId || ""}`,
-          ).trim();
+          const childExecutionId = deriveAgentExecutionId({
+            executionId: nodeIdentity?.childExecutionId,
+            turnScopeId: nodeIdentity?.turnScopeId,
+          });
           const currentNodeState =
             nodeStateSnapshot?.nodes?.find?.(
               (node) =>

@@ -6,6 +6,7 @@
 import { canonicalizeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createEventEnvelope } from "./envelope.js";
+import { isRecord, text } from "./normalize.js";
 
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
   PLANNING: "workflow_planning_message_prepared",
@@ -18,9 +19,6 @@ export const WORKFLOW_SEQUENCE_DOMAIN = Object.freeze({
   NODE_STATE: "workflow-node-state",
   SESSION_SNAPSHOT: "workflow-session-snapshot",
 });
-
-const text = (value) => String(value || "").trim();
-const isRecord = (value) => Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 export function workflowSequenceDomainForEvent(eventType = "") {
   if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) return WORKFLOW_SEQUENCE_DOMAIN.PLANNING;

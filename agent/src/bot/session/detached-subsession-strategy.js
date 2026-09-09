@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { deriveAgentExecutionId, normalizeParentSessionId } from "@noobot/session-protocol";
 
 export const AGENT_DETACHED_SESSION_ROOT = "runtime/agent/session";
 
@@ -30,7 +30,7 @@ export function createAgentDetachedSubSessionStrategy({
     parentDialogProcessId: normalizedParentDialogProcessId,
     dialogProcessId,
     turnScopeId,
-    executionId: `agent:${turnScopeId}`,
+    executionId: deriveAgentExecutionId({ turnScopeId }),
     relativeDir: `${AGENT_DETACHED_SESSION_ROOT}/${sessionId}`,
     allowedRoot: AGENT_DETACHED_SESSION_ROOT,
   });

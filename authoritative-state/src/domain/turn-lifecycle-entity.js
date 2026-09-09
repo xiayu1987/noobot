@@ -5,6 +5,8 @@
  */
 import {
   decideTurnTransition,
+  deriveAgentExecutionId,
+  EXECUTION_KIND,
   isRetryableFinalizeFailure,
   isTerminalTurnState,
   normalizeTurnContinuationSource,
@@ -45,11 +47,12 @@ function normalizeTurn(value, key) {
     turnScopeId,
     messageId: clean(value.messageId),
     presentationMessageId: clean(value.presentationMessageId),
-    executionId: clean(value.executionId) || `agent:${turnScopeId}`,
-    executionKind: clean(value.executionKind) || "agent",
+    executionId: deriveAgentExecutionId({ executionId: value.executionId, turnScopeId }),
+    executionKind: clean(value.executionKind) || EXECUTION_KIND.AGENT,
     parentExecutionId: clean(value.parentExecutionId),
     rootExecutionId:
-      clean(value.rootExecutionId) || clean(value.executionId) || `agent:${turnScopeId}`,
+      clean(value.rootExecutionId) ||
+      deriveAgentExecutionId({ executionId: value.executionId, turnScopeId }),
     origin:
       value.origin && typeof value.origin === "object" && !Array.isArray(value.origin)
         ? { ...value.origin }

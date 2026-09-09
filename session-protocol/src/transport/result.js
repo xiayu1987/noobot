@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { SESSION_PROTOCOL_VERSION } from "../version.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "../normalize.js";
 
 export function createSessionCommandResult({
   commandId,

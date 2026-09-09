@@ -9,8 +9,8 @@ import {
   validateSessionIdentity,
 } from "./identity/session-identity.js";
 import { normalizeTurnIdentity } from "./identity/turn-identity.js";
+import { text as clean } from "./normalize.js";
 
-const clean = (value) => String(value || "").trim();
 const SESSION_ID_MAX_LENGTH = 200;
 
 export function normalizeSessionId(value = "") {

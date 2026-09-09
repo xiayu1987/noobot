@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { TURN_TERMINAL_STATES } from "@noobot/session-protocol";
 
-export const USER_STOP_REQUEST_STORAGE_KEY = "noobot:session-run-state-machine:user-stop-requests:v1";
+export const USER_STOP_REQUEST_STORAGE_KEY =
+  "noobot:session-run-state-machine:user-stop-requests:v1";
 export const USER_STOP_REQUEST_TTL_MS = TIME_THRESHOLDS.client.stopRequestTtlMs;
 export const SESSION_RUN_MESSAGE_RUNTIME_MARK = "__noobotRuntimeRunStateKey";
 export const SESSION_RUN_MESSAGE_RUNTIME_ACTION = Object.freeze({
@@ -38,14 +40,7 @@ export const BackendTerminalStates = Object.freeze([
   BackendChannelState.NO_CONVERSATION,
 ]);
 
-export const AUTHORITATIVE_TERMINAL_STATES = Object.freeze([
-  "completed",
-  "stop_completed",
-  "action_failed",
-  "processing_failed",
-  "completion_failed",
-  "stop_failed",
-]);
+export const AUTHORITATIVE_TERMINAL_STATES = TURN_TERMINAL_STATES;
 
 export const LEGACY_TERMINAL_DISCOVERY_STATES = Object.freeze([
   ...AUTHORITATIVE_TERMINAL_STATES,
@@ -61,11 +56,19 @@ const AUTHORITATIVE_TERMINAL_STATE_SET = new Set(AUTHORITATIVE_TERMINAL_STATES);
 const LEGACY_TERMINAL_DISCOVERY_STATE_SET = new Set(LEGACY_TERMINAL_DISCOVERY_STATES);
 
 export function isAuthoritativeTerminalState(value = "") {
-  return AUTHORITATIVE_TERMINAL_STATE_SET.has(String(value || "").trim().toLowerCase());
+  return AUTHORITATIVE_TERMINAL_STATE_SET.has(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 export function isLegacyTerminalDiscoveryState(value = "") {
-  return LEGACY_TERMINAL_DISCOVERY_STATE_SET.has(String(value || "").trim().toLowerCase());
+  return LEGACY_TERMINAL_DISCOVERY_STATE_SET.has(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 export const FrontendRunState = Object.freeze({
@@ -150,9 +153,7 @@ export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
   FrontendRunState.USER_STOPPING,
 ]);
 
-export const USER_STOP_LOCK_STATES = Object.freeze([
-  FrontendRunState.USER_STOPPING,
-]);
+export const USER_STOP_LOCK_STATES = Object.freeze([FrontendRunState.USER_STOPPING]);
 
 export const USER_STOP_LOCK_REOPEN_STATES = Object.freeze([
   FrontendRunState.ACTION_REQUESTING,
@@ -231,17 +232,50 @@ export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
   [BackendChannelState.INTERACTION_PENDING]: createTransitionConfig(50),
   [FrontendRunState.RESEND_REPLACING_TURN]: createTransitionConfig(55),
   [FrontendRunState.RESEND_STREAMING]: createTransitionConfig(60),
-  [FrontendRunState.USER_STOPPING]: createTransitionConfig(80, SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED),
+  [FrontendRunState.USER_STOPPING]: createTransitionConfig(
+    80,
+    SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED,
+  ),
   [BackendChannelState.COMPLETED]: createTransitionConfig(90),
   [FrontendRunState.FRONTEND_COMPLETION_REQUESTING]: createTransitionConfig(95),
-  [FrontendRunState.FRONTEND_COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [FrontendRunState.USER_STOP_COMPLETED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [BackendChannelState.ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [BackendChannelState.EXPIRED]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [BackendChannelState.NO_CONVERSATION]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [FrontendRunState.CANCELLED]: createTransitionConfig(110, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [FrontendRunState.ACTION_REQUEST_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [FrontendRunState.PROCESSING_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [FrontendRunState.COMPLETION_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
-  [FrontendRunState.STOP_ERROR]: createTransitionConfig(100, SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED),
+  [FrontendRunState.FRONTEND_COMPLETED]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [FrontendRunState.USER_STOP_COMPLETED]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [BackendChannelState.ERROR]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [BackendChannelState.EXPIRED]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [BackendChannelState.NO_CONVERSATION]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [FrontendRunState.CANCELLED]: createTransitionConfig(
+    110,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [FrontendRunState.ACTION_REQUEST_ERROR]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [FrontendRunState.PROCESSING_ERROR]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [FrontendRunState.COMPLETION_ERROR]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
+  [FrontendRunState.STOP_ERROR]: createTransitionConfig(
+    100,
+    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
+  ),
 });

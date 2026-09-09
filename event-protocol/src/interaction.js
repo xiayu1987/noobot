@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const clean = (value) => String(value || "").trim();
+import { text } from "./normalize.js";
 
 export const INTERACTION_LIFECYCLE = Object.freeze({
   PENDING: "pending",
@@ -18,14 +18,14 @@ export const INTERACTION_RESOLVED_BY = Object.freeze({
 });
 
 export function normalizeInteractionLifecycle(value = "") {
-  const normalized = clean(value).toLowerCase();
+  const normalized = text(value).toLowerCase();
   return Object.values(INTERACTION_LIFECYCLE).includes(normalized)
     ? normalized
     : INTERACTION_LIFECYCLE.PENDING;
 }
 
 export function normalizeInteractionResolvedBy(value = "") {
-  const normalized = clean(value).toLowerCase();
+  const normalized = text(value).toLowerCase();
   return Object.values(INTERACTION_RESOLVED_BY).includes(normalized) ? normalized : "";
 }
 
@@ -46,11 +46,11 @@ export function validateInteractionRequestPayload(data = {}) {
     return { valid: false, reason: "payload_not_object", missing: [] };
   }
   const required = ["requestId", "dialogProcessId"];
-  const missing = required.filter((key) => !clean(data[key]));
+  const missing = required.filter((key) => !text(data[key]));
   const hasPayload =
     typeof data.content === "string" ||
     Array.isArray(data.fields) ||
-    Boolean(clean(data.interactionType)) ||
+    Boolean(text(data.interactionType)) ||
     (data.interactionData &&
       typeof data.interactionData === "object" &&
       !Array.isArray(data.interactionData));
@@ -73,7 +73,7 @@ export function validateInteractionRequestPayload(data = {}) {
   if (
     String(data.lifecycle || "").trim() &&
     lifecycle === INTERACTION_LIFECYCLE.PENDING &&
-    clean(data.lifecycle).toLowerCase() !== lifecycle
+    text(data.lifecycle).toLowerCase() !== lifecycle
   ) {
     return { valid: false, reason: "invalid_lifecycle", missing: [] };
   }
@@ -90,7 +90,7 @@ export function validateInteractionRequest(event = {}) {
 
 export function isPendingInteractionReplay(record = {}) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return false;
-  const eventType = clean(record?.identity?.eventType);
+  const eventType = text(record?.identity?.eventType);
   if (eventType !== INTERACTION_EVENT_TYPE.REQUEST) return false;
   const payload = record?.payload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
@@ -102,7 +102,7 @@ export function isPendingInteractionReplay(record = {}) {
 }
 
 export function validateInteractionResponsePayload(data = {}) {
-  const missing = ["requestId", "dialogProcessId"].filter((key) => !clean(data?.[key]));
+  const missing = ["requestId", "dialogProcessId"].filter((key) => !text(data?.[key]));
   return missing.length
     ? { valid: false, reason: "missing_identity", missing }
     : { valid: true, reason: "", missing: [] };

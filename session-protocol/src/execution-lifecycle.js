@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { canonicalizeTurnScopeId } from "./turn-scope-identity.js";
+import { text as clean } from "./normalize.js";
 
 export const EXECUTION_KIND = Object.freeze({
   AGENT: "agent",
@@ -20,8 +21,6 @@ export const EXECUTION_QUERY_COMMAND = Object.freeze({
   CHILDREN_GET: "execution.children.get",
   TREE_GET: "execution.tree.get",
 });
-
-const clean = (value) => String(value || "").trim();
 
 export function deriveAgentExecutionId({ executionId = "", turnScopeId = "" } = {}) {
   const canonicalTurnScopeId = canonicalizeTurnScopeId(turnScopeId);

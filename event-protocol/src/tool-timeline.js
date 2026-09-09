@@ -7,8 +7,7 @@
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
-
-const text = (value) => String(value || "").trim();
+import { text } from "./normalize.js";
 
 export function countCanonicalToolTimelineEvents(timeline = []) {
   return (Array.isArray(timeline) ? timeline : []).reduce(

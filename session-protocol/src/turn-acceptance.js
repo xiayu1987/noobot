@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_EVENT } from "./lifecycle/turn-event.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "./normalize.js";
 
 export function validateTurnAcceptanceUserMessage(event = {}) {
   if (text(event.eventType) !== TURN_EVENT.ACTION_ACCEPTED) {

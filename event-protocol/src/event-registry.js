@@ -10,26 +10,24 @@ import {
   EXECUTION_TREE_WIRE_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_SNAPSHOT_WIRE_EVENT,
-  validateExecutionIdentity,
   validateSessionEvent,
 } from "@noobot/session-protocol";
-import {
-  ATTACHMENT_LIFECYCLE_WIRE_EVENT,
-  createAttachmentLifecycleEvent,
-} from "@noobot/attachment-protocol";
+import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 import { validateEventEnvelope } from "./envelope.js";
 import {
   INTERACTION_EVENT_TYPE,
-  INTERACTION_SEQUENCE_DOMAIN,
   validateInteractionRequestPayload,
   validateInteractionResponsePayload,
 } from "./interaction.js";
+import { MESSAGE_EVENT_WIRE_EVENT, validateMessageEventPayload } from "./message-event.js";
 import {
-  MESSAGE_EVENT_TYPE,
-  MESSAGE_EVENT_SEQUENCE_DOMAIN,
-  MESSAGE_EVENT_WIRE_EVENT,
-  validateMessageEventPayload,
-} from "./message-event.js";
+  domainResult,
+  validateAttachment,
+  validateExecutionPayload,
+  validateInteractionEnvelope,
+  validateMessageEnvelope,
+} from "./event-registry-validators.js";
+import { text } from "./normalize.js";
 import {
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
@@ -70,65 +68,6 @@ export const EVENT_FAMILY = Object.freeze({
   WORKFLOW_RUNTIME: "workflow.runtime",
   PLUGIN_ARTIFACT: PLUGIN_ARTIFACT_FAMILY,
 });
-
-const domainResult = (result, fallback = "invalid_domain_payload") => {
-  if (result?.valid === true) return { valid: true, errors: [] };
-  const errors =
-    Array.isArray(result?.errors) && result.errors.length
-      ? result.errors
-      : Array.isArray(result?.missing) && result.missing.length
-        ? result.missing
-        : [result?.reason || fallback];
-  return { valid: false, errors };
-};
-const validateAttachment = (payload) => {
-  try {
-    createAttachmentLifecycleEvent(payload);
-    return { valid: true, errors: [] };
-  } catch (error) {
-    return { valid: false, errors: [error?.message || "invalid_attachment_lifecycle"] };
-  }
-};
-const validateExecutionPayload = (payload) => domainResult(validateExecutionIdentity(payload));
-const validateInteractionEnvelope = (envelope) => {
-  const errors = [];
-  const requestId = String(envelope?.payload?.requestId || "").trim();
-  if (!String(envelope?.identity?.turnScopeId || "").trim()) errors.push("missing_turn_scope_id");
-  if (envelope?.ordering?.domain !== INTERACTION_SEQUENCE_DOMAIN)
-    errors.push("sequence_domain_mismatch");
-  if (requestId && envelope?.ordering?.scopeId !== requestId)
-    errors.push("sequence_scope_mismatch");
-  return { valid: errors.length === 0, errors };
-};
-const validateMessageEnvelope = (envelope) => {
-  const errors = [];
-  const messageId = String(envelope?.identity?.messageId || "").trim();
-  if (!messageId) errors.push("missing_message_id");
-  if (envelope?.ordering?.domain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) {
-    errors.push("sequence_domain_mismatch");
-  }
-  if (messageId && envelope?.ordering?.scopeId !== messageId) {
-    errors.push("sequence_scope_mismatch");
-  }
-  if (envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
-    for (const role of ["user", "assistant"]) {
-      const message = envelope?.payload?.presentation?.[`${role}Message`];
-      if (
-        String(message?.sessionId || "").trim() !==
-        String(envelope?.identity?.sessionId || "").trim()
-      ) {
-        errors.push(`${role}_session_identity_mismatch`);
-      }
-      if (
-        String(message?.turnScopeId || "").trim() !==
-        String(envelope?.identity?.turnScopeId || "").trim()
-      ) {
-        errors.push(`${role}_turn_identity_mismatch`);
-      }
-    }
-  }
-  return { valid: errors.length === 0, errors };
-};
 
 const descriptors = Object.freeze(
   [
@@ -229,14 +168,14 @@ const byWireEvent = new Map(
 );
 
 export function getEventFamily(family = "") {
-  return byFamily.get(String(family || "").trim()) || null;
+  return byFamily.get(text(family)) || null;
 }
 
 export function readProtocolEventPayload(envelope = {}, { wireEvent = "", family = "" } = {}) {
   const validation = validateProtocolEvent(envelope);
   if (!validation.valid) return { ...validation, payload: null };
-  const expectedWireEvent = String(wireEvent || "").trim();
-  if (expectedWireEvent && String(envelope.identity.eventType || "").trim() !== expectedWireEvent) {
+  const expectedWireEvent = text(wireEvent);
+  if (expectedWireEvent && text(envelope.identity.eventType) !== expectedWireEvent) {
     return {
       valid: false,
       errors: ["transport_event_identity_mismatch"],
@@ -244,7 +183,7 @@ export function readProtocolEventPayload(envelope = {}, { wireEvent = "", family
       payload: null,
     };
   }
-  const expectedFamily = String(family || "").trim();
+  const expectedFamily = text(family);
   if (expectedFamily && validation.descriptor.family !== expectedFamily) {
     return {
       valid: false,
@@ -282,7 +221,7 @@ export function readProtocolEventReducerInput(envelope = {}) {
   };
 }
 export function getEventFamilyByWireEvent(wireEvent = "") {
-  return byWireEvent.get(String(wireEvent || "").trim()) || null;
+  return byWireEvent.get(text(wireEvent)) || null;
 }
 export function listEventFamilies() {
   return [...descriptors];

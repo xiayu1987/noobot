@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function text(value = "") {
-  return String(value ?? "")
-    .replaceAll(/\s+/g, " ")
-    .trim();
-}
+import { collapsedText as text } from "./normalize.js";
 
 function structuredDetail(value) {
   if (value && typeof value === "object" && !Array.isArray(value)) return value;

@@ -10,7 +10,9 @@ import {
   decideCommandIdempotency,
   decideTurnContinuation,
   deriveAuthoritativeTurnCapabilities,
+  deriveAgentExecutionId,
   deriveTurnExecutionState,
+  EXECUTION_KIND,
   isRetryableFinalizeFailure,
   isTerminalTurnState,
   normalizeTurnContinuationSource,
@@ -36,16 +38,18 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
   const eventType = clean(input.eventType);
   const phase = clean(input.phase);
   const executionIdentity = {
-    executionId: clean(input.executionId || currentValue.executionId) || `agent:${turnScopeId}`,
-    executionKind: clean(input.executionKind || currentValue.executionKind) || "agent",
+    executionId: deriveAgentExecutionId({
+      executionId: input.executionId || currentValue.executionId,
+      turnScopeId,
+    }),
+    executionKind: clean(input.executionKind || currentValue.executionKind) || EXECUTION_KIND.AGENT,
     parentExecutionId: clean(input.parentExecutionId || currentValue.parentExecutionId),
     rootExecutionId:
-      clean(
-        input.rootExecutionId ||
-          currentValue.rootExecutionId ||
-          input.executionId ||
-          currentValue.executionId,
-      ) || `agent:${turnScopeId}`,
+      clean(input.rootExecutionId || currentValue.rootExecutionId) ||
+      deriveAgentExecutionId({
+        executionId: input.executionId || currentValue.executionId,
+        turnScopeId,
+      }),
     origin: normalizeOrigin(input.origin, currentValue.origin),
     stage: clean(input.stage || currentValue.stage),
   };

@@ -5,6 +5,7 @@
 
 import { EVENT_FAMILY, validateProtocolEvent } from "./event-registry.js";
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
+import { text } from "./normalize.js";
 
 const ACTIVITY_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT]),
@@ -32,14 +33,12 @@ const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
   ]),
 );
 
-const text = (value) => String(value || "").trim();
-
 export function isCanonicalActivityMessageEvent(envelope = {}) {
   const validation = validateProtocolEvent(envelope);
   return Boolean(
     validation.valid &&
-      validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
-      ACTIVITY_EVENT_TYPES.has(text(envelope?.payload?.eventType)),
+    validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+    ACTIVITY_EVENT_TYPES.has(text(envelope?.payload?.eventType)),
   );
 }
 
@@ -96,22 +95,22 @@ export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
 export function isCanonicalActivityTimelineFact(value = {}) {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      text(value.eventId) &&
-      ACTIVITY_EVENT_TYPES.has(text(value.eventType)) &&
-      typeof value.text === "string" &&
-      Number.isInteger(Number(value.sequence)) &&
-      Number(value.sequence) > 0 &&
-      text(value.sequenceScopeId) &&
-      text(value.sequenceDomain) &&
-      text(value.authority) === "authoritative" &&
-      text(value.timestamp) &&
-      text(value.sessionId) &&
-      text(value.turnScopeId) &&
-      text(value.messageId) &&
-      text(value.presentationMessageId) &&
-      Object.keys(value).every((field) => ACTIVITY_TIMELINE_FACT_FIELDS.has(field)),
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    text(value.eventId) &&
+    ACTIVITY_EVENT_TYPES.has(text(value.eventType)) &&
+    typeof value.text === "string" &&
+    Number.isInteger(Number(value.sequence)) &&
+    Number(value.sequence) > 0 &&
+    text(value.sequenceScopeId) &&
+    text(value.sequenceDomain) &&
+    text(value.authority) === "authoritative" &&
+    text(value.timestamp) &&
+    text(value.sessionId) &&
+    text(value.turnScopeId) &&
+    text(value.messageId) &&
+    text(value.presentationMessageId) &&
+    Object.keys(value).every((field) => ACTIVITY_TIMELINE_FACT_FIELDS.has(field)),
   );
 }
 

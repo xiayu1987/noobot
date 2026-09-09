@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import {
+  createWorkflowNodeDialogProcessId,
+  createWorkflowNodeTurnScopeId,
+} from "@noobot/session-protocol/turn-scope-identity";
+import { deriveAgentExecutionId } from "@noobot/session-protocol";
 
 function safeId(value = "") {
   return String(value || "")
@@ -38,8 +43,8 @@ export function createWorkflowNodeIdentity({
 } = {}) {
   const nodeId = String(node?.id || node?.nodeId || node?.stepId || `node_${index}`).trim();
   const nodeExecutionId = `${safeId(workflowRunId || "workflow")}_${safeId(nodeId)}_${Math.max(1, Number(attempt) || 1)}`;
-  const dialogProcessId = `wf_node_${nodeExecutionId}`;
-  const turnScopeId = `workflow-node:${nodeExecutionId}`;
+  const dialogProcessId = createWorkflowNodeDialogProcessId(nodeExecutionId);
+  const turnScopeId = createWorkflowNodeTurnScopeId(nodeExecutionId);
   return {
     workflowRunId: String(workflowRunId || "").trim(),
     nodeExecutionId,
@@ -47,7 +52,7 @@ export function createWorkflowNodeIdentity({
     attempt: Math.max(1, Number(attempt) || 1),
     dialogProcessId,
     turnScopeId,
-    childExecutionId: `agent:${turnScopeId}`,
+    childExecutionId: deriveAgentExecutionId({ turnScopeId }),
     commandId: `workflow-node:${nodeExecutionId}:send`,
   };
 }

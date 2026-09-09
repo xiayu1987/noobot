@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { nullishText as clean } from "../normalize.js";
 
 export const EXECUTION_ABORT_TYPE = Object.freeze({
   USER_STOP: "user_stop",
@@ -12,8 +13,6 @@ export const EXECUTION_ABORT_TYPE = Object.freeze({
 });
 
 const EXECUTION_ABORT_TYPES = new Set(Object.values(EXECUTION_ABORT_TYPE));
-
-const clean = (value) => String(value ?? "").trim();
 
 function structuredAbortReason(value) {
   if (!value || typeof value !== "object") return null;
@@ -79,7 +78,5 @@ export function resolveExecutionAbortMessage({
 }
 
 export function isExecutionUserStop({ error = null, abortSignal = null } = {}) {
-  return (
-    resolveExecutionAbortType({ error, abortSignal }) === EXECUTION_ABORT_TYPE.USER_STOP
-  );
+  return resolveExecutionAbortType({ error, abortSignal }) === EXECUTION_ABORT_TYPE.USER_STOP;
 }
