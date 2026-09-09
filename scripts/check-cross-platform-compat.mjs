@@ -4,8 +4,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import {
+  collectSourceFiles,
+  ignorePathParts,
+  MISSING_DIRECTORY_POLICY,
+} from "./lib/guard-scan.mjs";
 
 function exists(filePath) {
   try {
@@ -37,18 +42,7 @@ const TARGET_DIRS = [
   "workflow",
 ];
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const IGNORE_PATH_PARTS = [
-  `${path.sep}node_modules${path.sep}`,
-  `${path.sep}.git${path.sep}`,
-  `${path.sep}dist${path.sep}`,
-  `${path.sep}build${path.sep}`,
-  `${path.sep}coverage${path.sep}`,
-  `${path.sep}vendor${path.sep}`,
-  `${path.sep}out${path.sep}`,
-  `${path.sep}docs${path.sep}`,
-  `${path.sep}__tests__${path.sep}`,
-  `${path.sep}tests${path.sep}`,
-];
+const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "out", "docs", "__tests__", "tests"]);
 const IGNORE_BASENAMES = new Set(["package.json", "package-lock.json"]);
 
 const RULES = [
@@ -114,28 +108,6 @@ function rel(filePath) {
   return toPosix(path.relative(ROOT, filePath));
 }
 
-function walk(dir, out = []) {
-  let entries = [];
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (IGNORE_PATH_PARTS.some((part) => full.includes(part))) continue;
-    if (entry.isDirectory()) {
-      walk(full, out);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (IGNORE_BASENAMES.has(entry.name)) continue;
-    if (!CODE_EXT.has(path.extname(entry.name).toLowerCase())) continue;
-    out.push(full);
-  }
-  return out;
-}
-
 function stripBlockComments(line = "") {
   return line.replace(/\/\*.*?\*\//g, " ");
 }
@@ -194,14 +166,26 @@ function scanPackageScripts(filePath) {
   return violations;
 }
 
-const files = [];
 const packageFiles = [path.join(ROOT, "package.json")];
 for (const dir of TARGET_DIRS) {
   const full = path.join(ROOT, dir);
   if (!exists(full)) continue;
-  walk(full, files);
   const packageFile = path.join(full, "package.json");
   if (exists(packageFile)) packageFiles.push(packageFile);
+}
+const files = collectSourceFiles(
+  TARGET_DIRS.map((dir) => path.join(ROOT, dir)),
+  {
+    extensions: CODE_EXT,
+    ignoredPathParts: IGNORE_PATH_PARTS,
+    ignoredBasenames: IGNORE_BASENAMES,
+    missingDirectory: MISSING_DIRECTORY_POLICY.SKIP_UNREADABLE,
+  },
+);
+if (!files.length) {
+  console.error("[check-cross-platform-compat] failed");
+  console.error("no source files matched the scan targets; check TARGET_DIRS");
+  process.exit(1);
 }
 
 const violations = [...files.flatMap(scanFile), ...packageFiles.flatMap(scanPackageScripts)];

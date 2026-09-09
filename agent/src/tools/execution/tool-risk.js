@@ -13,6 +13,7 @@ import {
   raiseSecurityAssessment,
   shouldRequireSecurityConfirmation,
 } from "@noobot/security-assessment-protocol";
+import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -73,8 +74,7 @@ function confirmationContent(
     if (Array.isArray(value)) return value.map(formatTarget).filter(Boolean).join(", ");
     if (!value || typeof value !== "object") return String(value || "").trim();
     if (value.view === "attachment" && value.identity) {
-      const identity = value.identity;
-      return `attachment:${String(identity.sessionId || "").trim()}/${String(identity.attachmentSource || "").trim()}/${String(identity.attachmentId || "").trim()}`;
+      return formatAttachmentIdentityRef(value.identity);
     }
     if (value.view && value.path) return String(value.path).trim();
     if (value.path) {

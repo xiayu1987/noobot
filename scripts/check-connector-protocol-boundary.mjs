@@ -4,34 +4,27 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
+import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const violations = [];
+const guard = createGuardViolations({ root: ROOT, label: "connector-protocol-boundary" });
+const { violations } = guard;
 
 async function source(relativePath) {
   return readFile(path.join(ROOT, relativePath), "utf8");
 }
 
-async function assertAbsent(relativePath) {
-  try {
-    await access(path.join(ROOT, relativePath));
-    violations.push(`${relativePath}: obsolete connector implementation must remain removed`);
-  } catch {
-    void 0;
-  }
-}
+const assertAbsent = (relativePath) =>
+  guard.assertAbsent(relativePath, "obsolete connector implementation must remain removed");
 
-async function sourceFiles(relativeDirectory) {
-  const files = [];
-  for (const entry of await readdir(path.join(ROOT, relativeDirectory), { withFileTypes: true })) {
-    const relativePath = path.join(relativeDirectory, entry.name);
-    if (entry.isDirectory()) files.push(...(await sourceFiles(relativePath)));
-    else if (/\.(?:js|mjs|vue)$/.test(entry.name)) files.push(relativePath);
-  }
-  return files;
-}
+const sourceFiles = createRelativeSourceCollector({
+  root: ROOT,
+  extensions: new Set([".js", ".mjs", ".vue"]),
+  ignoredDirectories: new Set(["node_modules", "vendor", "dist", "build"]),
+});
 
 for (const relativePath of [
   "agent/src/integrations/connectors/connector-event-listener.js",
@@ -141,9 +134,4 @@ if (runPreferences.includes("selectedConnectorIds")) {
   );
 }
 
-if (violations.length) {
-  console.error(`[connector-protocol-boundary] failed\n${violations.join("\n")}`);
-  process.exitCode = 1;
-} else {
-  console.log("[connector-protocol-boundary] ok");
-}
+guard.report();

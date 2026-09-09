@@ -8,7 +8,9 @@ import { randomUUID } from "node:crypto";
 import {
   ATTACHMENT_EVENT_TYPE,
   ATTACHMENT_LIFECYCLE,
+  ATTACHMENT_LIFECYCLE_WIRE_EVENT,
   ATTACHMENT_RELATION_TYPE,
+  ATTACHMENT_SOURCE,
   createAttachmentLifecycleEvent,
   findAttachmentRelation,
   projectAttachmentIdentity,
@@ -25,11 +27,7 @@ import { MIME_TYPE } from "../../shared/constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { emitEvent } from "../../events/index.js";
 import { queueUserMetaBackwrite } from "../../context/assembly/message-builder/user-meta-backwrite.js";
-import {
-  ARTIFACT_GENERATION_SOURCE,
-  TOOL_ATTACHMENT_SOURCE,
-  TOOL_NAME,
-} from "../constants/index.js";
+import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME } from "../constants/index.js";
 
 function sanitizeArtifactBaseName(input = "", fallback = "multimodal-parse") {
   const normalized = String(input || "").trim();
@@ -54,7 +52,7 @@ export async function persistParsedTextAttachment({
     text,
     name: `${inputBaseName}.multimodal-parse.${modeSuffix}.md`,
     mimeType: MIME_TYPE.TEXT_MARKDOWN,
-    attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+    attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_PARSE_TOOL,
     source: TRANSFER_SOURCE.TOOL,
     reason: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_PARSE_TOOL,
@@ -79,7 +77,8 @@ export async function backwriteParsedAttachment({
   sourceAttachmentMeta,
   parsedAttachment,
 }) {
-  if (String(sourceAttachmentMeta?.attachmentSource || "").trim() !== "user") return null;
+  if (String(sourceAttachmentMeta?.attachmentSource || "").trim() !== ATTACHMENT_SOURCE.USER)
+    return null;
   const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
   const targetAttachment = parsedAttachment?.identity
     ? { ...parsedAttachment, ...parsedAttachment.identity }
@@ -120,7 +119,7 @@ export async function backwriteParsedAttachment({
     parentSessionId,
     family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
     identity: {
-      eventType: "attachment_lifecycle",
+      eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
       turnScopeId: event.turnScopeId,
       messageId: event.messageId,
     },

@@ -14,6 +14,7 @@ import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } fro
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
 import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 
 export function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -200,7 +201,7 @@ export async function persistWorkflowNodeResultAttachment({
     ],
     nextSteps: [],
     forceAttachment: true,
-    attachmentSource: "model",
+    attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: "workflow_node_agent_result",
     source: "plugin",
     reason: "workflow_node_agent_result",
@@ -282,7 +283,7 @@ async function upsertWorkflowMessage({
       ],
       nextSteps: [],
       forceAttachment: true,
-      attachmentSource: "model",
+      attachmentSource: ATTACHMENT_SOURCE.MODEL,
       generationSource: `workflow_${normalizedPhase}_attachment_summary`,
       source: "plugin",
       reason: `workflow_${normalizedPhase}_attachment_summary`,

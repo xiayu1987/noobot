@@ -20,6 +20,7 @@ import {
   createScopedSubSessionEventListener,
 } from "./detached-subsession-events.js";
 import { createExecutionFailure } from "../../shared/errors/index.js";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
 
@@ -64,7 +65,8 @@ async function transferCanonicalAttachment({
   if (attachmentSessionId === subSessionId) return attachment;
   assertParentAttachmentOwnership(attachmentSessionId, parentSessionId);
   assertCanonicalAttachmentService(attachmentService);
-  const attachmentSource = String(attachment?.attachmentSource || "user").trim() || "user";
+  const attachmentSource =
+    String(attachment?.attachmentSource || ATTACHMENT_SOURCE.USER).trim() || ATTACHMENT_SOURCE.USER;
   const parentRecord = await attachmentService.getAttachmentById({
     userId,
     attachmentId,
@@ -82,7 +84,7 @@ async function transferCanonicalAttachment({
   const [transferred] = await attachmentService.ingest({
     userId,
     sessionId: subSessionId,
-    attachmentSource: "user",
+    attachmentSource: ATTACHMENT_SOURCE.USER,
     attachmentPolicy:
       attachmentPolicy && typeof attachmentPolicy === "object" ? attachmentPolicy : {},
     attachments: [

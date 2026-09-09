@@ -4,32 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
+import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
+import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const violations = [];
+const guard = createGuardViolations({ root: ROOT, label: "agent-context-boundary" });
+const { violations } = guard;
+const sourceFiles = createRelativeSourceCollector({
+  root: ROOT,
+  extensions: new Set([".js", ".mjs"]),
+});
 
-async function sourceFiles(directory) {
-  const entries = await readdir(path.join(ROOT, directory), { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const relative = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...(await sourceFiles(relative)));
-    else if (/\.(?:js|mjs)$/.test(entry.name)) files.push(relative);
-  }
-  return files;
-}
-
-async function assertAbsent(relative) {
-  try {
-    await access(path.join(ROOT, relative));
-    violations.push(`${relative}: obsolete boundary adapter must be removed`);
-  } catch {
-    void 0;
-  }
-}
+const assertAbsent = (relativePath) =>
+  guard.assertAbsent(relativePath, "obsolete boundary adapter must be removed");
 
 for (const file of await sourceFiles("context-protocol/src")) {
   const text = await readFile(path.join(ROOT, file), "utf8");
@@ -94,9 +83,4 @@ for (const file of await sourceFiles("agent/src")) {
   }
 }
 
-if (violations.length) {
-  console.error(violations.join("\n"));
-  process.exitCode = 1;
-} else {
-  console.log("[agent-context-boundary] ok");
-}
+guard.report();

@@ -9,6 +9,7 @@ import { tEngine } from "../../runtime/i18n-adapter.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../shared/utils/mime-utils.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -191,7 +192,7 @@ export async function persistModelGeneratedArtifacts({
   const attachmentRecords = await attachmentService.ingestGeneratedArtifacts({
     userId,
     sessionId: ownership.sessionId,
-    attachmentSource: "model",
+    attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: "llm_output",
     turnScope: {
       sessionId: ownership.sessionId,

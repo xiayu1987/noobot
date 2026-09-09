@@ -10,6 +10,7 @@ import {
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
 import { sourceReferenceTransfer } from "@noobot/semantic-transfer-protocol";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 function plain(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -133,7 +134,7 @@ export async function normalizeToolResultOverflow({
     text: rawText,
     name: overflowArtifactName(call),
     mimeType: "text/plain",
-    attachmentSource: "model",
+    attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: "tool_result_overflow",
     source: "tool",
     reason: "tool_result_overflow",

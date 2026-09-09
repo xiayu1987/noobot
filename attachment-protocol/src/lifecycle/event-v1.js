@@ -13,7 +13,7 @@ import {
   requireNonEmptyString,
   requirePlainObject,
 } from "../protocol-utils.js";
-import { ATTACHMENT_EVENT_STATUS } from "./transition-table.js";
+import { ATTACHMENT_EVENT_STATUS, ATTACHMENT_EVENT_TYPE } from "./transition-table.js";
 export const ATTACHMENT_LIFECYCLE_WIRE_EVENT = "attachment_lifecycle";
 const FIELDS = new Set([
   "eventType",
@@ -39,7 +39,7 @@ export function createAttachmentLifecycleEvent(value) {
   const identity = parseAttachmentIdentity(s.identity);
   let relation;
   if (s.relation !== undefined) relation = parseAttachmentRelation(s.relation);
-  if (eventType === "attachment.parsed") {
+  if (eventType === ATTACHMENT_EVENT_TYPE.PARSED) {
     if (!relation || relation.relationType !== ATTACHMENT_RELATION_TYPE.PARSED_RESULT)
       throw new AttachmentProtocolError("attachment_parsed_relation_required");
     if (!sameAttachmentIdentity(relation.sourceIdentity, identity))

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 
 export async function resolveAttachments({
@@ -31,7 +32,7 @@ export async function resolveAttachments({
     ? await attachmentService.ingest({
         userId,
         sessionId: sessionId || "",
-        attachmentSource: "user",
+        attachmentSource: ATTACHMENT_SOURCE.USER,
         attachments: rawAttachments,
         attachmentPolicy,
       })

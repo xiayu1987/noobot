@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { asEventProtocolEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
+import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
 import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import { recordServiceWebSocketSendFailure } from "./runtime-events.js";
@@ -128,7 +129,7 @@ function logRejectedTransport({
 function enrichTransportData(eventName, data, protocolEnvelope, authoritativeEvent, sequence) {
   if (
     protocolEnvelope ||
-    eventName === "attachment_lifecycle" ||
+    eventName === ATTACHMENT_LIFECYCLE_WIRE_EVENT ||
     usesExactAgentTransportPayload(eventName)
   ) {
     return data;

@@ -9,7 +9,11 @@ import { isEventProtocolEnvelope } from "@noobot/event-protocol";
 const text = (value) => String(value || "").trim();
 const TURN_KEY_PREFIX = "__turn__";
 
-export function createTurnIdentity({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
+export function createTurnIdentity({
+  sessionId = "",
+  turnScopeId = "",
+  dialogProcessId = "",
+} = {}) {
   const identity = Object.freeze({
     sessionId: text(sessionId),
     turnScopeId: text(turnScopeId),

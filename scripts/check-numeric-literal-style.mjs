@@ -4,14 +4,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import {
+  collectSourceFiles,
+  ignorePathParts,
+  MISSING_DIRECTORY_POLICY,
+} from "./lib/guard-scan.mjs";
 
 function resolveRepoRoot() {
   const cwd = process.cwd();
   if (exists(path.join(cwd, "package.json")) && exists(path.join(cwd, "scripts"))) return cwd;
   const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts"))) return parent;
+  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts")))
+    return parent;
   return cwd;
 }
 
@@ -25,42 +31,21 @@ function exists(filePath) {
 }
 
 const ROOT = resolveRepoRoot();
-const TARGET_DIRS = ["agent", "service", "agent-proxy", "model-proxy", "client", "plugin", "workflow", "i18n"];
-const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const IGNORE_PATH_PARTS = [
-  `${path.sep}node_modules${path.sep}`,
-  `${path.sep}.git${path.sep}`,
-  `${path.sep}dist${path.sep}`,
-  `${path.sep}build${path.sep}`,
-  `${path.sep}coverage${path.sep}`,
-  `${path.sep}vendor${path.sep}`,
-  `${path.sep}out${path.sep}`,
+const TARGET_DIRS = [
+  "agent",
+  "service",
+  "agent-proxy",
+  "model-proxy",
+  "client",
+  "plugin",
+  "workflow",
+  "i18n",
 ];
+const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
+const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "out"]);
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
-}
-
-function walk(dir, out = []) {
-  let entries = [];
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (IGNORE_PATH_PARTS.some((part) => full.includes(part))) continue;
-    if (entry.isDirectory()) {
-      walk(full, out);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (!CODE_EXT.has(path.extname(entry.name).toLowerCase())) continue;
-    out.push(full);
-  }
-  return out;
 }
 
 function isDigit(char) {
@@ -136,7 +121,7 @@ function scanCodeTokens(filePath, text) {
       state = "lineComment";
       continue;
     }
-    if (char === "\"" || char === "'") {
+    if (char === '"' || char === "'") {
       state = "string";
       quote = char;
       continue;
@@ -169,11 +154,18 @@ function scanCodeTokens(filePath, text) {
   return violations;
 }
 
-const files = [];
-for (const dir of TARGET_DIRS) {
-  const full = path.join(ROOT, dir);
-  if (!exists(full)) continue;
-  walk(full, files);
+const files = collectSourceFiles(
+  TARGET_DIRS.map((dir) => path.join(ROOT, dir)),
+  {
+    extensions: CODE_EXT,
+    ignoredPathParts: IGNORE_PATH_PARTS,
+    missingDirectory: MISSING_DIRECTORY_POLICY.SKIP_UNREADABLE,
+  },
+);
+if (!files.length) {
+  console.error("[check-numeric-literal-style] failed");
+  console.error("no source files matched the scan targets; check TARGET_DIRS");
+  process.exit(1);
 }
 
 const violations = [];
@@ -183,7 +175,9 @@ for (const file of files) {
 }
 
 if (violations.length) {
-  console.error("[check-numeric-literal-style] numeric separators are not allowed in code literals:");
+  console.error(
+    "[check-numeric-literal-style] numeric separators are not allowed in code literals:",
+  );
   for (const item of violations) {
     console.error(`- ${item.file}:${item.line}:${item.column} ${item.token}`);
   }

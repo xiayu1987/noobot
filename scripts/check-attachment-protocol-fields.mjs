@@ -4,8 +4,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { collectSourceFiles, ignorePathParts } from "./lib/guard-scan.mjs";
 
 function exists(filePath) {
   try {
@@ -39,17 +40,7 @@ const TARGET_DIRS = [
   "plugin/noobot-plugin-workflow/frontend",
 ];
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
-const IGNORE_PATH_PARTS = [
-  `${path.sep}node_modules${path.sep}`,
-  `${path.sep}.git${path.sep}`,
-  `${path.sep}dist${path.sep}`,
-  `${path.sep}build${path.sep}`,
-  `${path.sep}coverage${path.sep}`,
-  `${path.sep}vendor${path.sep}`,
-  `${path.sep}generated${path.sep}`,
-  `${path.sep}__tests__${path.sep}`,
-  `${path.sep}tests${path.sep}`,
-];
+const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "generated", "__tests__", "tests"]);
 
 const LEGACY_ATTACHMENT_FIELD_PATTERNS = [
   { field: "attachment_id", regex: /\battachment_id\b/ },
@@ -65,25 +56,23 @@ const LEGACY_ATTACHMENT_FIELD_PATTERNS = [
   { field: "parsed_from_attachment_ids", regex: /\bparsed_from_attachment_ids\b/ },
 ];
 
+const ATTACHMENT_SOURCE_LITERAL_PATTERNS = [
+  {
+    field: "attachmentSource_literal_assignment",
+    regex: /\battachmentSource\b\s*:\s*(["'`])(?:model|user|subtask|email)\1/,
+  },
+  {
+    field: "attachmentSource_literal_comparison",
+    regex: /\battachmentSource\b[^\n]*?[=!]==?\s*(["'`])(?:model|user|subtask|email)\1/,
+  },
+  {
+    field: "attachmentSource_literal_comparison_reversed",
+    regex: /(["'`])(?:model|user|subtask|email)\1\s*[=!]==?\s*[^\n]*?\battachmentSource\b/,
+  },
+];
+
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
-}
-
-function walk(dir, out = []) {
-  if (!existsSync(dir)) return out;
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (IGNORE_PATH_PARTS.some((part) => full.includes(part))) continue;
-    if (entry.isDirectory()) {
-      walk(full, out);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (!CODE_EXT.has(path.extname(entry.name).toLowerCase())) continue;
-    out.push(full);
-  }
-  return out;
 }
 
 const violations = [];
@@ -98,22 +87,27 @@ for (const relativePath of FORBIDDEN_PROTOCOL_FILES) {
     });
   }
 }
-for (const relDir of TARGET_DIRS) {
-  const dir = path.join(ROOT, relDir);
-  for (const file of walk(dir)) {
-    const rel = toPosix(path.relative(ROOT, file));
-    const lines = readFileSync(file, "utf8").split(/\r?\n/);
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index];
-      for (const item of LEGACY_ATTACHMENT_FIELD_PATTERNS) {
-        if (!item.regex.test(line)) continue;
-        violations.push({
-          field: item.field,
-          file: rel,
-          line: index + 1,
-          text: line.trim(),
-        });
-      }
+const FORBIDDEN_LINE_PATTERNS = [
+  ...LEGACY_ATTACHMENT_FIELD_PATTERNS,
+  ...ATTACHMENT_SOURCE_LITERAL_PATTERNS,
+];
+const scannedFiles = collectSourceFiles(
+  TARGET_DIRS.map((relDir) => path.join(ROOT, relDir)),
+  { extensions: CODE_EXT, ignoredPathParts: IGNORE_PATH_PARTS },
+);
+if (!scannedFiles.length) {
+  console.error("[check-attachment-protocol-fields] failed");
+  console.error("no source files matched the scan targets; check TARGET_DIRS");
+  process.exit(1);
+}
+for (const file of scannedFiles) {
+  const rel = toPosix(path.relative(ROOT, file));
+  const lines = readFileSync(file, "utf8").split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    for (const item of FORBIDDEN_LINE_PATTERNS) {
+      if (!item.regex.test(line)) continue;
+      violations.push({ field: item.field, file: rel, line: index + 1, text: line.trim() });
     }
   }
 }

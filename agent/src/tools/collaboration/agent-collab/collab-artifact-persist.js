@@ -5,6 +5,7 @@
  */
 import { Buffer } from "node:buffer";
 import { runBestEffort } from "@noobot/shared/best-effort";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -160,7 +161,7 @@ export function createCollabArtifactPersistor({
       const records = await attachmentService.ingestGeneratedArtifacts({
         userId,
         sessionId: attachmentSessionId,
-        attachmentSource: "subtask",
+        attachmentSource: ATTACHMENT_SOURCE.SUBTASK,
         generationSource: ASYNC_SUBTASK_RESULT_GENERATION_SOURCE,
         artifacts: generatedAttachments,
       });

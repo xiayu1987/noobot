@@ -4,8 +4,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { collectSourceFiles, ignorePathParts } from "./lib/guard-scan.mjs";
 
 const ROOT = process.cwd();
 const TARGET_DIRS = ["agent", "service", "agent-proxy", "client", "plugin"];
@@ -25,33 +26,7 @@ const LEGACY_KEYS = [
   "timeout_ms",
 ];
 
-const ALLOW_PATH_PARTS = [
-  `${path.sep}__tests__${path.sep}`,
-  `${path.sep}docs${path.sep}`,
-  `${path.sep}config${path.sep}`,
-  `${path.sep}node_modules${path.sep}`,
-  `${path.sep}.git${path.sep}`,
-  `${path.sep}dist${path.sep}`,
-  `${path.sep}build${path.sep}`,
-  `${path.sep}coverage${path.sep}`,
-];
-
-function walk(dir, out = []) {
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (ALLOW_PATH_PARTS.some((part) => full.includes(part))) continue;
-      walk(full, out);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    const ext = path.extname(entry.name).toLowerCase();
-    if (!CODE_EXT.has(ext)) continue;
-    out.push(full);
-  }
-  return out;
-}
+const ALLOW_PATH_PARTS = ignorePathParts(["__tests__", "docs", "config"]);
 
 function isAllowedLine(line = "") {
   const text = String(line || "");
@@ -70,7 +45,9 @@ function detectViolations(filePath) {
     const line = lines[index];
     for (const legacyKey of LEGACY_KEYS) {
       const directDot = new RegExp(`\\.${legacyKey}\\b`);
-      const directBracket = new RegExp(`\\b[A-Za-z_$][\\w$]*\\s*\\[\\s*["']${legacyKey}["']\\s*\\]`);
+      const directBracket = new RegExp(
+        `\\b[A-Za-z_$][\\w$]*\\s*\\[\\s*["']${legacyKey}["']\\s*\\]`,
+      );
       if (!directDot.test(line) && !directBracket.test(line)) continue;
       if (isAllowedLine(line)) continue;
       violations.push({
@@ -84,7 +61,7 @@ function detectViolations(filePath) {
 }
 
 function run() {
-  const files = [];
+  const targets = [];
   for (const dir of TARGET_DIRS) {
     const full = path.join(ROOT, dir);
     try {
@@ -92,7 +69,18 @@ function run() {
     } catch {
       continue;
     }
-    walk(full, files);
+    targets.push(full);
+  }
+
+  const files = collectSourceFiles(targets, {
+    extensions: CODE_EXT,
+    ignoredPathParts: ALLOW_PATH_PARTS,
+  });
+
+  if (!files.length) {
+    console.error("[check-legacy-time-keys] No source files scanned; check TARGET_DIRS.");
+    process.exitCode = 1;
+    return;
   }
 
   const allViolations = [];

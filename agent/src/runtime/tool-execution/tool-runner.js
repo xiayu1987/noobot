@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { isFatalError } from "../../shared/errors/index.js";
 import {
@@ -151,7 +152,7 @@ async function materializeToolOutputArtifacts({
     agentContext,
     userId: String(runtime?.userId || runtime?.systemRuntime?.userId || "").trim(),
     artifacts,
-    attachmentSource: "model",
+    attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: `${toolName}_output`,
     source: "tool",
     reason: "tool_output_artifact",

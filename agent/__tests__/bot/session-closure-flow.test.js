@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
+import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
@@ -187,7 +188,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
               {
                 attachmentId: "att-out-1",
                 sessionId,
-                attachmentSource: "model_generated",
+                attachmentSource: ATTACHMENT_SOURCE.MODEL,
                 name: "result.png",
                 mimeType: "image/png",
                 size: 2048,

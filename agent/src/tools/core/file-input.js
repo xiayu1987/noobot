@@ -5,6 +5,7 @@
  */
 import {
   ATTACHMENT_IDENTITY_REF_PREFIX,
+  ATTACHMENT_SOURCE,
   parseAttachmentIdentityRef,
 } from "@noobot/attachment-protocol";
 import { filePath as path, resolvePathRef } from "@noobot/path-resolver";
@@ -106,5 +107,5 @@ export async function resolveFileInput({
 }
 
 export function isUserAttachment(attachmentMeta = null) {
-  return String(attachmentMeta?.attachmentSource || "").trim() === "user";
+  return String(attachmentMeta?.attachmentSource || "").trim() === ATTACHMENT_SOURCE.USER;
 }
