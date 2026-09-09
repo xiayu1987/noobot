@@ -9,31 +9,19 @@ import {
   attachmentIdentityKey,
 } from "@noobot/attachment-protocol";
 import { assertSemanticTransferRegistration } from "./registry.js";
+import {
+  TRANSFER_PROTOCOL,
+  TRANSFER_VERSION,
+  TRANSFER_DIRECTION,
+  TRANSFER_MODE,
+} from "./constants.js";
 export * from "./registry.js";
 export * from "./policy.js";
-
-export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
-export const TRANSFER_VERSION = 2;
-export const TRANSFER_DIRECTION = Object.freeze({
-  INPUT: "input",
-  OUTPUT: "output",
-});
-export const TRANSFER_MODE = Object.freeze({
-  DIRECT: "direct",
-  ATTACHMENT: "attachment",
-  SOURCE_REFERENCE: "source_reference",
-});
-export const TRANSFER_SOURCE = Object.freeze({
-  USER: "user",
-  SYSTEM: "system",
-  AGENT: "agent",
-  SUBAGENT: "subagent",
-  MODEL: "model",
-  TOOL: "tool",
-  PLUGIN: "plugin",
-  SERVICE: "service",
-  CONNECTOR: "connector",
-});
+export * from "./constants.js";
+export * from "./vocabulary.js";
+export * from "./policies/transfer-envelope-fields.js";
+export * from "./policies/transfer-intent.js";
+export * from "./policies/transfer-result.js";
 
 const PRODUCER_KEYS = new Set(["type", "id"]);
 const INTENT_KEYS = new Set([

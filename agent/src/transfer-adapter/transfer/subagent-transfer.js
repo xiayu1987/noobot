@@ -5,14 +5,12 @@
  */
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
-  TRANSFER_REASON,
-} from "../core/constants.js";
-import {
   directTransfer,
+  resolveTransferIntent,
+  TRANSFER_REASON,
   TRANSFER_SOURCE,
   validateTransferEnvelope,
 } from "@noobot/semantic-transfer-protocol";
-import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { firstNormalizedString } from "../core/compact.js";
@@ -90,8 +88,7 @@ export async function transferBotPluginSubagentResult({
   for (const [index, item] of normalizedMessages.entries()) {
     const text = String(item?.content || "");
     if (!text) continue;
-    if (!item.id)
-      throw new Error("semantic_transfer_subagent_message_identity_required");
+    if (!item.id) throw new Error("semantic_transfer_subagent_message_identity_required");
     const itemIdentity = {
       ...identity,
       transferId: `${identity.transferId}:subagent:${item.id}`,
@@ -122,12 +119,7 @@ export async function transferBotPluginSubagentResult({
 
     const name = [
       "bot-plugin-node",
-      firstNormalizedString(
-        item?.nodeName,
-        item?.nodeId,
-        item?.id,
-        String(index + 1),
-      )
+      firstNormalizedString(item?.nodeName, item?.nodeId, item?.id, String(index + 1))
         .replace(/\s+/g, "-")
         .toLowerCase(),
       "result.md",
@@ -165,16 +157,12 @@ export async function transferBotPluginSubagentResult({
     const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
       ? persisted.transferEnvelopes
       : [];
-    transferEnvelopes.forEach((envelope) =>
-      validateTransferEnvelope(envelope, { strict: true }),
-    );
+    transferEnvelopes.forEach((envelope) => validateTransferEnvelope(envelope, { strict: true }));
     persistedItems.push({ ...item, transferEnvelopes });
   }
 
   const transferEnvelopes = persistedItems
-    .flatMap((item = {}) =>
-      Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : [],
-    )
+    .flatMap((item = {}) => (Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : []))
     .filter(isPlainObject);
   await emitSemanticTransferValidation({
     runtime,

@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
+import {
+  NODE_RESULT_FIRST_FIELDS,
+  pickTransferEnvelopeList,
+} from "@noobot/semantic-transfer-protocol";
 import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessId.js";
 
 function normalizeRuntimeStatusInput(item = {}) {
@@ -42,11 +46,9 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
     ).trim(),
     dialogProcessId,
     sessionId: String(item?.nodeSessionId || item?.sessionId || "").trim(),
-    transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
-      ? item.nodeResultTransferEnvelopes
-      : Array.isArray(item?.transferEnvelopes)
-        ? item.transferEnvelopes
-        : [],
+    transferEnvelopes: pickTransferEnvelopeList(item, NODE_RESULT_FIRST_FIELDS, {
+      skipEmpty: false,
+    }),
     status: String(item?.status || "").trim(),
     stepFailure:
       item?.stepFailure && typeof item.stepFailure === "object" ? item.stepFailure : null,

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  collectAllTransferEnvelopeLists,
   getTransferAttachmentReferences as getCanonicalTransferAttachmentReferences,
   mergeTransferEnvelopes,
   normalizeTransferEnvelopes as normalizeCanonicalTransferEnvelopes,
@@ -14,19 +15,16 @@ function normalizeTransferEnvelopes(value = null) {
 }
 
 function getMessageTransferEnvelopes(messageItem = {}) {
-  const values = [
-    messageItem?.transferEnvelopes,
-    messageItem?.payload?.transferEnvelopes,
-    messageItem?.pluginMeta?.payload?.transferEnvelopes,
-    messageItem?.pluginMeta?.payload?.nodeResultTransferEnvelopes,
-  ];
-  for (const run of messageItem?.pluginMeta?.payload?.execution?.nodeAgentRuns || []) {
-    values.push(run?.transferEnvelopes, run?.nodeResultTransferEnvelopes);
-  }
-  for (const session of messageItem?.pluginMeta?.payload?.nodeSessions || []) {
-    values.push(session?.transferEnvelopes, session?.nodeResultTransferEnvelopes);
-  }
-  return mergeTransferEnvelopes(...values);
+  const pluginPayload = messageItem?.pluginMeta?.payload;
+  return mergeTransferEnvelopes(
+    ...collectAllTransferEnvelopeLists([
+      messageItem,
+      messageItem?.payload,
+      pluginPayload,
+      ...(pluginPayload?.execution?.nodeAgentRuns || []),
+      ...(pluginPayload?.nodeSessions || []),
+    ]),
+  );
 }
 
 function getTransferAttachmentReferences(value = null) {
@@ -34,7 +32,9 @@ function getTransferAttachmentReferences(value = null) {
 }
 
 function getTransferAttachments(value = null) {
-  const envelopes = Array.isArray(value) ? normalizeTransferEnvelopes(value) : getMessageTransferEnvelopes(value);
+  const envelopes = Array.isArray(value)
+    ? normalizeTransferEnvelopes(value)
+    : getMessageTransferEnvelopes(value);
   return envelopes.flatMap((envelope) => {
     if (envelope.payload.mode !== "attachment") return [];
     return envelope.payload.attachments.map((reference) => ({

@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+  TRANSFER_ENVELOPE_FIELD,
+  collectTransferEnvelopeLists,
+  pickTransferEnvelopeList,
+} from "@noobot/semantic-transfer-protocol";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 
@@ -68,9 +73,7 @@ function buildNodeSessionRecord({ ctx, item, nodeState, semanticNode }) {
     startedAt: text(nodeState?.startedAt),
     completedAt: text(nodeState?.completedAt),
     updatedAt: text(nodeState?.updatedAt),
-    transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
-      ? item.nodeResultTransferEnvelopes
-      : [],
+    transferEnvelopes: pickTransferEnvelopeList(item, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
     stepFailure: resolveFailure(item?.stepFailure),
     parallelWave: Number(item?.parallelWave || 0),
     waveOrder: Number(item?.waveOrder || 0),
@@ -112,15 +115,7 @@ export function buildWorkflowNodeSessions({
 }
 
 export function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = []) {
-  return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : []).flatMap((item = {}) => {
-    if (
-      Array.isArray(item?.nodeResultTransferEnvelopes) &&
-      item.nodeResultTransferEnvelopes.length
-    ) {
-      return item.nodeResultTransferEnvelopes;
-    }
-    return [];
-  });
+  return collectTransferEnvelopeLists(nodeAgentRuns, TRANSFER_ENVELOPE_FIELD.NODE_RESULT);
 }
 
 export function enrichWorkflowPayload({

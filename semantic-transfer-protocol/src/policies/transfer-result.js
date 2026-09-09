@@ -57,16 +57,3 @@ export function createTransferResult({
   if (Object.keys(normalizedMeta).length) result.meta = normalizedMeta;
   return result;
 }
-
-export function transferOk(envelope = null, status = TRANSFER_RESULT_STATUS.DIRECT, meta = {}) {
-  return createTransferResult({ ok: true, status, envelope, meta });
-}
-
-export function transferFailed(error = null, meta = {}) {
-  return createTransferResult({
-    ok: false,
-    status: TRANSFER_RESULT_STATUS.FAILED,
-    error,
-    meta,
-  });
-}

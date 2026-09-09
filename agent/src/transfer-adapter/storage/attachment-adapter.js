@@ -7,11 +7,11 @@ import { Buffer } from "node:buffer";
 import {
   createAttachmentReference,
   createTransferEnvelope,
+  DEFAULT_TRANSFER_MIME_TYPE,
   directTransfer,
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
 import { AttachmentService } from "../../artifacts/service/attachment-service.js";
-import { DEFAULT_TRANSFER_MIME_TYPE } from "../core/constants.js";
 
 function text(value = "") {
   return String(value ?? "").trim();
