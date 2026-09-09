@@ -5,8 +5,8 @@
  */
 import { normalizeSlashPath } from "./platform.js";
 import {
-  EXECUTION_ISOLATION_MODE,
   WORKSPACE_SANDBOX_PATHS,
+  isSandboxIsolationMode,
   resolveExecutionIsolation,
   resolveSandboxMountMappings,
   resolveWorkspaceSandboxLayout,
@@ -28,7 +28,7 @@ function resolveConfiguredMountMappings(runtime = {}) {
 
 export function resolveSandboxUserRoot(runtime = {}) {
   const isolation = resolveExecutionIsolation(runtime?.globalConfig || {});
-  if (isolation.mode !== EXECUTION_ISOLATION_MODE.SANDBOX) return "";
+  if (!isSandboxIsolationMode(isolation.mode)) return "";
   return resolveWorkspaceSandboxLayout({
     isolation,
     userId: resolveRuntimeUserId({ runtime }),
@@ -105,7 +105,7 @@ export function resolveSandboxPath({
   runtime = {},
 } = {}) {
   const isolation = resolveExecutionIsolation(runtime?.globalConfig || {});
-  if (isolation.mode !== EXECUTION_ISOLATION_MODE.SANDBOX) return "";
+  if (!isSandboxIsolationMode(isolation.mode)) return "";
   const sandboxRoot = WORKSPACE_SANDBOX_PATHS.ROOT;
 
   const normalizedHostPath = normalizeSlashPath(hostPath || path);
@@ -141,7 +141,7 @@ export function resolveSandboxPath({
 
 export function resolveHostPath({ path = "", sandboxPath = "", runtime = {} } = {}) {
   const isolation = resolveExecutionIsolation(runtime?.globalConfig || {});
-  if (isolation.mode !== EXECUTION_ISOLATION_MODE.SANDBOX) return "";
+  if (!isSandboxIsolationMode(isolation.mode)) return "";
   const normalizedSandboxPath = normalizeSlashPath(sandboxPath || path);
   if (!normalizedSandboxPath) return "";
 

@@ -10,3 +10,15 @@ export const TOOL_EXECUTION_VIEW = Object.freeze({
   SERVICE_HOST_RESTRICTED: "service_host_restricted",
   NATIVE_HOST_RESTRICTED: "native_host_restricted",
 });
+
+function normalizeExecutionView(input = "") {
+  return String(input || "").trim();
+}
+
+export function isSandboxExecutionView(executionView = "") {
+  return normalizeExecutionView(executionView) === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
+}
+
+export function isRestrictedHostExecutionView(executionView = "") {
+  return normalizeExecutionView(executionView) === TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED;
+}

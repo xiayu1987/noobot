@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TOOL_EXECUTION_VIEW } from "@noobot/execution-isolation-protocol/execution-views";
+import { isRestrictedHostExecutionView } from "@noobot/execution-isolation-protocol/execution-views";
 
 export const SECURITY_ASSESSMENT_PROTOCOL_NAME = "noobot.security-assessment";
 export const SECURITY_ASSESSMENT_PROTOCOL_VERSION = 1;
@@ -114,7 +114,7 @@ export function classifyToolExecutionRisk({ toolName = "", executionView = "" } 
   const name = text(toolName);
   const view = text(executionView);
   if (name === "execute_script") {
-    return view === TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED
+    return isRestrictedHostExecutionView(view)
       ? SECURITY_RISK_LEVEL.CRITICAL
       : SECURITY_RISK_LEVEL.MEDIUM;
   }

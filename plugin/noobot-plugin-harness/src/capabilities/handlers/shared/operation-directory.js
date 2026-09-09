@@ -6,7 +6,7 @@
 import path from "node:path";
 import { resolveRuntimePathContext } from "@noobot/path-resolver";
 import {
-  EXECUTION_ISOLATION_MODE,
+  isSandboxIsolationMode,
   WORKSPACE_SANDBOX_PATHS,
   resolveExecutionIsolation,
   resolveToolExecutionPolicy,
@@ -43,7 +43,7 @@ export function resolveOperationDirectoryContext(ctx = {}) {
     ? normalizePath(path.join(hostBasePath, relativePath))
     : normalizePath(ctx?.agentContext?.context?.environment?.workspace?.cwd || "");
   const isolation = resolveExecutionIsolation(runtime.globalConfig || {});
-  const sandboxEnabled = isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX;
+  const sandboxEnabled = isSandboxIsolationMode(isolation.mode);
   const pathContext = resolveRuntimePathContext({
     runtime,
     agentContext: ctx?.agentContext || null,

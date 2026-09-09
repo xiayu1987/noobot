@@ -7,7 +7,7 @@ import { createSessionFacade, createSessionServices } from "../session/index.js"
 import { MemoryManager } from "../memory/index.js";
 import { AttachmentService } from "../artifacts/index.js";
 import { SkillService } from "../skills/index.js";
-import { ConfigService, mergeConfig } from "../config/index.js";
+import { ConfigService, WORKSPACE_SANDBOX_PATHS, mergeConfig } from "../config/index.js";
 import { SystemErrorLogger } from "../observability/index.js";
 import { AsyncJobManager } from "./async-job-manager.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
@@ -159,14 +159,12 @@ export class BotManager {
 
     const semanticTransferRoot = path.join(
       basePath,
-      "runtime",
-      "ops_workdir",
+      ...WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE.split("/"),
       ".semantic-transfer",
     );
     const legacyOverflowRoot = path.join(
       basePath,
-      "runtime",
-      "ops_workdir",
+      ...WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE.split("/"),
       ".tool-result-overflow",
     );
     const deletedSessionIds = [];
