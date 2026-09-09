@@ -7,6 +7,8 @@ import { summarizeDiagnosticMessages } from "@noobot/shared/message-diagnostics"
 import {
   createModelRequest,
   createModelResponse,
+  MODEL_ATTEMPT_KIND,
+  MODEL_ATTEMPT_STATUS,
   MODEL_OPERATION_KIND,
   MODEL_ERROR_CODE,
   MODEL_ERROR_KIND,
@@ -146,13 +148,13 @@ export function createModelRequestExecutor({
               const classification = adapter.classifyError(error);
               attempts.push({
                 attempt,
-                status: "failed",
-                kind: "transport",
+                status: MODEL_ATTEMPT_STATUS.FAILED,
+                kind: MODEL_ATTEMPT_KIND.TRANSPORT,
                 streaming: false,
                 error: {
                   message: String(error?.message || error || "model operation failed"),
                   retryable: classification?.retryable === true,
-                  kind: String(classification?.kind || "unknown"),
+                  kind: String(classification?.kind || MODEL_ERROR_KIND.UNKNOWN),
                 },
               });
               throw error;
@@ -162,8 +164,8 @@ export function createModelRequestExecutor({
         const output = normalizeModelOutput({ content: result.value?.rawText || "" });
         attempts.push({
           attempt: totalAttempts,
-          status: "completed",
-          kind: requestBase.operation.kind,
+          status: MODEL_ATTEMPT_STATUS.COMPLETED,
+          kind: MODEL_ATTEMPT_KIND.RESPONSE,
           streaming: false,
           output,
         });
@@ -261,13 +263,13 @@ export function createModelRequestExecutor({
               const classification = adapter.classifyError(error);
               attempts.push({
                 attempt,
-                status: "failed",
-                kind: "transport",
+                status: MODEL_ATTEMPT_STATUS.FAILED,
+                kind: MODEL_ATTEMPT_KIND.TRANSPORT,
                 streaming,
                 error: {
                   message: String(error?.message || error || "model attempt failed"),
                   retryable: classification?.retryable === true,
-                  kind: String(classification?.kind || "unknown"),
+                  kind: String(classification?.kind || MODEL_ERROR_KIND.UNKNOWN),
                 },
               });
               throw error;
@@ -282,15 +284,15 @@ export function createModelRequestExecutor({
         ) {
           attempts.push({
             attempt: totalAttempts,
-            status: "retry",
-            kind: "tool_call_streaming_mismatch",
+            status: MODEL_ATTEMPT_STATUS.RETRY,
+            kind: MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH,
             streaming,
             output,
           });
           mismatchAttempts += 1;
           streaming = retry.toolCallMismatch.downgradeStreaming === true ? false : streaming;
           observe("model.invocation.semantic_retry", {
-            kind: "tool_call_streaming_mismatch",
+            kind: MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH,
             attempt: totalAttempts,
             nextStreaming: streaming,
           });
@@ -301,15 +303,15 @@ export function createModelRequestExecutor({
           if (semanticAttempts < retry.reasoningOnly.maxAttempts) {
             attempts.push({
               attempt: totalAttempts,
-              status: "retry",
-              kind: "reasoning_only",
+              status: MODEL_ATTEMPT_STATUS.RETRY,
+              kind: MODEL_ATTEMPT_KIND.REASONING_ONLY,
               streaming,
               output,
             });
             semanticAttempts += 1;
             messages = appendReasoningContext(messages, output.reasoning);
             observe("model.invocation.semantic_retry", {
-              kind: "reasoning_only",
+              kind: MODEL_ATTEMPT_KIND.REASONING_ONLY,
               attempt: totalAttempts,
             });
             continue;
@@ -321,8 +323,8 @@ export function createModelRequestExecutor({
           });
           attempts.push({
             attempt: totalAttempts,
-            status: "failed",
-            kind: "reasoning_only",
+            status: MODEL_ATTEMPT_STATUS.FAILED,
+            kind: MODEL_ATTEMPT_KIND.REASONING_ONLY,
             streaming,
             output,
           });
@@ -335,8 +337,8 @@ export function createModelRequestExecutor({
         }
         attempts.push({
           attempt: totalAttempts,
-          status: "completed",
-          kind: "response",
+          status: MODEL_ATTEMPT_STATUS.COMPLETED,
+          kind: MODEL_ATTEMPT_KIND.RESPONSE,
           streaming,
           output,
         });

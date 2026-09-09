@@ -8,6 +8,7 @@ import {
   buildModelReasoningEffortTransport,
   createModelRequest,
   createModelResponse,
+  MODEL_ATTEMPT_KIND,
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_INPUT_PROCESSING_KIND,
   MODEL_OPERATION_KIND,
@@ -280,7 +281,15 @@ test("model operation results are validated by operation kind", () => {
     operationKind: MODEL_OPERATION_KIND.WEB_SEARCH,
     output,
     result: { rawText: "answer", output: [{ type: "message" }] },
-    attempts: [{ attempt: 1, status: "completed", kind: "web_search", streaming: false, output }],
+    attempts: [
+      {
+        attempt: 1,
+        status: "completed",
+        kind: MODEL_ATTEMPT_KIND.RESPONSE,
+        streaming: false,
+        output,
+      },
+    ],
     model,
     provider: { operatorId: "openai", adapterId: "openai-compatible", format: "openai_compatible" },
   });
@@ -293,7 +302,13 @@ test("model operation results are validated by operation kind", () => {
         output,
         result: { imageArtifacts: [] },
         attempts: [
-          { attempt: 1, status: "completed", kind: "web_search", streaming: false, output },
+          {
+            attempt: 1,
+            status: "completed",
+            kind: MODEL_ATTEMPT_KIND.RESPONSE,
+            streaming: false,
+            output,
+          },
         ],
         model,
       }),
@@ -336,7 +351,15 @@ test("model response preserves structured provider content blocks", () => {
   const response = createModelResponse({
     invocation,
     output,
-    attempts: [{ attempt: 1, status: "completed", kind: "chat", streaming: false, output }],
+    attempts: [
+      {
+        attempt: 1,
+        status: "completed",
+        kind: MODEL_ATTEMPT_KIND.RESPONSE,
+        streaming: false,
+        output,
+      },
+    ],
     model,
     provider: { operatorId: "anthropic", adapterId: "anthropic-messages" },
   });

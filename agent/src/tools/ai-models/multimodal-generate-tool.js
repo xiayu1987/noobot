@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
+  MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_MULTIMODAL_MODALITY,
   MODEL_OPERATION_KIND,
   resolveModelMultimodalCapabilities,
@@ -353,7 +354,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             flow: MULTIMODAL_FLOW_NAME,
             purpose: MULTIMODAL_PURPOSE_NAME,
             domain: MULTIMODAL_DOMAIN_NAME,
-            contextSequencePolicy: "independent_request",
+            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
           },
         });
         const generationResult = response.result;

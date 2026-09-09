@@ -22,18 +22,18 @@ export const MODEL_ERROR_KIND = Object.freeze({
   UNKNOWN: "unknown",
 });
 export const MODEL_ERROR_CODE = Object.freeze({
+  PROTOCOL: "MODEL_PROTOCOL_ERROR",
   CREDENTIAL_MISSING: "MODEL_CREDENTIAL_MISSING",
   REASONING_RETRY_EXHAUSTED: "MODEL_REASONING_RETRY_EXHAUSTED",
 });
-export const MODEL_PURPOSE = Object.freeze({
-  MAIN_AGENT: "main_agent",
-  CAPABILITY: "capability",
-  WORKFLOW_PLAN: "workflow_plan",
-  WORKFLOW_REFINEMENT: "workflow_refinement",
-  WORKFLOW_GUIDANCE: "workflow_guidance",
-  WORKFLOW_ACCEPTANCE: "workflow_acceptance",
-  MEMORY: "memory",
-  DATA_PROCESSING: "data_processing",
-  COLLABORATION: "collaboration",
-  MCP: "mcp",
+export const MODEL_ATTEMPT_STATUS = Object.freeze({
+  COMPLETED: "completed",
+  FAILED: "failed",
+  RETRY: "retry",
+});
+export const MODEL_ATTEMPT_KIND = Object.freeze({
+  TRANSPORT: "transport",
+  RESPONSE: "response",
+  REASONING_ONLY: "reasoning_only",
+  TOOL_CALL_STREAMING_MISMATCH: "tool_call_streaming_mismatch",
 });
