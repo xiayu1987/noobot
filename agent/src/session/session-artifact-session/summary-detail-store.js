@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
+import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { compactThinkingTimeline } from "../session-summary-builders/message-summary-projection.js";
@@ -12,35 +12,21 @@ import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
 
 function resolveSummaryDetailPath(sessionDir = "", file = "") {
-  const reference = String(file || "").replaceAll("\\", "/");
-  const normalized = path.normalize(reference);
-  const root = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir);
-  const resolved = path.resolve(sessionDir, normalized);
-  if (
-    !reference ||
-    path.isAbsolute(reference) ||
-    reference.includes("\0") ||
-    normalized === "." ||
-    normalized.startsWith(`..${path.sep}`) ||
-    (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) ||
-    path.extname(resolved) !== ".json"
-  ) {
-    const error = new Error(`invalid session summary detail reference: ${reference}`);
-    error.code = "SESSION_SUMMARY_DETAIL_PATH_INVALID";
-    throw error;
-  }
-  return resolved;
+  return resolveScopedArtifactPath({
+    baseDir: sessionDir,
+    reference: file,
+    scopeDir: SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir,
+    extensions: [".json"],
+    errorCode: "SESSION_SUMMARY_DETAIL_PATH_INVALID",
+    errorLabel: "session summary detail reference",
+  });
 }
 
 function summaryDetailHash(payload) {
   return `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
 }
 
-export async function writeSessionSummaryDetails({
-  storageService,
-  sessionDir,
-  summaryPayload,
-}) {
+export async function writeSessionSummaryDetails({ storageService, sessionDir, summaryPayload }) {
   const detailsDir = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir);
   await mkdir(detailsDir, { recursive: true });
   const referenced = new Set();
