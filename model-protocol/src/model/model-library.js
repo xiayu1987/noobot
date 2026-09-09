@@ -13,11 +13,6 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-/**
- * The library is the source of the reasoning facts, so its declarations must
- * already be canonical: normalization here may confirm them but never alter
- * them.
- */
 function validateReasoningConfiguration(provider, label) {
   let normalized;
   try {
@@ -85,7 +80,6 @@ export function resolveModelLibraryProvider(alias = "") {
   return isPlainObject(provider) ? clone(provider) : null;
 }
 
-/** Resolve the canonical provider declaration for a configured concrete model. */
 export function resolveModelLibraryProviderByModel(model = "") {
   const identity = String(model || "")
     .trim()

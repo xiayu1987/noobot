@@ -71,8 +71,7 @@ function resolveProjectionTargets(messageEvent, context) {
   const targetMessages =
     context.findCanonicalMessagesById?.(targetSessionId, presentationMessageId) ||
     [context.findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
-  // The send flow creates the visible assistant projection before replay can materialize hidden
-  // tool records. Include that canonical object so live artifacts reach the rendered entity.
+
   addLiveBotProjection(targetMessages, targetSessionId, identity, context);
   return { presentationMessageId, targetSessionId, targetMessages };
 }

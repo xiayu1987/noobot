@@ -4,21 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * The single source of truth for explicit configuration FIELDS and STRUCTURE.
- *
- * This contract is deliberately value-free. It declares which fields exist,
- * their type, which scopes may carry them, and where a node opens into a
- * user-owned collection. It never declares a default or a selectable value:
- *
- * - Model values and options come from the model library.
- * - Every other value comes from `service/config/global.config.example.json`.
- *
- * Both value sources are consulted only when a target value is missing or
- * invalid. Structure is never inferred from any template, so adding a provider
- * to the global example cannot widen or narrow the field contract.
- */
-
 import { MODEL_PROVIDER_CONFIG_CONTRACT } from "@noobot/model-protocol";
 import {
   CONFIG_DOCUMENT_SCOPE,
@@ -42,14 +27,8 @@ export const CONFIG_STRUCTURE_KIND = Object.freeze({
 const { USER_OPTIONAL, GLOBAL_ONLY } = CONFIG_NODE_POLICY;
 const { BUILTIN, EXPLICIT } = CONFIG_ITEM_TYPE;
 
-/**
- * A node the global example does not declare. Built-in nodes are not repaired:
- * they are validated and preserved where present, and never added, because
- * repair only repairs explicit configuration.
- */
 const builtin = (options = {}) => ({ itemType: BUILTIN, policy: USER_OPTIONAL, ...options });
 
-/** A leaf field. `policy` defaults to user-configurable at every scope. */
 const field = (kind, options = {}) => Object.freeze({ kind, itemType: EXPLICIT, ...options });
 
 const string = (options) => field(CONFIG_STRUCTURE_KIND.STRING, options);
@@ -57,7 +36,6 @@ const boolean = (options) => field(CONFIG_STRUCTURE_KIND.BOOLEAN, options);
 const integer = (options) => field(CONFIG_STRUCTURE_KIND.INTEGER, options);
 const array = (options) => field(CONFIG_STRUCTURE_KIND.ARRAY, options);
 
-/** A fixed-shape object node. */
 const object = (fields, options = {}) =>
   Object.freeze({
     kind: CONFIG_STRUCTURE_KIND.OBJECT,
@@ -66,11 +44,6 @@ const object = (fields, options = {}) =>
     ...options,
   });
 
-/**
- * A node whose keys are user-owned. Entry keys are never part of the field
- * contract; only the entry's own shape is. `entryContract` names the contract
- * that governs one entry, so an unknown key is repaired rather than removed.
- */
 const collection = (entry, options = {}) =>
   Object.freeze({
     kind: CONFIG_STRUCTURE_KIND.COLLECTION,
@@ -79,7 +52,6 @@ const collection = (entry, options = {}) =>
     ...options,
   });
 
-/** A collection whose entries are bare model-reference strings. */
 const modelReferenceCollection = (options = {}) =>
   collection(string({ nonEmpty: true }), { modelReference: "model", ...options });
 
@@ -99,11 +71,6 @@ const endpointStructure = object({
   body_format: string(),
 });
 
-/**
- * Provider fields are owned by the model protocol, which is the field authority
- * for model facts. This node delegates to that contract instead of restating it,
- * so a provider field exists in exactly one place.
- */
 const MODEL_PROVIDER_STRUCTURE_REF = Object.freeze({
   kind: CONFIG_STRUCTURE_KIND.OBJECT,
   delegatedContract: MODEL_PROVIDER_CONFIG_CONTRACT,
@@ -120,7 +87,6 @@ const SECURITY_STRUCTURE = object(
       item: string({ nonEmpty: true }),
       policy: GLOBAL_ONLY,
     }),
-    // The path protocol owns this policy's internal structure and semantics.
     path_policy: object({}, builtin({ open: true, scopes: GLOBAL_SCOPE_ONLY })),
     execution_isolation: object({
       mode: string({ nonEmpty: true }),
@@ -206,8 +172,7 @@ const PLUGINS_STRUCTURE = object({
   character: object({
     enabled: boolean(),
     mode: string({ nonEmpty: true }),
-    // Character assets are owned by each user's own workspace, so they exist
-    // only in the user scopes and have no global-example counterpart.
+
     characterAssets: array({
       item: object({ id: string({ nonEmpty: true }), name: string(), path: string() }),
       scopes: Object.freeze([CONFIG_DOCUMENT_SCOPE.USER_DEFAULT, CONFIG_DOCUMENT_SCOPE.USER]),
@@ -243,18 +208,13 @@ const MCP_SERVER_ENTRY_STRUCTURE = object(
   { requiredFields: Object.freeze(["baseUrl", "type"]) },
 );
 
-/**
- * The explicit configuration structure. Every field a configuration document
- * may carry is declared here exactly once, with the scopes allowed to carry it.
- */
 export const CONFIG_STRUCTURE = object({
   workspace_root: string({ policy: GLOBAL_ONLY }),
   workspace_template_path: string({ policy: GLOBAL_ONLY }),
   super_admin: object({ user_id: string(), connect_code: string() }, { policy: GLOBAL_ONLY }),
   streaming: boolean({ policy: GLOBAL_ONLY }),
   security: SECURITY_STRUCTURE,
-  // Built-in nodes: the global example does not declare them, so repair
-  // validates and preserves them but never adds or defaults them.
+
   attachments: object({}, builtin({ open: true, scopes: GLOBAL_SCOPE_ONLY })),
   desktop: object({ dependency_proxy_url: string() }, builtin({ scopes: GLOBAL_SCOPE_ONLY })),
   memory: object(
@@ -291,7 +251,6 @@ export const CONFIG_STRUCTURE = object({
 
 const ALL_SCOPES = Object.freeze(Object.values(CONFIG_DOCUMENT_SCOPE));
 
-/** Whether a scope may carry this node at all. */
 export function structureAllowsScope(node = {}, scope = CONFIG_DOCUMENT_SCOPE.GLOBAL) {
   if (Array.isArray(node.scopes)) return node.scopes.includes(scope);
   if (node.policy === CONFIG_NODE_POLICY.GLOBAL_ONLY) {
@@ -312,20 +271,10 @@ function walkStructure(node, path, visit) {
   }
 }
 
-/**
- * Project a persisted path into the runtime key spelling. The key contract
- * already owns that spelling, so it is applied here instead of being restated
- * once per node.
- */
 function toRuntimePath(path) {
   return path.map((key) => SNAKE_TO_CANONICAL_KEY_MAP[key] || key).join(".");
 }
 
-/**
- * Collect the shallowest paths a scope may not carry. Descending past such a
- * path would restate what its ancestor already settles, so collection stops at
- * the boundary.
- */
 function collectScopeForbiddenPaths(node, path, scope, paths) {
   if (path.length && !structureAllowsScope(node, scope)) {
     paths.push([...path]);
@@ -341,13 +290,6 @@ function collectScopeForbiddenPaths(node, path, scope, paths) {
   }
 }
 
-/**
- * Every declared path carrying the given policy, in either path spelling.
- *
- * `GLOBAL_ONLY` is answered by scope rather than by the declared policy word,
- * because a node is global-owned whenever no user scope may carry it — whether
- * it declares that through `policy` or through an explicit `scopes` list.
- */
 export function listConfigNodePathsByPolicy({
   policy,
   representation = CONFIG_PATH_REPRESENTATION.PERSISTED,
@@ -375,7 +317,6 @@ export function listConfigNodePathsByPolicy({
   );
 }
 
-/** Every model-reference path and the capability each reference requires. */
 export function listStructureModelReferences() {
   const references = [];
   walkStructure(CONFIG_STRUCTURE, [], (node, path) => {

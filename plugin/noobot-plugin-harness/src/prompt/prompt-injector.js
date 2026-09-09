@@ -19,7 +19,7 @@ import {
   resolveModelMessages,
   writeMessageBlocks,
 } from "../core/message-store.js";
-import { resolveContextMessageRole } from "@noobot/context-protocol/message/codec";
+import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
 const HARNESS_MARKERS = new Map();
 
 const injectedPromptCache = new WeakMap();
@@ -172,20 +172,9 @@ function isAnyPromptInjectionMessage(message = {}) {
   if (resolvePromptInjectionIdFromMetadata(message)) return true;
   return (
     (message?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] === HARNESS_INJECTED_MESSAGE_FLAG_VALUE ||
-      isSystemRoleMessage(message)) &&
+      isContextSystemMessage(message)) &&
     String(message?.content || "").startsWith("<!-- noobot-harness")
   );
-}
-
-function isSystemLikeRole(role = "") {
-  const normalized = String(role || "")
-    .trim()
-    .toLowerCase();
-  return normalized === "system" || normalized === "developer";
-}
-
-function isSystemRoleMessage(message = {}) {
-  return isSystemLikeRole(resolveContextMessageRole(message));
 }
 
 function removePromptMessagesFromList(messages = [], id = "", { removeSystem = false } = {}) {
@@ -194,7 +183,7 @@ function removePromptMessagesFromList(messages = [], id = "", { removeSystem = f
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index] || {};
     if (!isPromptMessage(message, id)) continue;
-    if (!removeSystem && isSystemRoleMessage(message)) continue;
+    if (!removeSystem && isContextSystemMessage(message)) continue;
     messages.splice(index, 1);
     removed += 1;
   }
@@ -229,7 +218,7 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
     const existingSystem = nextBlocks.system.find((message) => isPromptMessage(message, id));
     if (existingSystem) continue;
     const source = (Array.isArray(promptMessages) ? promptMessages : []).find(
-      (message) => isPromptMessage(message, id) && isSystemRoleMessage(message),
+      (message) => isPromptMessage(message, id) && isContextSystemMessage(message),
     );
     if (!source) continue;
     nextBlocks.system = [...nextBlocks.system, source];
@@ -244,7 +233,7 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
 
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
-  while (index < messages.length && isSystemLikeRole(resolveContextMessageRole(messages[index]))) {
+  while (index < messages.length && isContextSystemMessage(messages[index])) {
     index += 1;
   }
   return index;
@@ -355,7 +344,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
       ? promptMessages
       : updatedMessages.filter(
           (message) =>
-            isSystemRoleMessage(message) &&
+            isContextSystemMessage(message) &&
             Array.from(systemBlockIds).some((id) => isPromptMessage(message, id)),
         );
     syncSystemPromptMessagesToBlocks(ctx, syncSource, systemBlockIds);

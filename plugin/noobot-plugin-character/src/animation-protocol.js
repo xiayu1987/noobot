@@ -24,7 +24,7 @@ export {
   hasSpatiallyReachableEvents,
 };
 
-const number = z.number().finite();
+const number = z.number();
 const vec3 = z.array(number).length(3);
 const quat = z
   .array(number)
@@ -71,8 +71,7 @@ const animationAsset = z
     axes: z
       .object({ handedness: z.literal("right"), up: z.literal("Y"), forward: z.literal("-Z") })
       .strict(),
-    // Optional correction for source files whose visual forward axis is not
-    // the canonical -Z axis. This rotates only the asset-local model node.
+
     canonicalRotation: quat.optional(),
     normalization: z
       .object({
@@ -100,10 +99,6 @@ const keyframe = z
   .strict();
 const track = z
   .object({
-    // A named animation channel is model-authored metadata. The executable
-    // representation remains the same v4 track (node + property + keyframes).
-    // Keeping the channel on the authoritative track lets the model compose
-    // precise channels without introducing a second runtime protocol.
     channelId: protocolId.optional(),
     node: z.string().trim().min(1).max(160),
     property: z.enum(["position", "rotation", "scale"]),

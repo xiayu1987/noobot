@@ -384,11 +384,6 @@ function declaredContributionKeys(manifest = {}, surface = "") {
   ];
 }
 
-/**
- * Verifies the exact set of runtime registrations against the Manifest.
- * The Manifest is the sole declaration source: counts, hook points, or host
- * state must never be used to infer which contribution was registered.
- */
 export function validatePluginContributionReceipt(manifest = {}, surface = "", receipt = []) {
   const normalizedSurface = String(surface || "").trim();
   const expected = declaredContributionKeys(manifest, normalizedSurface);

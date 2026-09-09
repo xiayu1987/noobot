@@ -36,17 +36,10 @@ export const CONFIG_REPAIR_ACTION = Object.freeze({
   RESET_TO_DEFAULT: "reset_to_default",
 });
 
-// Which top-level keys a user may override is a structural fact, answered by the
-// scope declarations in the field/structure contract. This map only records HOW
-// an overridable key merges; anything not listed merges deeply.
 export const USER_CONFIG_MERGE_MODE = Object.freeze({
   defaultProvider: "replace",
   scenarios: "scenarios",
 });
-
-// Which path carries which policy is a structural fact. It is declared once in
-// the field/structure contract and read back through
-// `listConfigNodePathsByPolicy` there, never restated as a path list here.
 
 export function summarizeConfigRepairReport(report = {}) {
   const actionCounts = {};

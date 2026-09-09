@@ -104,8 +104,7 @@ class SessionSummaryMethods {
 
   async rebuildSessionsSummary(userId = "", { sessionTree = null } = {}) {
     const tree = sessionTree || null;
-    // Only materialized Session directories belong in the list. The tree may
-    // contain historical nodes whose artifacts were deleted or never created.
+
     const sessionIds = await this.listSessionIds(userId);
     const summaries = [];
     for (const sessionId of sessionIds) {

@@ -109,13 +109,13 @@ try {
     !(await artifactCanvas.isVisible().catch(() => false))
   ) {
     await capture(page);
-    // Keep the real request visible without letting provider latency dominate the GIF.
+
     await page.waitForTimeout(1000);
   }
   await artifactCanvas.waitFor({ state: "visible", timeout: 30000 });
   const statusRow = page.locator(".message-status-steps").last();
   await statusRow.waitFor({ state: "visible", timeout: 30000 });
-  // Capture the actual Three.js playback at 15 FPS for a fluid 10-second timeline.
+
   for (let index = 0; index < 180; index += 1) {
     await capture(page);
     await page.waitForTimeout(67);
@@ -132,7 +132,7 @@ try {
   });
   await page.waitForTimeout(1000);
   await capture(page);
-  // Remove the recording session through the same authenticated UI action used by users.
+
   await page.locator(".session-item.active .session-delete-btn").click();
   await page.waitForTimeout(500);
   await context.close();

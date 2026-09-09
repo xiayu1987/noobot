@@ -294,10 +294,7 @@ export function createChatEngineSender({
         botThinkingStartedAt: botMsg?.thinkingStartedAt || "",
       }));
       let locatedSendingStartedMessage = false;
-      // Authority terminal notifications are deliberately asynchronous: the
-      // coordinator resolves the authoritative materialization before the
-      // Registry can project the final message runtime. Keep that promise in
-      // the send transaction so send() cannot finish with a stale assistant.
+
       const pendingAuthorityResolutions = [];
       const trackAuthorityResolution = (result) => {
         if (result && typeof result.then === "function") {
@@ -369,9 +366,7 @@ export function createChatEngineSender({
         },
       });
       payload = streamResult.payload;
-      // The stream transport may resolve before the terminal lookup does.
-      // Await a stable snapshot of the promises observed during the stream;
-      // a resolution may schedule a newer one, so drain until quiescent.
+
       while (pendingAuthorityResolutions.length > 0) {
         await Promise.all([...pendingAuthorityResolutions]);
       }

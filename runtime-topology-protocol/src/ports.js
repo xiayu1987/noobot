@@ -4,13 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * The single source of truth for Noobot runtime port topology.
- *
- * Every consumer (launcher scripts, PM2 ecosystem, service bootstrap,
- * agent-proxy, Electron shell, Vite dev server) derives its defaults from this
- * frozen constant. Port literals must not be duplicated anywhere else.
- */
 export const RUNTIME_PORT_TOPOLOGY = Object.freeze({
   loopbackHost: "127.0.0.1",
   clientAddr: ":10060",
@@ -33,10 +26,6 @@ function pick(env, key, fallback) {
   return value === undefined || value === null || value === "" ? String(fallback) : String(value);
 }
 
-/**
- * Extract the trailing port from an address or URL form such as
- * ":<port>", "<host>:<port>" or "ws://<host>:<port>/chat/ws".
- */
 export function addressPort(address) {
   let value = String(address ?? "");
   const schemeIndex = value.indexOf("://");
@@ -48,10 +37,6 @@ export function addressPort(address) {
   return /^[0-9]+$/.test(value) ? value : null;
 }
 
-/**
- * Pure reduction of an environment bag onto the port topology defaults.
- * Environment values always win; nothing is read from disk or process state.
- */
 export function resolveRuntimeTopology(env = {}) {
   const loopbackHost = pick(env, "AGENT_PROXY_HOST", RUNTIME_PORT_TOPOLOGY.loopbackHost);
   const clientAddr = pick(env, "CADDY_ADDR", RUNTIME_PORT_TOPOLOGY.clientAddr);
@@ -76,7 +61,6 @@ export function resolveRuntimeTopology(env = {}) {
   };
 }
 
-/** Shape the topology into the environment bag consumed by PM2 apps. */
 export function toProcessEnv(env = {}) {
   const topology = resolveRuntimeTopology(env);
   return {
@@ -90,7 +74,6 @@ export function toProcessEnv(env = {}) {
   };
 }
 
-/** Listening ports every start/stop script must probe, in a stable order. */
 export function listeningPorts(env = {}) {
   const topology = resolveRuntimeTopology(env);
   return [topology.clientAddr, topology.servicePort, topology.agentProxyPort]
@@ -98,7 +81,6 @@ export function listeningPorts(env = {}) {
     .filter((value) => value !== null);
 }
 
-/** Render `export KEY=VALUE` lines for shell consumers to eval. */
 export function shellExports(env = {}) {
   const values = toProcessEnv(env);
   const topology = resolveRuntimeTopology(env);

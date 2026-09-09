@@ -367,11 +367,6 @@ export function resolvePathPolicy({
   return resolved;
 }
 
-/**
- * Resolve the global trusted-directory list used by host resource risk classification.
- * Missing configuration deliberately means every non-protected directory is trusted.
- * An explicitly configured empty list means no host directory is trusted.
- */
 export function resolveTrustedDirectories(configured = undefined) {
   if (configured === undefined) return BUILTIN_PATH_POLICY.trustedDirectories;
   if (!Array.isArray(configured)) throw new TypeError("trusted directories must be an array");
@@ -392,10 +387,6 @@ export function resolveTrustedDirectories(configured = undefined) {
   return Object.freeze(unique);
 }
 
-/**
- * A protected path is never trusted, even when the wildcard is configured.
- * Concrete trusted entries include the directory itself and all descendants.
- */
 export function isTrustedDirectoryPath(candidatePath = "", pathPolicy = undefined) {
   if (typeof candidatePath !== "string") {
     throw new TypeError("trusted-directory candidate must be a string");

@@ -315,9 +315,7 @@ export function selectTurnPresentations({
         turnScopeId: getMessageTurnScopeId(message),
       }),
   );
-  // Tool records are non-renderable, but their transfer envelopes are
-  // canonical artifacts of the same turn. Project that envelope set onto
-  // every visible assistant in the turn before coalescing presentations.
+
   const envelopesByTurn = new Map();
   for (const message of sourceMessages) {
     const key = messageTurnKey(message, activeSessionId);

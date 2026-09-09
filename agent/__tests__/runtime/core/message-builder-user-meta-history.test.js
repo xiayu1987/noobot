@@ -121,7 +121,7 @@ test("terminal history reaches the model as canonical user/meta/injection/explan
     blocks.history.map((item) => item.additional_kwargs?.noobotMessageId),
     ["stopped-user", "stopped-user::user_meta", "guidance-new", "turn-stopped::terminal_status"],
   );
-  assert.equal(blocks.history[3]._getType(), "human");
+  assert.equal(blocks.history[3].type, "human");
 });
 
 test("buildContextMessageBlocks builds user_meta with source info for historical user attachments", () => {

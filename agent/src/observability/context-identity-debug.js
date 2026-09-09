@@ -10,11 +10,11 @@ export const CONTEXT_IDENTITY_DEBUG_TYPE = "context-identity";
 
 export function canonicalMessageId(message = {}) {
   return String(
-    message?.messageUid
-      || message?.messageId
-      || message?.id
-      || message?.additional_kwargs?.noobotMessageId
-      || "",
+    message?.messageUid ||
+      message?.messageId ||
+      message?.id ||
+      message?.additional_kwargs?.noobotMessageId ||
+      "",
   ).trim();
 }
 
@@ -28,12 +28,9 @@ function messageField(message = {}, field = "") {
 }
 
 export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
-  const rawRole = String(
-    message?.role ||
-      message?.type ||
-      (typeof message?._getType === "function" ? message._getType() : "") ||
-      "",
-  ).trim().toLowerCase();
+  const rawRole = String(message?.role || message?.type || "")
+    .trim()
+    .toLowerCase();
   const role = rawRole === "ai" ? "assistant" : rawRole === "human" ? "user" : rawRole;
   const toolCalls = Array.isArray(message?.tool_calls)
     ? message.tool_calls

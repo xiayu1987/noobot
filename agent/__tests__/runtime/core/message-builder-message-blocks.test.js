@@ -263,16 +263,16 @@ test("buildContextMessageBlocks adapts restored protocol tool messages into Lang
     { currentUserMessage: createPersistedCurrentUserMessage("resume user input") },
   );
 
-  assert.equal(blocks.history[0]?._getType?.(), "ai");
+  assert.equal(blocks.history[0]?.type, "ai");
   assert.equal(blocks.history[0]?.tool_calls?.[0]?.id, "call_resume_1");
-  assert.equal(blocks.history[1]?._getType?.(), "tool");
+  assert.equal(blocks.history[1]?.type, "tool");
   assert.equal(blocks.history[1]?.tool_call_id, "call_resume_1");
   assert.equal(blocks.history[1]?.content, "tool result text");
-  assert.equal(blocks.incremental[0]?._getType?.(), "human");
+  assert.equal(blocks.incremental[0]?.type, "human");
   assert.equal(blocks.incremental[0]?.content, "resume user input");
   assert.equal(
     blocks.messages.some(
-      (message) => message?._getType?.() === "human" && String(message?.content || "") === "",
+      (message) => message?.type === "human" && String(message?.content || "") === "",
     ),
     false,
   );

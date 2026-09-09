@@ -182,7 +182,7 @@ test("invalid authoritative lifecycle has no journal or state projection side ef
     eventId: "invalid-completed-event",
     commandId: "invalid-completed-command",
     sessionId: "session-invalid-lifecycle",
-    // turnScopeId is intentionally absent and must never be inferred from startPayload.
+
     messageId: "message-invalid",
     presentationMessageId: "message-invalid",
     dialogProcessId: "dialog-invalid",

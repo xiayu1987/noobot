@@ -81,11 +81,6 @@ export function createTurnTerminalStatus(command = "", payload = {}) {
   return Object.freeze(status);
 }
 
-/**
- * Materializes the presentation side of one terminal fact. This is a pure
- * aggregate decision: lifecycle remains the terminal authority while messages
- * are its persisted presentation entities.
- */
 export function materializeTurnTerminalMessages({
   messages = [],
   terminalStatus = null,

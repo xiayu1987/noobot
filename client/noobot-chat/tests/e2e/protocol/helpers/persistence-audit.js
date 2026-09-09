@@ -324,9 +324,7 @@ export async function readSessionExecutionEventTree(
   const hasExplicitRoot = Boolean(String(rootSessionId || "").trim());
   const normalizedRootSessionId = String(rootSessionId || normalizedSessionId).trim();
   if (!normalizedSessionId || !normalizedRootSessionId) return [];
-  // Workflow child execution trees are canonically scoped below their root
-  // session. A child id alone is not a filesystem scope and must never be
-  // resolved as a top-level session.
+
   const segments = await findExecutionEventSegments(sessionRoot(userId, normalizedRootSessionId));
   const records = (
     await Promise.all(

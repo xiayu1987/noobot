@@ -8,8 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
 
-# Runtime port defaults come from @noobot/runtime-topology-protocol; PM2 already
-# injects CADDY_ADDR/API_UPSTREAM, this keeps standalone runs consistent.
+
+
 eval "$(node "$REPO_ROOT/scripts/lib/runtime-topology-cli.mjs" --shell)"
 cd "$PROJECT_DIR"
 

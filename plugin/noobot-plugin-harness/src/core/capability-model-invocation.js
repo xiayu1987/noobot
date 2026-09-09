@@ -42,8 +42,7 @@ export async function invokeCapabilityModelWithinDeadline({
       reject(controller.signal.reason || new Error("capability model invocation aborted"));
     };
     controller.signal.addEventListener("abort", rejectOnAbort, { once: true });
-    removeInvocationListener = () =>
-      controller.signal.removeEventListener("abort", rejectOnAbort);
+    removeInvocationListener = () => controller.signal.removeEventListener("abort", rejectOnAbort);
   });
 
   if (Number.isFinite(normalizedTimeoutMs) && normalizedTimeoutMs > 0) {

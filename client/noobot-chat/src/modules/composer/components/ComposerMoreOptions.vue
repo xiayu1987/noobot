@@ -54,10 +54,6 @@ const safeConfirmSliderValue = computed(() =>
   Math.max(0, SECURITY_RISK_LEVELS.indexOf(props.safeConfirmLevel)),
 );
 
-// The selection is a Set and callers may mutate it in place when a plugin is
-// toggled.  Depending on the Set object itself therefore does not invalidate
-// the extension outlet.  Track its contents explicitly and pass a fresh Set
-// to extension predicates on every selection change.
 const selectedPluginKeys = computed(() =>
   Array.from(props.selectedPluginKeySet instanceof Set ? props.selectedPluginKeySet : [])
     .map((key) => String(key).trim())
@@ -410,8 +406,7 @@ const composerExtensionBaseProps = computed(() => ({
   width: 100%;
   box-sizing: border-box;
   padding: 6px 10px 14px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border) 55%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--noobot-panel-border) 55%, transparent);
 }
 
 .safe-confirm-level-label {
@@ -505,16 +500,8 @@ const composerExtensionBaseProps = computed(() => ({
   height: 38px;
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
-  background: color-mix(
-    in srgb,
-    var(--noobot-control-bg) 94%,
-    var(--noobot-accent)
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-panel-border) 78%,
-    transparent
-  );
+  background: color-mix(in srgb, var(--noobot-control-bg) 94%, var(--noobot-accent));
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 78%, transparent);
   transition:
     background-color 0.18s ease,
     border-color 0.18s ease;
@@ -522,11 +509,7 @@ const composerExtensionBaseProps = computed(() => ({
 
 .composer-select :deep(.el-select__wrapper.is-focused),
 .composer-select :deep(.el-select__wrapper:hover) {
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-accent) 50%,
-    var(--noobot-panel-border)
-  );
+  border-color: color-mix(in srgb, var(--noobot-accent) 50%, var(--noobot-panel-border));
 }
 
 .composer-select :deep(.el-select__selected-item),
@@ -583,16 +566,8 @@ const composerExtensionBaseProps = computed(() => ({
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--noobot-text-accent);
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-accent) 42%,
-    var(--noobot-panel-border)
-  );
-  background: color-mix(
-    in srgb,
-    var(--noobot-accent) 9%,
-    var(--noobot-panel-bg)
-  );
+  border-color: color-mix(in srgb, var(--noobot-accent) 42%, var(--noobot-panel-border));
+  background: color-mix(in srgb, var(--noobot-accent) 9%, var(--noobot-panel-bg));
 }
 
 .model-select-card {
@@ -766,11 +741,7 @@ const composerExtensionBaseProps = computed(() => ({
 :global(.noobot-composer-select-popper) {
   width: auto;
   max-width: calc(100vw - 32px);
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-panel-border) 82%,
-    transparent
-  );
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 82%, transparent);
   background: var(--noobot-control-menu-bg);
   overflow: hidden;
   border-radius: var(--noobot-radius-md);
@@ -810,29 +781,17 @@ const composerExtensionBaseProps = computed(() => ({
 :global(.noobot-composer-select-popper .el-select-dropdown__item.hover),
 :global(.noobot-composer-select-popper .el-select-dropdown__item:hover) {
   color: var(--noobot-text-strong);
-  background: color-mix(
-    in srgb,
-    var(--noobot-accent) 10%,
-    var(--noobot-control-menu-bg)
-  );
+  background: color-mix(in srgb, var(--noobot-accent) 10%, var(--noobot-control-menu-bg));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected) {
   color: var(--noobot-text-accent);
-  background: color-mix(
-    in srgb,
-    var(--noobot-accent) 14%,
-    var(--noobot-control-menu-bg)
-  );
+  background: color-mix(in srgb, var(--noobot-accent) 14%, var(--noobot-control-menu-bg));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected.hover),
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected:hover) {
-  background: color-mix(
-    in srgb,
-    var(--noobot-accent) 18%,
-    var(--noobot-control-menu-bg)
-  );
+  background: color-mix(in srgb, var(--noobot-accent) 18%, var(--noobot-control-menu-bg));
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__empty) {
@@ -842,11 +801,7 @@ const composerExtensionBaseProps = computed(() => ({
 
 :global(.noobot-composer-select-popper .el-popper__arrow::before) {
   background: var(--noobot-control-menu-bg);
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-panel-border) 82%,
-    transparent
-  );
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 82%, transparent);
 }
 
 @media (max-width: 768px) {

@@ -38,10 +38,6 @@ function projectObservableModel(model = {}) {
   });
 }
 
-/**
- * The transport headers every invocation carries. Both the operation path and
- * the chat path derive them here so the header contract has one definition.
- */
 function buildInvocationHeaders({ model = {}, invocation = {}, headers = {} } = {}) {
   return {
     "X-Model-Name": String(model.model || "").trim(),
@@ -300,9 +296,7 @@ export function createModelRequestExecutor({
           });
           continue;
         }
-        // A provider may include reasoning alongside a valid tool call. Tool
-        // calls are actionable model output and must reach the tool runner;
-        // only responses with no tool calls can be retried as reasoning-only.
+
         if (classifyReasoningOnly(result.value) && output.toolCalls.length === 0) {
           if (semanticAttempts < retry.reasoningOnly.maxAttempts) {
             attempts.push({

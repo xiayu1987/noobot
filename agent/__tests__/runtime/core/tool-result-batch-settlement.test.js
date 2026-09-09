@@ -149,8 +149,22 @@ test("processToolResults commits result policy from its authoritative batch call
     loopState: { errorLogger: null, toolConsecutiveFailureCount: 0 },
     turn: 1,
     calls: [{ id: "check-1", name: "task_check", args: {}, contextPolicy: policy }],
-    toolMap: new Map([["task_check", { contextPolicy: policy, async invoke() { return { ok: true }; } }]]),
-    stateCommitter: { async pushToolResult(result) { committed.push(result); } },
+    toolMap: new Map([
+      [
+        "task_check",
+        {
+          contextPolicy: policy,
+          async invoke() {
+            return { ok: true };
+          },
+        },
+      ],
+    ]),
+    stateCommitter: {
+      async pushToolResult(result) {
+        committed.push(result);
+      },
+    },
   });
   assert.deepEqual(committed[0].call.contextPolicy, policy);
 });

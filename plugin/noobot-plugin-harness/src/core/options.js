@@ -83,10 +83,9 @@ export const DEFAULT_OPTIONS = Object.freeze({
 
 const HarnessOptionsSchema = z
   .object({
-    timeoutMs: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.timeoutMs),
+    timeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.timeoutMs),
     capabilityModelTimeoutMs: z.coerce
       .number()
-      .finite()
       .positive()
       .default(DEFAULT_OPTIONS.capabilityModelTimeoutMs),
     planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
@@ -108,11 +107,7 @@ const HarnessOptionsSchema = z
     guidance: z.record(z.any()).optional(),
     capabilityToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.capabilityToolAllowlist),
     capabilityToolAllowlistByPurpose: z.record(z.any()).default({}),
-    miniRunnerMaxTurns: z.coerce
-      .number()
-      .finite()
-      .positive()
-      .default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
+    miniRunnerMaxTurns: z.coerce.number().positive().default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
     miniRunnerToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.miniRunnerToolAllowlist),
     acceptance: z.record(z.any()).optional(),
     review: z.record(z.any()).optional(),
@@ -120,36 +115,21 @@ const HarnessOptionsSchema = z
     pendingTtlHookTurns: z.coerce
       .number()
       .int()
-      .finite()
       .nonnegative()
       .default(DEFAULT_OPTIONS.pendingTtlHookTurns),
-    manifestDebounceMs: z.coerce
-      .number()
-      .finite()
-      .nonnegative()
-      .default(DEFAULT_OPTIONS.manifestDebounceMs),
-    jsonlBatchSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
+    manifestDebounceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
+    jsonlBatchSize: z.coerce.number().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
     jsonlFlushIntervalMs: z.coerce
       .number()
-      .finite()
       .nonnegative()
       .default(DEFAULT_OPTIONS.jsonlFlushIntervalMs),
-    flushHookPriority: z.coerce.number().finite().default(DEFAULT_OPTIONS.flushHookPriority),
-    flushHookTimeoutMs: z.coerce
-      .number()
-      .finite()
-      .positive()
-      .default(DEFAULT_OPTIONS.flushHookTimeoutMs),
+    flushHookPriority: z.coerce.number().default(DEFAULT_OPTIONS.flushHookPriority),
+    flushHookTimeoutMs: z.coerce.number().positive().default(DEFAULT_OPTIONS.flushHookTimeoutMs),
     jsonlFlushStrategy: z
       .object({
-        maxSize: z.coerce
-          .number()
-          .finite()
-          .positive()
-          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
+        maxSize: z.coerce.number().positive().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
         maxTime: z.coerce
           .number()
-          .finite()
           .nonnegative()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
         onTerminal: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onTerminal),
@@ -157,48 +137,39 @@ const HarnessOptionsSchema = z
         maxRetry: z.coerce
           .number()
           .int()
-          .finite()
           .nonnegative()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxRetry),
         maxBufferEntries: z.coerce
           .number()
           .int()
-          .finite()
           .positive()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferEntries),
         maxBufferBytes: z.coerce
           .number()
           .int()
-          .finite()
           .positive()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferBytes),
         maxFileBytes: z.coerce
           .number()
           .int()
-          .finite()
           .nonnegative()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFileBytes),
         maxFiles: z.coerce
           .number()
           .int()
-          .finite()
           .nonnegative()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFiles),
       })
       .partial()
       .default(DEFAULT_OPTIONS.jsonlFlushStrategy),
-    maxRuns: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.maxRuns),
-    maxRunAgeDays: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.maxRunAgeDays),
-    cleanupGraceMs: z.coerce
-      .number()
-      .finite()
-      .nonnegative()
-      .default(DEFAULT_OPTIONS.cleanupGraceMs),
+    maxRuns: z.coerce.number().positive().default(DEFAULT_OPTIONS.maxRuns),
+    maxRunAgeDays: z.coerce.number().positive().default(DEFAULT_OPTIONS.maxRunAgeDays),
+    cleanupGraceMs: z.coerce.number().nonnegative().default(DEFAULT_OPTIONS.cleanupGraceMs),
     fsmEnabled: z.boolean().default(DEFAULT_OPTIONS.fsmEnabled),
     capabilityProfile: z.any().optional(),
     capabilityHandlers: z.any().optional(),
   })
-  .passthrough();
+  .loose();
 
 function normalizeModelByPurpose(...items) {
   const out = {};

@@ -16,7 +16,7 @@ export function resolveLocaleFromRequest(request = null) {
     const explicitLocale = String(requestUrl.searchParams.get("locale") || "").trim();
     if (explicitLocale) return explicitLocale;
   } catch {
-    // The transport layer validates and reports malformed request URLs.
+    void 0;
   }
   const acceptLanguage = String(request?.headers?.["accept-language"] || "").trim();
   if (!acceptLanguage) return "";

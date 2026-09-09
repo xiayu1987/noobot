@@ -32,11 +32,6 @@ function collectNativeRootTranslations(model) {
   return translations;
 }
 
-// Native GLB clips own the skeletal pose only. World translation belongs to
-// protocol root motion, so reset motion-carrier position tracks to their bind
-// values. Using the bind value (rather than the clip's first sample) also
-// prevents Run/Walk/Idle clips with different exported origins from changing
-// the foot_center height when the timeline crosses a segment boundary.
 export function makeNativeClipInPlace(clip, model) {
   let translations = bindTranslationsByModel.get(model);
   if (!translations) {

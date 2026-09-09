@@ -30,7 +30,7 @@ export function createDependencyInstaller({
       try {
         if (new URL(token).hostname.toLowerCase() === expectedHostname) return true;
       } catch {
-        // Process output commonly contains non-URL tokens.
+        void 0;
       }
     }
     return false;

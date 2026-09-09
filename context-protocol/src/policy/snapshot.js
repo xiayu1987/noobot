@@ -53,12 +53,6 @@ function cloneJson(value) {
   }
 }
 
-/**
- * Snapshot keeps its own on-disk vocabulary (system/ai/tool/human) which is
- * deliberately distinct from the canonical role vocabulary. This table is the
- * single mapping between the two; recognition of input tokens still comes from
- * the codec alias table.
- */
 const SNAPSHOT_TYPE_BY_ROLE = Object.freeze({
   [CONTEXT_MESSAGE_ROLE.SYSTEM]: "system",
   [CONTEXT_MESSAGE_ROLE.ASSISTANT]: "ai",
@@ -67,8 +61,6 @@ const SNAPSHOT_TYPE_BY_ROLE = Object.freeze({
 });
 
 function messageType(message = {}) {
-  if (typeof message?._getType === "function")
-    return String(message._getType() || "").toLowerCase();
   return String(message?.type || message?.role || message?.lc_kwargs?.type || "").toLowerCase();
 }
 
@@ -305,8 +297,6 @@ export function projectSnapshotIncrementalToContinuation(messages = [], identity
   if (!currentDialogProcessId || !currentTurnScopeId) {
     throw new Error("Continuation projection requires dialogProcessId and turnScopeId");
   }
-  // A stopped snapshot is an immutable model-input prefix. The continuation
-  // identity belongs to the new natural user message appended after it; old
-  // messages and user_meta projections retain their original facts.
+
   return (Array.isArray(messages) ? messages : []).map((source) => cloneJson(source));
 }

@@ -61,10 +61,7 @@ export function createModelContext({
   const explicitBlocks = normalizeBlocks(messageBlocks);
   const blocks =
     explicitBlocks || (Array.isArray(messages) ? resolveInitialBlocks(messages) : null);
-  // Explicit blocks are the authoritative context partition. A flat message
-  // projection supplied beside them must not be used to infer additional block
-  // membership, otherwise stale/filtered messages can silently re-enter the
-  // model context through a compatibility-shaped second source.
+
   const resolvedMessages = explicitBlocks
     ? [...explicitBlocks.system, ...explicitBlocks.history, ...explicitBlocks.incremental]
     : Array.isArray(messages)
@@ -78,10 +75,7 @@ export function createModelContext({
     checkpointRevision: normalizedCheckpointRevision,
     activeTurnIdentity: normalizeActiveTurnIdentity(activeTurnIdentity),
     userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
-    // When blocks are explicit, hydrate their entity identities before
-    // materializing the flat projection. Hydrating the flat list first would
-    // assign two ids to legacy copies of the same scoped message and prevent
-    // deterministic cross-block de-duplication.
+
     messages: explicitBlocks ? null : resolvedMessages,
     messageBlocks: blocks,
   };

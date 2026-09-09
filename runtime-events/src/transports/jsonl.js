@@ -145,8 +145,6 @@ async function appendLineBatch(file, entries = []) {
   const payload = entries.map((entry) => entry.line).join("");
   let rotatedFile = null;
   try {
-    // Rotation is deliberately evaluated at the batch boundary. This keeps a
-    // batch in one file and avoids stat/rename checks for every record.
     rotatedFile = await rotateIfNeeded(file, payload, options);
     await fs.appendFile(file, payload, "utf8");
     const state = activeFileStates.get(file);

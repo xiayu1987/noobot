@@ -11,7 +11,7 @@ export function extractJsonObjectFromText(text = "") {
   try {
     return JSON.parse(raw);
   } catch {
-    // Continue with the explicit fenced/object candidate protocol below.
+    void 0;
   }
   const candidates = [raw.match(/\{[\s\S]*\}/), raw.match(/\[[\s\S]*\]/)];
   for (const matched of candidates) {
@@ -20,7 +20,7 @@ export function extractJsonObjectFromText(text = "") {
     try {
       return JSON.parse(segment);
     } catch {
-      // This candidate is not valid JSON; try the next declared candidate.
+      void 0;
     }
   }
   return null;

@@ -25,12 +25,6 @@ function modelFamily(spec = {}) {
   return requireModelFamilyId(spec.modelFamily);
 }
 
-/**
- * GPT and Claude expose a body-level prompt-cache identity in the transports
- * used by this adapter. Other providers have different protocols (or only
- * server-managed prefix caching), so their cache identity must not leak into
- * OpenAI `prompt_cache_*` fields.
- */
 function usesPromptCacheKeyProtocol(spec = {}) {
   const family = modelFamily(spec);
   return family === MODEL_FAMILY_ID.GPT || family === MODEL_FAMILY_ID.CLAUDE;
@@ -52,7 +46,6 @@ export function resolveCacheVendor(spec = {}) {
   return operatorId(spec);
 }
 
-/** Grok carries its cache identity in a request header rather than the body. */
 export function resolvePromptCacheHeaders(spec = {}, flow = "agent.main") {
   if (modelFamily(spec) !== MODEL_FAMILY_ID.GROK) return {};
   const key =
@@ -73,10 +66,6 @@ export function cacheControlValueForRuntime(spec = {}) {
   return cacheControlValue(spec);
 }
 
-/**
- * Apply message-level cache markers required by DashScope/Qwen. Claude uses
- * Anthropic's top-level automatic cache control and is compiled below.
- */
 export function applyPromptCacheMessages(spec = {}, messages = []) {
   const family = modelFamily(spec);
   if (family !== MODEL_FAMILY_ID.QWEN) return messages;
@@ -117,7 +106,6 @@ export function applyPromptCacheMessages(spec = {}, messages = []) {
   return source;
 }
 
-/** The flow-scoped cache identity, independent of how a provider carries it. */
 function buildCacheIdentity(spec = {}, flow = "agent.main") {
   const model = segment(spec.model);
   if (!model) return "";

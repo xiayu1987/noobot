@@ -157,8 +157,6 @@ test("config repair recursively adds template nodes through one protocol", () =>
 });
 
 test("config repair separates structural fields from default values", () => {
-  // Structure is owned by the field contract; the value source only answers
-  // "what value stands here", so a value-only key can never add a field.
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
     baseValues: { preferences: { language: "zh-CN" }, undeclared_field: "ignored" },

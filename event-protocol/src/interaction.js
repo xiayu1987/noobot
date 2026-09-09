@@ -88,14 +88,6 @@ export function validateInteractionRequest(event = {}) {
   return validateInteractionRequestPayload(event?.payload);
 }
 
-/**
- * Returns true only for a complete interaction record in a replay stream.
- *
- * Replay transport envelopes are intentionally accepted here because the
- * protocol package is the single place that knows how an interaction request
- * is represented on the wire.  An incomplete interaction must not survive
- * sequence filtering and become a client-side pending state.
- */
 export function isPendingInteractionReplay(record = {}) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return false;
   const eventType = clean(record?.identity?.eventType);

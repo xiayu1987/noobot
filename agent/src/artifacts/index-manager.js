@@ -17,8 +17,6 @@ import {
 import { attachmentScopeIndexPath } from "./service/attachment-storage-layout.js";
 import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
 
-// Index updates are read-modify-write transactions. Serialize them per canonical
-// attachment scope so concurrent producers cannot overwrite each other's records.
 const scopeLocks = new Map();
 const attachmentIndexCoordinator = new FileMutationCoordinator({
   timeoutMessage: "attachment index lock timeout",

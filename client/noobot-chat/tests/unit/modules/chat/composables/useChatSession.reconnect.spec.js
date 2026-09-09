@@ -505,8 +505,7 @@ describe("useChatSession reconnect replay", () => {
     const requestedUrls = authFetch.mock.calls.map(([url]) => url);
     expect(requestedUrls.some((url) => url.includes("/turns/turn-new/terminal"))).toBe(false);
     expect(store.turnRuntimeRegistry.sessions).toEqual({});
-    // Message content is data-plane presentation only; lifecycle completion
-    // must come from an Authority snapshot or lifecycle envelope.
+
     expect(newAssistant.pending).toBe(true);
   });
 

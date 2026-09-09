@@ -9,6 +9,7 @@ import {
   buildHarnessInjectedMessage,
 } from "./injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
+import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
 import {
   appendMessage,
   replaceMessages,
@@ -20,22 +21,27 @@ function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const msg = messages[index] || {};
-    const role = String(msg?.role || "").trim().toLowerCase();
+    const role = String(msg?.role || "")
+      .trim()
+      .toLowerCase();
     if (role !== "assistant") continue;
     const calls = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
     if (!calls.length) return false;
     const callIds = new Set(
       calls
-        .map((call = {}) =>
-          String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim(),
-        )
+        .map((call = {}) => String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim())
         .filter(Boolean),
     );
     if (!callIds.size) return false;
     const matchedToolIds = new Set();
     for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
       const next = messages[cursor] || {};
-      if (String(next?.role || "").trim().toLowerCase() !== "tool") continue;
+      if (
+        String(next?.role || "")
+          .trim()
+          .toLowerCase() !== "tool"
+      )
+        continue;
       const toolCallId = String(next?.tool_call_id || "").trim();
       if (toolCallId && callIds.has(toolCallId)) matchedToolIds.add(toolCallId);
     }
@@ -60,17 +66,12 @@ function dedupeExists(messages = [], target = {}) {
   });
 }
 
-function resolveHarnessMainFlowRole({
-  role = "system",
-} = {}) {
-  const requestedRole = String(role || "system").trim().toLowerCase();
+function resolveHarnessMainFlowRole({ role = "system" } = {}) {
+  const requestedRole = String(role || "system")
+    .trim()
+    .toLowerCase();
   if (requestedRole === "user") return "user";
   return requestedRole || "system";
-}
-
-function isSystemLikeRole(role = "") {
-  const normalized = String(role || "").trim().toLowerCase();
-  return normalized === "system" || normalized === "developer";
 }
 
 export function injectMessageWithPolicy(
@@ -114,10 +115,12 @@ export function injectMessageWithPolicy(
     return { injected: false, target: "ctx_messages", deduped: true };
   }
 
-  const normalizedInjectAt = String(injectAt || "append").trim().toLowerCase();
+  const normalizedInjectAt = String(injectAt || "append")
+    .trim()
+    .toLowerCase();
   const shouldProtectContinuity =
     avoidBreakToolCallContinuity === true &&
-    isSystemLikeRole(resolvedRole) &&
+    isSystemLikeMessageRole(resolvedRole) &&
     normalizedInjectAt === "append" &&
     hasPendingToolCallPair(messages);
   if (shouldProtectContinuity) {
@@ -137,7 +140,7 @@ export function injectMessageWithPolicy(
     [canonicalMessage] = replaceMessages(ctx, [message, ...messages]);
   } else {
     canonicalMessage = appendMessage(ctx, message, {
-      block: isSystemLikeRole(resolvedRole) ? "system" : "incremental",
+      block: isSystemLikeMessageRole(resolvedRole) ? "system" : "incremental",
     });
   }
   persistHarnessMessageToCurrentTurn(ctx, canonicalMessage, persistToCurrentTurn);

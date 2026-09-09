@@ -238,9 +238,7 @@ export function createSendStreamEventHandler(context) {
       state: data?.state,
       botMessage: summarizeDebugMessage(botMsg),
     }));
-    // Lifecycle packets are authoritative state input. Route them before any
-    // extension or message projection so a plugin cannot consume a terminal
-    // child event before the single turn-runtime reducer sees it.
+
     if (
       routeForeignTurnLifecycleEvent(event, data, {
         activeSession,

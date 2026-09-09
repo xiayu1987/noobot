@@ -185,20 +185,6 @@ ${normalizedHtmlBodyContent}
 </html>`;
 }
 
-function fallbackCopyHtml(htmlContent = "", plainText = "") {
-  const normalizedHtmlContent = String(htmlContent || "");
-  const normalizedPlainText = String(plainText || "");
-  const onCopy = (event) => {
-    event.preventDefault();
-    event.clipboardData?.setData("text/html", normalizedHtmlContent);
-    event.clipboardData?.setData("text/plain", normalizedPlainText);
-  };
-  document.addEventListener("copy", onCopy);
-  const copied = document.execCommand("copy");
-  document.removeEventListener("copy", onCopy);
-  return copied;
-}
-
 export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
   let rawHtml = String(rawHtmlContent || "").trim();
   if (!rawHtml) throw new Error("NO_COPYABLE_CONTENT");
@@ -243,26 +229,18 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
     htmlPageContent = exportStyles + htmlPageContent;
   }
 
-  if (navigator.clipboard && typeof window.ClipboardItem === "function") {
-    const clipboardItem = new window.ClipboardItem({
-      "text/html": new Blob([htmlPageContent], { type: "text/html" }),
-      "text/plain": new Blob([htmlPageContent], { type: "text/plain" }),
-    });
-    await navigator.clipboard.write([clipboardItem]);
-    return;
-  }
-  if (!fallbackCopyHtml(htmlPageContent, htmlPageContent)) {
-    throw new Error("copy failed");
-  }
+  if (!navigator.clipboard || typeof window.ClipboardItem !== "function")
+    throw new Error("clipboard API unavailable");
+  const clipboardItem = new window.ClipboardItem({
+    "text/html": new Blob([htmlPageContent], { type: "text/html" }),
+    "text/plain": new Blob([htmlPageContent], { type: "text/plain" }),
+  });
+  await navigator.clipboard.write([clipboardItem]);
 }
 
 export async function copyMarkdownText(markdownText = "") {
   const normalizedText = String(markdownText || "");
   if (!normalizedText.trim()) throw new Error("NO_COPYABLE_TEXT");
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(normalizedText);
-    return;
-  }
-  const copied = fallbackCopyHtml("", normalizedText);
-  if (!copied) throw new Error("copy failed");
+  if (!navigator.clipboard?.writeText) throw new Error("clipboard API unavailable");
+  await navigator.clipboard.writeText(normalizedText);
 }

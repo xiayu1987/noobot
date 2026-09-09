@@ -192,8 +192,7 @@ export async function ensureUserWorkspaceInitialized({
         });
       }
       await ensureCanonicalMemoryFiles(templateBase, base);
-      // Runtime initialization repairs missing canonical files from the user
-      // template without overwriting existing user state.
+
       return base;
     }
 

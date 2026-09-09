@@ -192,8 +192,7 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     hookManager: {
       async emit(point, ctx = {}) {
         if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
-        // A detached flat projection is not a writable context source. The
-        // authoritative blocks remain unchanged.
+
         return createEmptyHookResult(point, ctx);
       },
     },

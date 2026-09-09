@@ -55,8 +55,7 @@ function entityKey(item = {}, index = 0, kind = "entity") {
   }
   const stableId = text(item?.id || item?.messageId || item?.toolCallId);
   if (stableId) return `id:${stableId}`;
-  // Message identity is protocol identity. Turn, dialog, role and array order
-  // are projection attributes and must never be used to guess entity equality.
+
   if (kind === "message") return "";
   const turnScopeId = text(item?.turnScopeId);
   if (turnScopeId) return `turn:${turnScopeId}:${kind}`;

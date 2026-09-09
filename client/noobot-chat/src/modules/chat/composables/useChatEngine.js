@@ -192,10 +192,7 @@ export function useChatEngine({
       raw: envelope,
     };
     const lifecycleResult = commitTurnLifecycleEnvelope?.(envelope);
-    // The lifecycle notification is the authority for the Turn state. Terminal
-    // resolution then materializes the persisted payload at the same protocol
-    // coordinate. Commit first so materialization cannot block presentation,
-    // while preserving completion semantics by awaiting it before returning.
+
     const terminalResolution = terminalResolutionCoordinator.observe(event);
     return terminalResolution ? terminalResolution.then(() => lifecycleResult) : lifecycleResult;
   };

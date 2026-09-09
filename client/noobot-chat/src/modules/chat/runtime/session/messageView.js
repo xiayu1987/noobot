@@ -73,9 +73,7 @@ export function createSessionMessageView({
       );
     });
     if (!matchingMessages.length) return null;
-    // A presentation identity can span the hidden tool-call record and the
-    // visible assistant record. Runtime artifacts must land on the visible
-    // canonical projection so the live UI and folded history share one target.
+
     return matchingMessages[matchingMessages.length - 1] || null;
   }
 

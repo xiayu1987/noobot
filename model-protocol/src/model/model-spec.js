@@ -8,8 +8,7 @@ export function requireModelSpec(input = {}) {
   const model = String(input.model || "").trim();
   if (!model) throw new TypeError("model spec.model is required");
   const provider = normalizeProviderSpec(input);
-  // Transport is derived from the model-family fact source. A spec still
-  // naming a format comes from a producer that has not been converged.
+
   if (input.format !== undefined) {
     throw new TypeError("model spec.format is not part of this protocol");
   }

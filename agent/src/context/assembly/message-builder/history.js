@@ -108,10 +108,9 @@ export function buildHistoryMessages({
           ? { reasoning: msg.modelAdditionalKwargs.reasoning }
           : {}),
       };
-      const responseMetadata =
-        Array.isArray(msg?.modelResponseMetadata?.output)
-          ? { output: msg.modelResponseMetadata.output }
-          : {};
+      const responseMetadata = Array.isArray(msg?.modelResponseMetadata?.output)
+        ? { output: msg.modelResponseMetadata.output }
+        : {};
       history.push(
         new AIMessage({
           content: resolvedAssistantContent,
@@ -177,8 +176,7 @@ export function buildHistoryMessages({
         }),
         new HumanMessage({
           content: buildHumanMessageContent(meta),
-          // A snapshot already contains the authoritative user_meta projection.
-          // Preserve its identity/type so the next resume does not re-materialize it.
+
           additional_kwargs: {
             ...projectContextMessageIdentityMetadata(meta),
             noobotInternalMessageType: "user_meta",

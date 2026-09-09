@@ -451,7 +451,7 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
   );
 
   const historicalBodies = messages.filter(
-    (message) => message?.content === "你好" && message?._getType?.() === "human",
+    (message) => message?.content === "你好" && message?.type === "human",
   );
   assert.equal(historicalBodies.length, 3);
   for (const body of historicalBodies) {

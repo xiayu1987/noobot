@@ -283,8 +283,6 @@ export function useReconnectReplay({
   }
 
   function applyChannelState(stateData = {}) {
-    // channel_state is transport-only. Recovery and business state are driven
-    // exclusively by the Replay Batch snapshot and ordered Authority tail.
     return Promise.resolve({
       applied: false,
       reason: "transport_channel_state_ignored",

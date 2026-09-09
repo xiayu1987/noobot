@@ -248,8 +248,6 @@ export function useThinkingTimeline(
     projectExecutionTimeline(currentToolTimelineLogs.value),
   );
 
-  // Both the realtime panel and the detail drawer consume this one projection.
-  // Container-specific grouping must never rebuild or normalize log content.
   function getCanonicalExecutionLogs(messageItem = {}) {
     const projection =
       messageItem === props.messageItem

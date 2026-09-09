@@ -21,9 +21,7 @@ const RESPONSE_KEYS = Object.freeze([
   "result",
   "execution",
 ]);
-// Provider content blocks are part of the canonical response when the
-// adapter must preserve structured output (for example Anthropic thinking
-// and tool_use blocks) for the following request.
+
 const OUTPUT_KEYS = Object.freeze([
   "text",
   "reasoning",
@@ -103,7 +101,9 @@ export function validateModelResponse(input) {
   }
   requireInvocationIdentity(response.invocation);
   if (!Object.values(MODEL_OPERATION_KIND).includes(response.operationKind)) {
-    throw new TypeError(`invalid model response operation kind: ${response.operationKind || "missing"}`);
+    throw new TypeError(
+      `invalid model response operation kind: ${response.operationKind || "missing"}`,
+    );
   }
   validateOutput(response.output);
   normalizeModelOperationResult(response.operationKind, response.result);

@@ -130,10 +130,7 @@ export async function buildSystemContext({
   const includeSkills = enabled("skills");
   const includeServices = enabled("services");
   const includeMcpServers = enabled("mcp_servers");
-  // A persisted session selection is an explicit capability grant. Its
-  // canonical connector projection must be visible to the model even when a
-  // scenario omits the optional connectors prompt section; otherwise the
-  // selected access_connector tool has no usable connector identity.
+
   const selectedConnectorIds = normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds);
   const includeConnectors = enabled("connectors") || selectedConnectorIds.length > 0;
   const includeAttachments = enabled("attachments");

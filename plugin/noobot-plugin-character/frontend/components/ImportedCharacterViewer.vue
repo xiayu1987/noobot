@@ -18,17 +18,13 @@ const props = defineProps({
   assets: { type: Array, default: () => [] },
   protocol: { type: Object, default: null },
   revision: { type: Number, default: 0 },
-  // Session artifact cards provide a bounded flex container while the asset
-  // management preview is an intrinsic-height panel. Keeping this explicit
-  // prevents percentage-height feedback from growing the management panel.
+
   fillContainer: { type: Boolean, default: false },
-  // Standalone asset previews use a bounded viewport so a catalog with many
-  // characters remains scannable inside the right panel.
+
   height: { type: Number, default: 300 },
   suspendResize: { type: Boolean, default: false },
   resizeRevision: { type: Number, default: 0 },
-  // Collision helpers are a debugging aid and stay hidden during normal
-  // playback so their wireframe does not look like a mesh overlay.
+
   showColliders: { type: Boolean, default: false },
 });
 const host = ref();
@@ -47,14 +43,9 @@ let players = new Map();
 let queuedProtocolCount = 0;
 let nextPlaybackAt = 0;
 let activeProtocol = null;
-// The protocol timeline is the single clock for actions, root motion, physics,
-// and camera playback. AnimationMixer.time is an implementation detail of a
-// single character and cannot define a multi-character timeline.
+
 let protocolElapsed = 0;
-// Non-loop playback has an explicit terminal state. Once the terminal frame
-// has been evaluated and physics has settled, no runtime channel may write to
-// the character again; repeated constraint projection is the source of end
-// frame jitter.
+
 let playbackEnded = false;
 let contactTargets = [];
 let colliderHelpers = [];
@@ -204,9 +195,7 @@ function playCharacter(player, protocol, character, characterIndex) {
       .setDuration(segment.duration);
     action.enabled = false;
     action.weight = 0;
-    // The protocol timeline, not the source clip duration, owns playback.
-    // Keep the action paused so a short GLB clip cannot finish early and
-    // disable itself before the declared segment ends.
+
     action.paused = true;
     return action;
   });
@@ -258,12 +247,6 @@ function updateCharacterActions(protocol, time) {
       action.time = clipDuration;
     }
 
-    // AnimationMixer applies action state during update(). At a segment
-    // boundary the previous action may already have completed and disabled
-    // itself, so waiting for the next frame briefly exposes the model's bind
-    // pose. Re-evaluate at the current action time immediately after the
-    // timeline selects the active segment; this keeps every rendered frame
-    // covered by exactly one action.
     player.mixer.update(0);
   }
 }
@@ -294,10 +277,7 @@ function applyAuthoredRootTransform(player, position, rotation, scale) {
 
 function updateRootMotion(protocol, time) {
   const duration = Math.max(0, Number(protocol?.duration || 0));
-  // Root motion is evaluated on the protocol timeline. A mixer keeps its
-  // clock advancing after a non-looping clip has finished; clamp that clock
-  // to the declared terminal frame instead of falling back to the authored
-  // start transform (which causes a visible snap/flash).
+
   const timelineTime = protocol?.loop
     ? time % Math.max(duration, 0.000001)
     : Math.min(Math.max(0, time), duration);
@@ -602,8 +582,7 @@ function setupCamera(loaded) {
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
-  // Assets and protocol tracks use canonical -Z as the character forward
-  // direction; the standalone import preview must use the same front side.
+
   camera.position.set(center.x, center.y, center.z - Math.max(size.x, size.y, size.z, 1) * 2.2);
   camera.lookAt(center);
   return center;
@@ -615,8 +594,6 @@ function startAnimationLoop() {
     frame = requestAnimationFrame(animate);
     const delta = clock.getDelta();
     for (const player of players.values()) {
-      // A completed non-loop protocol is immutable. Do not advance mixers
-      // after the terminal frame; this keeps the frozen pose authoritative.
       if (!activeProtocol || !playbackEnded) player.mixer.update(delta);
     }
     if (activeProtocol) {
@@ -637,8 +614,7 @@ function startAnimationLoop() {
           ? time % Math.max(activeProtocol.duration, 0.000001)
           : Math.min(time, activeProtocol.duration);
         updateCamera(activeProtocol, cameraTime);
-        // Mark completion only after all channels have evaluated the terminal
-        // frame and physics has performed its final projection.
+
         if (!activeProtocol.loop && protocolElapsed >= duration) playbackEnded = true;
         updatePlaybackTelemetry(time);
       }

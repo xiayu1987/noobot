@@ -611,7 +611,7 @@ button,
   color: var(--noobot-text-strong);
 }
 
-/* Icon-only controls stay visually quiet until hovered. */
+
 .noobot-flat-soft-btn.settings-btn,
 .noobot-flat-soft-btn.mobile-menu-btn,
 .noobot-flat-soft-btn.collapse-btn,

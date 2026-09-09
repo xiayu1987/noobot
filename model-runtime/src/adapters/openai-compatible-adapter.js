@@ -38,8 +38,6 @@ function applyInvocationOverrides(target, overrides = {}) {
 }
 
 export function orderOpenAiResponsesRequestBody(request = {}) {
-  // The wire prefix is part of the provider cache contract. Keep stable
-  // request settings and tool definitions ahead of append-only conversation input.
   const { input, ...stableRequest } = request;
   return { ...stableRequest, input };
 }

@@ -36,8 +36,7 @@ export function validateEventEnvelope(value = {}) {
   if (!isRecord(value.ordering)) errors.push("invalid_ordering");
   if (!text(value?.ordering?.domain)) errors.push("missing_ordering_domain");
   if (!text(value?.ordering?.scopeId)) errors.push("missing_ordering_scope");
-  // Zero is the valid baseline coordinate for an empty authoritative snapshot.
-  // Event-family validators decide whether a non-snapshot fact may use it.
+
   if (!Number.isInteger(Number(value?.ordering?.sequence)) || Number(value.ordering.sequence) < 0)
     errors.push("invalid_sequence");
   if (!isRecord(value.producer)) errors.push("invalid_producer");

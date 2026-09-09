@@ -82,8 +82,7 @@ function frameEnvelope(subjects, shot, fov, margin, groundY, assetById) {
     (radius * (1 + margin)) / Math.tan((fov * Math.PI) / 360),
   );
   const target = [center[0], Math.max(groundY + 0.25, center[1]), center[2]];
-  // Characters face the protocol canonical -Z axis. Place the default camera
-  // on that forward side so previews and generated animations show their face.
+
   return { target, radius, distance, position: add(target, [0, radius * 0.35, -distance]) };
 }
 

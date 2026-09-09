@@ -133,8 +133,7 @@ export function createServicePluginHost({
         try {
           await previousOperation;
         } catch {
-          // A failed candidate never becomes active; the next queued refresh
-          // still starts from the last committed generation.
+          void 0;
         }
       }
       assertLifecycleOwnership(operationGeneration);
@@ -305,7 +304,7 @@ export function createServicePluginHost({
           try {
             await pendingOperation;
           } catch {
-            /* Disposal owns final cleanup. */
+            void 0;
           }
         }
         const scope = activeScope;

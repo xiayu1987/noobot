@@ -11,14 +11,6 @@ import {
 } from "./summary.js";
 import { resolveMessageId } from "./message.js";
 
-/**
- * Applies the terminal policy for a complete dialog turn.
- *
- * This is distinct from a summary checkpoint: completion is the lifecycle
- * boundary that marks all eligible messages not covered by the latest
- * checkpoint artifacts, then persists the same decision in the canonical
- * current-turn store.
- */
 export function applyTurnCompletionPolicy({
   modelMessages = [],
   turnMessageStore = null,
@@ -27,8 +19,7 @@ export function applyTurnCompletionPolicy({
   if (!turnMessageStore || typeof turnMessageStore.updateWhere !== "function") {
     throw new Error("turn completion policy requires the canonical turn message store");
   }
-  // The canonical turn store is the sole decision source. Mirror its exact
-  // UID decisions to provider objects instead of classifying a second snapshot.
+
   const markedMessageIds = new Set();
   const markedCount = markCurrentTurnStoreSummarized(turnMessageStore, {
     policyOptions,

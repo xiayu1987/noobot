@@ -154,11 +154,7 @@ export function resolveDiagnosticRole(message = {}) {
     .trim()
     .toLowerCase();
   if (role) return role;
-  const type = String(
-    message?.type ||
-      message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  )
+  const type = String(message?.type || message?.lc_kwargs?.type || "")
     .trim()
     .toLowerCase();
   if (type === "ai") return "assistant";

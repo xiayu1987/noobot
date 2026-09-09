@@ -215,11 +215,6 @@ function assertCheckpointIndex(payload, index, previousHash, turnId) {
   }
 }
 
-/**
- * Rebuilds the artificial first-checkpoint baseline produced while converting a
- * cumulative legacy Session. This is repair-only: canonical runtime writers
- * already emit true incremental checkpoint records.
- */
 export async function resegmentMigratedCheckpointBaselines({ sessionDir = "" } = {}) {
   const manifestFile = path.join(sessionDir, "session.json");
   const manifest = await readRepairJson(manifestFile);
@@ -459,10 +454,6 @@ function isUncommittedAggregateConflictContinuation(turn, turns, messages) {
   );
 }
 
-/**
- * Removes failed pre-commit continuation attempts left by the former runtime
- * ordering. This repair is valid only when the failed Turn committed no message.
- */
 export function reconcileUncommittedAggregateConflictContinuations(document = {}) {
   if (!document || typeof document !== "object" || Array.isArray(document)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), {

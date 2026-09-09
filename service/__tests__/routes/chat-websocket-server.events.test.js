@@ -93,7 +93,6 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
     eventId: "invalid-event",
     eventType: "turn.completed",
     sessionId: "session-invalid",
-    // Required stable turn identity and the rest of the lifecycle contract are intentionally absent.
   };
   const bot = {
     async getPendingAuthorityEvents() {

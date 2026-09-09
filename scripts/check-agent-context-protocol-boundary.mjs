@@ -27,7 +27,7 @@ async function assertAbsent(relative) {
     await access(path.join(ROOT, relative));
     violations.push(`${relative}: obsolete boundary adapter must be removed`);
   } catch {
-    // Expected.
+    void 0;
   }
 }
 

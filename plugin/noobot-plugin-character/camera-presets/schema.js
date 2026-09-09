@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-const finite = z.number().finite();
+const finite = z.number();
 const vec3 = z.array(finite).length(3);
 const frameSubjects = z
   .object({

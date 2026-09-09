@@ -105,9 +105,6 @@ function normalizeExplicitConfigParamKeys(keys = []) {
 }
 
 export function assertConfigParamsDocumentKeys(document = {}, keys = []) {
-  // Template keys select values during resolution; they do not constrain the
-  // parameter document. Normalize the document to enforce syntax and duplicate
-  // detection while preserving valid user-defined keys.
   void keys;
   return normalizeConfigParamsDocument(document);
 }

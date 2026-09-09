@@ -7,10 +7,7 @@ import { GUIDANCE_REASON, TOOL_NAME_SET, ensureHarnessBucket } from "./deps.js";
 import { resolveSummaryScope } from "@noobot/context-protocol/policy/summary";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import {
-  getMessageId,
-  resolveModelMessageBlocks,
-} from "../../../core/message-store.js";
+import { getMessageId, resolveModelMessageBlocks } from "../../../core/message-store.js";
 import { requestSummaryCheckpointMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
 
 const FAILURE_THRESHOLD = Object.freeze({

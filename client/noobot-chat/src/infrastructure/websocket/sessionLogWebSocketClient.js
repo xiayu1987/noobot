@@ -190,9 +190,7 @@ export function createSessionLogWebSocketClient({
   function flush() {
     const socket = transport.current();
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    // Keep one bounded batch in flight. The server ACK is the authority that
-    // permits advancing the window; otherwise reconnect recovery can reorder
-    // or silently discard records from an arbitrarily large in-flight set.
+
     if (inFlight.length) return;
     const now = Date.now();
     while (debugQueue.length && debugQueue[0].expiresAt <= now) {

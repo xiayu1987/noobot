@@ -29,8 +29,7 @@ export class BotManager {
     } = {},
   ) {
     this.globalConfig = globalConfig;
-    // Keep the persisted/normalized document separate from the runtime
-    // projection. Workspace repair must consume the former only.
+
     this.globalConfigRaw = globalConfigRaw;
     this.startupContext = startupContext;
     this.pluginRuntimeBundle = pluginRuntimeBundle;

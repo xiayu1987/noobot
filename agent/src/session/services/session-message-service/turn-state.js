@@ -450,9 +450,7 @@ export async function applyTurnLifecycleEvent({
         expectedAggregateVersion: actualVersion,
         persistenceContext,
       });
-      // The display summary is the refresh read model. Persist it from the same
-      // authoritative session state so lifecycle terminal transitions cannot
-      // leave a stale processing snapshot behind.
+
       await this.sessionRepo.writeSessionDisplaySummary(userId, session, { persistenceContext });
       return {
         ...result,

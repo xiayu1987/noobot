@@ -39,15 +39,14 @@ const samples = Object.freeze([
     id: "sample.three.robot-expressive",
     name: "RobotExpressive.glb",
     url: robotSampleUrl,
-    // RobotExpressive.glb is authored facing +Z; convert it once to the
-    // protocol's canonical -Z forward axis at import time.
+
     canonicalRotation: [0, 1, 0, 0],
   },
   {
     id: "sample.three.soldier",
     name: "Soldier.glb",
     url: soldierSampleUrl,
-    // Soldier.glb is authored facing -Z, already matching the protocol axis.
+
     canonicalRotation: [0, 0, 0, 1],
   },
   { id: "sample.three.flamingo", name: "Flamingo.glb", url: flamingoSampleUrl },

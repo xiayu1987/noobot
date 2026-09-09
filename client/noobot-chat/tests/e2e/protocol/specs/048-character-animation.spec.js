@@ -331,9 +331,6 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
     .poll(async () => (await artifactPanel.boundingBox())?.width || 0)
     .toBeLessThanOrEqual((panelAfterRatioDrag?.width || 0) - 20);
 
-  // A genuinely independent mobile browser has no localStorage or IndexedDB
-  // from the importing desktop. It must restore the GLB from the authenticated
-  // workspace asset referenced by the Session authority event.
   const mobileContext = await browser.newContext({
     ...devices["iPhone 13"],
     launchOptions: { chromiumSandbox: false },
@@ -439,8 +436,6 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   const connectorPanel = page.locator(".connector-overview-panel").nth(0);
   const rightToolPanels = page.locator(".right-tool-panels");
 
-  // Collapsing every right-side tool still leaves a reserved icon rail in the
-  // message layout, so the session artifact cannot cover those controls.
   await page.getByTestId("right-chat-navigator-panel-toggle").click();
   await expect(chatNavigatorPanel).toHaveClass(/is-collapsed/);
   await expect(connectorPanel).toHaveClass(/is-collapsed/);
@@ -460,8 +455,6 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
     (collapsedArtifactIconBox?.x || 0) + (collapsedArtifactIconBox?.width || 0),
   ).toBeLessThanOrEqual(collapsedToolLeft - 8);
 
-  // Re-open the character tool while the artifact stays collapsed. The same
-  // reserved message column must keep both surfaces side by side.
   await page.getByTestId("right-feature-panel-toggle").click();
   await expect(featurePanel).not.toHaveClass(/is-collapsed/);
   await expect(chatNavigatorPanel).toHaveClass(/is-collapsed/);

@@ -468,8 +468,7 @@ describe("useChatEngine.send-stream", () => {
 
     releaseStream();
     await sendPromise;
-    // DONE only closes the data stream.  Lifecycle completion is owned by the
-    // authoritative terminal event, which this fixture intentionally omits.
+
     expect(sending.value).toBe(true);
   });
 
@@ -688,12 +687,9 @@ describe("useChatEngine.send-stream", () => {
     await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
     expect(applySessionDetail).not.toHaveBeenCalled();
-    // DONE payload messages are not a second message projection source. The
-    // content is only projected by the validated message event above; this
-    // fixture intentionally has no such event.
+
     expect(assistant?.content).toBe("");
-    // Canonical assistant messages normalize collection fields to empty lists;
-    // this is presentation shape, not persisted lifecycle state.
+
     expect(assistant?.attachments).toEqual([]);
     expect(assistant?.completedToolLogs).toBeUndefined();
     expect(assistant?.pending).toBe(false);
@@ -845,9 +841,6 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
-    // USER_STOPPED is data-plane transport information.  The explicit
-    // Authority terminal event above is the only lifecycle/terminal input;
-    // neither event may trigger an implicit session-detail refresh.
     expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();
   });

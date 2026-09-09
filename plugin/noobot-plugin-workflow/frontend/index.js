@@ -150,8 +150,7 @@ export async function activate(ctx = {}) {
         typeof context?.applyWorkflowRuntimeEvent === "function"
           ? context.applyWorkflowRuntimeEvent
           : null,
-      // Session logs are owned by the root chat session. Keep that routing
-      // identity separate from the isolated node session business identity.
+
       logWorkflowDiagnostics:
         typeof context?.logWorkflowDiagnostics === "function"
           ? (event, payload = {}) => {

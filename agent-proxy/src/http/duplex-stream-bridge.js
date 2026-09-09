@@ -49,8 +49,6 @@ export function bridgeDuplexStreams({
     return true;
   };
 
-  // Keep error listeners attached after finalization: either stream may report a
-  // second, asynchronous error while destroy() is propagating to its peer.
   upstream.on("error", (error) => finalize("upstream_error", error));
   downstream.on("error", (error) => finalize("downstream_error", error));
   upstream.once("close", () => finalize("upstream_close"));

@@ -15,11 +15,6 @@ const RECOVERABLE_FINALIZE_STATES = new Set([
 const PHASES = new Set(Object.values(TURN_PHASE));
 const clean = (value) => String(value || "").trim();
 
-/**
- * Reconciles an action conflict against the execution-liveness fact supplied by
- * the host. All lifecycle interpretation and recovery command construction stay
- * inside the authority boundary.
- */
 export async function recoverOrphanedTurn({
   conflict = null,
   snapshot = null,
@@ -81,10 +76,6 @@ export async function recoverOrphanedTurn({
     : { recovered: false, reason: committed?.reason || "orphan_commit_failed", committed };
 }
 
-/**
- * Recovers a persisted finalize intent. Snapshot I/O and command persistence are
- * injected ports; recoverability and the exact terminal command are authoritative.
- */
 export async function recoverTurnFinalize({
   readSnapshot,
   commitTurnLifecycle,
@@ -97,14 +88,15 @@ export async function recoverTurnFinalize({
   if (typeof readSnapshot !== "function") {
     return { recovered: false, reason: "lifecycle_snapshot_unavailable" };
   }
-  const read = (knownSequence) => readSnapshot({
-    userId,
-    sessionId,
-    parentSessionId,
-    commandId,
-    knownSequence,
-    terminalLimit,
-  });
+  const read = (knownSequence) =>
+    readSnapshot({
+      userId,
+      sessionId,
+      parentSessionId,
+      commandId,
+      knownSequence,
+      terminalLimit,
+    });
   const initial = await read(undefined);
   if (!initial?.found) {
     return { recovered: false, reason: initial?.reason || "snapshot_not_found", result: initial };
@@ -139,7 +131,12 @@ export async function recoverTurnFinalize({
     },
   });
   if (!committed?.applied && !committed?.deduplicated) {
-    return { recovered: false, reason: committed?.reason || "finalize_commit_failed", result: initial, committed };
+    return {
+      recovered: false,
+      reason: committed?.reason || "finalize_commit_failed",
+      result: initial,
+      committed,
+    };
   }
   return { recovered: true, result: await read(undefined), committed };
 }

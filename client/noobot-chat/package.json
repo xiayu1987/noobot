@@ -50,6 +50,7 @@
     "@noobot/shared": "file:../../shared",
     "@noobot/timeline-runtime": "file:../../timeline-runtime",
     "@tanstack/vue-virtual": "^3.13.36",
+    "@vue/devtools-api": "^8.1.5",
     "element-plus": "^2.14.4",
     "markdown-it": "^15.0.0",
     "mermaid": "^11.16.1",

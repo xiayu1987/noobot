@@ -666,9 +666,7 @@ describe("workflow node session view ownership", () => {
       sessionId: "session-registry-live",
       messages: [{ id: "authoritative-message", role: "assistant", content: "final result" }],
     };
-    // The ExtensionOutlet receives Pinia's unwrapped registry as a stable plain
-    // object. Only the scalar version is guaranteed to cross that dynamic
-    // extension boundary reactively.
+
     viewerProps.subSessionMessageRegistryVersion += 1;
     await nextTick();
     await nextTick();

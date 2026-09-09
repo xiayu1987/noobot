@@ -30,9 +30,7 @@ function textBlocks(content) {
     if (typeof block === "string") return block ? [{ type: "text", text: block }] : [];
     if (!block || typeof block !== "object") return [];
     if (block.type === "text") return [{ ...block, text: String(block.text || "") }];
-    // Anthropic thinking/tool blocks are protocol data, not display text. Keep
-    // them byte-for-byte available for the next request so thinking-enabled
-    // tool loops satisfy Anthropic's preserved-thinking contract.
+
     if (
       block.type === "thinking" ||
       block.type === "redacted_thinking" ||
@@ -55,12 +53,7 @@ function resolveMessageRole(message = {}) {
     .trim()
     .toLowerCase();
   if (explicitRole) return explicitRole;
-  const type = String(
-    (typeof message?._getType === "function" ? message._getType() : "") ||
-      message?.type ||
-      message?.lc_kwargs?.type ||
-      "",
-  )
+  const type = String(message?.type || message?.lc_kwargs?.type || "")
     .trim()
     .toLowerCase();
   if (type === "human") return "user";
@@ -172,8 +165,6 @@ function responseFromAnthropic(raw = {}) {
     }));
   const usage = raw.usage || {};
   return {
-    // Preserve the provider's exact content blocks. In particular, Fable 5.1
-    // requires thinking blocks to be echoed unchanged with tool results.
     content: blocks.map((block) => ({ ...block })),
     reasoning_content: reasoning,
     tool_calls,

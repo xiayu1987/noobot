@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// E2E waits are protocol budgets, not provider retry budgets. Keep the
-// budgets here so lifecycle, persistence, and model-observation assertions
-// converge on the same authoritative limits.
 export const PROTOCOL_TIMEOUTS = Object.freeze({
   model: 420000,
   toolChain: 900000,

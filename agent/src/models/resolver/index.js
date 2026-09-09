@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  pickAlias,
-  byAliasWithUser,
-  getEnabledProviders,
-} from "../provider/resolver.js";
+import { pickAlias, byAliasWithUser, getEnabledProviders } from "../provider/resolver.js";
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
@@ -15,20 +11,11 @@ export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
   return byAliasWithUser(alias, globalConfig, userConfig);
 }
 
-export function resolveModelSpecByAlias({
-  alias,
-  globalConfig,
-  userConfig,
-}) {
+export function resolveModelSpecByAlias({ alias, globalConfig, userConfig }) {
   return byAliasWithUser(alias, globalConfig, userConfig);
 }
 
-export function resolveModelSpecByName({
-  name,
-  modelName,
-  globalConfig,
-  userConfig,
-}) {
+export function resolveModelSpecByName({ name, modelName, globalConfig, userConfig }) {
   const targetName = String(modelName || name || "").trim();
   if (!targetName) return null;
 
@@ -52,12 +39,7 @@ export function resolveModelSpecByName({
   return null;
 }
 
-export function resolveModelSpecOrConfiguredDefault({
-  name,
-  modelName,
-  globalConfig,
-  userConfig,
-}) {
+export function resolveModelSpecOrConfiguredDefault({ name, modelName, globalConfig, userConfig }) {
   const requestedModel = String(modelName || name || "").trim();
   if (!requestedModel) return resolveDefaultModelSpec({ globalConfig, userConfig });
   const requestedModelSpec = resolveModelSpecByName({
@@ -75,9 +57,6 @@ export function resolveSkillModelSpec({ skillConfig, globalConfig, userConfig })
   const spec = byAliasWithUser(alias, globalConfig, userConfig);
   if (!spec) return null;
 
-  // A skill may select another concrete model. Re-normalize after applying
-  // the override so modelFamily, operator defaults, and concrete-model rules
-  // are recalculated instead of leaking the alias model's identity.
   return normalizeRuntimeModelSpec({
     ...spec,
     ...(skillConfig.model ? { model: skillConfig.model } : {}),

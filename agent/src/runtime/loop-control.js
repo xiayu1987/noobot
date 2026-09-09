@@ -10,7 +10,10 @@ import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,
 } from "@noobot/context-protocol/policy/injected-message";
-import { resolveContextMessageContent } from "@noobot/context-protocol/message/codec";
+import {
+  resolveContextMessageContent,
+  resolveContextMessageSummarized,
+} from "@noobot/context-protocol/message/codec";
 import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
 import { TOOL_NAME } from "../tools/constants/index.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
@@ -32,10 +35,6 @@ function hasTaskSummaryTool(tools = []) {
   return hasTool(tools, TOOL_NAME.TASK_SUMMARY);
 }
 
-function isMessageSummarized(message = {}) {
-  return message?.summarized === true || message?.lc_kwargs?.summarized === true;
-}
-
 function hasInternalMessageMarker(message = {}) {
   return Boolean(resolveContextInternalMessageType(message));
 }
@@ -44,7 +43,7 @@ function resolveUnsummarizedMessageChars(messages = []) {
   if (!Array.isArray(messages)) return 0;
   return messages.reduce((total, message) => {
     if (!message || typeof message !== "object") return total;
-    if (isMessageSummarized(message)) return total;
+    if (resolveContextMessageSummarized(message)) return total;
     if (hasInternalMessageMarker(message)) return total;
     const text = resolveContextMessageContent(message);
     return total + String(text || "").length;

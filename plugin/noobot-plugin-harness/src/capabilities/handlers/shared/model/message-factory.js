@@ -13,6 +13,7 @@ import {
   declareAuxiliarySequenceIdentity,
 } from "@noobot/context-protocol/assembly/auxiliary-sequence";
 import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
 
 function markContextMessage(message = {}, source = {}) {
   const sourceMessageId = resolveContextMessageId(source);
@@ -56,13 +57,6 @@ function normalizeTextList(items = []) {
     .filter(Boolean);
 }
 
-function isSystemLikeRole(role = "") {
-  const normalized = String(role || "")
-    .trim()
-    .toLowerCase();
-  return normalized === "system" || normalized === "developer";
-}
-
 export function buildCapabilityModelMessages({
   locale = "zh-CN",
   agentMessages = [],
@@ -87,9 +81,11 @@ export function buildCapabilityModelMessages({
   const resolvedTaskRole = normalizeModelMessageRole(taskRole, "user");
   const resolvedPostTaskRole = normalizeModelMessageRole(postTaskRole, resolvedTaskRole);
   if (normalizedTask) {
-    const target = isSystemLikeRole(resolvedTaskRole) ? protocolSystemMessages : taskMessages;
+    const target = isSystemLikeMessageRole(resolvedTaskRole)
+      ? protocolSystemMessages
+      : taskMessages;
     target.push(
-      isSystemLikeRole(resolvedTaskRole)
+      isSystemLikeMessageRole(resolvedTaskRole)
         ? markStableProtocolMessage({ role: resolvedTaskRole, content: normalizedTask }, "task")
         : markRequestMessage({ role: resolvedTaskRole, content: normalizedTask }),
     );
@@ -100,9 +96,11 @@ export function buildCapabilityModelMessages({
     );
   }
   for (const [index, content] of normalizedPostTaskMessages.entries()) {
-    const target = isSystemLikeRole(resolvedPostTaskRole) ? protocolSystemMessages : taskMessages;
+    const target = isSystemLikeMessageRole(resolvedPostTaskRole)
+      ? protocolSystemMessages
+      : taskMessages;
     target.push(
-      isSystemLikeRole(resolvedPostTaskRole)
+      isSystemLikeMessageRole(resolvedPostTaskRole)
         ? markStableProtocolMessage(
             { role: resolvedPostTaskRole, content },
             `post-message:${index}`,

@@ -545,9 +545,9 @@ main() {
   log "$(msg step_install)"
   unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true
   if node -e "const p=require(process.argv[1]); process.exit(Array.isArray(p.workspaces)&&p.workspaces.length>0?0:1)" "$ROOT_DIR/package.json" >/dev/null 2>&1; then
-    # Dependency resolution must stay offline with respect to npm's audit and
-    # funding endpoints. Those network calls are not part of startup and can
-    # block the service indefinitely when the registry is unreachable.
+
+
+
     npm --prefix "$ROOT_DIR" install --workspaces --ignore-scripts --no-audit --no-fund --no-progress
     (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet)
   else

@@ -16,7 +16,6 @@ function fetcherOptions() {
   return authenticatedFetcher ? { fetcher: authenticatedFetcher } : {};
 }
 
-/** Host-owned, least-privilege access to attachment and generated-file content. */
 export const attachmentService = Object.freeze({
   configure({ fetcher = null } = {}) {
     authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;

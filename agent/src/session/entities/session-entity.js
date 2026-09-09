@@ -205,9 +205,6 @@ function applyChatPresentation(target, message) {
   if (typeof message?.chatPresentation === "boolean") {
     target.chatPresentation = message.chatPresentation;
   } else if (target.type === "context_control") {
-    // Context-control messages are model-only by protocol. Keep the
-    // invariant when normalizing artifacts written before the field was
-    // persisted by the turn message service.
     target.chatPresentation = false;
   }
 }
@@ -252,9 +249,6 @@ function applyMessagePluginFields(target, message) {
 }
 
 function applyAnthropicMessageContent(target, message) {
-  // Anthropic Messages thinking/tool blocks are protocol state, not a
-  // presentation preview. Assistant history must retain the exact block
-  // array so a resumed tool turn can echo thinking signatures unchanged.
   if (target.role === "assistant" && Array.isArray(message?.rawModelContent)) {
     target.rawModelContent = message.rawModelContent.map((block) =>
       block && typeof block === "object" ? { ...block } : block,
@@ -320,8 +314,7 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
         message.attachments.map(normalizeSessionAttachment).filter(Boolean),
       )
     : [];
-  // Provider/runtime IDs may be scoped to one model run. They are retained for
-  // streaming correlation, while messageUid is the persistence identity.
+
   const messageUid = normalizeMessageUid(message?.messageUid);
   const runtimeMessageId = resolveRuntimeMessageId(message, messageUid);
   const normalizedMessage = createBaseMessageEntity(message, now);
@@ -485,9 +478,7 @@ function resolveSessionNormalizationContext(session, { now, sessionId, parentSes
 
 function createNormalizedSessionEntity(session, context, messages) {
   const normalizedBase = { ...objectRecord(session) };
-  // The event list is the only persisted artifact fact.  A materialized map
-  // would create a second source of truth and can drift after old sessions are
-  // loaded.
+
   delete normalizedBase.sessionArtifacts;
   return {
     ...normalizedBase,

@@ -124,8 +124,6 @@ function attachmentRefsFromTransferEnvelopes(value) {
   return Array.from(new Set(refs));
 }
 
-// Runtime resources and transfer envelopes remain internal. The model sees
-// one canonical attachmentRef representation at this boundary.
 export function projectToolResultForModel(toolResultText = "") {
   let source;
   try {

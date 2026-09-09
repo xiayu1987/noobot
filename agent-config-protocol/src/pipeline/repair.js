@@ -221,9 +221,7 @@ function repairContractNode({
       "unsupported_node",
     );
   }
-  // A node's declared facts layer config over its template, then over the
-  // library default, so repair always resolves to one declared answer instead
-  // of inventing a value of its own.
+
   const shouldNormalizeModel =
     contract !== MODEL_PROVIDER_CONFIG_CONTRACT ||
     Object.keys({ ...templateObject, ...valueObject, ...output }).some((key) =>
@@ -252,11 +250,6 @@ function repairContractNode({
   return output;
 }
 
-/**
- * Repair one node against the STRUCTURE contract. Structure decides what may
- * exist; the value source decides what stands in when the target's own value is
- * missing or invalid. Neither role is ever taken from the other.
- */
 function repairStructureNode({ node, target, path, values, scope, changes }) {
   if (!structureAllowsScope(node, scope)) {
     if (target !== undefined) {
@@ -266,8 +259,6 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
   }
   const optional = node.policy === CONFIG_NODE_POLICY.USER_OPTIONAL;
 
-  // A provider entry's fields belong to the model protocol, so its own contract
-  // walker owns the entry and the model library owns its values.
   if (node.delegatedContract) {
     const providerValues = values.resolveProviderValues(path.at(-1));
     return repairContractNode({
@@ -301,8 +292,7 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
       });
       if (repaired !== REMOVE_NODE) output[key] = repaired;
     }
-    // Entries the value source declares are restored when absent, so a
-    // collection never silently loses a shipped entry.
+
     for (const key of collectionValueKeys({ node, path, values })) {
       if (Object.prototype.hasOwnProperty.call(output, key)) continue;
       const repaired = repairStructureNode({
@@ -457,16 +447,11 @@ function restoreProviderReferenceDefaults({ document, values, alias, requirement
   }
 }
 
-/**
- * Expand the structure's declared model references onto this document, so a
- * reference path exists once in the contract rather than twice in code.
- */
 function collectReferenceRules(document) {
   const rules = [];
   for (const { path, requirement } of listStructureModelReferences()) {
     const placeholderIndex = path.indexOf(CONFIG_STRUCTURE_PLACEHOLDER);
     if (placeholderIndex < 0) {
-      // A collection declared as a reference has model aliases for values.
       const node = valueAt(document, path);
       if (isPlainObject(node)) {
         for (const key of Object.keys(node)) rules.push({ path: [...path, key], requirement });

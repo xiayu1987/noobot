@@ -66,14 +66,7 @@ export function characterPositionAt(character, time) {
   return interpolateRootMotion(character, time).position;
 }
 
-/**
- * Resolve the canonical asset transform used by the renderer. Callers that
- * have imported GLB scene data can provide a node resolver for exact bone
- * colliders; the fallback remains deterministic for server-side validation.
- */
 export function characterTransformAt(character, time) {
-  // Root motion is already expressed in canonical world coordinates. Asset
-  // offsets belong to node-local geometry and must not move the trajectory.
   return interpolateRootMotion(character, time);
 }
 
@@ -180,9 +173,7 @@ function collidersCanContact(source, target, characters, time, options = {}) {
 function nodeReachAllowance(collider, character, time, options) {
   if (collider?.node == null) return 0;
   if (options.attackReachAllowance != null) return options.attackReachAllowance;
-  // Server-side validation cannot resolve animated bone world transforms. A
-  // node-bound hitbox/hurtbox therefore gets a conservative limb allowance,
-  // while root colliders and contact events retain strict static geometry.
+
   const transform = characterTransformAt(character, time);
   return Math.abs(transform.scale[1] || 1) * 0.65;
 }

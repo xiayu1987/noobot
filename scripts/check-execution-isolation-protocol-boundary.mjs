@@ -21,7 +21,7 @@ async function assertAbsent(relativePath) {
       `${relativePath}: obsolete duplicate execution-isolation protocol is forbidden`,
     );
   } catch {
-    // Absence is required.
+    void 0;
   }
 }
 

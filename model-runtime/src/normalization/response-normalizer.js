@@ -104,9 +104,6 @@ export function normalizeModelOutput(response = {}) {
       ? response.additional_kwargs.reasoning
       : null;
   return Object.freeze({
-    // Keep the provider content blocks as protocol data. Anthropic adaptive
-    // thinking requires the exact thinking/tool_use blocks to be echoed on the
-    // following tool-result request; reducing them to text loses that binding.
     ...(typeof response.content === "string" || Array.isArray(response.content)
       ? { content: response.content }
       : {}),

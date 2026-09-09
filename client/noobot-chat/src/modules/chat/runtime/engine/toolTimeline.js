@@ -186,9 +186,6 @@ function buildToolLogProjectionState(timeline = []) {
 }
 
 function toolLogProjectionState(timeline = []) {
-  // Timelines are updated in place as lifecycle facets arrive. A permanent
-  // cache keyed only by the array identity would retain an obsolete
-  // projection after a later facet supplies canonical args or results.
   return buildToolLogProjectionState(timeline);
 }
 

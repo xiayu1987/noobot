@@ -134,8 +134,6 @@ export function attachmentMatchKeys(item = {}) {
       }),
     ];
   } catch {
-    // Legacy records must be normalized by the single legacy adapter before
-    // they enter a matching path. Access/content fields are never identity.
     return [];
   }
 }

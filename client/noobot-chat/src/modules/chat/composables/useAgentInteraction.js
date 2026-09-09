@@ -10,10 +10,7 @@ import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
 import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugLogger.js";
 
-export function useAgentInteraction({
-  encryptPayloadBySessionId,
-  sendJson,
-} = {}) {
+export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}) {
   const { translate } = useLocale();
   const chatStore = useChatStore();
   const {
@@ -85,12 +82,11 @@ export function useAgentInteraction({
       pendingInteractionRequests.value = queue;
     }
     const currentSessionId = String(activeSessionId.value || "").trim();
-    // During initial connection the authoritative request can arrive before
-    // the active session identity is committed. Keep the queued protocol
-    // record visible until that identity is available; the watcher below
-    // then narrows it to the exact session.
+
     pendingInteractionRequest.value = currentSessionId
-      ? queue.find((requestItem) => String(requestItem?.sessionId || "").trim() === currentSessionId) || null
+      ? queue.find(
+          (requestItem) => String(requestItem?.sessionId || "").trim() === currentSessionId,
+        ) || null
       : queue[0] || null;
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;
@@ -131,7 +127,9 @@ export function useAgentInteraction({
       if (normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId)) return true;
       if (normalizedRequestId) return false;
       const signature = buildInteractionRequestSignature(requestOrId);
-      return Boolean(hasUsableSignature(signature) && handledInteractionRequestSignatures.has(signature));
+      return Boolean(
+        hasUsableSignature(signature) && handledInteractionRequestSignatures.has(signature),
+      );
     }
     const normalizedRequestId = normalizeRequestId(requestOrId);
     return Boolean(normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId));
@@ -142,8 +140,10 @@ export function useAgentInteraction({
       const removed = removePendingInteraction((requestItem) => {
         if (!requestItem || typeof requestItem !== "object") return false;
         if (requestOrId && typeof requestOrId === "object") {
-          return findPendingInteractionIndex(requestOrId) >= 0 &&
-            getInteractionRequestKey(requestItem) === getInteractionRequestKey(requestOrId);
+          return (
+            findPendingInteractionIndex(requestOrId) >= 0 &&
+            getInteractionRequestKey(requestItem) === getInteractionRequestKey(requestOrId)
+          );
         }
         return normalizeRequestId(requestItem?.requestId || "") === normalizeRequestId(requestOrId);
       });
@@ -183,7 +183,11 @@ export function useAgentInteraction({
       ) {
         return false;
       }
-      if (pendingTurnScopeId && normalizedTurnScopeId && pendingTurnScopeId !== normalizedTurnScopeId) {
+      if (
+        pendingTurnScopeId &&
+        normalizedTurnScopeId &&
+        pendingTurnScopeId !== normalizedTurnScopeId
+      ) {
         return false;
       }
       return true;
@@ -236,15 +240,17 @@ export function useAgentInteraction({
           }
         : response || {};
     try {
-      sendJson(createInteractionResponseCommand({
-        commandId: `interaction:${request.requestId}`,
-        identity: {
-          sessionId,
-          dialogProcessId: request?.dialogProcessId,
-          turnScopeId: request?.turnScopeId,
-        },
-        interaction: { requestId: request.requestId, response: responsePayload },
-      }));
+      sendJson(
+        createInteractionResponseCommand({
+          commandId: `interaction:${request.requestId}`,
+          identity: {
+            sessionId,
+            dialogProcessId: request?.dialogProcessId,
+            turnScopeId: request?.turnScopeId,
+          },
+          interaction: { requestId: request.requestId, response: responsePayload },
+        }),
+      );
     } catch (error) {
       interactionSubmitting.value = false;
       throw error;
