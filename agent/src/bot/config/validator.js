@@ -21,12 +21,7 @@ export class BotManageValidator {
     return normalizedMessage;
   }
 
-  validateRunInput({
-    userId,
-    sessionId,
-    caller = CALLER_ROLE.USER,
-    parentSessionId = "",
-  }) {
+  validateRunInput({ userId, sessionId, caller = CALLER_ROLE.USER, parentSessionId = "" }) {
     if (!userId || !sessionId) {
       throw recoverableToolError(tSystem("common.userSessionRequired"), {
         code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -46,21 +41,6 @@ export class BotManageValidator {
       throw recoverableToolError(tSystem("bot.invalidParentSessionIdFormat"), {
         code: ERROR_CODE.RECOVERABLE_INVALID_PARENT_SESSION_ID,
       });
-    }
-  }
-
-  validateScenarioConfig(scenarioConfig) {
-    if (!scenarioConfig || typeof scenarioConfig !== "object") {
-      throw new Error(tSystem("bot.scenarioConfigObjectRequired"));
-    }
-    if (scenarioConfig.tools && !Array.isArray(scenarioConfig.tools)) {
-      throw new Error(tSystem("bot.scenarioConfigToolsArrayRequired"));
-    }
-    if (
-      scenarioConfig.context &&
-      typeof scenarioConfig.context !== "object"
-    ) {
-      throw new Error(tSystem("bot.scenarioConfigContextObjectRequired"));
     }
   }
 }
