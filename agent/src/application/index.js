@@ -26,12 +26,6 @@ function requireMethod(target, methodName) {
   return method.bind(target);
 }
 
-/**
- * Transport-neutral application boundary for Agent clients.
- * Service, a future CLI, IDE integrations, and tests must depend on this API
- * instead of BotManager internals. Plugin loading remains owned by Agent and
- * always uses the agent runtime surface.
- */
 export function createAgentApplication({ runtime } = {}) {
   const runSession = requireMethod(runtime, "runSession");
   const resolveExecutionIntent = requireMethod(runtime, "resolveExecutionIntent");

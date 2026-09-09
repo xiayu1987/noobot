@@ -34,9 +34,7 @@ export function buildSessionDetailProjection({
     turnTimings,
     makeViewMessage,
   });
-  // A detail snapshot contains canonical model-history entities. Chat display
-  // entities are always projected by the same presentation-identity contract
-  // used by the live stream; callers cannot bypass this projection.
+
   const foldedMessages = foldConversationMessages(normalizedMessages, makeViewMessage);
   const projectedMessages = selectTurnPresentations({
     activeSession: {

@@ -55,7 +55,7 @@ export {
   shouldProcessPrimaryToolHooks,
 } from "./tool-utils.js";
 
-export { extractRawTextContent, isMessageSummarized, safeJsonStringify } from "./message/utils.js";
+export { extractRawTextContent, safeJsonStringify } from "./message/utils.js";
 
 export {
   buildPlanSnapshot,

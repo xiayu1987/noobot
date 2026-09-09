@@ -365,8 +365,6 @@ test("model request requires one explicit context sequence policy", () => {
 });
 
 test("model request derives provider and adapter identities", () => {
-  // The transport is a protocol fact derived from model family, so a spec
-  // that still names a format is a non-converged producer.
   assert.throws(
     () =>
       createModelRequest({
@@ -386,7 +384,10 @@ test("model request derives provider and adapter identities", () => {
 });
 
 test("model-family facts select the transport adapter without config fields", () => {
-  assert.equal(resolveModelAdapterId({ modelFamily: "claude" }), MODEL_ADAPTER_ID.ANTHROPIC_MESSAGES);
+  assert.equal(
+    resolveModelAdapterId({ modelFamily: "claude" }),
+    MODEL_ADAPTER_ID.ANTHROPIC_MESSAGES,
+  );
   assert.equal(resolveModelAdapterId({ modelFamily: "gpt" }), MODEL_ADAPTER_ID.OPENAI_COMPATIBLE);
   const claude = createModelRequest({
     invocation,
@@ -467,7 +468,6 @@ test("model operation capabilities are governed only by explicit model configura
 });
 
 test("reasoning transport is declared by the provider, never inferred from a model name", () => {
-  // A model name that looks like Gemini must not select Gemini's parameter.
   const misleading = {
     model: "gemini-3.7-flash",
     reasoning_effort_parameter: "reasoning_effort",

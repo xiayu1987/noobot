@@ -21,11 +21,6 @@ function text(value) {
   return String(value || "").trim();
 }
 
-/*
- * Policy-layer names for codec accessors. These are alias exports, not a
- * semantic layer: downstream packages and sibling policy modules import them by
- * these names, so the aliases stay while the implementations live in the codec.
- */
 export {
   readContextMessageField as readMessageField,
   resolveContextMessageDialogProcessId as resolveMessageDialogProcessId,

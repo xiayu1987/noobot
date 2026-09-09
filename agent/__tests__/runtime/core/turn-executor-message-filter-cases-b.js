@@ -50,7 +50,7 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
       return {
         async invoke(messages) {
           capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
-            role: item.role || (typeof item._getType === "function" ? item._getType() : ""),
+            role: item.role || item.type || "",
             content: item.content,
           }));
           return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
@@ -136,7 +136,7 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
       return {
         async invoke(messages) {
           capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
-            role: item.role || (typeof item._getType === "function" ? item._getType() : ""),
+            role: item.role || item.type || "",
             content: item.content,
             dialogProcessId: item.dialogProcessId || item.additional_kwargs?.dialogProcessId || "",
             turnScopeId: item.turnScopeId || item.additional_kwargs?.turnScopeId || "",
@@ -304,7 +304,7 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
       return {
         async invoke(messages) {
           capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({
-            role: item.role || (typeof item._getType === "function" ? item._getType() : ""),
+            role: item.role || item.type || "",
             content: item.content,
           }));
           return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };

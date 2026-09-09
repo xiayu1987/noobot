@@ -147,8 +147,6 @@ export function registerLogWebSocketServer(
         for (const item of events) {
           const event = { ...item, userId: request.auth?.userId || item.userId };
           if (isBestEffortDebugEvent(event)) {
-            // Debug ACK means accepted by the collector boundary. It is never
-            // allowed to hold the browser retry window behind disk I/O.
             void writeLogEvent(event, logConfig)
               .then((result) => {
                 if (result?.ok === false) {

@@ -19,7 +19,7 @@ async function assertAbsent(relativePath) {
     await access(path.join(ROOT, relativePath));
     violations.push(`${relativePath}: obsolete connector implementation must remain removed`);
   } catch {
-    // Absence is required.
+    void 0;
   }
 }
 

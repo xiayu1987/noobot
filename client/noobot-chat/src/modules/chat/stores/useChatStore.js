@@ -18,8 +18,7 @@ export const useChatStore = defineStore("chat", () => {
   const input = ref("");
   const uploadFiles = ref([]);
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
-  // Plugin-runtime projectors materialize plugin state through this single
-  // reducer gateway; Turn/Execution authority remains in turnRuntimeRegistry.
+
   const workflowNodeStateRegistry = ref(null);
   const subSessionMessageRegistry = ref(createSubSessionMessageRegistry());
   const subSessionMessageRegistryVersion = ref(0);
@@ -139,9 +138,7 @@ export const useChatStore = defineStore("chat", () => {
     subSessionMessageRegistry,
     subSessionMessageRegistryVersion,
     turnRuntimeRegistry,
-    // Resolve lazily: workflowStore is created below because it depends on
-    // the sub-session reducers. This keeps one selector implementation while
-    // avoiding a second workflow-state cache in the sub-session store.
+
     selectWorkflowNodeState: (...args) => workflows.selectWorkflowNodeState(...args),
     applyTurnLifecycleSnapshot: turnActions.applyTurnLifecycleSnapshot,
     applyTurnTimingSnapshot: turnActions.applyTurnTimingSnapshot,

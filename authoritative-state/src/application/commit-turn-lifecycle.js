@@ -83,10 +83,6 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
   });
 }
 
-/**
- * Computes one authoritative commit. The caller owns the storage transaction and
- * must persist lifecycle, terminal materialization and eventOutbox together.
- */
 export function commitTurnLifecycle({
   lifecycle = {},
   event = {},

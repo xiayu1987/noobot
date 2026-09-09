@@ -31,7 +31,11 @@ function transferIdentityRequired(identity) {
       throw new Error(`semantic_transfer_overflow_${key}_required`);
     }
   }
-  if (!plain(identity.producer) || !String(identity.producer.type || "").trim() || !String(identity.producer.id || "").trim()) {
+  if (
+    !plain(identity.producer) ||
+    !String(identity.producer.type || "").trim() ||
+    !String(identity.producer.id || "").trim()
+  ) {
     throw new Error("semantic_transfer_overflow_producer_required");
   }
   return identity;
@@ -80,11 +84,6 @@ function buildReadFileSourceReference({ parsed = {}, identity }) {
   });
 }
 
-/**
- * Tool result overflow is an Agent adapter, not a protocol implementation.
- * It has exactly one materialization path: AttachmentService -> V2 Envelope.
- * It must never create paths, V1 envelopes, or a direct fallback after overflow.
- */
 export async function normalizeToolResultOverflow({
   call = {},
   toolResultText = "",
@@ -120,7 +119,13 @@ export async function normalizeToolResultOverflow({
       transferEnvelopes: [referenceEnvelope],
       summary: { original_length: rawText.length, max_length: maxChars },
     });
-    return { toolResultText: normalized, overflowed: true, rawLength: rawText.length, measuredLength: rawText.length, transferEnvelopes: [referenceEnvelope] };
+    return {
+      toolResultText: normalized,
+      overflowed: true,
+      rawLength: rawText.length,
+      measuredLength: rawText.length,
+      transferEnvelopes: [referenceEnvelope],
+    };
   }
   const persisted = await materializeTextForToolResult({
     runtime,
@@ -148,10 +153,12 @@ export async function normalizeToolResultOverflow({
     throw new Error("semantic_transfer_overflow_envelope_required");
   }
 
-  const message = String(parsed?.message || "").trim() || overflowMessage({
-    measuredLength: rawText.length,
-    maxChars,
-  });
+  const message =
+    String(parsed?.message || "").trim() ||
+    overflowMessage({
+      measuredLength: rawText.length,
+      maxChars,
+    });
   const normalized = toToolJsonResult(call?.name, {
     ...(typeof parsed?.ok === "boolean" ? { ok: parsed.ok } : { ok: true }),
     ...(parsed?.status ? { status: parsed.status } : {}),

@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createHarness, assistantMessage, emitChannelState } from "../helpers/useChatEngineHarness.js";
+import {
+  createHarness,
+  assistantMessage,
+  emitChannelState,
+} from "../helpers/useChatEngineHarness.js";
 import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: interaction", () => {
@@ -164,9 +168,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    // Refresh failure cannot manufacture an Authority terminal state. The
-    // transport cache-expiry observation leaves the turn in-flight until a
-    // lifecycle envelope or snapshot arrives.
+
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
     expect(assistant?.statusLabel).not.toBe("chat.generated");
@@ -245,10 +247,12 @@ describe("useChatEngine.interaction-stop: interaction", () => {
 
     await engine.send();
 
-    expect(clearPendingInteraction).toHaveBeenCalledWith(expect.objectContaining({
-      requestId: "req-timeout",
-      lifecycle: "failed",
-    }));
+    expect(clearPendingInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-timeout",
+        lifecycle: "failed",
+      }),
+    );
     expect(setPendingInteractionRequest).not.toHaveBeenCalled();
   });
 });

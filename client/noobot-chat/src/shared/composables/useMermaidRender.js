@@ -14,7 +14,7 @@ export function useMermaidRender() {
       try {
         await renderMermaidInElement(mermaidHostRef.value);
       } catch {
-        // Rendering failures must not interrupt message display.
+        void 0;
       }
     });
   }

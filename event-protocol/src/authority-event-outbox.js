@@ -147,11 +147,6 @@ export function acknowledgeAuthorityEventDelivery(
   return { found, changed, outbox };
 }
 
-/**
- * Removes events only from explicit durable delivery acknowledgements for one
- * consumer and one ordering stream. No domain fact or command receipt is used
- * to infer delivery.
- */
 export function compactAuthorityEventOutbox(
   source = [],
   {

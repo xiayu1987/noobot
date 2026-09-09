@@ -45,10 +45,7 @@ export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
     if (isHarnessInjectedMessage(message)) continue;
     const role = resolveContextMessageRole(message);
     if (role !== "assistant") continue;
-    // The context protocol owns the canonical assistant projection.  Provider
-    // adapters (Anthropic blocks, Chat Completions content, Responses output)
-    // must be normalized before reaching this guard; do not infer provider
-    // format or inspect response metadata here.
+
     const toolCalls = resolveContextToolCalls(message);
     if (!toolCalls.length) return false;
     const content = resolveContextMessageContent(message);
@@ -81,13 +78,6 @@ export function safeJsonStringify(value = null, space = 2) {
       message: String(error?.message || error || ""),
     });
   }
-}
-
-export function isMessageSummarized(messageItem = {}) {
-  if (!messageItem || typeof messageItem !== "object") return false;
-  if (messageItem?.summarized === true) return true;
-  if (messageItem?.lc_kwargs?.summarized === true) return true;
-  return false;
 }
 
 function normalizePromptMessageItem(message = {}) {

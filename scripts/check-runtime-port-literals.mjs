@@ -29,16 +29,8 @@ function resolveRepoRoot() {
 const ROOT = resolveRepoRoot();
 const SOURCE_OF_TRUTH = "runtime-topology-protocol/src/ports.js";
 
-/**
- * The only file allowed to hold runtime port literals: the frozen
- * RUNTIME_PORT_TOPOLOGY contract every other consumer derives from.
- */
 const ALLOWED_FILES = new Set([SOURCE_OF_TRUTH]);
 
-/**
- * Test fixtures assert against concrete ports on purpose; they are expectations,
- * not configuration defaults, so they are out of scope for this guard.
- */
 const SKIPPED_DIRECTORIES = new Set([
   "node_modules",
   ".git",

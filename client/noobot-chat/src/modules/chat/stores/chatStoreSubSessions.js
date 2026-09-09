@@ -73,11 +73,7 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
   const canonicalMessageId = text(messageId || realtime.messageId || realtime.id);
   const realtimeOwnsFinalContent =
     Number(realtime?.messageEventState?.finalContentSequence || 0) > 0;
-  // Ownership is explicit and independent from arrival order. A canonical
-  // replace event owns final content once committed; otherwise the persisted
-  // snapshot owns canonical content. Realtime always owns event-only facets
-  // which snapshots do not necessarily serialize. Both facts must carry the
-  // same stable messageId before this function is called.
+
   const merged = {
     ...realtime,
     ...snapshot,
@@ -187,8 +183,7 @@ export function createSubSessionStore({
       turnScopeId: text(eventData?.turnScopeId || currentSession.turnScopeId),
       workflowRunId: text(eventData?.workflowRunId || currentSession.workflowRunId),
       nodeExecutionId: text(eventData?.nodeExecutionId || currentSession.nodeExecutionId),
-      // Container metadata is not a lifecycle fact.  Do not stamp it with the
-      // local clock: live/replay must produce the same projection.
+
       updatedAt:
         currentSession.updatedAt ||
         text(eventData?.updatedAt || eventData?.createdAt || eventData?.timestamp),

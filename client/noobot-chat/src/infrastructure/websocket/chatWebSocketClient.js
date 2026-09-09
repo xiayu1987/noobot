@@ -60,10 +60,7 @@ export function createChatWebSocketClient({
   let reconnectReject = null;
   let reconnectTimeout = null;
   let liveEventSubscriber = null;
-  // A server can answer the turn immediately after the command is sent. Keep
-  // every protocol event for that stream during the short handler-bind
-  // window; dropping a runtime event makes live artifacts appear only after a
-  // later replay.
+
   const pendingStreamEvents = [];
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
   function logAgentTransportCommand(event, command, extra = {}) {
@@ -202,7 +199,7 @@ export function createChatWebSocketClient({
         },
       });
     } catch {
-      // Observability must not alter protocol delivery.
+      void 0;
     }
   }
 
@@ -308,9 +305,7 @@ export function createChatWebSocketClient({
               dispatchEligible,
               owner,
             }));
-            // Receipt is a transport acknowledgement. Send it immediately after
-            // validating the envelope so a business reducer failure cannot stall
-            // the authoritative lifecycle delivery queue.
+
             acknowledgeTurnLifecycleReceipt(ws, event, lifecycleData);
           }
           if (owner === "reconnect_handler") {

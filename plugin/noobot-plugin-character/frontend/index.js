@@ -25,10 +25,7 @@ export function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {
   ) {
     const eventSessionId = String(envelope?.identity?.sessionId || "").trim();
     const activeSessionId = String(context?.sessionId || "").trim();
-    // The live stream carries the authoritative session identity. Establish
-    // the plugin projection boundary before applying its first event so a
-    // session switch cannot reject that event while detail hydration is still
-    // pending. A different active session remains ineligible.
+
     if (activeSessionId && eventSessionId && activeSessionId !== eventSessionId) return false;
     if (eventSessionId && animationRuntimeState.sessionId !== eventSessionId) {
       resetAnimationRuntimeState(eventSessionId);
@@ -113,8 +110,7 @@ export async function activate(ctx = {}) {
     component: CharacterAnimationAssets,
     resolveProps: (context = {}) => resolveAssetProps(context, "manage"),
   });
-  // Expose a capability service for host panels and app integrations. The
-  // character state is a feature projection, not a chat message.
+
   return createPluginActivationResult({
     pluginId: "character",
     surface: PLUGIN_SURFACE.FRONTEND,

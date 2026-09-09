@@ -4,21 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Value authority for explicit configuration.
- *
- * Structure comes from `config-structure.js`; this module answers only "what
- * value should stand here when the target's own value is missing or invalid".
- * There are exactly two value sources, and neither is consulted otherwise:
- *
- * - Model facts (a provider entry's fields): the model library.
- * - Everything else: `service/config/global.config.example.json`.
- *
- * The user-default template is NOT a value source. It is a value *override*
- * layer: it may restate a value it deliberately differs on, and repair prefers
- * it for those paths only. It can never introduce a field or a new default.
- */
-
 import {
   resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
@@ -35,12 +20,6 @@ function valueAt(source, path) {
   return node;
 }
 
-/**
- * Create the value authority for one repair run.
- *
- * `baseValues` is the global example — the sole non-model value source.
- * User configuration files are never value sources.
- */
 export function createConfigValueSource({ baseValues = {} } = {}) {
   const base = isPlainObject(baseValues) ? baseValues : {};
 
@@ -51,41 +30,26 @@ export function createConfigValueSource({ baseValues = {} } = {}) {
   };
 
   return Object.freeze({
-    /** Whether any value source declares this path. */
     has(path = []) {
       return hasAt(base, path);
     },
 
-    /** The authoritative value for a non-model path. */
     resolve(path = []) {
       return valueAt(base, path);
     },
 
-    /**
-     * The authoritative value template for one provider entry. The model
-     * library owns model values, so a provider present in the library uses its
-     * library entry; anything else falls back to the library's generic
-     * provider. The global example never overrides a library value — it only
-     * supplies entries the library does not know.
-     */
     resolveProviderValues(alias = "") {
       const fromLibrary = resolveModelLibraryProvider(alias);
       if (isPlainObject(fromLibrary)) return fromLibrary;
       const configuredModel = valueAt(base, ["providers", alias, "model"]);
       const fromModel = resolveModelLibraryProviderByModel(configuredModel);
       if (isPlainObject(fromModel)) return fromModel;
-      // The library knows neither the alias nor the concrete model, so this is
-      // the missing-library case. A provider the explicit global example
-      // declares on its own keeps that declaration — including its declared
-      // capabilities and connection fields — instead of being replaced by the
-      // generic provider. Only an entry no value source declares falls back to
-      // the library's generic provider.
+
       const fromExample = valueAt(base, ["providers", alias]);
       if (isPlainObject(fromExample)) return fromExample;
       return resolveDefaultModelLibraryProvider();
     },
 
-    /** Provider aliases the value sources declare, in declaration order. */
     listProviderAliases() {
       const aliases = new Set();
       const providers = isPlainObject(base) ? base.providers : null;

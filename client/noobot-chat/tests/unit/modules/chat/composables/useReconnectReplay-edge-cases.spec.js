@@ -102,9 +102,7 @@ describe("useReconnectReplay", () => {
         dialogProcessId: "dp-late",
       }),
     );
-    // An interaction record is not a lifecycle event.  It registers the
-    // pending interaction only; running/stop capabilities come from the
-    // authoritative Turn snapshot.
+
     expect(refs.sending.value).toBe(false);
     expect(mocks.notify).not.toHaveBeenCalled();
     vi.useRealTimers();

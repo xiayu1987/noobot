@@ -52,7 +52,7 @@ export async function writeFileAtomic({
     try {
       await remove(temporary, { force: true });
     } catch {
-      // The primary write failure remains authoritative.
+      void 0;
     }
     throw error;
   }

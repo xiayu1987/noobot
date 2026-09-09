@@ -56,11 +56,7 @@ export function useWorkflowNodeMessages({
         ).trim(),
         caller: String(summary?.caller || "bot").trim() || "bot",
         depth: Number.isFinite(Number(summary?.depth)) ? Number(summary.depth) : 1,
-        // selectedNodeMessages is the canonical live projection. sessionSummary.messages
-        // is only a transport snapshot and may lag behind or contain a pre-folded copy.
-        // Reading it here created a second message fact source: live events updated the
-        // canonical list while rendering continued to use the stale snapshot, and a
-        // later detail reload could fold both copies into one duplicated content body.
+
         messages: Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : [],
       },
     ];

@@ -57,7 +57,7 @@ export function decodeCommandOutput(
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
-    // Fall through to the platform locale used by legacy command-line programs.
+    void 0;
   }
   if (normalizePlatform(platform) !== PLATFORM.WINDOWS) return bytes.toString("utf8");
   const normalizedLocale = String(locale || "")
@@ -149,7 +149,7 @@ export function terminateProcessTree(
       processKill(-pid, signal);
       return Promise.resolve();
     } catch {
-      // Fall back to the direct child when its process group no longer exists.
+      void 0;
     }
   }
   child.kill(signal);

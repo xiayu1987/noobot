@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isMessageInjected } from "./shared.js";
-import { resolveContextMessageRole } from "@noobot/context-protocol/message/codec";
+import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
 import {
   HARNESS_INJECTED_MESSAGE_BY_FIELD,
   HARNESS_INJECTED_MESSAGE_BY_VALUE,
@@ -32,7 +32,7 @@ function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
   while (
     index < messages.length &&
-    isSystemLikeRole(resolveContextMessageRole(messages[index])) &&
+    isContextSystemMessage(messages[index]) &&
     messages[index]?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] !== HARNESS_INJECTED_MESSAGE_FLAG_VALUE
   ) {
     index += 1;
@@ -76,15 +76,8 @@ function buildTakeoverMessage(directive = {}) {
   };
 }
 
-function isSystemLikeRole(role = "") {
-  const normalized = String(role || "")
-    .trim()
-    .toLowerCase();
-  return normalized === "system" || normalized === "developer";
-}
-
 function resolveBlockForMessage(message = {}) {
-  return isSystemLikeRole(resolveContextMessageRole(message)) ? "system" : "incremental";
+  return isContextSystemMessage(message) ? "system" : "incremental";
 }
 
 function cloneBlocks(blocks = {}) {
@@ -179,7 +172,6 @@ export function applyMessageTakeover(_point = "", ctx = {}, takeover = {}) {
   if (target === "ctx_messages") return applyCtxMessagesTakeover(ctx, takeover);
   if (target === "agent_system") return applyAgentSystemTakeover(ctx, takeover);
   if (target !== "auto") return false;
-  // The former auto target wrote two independent message sources. With the
-  // versioned model context there is one authority, so auto applies once to it.
+
   return applyCtxMessagesTakeover(ctx, takeover);
 }

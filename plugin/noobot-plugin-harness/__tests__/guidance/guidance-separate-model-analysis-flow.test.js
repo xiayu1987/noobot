@@ -146,13 +146,10 @@ test("separate_model skips analysis for LangChain AIMessage tool call with conte
   const aiMessage = {
     content: "先检查真实运行状态。",
     tool_calls: [{ id: "call-langchain", function: { name: "read_file", arguments: "{}" } }],
-    _getType: () => "ai",
+    type: "ai",
   };
   const ctx = {
-    messages: [
-      aiMessage,
-      { content: "读取完成", tool_call_id: "call-langchain", _getType: () => "tool" },
-    ],
+    messages: [aiMessage, { content: "读取完成", tool_call_id: "call-langchain", type: "tool" }],
     agentContext,
   };
   const meta = {

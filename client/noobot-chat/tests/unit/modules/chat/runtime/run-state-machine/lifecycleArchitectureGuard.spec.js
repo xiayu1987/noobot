@@ -205,10 +205,11 @@ describe("lifecycle architecture guard", () => {
 
   it("keeps interaction requests pending until websocket send returns successfully", () => {
     const code = source(files.interaction);
-    const send = code.indexOf(
-      "sendJson(createInteractionResponseCommand({",
-      code.indexOf("function submitInteractionResponse"),
-    );
+    const functionStart = code.indexOf("function submitInteractionResponse");
+    const sendMatch = code
+      .slice(functionStart)
+      .match(/sendJson\s*\(\s*createInteractionResponseCommand\s*\(/);
+    const send = sendMatch ? functionStart + sendMatch.index : -1;
     const handled = code.indexOf("markInteractionRequestHandled(request)", send);
     const cleared = code.indexOf("clearPendingInteraction(request)", send);
     const catchBlock = code.slice(code.indexOf("} catch (error) {", send), handled);

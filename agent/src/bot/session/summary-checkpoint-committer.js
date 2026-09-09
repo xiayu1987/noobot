@@ -245,9 +245,6 @@ export async function commitSummaryCheckpoint({
     exactCheckpoint: true,
   });
 
-  // The summary checkpoint is the commit boundary for deferred user_meta
-  // projections. Apply each pending attachment result to its original
-  // snapshot projection before summarized incremental messages are pruned.
   await applyPendingUserMetaBackwrites(runtime, {
     turnPersister,
     userId,

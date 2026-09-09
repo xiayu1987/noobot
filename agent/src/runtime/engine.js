@@ -119,7 +119,6 @@ export async function emitAuthoritativeFinalMessageContent({ result = {}, runtim
   return event;
 }
 
-/** The sole authoritative final-result boundary for every dispatch disposition. */
 export async function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {}) {
   const store = runtime?.currentTurnMessages;
   const promotionSources = Array.isArray(runtime?.summaryCheckpointPromotionSources)

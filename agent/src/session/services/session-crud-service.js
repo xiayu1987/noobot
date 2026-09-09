@@ -387,8 +387,7 @@ export class SessionCrudService {
     const sessionTree = this.sessionTreeService
       ? await this.sessionTreeService.getSessionTree({ userId })
       : await this.treeRepo.getTree(userId);
-    // The filesystem Session artifact is the sole source of list membership.
-    // The tree is relationship metadata and may retain historical orphan nodes.
+
     const sessionIds = await this.listSessionIds({ userId });
     const rebuiltSessionIds = [];
     const migratedSessionIds = [];
@@ -434,7 +433,7 @@ export class SessionCrudService {
     const sessionTree = this.sessionTreeService
       ? await this.sessionTreeService.getSessionTree({ userId })
       : await this.treeRepo.getTree(userId);
-    // Session artifacts define list membership; the tree only supplies relationships.
+
     const sessionIds = await this.listSessionIds({ userId });
 
     const sessionList = (

@@ -409,9 +409,6 @@ export function replaceMessages(holder = {}, messages = []) {
     const retained = new Set(canonicalMessages);
     const assigned = new Set();
     for (const blockName of ["system", "history", "incremental"]) {
-      // History is an immutable context block. Replacing the active flat
-      // projection must not discard historical entities that are intentionally
-      // absent from that projection.
       const next =
         blockName === "history"
           ? normalizeList(blocks[blockName])
@@ -431,14 +428,6 @@ export function replaceMessages(holder = {}, messages = []) {
   return holder.messages;
 }
 
-/**
- * Replace only the materialized model-input projection.
- *
- * messageBlocks remain the authoritative partition and are intentionally not
- * rewritten. This is used after policy filtering/window resolution, where the
- * final LLM input may omit summarized or out-of-window entities without
- * deleting them from the source context blocks.
- */
 export function replaceMessageProjection(holder = {}, messages = []) {
   if (!holder || typeof holder !== "object") return [];
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
@@ -523,8 +512,7 @@ export function appendMessage(holder = {}, message = {}, { block = "" } = {}) {
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const isNewEntity = !isKnownCanonicalEntity(store, message);
   const identifiedMessage = isNewEntity ? applyActiveTurnIdentity(holder, message) : message;
-  // Appends create a new entity unless the producer supplied a stable Noobot message id.
-  // Content-based matching is restricted to list hydration in canonicalizeList.
+
   const canonicalMessage = canonicalizeMessage(store, identifiedMessage);
   if (!Array.isArray(holder.messages)) holder.messages = [];
   if (!holder.messages.includes(canonicalMessage)) holder.messages.push(canonicalMessage);

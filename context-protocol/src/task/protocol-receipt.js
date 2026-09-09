@@ -5,11 +5,6 @@
  */
 import crypto from "node:crypto";
 
-/**
- * Task check and task summary share one receipt shape, one state vocabulary and
- * one content-hash algorithm. This module is the single source for all three;
- * callers only supply how their errors are phrased.
- */
 export const TASK_PROTOCOL_STATE = Object.freeze({
   CONTINUE: "CONTINUE",
   COMPLETE: "COMPLETE",
@@ -34,12 +29,6 @@ export function createTaskProtocolReceipt(parsed = {}) {
   });
 }
 
-/**
- * @param {unknown} value candidate receipt object
- * @param {{ protocolError: (message: string) => Error, subject: string, fieldPrefix?: string }} options
- *   `subject` names the receipt in object-level errors; `fieldPrefix` prefixes
- *   field-level errors. Both exist to keep each protocol's wording unchanged.
- */
 export function parseTaskProtocolReceipt(value, { protocolError, subject, fieldPrefix = "" } = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw protocolError(`${subject} must be a plain object`);
@@ -49,7 +38,9 @@ export function parseTaskProtocolReceipt(value, { protocolError, subject, fieldP
     keys.length !== TASK_PROTOCOL_RECEIPT_FIELDS.length ||
     keys.some((key, index) => key !== TASK_PROTOCOL_RECEIPT_FIELDS[index])
   ) {
-    throw protocolError(`${subject} must contain exactly ${TASK_PROTOCOL_RECEIPT_FIELDS.join(", ")}`);
+    throw protocolError(
+      `${subject} must contain exactly ${TASK_PROTOCOL_RECEIPT_FIELDS.join(", ")}`,
+    );
   }
   const states = Object.values(TASK_PROTOCOL_STATE);
   const state = String(value.state || "").trim();

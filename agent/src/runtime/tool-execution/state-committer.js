@@ -141,11 +141,7 @@ export function createStateCommitter({
         }),
       });
       turnMessageStore.push(assistantMessage);
-      // The in-memory turn store is also the source for the running-turn
-      // recovery checkpoint.  Persist it before returning from the commit so
-      // an immediate reconnect cannot observe a lifecycle without its
-      // analysis/tool timeline.  The callback is installed by the runner and
-      // is serialized there; message events remain read-only on the client.
+
       await runtime?.persistCurrentTurnMessages?.();
       await runAgentRuntimeHook({
         runtime,

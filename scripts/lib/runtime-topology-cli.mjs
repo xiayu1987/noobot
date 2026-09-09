@@ -5,13 +5,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Shell-facing adapter over @noobot/runtime-topology-protocol.
- *
- * The protocol package stays pure; this thin CLI is the only place that reads
- * process.env and writes to stdout, so start/restart/stop/close scripts can
- * `eval "$(node scripts/lib/runtime-topology-cli.mjs --shell)"`.
- */
 import {
   listeningPorts,
   resolveRuntimeTopology,

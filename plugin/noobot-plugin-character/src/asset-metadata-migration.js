@@ -25,12 +25,6 @@ function isLegacyAssetDescriptor(value = {}) {
   );
 }
 
-/**
- * Upgrade descriptors written before the canonical asset metadata contract.
- * The old importer already established meter input and the canonical world
- * axis; this migration materializes those protocol facts once, then callers
- * persist the result so future reads use only the current schema.
- */
 export function migrateLegacyAssetDescriptor(value = {}) {
   if (!isLegacyAssetDescriptor(value)) return null;
   return {

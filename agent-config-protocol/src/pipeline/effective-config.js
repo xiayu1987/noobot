@@ -17,7 +17,7 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const out = { ...globalBase };
   for (const [key, userValue] of Object.entries(safeUser)) {
     if (key === "scenarios") continue;
-    // Anything the merge-mode map does not single out merges deeply.
+
     if (USER_CONFIG_MERGE_MODE[key] === "replace") {
       out[key] = userValue;
       continue;

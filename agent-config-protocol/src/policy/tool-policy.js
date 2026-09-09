@@ -9,11 +9,6 @@ import { normalizeStringList } from "../utils.js";
 
 const normalizeStringArrayFallback = (input = []) => normalizeStringList(input);
 
-/**
- * Authoritative allow/deny conflict resolution: a denied tool name can never
- * survive in the allow list. Exported so every caller resolves the conflict
- * through this single implementation.
- */
 export function removeDeniedToolNamesFromAllow({
   toolPolicy = {},
   normalizeStringArray = normalizeStringArrayFallback,
@@ -119,9 +114,7 @@ export function resolveToolBindings({ sourceTools = [], runConfig = {} } = {}) {
   if (mode === "custom_only") tools = [...customTools, ...included];
   else if (mode === "append_custom") tools = [...source, ...customTools];
   const allow = new Set(normalize(policy.allowToolNames));
-  // Activated plugin contributions are part of the runtime tool surface. A
-  // scenario may restrict built-in tools, but must not silently hide a tool
-  // contributed by an enabled plugin; denyToolNames remains authoritative.
+
   if (Array.isArray(runConfig?.pluginTools)) {
     for (const contribution of runConfig.pluginTools) {
       const name = String(contribution?.name || "").trim();

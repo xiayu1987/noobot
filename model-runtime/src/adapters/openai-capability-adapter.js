@@ -10,9 +10,7 @@ import { IMAGE_GENERATION_API_TYPE, MODEL_OPERATION_KIND } from "@noobot/model-p
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
 const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
 const RATIO_SIZE = /^(auto|\d+(?:\.\d+)?:\d+(?:\.\d+)?)$/i;
-// OpenAI's documented status-level meanings are only used when the provider
-// does not return a usable error message. A compatible provider's own message
-// is more specific and must remain visible to the caller.
+
 const HTTP_STATUS_FALLBACKS = Object.freeze({
   "zh-CN": Object.freeze({
     400: "请求参数或格式无效",

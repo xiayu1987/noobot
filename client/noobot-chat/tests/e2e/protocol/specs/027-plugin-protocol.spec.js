@@ -254,7 +254,6 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     ),
   ).toBe(true);
 
-  // The same session also proves that ordinary harness guidance is not an attachment flow.
   const executionEvents = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   const envelopes = executionEvents.flatMap((record) =>
     Array.isArray(record?.data?.transferEnvelopes) ? record.data.transferEnvelopes : [],

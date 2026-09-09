@@ -6,7 +6,6 @@
 
 import { validateTurnUserMessageEventData } from "./transport/turn-user-message-event.js";
 
-/** Session command commit receipt wire event. This is not a lifecycle fact. */
 export const TURN_COMMITTED_WIRE_EVENT = "turn_committed";
 
 export function validateTurnCommittedEventData(data = {}) {

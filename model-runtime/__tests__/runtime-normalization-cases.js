@@ -208,8 +208,7 @@ test("reasoning effort defaults and invalid values follow model options", async 
   assert.deepEqual(glm.reasoning_effort_options, ["low", "high", "max"]);
   assert.equal(glm.reasoning_effort, "low");
   assert.equal(glm.tool_reasoning_effort, "low");
-  // A spec without declared reasoning facts never reaches the transport with an
-  // invented default: config repair fills them from the library template first.
+
   assert.throws(
     () => normalizeRuntimeModelSpec({ model: "custom" }),
     /reasoning_effort_options is required/,

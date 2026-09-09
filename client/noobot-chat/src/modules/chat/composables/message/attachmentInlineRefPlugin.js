@@ -40,10 +40,6 @@ function resolveIdentity(ref = "") {
   }
 }
 
-/**
- * 把权威附件集合投影为按 identity key 索引的查表结构。
- * 索引只用于查表，href 一律取自调用方提供的 resolveHref，禁止拼接式猜测。
- */
 export function buildAttachmentRefIndex(attachmentItems = [], { resolveHref } = {}) {
   const index = new Map();
   if (typeof resolveHref !== "function") return index;
@@ -91,10 +87,6 @@ function renderMissingChip({ label, reason }) {
   ].join("");
 }
 
-/**
- * markdown-it 的 text 规则会把不含特殊字符的整段文本一次吞掉，裸 ref 无法靠
- * inline 规则命中，因此在 core 阶段拆分 text token（与 linkify 同层）。
- */
 function splitTextTokenByRef(state, textToken) {
   const src = String(textToken.content || "");
   const produced = [];
@@ -142,10 +134,6 @@ function rewriteAttachmentTextTokens(state) {
   }
 }
 
-/**
- * markdown-it 的 validateLink 会放行 attachment: scheme，产出看似可点实则无效的
- * 真实 <a>。这里把这类 link token 一并接管，避免出现假链接。
- */
 function rewriteAttachmentLinkTokens(state) {
   for (const blockToken of state.tokens || []) {
     if (blockToken.type !== "inline" || !Array.isArray(blockToken.children)) continue;

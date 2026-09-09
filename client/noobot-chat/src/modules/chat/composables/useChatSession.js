@@ -324,9 +324,7 @@ export function useChatSession({
     refreshAuthentication,
     sessionLogSink: sessionLogWebSocketClient,
   });
-  // Plugin HTTP capabilities must use the same authenticated fetcher as the
-  // host. Configure this before plugin activation so catalog hydration never
-  // issues an unauthenticated request.
+
   watch(apiKey, (nextApiKey, previousApiKey) => {
     if (nextApiKey && nextApiKey !== previousApiKey) sessionLogWebSocketClient.resume();
   });

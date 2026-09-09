@@ -59,8 +59,6 @@ function stripDiffPath(rawPath = "", strip = 1) {
   if (!normalizedPath || normalizedPath === "/dev/null") return normalizedPath;
   if (isAbsoluteDiffPath(pathToken)) return normalizedPath;
 
-  // Strip operates on lexical diff components. Normalizing first can erase a
-  // remaining ".." component and change the patch target before authorization.
   const parts = pathToken.replaceAll("\\", "/").split("/").filter(Boolean);
   const stripCount = toPositiveInt(strip, 1, 0, 10);
   return normalizePatchPathInput(parts.slice(stripCount).join("/") || pathToken);

@@ -15,7 +15,8 @@ import {
 } from "@noobot/session-protocol/turn-attachment-bind";
 
 function buildEventAudit(eventName, eventData, sessionId, turnScopeId) {
-  const canonicalEnvelope = eventData?.protocol?.name === "@noobot/event-protocol" ? eventData : null;
+  const canonicalEnvelope =
+    eventData?.protocol?.name === "@noobot/event-protocol" ? eventData : null;
   const identity = canonicalEnvelope?.identity || {};
   const ordering = canonicalEnvelope?.ordering || {};
   const payload = canonicalEnvelope?.payload || eventData;
@@ -198,8 +199,7 @@ export function createRunEventListener({
         resolveTurnScopeId,
         onRootRunning,
       });
-      // Lifecycle state is local run coordination only. It must not be
-      // projected as a websocket/domain event.
+
       return;
     },
   };

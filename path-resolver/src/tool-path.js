@@ -327,11 +327,6 @@ export function resolveToolInputPath({
   };
 }
 
-/**
- * Return only path-scope information safe for tool consumers.
- *
- * Host filesystem enforcement details are intentionally not part of a public tool error.
- */
 export function buildToolPathScopeErrorDetails({ field = "", pathView = "" } = {}) {
   return {
     ...(field ? { field } : {}),

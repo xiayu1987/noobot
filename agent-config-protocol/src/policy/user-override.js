@@ -22,11 +22,6 @@ const USER_CONFIG_SYSTEM_OWNED_PATHS = listConfigNodePathsByPolicy({
   representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
 });
 
-/**
- * Which top-level keys a user document may carry is a structural fact, so it is
- * derived from the scope declarations instead of restated as a key list here.
- * This module only decides HOW an allowed key merges.
- */
 const USER_OVERRIDABLE_TOP_LEVEL_KEYS = Object.freeze(
   Object.entries(CONFIG_STRUCTURE.fields)
     .filter(([, child]) => structureAllowsScope(child, CONFIG_DOCUMENT_SCOPE.USER))

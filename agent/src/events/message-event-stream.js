@@ -133,8 +133,7 @@ export function currentAssistantModelMessageId(runtime = {}) {
 export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   const id = text(messageId);
   if (!message || typeof message !== "object" || !id) return message;
-  // Model values are immutable protocol snapshots. Adding the authoritative
-  // message identity is therefore a value transformation, never mutation.
+
   const target = { ...message };
   target.id = id;
   target.messageId = id;

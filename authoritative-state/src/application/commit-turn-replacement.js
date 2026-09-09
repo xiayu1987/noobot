@@ -28,11 +28,6 @@ function sameReplacement(left = {}, right = {}) {
   );
 }
 
-/**
- * Commits a message Turn replacement into lifecycle authority. The storage
- * owner must persist the returned lifecycle and outbox with the message
- * replacement in one session transaction.
- */
 export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replacement = {} } = {}) {
   try {
     assertTurnReplacementCommit(replacement);

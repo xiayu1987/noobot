@@ -36,10 +36,6 @@ function identities(messages) {
   return new Set((Array.isArray(messages) ? messages : []).map(messageIdentity).filter(Boolean));
 }
 
-/**
- * System and incremental blocks apply the same model-context filter today but
- * remain separate entry points because they are distinct protocol blocks.
- */
 function resolveModelBlockMessages({ sourceMessages = [], policyOptions = {} } = {}) {
   return filterForModelContext(sourceMessages, policyOptions);
 }

@@ -97,8 +97,6 @@ export function resolveMessageEventPresentationId(value = {}) {
   return text(value?.presentationMessageId);
 }
 
-/** Validates the Message domain payload. Cross-domain identity and ordering
- * belong exclusively to the Event Protocol v3 envelope. */
 export function validateMessageEventPayload(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return Object.freeze({

@@ -10,16 +10,11 @@ import {
   resolveModelOperatorId,
 } from "@noobot/model-protocol";
 
-// The transport baseline. Provider-, family- and model-specific values are
-// layered on top of it by `normalizeRuntimeModelSpec`.
 const TRANSPORT_DEFAULT_FIELDS = Object.freeze({
   temperature: 0.7,
   max_tokens: 10000,
 });
 
-// Defaults are layered in this order: transport -> operator -> model family ->
-// concrete model. Explicit fields in the user's model config always win over
-// every inferred default.
 const OPERATOR_DEFAULT_FIELDS = Object.freeze({
   openai: Object.freeze({}),
   anthropic: Object.freeze({}),
@@ -58,10 +53,6 @@ function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
 }
 
-/**
- * The model family drives sampling defaults only. Transport contracts such as
- * the reasoning parameter are declared by the provider, never inferred here.
- */
 function classifyModelFamily(modelSpec = {}) {
   const model = String(modelSpec.model || "").toLowerCase();
   if (/grok|xai/.test(model)) return MODEL_FAMILY_ID.GROK;
@@ -88,7 +79,7 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   out.model = String(out.model || "").trim();
   out.alias = String(out.alias || "").trim();
   if (!out.model) throw new TypeError("model spec.model is required");
-  // Adapter identity is a protocol fact, never a user-configurable field.
+
   delete out.adapterId;
   delete out.adapter_id;
   out.operatorId = resolveModelOperatorId({
@@ -101,9 +92,7 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});
   Object.assign(defaults, MODEL_FAMILY_DEFAULT_FIELDS[out.modelFamily] || {});
   Object.assign(defaults, resolveConcreteModelDefaults(out.model));
-  // OpenAI defines temperature and top_p as alternative sampling controls.
-  // Apply this invariant after every default layer so a family default cannot
-  // reintroduce temperature when the user selected top_p explicitly.
+
   if (hasOwn(out, "top_p") && !hasOwn(out, "temperature")) {
     delete defaults.temperature;
   }

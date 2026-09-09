@@ -85,9 +85,7 @@ export default defineConfig({
       name: "chromium-protocol",
       use: {
         ...devices["Desktop Chrome"],
-        // The managed Linux runner disallows Chromium's sandbox host. Keep the
-        // browser test itself enabled and explicitly select Playwright's
-        // supported no-sandbox launch mode for this environment.
+
         launchOptions: { chromiumSandbox: false },
       },
     },

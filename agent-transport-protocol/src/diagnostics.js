@@ -19,10 +19,6 @@ function resolveCommand(command) {
   }
 }
 
-/**
- * Returns correlation metadata only. Business payloads, credentials and user ids
- * are deliberately excluded so transport diagnostics are safe to retain.
- */
 export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
   const command = resolveCommand(rawCommand);
   const identity = isObject(command.identity) ? command.identity : {};

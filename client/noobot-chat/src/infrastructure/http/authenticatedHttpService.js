@@ -28,7 +28,6 @@ function matchesRoute(pathname = "", pattern = {}) {
   );
 }
 
-/** Creates a least-privilege authenticated request capability for one plugin. */
 export function createScopedAuthenticatedHttpService({ routePatterns = [] } = {}) {
   const allowedRoutes = routePatterns.map(compileRoutePattern).filter(Boolean);
   return Object.freeze({
@@ -55,7 +54,6 @@ export function createScopedAuthenticatedHttpService({ routePatterns = [] } = {}
   });
 }
 
-/** Host configuration only; never expose this unrestricted service to plugins. */
 export const authenticatedHttpService = Object.freeze({
   configure({ fetcher = null } = {}) {
     authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;

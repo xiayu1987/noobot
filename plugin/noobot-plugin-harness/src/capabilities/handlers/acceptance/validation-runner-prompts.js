@@ -11,6 +11,7 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { appendMessage } from "../../../core/message-store.js";
+import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
 import {
   buildAllPhaseAcceptanceReportSystemContents,
   buildAllSummaryReportSystemContents,
@@ -217,13 +218,6 @@ export function buildFinalOutputFallbackPhaseAcceptanceText(
   );
 }
 
-function isSystemLikeRole(role = "") {
-  const normalized = String(role || "")
-    .trim()
-    .toLowerCase();
-  return normalized === "system" || normalized === "developer";
-}
-
 export function pushRoleMessage(ctx = {}, messages = [], role = "system", content = "") {
   const normalizedContent = String(content || "").trim();
   if (!Array.isArray(messages) || !normalizedContent) return false;
@@ -237,7 +231,7 @@ export function pushRoleMessage(ctx = {}, messages = [], role = "system", conten
       role: normalizedRole,
       injectedMessageType: "acceptance_prompt",
     }),
-    { block: isSystemLikeRole(normalizedRole) ? "system" : "incremental" },
+    { block: isSystemLikeMessageRole(normalizedRole) ? "system" : "incremental" },
   );
   return true;
 }

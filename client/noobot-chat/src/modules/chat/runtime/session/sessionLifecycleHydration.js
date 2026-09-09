@@ -56,9 +56,7 @@ export function installSessionLifecycleHydration({
         "action_failed",
         "stopped",
       ].includes(activeTurnState);
-      // A non-terminal authoritative activeTurn is the only legal source for
-      // terminal discovery after refresh. Persisted message status is not an
-      // authority source here.
+
       if (result?.applied === true && activeTurn && activeTurnScopeId && !isTerminal) {
         scheduleTerminalResolution?.(sessionId, activeTurnScopeId, {
           source: "authoritative_active_turn_hydration",

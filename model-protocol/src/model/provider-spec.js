@@ -48,11 +48,6 @@ const modalityListField = Object.freeze({
   items: modalityField,
 });
 
-/**
- * The reasoning transport parameter each provider accepts, with the value shape
- * it carries on the wire. This table is the only place a parameter name maps to
- * a value shape; nothing infers either from a model name.
- */
 export const MODEL_REASONING_EFFORT_PARAMETER = Object.freeze({
   REASONING_EFFORT: "reasoning_effort",
   THINKING_LEVEL: "thinking_level",
@@ -79,11 +74,6 @@ function identityText(value) {
     .toLowerCase();
 }
 
-/**
- * Project a provider's declared reasoning facts into their canonical form.
- * A configured effort outside the declared options is not a supported fact and
- * resolves to the provider's lowest declared option.
- */
 export function normalizeModelReasoningConfiguration(provider = {}, fallback = {}) {
   const source = provider && typeof provider === "object" ? provider : {};
   const defaults = fallback && typeof fallback === "object" ? fallback : {};
@@ -122,7 +112,6 @@ export function normalizeModelReasoningConfiguration(provider = {}, fallback = {
   });
 }
 
-/** The wire value for an effort level, per the parameter's declared shape. */
 export function resolveModelReasoningEffortTransportValue(provider = {}, effort = "") {
   const parameter = identityText(provider.reasoning_effort_parameter);
   const shape = REASONING_EFFORT_VALUE_SHAPE[parameter];
@@ -135,7 +124,6 @@ export function resolveModelReasoningEffortTransportValue(provider = {}, effort 
   return shape === "switch" ? value !== MODEL_REASONING_EFFORT_DISABLED : value;
 }
 
-/** The transport pair for an effort level, keyed by the declared parameter. */
 export function buildModelReasoningEffortTransport(provider = {}, effort = "") {
   return {
     [identityText(provider.reasoning_effort_parameter)]: resolveModelReasoningEffortTransportValue(
@@ -145,7 +133,6 @@ export function buildModelReasoningEffortTransport(provider = {}, effort = "") {
   };
 }
 
-/** The provider's lowest declared effort level, used to suppress reasoning. */
 export function resolveModelMinimumReasoningEffort(provider = {}) {
   const options = Array.isArray(provider.reasoning_effort_options)
     ? provider.reasoning_effort_options.map(identityText).filter(Boolean)

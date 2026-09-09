@@ -25,7 +25,7 @@ async function assertAbsent(relativePath) {
     await access(path.join(ROOT, relativePath));
     violations.push(`${relativePath}: obsolete duplicate config implementation must be removed`);
   } catch {
-    // Absence is required.
+    void 0;
   }
 }
 

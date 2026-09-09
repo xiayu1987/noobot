@@ -22,11 +22,6 @@ const ENVELOPE_FIELDS = new Set([
   "sessionId",
 ]);
 
-/**
- * Constructs the sole Workflow Runtime wire contract used by client tests.
- * Domain identities are deliberately moved to their canonical owners instead
- * of being duplicated inside payload.
- */
 export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
   const workflowRunId = String(
     Object.hasOwn(data, "workflowRunId") ? data.workflowRunId : "workflow-1",

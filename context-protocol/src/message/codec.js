@@ -36,24 +36,14 @@ export const CONTEXT_MESSAGE_ROLE_ALIASES = Object.freeze({
   tool_result: CONTEXT_MESSAGE_ROLE.TOOL,
 });
 
-/**
- * Reads the declared role field verbatim without alias normalization.
- * Callers that must distinguish "declared but unknown" from "absent"
- * (protocol required-field validation) depend on this raw form.
- */
 export function readDeclaredContextMessageRole(message = {}) {
   return text(message?.role || message?.lc_kwargs?.role).toLowerCase();
 }
 
 function readDeclaredContextMessageType(message = {}) {
-  return text(
-    message?.type ||
-      message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  ).toLowerCase();
+  return text(message?.type || message?.lc_kwargs?.type || "").toLowerCase();
 }
 
-/** Maps any declared role or type token onto the canonical role vocabulary. */
 export function normalizeContextMessageRole(role = "") {
   return CONTEXT_MESSAGE_ROLE_ALIASES[text(role).toLowerCase()] || "";
 }
@@ -65,7 +55,6 @@ export function resolveContextMessageRole(message = {}) {
   );
 }
 
-/** Single decision point for "does this message belong to the system block". */
 export function isContextSystemMessage(message = {}) {
   return resolveContextMessageRole(message) === CONTEXT_MESSAGE_ROLE.SYSTEM;
 }
@@ -136,7 +125,6 @@ export function resolveContextToolCallId(value = {}) {
   );
 }
 
-/** Single read point for the summarized mark across all four carrier paths. */
 export function resolveContextMessageSummarized(message = {}) {
   return (
     message?.summarized === true ||
@@ -146,7 +134,6 @@ export function resolveContextMessageSummarized(message = {}) {
   );
 }
 
-/** Single write point for the summarized mark; mirrors onto lc_kwargs when present. */
 export function markContextMessageSummarized(message = {}) {
   if (!message || typeof message !== "object") return message;
   message.summarized = true;

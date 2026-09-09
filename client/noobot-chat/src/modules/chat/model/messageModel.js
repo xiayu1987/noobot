@@ -251,8 +251,6 @@ function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage
     }
   }
 
-  // Canonical model-history records contribute presentation facets while
-  // remaining excluded from the chat body.
   if (sourceMessage?.chatPresentation === false) {
     normalizedMessage.content = "";
   }
@@ -375,9 +373,7 @@ function foldConversationMessages(messages = [], buildView) {
         ...currentTransferEnvelopes,
       ];
     }
-    // transferEnvelopes are the canonical artifact source. Rebuild the
-    // render projection after folding so an envelope arriving on a later
-    // assistant record cannot be lost from the displayed message.
+
     previousMessage.attachments = getMessageAttachments(previousMessage);
     previousMessage.ts = currentMessage?.ts || previousMessage?.ts;
     if (String(currentMessage?.modelAlias || "").trim()) {
@@ -393,15 +389,9 @@ function foldConversationMessages(messages = [], buildView) {
     );
     previousMessage.modelRuns = mergedModelRuns;
   }
-  // A turn may contain hidden tool-call records and a separate visible
-  // assistant record. Their artifact envelopes still belong to one turn
-  // projection, so expose the canonical envelope set on each assistant view
-  // record instead of relying on which record happened to receive the event.
+
   const turnArtifacts = new Map();
-  // Tool records are intentionally excluded from chat rendering, but their
-  // completed result artifacts are canonical turn artifacts. Collect from the
-  // full canonical stream before role filtering so a live or persisted tool
-  // result cannot disappear from the visible assistant projection.
+
   for (const message of sourceMessages) {
     const key = resolveMessageTurnScopeMergeKey(message);
     if (!key) continue;

@@ -39,19 +39,19 @@ function normalizeTimestamp(rawEvent = {}) {
 
 export function normalizeSessionRunEvent(rawEvent = {}) {
   const turnMeta = normalizeTurnMeta(rawEvent);
-  const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
+  const type = trim(
+    rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+  );
   const wireState = normalizeState(rawEvent?.state);
-  const isAuthoritativeEvent = type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE ||
+  const isAuthoritativeEvent =
+    type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE ||
     type === SESSION_RUN_EVENT.TERMINAL_RESOLVED;
-  // Authority lifecycle state belongs to @noobot/event-protocol. Do not pass
-  // it through transport/UI state normalization: that conversion changes
-  // `completed` and drops states such as `processing`/`stop_completed` before
-  // the sole Authority projector can consume them.
+
   const state = isAuthoritativeEvent
     ? trim(rawEvent?.state || rawEvent?.raw?.turn?.state).toLowerCase()
     : type === SESSION_RUN_EVENT.LOCAL_FAILURE
-    ? normalizeState(rawEvent?.failureState)
-    : wireState;
+      ? normalizeState(rawEvent?.failureState)
+      : wireState;
   const isBackendStateEvent = [
     SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
     SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
@@ -85,18 +85,21 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     revision: Number(rawEvent?.revision || 0),
     summaryVersion: Number(rawEvent?.summaryVersion || 0),
     completionCommitId: trim(rawEvent?.completionCommitId),
-    authoritativeTurnState: type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
-      ? trim(rawEvent?.state || rawEvent?.raw?.turn?.state).toLowerCase()
-      : "",
+    authoritativeTurnState:
+      type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
+        ? trim(rawEvent?.state || rawEvent?.raw?.turn?.state).toLowerCase()
+        : "",
     finalizeIntent: rawEvent?.finalizeIntent || rawEvent?.raw?.turn?.finalizeIntent || null,
     failure: rawEvent?.failure || rawEvent?.raw?.turn?.failure || null,
-    continuationSource: rawEvent?.continuationSource || rawEvent?.raw?.turn?.continuationSource || null,
+    continuationSource:
+      rawEvent?.continuationSource || rawEvent?.raw?.turn?.continuationSource || null,
     continuedByTurnScopeId: trim(
       rawEvent?.continuedByTurnScopeId || rawEvent?.raw?.turn?.continuedByTurnScopeId,
     ),
-    materialization: rawEvent?.materialization && typeof rawEvent.materialization === "object"
-      ? rawEvent.materialization
-      : null,
+    materialization:
+      rawEvent?.materialization && typeof rawEvent.materialization === "object"
+        ? rawEvent.materialization
+        : null,
     eventType: trim(rawEvent?.eventType),
     phase: trim(rawEvent?.phase || rawEvent?.failure?.phase),
     timestamp,

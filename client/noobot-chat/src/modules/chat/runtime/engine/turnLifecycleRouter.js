@@ -191,10 +191,6 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   } else if (eventSessionId !== targetSessionId) {
     reason = "committed_session_mismatch";
   } else {
-    // The committed aggregate version is authoritative independently of the
-    // local presentation tree. A reconnect or optimistic replacement may
-    // legitimately make the committed user node unavailable while the
-    // version must still advance for the next command.
     applyLatestSessionAggregateVersion(activeSession.value, {
       aggregateVersion: data.aggregateVersion,
     });

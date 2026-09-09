@@ -224,8 +224,6 @@ export function createExecutionEventListener({
         ts,
       });
 
-      // Execution diagnostics are persisted locally and never become client
-      // facts. Only the explicit private run contract may cross this boundary.
       if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
       return forwardEvent({ event, data, ts });
     },

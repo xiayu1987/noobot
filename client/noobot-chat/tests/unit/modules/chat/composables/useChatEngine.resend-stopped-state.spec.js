@@ -438,8 +438,6 @@ describe("useChatEngine.resend stopped state", () => {
       secondReplaceScope,
     );
     expect(secondRuntime).toMatchObject({
-      // Authority state stop_completed is intentionally projected to the
-      // client presentation terminal user_stopped.
       terminal: "user_stopped",
       turnScopeId: committedSecondReplaceScope,
       sending: false,

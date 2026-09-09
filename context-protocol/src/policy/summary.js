@@ -291,16 +291,6 @@ export function collectClosedToolCallBatchMessages(
   );
 }
 
-/**
- * Resolve the single authoritative scope for a summary checkpoint.
- *
- * A checkpoint is allowed to span persisted history and the active turn.  The
- * block layout is owned by the context protocol; consumers must not recreate
- * that boundary (or apply a separate "history is already closed" rule).
- * Tool-call batches are closed here and the same source is used for candidate
- * selection and retention, so checkpoint ids and summarized flags cannot
- * diverge between callers.
- */
 export function resolveSummaryScope(
   messageBlocks = {},
   { messageIds = null, policyOptions = {} } = {},
@@ -318,9 +308,6 @@ export function resolveSummaryScope(
   const selectedCheckpointMessages = wantedIds
     ? checkpointMessages.filter((message) => wantedIds.has(resolveMessageId(message)))
     : checkpointMessages;
-  // Canonical checkpoint ids keep the commit boundary fixed. Retention is
-  // evaluated against the current complete protocol source so a summary relay
-  // appended by the auxiliary call can replace the previous retained summary.
   const summaryMessages = collectDialogScopedMessagesToSummarize(selectedCheckpointMessages, {
     maxMessages: selectedCheckpointMessages.length,
     limitToProvidedMessagesOnly: true,

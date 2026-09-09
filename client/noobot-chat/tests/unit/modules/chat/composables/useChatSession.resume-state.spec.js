@@ -663,9 +663,7 @@ describe("useChatSession summary and reconnect state", () => {
       canStop: false,
       commandId: "stop:turn-stop",
     });
-    // The local stop mutex and the authoritative lifecycle are separate facts.
-    // STOP_ACCEPTED is the authority's action-requesting state; it does not
-    // become STOPPING until STOP_PROCESSING_COMPLETED is committed.
+
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop").displayState).toBe(
       "requesting",
     );

@@ -11,8 +11,6 @@ function normalize(value) {
   return magnitude > 1e-8 ? value.map((item) => item / magnitude) : [0, 0, 0];
 }
 
-// Returns the shortest Y-up rotation from the canonical character forward
-// axis (-Z) to a world-space travel direction.
 function rotationFromForward(direction, fallback) {
   const forward = normalize([direction[0], 0, direction[2]]);
   if (Math.hypot(...forward) <= 1e-8) return fallback;
@@ -34,8 +32,7 @@ function hasRotation(frames) {
 
 function applyAutomaticOrientation(frames, mode, authoredRotation = false) {
   if (mode === "authored" || !frames.length) return frames;
-  // `auto` only fills rotations when the author omitted them. Explicit
-  // rotations are authoritative and are never overwritten.
+
   if (mode === "auto" && authoredRotation) return frames;
   let lastRotation = frames[0].rotation;
   return frames.map((frame, index) => {

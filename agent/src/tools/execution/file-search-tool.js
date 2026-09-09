@@ -241,9 +241,7 @@ async function searchFilesSource({
     target: projectToolPathRef(searchPathRef),
     reason: "The final normalized resource requires confirmation under the server path policy.",
   });
-  // Search implementations return paths relative to the directory they scan.
-  // Keep that same root for host searches so matches outside the user's workspace
-  // can be resolved back to their authorized host paths.
+
   const searchProjectionRoot = searchRoot;
   const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
   let result = null;

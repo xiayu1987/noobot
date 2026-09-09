@@ -5,6 +5,7 @@
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveToolCallName } from "@noobot/shared/tool-name";
+import { resolveContextMessageSummarized } from "@noobot/context-protocol/message/codec";
 import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
@@ -50,15 +51,11 @@ const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 
-function isMessageSummarized(message = {}) {
-  return message?.summarized === true || message?.lc_kwargs?.summarized === true;
-}
-
 function resolveUnsummarizedMessageChars(messages = []) {
   if (!Array.isArray(messages)) return 0;
   return messages.reduce((total, message) => {
     if (!message || typeof message !== "object") return total;
-    if (isMessageSummarized(message)) return total;
+    if (resolveContextMessageSummarized(message)) return total;
     const content = extractRawTextContent(message?.content ?? message);
     return total + String(content || "").length;
   }, 0);

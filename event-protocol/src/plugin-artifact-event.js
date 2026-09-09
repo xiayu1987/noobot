@@ -8,9 +8,7 @@ import { createEventEnvelope } from "./envelope.js";
 export const PLUGIN_ARTIFACT_EVENT = "plugin.artifact.committed";
 export const PLUGIN_ARTIFACT_FAMILY = "plugin.artifact";
 export const PLUGIN_ARTIFACT_SEQUENCE_DOMAIN = "plugin-artifact";
-// Revision and operation fields are part of the wire contract.  Keep the
-// artifact family versioned independently so consumers cannot silently accept
-// the pre-revision payload shape.
+
 export const PLUGIN_ARTIFACT_SCHEMA_VERSION = 2;
 export const PLUGIN_ARTIFACT_OPERATIONS = Object.freeze(["created", "replaced"]);
 export const PLUGIN_ARTIFACT_ERROR_CODE = Object.freeze({

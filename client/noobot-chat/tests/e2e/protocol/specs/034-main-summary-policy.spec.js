@@ -311,8 +311,6 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     summaryExchanges.length,
   );
 
-  // The next user turn must receive the durable post-finalization projection,
-  // not the in-memory pre-finalizer tool-message prefix.
   const commandCountBeforeSecondTurn = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(noobot.page, uniquePrompt(testInfo, "第二轮只回复已完成，不调用工具。"));
   const secondSend = await waitForCommand(

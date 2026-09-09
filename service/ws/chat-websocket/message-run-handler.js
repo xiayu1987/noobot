@@ -48,7 +48,7 @@ async function settlePendingLifecycle(context) {
     const pendingResult = await context.lifecycle.pending;
     if (pendingResult?.turn) context.lifecycle.latestTurn = pendingResult.turn;
   } catch {
-    // The failure command remains responsible for recording the run failure.
+    void 0;
   }
 }
 

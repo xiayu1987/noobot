@@ -29,11 +29,6 @@ export const TURN_EVENT_VALUES = Object.freeze(Object.values(TURN_EVENT));
 
 const clean = (value) => String(value || "").trim();
 
-/**
- * Derives the globally unique identity of one lifecycle transition from the
- * owning transport/domain command. A command may produce several lifecycle
- * facts, therefore its raw commandId must never be reused as a transition id.
- */
 export function createTurnLifecycleCommandId({ commandId, eventType, phase = "" } = {}) {
   const rootCommandId = clean(commandId);
   const lifecycleEventType = clean(eventType);

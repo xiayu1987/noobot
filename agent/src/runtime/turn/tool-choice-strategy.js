@@ -10,13 +10,11 @@ import {
   resolveModelMinimumReasoningEffort,
 } from "@noobot/model-protocol";
 
-/** Bound tool rounds run at the effort the model declares for tool use. */
 export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
   const { tool_reasoning_effort: effort } = normalizeModelReasoningConfiguration(modelSpec);
   return buildModelReasoningEffortTransport(modelSpec, effort);
 }
 
-/** Suppressing reasoning means the model's lowest declared effort level. */
 function suppressedReasoningOverrides(modelSpec = {}) {
   return buildModelReasoningEffortTransport(
     modelSpec,

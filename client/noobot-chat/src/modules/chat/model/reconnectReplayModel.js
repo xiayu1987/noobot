@@ -49,11 +49,7 @@ function findRecoverableReconnectSessionId(sessionsPayload = [], preferredSessio
     const preferredEntry = (Array.isArray(sessionsPayload) ? sessionsPayload : []).find(
       (sessionEntry) => String(sessionEntry?.sessionId || "").trim() === preferred,
     );
-    // The server-provided currentSessionId is the singular authoritative UI
-    // session on reconnect. A different running/pending session must not hijack
-    // activation and mix histories, interactions, or thinking projections into
-    // the wrong session. Fallback recovery is only valid when the preferred
-    // session is absent from the payload entirely.
+
     if (preferredEntry) return preferred;
   }
   for (const sessionEntry of Array.isArray(sessionsPayload) ? sessionsPayload : []) {

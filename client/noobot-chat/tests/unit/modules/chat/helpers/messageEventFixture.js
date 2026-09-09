@@ -19,12 +19,6 @@ const ORDERING_FIELDS = new Set([
   "aggregateVersion",
 ]);
 
-/**
- * Constructs the canonical Event Protocol v3 Message Timeline envelope used at
- * client reducer boundaries. This intentionally does not call the asserting
- * protocol factory so negative validation tests can construct malformed domain
- * payloads without introducing a second wire format.
- */
 export function canonicalMessageEvent(overrides = {}) {
   const eventType = overrides.eventType || "tool_call_start";
   const values = {

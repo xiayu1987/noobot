@@ -11,13 +11,10 @@ const clean = (value) => String(value || "").trim();
 export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
   const inFlightByScope = new Map();
 
-  const drainAuthorityEvents = async ({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    persistenceScope = null,
-    limit = 100,
-  } = {}, publishEvent = sendEvent) => {
+  const drainAuthorityEvents = async (
+    { userId, sessionId, parentSessionId = "", persistenceScope = null, limit = 100 } = {},
+    publishEvent = sendEvent,
+  ) => {
     const identity = {
       userId: clean(userId),
       sessionId: clean(sessionId),
@@ -41,7 +38,11 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
     while (true) {
       const pending = await bot.getPendingAuthorityEvents({ ...identity, limit });
       if (!pending?.found) {
-        return { dispatched: false, reason: pending?.reason || "authority_outbox_unavailable", delivered };
+        return {
+          dispatched: false,
+          reason: pending?.reason || "authority_outbox_unavailable",
+          delivered,
+        };
       }
       const events = Array.isArray(pending.events) ? pending.events : [];
       if (!events.length) break;
@@ -58,7 +59,11 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
         }
         const attempt = await bot.recordAuthorityEventAttempt({ ...identity, eventId });
         if (!attempt?.recorded) {
-          return { dispatched: false, reason: attempt?.reason || "authority_event_attempt_failed", delivered };
+          return {
+            dispatched: false,
+            reason: attempt?.reason || "authority_event_attempt_failed",
+            delivered,
+          };
         }
         if (typeof publishEvent !== "function") {
           return { dispatched: false, reason: "authority_event_transport_unavailable", delivered };
@@ -79,14 +84,21 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
           sequence,
         });
         if (!acknowledged?.acknowledged) {
-          return { dispatched: false, reason: acknowledged?.reason || "authority_event_ack_failed", delivered };
+          return {
+            dispatched: false,
+            reason: acknowledged?.reason || "authority_event_ack_failed",
+            delivered,
+          };
         }
         delivered += 1;
         const streamKey = `${orderingDomain}\u0000${orderingScopeId}`;
         watermarks.set(streamKey, {
           orderingDomain,
           orderingScopeId,
-          deliveredThroughSequence: Math.max(sequence, watermarks.get(streamKey)?.deliveredThroughSequence || 0),
+          deliveredThroughSequence: Math.max(
+            sequence,
+            watermarks.get(streamKey)?.deliveredThroughSequence || 0,
+          ),
         });
       }
     }
@@ -132,8 +144,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
           }
           if (entry.dirty) continue;
 
-          // Delete before resolving so a later commit cannot attach to a drain
-          // which has already made its final pending-event observation.
           if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
           return { dispatched: true, delivered };
         }

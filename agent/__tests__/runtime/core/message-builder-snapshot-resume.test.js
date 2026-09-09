@@ -110,13 +110,13 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
   );
   assert.equal(
     blocks.history.some(
-      (message) => message?._getType?.() === "human" && String(message?.content || "") === "",
+      (message) => message?.type === "human" && String(message?.content || "") === "",
     ),
     false,
   );
 
-  const aiMessages = blocks.history.filter((message) => message?._getType?.() === "ai");
-  const toolMessages = blocks.history.filter((message) => message?._getType?.() === "tool");
+  const aiMessages = blocks.history.filter((message) => message?.type === "ai");
+  const toolMessages = blocks.history.filter((message) => message?.type === "tool");
   assert.equal(aiMessages.length, 3);
   assert.equal(toolMessages.length, 3);
   assert.deepEqual(
@@ -184,11 +184,8 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
     ),
   );
   const all = blocks.messages;
-  assert.equal(
-    all.find((message) => message?._getType?.() === "ai")?.tool_calls?.[0]?.id,
-    toolCallId,
-  );
-  assert.equal(all.find((message) => message?._getType?.() === "tool")?.tool_call_id, toolCallId);
+  assert.equal(all.find((message) => message?.type === "ai")?.tool_calls?.[0]?.id, toolCallId);
+  assert.equal(all.find((message) => message?.type === "tool")?.tool_call_id, toolCallId);
 
   const metaPayloads = all
     .filter((message) => message?.additional_kwargs?.noobotInternalMessageType === "user_meta")
@@ -312,16 +309,16 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
 
   assert.equal(
     blocks.history.some(
-      (message) => message?._getType?.() === "human" && String(message?.content || "") === "",
+      (message) => message?.type === "human" && String(message?.content || "") === "",
     ),
     false,
   );
   assert.equal(
-    blocks.history.find((message) => message?._getType?.() === "ai")?.tool_calls?.[0]?.id,
+    blocks.history.find((message) => message?.type === "ai")?.tool_calls?.[0]?.id,
     toolCallId,
   );
   assert.equal(
-    blocks.history.find((message) => message?._getType?.() === "tool")?.tool_call_id,
+    blocks.history.find((message) => message?.type === "tool")?.tool_call_id,
     toolCallId,
   );
 
@@ -445,7 +442,7 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
   );
 
   const humanMessages = [...blocks.history, ...blocks.incremental].filter(
-    (message) => message?._getType?.() === "human",
+    (message) => message?.type === "human",
   );
   assert.equal(
     humanMessages.some((message) => message.content === "添加附件发送后编辑重发"),
@@ -577,8 +574,8 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
   assert.equal(blocks.system.length, 1);
   assert.equal(blocks.history[0]?.content, "测试所有工具");
   assert.equal(blocks.history[1]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
-  assert.equal(blocks.history[2]?._getType?.(), "ai");
-  assert.equal(blocks.history[3]?._getType?.(), "tool");
+  assert.equal(blocks.history[2]?.type, "ai");
+  assert.equal(blocks.history[3]?.type, "tool");
   assert.equal(blocks.history[2]?.tool_calls?.[0]?.id, toolCallId);
   assert.equal(blocks.history[3]?.tool_call_id, toolCallId);
 

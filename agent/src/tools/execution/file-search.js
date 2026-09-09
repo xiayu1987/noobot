@@ -186,7 +186,7 @@ function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }
       try {
         if (JSON.parse(line)?.type === "match") matchCount += 1;
       } catch {
-        // Non-JSON diagnostics are handled by the process exit contract.
+        void 0;
       }
       if (matchCount >= maxCount && !stoppedAtLimit) {
         stoppedAtLimit = true;

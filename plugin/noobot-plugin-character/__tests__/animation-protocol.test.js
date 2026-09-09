@@ -243,7 +243,7 @@ test("spatial diagnostics apply root rotation/scale and expose displacement", ()
   const diagnostics = analyzeAnimationSpatial(value);
   assert.equal(diagnostics.units, "normalized_world");
   assert.equal(diagnostics.characters["character-1"].displacement, 0);
-  // [1, 0, 0] rotated in the XY plane by 90 degrees and scaled by 2 => [0, 2, 0].
+
   assert.ok(diagnostics.characters["character-1"].minClearance < 0);
 });
 

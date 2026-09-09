@@ -149,7 +149,6 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     },
   ];
   const ctx = {
-    // Untrusted hook context must not override the runtime-owned identity.
     userId: "u-spoofed",
     sessionId: "s-spoofed",
     result: {

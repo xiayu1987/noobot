@@ -84,10 +84,6 @@ export async function dispatchAgentTurn({
   resolvedTurnScopeId,
   syncLifecycleRuntimeState,
 }) {
-  // BEFORE_AGENT_DISPATCH runs before the root Agent constructs its final model
-  // window. At this boundary the prepared session history is the only model
-  // context owned by the dispatcher; system and incremental messages are added
-  // later by the selected execution owner.
   const context = getAgentContextEnvelope(runtimeAgentContext);
   const dispatchContextMessages = Array.isArray(context?.modelContext?.messageBlocks?.history)
     ? context.modelContext.messageBlocks.history

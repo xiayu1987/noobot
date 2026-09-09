@@ -94,8 +94,7 @@ export async function applyReconnectDataReplay({
       reason: "invalid_replay_batch",
     });
   }
-  // A reconnect transaction has exactly one Authority baseline. Events are a
-  // tail after that baseline, never an alternative snapshot source.
+
   for (const sessionEntry of reconnectSessions) {
     const snapshot = sessionEntry?.replayBatch?.snapshot?.payload;
     if (!snapshot || typeof snapshot !== "object") continue;
@@ -195,9 +194,6 @@ export async function applyReconnectDataReplay({
     }
   }
 
-  // Pending interactions are materialized only after the authoritative
-  // session has been activated and hydrated. This keeps the queue projection
-  // scoped to the same active session as the replay batch.
   for (const sessionEntry of reconnectSessions) {
     for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
       if (isPendingInteractionReplay(interaction)) {
