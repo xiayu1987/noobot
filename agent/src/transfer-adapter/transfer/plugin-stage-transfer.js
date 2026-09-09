@@ -5,11 +5,12 @@
  */
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
+  resolveTransferIntent,
   TRANSFER_REASON,
-} from "../core/constants.js";
+  TRANSFER_SOURCE,
+  validateTransferEnvelope,
+} from "@noobot/semantic-transfer-protocol";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { TRANSFER_SOURCE, validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
-import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { firstNormalizedString } from "../core/compact.js";
 
@@ -100,9 +101,7 @@ export async function transferAgentPluginStageMessage({
   const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
     ? persisted.transferEnvelopes
     : [];
-  transferEnvelopes.forEach((envelope) =>
-    validateTransferEnvelope(envelope, { strict: true }),
-  );
+  transferEnvelopes.forEach((envelope) => validateTransferEnvelope(envelope, { strict: true }));
   await emitSemanticTransferValidation({
     runtime,
     scenario: "harness",
@@ -125,14 +124,9 @@ export function composeAgentPluginFinalMessage({
   const validationText = String(validationInfo || "").trim();
   const detailLines = (Array.isArray(detailEnvelopes) ? detailEnvelopes : [])
     .flatMap((envelope = {}) =>
-      Array.isArray(envelope?.payload?.attachments)
-        ? envelope.payload.attachments
-        : [],
+      Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : [],
     )
-    .map(
-      (item = {}) =>
-        `- ${firstNormalizedString(item.name, item.identity?.attachmentId)}`,
-    );
+    .map((item = {}) => `- ${firstNormalizedString(item.name, item.identity?.attachmentId)}`);
 
   return [
     normalizeString(header),

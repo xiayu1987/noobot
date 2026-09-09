@@ -3,14 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON } from "../core/constants.js";
 import { createDirectTransferEnvelope, persistTransferFile } from "./attachment-adapter.js";
-import { resolveTransferIntent } from "../core/intent.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import {
+  createTransferResult,
   decideTransfer,
+  resolveTransferIntent,
+  DEFAULT_TRANSFER_MIME_TYPE,
   normalizeTransferEnvelopes,
   TRANSFER_MODE,
+  TRANSFER_REASON,
+  TRANSFER_RESULT_STATUS,
   TRANSFER_SOURCE,
 } from "@noobot/semantic-transfer-protocol";
 
@@ -89,9 +91,7 @@ export async function materializeOutputResult({
     meta: outputMeta,
   });
 
-  const persistedTransferEnvelopes = normalizeTransferEnvelopes(
-    persisted?.transferEnvelopes,
-  );
+  const persistedTransferEnvelopes = normalizeTransferEnvelopes(persisted?.transferEnvelopes);
   if (persistedTransferEnvelopes.length !== 1) {
     throw new Error("semantic_transfer_materializer_expected_single_envelope");
   }

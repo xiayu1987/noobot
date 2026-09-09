@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_REASON } from "../core/constants.js";
 import {
   SEMANTIC_TRANSFER_REGISTRATION,
+  TRANSFER_REASON,
   TRANSFER_SOURCE,
   assertSemanticTransferRegistration,
 } from "@noobot/semantic-transfer-protocol";

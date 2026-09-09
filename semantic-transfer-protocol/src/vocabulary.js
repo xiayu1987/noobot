@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+export const DEFAULT_TRANSFER_MIME_TYPE = "text/plain";
+
 export const TRANSFER_REASON = Object.freeze({
   SEMANTIC_TRANSFER_OUTPUT: "semantic_transfer_output",
   SEMANTIC_TRANSFER_TOOL_RESULT: "semantic_transfer_tool_result",
@@ -18,4 +20,7 @@ export const TRANSFER_REASON = Object.freeze({
   PATCH_FILE_INPUT_TOO_LONG: "patch_file_input_too_long",
 });
 
-export const DEFAULT_TRANSFER_MIME_TYPE = "text/plain";
+export const TRANSFER_REASON_ALIAS = Object.freeze({
+  semantic_transfer: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+  transfer_output: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+});

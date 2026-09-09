@@ -6,7 +6,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { cp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import {
+  assertTransferEnvelope,
+  isTransferEnvelopeField,
+} from "@noobot/semantic-transfer-protocol";
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import {
   SESSION_COMMAND,
@@ -320,10 +323,7 @@ function validateTransferCollections(value) {
     return false;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (
-      (key === "transferEnvelopes" || key === "nodeResultTransferEnvelopes") &&
-      Array.isArray(child)
-    ) {
+    if (isTransferEnvelopeField(key) && Array.isArray(child)) {
       for (const envelope of child) assertTransferEnvelope(envelope);
       continue;
     }

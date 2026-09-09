@@ -3,16 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON } from "../core/constants.js";
 import {
   decideTransfer,
+  DEFAULT_TRANSFER_MIME_TYPE,
   directTransfer,
+  resolveTransferIntent,
   TRANSFER_DIRECTION,
   TRANSFER_MODE,
+  TRANSFER_REASON,
   TRANSFER_SOURCE,
   getToolInputPolicy,
 } from "@noobot/semantic-transfer-protocol";
-import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { firstNormalizedString } from "../core/compact.js";
 import {
