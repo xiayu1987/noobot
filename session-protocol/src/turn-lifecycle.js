@@ -3,19 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  EXECUTION_KIND,
-  normalizeExecutionIdentity,
-} from "@noobot/session-protocol/execution-lifecycle";
-import {
-  canonicalizeTurnScopeId,
-  isCanonicalTurnScopeId,
-} from "@noobot/session-protocol/turn-scope-identity";
+import { EXECUTION_KIND, normalizeExecutionIdentity } from "./execution-lifecycle.js";
+import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
+import {
+  collectPositiveIntegerErrors,
+  collectRequiredFieldErrors,
+  collectTurnMaterializationErrors,
+  collectTurnScopeIdErrors,
+} from "./lifecycle/turn-field-assertions.js";
 import { normalizeTurnContinuationSource } from "./lifecycle/turn-continuation.js";
 import { TURN_COMMAND, TURN_EVENT, TURN_EVENT_VALUES } from "./lifecycle/turn-event.js";
 import { TURN_EVENT_STATE, TURN_FAILED_PHASE_STATE } from "./lifecycle/turn-transition-policy.js";
-import { TURN_PHASE, TURN_STATE, TURN_TERMINAL_STATES } from "./lifecycle/turn-state.js";
+import { TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
+import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
 
 export {
   deriveAuthoritativeTurnCapabilities,
@@ -26,14 +27,19 @@ export {
   TURN_STATE,
 };
 
+export {
+  createTurnTerminalResolution,
+  TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
+  TURN_TERMINAL_RESOLVED_EVENT,
+  validateTurnTerminalResolution,
+} from "./lifecycle/turn-terminal-resolution.js";
+
 export const TURN_LIFECYCLE_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
 export const TURN_SNAPSHOT_WIRE_EVENT = "turn_snapshot";
 export const TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";
-export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 2;
-export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
 
 const EVENT_VALUES = new Set(TURN_EVENT_VALUES);
 const EVENT_STATE = TURN_EVENT_STATE;
@@ -74,8 +80,7 @@ export function validateTurnLifecycleReceipt(receipt = {}) {
   }
   if (!clean(receipt.eventId)) errors.push("missing_event_id");
   if (!clean(receipt.sessionId)) errors.push("missing_session_id");
-  if (!canonicalizeTurnScopeId(receipt.turnScopeId)) errors.push("missing_turn_scope_id");
-  else if (!isCanonicalTurnScopeId(receipt.turnScopeId)) errors.push("non_canonical_turn_scope_id");
+  errors.push(...collectTurnScopeIdErrors(receipt.turnScopeId));
   return { valid: errors.length === 0, errors };
 }
 
@@ -92,67 +97,6 @@ export function validateSessionProvisionIntent(input = {}) {
     valid,
     requested: input.createSessionIfAbsent === true,
     errors: valid ? [] : ["invalid_session_provision_intent"],
-  };
-}
-
-function snapshotTurn(turn = {}) {
-  const executionIdentity = normalizeExecutionIdentity({
-    ...turn,
-    executionKind: turn.executionKind || EXECUTION_KIND.AGENT,
-  });
-  return {
-    ...executionIdentity,
-    turnScopeId: canonicalizeTurnScopeId(turn.turnScopeId),
-    messageId: clean(turn.messageId),
-    presentationMessageId: clean(turn.presentationMessageId),
-    dialogProcessId: clean(turn.dialogProcessId),
-    commandId: clean(turn.commandId),
-    action: clean(turn.action),
-    state: clean(turn.state),
-    phase: clean(turn.phase),
-    executionState: clean(turn.executionState).toLowerCase(),
-    revision: Number(turn.revision || 0),
-    sequence: Number(turn.sequence || 0),
-    summaryVersion: Number(turn.summaryVersion || 0),
-    completionCommitId: clean(turn.completionCommitId),
-    terminalStatus:
-      turn.terminalStatus && typeof turn.terminalStatus === "object" ? turn.terminalStatus : null,
-    failure: turn.failure && typeof turn.failure === "object" ? turn.failure : null,
-    finalizeIntent:
-      turn.finalizeIntent && typeof turn.finalizeIntent === "object" ? turn.finalizeIntent : null,
-    continuationSource: normalizeTurnContinuationSource(turn.continuationSource),
-    continuedByTurnScopeId: canonicalizeTurnScopeId(turn.continuedByTurnScopeId),
-    startedAt: clean(turn.startedAt),
-    finishedAt: clean(turn.finishedAt),
-    thinkingStartedAt: clean(turn.thinkingStartedAt),
-    thinkingFinishedAt: clean(turn.thinkingFinishedAt),
-    capabilities: deriveAuthoritativeTurnCapabilities(turn),
-    createdAt: clean(turn.createdAt),
-    updatedAt: clean(turn.updatedAt),
-  };
-}
-
-function snapshotReplacedTurn(replacement = {}) {
-  return {
-    turnScopeId: canonicalizeTurnScopeId(replacement.turnScopeId),
-    replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
-    replacementTurnScopeId: canonicalizeTurnScopeId(replacement.replacementTurnScopeId),
-    replacementUserMessageId: clean(replacement.replacementUserMessageId),
-    requestHash: clean(replacement.requestHash),
-    commandId: clean(replacement.commandId),
-    committedAggregateVersion: Number(replacement.committedAggregateVersion || 0),
-    replacedTurnScopeIds: [
-      ...new Set(
-        (Array.isArray(replacement.replacedTurnScopeIds)
-          ? replacement.replacedTurnScopeIds
-          : [replacement.turnScopeId]
-        )
-          .map(canonicalizeTurnScopeId)
-          .filter(Boolean),
-      ),
-    ],
-    sequence: Number(replacement.sequence || 0),
-    committedAt: clean(replacement.committedAt),
   };
 }
 
@@ -200,15 +144,12 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
     ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : []),
   ].filter(Boolean);
   for (const turn of turns) {
-    if (!clean(turn.turnScopeId)) errors.push("missing_turn_scope_id");
-    else if (!isCanonicalTurnScopeId(turn.turnScopeId)) errors.push("non_canonical_turn_scope_id");
-    if (!clean(turn.messageId)) errors.push("missing_message_id");
-    if (!clean(turn.presentationMessageId)) errors.push("missing_presentation_message_id");
-    if (!Number.isInteger(Number(turn.revision)) || Number(turn.revision) < 1)
-      errors.push("invalid_turn_revision");
-    if (!Number.isInteger(Number(turn.sequence)) || Number(turn.sequence) < 1)
-      errors.push("invalid_turn_sequence");
-    else if (Number(turn.sequence) > Number(snapshot.sequence))
+    errors.push(...collectTurnMaterializationErrors(turn));
+    if (
+      Number.isInteger(Number(turn.sequence)) &&
+      Number(turn.sequence) >= 1 &&
+      Number(turn.sequence) > Number(snapshot.sequence)
+    )
       errors.push("turn_sequence_exceeds_snapshot");
   }
   if (!Array.isArray(snapshot.replacedTurns)) errors.push("missing_replaced_turns");
@@ -364,15 +305,16 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (!EVENT_VALUES.has(clean(envelope.eventType))) errors.push("invalid_event_type");
   if (!clean(envelope.eventId)) errors.push("missing_event_id");
   if (!clean(envelope.sessionId)) errors.push("missing_session_id");
-  if (!clean(envelope.turnScopeId)) errors.push("missing_turn_scope_id");
-  else if (!isCanonicalTurnScopeId(envelope.turnScopeId))
-    errors.push("non_canonical_turn_scope_id");
-  if (!clean(envelope.messageId)) errors.push("missing_message_id");
-  if (!clean(envelope.presentationMessageId)) errors.push("missing_presentation_message_id");
-  if (!Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1)
-    errors.push("invalid_revision");
-  if (!Number.isInteger(Number(envelope.sequence)) || Number(envelope.sequence) < 1)
-    errors.push("invalid_sequence");
+  errors.push(...collectTurnScopeIdErrors(envelope.turnScopeId));
+  errors.push(...collectRequiredFieldErrors(envelope.messageId, "missing_message_id"));
+  errors.push(
+    ...collectRequiredFieldErrors(
+      envelope.presentationMessageId,
+      "missing_presentation_message_id",
+    ),
+  );
+  errors.push(...collectPositiveIntegerErrors(envelope.revision, "invalid_revision"));
+  errors.push(...collectPositiveIntegerErrors(envelope.sequence, "invalid_sequence"));
   const eventType = clean(envelope.eventType);
   const phase = clean(envelope.phase || envelope.failure?.phase);
   const expectedState =
@@ -412,85 +354,4 @@ export function validateSessionEvent(event = {}) {
     return { valid: false, recognized: false, errors: ["unsupported_session_event"] };
   }
   return { ...validateTurnLifecycleEnvelope(event), recognized: true };
-}
-
-const TERMINAL_STATE_VALUES = new Set(TURN_TERMINAL_STATES);
-
-export function createTurnTerminalResolution({
-  commandId = "",
-  sessionId = "",
-  turnScopeId = "",
-  resolved = false,
-  retryable = false,
-  reason = "",
-  retryAfterMs = 0,
-  turn = null,
-  materialization = null,
-  aggregateVersion = null,
-  generatedAt = new Date().toISOString(),
-} = {}) {
-  const resolvedTurn = turn
-    ? {
-        ...turn,
-        terminalStatus: turn.terminalStatus || materialization?.terminalStatus || null,
-      }
-    : null;
-  return {
-    protocolVersion: TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
-    eventType: TURN_TERMINAL_RESOLVED_EVENT,
-    commandId: clean(commandId),
-    sessionId: clean(sessionId),
-    turnScopeId: canonicalizeTurnScopeId(turnScopeId),
-    resolved: resolved === true,
-    retryable: retryable === true,
-    reason: clean(reason),
-    retryAfterMs: Math.max(0, Number(retryAfterMs || 0)),
-    aggregateVersion: aggregateVersion == null ? null : Number(aggregateVersion),
-    turn: resolvedTurn
-      ? { ...snapshotTurn(resolvedTurn), sessionId: clean(resolvedTurn.sessionId || sessionId) }
-      : null,
-    materialization:
-      materialization && typeof materialization === "object" ? materialization : null,
-    generatedAt: clean(generatedAt),
-  };
-}
-
-export function validateTurnTerminalResolution(response = {}) {
-  const errors = [];
-  if (Number(response.protocolVersion) !== TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION)
-    errors.push("unsupported_terminal_resolution_version");
-  if (clean(response.eventType) !== TURN_TERMINAL_RESOLVED_EVENT)
-    errors.push("invalid_terminal_resolution_event_type");
-  if (!clean(response.commandId)) errors.push("missing_command_id");
-  if (!clean(response.sessionId)) errors.push("missing_session_id");
-  if (!clean(response.turnScopeId)) errors.push("missing_turn_scope_id");
-  if (response.resolved === true) {
-    const turn = response.turn || {};
-    const materialization = response.materialization || {};
-    const terminalStatus = turn.terminalStatus || materialization.terminalStatus;
-    if (clean(turn.sessionId) !== clean(response.sessionId))
-      errors.push("terminal_session_identity_mismatch");
-    if (clean(turn.turnScopeId) !== clean(response.turnScopeId))
-      errors.push("terminal_turn_identity_mismatch");
-    if (!TERMINAL_STATE_VALUES.has(clean(turn.state))) errors.push("invalid_terminal_state");
-    if (!Number.isInteger(Number(turn.revision)) || Number(turn.revision) < 1)
-      errors.push("invalid_turn_revision");
-    if (!Number.isInteger(Number(turn.sequence)) || Number(turn.sequence) < 1)
-      errors.push("invalid_turn_sequence");
-    if (!terminalStatus || typeof terminalStatus !== "object")
-      errors.push("missing_terminal_status");
-    if (!Number.isInteger(response.aggregateVersion) || response.aggregateVersion < 0)
-      errors.push("invalid_aggregate_version");
-    if (
-      [
-        TURN_STATE.ACTION_FAILED,
-        TURN_STATE.PROCESSING_FAILED,
-        TURN_STATE.COMPLETION_FAILED,
-        TURN_STATE.STOP_FAILED,
-      ].includes(clean(turn.state)) &&
-      (!turn.failure || typeof turn.failure !== "object")
-    )
-      errors.push("missing_terminal_failure");
-  } else if (!clean(response.reason)) errors.push("missing_unresolved_reason");
-  return { valid: errors.length === 0, errors };
 }
