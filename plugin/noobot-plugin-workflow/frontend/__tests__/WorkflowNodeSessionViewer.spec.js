@@ -677,6 +677,34 @@ describe("workflow node session view ownership", () => {
     wrapper.unmount();
   });
 
+  it("projects authoritative messages before the REST detail request completes", async () => {
+    const request = deferred();
+    const selectedStep = { ...step("registry-before-rest"), status: "running" };
+    const sessionDocs = reactive({
+      "session-registry-before-rest": {
+        sessionId: "session-registry-before-rest",
+        messages: [{ id: "live-assistant", role: "assistant", content: "live result" }],
+      },
+    });
+    const { wrapper, state, viewer } = mountViewer({
+      fetcher: vi.fn(() => request.promise),
+      sessionDocs,
+      runtimeNodes: [selectedStep],
+    });
+
+    const opening = viewer.openNodeSession(selectedStep);
+    await nextTick();
+
+    expect(state.viewerLoading.value).toBe(false);
+    expect(state.selectedNodeMessages.value).toEqual([
+      expect.objectContaining({ id: "live-assistant", content: "live result" }),
+    ]);
+
+    request.resolve(detailResponse("session-registry-before-rest", "REST result"));
+    await opening;
+    wrapper.unmount();
+  });
+
   it("replaces the selected step snapshot and rejects stale or foreign projections", async () => {
     const requests = { a: deferred(), b: deferred() };
     const sessionDocs = reactive({

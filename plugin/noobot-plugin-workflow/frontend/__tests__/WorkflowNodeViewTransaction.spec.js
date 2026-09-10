@@ -22,13 +22,15 @@ describe("workflow node view transaction", () => {
 
     expect(transaction.replace(first, { messages: ["stale"] })).toBe(false);
     expect(transaction.activate(first)).toBe(false);
-    expect(transaction.merge("root:node-a", { messages: ["too-early"] })).toBe(false);
+    expect(transaction.merge("root:node-a", { messages: ["live-before-rest"] })).toBe(true);
+    expect(transaction.state.phase).toBe("live");
     expect(transaction.replace(second, { messages: ["snapshot"] })).toBe(true);
     expect(transaction.activate(second)).toBe(true);
     expect(transaction.merge("root:node-a", { messages: ["live"] })).toBe(true);
     expect(clearSnapshot).toHaveBeenCalledTimes(2);
     expect(replaceSnapshot).toHaveBeenCalledExactlyOnceWith({ messages: ["snapshot"] });
-    expect(mergeSnapshot).toHaveBeenCalledExactlyOnceWith({ messages: ["live"] });
+    expect(mergeSnapshot).toHaveBeenNthCalledWith(1, { messages: ["live-before-rest"] });
+    expect(mergeSnapshot).toHaveBeenNthCalledWith(2, { messages: ["live"] });
   });
 
   it("invalidates the current ticket and clears its snapshot", () => {
