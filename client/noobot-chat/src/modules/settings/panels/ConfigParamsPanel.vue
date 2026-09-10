@@ -302,9 +302,7 @@ watch(
 }
 
 .param-value-input :deep(.el-input__inner) {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
+  font-family: var(--noobot-font-mono);
 }
 
 .file-info {

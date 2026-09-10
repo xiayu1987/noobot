@@ -135,8 +135,8 @@ function onInputKeydown(event) {
   align-items: center;
   flex-shrink: 0;
   transition:
-    background-color 0.2s ease,
-    filter 0.2s ease;
+    background-color var(--noobot-duration-normal) ease,
+    filter var(--noobot-duration-normal) ease;
 }
 
 .stop-float-btn:hover,
@@ -182,8 +182,8 @@ function onInputKeydown(event) {
   background: transparent;
   color: var(--noobot-text-secondary);
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
+    background-color var(--noobot-duration-normal) ease,
+    color var(--noobot-duration-normal) ease;
   box-shadow: none;
 }
 
@@ -207,8 +207,8 @@ function onInputKeydown(event) {
   border: none;
   box-shadow: none;
   transition:
-    filter 0.2s ease,
-    opacity 0.2s ease;
+    filter var(--noobot-duration-normal) ease,
+    opacity var(--noobot-duration-normal) ease;
 }
 
 .send-btn-wrap {

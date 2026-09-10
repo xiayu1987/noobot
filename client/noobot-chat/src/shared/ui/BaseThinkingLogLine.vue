@@ -174,9 +174,7 @@ function handleToggle() {
   word-break: break-word;
   border-radius: var(--noobot-thinking-log-detail-radius);
   background: var(--noobot-thinking-detail-background);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
+  font-family: var(--noobot-font-mono);
 }
 .base-thinking-log-line.is-tool {
   border-left-color: var(--noobot-thinking-tool-border);
@@ -188,9 +186,7 @@ function handleToggle() {
 .base-thinking-log-line__prefix {
   flex: 0 0 auto;
   color: var(--noobot-thinking-muted);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
+  font-family: var(--noobot-font-mono);
 }
 .base-thinking-log-line__event {
   display: inline-flex;

@@ -1,7 +1,11 @@
 :root {
   --noobot-btn-radius: var(--noobot-radius-xs);
   --noobot-btn-font-weight: 600;
-  --noobot-btn-transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+  --noobot-btn-transition:
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    color var(--noobot-duration-normal) ease,
+    opacity var(--noobot-duration-normal) ease;
   --noobot-btn-disabled-opacity: 0.6;
 
   --noobot-btn-soft-bg: var(--noobot-surface-soft);

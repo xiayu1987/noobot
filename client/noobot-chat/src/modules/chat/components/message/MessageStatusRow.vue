@@ -75,7 +75,7 @@ const stepView = computed(() => {
   color: var(--noobot-text-secondary);
   background: transparent;
   overflow: hidden;
-  transition: border-color 0.2s ease;
+  transition: border-color var(--noobot-duration-normal) ease;
 }
 
 .message-status-steps.is-running {
@@ -94,7 +94,7 @@ const stepView = computed(() => {
   border: none !important;
   border-radius: 50%;
   background-color: var(--noobot-panel-border);
-  transition: background-color 0.3s ease;
+  transition: background-color var(--noobot-duration-slow) ease;
 }
 
 .message-status-steps :deep(.el-step__icon-inner) {

@@ -503,8 +503,8 @@ const composerExtensionBaseProps = computed(() => ({
   background: color-mix(in srgb, var(--noobot-control-bg) 94%, var(--noobot-accent));
   border-color: color-mix(in srgb, var(--noobot-panel-border) 78%, transparent);
   transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease;
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .composer-select :deep(.el-select__wrapper.is-focused),
@@ -745,7 +745,6 @@ const composerExtensionBaseProps = computed(() => ({
   background: var(--noobot-control-menu-bg);
   overflow: hidden;
   border-radius: var(--noobot-radius-md);
-  box-shadow: var(--noobot-shadow-overlay);
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown),
@@ -812,7 +811,6 @@ const composerExtensionBaseProps = computed(() => ({
     border-radius: var(--noobot-radius-md);
     overflow: hidden auto;
     overscroll-behavior: contain;
-    box-shadow: var(--noobot-shadow-overlay);
   }
 
   :global(.noobot-composer-select-popper[data-popper-placement^="bottom"]) {

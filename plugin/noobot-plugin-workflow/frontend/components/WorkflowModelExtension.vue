@@ -156,8 +156,8 @@ function onWorkflowSemanticModelChange(value = "") {
     transparent
   );
   transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease;
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .composer-select :deep(.el-select__wrapper.is-focused),

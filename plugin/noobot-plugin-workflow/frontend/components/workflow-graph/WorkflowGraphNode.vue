@@ -193,7 +193,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   align-items: center;
   gap: 6px;
   cursor: default;
-  transition: border-color 0.18s ease;
+  transition: border-color var(--noobot-duration-normal) ease;
 }
 
 .workflow-node.is-state-node {

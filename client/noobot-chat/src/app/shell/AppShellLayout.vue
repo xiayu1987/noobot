@@ -590,9 +590,9 @@ defineExpose({
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
-    width 0.18s ease,
-    padding 0.18s ease,
-    max-width 0.18s ease;
+    width var(--noobot-duration-normal) ease,
+    padding var(--noobot-duration-normal) ease,
+    max-width var(--noobot-duration-normal) ease;
 }
 
 .right-tool-panels {
@@ -643,9 +643,9 @@ defineExpose({
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
-    width 0.18s ease,
-    padding 0.18s ease,
-    max-width 0.18s ease;
+    width var(--noobot-duration-normal) ease,
+    padding var(--noobot-duration-normal) ease,
+    max-width var(--noobot-duration-normal) ease;
 }
 
 .connector-overview-panel.is-collapsed {
