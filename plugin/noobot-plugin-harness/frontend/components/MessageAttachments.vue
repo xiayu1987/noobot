@@ -168,7 +168,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
 
 <style scoped>
 .plugin-attachments-wrap {
-  padding: 6px;
+  padding: var(--noobot-space-2xs-plus);
 }
 .plugin-attachments-toggle {
   width: 100%;
@@ -178,7 +178,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   border-radius: var(--noobot-radius-sm);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 38%, transparent);
   background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
-  padding: 6px 8px;
+  padding: var(--noobot-space-2xs-plus) var(--noobot-space-xs);
 }
 .plugin-attachments-title,
 .plugin-attachments-action {
@@ -191,7 +191,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   color: var(--noobot-text-main);
 }
 .plugin-attachments-list {
-  margin-top: 6px;
+  margin-top: var(--noobot-space-2xs-plus);
   display: flex;
   flex-direction: column;
   gap: var(--noobot-space-xs);

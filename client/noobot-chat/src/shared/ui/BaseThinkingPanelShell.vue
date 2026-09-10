@@ -73,6 +73,6 @@ const collapseValue = computed({
 .base-thinking-footer {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: var(--noobot-space-xs);
 }
 </style>

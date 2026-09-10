@@ -216,8 +216,8 @@ function sectionClass(name) {
 <style scoped>
 .dir-inner-actions {
   display: flex;
-  gap: 8px;
-  padding: 8px 10px 0 10px;
+  gap: var(--noobot-space-xs);
+  padding: var(--noobot-space-xs) var(--noobot-space-sm) 0 var(--noobot-space-sm);
 }
 
 .resource-collapse {
@@ -232,7 +232,7 @@ function sectionClass(name) {
 .resource-collapse :deep(.el-collapse-item__header) {
   height: 40px;
   line-height: 40px;
-  padding: 0 12px;
+  padding: 0 var(--noobot-space-md);
   background: var(--noobot-panel-head-bg);
   color: var(--noobot-text-main);
   border-bottom: 1px solid var(--noobot-divider);

@@ -11,7 +11,7 @@
   display: flex;
   align-items: center;
   gap: var(--noobot-space-xs);
-  padding: 4px var(--noobot-space-xs);
+  padding: var(--noobot-space-2xs) var(--noobot-space-xs);
 }
 
 .file-thumb {

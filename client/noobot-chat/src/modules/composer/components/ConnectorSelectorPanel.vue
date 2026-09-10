@@ -57,35 +57,35 @@ const selectedConnectorIds = computed(() =>
 
 <style scoped>
 .connector-selector {
-  padding: 12px;
+  padding: var(--noobot-space-md);
 }
 .connector-selector-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   font-weight: 650;
 }
 .connector-options {
   display: grid;
-  gap: 6px;
-  margin-top: 10px;
+  gap: var(--noobot-space-xs);
+  margin-top: var(--noobot-space-sm);
 }
 .connector-option {
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 8px;
+  padding: var(--noobot-space-xs);
 }
 .connector-name {
   font-weight: 600;
 }
 .connector-kind {
-  margin-left: 8px;
+  margin-left: var(--noobot-space-xs);
   color: var(--noobot-text-secondary);
   font-size: 12px;
 }
 .connector-empty {
-  padding: 14px 4px 4px;
+  padding: var(--noobot-space-lg) var(--noobot-space-2xs) var(--noobot-space-2xs);
   color: var(--noobot-text-secondary);
   font-size: 13px;
 }

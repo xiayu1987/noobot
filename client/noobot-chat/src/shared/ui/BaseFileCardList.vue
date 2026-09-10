@@ -14,7 +14,7 @@
 .base-file-card-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--noobot-space-3xs);
   margin-top: var(--noobot-space-md);
   padding-top: var(--noobot-space-sm);
   border-top: 1px dashed color-mix(in srgb, var(--noobot-accent) 35%, transparent);

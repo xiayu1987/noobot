@@ -223,8 +223,8 @@ watch(
 .thinking-elapsed {
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-thinking-muted);
-  gap: 4px;
-  padding: 0 6px;
+  gap: var(--noobot-space-2xs);
+  padding: 0 var(--noobot-space-xs);
   min-height: 20px;
   line-height: 1.2;
   border-radius: var(--noobot-radius-pill);
@@ -232,12 +232,12 @@ watch(
 .thinking-analysis-block {
   flex: 0 0 auto;
   margin-top: 0;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  margin-bottom: var(--noobot-space-md);
+  padding-bottom: var(--noobot-space-md);
   border-bottom: 1px solid var(--noobot-divider);
 }
 .thinking-analysis-title {
-  margin-bottom: 8px;
+  margin-bottom: var(--noobot-space-xs);
 }
 .thinking-analysis-block :deep(.base-note-block__content) {
   font-size: var(--noobot-msg-caption-font-size);
@@ -270,13 +270,13 @@ watch(
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: var(--noobot-space-md);
+  padding-top: var(--noobot-space-sm);
   border-top: 1px solid var(--noobot-divider);
 }
 .thinking-detail-action-button {
   min-height: 34px;
-  padding: 0 14px;
+  padding: 0 var(--noobot-space-lg);
 }
 .thinking-realtime-body {
   max-height: none;

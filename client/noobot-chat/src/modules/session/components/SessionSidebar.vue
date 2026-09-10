@@ -179,7 +179,7 @@ const { translate } = useLocale();
 }
 
 .brand {
-  padding: 16px 16px 12px;
+  padding: var(--noobot-space-xl) var(--noobot-space-xl) var(--noobot-space-md);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -190,7 +190,7 @@ const { translate } = useLocale();
 .brand-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--noobot-space-md);
   min-width: 0;
 }
 
@@ -258,10 +258,10 @@ const { translate } = useLocale();
 }
 
 .sidebar-header {
-  padding: 0 12px 12px;
+  padding: 0 var(--noobot-space-md) var(--noobot-space-md);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   border-bottom: 1px solid var(--noobot-border-weak);
 }
 
@@ -274,7 +274,7 @@ const { translate } = useLocale();
     background-color var(--noobot-duration-normal) ease,
     border-color var(--noobot-duration-normal) ease,
     box-shadow var(--noobot-duration-normal) ease;
-  padding: 0 12px;
+  padding: 0 var(--noobot-space-md);
 }
 
 .custom-input :deep(.el-input__wrapper.is-focus),
@@ -304,12 +304,12 @@ const { translate } = useLocale();
 
 .action-row {
   display: flex;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   align-items: center;
 }
 
 .sidebar-actions {
-  margin-top: 4px;
+  margin-top: var(--noobot-space-2xs);
 }
 
 .connect-btn,
@@ -397,7 +397,7 @@ const { translate } = useLocale();
 
 .sidebar.collapsed .brand {
   justify-content: center;
-  padding: 16px 0;
+  padding: var(--noobot-space-xl) 0;
 }
 
 .sidebar.collapsed .brand-left,

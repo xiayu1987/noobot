@@ -89,7 +89,7 @@ function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
 
 <style scoped>
 .agent-execution-view__message {
-  margin-bottom: 12px;
+  margin-bottom: var(--noobot-space-md);
 }
 .agent-execution-view__message:last-child {
   margin-bottom: 0;

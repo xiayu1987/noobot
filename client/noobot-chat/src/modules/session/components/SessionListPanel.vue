@@ -295,10 +295,10 @@ watch(
 }
 
 .session-list-inner {
-  padding: 4px 12px 8px;
+  padding: var(--noobot-space-2xs) var(--noobot-space-md) var(--noobot-space-xs);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .session-date-collapse {
@@ -308,7 +308,7 @@ watch(
 
 .session-date-collapse :deep(.el-collapse-item__header) {
   height: 36px;
-  padding: 0 14px;
+  padding: 0 var(--noobot-space-lg);
   border: 0;
   background: transparent;
   color: var(--noobot-text-muted);
@@ -328,8 +328,8 @@ watch(
 .session-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--noobot-space-xs);
+  padding: var(--noobot-space-xs) var(--noobot-space-sm);
   cursor: pointer;
 }
 
@@ -383,13 +383,13 @@ watch(
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .session-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
   flex: 0 0 auto;
 }
 
@@ -453,7 +453,7 @@ watch(
   color: var(--noobot-text-muted);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
   font-family: var(--noobot-font-mono);
 }
 
@@ -490,7 +490,7 @@ watch(
   display: grid;
   place-items: center;
   width: 100%;
-  padding: 8px 0;
+  padding: var(--noobot-space-xs) 0;
   gap: 0;
 }
 
@@ -512,7 +512,7 @@ watch(
 
 <style>
 .session-hover-popover.el-popover.el-popper {
-  padding: 12px 14px;
+  padding: var(--noobot-space-md) var(--noobot-space-lg);
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-panel-border);
   color: var(--noobot-text-strong);
@@ -533,7 +533,7 @@ watch(
 .session-popover__title {
   font-weight: 600;
   font-size: var(--noobot-font-size-md);
-  margin-bottom: 8px;
+  margin-bottom: var(--noobot-space-xs);
   word-break: break-word;
   color: var(--noobot-text-strong);
 }
@@ -544,12 +544,12 @@ watch(
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .session-popover__meta li {
   display: flex;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
   line-height: 1.4;
 }
@@ -566,7 +566,7 @@ watch(
   word-break: break-all;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--noobot-space-xs);
   color: var(--noobot-text-strong);
 }
 

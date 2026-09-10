@@ -69,7 +69,7 @@ defineEmits([
 :deep(.workspace-reset-dialog .el-dialog__header) {
   border-bottom: 1px solid var(--noobot-divider);
   margin-right: 0;
-  padding-bottom: 12px;
+  padding-bottom: var(--noobot-space-md);
 }
 
 :deep(.workspace-reset-dialog .el-dialog__title) {
@@ -78,7 +78,7 @@ defineEmits([
 }
 
 :deep(.workspace-reset-dialog .el-dialog__body) {
-  padding-top: 14px;
+  padding-top: var(--noobot-space-lg);
 }
 
 :deep(.workspace-reset-dialog .el-dialog__footer) {
@@ -86,17 +86,17 @@ defineEmits([
 }
 
 .reset-section-group {
-  margin-top: 8px;
+  margin-top: var(--noobot-space-xs);
   display: grid;
   grid-template-columns: repeat(2, minmax(120px, 1fr));
-  gap: 8px 12px;
+  gap: var(--noobot-space-xs) var(--noobot-space-md);
 }
 
 .reset-dialog-tip {
   font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-secondary);
   line-height: 1.6;
-  padding: 10px 12px;
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
   background: var(--noobot-panel-muted);
 }
 
@@ -105,10 +105,10 @@ defineEmits([
 }
 
 .reset-dialog-toolbar {
-  margin-top: 10px;
+  margin-top: var(--noobot-space-sm);
   display: flex;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .reset-section-item {
@@ -116,7 +116,7 @@ defineEmits([
 }
 
 .reset-dialog-note {
-  margin-top: 10px;
+  margin-top: var(--noobot-space-sm);
   font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-muted);
 }
@@ -124,7 +124,7 @@ defineEmits([
 @media (max-width: 768px) {
   .reset-section-group {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: var(--noobot-space-xs);
   }
 
   .reset-dialog-toolbar {
@@ -138,14 +138,14 @@ defineEmits([
   }
 
   :deep(.workspace-reset-dialog .el-dialog__body) {
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: var(--noobot-space-lg);
+    padding-right: var(--noobot-space-lg);
   }
 
   :deep(.workspace-reset-dialog .el-dialog__footer) {
-    padding: 10px 14px 14px;
+    padding: var(--noobot-space-sm) var(--noobot-space-lg) var(--noobot-space-lg);
     display: flex;
-    gap: 8px;
+    gap: var(--noobot-space-xs);
   }
 
   :deep(.workspace-reset-dialog .el-dialog__footer .el-button) {

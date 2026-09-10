@@ -113,7 +113,7 @@ watch(
   width: 100%;
   max-height: min(70vh, 560px);
   overflow: auto;
-  padding: 10px 12px;
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
   color: var(--noobot-text-main);
   --el-anchor-marker-bg-color: var(--noobot-accent);
   --el-anchor-bg-color: transparent;
@@ -130,7 +130,7 @@ watch(
 
 .chat-message-navigator__empty {
   display: block;
-  padding: 8px 4px;
+  padding: var(--noobot-space-xs) var(--noobot-space-2xs);
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
   text-align: center;
@@ -157,7 +157,7 @@ watch(
   width: 100%;
   max-width: 100%;
   margin: 3px 0;
-  padding: 8px 14px 8px 16px;
+  padding: var(--noobot-space-xs) var(--noobot-space-lg) var(--noobot-space-xs) var(--noobot-space-xl);
   border-radius: var(--noobot-radius-xs);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -177,7 +177,7 @@ watch(
 .chat-message-navigator__item {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
   width: 100%;
 }
@@ -258,14 +258,14 @@ watch(
 @media (max-width: 720px) {
   .chat-message-navigator {
     max-height: calc(100dvh - 120px);
-    padding: 8px 10px;
+    padding: var(--noobot-space-xs) var(--noobot-space-sm);
     border-color: color-mix(in srgb, var(--noobot-panel-border) 58%, transparent);
     background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent);
   }
 
   :deep(.el-anchor__link) {
     max-width: none;
-    padding: 10px 14px 10px 16px;
+    padding: var(--noobot-space-sm) var(--noobot-space-lg) var(--noobot-space-sm) var(--noobot-space-xl);
     font-size: var(--noobot-font-size-md);
   }
 }
@@ -273,7 +273,7 @@ watch(
 
 <style>
 .chat-message-navigator-popover.el-popover.el-popper {
-  padding: 12px 14px;
+  padding: var(--noobot-space-md) var(--noobot-space-lg);
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-panel-border);
   color: var(--noobot-text-strong);
@@ -297,12 +297,12 @@ watch(
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .chat-nav-popover__meta li {
   display: flex;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
   line-height: 1.45;
 }

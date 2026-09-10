@@ -69,7 +69,7 @@ const stepView = computed(() => {
   width: 100%;
   max-width: 100%;
   margin: 0;
-  padding: 12px var(--noobot-space-md) 10px;
+  padding: var(--noobot-space-md) var(--noobot-space-md) var(--noobot-space-sm);
   border: none;
   border-radius: var(--noobot-radius-xs);
   color: var(--noobot-text-secondary);
@@ -115,7 +115,7 @@ const stepView = computed(() => {
 .message-status-steps :deep(.el-step__title) {
   font-size: 11px !important;
   line-height: 1 !important;
-  margin-top: 8px !important;
+  margin-top: var(--noobot-space-xs) !important;
   font-weight: 400 !important;
   color: var(--noobot-thinking-muted);
   letter-spacing: 0.5px;
@@ -172,7 +172,7 @@ const stepView = computed(() => {
 
 @media (max-width: 560px) {
   .message-status-steps {
-    padding: 10px var(--noobot-space-md) 8px;
+    padding: var(--noobot-space-sm) var(--noobot-space-md) var(--noobot-space-xs);
   }
   .message-status-steps :deep(.el-step__title) {
     font-size: 10px !important;

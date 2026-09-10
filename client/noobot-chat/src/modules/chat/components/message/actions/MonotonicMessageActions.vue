@@ -136,6 +136,6 @@ async function handleDelete() {
 <style scoped>
 .monotonic-message-actions {
   width: 100%;
-  margin-top: 12px;
+  margin-top: var(--noobot-space-md);
 }
 </style>

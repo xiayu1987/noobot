@@ -17,6 +17,6 @@ defineProps({
 .base-empty-hint {
   font-size: var(--noobot-font-size-sm);
   color: var(--noobot-thinking-muted);
-  padding: 6px 2px 2px;
+  padding: var(--noobot-space-xs) var(--noobot-space-3xs) var(--noobot-space-3xs);
 }
 </style>

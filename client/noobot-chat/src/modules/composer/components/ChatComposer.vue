@@ -430,7 +430,7 @@ defineExpose({
   --composer-send-height: 36px;
   --composer-send-padding-x: 20px;
 
-  padding: 0 24px 24px;
+  padding: 0 var(--noobot-space-2xl) var(--noobot-space-2xl);
   background: var(--noobot-panel-bg);
   position: relative;
   width: 100%;
@@ -466,10 +466,10 @@ defineExpose({
   position: relative;
   max-width: 800px;
   margin: 0 auto;
-  padding: 12px 16px;
+  padding: var(--noobot-space-md) var(--noobot-space-xl);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--noobot-space-md);
   width: 100%;
 }
 
@@ -495,7 +495,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--noobot-space-md) var(--noobot-space-xl);
   background: var(--noobot-panel-bg);
 }
 
@@ -509,7 +509,7 @@ defineExpose({
 .more-collapse-btn {
   height: 28px;
   min-height: 28px;
-  padding: 0 10px;
+  padding: 0 var(--noobot-space-sm);
   border-radius: var(--noobot-radius-pill);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
   background: color-mix(in srgb, var(--noobot-surface-sidebar) 78%, transparent);
@@ -517,7 +517,7 @@ defineExpose({
   box-shadow: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .more-collapse-btn:hover {
@@ -527,10 +527,10 @@ defineExpose({
 
 .more-panel-content {
   min-height: 0;
-  padding: 14px;
+  padding: var(--noobot-space-lg);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--noobot-space-md);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -542,7 +542,7 @@ defineExpose({
     --composer-icon-radius: var(--noobot-radius-xs);
     --composer-send-height: 32px;
     --composer-send-padding-x: 16px;
-    padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+    padding: 0 var(--noobot-space-md) calc(var(--noobot-space-md) + env(safe-area-inset-bottom));
   }
   .composer-drop-overlay {
     inset: 0 12px calc(12px + env(safe-area-inset-bottom));
@@ -552,7 +552,7 @@ defineExpose({
     border-radius: var(--noobot-radius-md);
   }
   .composer {
-    padding: 10px 12px;
+    padding: var(--noobot-space-sm) var(--noobot-space-md);
     border-radius: var(--noobot-radius-md);
   }
   .more-panel-overlay {
@@ -567,8 +567,8 @@ defineExpose({
     border-radius: var(--noobot-radius-lg);
   }
   .more-panel-content {
-    padding: 12px;
-    gap: 12px;
+    padding: var(--noobot-space-md);
+    gap: var(--noobot-space-md);
   }
 }
 
@@ -581,11 +581,11 @@ defineExpose({
   }
 
   .more-actions-row {
-    padding: 9px 12px;
+    padding: 9px var(--noobot-space-md);
   }
 
   .more-panel-content {
-    padding: 10px;
+    padding: var(--noobot-space-sm);
   }
 }
 </style>

@@ -379,7 +379,7 @@ const composerExtensionBaseProps = computed(() => ({
 .composer-options {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   flex-wrap: wrap;
 }
 
@@ -392,9 +392,9 @@ const composerExtensionBaseProps = computed(() => ({
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   min-width: 0;
-  padding: 10px 12px;
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
 }
 
 .safe-confirm-level {
@@ -405,7 +405,7 @@ const composerExtensionBaseProps = computed(() => ({
   flex: 1 0 100%;
   width: 100%;
   box-sizing: border-box;
-  padding: 6px 10px 14px;
+  padding: var(--noobot-space-xs) var(--noobot-space-sm) var(--noobot-space-lg);
   border-top: 1px solid color-mix(in srgb, var(--noobot-panel-border) 55%, transparent);
 }
 
@@ -419,12 +419,12 @@ const composerExtensionBaseProps = computed(() => ({
 
 .safe-confirm-level-slider {
   min-width: 0;
-  padding: 0 8px;
+  padding: 0 var(--noobot-space-xs);
 }
 
 .safe-confirm-level-slider :deep(.el-slider__runway) {
   height: 4px;
-  margin: 14px 0 18px;
+  margin: var(--noobot-space-lg) 0 18px;
 }
 
 .safe-confirm-level-slider :deep(.el-slider__bar) {
@@ -442,7 +442,7 @@ const composerExtensionBaseProps = computed(() => ({
 }
 
 .safe-confirm-level-slider :deep(.el-slider__marks-text) {
-  margin-top: 8px;
+  margin-top: var(--noobot-space-xs);
   color: var(--noobot-text-muted);
   font-size: 10px;
   font-weight: 500;
@@ -453,7 +453,7 @@ const composerExtensionBaseProps = computed(() => ({
 @media (max-width: 560px) {
   .safe-confirm-level {
     grid-template-columns: 1fr;
-    row-gap: 2px;
+    row-gap: var(--noobot-space-3xs);
     padding-inline: 4px;
   }
 
@@ -465,10 +465,10 @@ const composerExtensionBaseProps = computed(() => ({
 .option-selector {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   min-height: 30px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
 }
 
 .scenario-selector-label {
@@ -483,7 +483,7 @@ const composerExtensionBaseProps = computed(() => ({
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
 }
 
@@ -530,10 +530,10 @@ const composerExtensionBaseProps = computed(() => ({
 .model-config-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   width: 100%;
   min-width: 0;
-  padding: 14px;
+  padding: var(--noobot-space-lg);
 }
 
 .model-config-heading,
@@ -541,7 +541,7 @@ const composerExtensionBaseProps = computed(() => ({
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--noobot-space-md);
   min-width: 0;
 }
 
@@ -574,10 +574,10 @@ const composerExtensionBaseProps = computed(() => ({
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
   align-items: center;
-  gap: 12px;
+  gap: var(--noobot-space-md);
   width: 100%;
   min-width: 0;
-  padding: 10px 12px;
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
 }
 
 .model-field-copy {
@@ -602,8 +602,8 @@ const composerExtensionBaseProps = computed(() => ({
 .model-option-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px 0;
+  gap: var(--noobot-space-3xs);
+  padding: var(--noobot-space-2xs) 0;
   min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -628,9 +628,9 @@ const composerExtensionBaseProps = computed(() => ({
 .plugin-model-extension {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   min-width: 0;
-  padding-top: 2px;
+  padding-top: var(--noobot-space-3xs);
 }
 
 .scenario-description {
@@ -653,11 +653,11 @@ const composerExtensionBaseProps = computed(() => ({
   }
 
   .composer-options {
-    gap: 10px;
+    gap: var(--noobot-space-sm);
   }
 
   .model-config-panel {
-    padding: 12px;
+    padding: var(--noobot-space-md);
     border-radius: var(--noobot-radius-lg);
   }
 
@@ -690,27 +690,27 @@ const composerExtensionBaseProps = computed(() => ({
   }
 
   .option-selector {
-    gap: 6px;
+    gap: var(--noobot-space-xs);
     flex-wrap: wrap;
     align-items: flex-start;
   }
 
   .composer-toggle-panel {
-    padding: 10px;
-    gap: 8px;
+    padding: var(--noobot-space-sm);
+    gap: var(--noobot-space-xs);
   }
 
   .option-button-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
     width: 100%;
-    gap: 6px;
+    gap: var(--noobot-space-xs);
   }
 
   .composer-option-button {
     width: 100%;
     min-height: 32px;
-    padding: 5px 8px;
+    padding: 5px var(--noobot-space-xs);
     justify-content: center;
   }
 
@@ -721,13 +721,13 @@ const composerExtensionBaseProps = computed(() => ({
 
 @media (max-width: 480px) {
   .model-config-panel {
-    padding: 10px;
-    gap: 10px;
+    padding: var(--noobot-space-sm);
+    gap: var(--noobot-space-sm);
   }
 
   .model-select-card {
     display: flex;
-    padding: 10px;
+    padding: var(--noobot-space-sm);
   }
 
   .model-config-description,
@@ -762,14 +762,14 @@ const composerExtensionBaseProps = computed(() => ({
 
 :global(.noobot-composer-select-popper .el-select-dropdown__list) {
   box-sizing: border-box;
-  padding: 4px;
+  padding: var(--noobot-space-2xs);
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item) {
   height: auto;
   min-height: var(--noobot-control-height-xl);
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--noobot-space-xs) var(--noobot-space-sm);
   border-radius: var(--noobot-radius-xs);
   line-height: 1.35;
   color: var(--noobot-text-main);
@@ -814,11 +814,11 @@ const composerExtensionBaseProps = computed(() => ({
   }
 
   :global(.noobot-composer-select-popper[data-popper-placement^="bottom"]) {
-    margin-top: 6px;
+    margin-top: var(--noobot-space-xs);
   }
 
   :global(.noobot-composer-select-popper[data-popper-placement^="top"]) {
-    margin-bottom: 6px;
+    margin-bottom: var(--noobot-space-xs);
   }
 
   :global(.noobot-composer-select-popper .el-select-dropdown__wrap) {
@@ -828,7 +828,7 @@ const composerExtensionBaseProps = computed(() => ({
 
   :global(.noobot-composer-select-popper .el-select-dropdown__item) {
     min-height: 42px;
-    padding: 8px 10px;
+    padding: var(--noobot-space-xs) var(--noobot-space-sm);
   }
 
   :global(.noobot-composer-select-popper .el-popper__arrow) {

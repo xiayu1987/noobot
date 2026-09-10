@@ -92,8 +92,8 @@ function handleRowKeydown(event) {
   justify-content: flex-end;
   align-items: center;
   width: 100%;
-  margin-bottom: 16px;
-  padding: 0 0 12px var(--noobot-space-xs);
+  margin-bottom: var(--noobot-space-xl);
+  padding: 0 0 var(--noobot-space-md) var(--noobot-space-xs);
   border-bottom: 1px solid var(--noobot-divider);
   cursor: pointer;
 }

@@ -320,12 +320,12 @@ watch(
 }
 .thinking-task-check-block {
   flex: 0 0 auto;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  margin-bottom: var(--noobot-space-md);
+  padding-bottom: var(--noobot-space-md);
   border-bottom: 1px solid var(--noobot-divider);
 }
 .thinking-task-check-title {
-  margin-bottom: 8px;
+  margin-bottom: var(--noobot-space-xs);
 }
 .thinking-task-check-item:last-child {
   margin-bottom: 0;
@@ -335,7 +335,7 @@ watch(
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: var(--noobot-space-md);
   box-sizing: border-box;
   overflow: hidden;
 }

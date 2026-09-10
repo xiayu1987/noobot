@@ -12,6 +12,6 @@
 <style scoped>
 .base-tab-panel-body {
   overflow: visible;
-  padding-right: 4px;
+  padding-right: var(--noobot-space-2xs);
 }
 </style>

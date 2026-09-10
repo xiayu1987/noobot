@@ -4,14 +4,17 @@
   --noobot-radius-md: 8px;
   --noobot-radius-lg: 10px;
   --noobot-radius-pill: 999px;
-  --noobot-space-xs: 8px;
+  /* Spacing scale, tuned for a compact global density. 3xs/2xs are structural
+     minimums (icon rows, borders adjacency) and stay fixed; xs..2xl carry the
+     layout slack. Keep strictly increasing and free of duplicate steps. */
+  --noobot-space-xs: 6px;
   --noobot-space-2xs: 4px;
   --noobot-space-3xs: 2px;
-  --noobot-space-sm: 10px;
-  --noobot-space-md: 12px;
-  --noobot-space-lg: 14px;
-  --noobot-space-xl: 16px;
-  --noobot-space-2xl: 24px;
+  --noobot-space-sm: 8px;
+  --noobot-space-md: 10px;
+  --noobot-space-lg: 12px;
+  --noobot-space-xl: 14px;
+  --noobot-space-2xl: 18px;
   --noobot-control-height-sm: 30px;
   --noobot-control-height-md: 34px;
   --noobot-control-height-lg: 38px;

@@ -386,7 +386,7 @@ button,
   display: inline-flex;
   align-items: center;
   gap: var(--noobot-space-xs);
-  padding: 2px var(--noobot-space-xs);
+  padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   border-radius: var(--noobot-radius-pill);
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-msg-tag-text);
@@ -400,7 +400,7 @@ button,
   align-items: center;
   gap: var(--noobot-space-2xs);
   min-height: var(--noobot-control-height-sm);
-  padding: 0 12px;
+  padding: 0 var(--noobot-space-md);
   border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-pill);
   color: var(--noobot-text-main);
@@ -471,7 +471,7 @@ button,
   min-height: 28px;
   box-sizing: border-box;
   margin: 0;
-  padding: 4px 9px;
+  padding: var(--noobot-space-2xs) 9px;
   border-radius: var(--noobot-radius-pill);
   font-size: var(--noobot-font-size-sm);
   font-weight: 600;

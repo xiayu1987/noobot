@@ -160,7 +160,7 @@ function onInputKeydown(event) {
 .chat-input :deep(.el-textarea__inner) {
   border: none;
   box-shadow: none;
-  padding: 6px 4px;
+  padding: var(--noobot-space-xs) var(--noobot-space-2xs);
   background: transparent;
   font-size: var(--noobot-font-size-lg);
   line-height: 1.5;
@@ -227,7 +227,7 @@ function onInputKeydown(event) {
 .mic-status-row {
   display: flex;
   justify-content: flex-end;
-  padding-right: 4px;
+  padding-right: var(--noobot-space-2xs);
 }
 
 .mic-status-text {
@@ -254,7 +254,7 @@ function onInputKeydown(event) {
   .composer-row .send-btn-wrap {
     grid-column: 1 / -1;
     width: 100%;
-    margin-top: 4px;
+    margin-top: var(--noobot-space-2xs);
     margin-left: 0px;
     justify-self: stretch;
   }

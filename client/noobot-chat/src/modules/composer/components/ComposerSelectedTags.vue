@@ -75,11 +75,11 @@ function onRemoveUpload(draftAttachmentId) {
 <style scoped>
 .selected-connectors-row {
   max-width: 800px;
-  margin: 0 auto 12px;
-  padding: 0 4px;
+  margin: 0 auto var(--noobot-space-md);
+  padding: 0 var(--noobot-space-2xs);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   flex-wrap: wrap;
 }
 
@@ -89,7 +89,7 @@ function onRemoveUpload(draftAttachmentId) {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--noobot-text-secondary);
-  padding: 4px 14px;
+  padding: var(--noobot-space-2xs) var(--noobot-space-lg);
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
 }
@@ -106,7 +106,7 @@ function onRemoveUpload(draftAttachmentId) {
 .selected-attachment-name {
   border-color: color-mix(in srgb, var(--noobot-text-muted) 28%, transparent);
   background: color-mix(in srgb, var(--noobot-surface-soft) 78%, var(--noobot-accent));
-  padding-right: 6px;
+  padding-right: var(--noobot-space-xs);
 }
 
 .selected-attachment-text {
@@ -135,7 +135,7 @@ function onRemoveUpload(draftAttachmentId) {
 
 @media (max-width: 768px) {
   .selected-connectors-row {
-    margin-bottom: 8px;
+    margin-bottom: var(--noobot-space-xs);
     overflow-x: auto;
     flex-wrap: nowrap;
     scrollbar-width: none;

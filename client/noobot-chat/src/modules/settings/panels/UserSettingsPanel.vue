@@ -519,7 +519,7 @@ watch(
 
 .code-row {
   display: flex;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 
 .code-row .row-input {
@@ -527,7 +527,7 @@ watch(
 }
 
 .action-btn {
-  padding: 8px 12px;
+  padding: var(--noobot-space-xs) var(--noobot-space-md);
 }
 
 .allow-ide-row {

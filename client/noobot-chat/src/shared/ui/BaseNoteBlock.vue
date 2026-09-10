@@ -21,13 +21,13 @@ defineProps({
 .base-note-block {
   border-left: 2px solid var(--noobot-thinking-tool-border);
   padding-left: var(--noobot-space-sm);
-  margin-bottom: 10px;
+  margin-bottom: var(--noobot-space-sm);
 }
 
 .base-note-block__title {
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-thinking-muted);
-  margin-bottom: 4px;
+  margin-bottom: var(--noobot-space-2xs);
 }
 
 .base-note-block__content {

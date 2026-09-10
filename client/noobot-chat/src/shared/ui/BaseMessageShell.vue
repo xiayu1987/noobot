@@ -51,8 +51,8 @@ const { translate } = useLocale();
 .base-message-shell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 22px;
+  gap: var(--noobot-space-xs);
+  margin-bottom: var(--noobot-msg-stack-gap);
   width: 100%;
   position: relative;
 }
@@ -65,7 +65,7 @@ const { translate } = useLocale();
 .base-message-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   height: var(--noobot-msg-avatar-size);
 }
 

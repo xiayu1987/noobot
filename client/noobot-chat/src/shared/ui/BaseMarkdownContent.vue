@@ -57,7 +57,7 @@ defineExpose({ getHtml });
 }
 
 .base-markdown-content :deep(code) {
-  padding: 2px 6px;
+  padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
 }
 
@@ -73,13 +73,13 @@ defineExpose({ getHtml });
 
 .base-markdown-content :deep(ul),
 .base-markdown-content :deep(ol) {
-  margin: var(--noobot-space-xs) 0 var(--noobot-space-md) 20px;
-  padding-left: 16px;
+  margin: var(--noobot-space-2xs) 0 var(--noobot-space-sm) 0;
+  padding-left: var(--noobot-space-xl);
 }
 
 .base-markdown-content :deep(li) {
-  margin: 4px 0;
-  line-height: 1.7;
+  margin: var(--noobot-space-3xs) 0;
+  line-height: var(--noobot-line-height-body);
 }
 
 .base-markdown-content :deep(ul li::marker) {
@@ -172,7 +172,7 @@ defineExpose({ getHtml });
   align-items: center;
   gap: var(--noobot-space-xs);
   max-width: 100%;
-  padding: 2px var(--noobot-space-sm);
+  padding: var(--noobot-space-3xs) var(--noobot-space-sm);
   border: 1px solid var(--noobot-msg-file-card-border);
   border-radius: var(--noobot-radius-sm);
   background: var(--noobot-msg-file-card-bg);
