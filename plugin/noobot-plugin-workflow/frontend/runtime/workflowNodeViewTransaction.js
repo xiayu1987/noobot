@@ -66,8 +66,11 @@ export function createWorkflowNodeViewTransaction({
   }
 
   function merge(ownerKey = "", detail = {}) {
-    if (state.phase !== "live" || text(ownerKey) !== state.ownerKey) return false;
-    return mergeSnapshot(detail) !== false;
+    if (!["loading", "live"].includes(state.phase) || text(ownerKey) !== state.ownerKey)
+      return false;
+    const merged = mergeSnapshot(detail) !== false;
+    if (merged && state.phase === "loading") state.phase = "live";
+    return merged;
   }
 
   return {

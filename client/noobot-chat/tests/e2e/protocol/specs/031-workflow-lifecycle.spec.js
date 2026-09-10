@@ -30,6 +30,9 @@ import {
 } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
+import { findProtocolObjects, waitForCaptured } from "../helpers/websocket-capture.js";
+
+const LIVE_DRAWER_ASSERTION_TIMEOUT_MS = 3000;
 
 async function assertCompletedWorkflowChildPresentation(page) {
   const restoredDrawer = page.locator(".workflow-node-session-drawer:visible");
@@ -50,6 +53,7 @@ async function assertCompletedWorkflowChildPresentation(page) {
 
   const executionView = page.locator(".workflow-node-session-drawer .agent-execution-view");
   await expect(executionView).toBeVisible();
+  await expect(executionView.locator(".base-message-shell.assistant")).toHaveCount(1);
   const statusSteps = executionView.locator(".message-status-steps");
   await expect(statusSteps).not.toHaveCount(0);
   await expect(executionView.locator(".message-status-steps.is-running")).toHaveCount(0);
@@ -59,10 +63,49 @@ async function assertCompletedWorkflowChildPresentation(page) {
   await expect(thinkingElapsed).not.toContainText("--:--");
 }
 
+async function assertLiveWorkflowChildAssistantMessage(page, timeout = PROTOCOL_TIMEOUTS.model) {
+  const actionNode = page
+    .locator(".workflow-node:not(.is-state-node)")
+    .filter({ hasText: /Running/ })
+    .last();
+  await expect(actionNode).toBeVisible();
+  await actionNode.click();
+
+  const drawer = page.locator(".workflow-node-session-drawer:visible");
+  await expect(drawer).toBeVisible();
+  const runtimeStep = drawer.locator(".workflow-runtime-step-box:not(:disabled)").last();
+  await expect(runtimeStep).toBeVisible();
+  await runtimeStep.click();
+
+  const executionView = drawer.locator(".agent-execution-view");
+  await expect(executionView).toBeVisible();
+  await expect
+    .poll(() => executionView.locator(".base-message-shell.assistant").count(), {
+      message: "Workflow child assistant message should be projected while the run is active",
+      timeout,
+    })
+    .toBeGreaterThan(0);
+
+  await drawer.locator(".el-drawer__close-btn").click();
+  await expect(drawer).toHaveCount(0);
+}
+
 test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protocolCapture }, testInfo) => {
   const workflowCompletionTimeoutMs = PROTOCOL_TIMEOUTS.workflow;
   test.setTimeout(workflowCompletionTimeoutMs + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
+  let releaseNodeDetail;
+  const nodeDetailGate = new Promise((resolve) => {
+    releaseNodeDetail = resolve;
+  });
+  await noobot.page.route("**/api/internal/workflow/session/**", async (route) => {
+    if (route.request().method() !== "GET" || route.request().url().includes("thinking-detail")) {
+      await route.continue();
+      return;
+    }
+    await nodeDetailGate;
+    await route.continue();
+  });
   const beforeSend = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(
     noobot.page,
@@ -88,6 +131,22 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
     ...send,
     identity: { ...send.identity, dialogProcessId: processing.dialogProcessId },
   };
+  await waitForCaptured(
+    () =>
+      findProtocolObjects(protocolCapture.websocketReceived).find(
+        ({ event, data }) =>
+          event === "message_event" &&
+          data?.payload?.eventType === "turn_presentation_committed" &&
+          Boolean(data?.payload?.workflowRunId && data?.payload?.nodeExecutionId),
+      ),
+    { timeoutMs: PROTOCOL_TIMEOUTS.model },
+  );
+  try {
+    await assertLiveWorkflowChildAssistantMessage(noobot.page, LIVE_DRAWER_ASSERTION_TIMEOUT_MS);
+  } finally {
+    releaseNodeDetail();
+  }
+
   const initialTraces = await waitForModelInvocationTraces(
     noobot.userId,
     noobot.sessionId,

@@ -270,6 +270,7 @@ async function openNewProtocolSession(context, prepared, opening) {
   );
   refs.selectedExecutionId.value = identity.executionId;
   refs.attemptExecutionIds.value = childExecutionIds;
+  applyUnifiedSessionDetailIfAvailable(prepared.canonicalNodeItem);
   try {
     if (identity.sessionIdHint) await loadMaterializedSession(context, prepared, opening, identity);
     else if (nodeViewTransaction.accepts(opening.viewTicket)) refs.viewerState.value = "pending";

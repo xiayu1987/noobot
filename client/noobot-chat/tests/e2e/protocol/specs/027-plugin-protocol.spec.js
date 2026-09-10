@@ -326,6 +326,31 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     timeoutMs: PROTOCOL_TIMEOUTS.toolChain,
   });
 
+  const failureRunRecords = await waitForSessionExecutionEventTree(
+    noobot.userId,
+    noobot.sessionId,
+    (records) =>
+      records.some(
+        (record) =>
+          record.sessionId === noobot.sessionId &&
+          record.turnScopeId === failureSend.identity.turnScopeId &&
+          Boolean(record.data?.origin?.workflowRunId),
+      ),
+  );
+  const failureWorkflowRunIds = [
+    ...new Set(
+      failureRunRecords
+        .filter(
+          (record) =>
+            record.sessionId === noobot.sessionId &&
+            record.turnScopeId === failureSend.identity.turnScopeId,
+        )
+        .map((record) => record.data?.origin?.workflowRunId)
+        .filter(Boolean),
+    ),
+  ];
+  expect(failureWorkflowRunIds).toHaveLength(1);
+  const [failureWorkflowRunId] = failureWorkflowRunIds;
   const failureEvents = await waitForSessionExecutionEventTree(
     noobot.userId,
     noobot.sessionId,
@@ -335,6 +360,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
           record.parentSessionId === noobot.sessionId &&
           record.event === "tool_call_end" &&
           record.data?.tool === "read_file" &&
+          record.data?.workflowRunId === failureWorkflowRunId &&
           record.data?.success === false,
       ).length >= 3,
   );
@@ -343,6 +369,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
       record.parentSessionId === noobot.sessionId &&
       record.event === "tool_call_end" &&
       record.data?.tool === "read_file" &&
+      record.data?.workflowRunId === failureWorkflowRunId &&
       record.data?.success === false,
   );
   expect(failedReads).toHaveLength(3);

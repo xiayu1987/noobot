@@ -58,7 +58,7 @@ function buildLiveProjection({ props, runtimeNodeSessions, nodeViewTransaction, 
     subSessionMessageRegistryVersion: registryVersion,
     ...extra,
   });
-  if (transactionPhase !== "live") return unavailable("transaction_not_live");
+  if (!["loading", "live"].includes(transactionPhase)) return unavailable("transaction_not_active");
   if (!viewKey) return unavailable("missing_transaction_owner");
   if (!selectedStep) return unavailable("missing_selected_runtime_step");
   const detail = buildUnifiedSessionDetail({
@@ -170,7 +170,7 @@ export function createLiveProjectionController(context) {
   function applyAvailable(nodeItem = refs.selectedNode.value || {}) {
     const viewKey = createWorkflowNodeViewKey(nodeItem, workflowPayload.value);
     if (
-      nodeViewTransaction.state.phase !== "live" ||
+      !["loading", "live"].includes(nodeViewTransaction.state.phase) ||
       nodeViewTransaction.state.ownerKey !== viewKey
     )
       return false;

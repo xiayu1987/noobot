@@ -32,11 +32,6 @@ function isRecord(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-/**
- * 按给定字段优先序取出第一个可用的 envelope 列表。
- * skipEmpty=true：空数组视为缺失，继续看下一个字段。
- * skipEmpty=false：只要字段是数组就返回，等价于 `a || b` 的降级语义。
- */
 export function pickTransferEnvelopeList(
   source = null,
   fields = NODE_RESULT_FIRST_FIELDS,
@@ -62,10 +57,6 @@ export function collectTransferEnvelopeLists(
   );
 }
 
-/**
- * 不做优先序取舍：把每个来源上所有 envelope 字段的数组全部收下。
- * 适用于「多路来源汇总后再按身份去重」的场景。
- */
 export function collectAllTransferEnvelopeLists(sources = [], fields = TRANSFER_ENVELOPE_FIELDS) {
   const fieldList = Array.isArray(fields) ? fields : [fields];
   return (Array.isArray(sources) ? sources : [sources]).flatMap((source) => {
