@@ -1,6 +1,0 @@
-:root[data-theme="light"] {
-  --noobot-thinking-header: var(--noobot-text-secondary);
-  --noobot-thinking-text: var(--noobot-text-main);
-  --noobot-thinking-muted: var(--noobot-text-muted);
-  --noobot-thinking-line-border: var(--noobot-divider);
-}

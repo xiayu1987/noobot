@@ -19,7 +19,6 @@
     var(--noobot-panel-border)
   );
   --noobot-overlay-outline: color-mix(in srgb, var(--noobot-base-white) 70%, transparent);
-  --noobot-input-ring: 0 0 0 1px var(--noobot-panel-border);
   --noobot-input-ring-focus: 0 0 0 1px var(--noobot-accent-border), 0 0 5px color-mix(in srgb, var(--noobot-accent) 22%, transparent);
   --noobot-runtime-glow: 0 0 9px color-mix(in srgb, var(--noobot-accent) 22%, transparent);
   --noobot-runtime-border: color-mix(in srgb, var(--noobot-accent) 34%, var(--noobot-panel-border));
