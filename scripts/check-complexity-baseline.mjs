@@ -9,9 +9,9 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 577,
+  complexityCount: 574,
   longFunctionCount: 119,
-  maxComplexity: 85,
+  maxComplexity: 83,
   hotspots: Object.freeze({
     "agent/src/bot/session/detached-subsession-runner.js": [0, 0, 0],
     "agent/src/session/entities/session-entity.js": [0, 0, 0],
