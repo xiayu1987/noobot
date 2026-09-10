@@ -102,6 +102,63 @@ async function runOrPrint(command, args, { dryRun = false } = {}) {
   await run(command, args);
 }
 
+async function waitForRemoteQuality(branch, commit, { remote = "origin", dryRun = false } = {}) {
+  if (dryRun) {
+    console.log(`[release][dry-run] wait for Quality Checks on ${remote}/${branch} at ${commit}`);
+    return;
+  }
+  const remoteUrl = await gitOutput(["remote", "get-url", remote]);
+  if (!/^git@github\.com:|^https:\/\/github\.com\//.test(remoteUrl)) {
+    throw new Error(`Remote quality gate requires a GitHub remote, got ${remoteUrl}`);
+  }
+  const timeoutMs = 30 * 60 * 1000;
+  const pollMs = 5 * 1000;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    let output = "";
+    try {
+      const result = await execFileAsync(
+        "gh",
+        [
+          "run",
+          "list",
+          "--workflow",
+          "quality-checks.yml",
+          "--branch",
+          branch,
+          "--commit",
+          commit,
+          "--limit",
+          "1",
+          "--json",
+          "databaseId,status,conclusion",
+        ],
+        { encoding: "utf8", maxBuffer: 1024 * 1024 },
+      );
+      output = String(result.stdout || "");
+    } catch (error) {
+      throw new Error(
+        `Unable to query GitHub Quality Checks. Install and authenticate gh: ${error.message}`,
+      );
+    }
+    const runs = JSON.parse(output || "[]");
+    const run = runs[0];
+    if (run?.status === "completed") {
+      if (run.conclusion === "success") {
+        console.log(`[release] remote Quality Checks passed for ${commit}`);
+        return;
+      }
+      throw new Error(
+        `Remote Quality Checks failed for ${commit} (run ${run.databaseId}, ${run.conclusion})`,
+      );
+    }
+    if (run?.databaseId)
+      console.log(`[release] waiting for remote Quality Checks run ${run.databaseId}`);
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  throw new Error(`Timed out waiting for remote Quality Checks for ${commit}`);
+}
+
 async function resolveReleaseNotes(tagName = "") {
   const notesPath = path.join(".github", "release-notes", `${tagName}.md`);
   try {
@@ -122,26 +179,30 @@ async function main() {
   await assertTagDoesNotExist(tagName, args.remote);
 
   console.log(`[release] preparing ${tagName} on ${branch}`);
-  console.log("[release] running quality checks");
-  await runOrPrint("npm", ["run", "check:quality"], args);
-  console.log("[release] running full repository regression");
-  await runOrPrint("npm", ["test"], args);
-  if (!args.dryRun) await assertCleanWorkingTree();
-
   if (args.dryRun) {
     console.log(`[release][dry-run] npm run release:version -- ${args.version}`);
   } else {
     await bumpVersion(args.version);
   }
 
+  console.log("[release] running quality checks for the final release version");
+  await runOrPrint("npm", ["run", "check:quality"], args);
+  console.log("[release] running full repository regression for the final release version");
+  await runOrPrint("npm", ["test"], args);
+  if (!args.dryRun) await assertCleanWorkingTree();
+
   await runOrPrint("git", ["add", "."], args);
   await runOrPrint("git", ["commit", "-m", `chore: release ${tagName}`], args);
+  if (!args.skipPush) {
+    const commit = await gitOutput(["rev-parse", "HEAD"]);
+    await runOrPrint("git", ["push", args.remote, branch], args);
+    await waitForRemoteQuality(branch, commit, args);
+  }
   const tagArgs = releaseNotes
     ? ["tag", "--annotate", tagName, "--file", releaseNotes]
     : ["tag", tagName];
   await runOrPrint("git", tagArgs, args);
   if (!args.skipPush) {
-    await runOrPrint("git", ["push", args.remote, branch], args);
     await runOrPrint("git", ["push", args.remote, tagName], args);
   }
   console.log(`[release] ${tagName} is ready`);
