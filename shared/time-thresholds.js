@@ -69,6 +69,7 @@ export const TIME_THRESHOLDS = deepFreeze({
 
   tools: {
     executeScriptTimeoutMs: TIME_TIERS.fiveMinutesMs,
+    browserDevtoolsPortPollIntervalMs: 250,
     imagesAsyncPollIntervalMs: TIME_TIERS.fiveSecondsMs,
     imagesAsyncTimeoutMs: TIME_TIERS.threeMinutesMs,
     docToDataLibreOfficeBaseTimeoutMs: TIME_TIERS.threeMinutesMs,

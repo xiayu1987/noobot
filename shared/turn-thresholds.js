@@ -54,6 +54,7 @@ export const TURN_THRESHOLDS = deepFreeze({
 
   tools: {
     nativeTaskCleanupMaxRetries: 10,
+    browserDevtoolsPortReadAttempts: 60,
   },
 
   web: {

@@ -29,6 +29,9 @@ const LIBREOFFICE_EXECUTABLE_ENV_KEYS = Object.freeze([
   "SOFFICE_EXE",
   "SOFFICE_PATH",
 ]);
+const BROWSER_PROFILE_ROOT_ENV_KEYS = Object.freeze(["NOOBOT_BROWSER_PROFILE_ROOT"]);
+const HEADED_DISPLAY_ENV_KEYS = Object.freeze(["DISPLAY", "WAYLAND_DISPLAY"]);
+const BROWSER_PROFILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const WINDOWS_OUTPUT_ENCODINGS = Object.freeze({
   ja: "shift_jis",
   ko: "euc-kr",
@@ -104,6 +107,36 @@ export function buildRestrictedProcessEnv({
   sourceEnv = process.env,
   runElectronAsNode = true,
 } = {}) {
+  return buildRestrictedProcessEnvironment({
+    home,
+    temp,
+    platform,
+    sourceEnv,
+    runElectronAsNode,
+  });
+}
+
+export function resolveBrowserProfileRoot({ sourceEnv = process.env } = {}) {
+  for (const key of BROWSER_PROFILE_ROOT_ENV_KEYS) {
+    const value = String(sourceEnv[key] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+export function isBrowserProfileNameAllowed(value) {
+  return BROWSER_PROFILE_NAME_PATTERN.test(String(value || ""));
+}
+
+export function supportsHeadedBrowser({
+  platform = process.platform,
+  sourceEnv = process.env,
+} = {}) {
+  if (normalizePlatform(platform) !== PLATFORM.LINUX) return true;
+  return HEADED_DISPLAY_ENV_KEYS.some((key) => String(sourceEnv[key] || "").trim().length > 0);
+}
+
+function buildRestrictedProcessEnvironment({ home, temp, platform, sourceEnv, runElectronAsNode }) {
   const environment = {
     PATH: sourceEnv.PATH || "",
     HOME: home,

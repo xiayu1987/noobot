@@ -14,8 +14,17 @@ import os from "node:os";
 import { createDependencyDetector } from "../../electron/dependencies/detect.js";
 import { createDependencyInstaller } from "../../electron/dependencies/installer.js";
 import { createMacDependencyInstallerTools } from "../../electron/dependencies/managed-mac.js";
-import { buildDependencyRuntimeEnv, summarizeDependencySources } from "../../electron/dependencies/runtime-env.js";
-import { getDependencyProxyEnv, getCurlProxyArgs, maskDependencyProxyUrl, normalizeDependencyProxyUrl, validateDependencyProxy } from "../../electron/dependencies/proxy.js";
+import {
+  buildDependencyRuntimeEnv,
+  summarizeDependencySources,
+} from "../../electron/dependencies/runtime-env.js";
+import {
+  getDependencyProxyEnv,
+  getCurlProxyArgs,
+  maskDependencyProxyUrl,
+  normalizeDependencyProxyUrl,
+  validateDependencyProxy,
+} from "../../electron/dependencies/proxy.js";
 
 function withPlatform(platform, fn) {
   const original = Object.getOwnPropertyDescriptor(process, "platform");
@@ -43,7 +52,11 @@ test("darwin managed dependency probe uses managedVersionArgs", async () => {
     const detector = createDependencyDetector({
       runProcess: async (command, args) => {
         calls.push({ command, args });
-        return { ok: args.length === 1 && args[0] === "-version", code: 0, stdout: "ffmpeg version test" };
+        return {
+          ok: args.length === 1 && args[0] === "-version",
+          code: 0,
+          stdout: "ffmpeg version test",
+        };
       },
       hasExistingFile: (filePath) => filePath === "/managed/ffmpeg/bin/ffmpeg",
       getDarwinManagedKeyForSpec: () => "ffmpeg",
@@ -115,11 +128,13 @@ test("darwin dependency source summary is redacted for model context", async () 
       platform: "darwin",
       runtimeEnv: {
         LIBRE_OFFICE_EXE: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-        NOOBOT_FFMPEG_PATH: "/Users/me/Library/Application Support/Noobot/managed-dependencies/ffmpeg/bin/ffmpeg",
+        NOOBOT_FFMPEG_PATH:
+          "/Users/me/Library/Application Support/Noobot/managed-dependencies/ffmpeg/bin/ffmpeg",
         PATH: "/Users/me/Library/Application Support/Noobot/managed-dependencies/nodejs/bin:/usr/bin",
       },
       env: {
-        NOOBOT_LIBREOFFICE_MAC_DMG_URL: "https://user:secret@example.internal/libreoffice.dmg?token=abc",
+        NOOBOT_LIBREOFFICE_MAC_DMG_URL:
+          "https://user:secret@example.internal/libreoffice.dmg?token=abc",
         NOOBOT_FFMPEG_MAC_URL: "https://example.internal/ffmpeg.tar.gz?sig=secret",
         NOOBOT_NODEJS_MAC_URL: "https://example.internal/node.tar.xz?token=secret",
         NOOBOT_NODEJS_MAC_VERSION: "v24.0.0",
@@ -129,13 +144,29 @@ test("darwin dependency source summary is redacted for model context", async () 
 
     const text = JSON.stringify(summary);
     assert.equal(summary.platform, "darwin");
-    assert.equal(summary.dependencies.find((item) => item.name === "LibreOffice")?.key, "libreoffice");
-    assert.equal(summary.dependencies.find((item) => item.name === "LibreOffice")?.sourceType, "self-hosted");
-    assert.equal(summary.dependencies.find((item) => item.name === "FFmpeg")?.hasCustomSource, true);
+    assert.equal(
+      summary.dependencies.find((item) => item.name === "LibreOffice")?.key,
+      "libreoffice",
+    );
+    assert.equal(
+      summary.dependencies.find((item) => item.name === "LibreOffice")?.sourceType,
+      "self-hosted",
+    );
+    assert.equal(
+      summary.dependencies.find((item) => item.name === "FFmpeg")?.hasCustomSource,
+      true,
+    );
     assert.equal(summary.dependencies.find((item) => item.name === "Node.js")?.available, true);
-    assert.ok(summary.dependencies.find((item) => item.name === "Node.js")?.configKeys.includes("darwinManaged.url"));
+    assert.ok(
+      summary.dependencies
+        .find((item) => item.name === "Node.js")
+        ?.configKeys.includes("darwinManaged.url"),
+    );
     assert.match(text, /NOOBOT_FFMPEG_MAC_URL/);
-    assert.doesNotMatch(text, /example\.internal|secret|token=|sig=|\/Users\/me|Application Support/);
+    assert.doesNotMatch(
+      text,
+      /example\.internal|secret|token=|sig=|\/Users\/me|Application Support/,
+    );
   });
 });
 
@@ -145,11 +176,13 @@ test("win32 dependency source summary is platform neutral and redacted", async (
       platform: "win32",
       runtimeEnv: {
         LIBRE_OFFICE_EXE: "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
-        NOOBOT_FFMPEG_PATH: "C:\\Users\\me\\AppData\\Local\\Noobot\\managed-dependencies\\ffmpeg\\bin\\ffmpeg.exe",
+        NOOBOT_FFMPEG_PATH:
+          "C:\\Users\\me\\AppData\\Local\\Noobot\\managed-dependencies\\ffmpeg\\bin\\ffmpeg.exe",
         PATH: "C:\\Users\\me\\AppData\\Local\\Noobot\\managed-dependencies\\nodejs\\bin;C:\\Windows\\System32",
       },
       env: {
-        NOOBOT_LIBREOFFICE_WIN_URL: "https://user:secret@example.internal/libreoffice.exe?token=abc",
+        NOOBOT_LIBREOFFICE_WIN_URL:
+          "https://user:secret@example.internal/libreoffice.exe?token=abc",
         NOOBOT_FFMPEG_WIN_URL: "https://example.internal/ffmpeg.zip?sig=secret",
         NOOBOT_NODEJS_WIN_URL: "https://example.internal/node.zip?token=secret",
         NOOBOT_NODEJS_WIN_VERSION: "v24.0.0",
@@ -160,19 +193,34 @@ test("win32 dependency source summary is platform neutral and redacted", async (
     const text = JSON.stringify(summary);
     assert.equal(summary.platform, "win32");
     assert.equal(summary.dependencies.length, 4);
-    assert.deepEqual(summary.dependencies.map((item) => item.key), [
-      "playwright",
-      "libreoffice",
-      "ffmpeg",
-      "nodejs",
-    ]);
-    assert.equal(summary.dependencies.find((item) => item.key === "libreoffice")?.installMode, "managed");
-    assert.equal(summary.dependencies.find((item) => item.key === "ffmpeg")?.sourceType, "self-hosted");
+    assert.deepEqual(
+      summary.dependencies.map((item) => item.key),
+      ["playwright", "libreoffice", "ffmpeg", "nodejs"],
+    );
+    assert.equal(
+      summary.dependencies.find((item) => item.key === "libreoffice")?.installMode,
+      "managed",
+    );
+    assert.equal(
+      summary.dependencies.find((item) => item.key === "ffmpeg")?.sourceType,
+      "self-hosted",
+    );
     assert.equal(summary.dependencies.find((item) => item.key === "nodejs")?.available, true);
-    assert.ok(summary.dependencies.find((item) => item.key === "nodejs")?.customSourceEnvKeys.includes("NOOBOT_NODEJS_WIN_URL"));
-    assert.ok(summary.dependencies.find((item) => item.key === "nodejs")?.configKeys.includes("packages.win32.winget"));
+    assert.ok(
+      summary.dependencies
+        .find((item) => item.key === "nodejs")
+        ?.customSourceEnvKeys.includes("NOOBOT_NODEJS_WIN_URL"),
+    );
+    assert.ok(
+      summary.dependencies
+        .find((item) => item.key === "nodejs")
+        ?.configKeys.includes("packages.win32.winget"),
+    );
     assert.match(text, /NOOBOT_FFMPEG_WIN_URL/);
-    assert.doesNotMatch(text, /example\.internal|secret|token=|sig=|C:\\Users|AppData|Program Files/);
+    assert.doesNotMatch(
+      text,
+      /example\.internal|secret|token=|sig=|C:\\Users|AppData|Program Files/,
+    );
   });
 });
 
@@ -189,7 +237,10 @@ test("darwin managed dependency probe falls back to --version when no version ar
       getMacManagedCommandPath: () => "/managed/tool/bin/tool",
     });
 
-    assert.equal(await detector.isDependencyInstalled({ label: "Tool", managedCommand: "tool" }), true);
+    assert.equal(
+      await detector.isDependencyInstalled({ label: "Tool", managedCommand: "tool" }),
+      true,
+    );
     assert.deepEqual(calls, [{ command: "/managed/tool/bin/tool", args: ["--version"] }]);
   });
 });
@@ -224,7 +275,9 @@ test("win32 registry parser supports localized default value names", () => {
   const detector = createDependencyDetector();
 
   assert.equal(
-    detector.parseWindowsRegistryDefaultValue("    默认    REG_SZ    C:\\Program Files\\LibreOffice\r\n"),
+    detector.parseWindowsRegistryDefaultValue(
+      "    默认    REG_SZ    C:\\Program Files\\LibreOffice\r\n",
+    ),
     "C:\\Program Files\\LibreOffice",
   );
 });
@@ -232,7 +285,9 @@ test("win32 registry parser supports localized default value names", () => {
 test("darwin FFmpeg managed candidates prefer configured URL then GitHub gzip before evermeet zip", async () => {
   await withProcessProperty("arch", "arm64", async () => {
     const tools = createMacDependencyInstallerTools();
-    const candidates = tools.getMacFfmpegUrlCandidates({ darwinManaged: { url: "https://mirror.example/ffmpeg.gz" } });
+    const candidates = tools.getMacFfmpegUrlCandidates({
+      darwinManaged: { url: "https://mirror.example/ffmpeg.gz" },
+    });
 
     assert.deepEqual(candidates, [
       "https://mirror.example/ffmpeg.gz",
@@ -260,7 +315,11 @@ test("darwin FFmpeg managed installer extracts gzip binary archives", async () =
       const sourceBinary = path.join(rootDir, "ffmpeg-source");
       const sourceArchive = path.join(rootDir, "ffmpeg.gz");
       await writeFile(sourceBinary, "#!/bin/sh\necho ffmpeg version test\n");
-      await pipeline(createReadStream(sourceBinary), createGzip(), createWriteStream(sourceArchive));
+      await pipeline(
+        createReadStream(sourceBinary),
+        createGzip(),
+        createWriteStream(sourceArchive),
+      );
 
       const app = {
         isReady: () => true,
@@ -294,7 +353,12 @@ test("darwin FFmpeg managed installer extracts gzip binary archives", async () =
       assert.equal(result.ok, true);
       assert.equal(result.path, installedPath);
       assert.equal(await readFile(installedPath, "utf8"), "#!/bin/sh\necho ffmpeg version test\n");
-      assert.ok(logs.some((entry) => entry.event === "managed:ffmpeg:extract:finish" && entry.payload.format === "gzip"));
+      assert.ok(
+        logs.some(
+          (entry) =>
+            entry.event === "managed:ffmpeg:extract:finish" && entry.payload.format === "gzip",
+        ),
+      );
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }
@@ -340,7 +404,11 @@ test("darwin curl downloads include configured dependency proxy", async () => {
       const sourceBinary = path.join(rootDir, "ffmpeg-source");
       const sourceArchive = path.join(rootDir, "ffmpeg.gz");
       await writeFile(sourceBinary, "#!/bin/sh\necho ffmpeg version test\n");
-      await pipeline(createReadStream(sourceBinary), createGzip(), createWriteStream(sourceArchive));
+      await pipeline(
+        createReadStream(sourceBinary),
+        createGzip(),
+        createWriteStream(sourceArchive),
+      );
       const curlCalls = [];
       const tools = createMacDependencyInstallerTools({
         app: { isReady: () => true, getPath: () => rootDir },
@@ -352,12 +420,16 @@ test("darwin curl downloads include configured dependency proxy", async () => {
             await copyFile(sourceArchive, args[args.indexOf("-o") + 1]);
             return { ok: true, code: 0, stdout: "", stderr: "" };
           }
-          if (String(command).endsWith("/managed-dependencies/ffmpeg/bin/ffmpeg")) return { ok: true, code: 0, stdout: "ffmpeg version test", stderr: "" };
+          if (String(command).endsWith("/managed-dependencies/ffmpeg/bin/ffmpeg"))
+            return { ok: true, code: 0, stdout: "ffmpeg version test", stderr: "" };
           return { ok: false, code: 1, stdout: "", stderr: `unexpected command ${command}` };
         },
       });
 
-      await tools.installManagedDependencyMac("ffmpeg", { label: "FFmpeg", darwinManaged: { url: "https://mirror.example/ffmpeg.gz" } });
+      await tools.installManagedDependencyMac("ffmpeg", {
+        label: "FFmpeg",
+        darwinManaged: { url: "https://mirror.example/ffmpeg.gz" },
+      });
       assert.equal(curlCalls.length, 1);
       assert.ok(curlCalls[0].args.includes("--proxy"));
       assert.ok(curlCalls[0].args.includes("socks5://127.0.0.1:7890"));
@@ -402,7 +474,13 @@ test("darwin FFmpeg managed installer copies ffprobe when archive contains it", 
         darwinManaged: { url: "https://mirror.example/ffmpeg.zip" },
       });
 
-      const installedFfprobePath = path.join(rootDir, "managed-dependencies", "ffmpeg", "bin", "ffprobe");
+      const installedFfprobePath = path.join(
+        rootDir,
+        "managed-dependencies",
+        "ffmpeg",
+        "bin",
+        "ffprobe",
+      );
       assert.equal(await readFile(installedFfprobePath, "utf8"), "#!/bin/sh\necho ffprobe\n");
     } finally {
       await rm(rootDir, { recursive: true, force: true });
@@ -429,7 +507,15 @@ test("dependency installer injects proxy environment into Windows install comman
     const result = await installer.ensureSelectedDependencies({ ffmpeg: true });
     assert.equal(result[0].ok, true);
     assert.equal(runs[0].command, "winget");
-    assert.deepEqual(runs[0].args.slice(0, 7), ["install", "--id", "Gyan.FFmpeg", "--exact", "--source", "winget", "--accept-package-agreements"]);
+    assert.deepEqual(runs[0].args.slice(0, 7), [
+      "install",
+      "--id",
+      "Gyan.FFmpeg",
+      "--exact",
+      "--source",
+      "winget",
+      "--accept-package-agreements",
+    ]);
     assert.ok(runs[0].args.includes("--accept-source-agreements"));
     assert.ok(runs[0].args.includes("--disable-interactivity"));
     assert.equal(runs[0].options.env.HTTPS_PROXY, "http://127.0.0.1:7890/");
@@ -578,4 +664,22 @@ test("dependency runtime env accepts an explicitly installed Playwright Chromium
   });
 
   assert.equal(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH, chromiumPath);
+});
+
+test("dependency runtime env exposes the browser profile root under user data", () => {
+  const runtimeEnv = buildDependencyRuntimeEnv({
+    app: {
+      isReady: () => true,
+      getPath: (key) => (key === "userData" ? "/home/tester/.config/noobot" : ""),
+    },
+    backendRoot: "/missing/backend",
+    env: { PATH: "/usr/bin" },
+    platform: "linux",
+    exists: () => false,
+  });
+
+  assert.equal(
+    runtimeEnv.NOOBOT_BROWSER_PROFILE_ROOT,
+    "/home/tester/.config/noobot/browser-profiles",
+  );
 });
