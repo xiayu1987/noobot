@@ -112,7 +112,6 @@ button,
   border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-md);
   background: var(--noobot-panel-bg);
-  box-shadow: none;
 }
 
 .noobot-subtle-row {

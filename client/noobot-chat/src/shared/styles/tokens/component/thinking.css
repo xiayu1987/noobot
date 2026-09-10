@@ -1,5 +1,6 @@
 :root {
-  --noobot-thinking-log-detail-radius: 4px;
+  --noobot-thinking-log-detail-radius: var(--noobot-radius-xs);
+  /* 3px 无等值 radius 原语，保留字面值以免引入 1px 偏移 */
   --noobot-thinking-log-event-radius: 3px;
   --noobot-thinking-detail-background: var(--noobot-panel-muted);
   --noobot-thinking-header: var(--noobot-text-secondary);

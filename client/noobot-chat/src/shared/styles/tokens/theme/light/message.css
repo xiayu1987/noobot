@@ -1,23 +1,11 @@
 :root[data-theme="light"] {
-  --noobot-msg-avatar-bg: var(--noobot-accent);
   --noobot-msg-user-avatar: var(--noobot-base-slate-200);
-  --noobot-msg-user-avatar-text: var(--noobot-text-strong);
-  --noobot-msg-meta: var(--noobot-text-muted);
   --noobot-msg-assistant-bg: var(--noobot-base-white);
   --noobot-msg-assistant-border: var(--noobot-base-slate-200);
   --noobot-msg-assistant-text: var(--noobot-text-strong);
-  --noobot-msg-user-bg: var(--noobot-surface-primary-soft);
-  --noobot-msg-user-border: var(--noobot-border-primary);
-  --noobot-msg-user-text: var(--noobot-text-strong);
-  --noobot-msg-tag-bg: var(--noobot-surface-soft);
-  --noobot-msg-tag-text: var(--noobot-text-secondary);
   --noobot-msg-file-card-bg: var(--noobot-base-white);
   --noobot-msg-file-card-border: var(--noobot-base-slate-200);
-  --noobot-msg-file-icon-bg: var(--noobot-surface-primary-soft);
   --noobot-msg-file-name: var(--noobot-text-strong);
-  --noobot-msg-file-size: var(--noobot-text-muted);
   --noobot-msg-inline-code-bg: var(--noobot-panel-muted);
   --noobot-msg-inline-code-text: var(--noobot-text-accent);
-  --noobot-msg-code-block-bg: var(--noobot-base-slate-900);
-  --noobot-msg-code-block-text: var(--noobot-base-slate-200);
 }

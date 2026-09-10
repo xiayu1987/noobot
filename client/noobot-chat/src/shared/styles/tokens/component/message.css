@@ -33,10 +33,10 @@
   --noobot-msg-file-size-font-size: var(--noobot-font-size-xs);
   --noobot-msg-caption-font-size: var(--noobot-font-size-md);
   --noobot-msg-font-size: var(--noobot-font-size-lg);
-  --noobot-msg-line-height: 1.6;
+  --noobot-msg-line-height: var(--noobot-line-height-body);
   --noobot-msg-bubble-pad-y: 11px;
   --noobot-msg-bubble-pad-x: 14px;
-  --noobot-msg-corner-accent-radius: 8px;
+  --noobot-msg-corner-accent-radius: var(--noobot-radius-md);
   --noobot-msg-file-thumb-size: 34px;
   --noobot-msg-file-icon-size: 18px;
   --noobot-msg-file-card-min-height: 42px;
