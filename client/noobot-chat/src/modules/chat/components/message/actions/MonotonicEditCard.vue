@@ -208,7 +208,7 @@ defineExpose({ focusTextarea });
   flex-direction: column;
   gap: 8px;
   padding: 16px;
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow var(--noobot-duration-slow) ease;
   background: var(--noobot-panel-bg);
   border-color: var(--noobot-panel-border);
 }
@@ -283,7 +283,7 @@ defineExpose({ focusTextarea });
   border: none;
   font-size: var(--noobot-font-size-base);
   line-height: 1.6;
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
@@ -346,7 +346,7 @@ defineExpose({ focusTextarea });
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
   position: relative;
   background: var(--noobot-control-bg);
   border-color: var(--noobot-panel-border);
@@ -436,7 +436,7 @@ defineExpose({ focusTextarea });
   cursor: pointer;
   opacity: 0;
   transform: scale(0.9);
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
 }
 
 .monotonic-attachment-item:hover .monotonic-attachment-remove {
@@ -467,7 +467,7 @@ defineExpose({ focusTextarea });
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
 }
 
 .monotonic-add-attachment-btn:hover:not(:disabled) {

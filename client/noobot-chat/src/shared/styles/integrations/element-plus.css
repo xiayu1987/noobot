@@ -61,7 +61,7 @@
 .el-button {
   border-radius: var(--noobot-btn-radius);
   min-height: var(--noobot-control-height-sm);
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition: background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, color var(--noobot-duration-normal) ease;
 }
 
 .el-button:not(:disabled):hover {
@@ -177,7 +177,7 @@
   line-height: var(--noobot-tab-height);
   border: 1px solid transparent;
   border-radius: 0;
-  transition: color 0.18s ease, border-color 0.18s ease;
+  transition: color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease;
 }
 
 .noobot-tabs .el-tabs__item:hover {

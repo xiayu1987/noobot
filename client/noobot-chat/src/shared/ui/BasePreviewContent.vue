@@ -139,8 +139,8 @@ watch(
   overflow-x: hidden;
   padding: var(--noobot-space-xl) var(--noobot-space-2xl);
   transition:
-    padding 0.3s ease,
-    max-height 0.3s ease;
+    padding var(--noobot-duration-slow) ease,
+    max-height var(--noobot-duration-slow) ease;
 }
 
 .preview-body::-webkit-scrollbar {
@@ -197,7 +197,7 @@ watch(
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--noobot-preview-text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--noobot-font-mono);
   font-size: var(--noobot-font-size-base);
   line-height: var(--noobot-line-height-body);
 }

@@ -631,8 +631,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   text-align: left;
   cursor: pointer;
   transition:
-    border-color 0.16s ease,
-    background 0.16s ease;
+    border-color var(--noobot-duration-fast) ease,
+    background var(--noobot-duration-fast) ease;
 }
 
 .workflow-runtime-step-box:hover:not(:disabled) {

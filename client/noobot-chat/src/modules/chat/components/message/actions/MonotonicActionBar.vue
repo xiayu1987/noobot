@@ -53,7 +53,7 @@ const emit = defineEmits(["edit", "delete"]);
   align-items: center;
   gap: 10px;
   opacity: 0.9;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--noobot-duration-normal) ease;
 }
 
 .monotonic-action-bar:hover {

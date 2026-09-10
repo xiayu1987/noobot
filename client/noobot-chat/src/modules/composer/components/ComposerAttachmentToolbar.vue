@@ -106,7 +106,7 @@ defineExpose({
   border-radius: var(--noobot-radius-pill);
   padding: 0 12px;
   flex-shrink: 0;
-  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  transition: color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease;
 }
 
 .poe-upload-btn:hover {

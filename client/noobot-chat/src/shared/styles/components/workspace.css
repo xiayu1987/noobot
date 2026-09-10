@@ -275,8 +275,8 @@
   box-shadow: none;
   border-radius: var(--noobot-radius-sm);
   transition:
-    background 0.16s ease,
-    border-color 0.16s ease;
+    background var(--noobot-duration-fast) ease,
+    border-color var(--noobot-duration-fast) ease;
 }
 
 .noobot-workspace-layout .row-input .el-input__wrapper:hover,
@@ -335,8 +335,8 @@
   border-radius: var(--noobot-radius-md);
   box-shadow: none;
   transition:
-    background 0.16s ease,
-    border-color 0.16s ease;
+    background var(--noobot-duration-fast) ease,
+    border-color var(--noobot-duration-fast) ease;
 }
 
 .noobot-list-row:hover {
@@ -365,9 +365,7 @@
   box-shadow: none;
   border-radius: 0 0 var(--noobot-radius-lg) var(--noobot-radius-lg);
   padding: var(--noobot-space-xl);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
+  font-family: var(--noobot-font-mono);
   font-size: var(--noobot-msg-caption-font-size);
   line-height: 1.6;
   resize: none;

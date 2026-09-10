@@ -168,10 +168,10 @@ watch(
   font-size: var(--noobot-font-size-sm);
   line-height: 1.35;
   transition:
-    color 0.18s ease,
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    transform 0.18s ease;
+    color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    transform var(--noobot-duration-normal) ease;
 }
 
 .chat-message-navigator__item {
@@ -232,7 +232,7 @@ watch(
   background: var(--noobot-accent);
   opacity: 0;
   transform: translateY(-50%);
-  transition: opacity 0.18s ease;
+  transition: opacity var(--noobot-duration-normal) ease;
 }
 
 :deep(.el-anchor__link:hover) {

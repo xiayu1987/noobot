@@ -6,7 +6,7 @@
 
 :root {
   --noobot-font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  --noobot-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --noobot-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --noobot-base-white: #ffffff;
   --noobot-base-black: #000000;
   --noobot-base-blue-400: #60a5fa;
@@ -36,4 +36,13 @@
   --noobot-font-size-2xs: var(--noobot-font-size-xs);
   --noobot-font-size-base: var(--noobot-font-size-md);
   --noobot-font-size-xl: var(--noobot-font-size-lg);
+
+  /*
+   * Motion durations for state-change transitions (hover, focus, active).
+   * Three perceptually distinct steps only; keyframe animations declare their
+   * own timing because their duration carries meaning per animation.
+   */
+  --noobot-duration-fast: 0.16s;
+  --noobot-duration-normal: 0.2s;
+  --noobot-duration-slow: 0.3s;
 }

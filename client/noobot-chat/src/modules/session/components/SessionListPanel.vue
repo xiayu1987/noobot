@@ -363,8 +363,8 @@ watch(
   align-items: center;
   justify-content: center;
   transition:
-    color 0.2s ease,
-    background-color 0.2s ease;
+    color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease;
   color: var(--noobot-text-main);
 }
 
@@ -400,10 +400,10 @@ watch(
   opacity: 0;
   transform: none;
   transition:
-    opacity 0.2s ease,
-    color 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+    opacity var(--noobot-duration-normal) ease,
+    color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .session-item:hover .session-rename-btn,
@@ -440,7 +440,7 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 0.2s ease;
+  transition: color var(--noobot-duration-normal) ease;
 }
 
 .session-item.active .title {
@@ -454,7 +454,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--noobot-font-mono);
 }
 
 .status-dot {
