@@ -44,7 +44,7 @@ const snapshotList = computed(() =>
 <style scoped>
 .conversation-state-debug {
   border-top: 1px dashed var(--noobot-divider);
-  padding: 8px 12px;
+  padding: var(--noobot-space-xs) var(--noobot-space-md);
   background: var(--noobot-surface-sidebar);
 }
 
@@ -57,13 +57,13 @@ const snapshotList = computed(() =>
 .state-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
+  gap: var(--noobot-space-md);
+  margin-top: var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
 }
 
 .state-block h4 {
-  margin: 8px 0 4px;
+  margin: var(--noobot-space-xs) 0 var(--noobot-space-2xs);
   font-size: var(--noobot-font-size-sm);
 }
 
@@ -75,6 +75,6 @@ const snapshotList = computed(() =>
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-divider);
   border-radius: var(--noobot-radius-xs);
-  padding: 6px;
+  padding: var(--noobot-space-xs);
 }
 </style>

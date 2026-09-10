@@ -94,7 +94,7 @@ defineExpose({
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   flex-wrap: wrap;
 }
 
@@ -104,7 +104,7 @@ defineExpose({
 
 .poe-upload-btn {
   border-radius: var(--noobot-radius-pill);
-  padding: 0 12px;
+  padding: 0 var(--noobot-space-md);
   flex-shrink: 0;
   transition: color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease;
 }
@@ -114,13 +114,13 @@ defineExpose({
 }
 
 .btn-icon {
-  margin-right: 4px;
+  margin-right: var(--noobot-space-2xs);
 }
 
 .attachment-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--noobot-space-xs);
   align-items: center;
   flex: 1;
   min-width: 0;
@@ -128,11 +128,11 @@ defineExpose({
 
 .attachment-pill {
   max-width: 200px;
-  padding: 4px 6px 4px 10px;
+  padding: var(--noobot-space-2xs) var(--noobot-space-xs) var(--noobot-space-2xs) var(--noobot-space-sm);
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
   min-width: 0;
 }
 

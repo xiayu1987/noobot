@@ -34,8 +34,11 @@
   --noobot-msg-caption-font-size: var(--noobot-font-size-md);
   --noobot-msg-font-size: var(--noobot-font-size-lg);
   --noobot-msg-line-height: var(--noobot-line-height-body);
-  --noobot-msg-bubble-pad-y: 11px;
-  --noobot-msg-bubble-pad-x: 14px;
+  /* Vertical rhythm between consecutive messages. Dominant driver of chat
+     density, so it is tuned here rather than through the generic space scale. */
+  --noobot-msg-stack-gap: 14px;
+  --noobot-msg-bubble-pad-y: 8px;
+  --noobot-msg-bubble-pad-x: 12px;
   --noobot-msg-corner-accent-radius: var(--noobot-radius-md);
   --noobot-msg-file-thumb-size: 34px;
   --noobot-msg-file-icon-size: 18px;

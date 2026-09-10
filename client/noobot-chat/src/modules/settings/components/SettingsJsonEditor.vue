@@ -38,6 +38,6 @@ function handleInput(value = "") {
 <style scoped>
 .json-error {
   font-size: var(--noobot-font-size-sm);
-  padding: 8px 16px;
+  padding: var(--noobot-space-xs) var(--noobot-space-xl);
 }
 </style>

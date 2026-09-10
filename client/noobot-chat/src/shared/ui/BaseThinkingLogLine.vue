@@ -157,17 +157,17 @@ function handleToggle() {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
   font-size: var(--noobot-msg-caption-font-size);
   color: var(--noobot-thinking-text);
-  margin-bottom: 6px;
+  margin-bottom: var(--noobot-space-xs);
   padding-left: var(--noobot-space-sm);
   border-left: 2px solid var(--noobot-thinking-line-border);
 }
 .base-thinking-log-line__detail {
   flex: 0 0 calc(100% - var(--noobot-space-sm));
-  margin: 2px 0 2px var(--noobot-space-sm);
+  margin: var(--noobot-space-3xs) 0 var(--noobot-space-3xs) var(--noobot-space-sm);
   padding: var(--noobot-space-sm);
   overflow: auto;
   white-space: pre-wrap;
@@ -232,7 +232,7 @@ function handleToggle() {
 }
 .base-thinking-log-line__risk {
   display: inline-block;
-  margin-left: 6px;
+  margin-left: var(--noobot-space-xs);
   padding: 1px 5px;
   border-radius: var(--noobot-thinking-log-event-radius);
   background: var(--noobot-thinking-detail-background);
@@ -249,7 +249,7 @@ function handleToggle() {
   background: color-mix(in srgb, var(--noobot-status-error) 12%, transparent);
 }
 .base-thinking-log-line__summary {
-  margin-left: 6px;
+  margin-left: var(--noobot-space-xs);
 }
 .base-thinking-log-line__text.is-expandable {
   cursor: pointer;

@@ -241,8 +241,8 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .plugin-model-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--noobot-space-md);
+  padding: var(--noobot-space-lg);
   border: 1px solid
     color-mix(
       in srgb,
@@ -273,7 +273,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .plugin-model-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
+  gap: var(--noobot-space-md);
 }
 
 .plugin-model-field {
@@ -282,7 +282,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
   align-items: stretch;
   gap: 7px;
   min-width: 0;
-  padding: 10px;
+  padding: var(--noobot-space-sm);
   border: 1px solid
     color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
   border-radius: var(--noobot-radius-md);
@@ -322,8 +322,8 @@ function isHarnessStepModelDisabled(stepKey = "") {
   line-height: 26px;
   padding-top: 0;
   padding-bottom: 0;
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-left: var(--noobot-space-xs);
+  padding-right: var(--noobot-space-xs);
   box-sizing: border-box;
   font-size: 12px;
 }
@@ -354,11 +354,11 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .plugin-guidance-analysis-control {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--noobot-space-md);
   width: 100%;
   height: 28px;
   min-height: 28px;
-  padding: 0 8px;
+  padding: 0 var(--noobot-space-xs);
   box-sizing: border-box;
   border: 1px solid
     color-mix(
@@ -378,7 +378,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  gap: 6px;
+  gap: var(--noobot-space-2xs-plus);
   max-width: 42%;
   font-size: 12px;
   line-height: 1.2;
@@ -405,7 +405,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .plugin-guidance-analysis-control :deep(.el-slider__runway) {
-  margin: 12px 0;
+  margin: var(--noobot-space-md) 0;
 }
 
 .plugin-guidance-analysis-control :deep(.el-slider__stop) {
@@ -455,8 +455,8 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .model-option-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px 0;
+  gap: var(--noobot-space-3xs);
+  padding: var(--noobot-space-2xs) 0;
 }
 
 .model-option-label {
@@ -479,7 +479,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 
 @media (max-width: 768px) {
   .plugin-model-card {
-    padding: 12px;
+    padding: var(--noobot-space-md);
   }
 
   .plugin-model-grid {

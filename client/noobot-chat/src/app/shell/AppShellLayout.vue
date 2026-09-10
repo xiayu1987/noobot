@@ -757,7 +757,7 @@ defineExpose({
 
 .chat-message-nav-count {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--noobot-space-3xs);
   font-size: var(--noobot-font-size-xs);
   font-weight: 600;
   color: var(--noobot-text-secondary);

@@ -51,7 +51,7 @@ const emit = defineEmits(["edit", "delete"]);
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   opacity: 0.9;
   transition: opacity var(--noobot-duration-normal) ease;
 }

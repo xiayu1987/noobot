@@ -30,7 +30,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--workflow-space-sm, 8px);
+  margin-bottom: var(--workflow-space-sm, var(--noobot-space-xs));
 }
 
 .base-zoom-toolbar__title {
@@ -41,7 +41,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 .base-zoom-toolbar__actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--workflow-space-xs, 6px);
+  gap: var(--workflow-space-xs, var(--noobot-space-xs));
 }
 
 .base-zoom-btn,
@@ -63,7 +63,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 }
 
 .base-zoom-reset {
-  padding: 0 var(--workflow-space-sm, 8px);
+  padding: 0 var(--workflow-space-sm, var(--noobot-space-xs));
   height: 24px;
 }
 
@@ -77,8 +77,8 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 @media (max-width: 480px) {
   .base-zoom-toolbar {
     align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
+    gap: var(--noobot-space-xs);
+    margin-bottom: var(--noobot-space-xs);
   }
 
   .base-zoom-toolbar__title {
@@ -87,7 +87,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 
   .base-zoom-toolbar__actions {
     margin-left: auto;
-    gap: 4px;
+    gap: var(--noobot-space-2xs);
   }
 
   .base-zoom-btn {

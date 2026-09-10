@@ -287,7 +287,7 @@ watch(
 }
 
 .param-row {
-  gap: 10px;
+  gap: var(--noobot-space-sm);
 }
 
 .param-index {
@@ -317,12 +317,12 @@ watch(
 
 .list-empty-tip {
   position: static;
-  padding: 48px 16px;
+  padding: 48px var(--noobot-space-xl);
 }
 
 .list-empty-tip .empty-icon {
   font-size: var(--noobot-font-size-lg);
-  margin-bottom: 10px;
+  margin-bottom: var(--noobot-space-sm);
   opacity: 0.42;
 }
 

@@ -202,7 +202,7 @@ function emitPreview() {
 .attachment-owner-badge {
   flex: 0 0 auto;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 var(--noobot-space-xs);
   font-size: var(--noobot-font-size-2xs);
   line-height: 1;
 }
@@ -213,8 +213,8 @@ function emitPreview() {
 .parsed-result-row {
   width: fit-content;
   max-width: 100%;
-  margin-top: 6px;
-  padding: 3px 5px 3px 8px;
+  margin-top: var(--noobot-space-xs);
+  padding: 3px 5px 3px var(--noobot-space-xs);
 }
 .parsed-result-label {
   flex: 0 0 auto;
@@ -227,7 +227,7 @@ function emitPreview() {
   display: inline-block;
   width: 1px;
   height: 12px;
-  margin-left: 6px;
+  margin-left: var(--noobot-space-xs);
   vertical-align: -2px;
   background: color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
 }
@@ -238,7 +238,7 @@ function emitPreview() {
   height: 22px;
   line-height: 1;
   font-size: var(--noobot-msg-meta-font-size);
-  padding: 0 8px;
+  padding: 0 var(--noobot-space-xs);
   border-color: transparent;
   border-radius: var(--noobot-radius-pill);
   color: var(--noobot-msg-file-name);

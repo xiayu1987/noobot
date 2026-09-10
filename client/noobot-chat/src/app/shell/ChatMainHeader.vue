@@ -257,7 +257,7 @@ function handleHeaderAction(command = "") {
 
   .chat-header {
     min-height: var(--noobot-header-height-mobile);
-    padding: 0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right));
+    padding: 0 max(var(--noobot-space-md), env(safe-area-inset-left)) 0 max(var(--noobot-space-md), env(safe-area-inset-right));
     gap: var(--noobot-space-2xs);
   }
 

@@ -135,7 +135,7 @@ function replay() {
 </template>
 <style scoped>
 .character-animation-card {
-  padding: 8px;
+  padding: var(--noobot-space-xs);
   border: 1px solid #24344d;
   border-radius: 8px;
   background: #0a1120;
@@ -148,22 +148,22 @@ header {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--noobot-space-xs);
+  margin-bottom: var(--noobot-space-2xs-plus);
   color: #dbeafe;
   font-size: 12px;
 }
 .character-animation-card__title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
 }
 .character-animation-card__actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: var(--noobot-space-2xs-plus);
   flex-wrap: wrap;
 }
 button {
@@ -174,39 +174,39 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 11px;
-  padding: 4px 7px;
+  padding: var(--noobot-space-2xs) 7px;
 }
 button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
 .character-animation-card__error {
-  margin: 4px 0;
+  margin: var(--noobot-space-2xs) 0;
   color: #fca5a5;
   font-size: 11px;
 }
 .character-animation-card__diagnostics {
   display: grid;
-  gap: 6px;
-  margin: 0 0 6px;
+  gap: var(--noobot-space-2xs-plus);
+  margin: 0 0 var(--noobot-space-2xs-plus);
   color: #93a4bb;
   font-size: 10px;
 }
 .character-animation-card__diagnostic-row {
   min-width: 0;
-  padding: 4px 6px;
+  padding: var(--noobot-space-2xs) var(--noobot-space-2xs-plus);
   border: 1px solid #1f3047;
   background: #0d1829;
 }
 .character-animation-card__diagnostic-row > strong {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: var(--noobot-space-2xs);
   color: #dbeafe;
 }
 .character-animation-card__diagnostic-row dl {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--noobot-space-2xs-plus);
   margin: 0;
 }
 .character-animation-card__diagnostics dt {
@@ -215,7 +215,7 @@ button:disabled {
   white-space: nowrap;
 }
 .character-animation-card__diagnostics dd {
-  margin: 2px 0 0;
+  margin: var(--noobot-space-3xs) 0 0;
   color: #dbeafe;
   font-variant-numeric: tabular-nums;
 }

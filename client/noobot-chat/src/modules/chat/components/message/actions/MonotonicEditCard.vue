@@ -206,8 +206,8 @@ defineExpose({ focusTextarea });
 .monotonic-edit-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
+  gap: var(--noobot-space-xs);
+  padding: var(--noobot-space-xl);
   transition: box-shadow var(--noobot-duration-slow) ease;
   background: var(--noobot-panel-bg);
   border-color: var(--noobot-panel-border);
@@ -221,7 +221,7 @@ defineExpose({ focusTextarea });
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 
 .monotonic-edit-title {
@@ -232,7 +232,7 @@ defineExpose({ focusTextarea });
 }
 
 .monotonic-edit-subtitle {
-  margin-top: 4px;
+  margin-top: var(--noobot-space-2xs);
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-md);
   line-height: 1.4;
@@ -243,9 +243,9 @@ defineExpose({ focusTextarea });
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
   font-weight: 600;
-  padding: 0 10px;
+  padding: 0 var(--noobot-space-sm);
   height: 26px;
   line-height: 26px;
   white-space: nowrap;
@@ -257,7 +257,7 @@ defineExpose({ focusTextarea });
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
   line-height: 1;
 }
 
@@ -272,11 +272,11 @@ defineExpose({ focusTextarea });
 .monotonic-edit-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner) {
-  padding: 14px 16px;
+  padding: var(--noobot-space-lg) var(--noobot-space-xl);
   border-radius: var(--noobot-radius-xs);
   color: var(--noobot-text-main);
   background: var(--noobot-control-bg);
@@ -297,7 +297,7 @@ defineExpose({ focusTextarea });
 .monotonic-edit-attachments {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 
 .monotonic-attachment-header {
@@ -314,7 +314,7 @@ defineExpose({ focusTextarea });
 
 .monotonic-attachment-stats {
   display: flex;
-  gap: 6px;
+  gap: var(--noobot-space-xs);
 }
 
 .stat-tag {
@@ -324,7 +324,7 @@ defineExpose({ focusTextarea });
 }
 
 .monotonic-attachment-empty {
-  padding: 16px;
+  padding: var(--noobot-space-xl);
   background: var(--noobot-control-bg);
   border-color: var(--noobot-panel-border);
 }
@@ -337,15 +337,15 @@ defineExpose({ focusTextarea });
 .monotonic-attachment-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 8px;
-  padding-right: 8px;
+  gap: var(--noobot-space-xs);
+  padding-right: var(--noobot-space-xs);
 }
 
 .monotonic-attachment-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--noobot-space-xs);
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
   transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
   position: relative;
   background: var(--noobot-control-bg);
@@ -384,7 +384,7 @@ defineExpose({ focusTextarea });
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .monotonic-attachment-name {
@@ -408,14 +408,14 @@ defineExpose({ focusTextarea });
 
 .kind-tag {
   height: 18px;
-  padding: 0 6px;
+  padding: 0 var(--noobot-space-xs);
   font-size: var(--noobot-font-size-2xs);
   border: none;
   background: transparent;
 }
 
 .dot {
-  margin: 0 4px;
+  margin: 0 var(--noobot-space-2xs);
   color: var(--noobot-text-muted);
 }
 
@@ -457,9 +457,9 @@ defineExpose({ focusTextarea });
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   width: 100%;
-  padding: 12px;
+  padding: var(--noobot-space-md);
   border-radius: var(--noobot-radius-sm);
   border: 1px dashed var(--noobot-panel-border);
   background: transparent;
@@ -486,14 +486,14 @@ defineExpose({ focusTextarea });
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 16px;
+  padding-top: var(--noobot-space-xl);
   border-top: 1px solid var(--noobot-panel-border);
 }
 
 .monotonic-edit-tip {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-md);
 }
@@ -501,14 +501,14 @@ defineExpose({ focusTextarea });
 .monotonic-edit-buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 
 .monotonic-footer-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 20px;
+  padding: var(--noobot-space-xs) 20px;
   font-weight: 500;
 }
 
@@ -516,24 +516,24 @@ defineExpose({ focusTextarea });
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--noobot-space-xs);
   line-height: 1;
 }
 
 @media (max-width: 640px) {
   .monotonic-edit-card {
-    padding: 12px;
+    padding: var(--noobot-space-md);
   }
 
   .monotonic-edit-heading {
     flex-direction: column;
-    gap: 10px;
+    gap: var(--noobot-space-sm);
   }
 
   .monotonic-edit-footer {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: var(--noobot-space-xs);
   }
 
   .monotonic-edit-buttons {

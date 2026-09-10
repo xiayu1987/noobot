@@ -266,7 +266,7 @@ watch(
 </template>
 <style scoped>
 .character-animation-assets {
-  padding: 12px;
+  padding: var(--noobot-space-md);
   color: #dbeafe;
 }
 .is-right-panel {
@@ -277,7 +277,7 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: var(--noobot-space-sm);
 }
 button {
   border: 0;
@@ -286,7 +286,7 @@ button {
   cursor: pointer;
 }
 .character-animation-assets__sample {
-  margin-bottom: 10px;
+  margin-bottom: var(--noobot-space-sm);
   padding: 0;
   font-size: 12px;
 }
@@ -296,7 +296,7 @@ button:disabled {
 }
 .character-animation-assets__import {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: var(--noobot-space-sm);
   color: #93a4bb;
   font-size: 12px;
   cursor: pointer;
@@ -304,14 +304,14 @@ button:disabled {
 input[type="file"] {
   display: block;
   width: 100%;
-  margin-top: 6px;
+  margin-top: var(--noobot-space-2xs-plus);
 }
 .character-animation-assets__item {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  padding: 6px 0;
+  padding: var(--noobot-space-2xs-plus) 0;
   font-size: 12px;
 }
 .character-animation-assets__item > span {
@@ -328,14 +328,14 @@ input[type="file"] {
 }
 .character-animation-assets__inventory {
   display: grid;
-  gap: 4px;
-  margin: 2px 0 12px;
+  gap: var(--noobot-space-2xs);
+  margin: var(--noobot-space-3xs) 0 var(--noobot-space-md);
 }
 .character-animation-assets__inventory-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
   padding: 5px 0;
   border-top: 1px solid color-mix(in srgb, #385170 55%, transparent);
@@ -358,8 +358,8 @@ input[type="file"] {
 }
 .character-animation-assets__previews {
   display: grid;
-  gap: 10px;
-  padding-right: 2px;
+  gap: var(--noobot-space-sm);
+  padding-right: var(--noobot-space-3xs);
 }
 
 .is-right-panel .character-animation-assets__previews {
@@ -367,7 +367,7 @@ input[type="file"] {
   overflow: visible;
 }
 .character-animation-assets__preview-title {
-  margin: 4px 0;
+  margin: var(--noobot-space-2xs) 0;
   color: #93a4bb;
   font-size: 12px;
 }
@@ -375,7 +375,7 @@ input[type="file"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
 }
 </style>

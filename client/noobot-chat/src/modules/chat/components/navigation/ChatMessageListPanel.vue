@@ -240,10 +240,10 @@ defineExpose({
 }
 
 .msg-list-inner {
-  padding: 24px max(24px, calc(50% - 400px));
+  padding: var(--noobot-space-2xl) max(var(--noobot-space-2xl), calc(50% - 400px));
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--noobot-space-2xl);
 }
 
 .chat-message-anchor {
@@ -252,7 +252,7 @@ defineExpose({
 }
 
 .skeleton-loading {
-  padding: 16px;
+  padding: var(--noobot-space-xl);
 }
 
 .empty-state {
@@ -266,7 +266,7 @@ defineExpose({
 }
 
 .empty-icon {
-  margin-bottom: 16px;
+  margin-bottom: var(--noobot-space-xl);
   opacity: 0.8;
 }
 
@@ -278,8 +278,8 @@ defineExpose({
 
 @media (max-width: 768px) {
   .msg-list-inner {
-    padding: 14px max(12px, env(safe-area-inset-left)) 14px max(12px, env(safe-area-inset-right));
-    gap: 8px;
+    padding: var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-left)) var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-right));
+    gap: var(--noobot-space-xs);
   }
 }
 </style>

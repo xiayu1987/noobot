@@ -4,7 +4,7 @@
   gap: var(--noobot-space-lg);
   height: 100%;
   min-height: 0;
-  padding: 2px 2px var(--noobot-space-xl);
+  padding: var(--noobot-space-3xs) var(--noobot-space-3xs) var(--noobot-space-xl);
   box-sizing: border-box;
 }
 
@@ -48,7 +48,7 @@
 .noobot-workspace-layout .active-file {
   font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-secondary);
-  padding: 4px var(--noobot-space-sm);
+  padding: var(--noobot-space-2xs) var(--noobot-space-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -150,7 +150,7 @@
   background: transparent;
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xl);
-  padding: 4px 8px;
+  padding: var(--noobot-space-2xs) var(--noobot-space-xs);
 }
 
 .noobot-workspace-layout .icon-btn:hover {
@@ -215,7 +215,7 @@
 .noobot-workspace-layout .custom-tree .el-tree-node__content {
   height: var(--noobot-control-icon-size);
   border-radius: var(--noobot-radius-xs);
-  margin-bottom: 2px;
+  margin-bottom: var(--noobot-space-3xs);
 }
 
 .noobot-workspace-layout .custom-tree .el-tree-node.is-current > .el-tree-node__content {
@@ -258,7 +258,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2px;
+  margin-bottom: var(--noobot-space-3xs);
 }
 
 .noobot-workspace-layout .user-idx {

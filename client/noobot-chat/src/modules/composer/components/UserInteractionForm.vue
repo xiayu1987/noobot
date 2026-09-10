@@ -123,8 +123,8 @@ watch(
   position: relative;
   display: flex;
   flex-direction: column;
-  margin: 0 max(24px, calc(50% - 400px)) 12px;
-  padding: 14px 16px;
+  margin: 0 max(var(--noobot-space-2xl), calc(50% - 400px)) var(--noobot-space-md);
+  padding: var(--noobot-space-lg) var(--noobot-space-xl);
   max-height: min(72vh, 560px);
   overflow: hidden;
 }
@@ -145,14 +145,14 @@ watch(
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--noobot-space-sm);
+  margin-bottom: var(--noobot-space-md);
   flex: 0 0 auto;
 }
 
 .interaction-badge {
   flex: 0 0 auto;
-  padding: 2px 8px;
+  padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
   font-weight: 700;
 }
@@ -174,7 +174,7 @@ watch(
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding-right: 2px;
+  padding-right: var(--noobot-space-3xs);
 }
 
 .interaction-form :deep(.el-input__wrapper) {
@@ -191,10 +191,10 @@ watch(
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   justify-content: flex-end;
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: var(--noobot-space-sm);
+  padding-top: var(--noobot-space-sm);
 }
 
 .interaction-actions :deep(.el-button) {
@@ -203,8 +203,8 @@ watch(
 
 @media (max-width: 768px) {
   .interaction-card {
-    margin: 0 12px 10px;
-    padding: 12px;
+    margin: 0 var(--noobot-space-md) var(--noobot-space-sm);
+    padding: var(--noobot-space-md);
     max-height: 62vh;
   }
 

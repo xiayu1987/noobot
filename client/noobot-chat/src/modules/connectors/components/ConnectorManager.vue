@@ -352,10 +352,10 @@ watch(() => [props.connected, props.userId], refresh);
   font-weight: 650;
 }
 .manager-title .el-tag {
-  margin-left: 2px;
+  margin-left: var(--noobot-space-3xs);
 }
 .connector-manager.compact {
-  padding: 8px 0 0;
+  padding: var(--noobot-space-xs) 0 0;
   border-top: 0;
 }
 .connector-manager.compact .manager-header {
@@ -390,7 +390,7 @@ watch(() => [props.connected, props.userId], refresh);
   display: grid;
   flex: 1 1 auto;
   min-width: 0;
-  gap: 2px;
+  gap: var(--noobot-space-3xs);
   align-items: start;
 }
 .connector-identity strong,
@@ -433,22 +433,22 @@ watch(() => [props.connected, props.userId], refresh);
 }
 .connector-row-actions {
   width: 100%;
-  padding-top: 6px;
+  padding-top: var(--noobot-space-xs);
   border-top: 1px solid var(--noobot-border-weak);
-  gap: 2px;
+  gap: var(--noobot-space-3xs);
   flex: none;
   justify-content: flex-end;
 }
 .type-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--noobot-space-md);
 }
 
 .connector-add-form {
   width: min(100%, 720px);
   margin: 0 auto;
-  padding: 12px 20px 24px;
+  padding: var(--noobot-space-md) 20px var(--noobot-space-2xl);
   box-sizing: border-box;
 }
 
@@ -474,7 +474,7 @@ watch(() => [props.connected, props.userId], refresh);
 
   .connector-add-form {
     width: 100%;
-    padding: 8px 16px 20px;
+    padding: var(--noobot-space-xs) var(--noobot-space-xl) 20px;
   }
 }
 </style>
