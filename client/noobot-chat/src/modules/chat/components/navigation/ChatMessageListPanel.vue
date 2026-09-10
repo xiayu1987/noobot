@@ -278,7 +278,8 @@ defineExpose({
 
 @media (max-width: 768px) {
   .msg-list-inner {
-    padding: var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-left)) var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-right));
+    padding: var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-left))
+      var(--noobot-space-lg) max(var(--noobot-space-md), env(safe-area-inset-right));
     gap: var(--noobot-space-xs);
   }
 }

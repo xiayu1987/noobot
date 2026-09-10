@@ -55,7 +55,17 @@ defineExpose({ focusTextarea });
         <div class="monotonic-edit-subtitle">调整内容和附件后，将替换本轮消息并重新生成回复</div>
       </div>
       <el-tag type="primary" effect="light" round class="monotonic-mode-tag">
-        <svg class="monotonic-mode-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          class="monotonic-mode-icon"
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          stroke="currentColor"
+          stroke-width="2"
+          fill="none"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <polyline points="1 4 1 10 7 10"></polyline>
           <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
         </svg>
@@ -83,9 +93,27 @@ defineExpose({ focusTextarea });
             <span class="monotonic-attachment-title">附件列表</span>
           </div>
           <div class="monotonic-attachment-stats">
-            <el-tag size="small" effect="plain" round class="stat-tag noobot-soft-badge">{{ attachmentStats.total }} 个</el-tag>
-            <el-tag v-if="attachmentStats.history" size="small" type="info" effect="light" round class="stat-tag noobot-soft-badge">原 {{ attachmentStats.history }}</el-tag>
-            <el-tag v-if="attachmentStats.added" size="small" type="success" effect="light" round class="stat-tag noobot-soft-badge is-success">新 {{ attachmentStats.added }}</el-tag>
+            <el-tag size="small" effect="plain" round class="stat-tag noobot-soft-badge"
+              >{{ attachmentStats.total }} 个</el-tag
+            >
+            <el-tag
+              v-if="attachmentStats.history"
+              size="small"
+              type="info"
+              effect="light"
+              round
+              class="stat-tag noobot-soft-badge"
+              >原 {{ attachmentStats.history }}</el-tag
+            >
+            <el-tag
+              v-if="attachmentStats.added"
+              size="small"
+              type="success"
+              effect="light"
+              round
+              class="stat-tag noobot-soft-badge is-success"
+              >新 {{ attachmentStats.added }}</el-tag
+            >
           </div>
         </div>
 
@@ -114,10 +142,17 @@ defineExpose({ focusTextarea });
               <div v-else class="monotonic-attachment-icon">{{ attachmentIcon(attachment) }}</div>
 
               <div class="monotonic-attachment-meta">
-                <div class="monotonic-attachment-name" :title="attachment.name">{{ attachment.name }}</div>
+                <div class="monotonic-attachment-name" :title="attachment.name">
+                  {{ attachment.name }}
+                </div>
                 <div class="monotonic-attachment-desc">
-                  <el-tag size="small" :type="attachment.kind === 'new' ? 'success' : 'info'" effect="light" class="kind-tag">
-                    {{ attachment.kind === 'new' ? '新增' : '原附件' }}
+                  <el-tag
+                    size="small"
+                    :type="attachment.kind === 'new' ? 'success' : 'info'"
+                    effect="light"
+                    class="kind-tag"
+                  >
+                    {{ attachment.kind === "new" ? "新增" : "原附件" }}
                   </el-tag>
                   <span class="dot" aria-hidden="true">·</span>
                   <span class="desc-text">{{ attachmentTypeLabel(attachment) }}</span>
@@ -132,7 +167,16 @@ defineExpose({ focusTextarea });
                 @click="emit('remove-attachment', index)"
                 title="移除附件"
               >
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
@@ -154,7 +198,16 @@ defineExpose({ focusTextarea });
           :disabled="disabled || operating"
           @click="handleChooseFiles"
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            stroke="currentColor"
+            stroke-width="2"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
@@ -165,7 +218,17 @@ defineExpose({ focusTextarea });
 
     <div class="monotonic-edit-footer">
       <span class="monotonic-edit-tip">
-        <svg class="monotonic-tip-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          class="monotonic-tip-icon"
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          stroke="currentColor"
+          stroke-width="2"
+          fill="none"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="16" x2="12" y2="12"></line>
           <line x1="12" y1="8" x2="12.01" y2="8"></line>
@@ -173,12 +236,7 @@ defineExpose({ focusTextarea });
         {{ t("message.monotonicEditTip") }}
       </span>
       <div class="monotonic-edit-buttons">
-        <el-button
-          class="monotonic-footer-btn"
-          :disabled="operating"
-          @click="emit('cancel')"
-          round
-        >
+        <el-button class="monotonic-footer-btn" :disabled="operating" @click="emit('cancel')" round>
           {{ t("common.cancel") }}
         </el-button>
         <el-button
@@ -190,7 +248,16 @@ defineExpose({ focusTextarea });
           round
         >
           <template #icon v-if="!operating">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              stroke="currentColor"
+              stroke-width="2"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
             </svg>
@@ -283,7 +350,13 @@ defineExpose({ focusTextarea });
   border: none;
   font-size: var(--noobot-font-size-base);
   line-height: 1.6;
-  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
+  transition:
+    color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    box-shadow var(--noobot-duration-normal) ease,
+    opacity var(--noobot-duration-normal) ease,
+    transform var(--noobot-duration-normal) ease;
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
@@ -346,7 +419,13 @@ defineExpose({ focusTextarea });
   align-items: center;
   gap: var(--noobot-space-xs);
   padding: var(--noobot-space-sm) var(--noobot-space-md);
-  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
+  transition:
+    color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    box-shadow var(--noobot-duration-normal) ease,
+    opacity var(--noobot-duration-normal) ease,
+    transform var(--noobot-duration-normal) ease;
   position: relative;
   background: var(--noobot-control-bg);
   border-color: var(--noobot-panel-border);
@@ -436,7 +515,13 @@ defineExpose({ focusTextarea });
   cursor: pointer;
   opacity: 0;
   transform: scale(0.9);
-  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
+  transition:
+    color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    box-shadow var(--noobot-duration-normal) ease,
+    opacity var(--noobot-duration-normal) ease,
+    transform var(--noobot-duration-normal) ease;
 }
 
 .monotonic-attachment-item:hover .monotonic-attachment-remove {
@@ -467,7 +552,13 @@ defineExpose({ focusTextarea });
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
   cursor: pointer;
-  transition: color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease, opacity var(--noobot-duration-normal) ease, transform var(--noobot-duration-normal) ease;
+  transition:
+    color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    box-shadow var(--noobot-duration-normal) ease,
+    opacity var(--noobot-duration-normal) ease,
+    transform var(--noobot-duration-normal) ease;
 }
 
 .monotonic-add-attachment-btn:hover:not(:disabled) {

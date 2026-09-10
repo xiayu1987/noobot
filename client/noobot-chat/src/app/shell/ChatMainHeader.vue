@@ -15,7 +15,13 @@ defineProps({
   canUseIde: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["toggle-sidebar", "open-openvscode", "open-workspace", "open-user-settings", "open-config-params"]);
+const emit = defineEmits([
+  "toggle-sidebar",
+  "open-openvscode",
+  "open-workspace",
+  "open-user-settings",
+  "open-config-params",
+]);
 const { translate, locale, setLocale } = useLocale();
 const { theme, applyTheme } = useTheme();
 
@@ -65,7 +71,10 @@ function handleHeaderAction(command = "") {
         >
           {{ translate("common.openVSCode") }}
         </el-button>
-        <el-button class="workspace-btn noobot-action-btn noobot-flat-soft-btn" @click="emit('open-workspace')">
+        <el-button
+          class="workspace-btn noobot-action-btn noobot-flat-soft-btn"
+          @click="emit('open-workspace')"
+        >
           {{ translate("common.workspace") }}
         </el-button>
         <el-button
@@ -75,7 +84,10 @@ function handleHeaderAction(command = "") {
         >
           {{ translate("common.userSettings") }}
         </el-button>
-        <el-button class="workspace-btn noobot-action-btn noobot-flat-soft-btn" @click="emit('open-config-params')">
+        <el-button
+          class="workspace-btn noobot-action-btn noobot-flat-soft-btn"
+          @click="emit('open-config-params')"
+        >
           {{ translate("common.configParams") }}
         </el-button>
         <el-button
@@ -85,12 +97,12 @@ function handleHeaderAction(command = "") {
           :title="translate('common.refresh')"
           @click="reloadPage"
         />
-      <el-dropdown
-        class="settings-dropdown"
-        trigger="click"
-        popper-class="noobot-settings-dropdown"
-        @command="handleHeaderAction"
-      >
+        <el-dropdown
+          class="settings-dropdown"
+          trigger="click"
+          popper-class="noobot-settings-dropdown"
+          @command="handleHeaderAction"
+        >
           <el-button
             class="workspace-btn settings-btn noobot-action-btn noobot-flat-soft-btn"
             native-type="button"
@@ -99,13 +111,39 @@ function handleHeaderAction(command = "") {
           />
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item disabled>{{ translate("common.english") }} / {{ translate("common.chinese") }}</el-dropdown-item>
-              <el-dropdown-item :command="'lang_zh'" :class="{ 'is-selected': locale === 'zh-CN' }">{{ translate("common.chinese") }}</el-dropdown-item>
-              <el-dropdown-item :command="'lang_en'" :class="{ 'is-selected': locale === 'en-US' }">{{ translate("common.english") }}</el-dropdown-item>
-              <el-dropdown-item divided disabled>{{ translate("common.themeSystem") }} / {{ translate("common.themeDark") }} / {{ translate("common.themeLight") }}</el-dropdown-item>
-              <el-dropdown-item :command="'theme_system'" :class="{ 'is-selected': theme === 'system' }">{{ translate("common.themeSystem") }}</el-dropdown-item>
-              <el-dropdown-item :command="'theme_dark'" :class="{ 'is-selected': theme === 'dark' }">{{ translate("common.themeDark") }}</el-dropdown-item>
-              <el-dropdown-item :command="'theme_light'" :class="{ 'is-selected': theme === 'light' }">{{ translate("common.themeLight") }}</el-dropdown-item>
+              <el-dropdown-item disabled
+                >{{ translate("common.english") }} /
+                {{ translate("common.chinese") }}</el-dropdown-item
+              >
+              <el-dropdown-item
+                :command="'lang_zh'"
+                :class="{ 'is-selected': locale === 'zh-CN' }"
+                >{{ translate("common.chinese") }}</el-dropdown-item
+              >
+              <el-dropdown-item
+                :command="'lang_en'"
+                :class="{ 'is-selected': locale === 'en-US' }"
+                >{{ translate("common.english") }}</el-dropdown-item
+              >
+              <el-dropdown-item divided disabled
+                >{{ translate("common.themeSystem") }} / {{ translate("common.themeDark") }} /
+                {{ translate("common.themeLight") }}</el-dropdown-item
+              >
+              <el-dropdown-item
+                :command="'theme_system'"
+                :class="{ 'is-selected': theme === 'system' }"
+                >{{ translate("common.themeSystem") }}</el-dropdown-item
+              >
+              <el-dropdown-item
+                :command="'theme_dark'"
+                :class="{ 'is-selected': theme === 'dark' }"
+                >{{ translate("common.themeDark") }}</el-dropdown-item
+              >
+              <el-dropdown-item
+                :command="'theme_light'"
+                :class="{ 'is-selected': theme === 'light' }"
+                >{{ translate("common.themeLight") }}</el-dropdown-item
+              >
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -124,21 +162,38 @@ function handleHeaderAction(command = "") {
         />
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item v-if="canUseIde || isSuperAdmin" command="openvscode">{{ translate("common.openVSCode") }}</el-dropdown-item>
-            <el-dropdown-item command="workspace">{{ translate("common.workspace") }}</el-dropdown-item>
-            <el-dropdown-item v-if="isSuperAdmin" command="user-settings">{{ translate("common.userSettings") }}</el-dropdown-item>
-            <el-dropdown-item command="config-params">{{ translate("common.configParams") }}</el-dropdown-item>
-            <el-dropdown-item divided command="reload">{{ translate("common.refresh") }}</el-dropdown-item>
-            <el-dropdown-item divided command="lang_zh">{{ translate("common.chinese") }}</el-dropdown-item>
+            <el-dropdown-item v-if="canUseIde || isSuperAdmin" command="openvscode">{{
+              translate("common.openVSCode")
+            }}</el-dropdown-item>
+            <el-dropdown-item command="workspace">{{
+              translate("common.workspace")
+            }}</el-dropdown-item>
+            <el-dropdown-item v-if="isSuperAdmin" command="user-settings">{{
+              translate("common.userSettings")
+            }}</el-dropdown-item>
+            <el-dropdown-item command="config-params">{{
+              translate("common.configParams")
+            }}</el-dropdown-item>
+            <el-dropdown-item divided command="reload">{{
+              translate("common.refresh")
+            }}</el-dropdown-item>
+            <el-dropdown-item divided command="lang_zh">{{
+              translate("common.chinese")
+            }}</el-dropdown-item>
             <el-dropdown-item command="lang_en">{{ translate("common.english") }}</el-dropdown-item>
-            <el-dropdown-item divided command="theme_system">{{ translate("common.themeSystem") }}</el-dropdown-item>
-            <el-dropdown-item command="theme_dark">{{ translate("common.themeDark") }}</el-dropdown-item>
-            <el-dropdown-item command="theme_light">{{ translate("common.themeLight") }}</el-dropdown-item>
+            <el-dropdown-item divided command="theme_system">{{
+              translate("common.themeSystem")
+            }}</el-dropdown-item>
+            <el-dropdown-item command="theme_dark">{{
+              translate("common.themeDark")
+            }}</el-dropdown-item>
+            <el-dropdown-item command="theme_light">{{
+              translate("common.themeLight")
+            }}</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
     </div>
-
   </header>
 </template>
 
@@ -257,14 +312,14 @@ function handleHeaderAction(command = "") {
 
   .chat-header {
     min-height: var(--noobot-header-height-mobile);
-    padding: 0 max(var(--noobot-space-md), env(safe-area-inset-left)) 0 max(var(--noobot-space-md), env(safe-area-inset-right));
+    padding: 0 max(var(--noobot-space-md), env(safe-area-inset-left)) 0
+      max(var(--noobot-space-md), env(safe-area-inset-right));
     gap: var(--noobot-space-2xs);
   }
 
   .chat-header-main {
     height: 38px;
   }
-
 }
 
 @media (max-width: 1080px) {

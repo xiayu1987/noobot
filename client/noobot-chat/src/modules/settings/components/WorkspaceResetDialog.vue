@@ -13,13 +13,7 @@ defineProps({
   translate: { type: Function, required: true },
 });
 
-defineEmits([
-  "update:visible",
-  "update:sections",
-  "select-all",
-  "clear-all",
-  "confirm",
-]);
+defineEmits(["update:visible", "update:sections", "select-all", "clear-all", "confirm"]);
 </script>
 
 <template>
@@ -36,8 +30,12 @@ defineEmits([
       <code>default-user</code> {{ translate("settings.resetDialogTipSuffix") }}
     </div>
     <div class="reset-dialog-toolbar">
-      <el-button text size="small" @click="$emit('select-all')">{{ translate("settings.selectAll") }}</el-button>
-      <el-button text size="small" @click="$emit('clear-all')">{{ translate("settings.clear") }}</el-button>
+      <el-button text size="small" @click="$emit('select-all')">{{
+        translate("settings.selectAll")
+      }}</el-button>
+      <el-button text size="small" @click="$emit('clear-all')">{{
+        translate("settings.clear")
+      }}</el-button>
     </div>
     <el-checkbox-group
       :model-value="sections"
@@ -57,7 +55,9 @@ defineEmits([
     </el-checkbox-group>
     <div class="reset-dialog-note">{{ translate("settings.resetDialogNote") }}</div>
     <template #footer>
-      <el-button @click="$emit('update:visible', false)">{{ translate("settings.cancel") }}</el-button>
+      <el-button @click="$emit('update:visible', false)">{{
+        translate("settings.cancel")
+      }}</el-button>
       <el-button type="danger" :loading="confirmLoading" @click="$emit('confirm')">
         {{ translate("settings.confirmReset") }}
       </el-button>

@@ -20,7 +20,9 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
       <button type="button" class="base-zoom-btn" @click="$emit('zoom-out')">-</button>
       <span class="base-zoom-text">{{ Math.round(Number(scale || 1) * 100) }}%</span>
       <button type="button" class="base-zoom-btn" @click="$emit('zoom-in')">+</button>
-      <button type="button" class="base-zoom-reset" @click="$emit('zoom-reset')">{{ resetLabel }}</button>
+      <button type="button" class="base-zoom-reset" @click="$emit('zoom-reset')">
+        {{ resetLabel }}
+      </button>
     </div>
   </div>
 </template>
@@ -47,11 +49,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 .base-zoom-btn,
 .base-zoom-reset {
   border: 1px solid var(--noobot-msg-assistant-border);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 96%,
-    var(--noobot-accent) 4%
-  );
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, var(--noobot-accent) 4%);
   border-radius: var(--noobot-radius-xs);
   cursor: pointer;
   color: var(--noobot-text-main);

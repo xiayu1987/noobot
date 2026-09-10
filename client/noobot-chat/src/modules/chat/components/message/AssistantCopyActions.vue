@@ -54,11 +54,7 @@ function handleRowKeydown(event) {
       <el-icon><ArrowDown /></el-icon>
     </span>
     <span class="assistant-copy-actions__spacer" />
-    <el-tooltip
-      :content="translate('message.copyFormat')"
-      placement="top"
-      :show-after="300"
-    >
+    <el-tooltip :content="translate('message.copyFormat')" placement="top" :show-after="300">
       <el-button
         size="small"
         class="noobot-flat-inline-icon-btn noobot-copy-button"
@@ -68,11 +64,7 @@ function handleRowKeydown(event) {
         <el-icon><CopyDocument /></el-icon>
       </el-button>
     </el-tooltip>
-    <el-tooltip
-      :content="translate('message.copyText')"
-      placement="top"
-      :show-after="300"
-    >
+    <el-tooltip :content="translate('message.copyText')" placement="top" :show-after="300">
       <el-button
         size="small"
         class="noobot-flat-inline-icon-btn noobot-copy-button"

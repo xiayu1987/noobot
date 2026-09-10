@@ -15,8 +15,8 @@ const props = defineProps({
 });
 
 const snapshotList = computed(() =>
-  Object.values(props.conversationStateSnapshot || {}).sort(
-    (left, right) => String(right?.updatedAt || "").localeCompare(String(left?.updatedAt || "")),
+  Object.values(props.conversationStateSnapshot || {}).sort((left, right) =>
+    String(right?.updatedAt || "").localeCompare(String(left?.updatedAt || "")),
   ),
 );
 </script>
