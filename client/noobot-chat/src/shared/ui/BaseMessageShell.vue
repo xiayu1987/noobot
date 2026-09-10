@@ -30,7 +30,10 @@ const { translate } = useLocale();
       </div>
       <div class="base-message-meta">
         <span v-if="ts">{{ formatTime(ts) }}</span>
-        <span v-if="role === 'assistant' && modelLabel" class="base-message-model-label noobot-soft-badge">
+        <span
+          v-if="role === 'assistant' && modelLabel"
+          class="base-message-model-label noobot-soft-badge"
+        >
           {{ modelLabel }}
         </span>
       </div>

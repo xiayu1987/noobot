@@ -4,9 +4,6 @@
   --noobot-radius-md: 8px;
   --noobot-radius-lg: 10px;
   --noobot-radius-pill: 999px;
-  /* Spacing scale, tuned for a compact global density. 3xs/2xs are structural
-     minimums (icon rows, borders adjacency) and stay fixed; xs..2xl carry the
-     layout slack. Keep strictly increasing and free of duplicate steps. */
   --noobot-space-xs: 6px;
   --noobot-space-2xs: 4px;
   --noobot-space-3xs: 2px;

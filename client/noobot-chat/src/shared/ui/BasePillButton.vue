@@ -13,11 +13,7 @@ defineEmits(["click"]);
 </script>
 
 <template>
-  <button
-    :type="type"
-    class="base-pill-btn noobot-flat-chip"
-    @click="$emit('click')"
-  >
+  <button :type="type" class="base-pill-btn noobot-flat-chip" @click="$emit('click')">
     {{ label }}
   </button>
 </template>

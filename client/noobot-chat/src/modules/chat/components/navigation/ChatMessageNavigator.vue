@@ -157,7 +157,8 @@ watch(
   width: 100%;
   max-width: 100%;
   margin: 3px 0;
-  padding: var(--noobot-space-xs) var(--noobot-space-lg) var(--noobot-space-xs) var(--noobot-space-xl);
+  padding: var(--noobot-space-xs) var(--noobot-space-lg) var(--noobot-space-xs)
+    var(--noobot-space-xl);
   border-radius: var(--noobot-radius-xs);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -265,7 +266,8 @@ watch(
 
   :deep(.el-anchor__link) {
     max-width: none;
-    padding: var(--noobot-space-sm) var(--noobot-space-lg) var(--noobot-space-sm) var(--noobot-space-xl);
+    padding: var(--noobot-space-sm) var(--noobot-space-lg) var(--noobot-space-sm)
+      var(--noobot-space-xl);
     font-size: var(--noobot-font-size-md);
   }
 }

@@ -244,11 +244,7 @@ watch(
               <div class="row-header">
                 <span class="user-idx param-index">Param {{ idx + 1 }}</span>
               </div>
-              <el-input
-                v-model="item.key"
-                readonly
-                class="row-input param-key-input"
-              />
+              <el-input v-model="item.key" readonly class="row-input param-key-input" />
               <el-input
                 v-model="item.value"
                 :placeholder="translate('settings.paramValue')"

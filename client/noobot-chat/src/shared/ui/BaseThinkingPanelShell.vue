@@ -20,10 +20,7 @@ const collapseValue = computed({
 </script>
 
 <template>
-  <el-collapse
-    v-model="collapseValue"
-    class="base-thinking-collapse noobot-flat-card"
-  >
+  <el-collapse v-model="collapseValue" class="base-thinking-collapse noobot-flat-card">
     <el-collapse-item :name="itemName">
       <template #title>
         <slot name="title"></slot>

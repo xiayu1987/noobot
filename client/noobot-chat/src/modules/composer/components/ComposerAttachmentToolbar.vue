@@ -83,7 +83,12 @@ defineExpose({
           <el-icon><Close /></el-icon>
         </button>
       </div>
-      <el-button size="small" text class="clear-files-btn noobot-action-btn" @click="onClearUploads">
+      <el-button
+        size="small"
+        text
+        class="clear-files-btn noobot-action-btn"
+        @click="onClearUploads"
+      >
         {{ translate("composer.clear") }}
       </el-button>
     </div>
@@ -106,7 +111,10 @@ defineExpose({
   border-radius: var(--noobot-radius-pill);
   padding: 0 var(--noobot-space-md);
   flex-shrink: 0;
-  transition: color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, background-color var(--noobot-duration-normal) ease;
+  transition:
+    color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    background-color var(--noobot-duration-normal) ease;
 }
 
 .poe-upload-btn:hover {
@@ -128,7 +136,8 @@ defineExpose({
 
 .attachment-pill {
   max-width: 200px;
-  padding: var(--noobot-space-2xs) var(--noobot-space-xs) var(--noobot-space-2xs) var(--noobot-space-sm);
+  padding: var(--noobot-space-2xs) var(--noobot-space-xs) var(--noobot-space-2xs)
+    var(--noobot-space-sm);
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
