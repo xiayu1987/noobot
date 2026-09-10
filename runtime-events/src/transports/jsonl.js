@@ -268,7 +268,6 @@ export function appendJsonLine(file, record, options = {}) {
       batch = { entries: [], timer: null, flushing: false, flushPromise: null };
       pendingBatches.set(file, batch);
       batch.timer = setTimeout(() => flushPendingBatch(file), DEFAULT_BATCH_FLUSH_MS);
-      batch.timer.unref?.();
     }
     batch.entries.push({ line, options, resolve, reject });
     if (batch.entries.length >= DEFAULT_BATCH_MAX_RECORDS) void flushPendingBatch(file);
