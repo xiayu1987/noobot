@@ -99,9 +99,11 @@ describe("normalizeSessionRunEvent", () => {
   });
 
   it("keeps materialization only when it is an object", () => {
-    expect(normalizeSessionRunEvent({ materialization: { kind: "full" } }).materialization).toEqual({
-      kind: "full",
-    });
+    expect(normalizeSessionRunEvent({ materialization: { kind: "full" } }).materialization).toEqual(
+      {
+        kind: "full",
+      },
+    );
     expect(normalizeSessionRunEvent({ materialization: "full" }).materialization).toBeNull();
   });
 

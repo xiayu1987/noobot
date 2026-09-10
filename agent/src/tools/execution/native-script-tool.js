@@ -42,11 +42,20 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   buildRestrictedProcessEnv,
   resolveBrowserExecutable,
+  resolveBrowserProfileRoot,
   resolveLibreOfficeExecutable,
   terminateProcessTree,
   usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
 import { cleanupNativeTaskDirectory } from "./native-script-cleanup.js";
+import {
+  NATIVE_SCRIPT_IPC_CHANNEL,
+  NATIVE_SCRIPT_IPC_PENDING_CHANNELS,
+  NATIVE_SCRIPT_IPC_RESULT_CHANNEL,
+  createPendingInteractionClock,
+  isNativeScriptIpcMessage,
+} from "./native-script-ipc.js";
+import { acquireBrowserSession, closeBrowserSession } from "./browser-session-registry.js";
 
 const FORBIDDEN_IDENTIFIERS = new Set([
   "require",
@@ -83,7 +92,7 @@ function validateScriptBody(value) {
   let ast;
   try {
     ast = parse(
-      `async ({ browser, libreoffice, ffmpeg, ffprobe, files, output, args, log }) => {\n${body}\n}`,
+      `async ({ browser, ui, libreoffice, ffmpeg, ffprobe, files, output, args, log }) => {\n${body}\n}`,
       { ecmaVersion: "latest", sourceType: "module", locations: true },
     );
   } catch (error) {
@@ -142,7 +151,7 @@ function validateScriptBody(value) {
   return body;
 }
 
-function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal }) {
+function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcHandlers = {} }) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [scriptPath], {
       cwd,
@@ -150,7 +159,7 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal }) {
       shell: false,
       detached: usesDetachedProcessGroup(process.platform),
       windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
     });
     const stdout = [];
     const stderr = [];
@@ -183,12 +192,43 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal }) {
     };
     const onAbort = () => terminate("abort");
     abortSignal?.addEventListener?.("abort", onAbort, { once: true });
-    const timer = setTimeout(() => terminate("timeout"), timeoutMs);
+    let timer = setTimeout(() => terminate("timeout"), timeoutMs);
     timer.unref?.();
+    const interactionClock = createPendingInteractionClock({
+      stop: () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+      },
+      start: () => {
+        if (timer || settled) return;
+        timer = setTimeout(() => terminate("timeout"), timeoutMs);
+        timer.unref?.();
+      },
+    });
+    child.on("message", async (message) => {
+      if (!isNativeScriptIpcMessage(message)) return;
+      const handler = ipcHandlers[message.type];
+      const resultChannel = NATIVE_SCRIPT_IPC_RESULT_CHANNEL[message.type];
+      if (!handler || !resultChannel) return;
+      const waits = NATIVE_SCRIPT_IPC_PENDING_CHANNELS.includes(message.type);
+      if (waits) interactionClock.suspend();
+      let response;
+      try {
+        response = { ok: true, value: await handler(message.payload || {}) };
+      } catch (error) {
+        response = { ok: false, error: String(error?.message || "native script ipc failed") };
+      } finally {
+        if (waits) interactionClock.resume();
+      }
+      if (!settled && child.connected) {
+        child.send({ type: resultChannel, requestId: message.requestId, ...response });
+      }
+    });
     const settle = async ({ code = 1, signal = "", spawnError = null } = {}) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      timer = null;
       if (forceKillTimer) clearTimeout(forceKillTimer);
       abortSignal?.removeEventListener?.("abort", onAbort);
       await terminationPromise;
@@ -218,6 +258,61 @@ async function collectOutputFiles(root, relative = "") {
     else if (entry.isFile()) files.push(childRelative);
   }
   return files;
+}
+
+function resolveNativeScriptOwner(runtime, agentContext) {
+  return String(
+    runtime?.userId || runtime?.systemRuntime?.userId || agentContext?.userId || "",
+  ).trim();
+}
+
+function createNativeScriptIpcHandlers({
+  runtime,
+  agentContext,
+  browserExecutablePath,
+  browserProfileRoot,
+  interactionId,
+}) {
+  const userId = resolveNativeScriptOwner(runtime, agentContext);
+  return {
+    [NATIVE_SCRIPT_IPC_CHANNEL.BROWSER_SESSION_REQUEST]: async ({ headed, profile } = {}) => {
+      if (!userId) throw new Error("native script browser profile owner is unavailable");
+      return acquireBrowserSession({
+        userId,
+        profileName: profile,
+        profileRoot: browserProfileRoot,
+        headed: headed === true,
+        executablePath: browserExecutablePath,
+      });
+    },
+    [NATIVE_SCRIPT_IPC_CHANNEL.BROWSER_SESSION_CLOSE_REQUEST]: async ({ profile } = {}) => {
+      if (!userId) throw new Error("native script browser profile owner is unavailable");
+      return closeBrowserSession({ userId, profileName: profile });
+    },
+    [NATIVE_SCRIPT_IPC_CHANNEL.USER_INTERACTION_REQUEST]: async ({ content, fields } = {}) => {
+      const bridge = runtime?.userInteractionBridge || null;
+      if (!bridge?.requestUserInteraction) {
+        throw new Error("native script user interaction bridge is unavailable");
+      }
+      const result = await bridge.requestUserInteraction({
+        interactionId,
+        content: String(content || "").trim(),
+        fields: Array.isArray(fields) ? fields : [],
+        dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+        requireEncryption: false,
+        sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
+        toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
+        lifecycle: "pending",
+        ackMode: "manual",
+        resolvedBy: "",
+      });
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        if (result.confirmed === false) throw new Error("native script user interaction cancelled");
+        return result;
+      }
+      return { response: String(result ?? "") };
+    },
+  };
 }
 
 export function createNativeScriptTool({ agentContext }) {
@@ -324,6 +419,20 @@ export function createNativeScriptTool({ agentContext }) {
           env: buildRestrictedProcessEnv({ home: taskRoot, temp: tempRoot }),
           timeoutMs: BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs,
           abortSignal: toolConfig?.signal || null,
+          ipcHandlers: createNativeScriptIpcHandlers({
+            runtime,
+            agentContext,
+            browserExecutablePath,
+            browserProfileRoot:
+              resolveBrowserProfileRoot() ||
+              path.join(runtime.basePath, "runtime", "browser-profiles"),
+            interactionId: String(
+              toolConfig?.configurable?.noobotHookContext?.call?.id ||
+                toolConfig?.configurable?.noobotHookContext?.call?.tool_call_id ||
+                toolConfig?.configurable?.noobotHookContext?.call?.toolCallId ||
+                "",
+            ).trim(),
+          }),
         });
         const outputFiles = result.code === 0 ? await collectOutputFiles(outputRoot) : [];
         const outputStats = await Promise.all(

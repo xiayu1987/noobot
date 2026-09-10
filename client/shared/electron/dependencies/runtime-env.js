@@ -83,6 +83,10 @@ function getManagedBinDirs({ app = null } = {}) {
   return [joinClientPath(root, "ffmpeg", "bin"), joinClientPath(root, "nodejs", "bin")];
 }
 
+function getBrowserProfileRoot({ app = null } = {}) {
+  return joinClientPath(getUserDataPath(app), "browser-profiles");
+}
+
 function resolveFirstExistingPath(candidates = [], exists = fs.existsSync) {
   return uniqueTruthyStrings(candidates).find((candidate) => pathExists(candidate, exists)) || "";
 }
@@ -248,6 +252,7 @@ export function buildDependencyRuntimeEnv({
   ]);
   const output = {
     PATH: prependPathDirs(env.PATH || "", dependencyDirs, platform),
+    NOOBOT_BROWSER_PROFILE_ROOT: getBrowserProfileRoot({ app }),
   };
   if (ffmpegPath) output.NOOBOT_FFMPEG_PATH = ffmpegPath;
   if (ffprobePath) output.NOOBOT_FFPROBE_PATH = ffprobePath;

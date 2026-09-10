@@ -19,6 +19,49 @@ import {
 } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { buildRestrictedProcessEnv } from "@noobot/platform-compatibility/process";
+import {
+  NATIVE_SCRIPT_IPC_CHANNEL,
+  NATIVE_SCRIPT_IPC_RESULT_CHANNEL,
+  isNativeScriptIpcMessage,
+} from "./native-script-ipc.js";
+
+function createHostBridge() {
+  const pending = new Map();
+  let sequence = 0;
+  let listening = false;
+  const syncChannelRef = () => {
+    const channel = process.channel;
+    if (!channel) return;
+    if (pending.size > 0) channel.ref?.();
+    else channel.unref?.();
+  };
+  const ensureListening = () => {
+    if (listening) return;
+    listening = true;
+    process.on("message", (message) => {
+      if (!isNativeScriptIpcMessage(message)) return;
+      const entry = pending.get(message.requestId);
+      if (!entry) return;
+      pending.delete(message.requestId);
+      syncChannelRef();
+      if (message.ok === true) entry.resolve(message.value);
+      else entry.reject(new Error(String(message.error || "native script host call failed")));
+    });
+  };
+  return async function callHost(type, payload = {}) {
+    if (typeof process.send !== "function" || !NATIVE_SCRIPT_IPC_RESULT_CHANNEL[type]) {
+      throw new Error("native script host channel is unavailable");
+    }
+    ensureListening();
+    sequence += 1;
+    const requestId = `native-script-call:${sequence}`;
+    return new Promise((resolve, reject) => {
+      pending.set(requestId, { resolve, reject });
+      syncChannelRef();
+      process.send({ type, requestId, payload });
+    });
+  };
+}
 
 const LIBREOFFICE_OUTPUT_FORMATS = Object.freeze({
   docx: Object.freeze({ extension: "docx", convertTo: "docx:Office Open XML Text" }),
@@ -588,25 +631,22 @@ export async function createNativeScriptRuntime({
       );
     },
   });
-  let browser = null;
-  const browserContexts = [];
-  const getBrowser = async () => {
-    if (browser) return browser;
-    if (!browserExecutablePath) {
-      throw new Error("Playwright Chromium executable is not configured");
-    }
-    const playwright = await import("playwright");
-    const browserExecutableStat = await stat(browserExecutablePath);
-    if (!browserExecutableStat.isFile()) {
-      throw new Error("configured Playwright Chromium executable is not a file");
-    }
-    const instance = await playwright.chromium.launch({
-      headless: true,
-      executablePath: browserExecutablePath,
-      proxy: resolveBrowserProxyFromEnv(),
+  const callHost = createHostBridge();
+  const connections = new Map();
+  const ownedPages = [];
+  const connectProfileSession = async ({ headed, profile }) => {
+    const session = await callHost(NATIVE_SCRIPT_IPC_CHANNEL.BROWSER_SESSION_REQUEST, {
+      headed,
+      profile,
     });
-    browser = instance;
-    return instance;
+    const key = `${session.profileName}\u0000${session.headed ? "headed" : "headless"}`;
+    const existing = connections.get(key);
+    if (existing) return existing;
+    const playwright = await import("playwright");
+    const connection = await playwright.chromium.connectOverCDP(session.endpoint);
+    const entry = { connection, session };
+    connections.set(key, entry);
+    return entry;
   };
   const capabilities = Object.freeze({
     args: Object.freeze(
@@ -623,26 +663,42 @@ export async function createNativeScriptRuntime({
     ffmpeg,
     ffprobe,
     browser: opaqueFacade({
-      newPage: async (contextOptions = {}) => {
-        const source = contextOptions && typeof contextOptions === "object" ? contextOptions : {};
-        const allowed = [
-          "viewport",
-          "locale",
-          "colorScheme",
-          "timezoneId",
-          "userAgent",
-          "ignoreHTTPSErrors",
-        ];
-        const safeOptions = Object.fromEntries(
-          allowed.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]),
-        );
-        const context = await (await getBrowser()).newContext(safeOptions);
-        await context.route("**/*", async (route) => {
-          if (isAllowedBrowserResource(route.request().url())) await route.continue();
-          else await route.abort("blockedbyclient");
+      newPage: async (pageOptions = {}) => {
+        const source = pageOptions && typeof pageOptions === "object" ? pageOptions : {};
+        const headed = source.headed === true;
+        const { connection } = await connectProfileSession({ headed, profile: source.profile });
+        const context = connection.contexts()[0];
+        if (!context) throw new Error("browser profile session has no persistent context");
+        const page = await context.newPage();
+        if (!headed) {
+          await page.route("**/*", async (route) => {
+            if (isAllowedBrowserResource(route.request().url())) await route.continue();
+            else await route.abort("blockedbyclient");
+          });
+        }
+        if (source.viewport && typeof source.viewport === "object") {
+          await page.setViewportSize({
+            width: Number(source.viewport.width || 0),
+            height: Number(source.viewport.height || 0),
+          });
+        }
+        if (!headed) ownedPages.push(page);
+        return createPageFacade(page, { resolveInput, resolveOutput });
+      },
+      closeProfile: async (options = {}) => {
+        const source = options && typeof options === "object" ? options : {};
+        return callHost(NATIVE_SCRIPT_IPC_CHANNEL.BROWSER_SESSION_CLOSE_REQUEST, {
+          profile: source.profile,
         });
-        browserContexts.push(context);
-        return createPageFacade(await context.newPage(), { resolveInput, resolveOutput });
+      },
+    }),
+    ui: opaqueFacade({
+      waitForUser: async (options = {}) => {
+        const source = options && typeof options === "object" ? options : {};
+        return callHost(NATIVE_SCRIPT_IPC_CHANNEL.USER_INTERACTION_REQUEST, {
+          content: source.content,
+          fields: source.fields,
+        });
       },
     }),
     log: opaqueCallable((...values) =>
@@ -655,8 +711,9 @@ export async function createNativeScriptRuntime({
   return Object.freeze({
     capabilities,
     close: async () => {
-      await Promise.allSettled(browserContexts.map((context) => context.close()));
-      if (browser) await browser.close().catch(() => undefined);
+      await Promise.allSettled(ownedPages.map((page) => page.close()));
+      await Promise.allSettled([...connections.values()].map((entry) => entry.connection.close()));
+      connections.clear();
     },
   });
 }
@@ -673,7 +730,7 @@ export async function executeNativeScriptBody({ body, capabilities, timeoutMs })
     writable: false,
   });
   const script = new vm.Script(
-    `(async ({ browser, libreoffice, ffmpeg, ffprobe, files, output, args, log }) => {\n${String(body || "")}\n})(capabilities)`,
+    `(async ({ browser, ui, libreoffice, ffmpeg, ffprobe, files, output, args, log }) => {\n${String(body || "")}\n})(capabilities)`,
     { filename: "native-script-body.js" },
   );
   return script.runInContext(context, { timeout: Number(timeoutMs || 0) || undefined });

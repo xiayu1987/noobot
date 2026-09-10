@@ -10,12 +10,15 @@ import {
   SHELL,
   buildRestrictedProcessEnv,
   decodeCommandOutput,
+  isBrowserProfileNameAllowed,
   isTransientAtomicRenameError,
   normalizePlatform,
   resolveCommandLookupExecutable,
   resolveCommandShimExecutable,
+  resolveBrowserProfileRoot,
   resolveHostShell,
   resolveLibreOfficeExecutable,
+  supportsHeadedBrowser,
   terminateProcessTree,
   usesDetachedProcessGroup,
 } from "../src/index.js";
@@ -81,6 +84,58 @@ test("restricted process environment projects only declared platform variables",
 test("LibreOffice executable resolution is platform-owned", () => {
   assert.equal(resolveLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }), "soffice.exe");
   assert.equal(resolveLibreOfficeExecutable({ platform: "darwin", sourceEnv: {} }), "libreoffice");
+});
+
+test("browser profile root is resolved only from the declared environment key", () => {
+  assert.equal(
+    resolveBrowserProfileRoot({ sourceEnv: { NOOBOT_BROWSER_PROFILE_ROOT: "/data/profiles" } }),
+    "/data/profiles",
+  );
+  assert.equal(resolveBrowserProfileRoot({ sourceEnv: { HOME: "/home/user" } }), "");
+  assert.equal(resolveBrowserProfileRoot({ sourceEnv: { NOOBOT_BROWSER_PROFILE_ROOT: "  " } }), "");
+});
+
+test("browser profile names reject traversal and separator characters", () => {
+  assert.equal(isBrowserProfileNameAllowed("default"), true);
+  assert.equal(isBrowserProfileNameAllowed("work-account.2"), true);
+  assert.equal(isBrowserProfileNameAllowed(".."), false);
+  assert.equal(isBrowserProfileNameAllowed("../escape"), false);
+  assert.equal(isBrowserProfileNameAllowed("nested/name"), false);
+  assert.equal(isBrowserProfileNameAllowed("back\\slash"), false);
+  assert.equal(isBrowserProfileNameAllowed(""), false);
+  assert.equal(isBrowserProfileNameAllowed(".hidden"), false);
+  assert.equal(isBrowserProfileNameAllowed("a".repeat(65)), false);
+});
+
+test("headed browser support requires a display only on Linux", () => {
+  assert.equal(supportsHeadedBrowser({ platform: "win32", sourceEnv: {} }), true);
+  assert.equal(supportsHeadedBrowser({ platform: "darwin", sourceEnv: {} }), true);
+  assert.equal(supportsHeadedBrowser({ platform: "linux", sourceEnv: {} }), false);
+  assert.equal(supportsHeadedBrowser({ platform: "linux", sourceEnv: { DISPLAY: ":0" } }), true);
+  assert.equal(
+    supportsHeadedBrowser({ platform: "linux", sourceEnv: { WAYLAND_DISPLAY: "wayland-0" } }),
+    true,
+  );
+});
+
+test("restricted process env never projects display session variables", () => {
+  const sourceEnv = {
+    PATH: "/usr/bin",
+    DISPLAY: ":0",
+    XAUTHORITY: "/run/user/1000/.mutter-Xwaylandauth",
+    XDG_RUNTIME_DIR: "/run/user/1000",
+    SECRET: "excluded",
+  };
+  const restricted = buildRestrictedProcessEnv({
+    home: "/task",
+    temp: "/tmp",
+    platform: "linux",
+    sourceEnv,
+  });
+  assert.equal(restricted.DISPLAY, undefined);
+  assert.equal(restricted.XAUTHORITY, undefined);
+  assert.equal(restricted.XDG_RUNTIME_DIR, undefined);
+  assert.equal(restricted.SECRET, undefined);
 });
 
 test("process tree termination uses the platform primitive", async () => {

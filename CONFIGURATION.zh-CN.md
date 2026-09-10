@@ -130,7 +130,13 @@ Session 日志 WebSocket：
 | `security.execution_isolation.sandbox.mounts[].read_only`   | boolean      | `true` 时只读挂载；默认可写，以保留原有额外挂载行为                                       |
 | `security.execution_isolation.sandbox.lock_wait_timeout_ms` | number       | 复用同一容器时的排队超时，最小 `100` 毫秒                                                 |
 
-`execute_native_script` 注入受控的 Playwright、LibreOffice、FFmpeg/FFprobe、声明输入文件和任务输出能力。文件唯一协议为 `files.input`、`files.readText`、`files.readJson`、`files.writeText`、`files.writeJson`、`output.file`、`output.tempFile` 和 `output.directory`。读取接受 `input://`、`output://`、`temp://`，写入只接受 `output://`，能力 wrapper 在内部解析任务路径；不暴露 import、Shell 命令、环境变量、可执行文件选择或任意宿主路径。浏览器只允许访问 loopback HTTP(S)，输出统一通过 semantic-transfer 持久化。该宿主受限模式用于受信任的本地/管理员自动化，不是面向恶意代码的操作系统安全沙箱。
+`execute_native_script` 注入受控的 Playwright、LibreOffice、FFmpeg/FFprobe、声明输入文件、任务输出和用户交互能力。文件唯一协议为 `files.input`、`files.readText`、`files.readJson`、`files.writeText`、`files.writeJson`、`output.file`、`output.tempFile` 和 `output.directory`。读取接受 `input://`、`output://`、`temp://`，写入只接受 `output://`，能力 wrapper 在内部解析任务路径；不暴露 import、Shell 命令、环境变量、可执行文件选择或任意宿主路径。能力选项一律声明在各自的能力方法上，因此工具 schema 始终只有 `script_body`、`inputs`、`arguments` 和 `riskLevel` 四项。浏览器导航只接受 HTTP(S)，另放行 `data:`、`blob:` 和 `about:` 资源，但不限制主机为 loopback。输出统一通过 semantic-transfer 持久化。该宿主受限模式用于受信任的本地/管理员自动化，不是面向恶意代码的操作系统安全沙箱。
+
+`browser.newPage({ headed, profile })` 解析到由 agent 主进程持有的持久化 Chromium profile，而不是用完即弃的临时 context。每个 profile 位于 `<profile 根>/<用户 ID>/<profile 名>`，profile 根来自 `NOOBOT_BROWSER_PROFILE_ROOT`（桌面客户端指向 `<userData>/browser-profiles`），否则回落到 `<basePath>/runtime/browser-profiles`。归属用户 ID 由 agent 注入，脚本无法传入；脚本只能指定 `profile`，且该名称必须通过防路径穿越校验。因为浏览器窗口必须比打开它的脚本活得更久，脚本结束后窗口保持打开，只能由 `browser.closeProfile({ profile })` 或用户手动关闭来释放。`headed: true` 要求存在可用的显示会话，同一 profile 不能同时以有头和无头模式打开。
+
+持久化 profile 是对脚本隔离的一次有意放宽：登录会话期间写入的 cookie、`localStorage` 和 `IndexedDB` 会跨脚本、跨轮次、跨重启保留，因此同一用户后续的任何脚本都能读到该 profile 中累积的全部登录态。profile 只按用户 ID 和 profile 名隔离，不按脚本或轮次隔离。有头模式下请求过滤同时放宽，以便通过第三方身份提供方和 CDN 完成交互式登录。建议用独立的 profile 名隔开互不相关的凭据，脚本不需要登录态时优先使用默认的无头模式。当非桌面客户端形态下 profile 根回落到临时目录时，登录态不会跨重启保留。
+
+`ui.waitForUser({ content, fields })` 会挂起脚本，直到用户通过标准交互通道作答，这正是在有头浏览器中完成人工登录的前提。等待期间脚本超时计时停表，所有挂起请求结束后恢复，因此人工耗时不会触发超时强杀。交互被取消时脚本失败。
 
 执行隔离规范由 `@noobot/execution-isolation-protocol` workspace 唯一维护。额外挂载只能通过全局管理员配置声明；挂载源、目标或只读状态变化后，托管 Docker 容器会在下一次脚本执行前重建。额外挂载不会扩大文件工具授权，也不能覆盖 `/workspace`。
 
