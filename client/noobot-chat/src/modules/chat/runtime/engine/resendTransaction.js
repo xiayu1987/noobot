@@ -135,6 +135,24 @@ function createTurnScopeId() {
   return createSecureId("client-turn");
 }
 
+export function resolveKeptAttachments(userTargetMessage = {}, options = {}) {
+  const removedAttachmentKeys = new Set(
+    (Array.isArray(options?.removedAttachmentKeys) ? options.removedAttachmentKeys : [])
+      .map((key) => String(key || "").trim())
+      .filter(Boolean),
+  );
+  const authoritativeAttachments = dedupeAttachmentMetas(
+    userTargetMessage?.attachments || [],
+  ).filter(
+    (attachment) =>
+      !removedAttachmentKeys.has(attachmentIdentityKey(projectAttachmentIdentity(attachment))),
+  );
+  return dedupeAttachmentMetas([
+    ...authoritativeAttachments,
+    ...(Array.isArray(options?.attachments) ? options.attachments : []),
+  ]);
+}
+
 export function createResendMessageTransaction({
   activeSession,
   activeSessionId,
@@ -239,21 +257,7 @@ export function createResendMessageTransaction({
       messageOperationStore?.completeOperation(operation.opId);
       throw error;
     }
-    const removedAttachmentKeys = new Set(
-      (Array.isArray(options?.removedAttachmentKeys) ? options.removedAttachmentKeys : [])
-        .map((key) => String(key || "").trim())
-        .filter(Boolean),
-    );
-    const authoritativeAttachments = dedupeAttachmentMetas(
-      userTargetMessage?.attachments || [],
-    ).filter(
-      (attachment) =>
-        !removedAttachmentKeys.has(attachmentIdentityKey(projectAttachmentIdentity(attachment))),
-    );
-    const keptAttachments = dedupeAttachmentMetas([
-      ...authoritativeAttachments,
-      ...(Array.isArray(options?.attachments) ? options.attachments : []),
-    ]);
+    const keptAttachments = resolveKeptAttachments(userTargetMessage, options);
     const attachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : [];
     let serializedNewAttachments;
     try {
