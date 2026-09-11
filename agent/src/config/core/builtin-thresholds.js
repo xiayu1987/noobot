@@ -25,8 +25,7 @@ export const BUILTIN_THRESHOLDS = Object.freeze({
     maxSubAgentDepth: QUANTITY_THRESHOLDS.agentCollab.maxSubAgentDepth,
   }),
   subTasks: Object.freeze({
-    processContentTaskMaxToolLoopTurns:
-      TURN_THRESHOLDS.subTasks.processContentTaskMaxToolLoopTurns,
+    processContentTaskMaxToolLoopTurns: TURN_THRESHOLDS.subTasks.processContentTaskMaxToolLoopTurns,
     processConnectorToolMaxToolLoopTurns:
       TURN_THRESHOLDS.subTasks.processConnectorToolMaxToolLoopTurns,
     callMcpTaskMaxToolLoopTurns: TURN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns,
@@ -48,7 +47,7 @@ export const BUILTIN_THRESHOLDS = Object.freeze({
   taskCheck: Object.freeze({
     taskCheckLoopTurns: TURN_THRESHOLDS.agent.taskCheckLoopTurns,
   }),
-  requestHelp: Object.freeze({
+  help: Object.freeze({
     helpPromptLoopTurns: TURN_THRESHOLDS.agent.helpPromptLoopTurns,
     toolFailureHelpCount: TURN_THRESHOLDS.agent.toolFailureHelpCount,
   }),

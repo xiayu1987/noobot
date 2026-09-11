@@ -10,6 +10,7 @@ import {
 } from "../protocol/constants.js";
 import { requireInvocationIdentity } from "../protocol/invocation.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "../protocol/operation.js";
+import { hasUsableModelChatOutput } from "../protocol/output.js";
 
 const RESPONSE_KEYS = Object.freeze([
   "protocol",
@@ -105,7 +106,12 @@ export function validateModelResponse(input) {
       `invalid model response operation kind: ${response.operationKind || "missing"}`,
     );
   }
-  validateOutput(response.output);
+  const output = validateOutput(response.output);
+  if (response.operationKind === MODEL_OPERATION_KIND.CHAT && !hasUsableModelChatOutput(output)) {
+    throw new TypeError(
+      "model response chat output must contain text, a tool call, or an artifact",
+    );
+  }
   normalizeModelOperationResult(response.operationKind, response.result);
   const execution = requirePlainObject(response.execution, "model response.execution");
   rejectUnknownKeys(execution, EXECUTION_KEYS, "model response.execution");

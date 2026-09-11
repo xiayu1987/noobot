@@ -146,11 +146,9 @@ Session 日志 WebSocket：
 | `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |
 | `tools.task_summary.enabled` | boolean | 启用阶段小结工具 |
 | `tools.task_summary.phase_summary_loop_turns` | number | 触发阶段小结的对话轮数阈值 |
-| `tools.request_help.enabled` | boolean | 启用请求帮助工具 |
-| `tools.request_help.help_services` | string[]/object[] | 帮助服务列表（默认空；网页搜索使用 `web_search` 工具） |
-| `tools.request_help.help_model` | string | 帮助模型别名/名称（留空按当前/默认模型逻辑） |
-| `tools.request_help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
-| `tools.request_help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
+| `tools.help.enabled` | boolean | 启用帮助工具 |
+| `tools.help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
+| `tools.help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
 | `tools.web_search.enabled` | boolean | 启用网页搜索工具 |
 | `tools.web_search.mode` | enum | 搜索后端：`responses_api` / `search_engine` |
 | `tools.web_search.responses_api.model` | string | Responses API 网页搜索使用的模型别名/名称 |

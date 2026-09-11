@@ -50,7 +50,7 @@ test("harness capability hook can take over tool calls", async () => {
     status: "start",
     calls: [
       { name: "web_search", args: { q: "abc" } },
-      { name: "request_help", args: {} },
+      { name: "help", args: {} },
     ],
   });
 

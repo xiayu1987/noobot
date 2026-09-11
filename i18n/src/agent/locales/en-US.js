@@ -22,9 +22,9 @@ export default {
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
     `Tool "${String(params.toolName || "").trim() || "unknown"}" failed ${Number(params.maxFails || 5)} times consecutively. Loop stopped automatically.`,
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
-    `Tool calls have failed consecutively ${Number(params.failureCount || 0)} times. If needed, call ${String(params.helpToolName || "request_help")} with help content for assistance.`,
+    `Tool calls have failed consecutively ${Number(params.failureCount || 0)} times. If the tool usage or parameter semantics are unclear, call ${String(params.helpToolName || "help")} to read the detailed manual for that tool.`,
   "agent.helpToolLoopPrompt": (params = {}) =>
-    `Tool loop has run ${Number(params.loopCount || 0)} turns. Consider calling ${String(params.helpToolName || "request_help")} for extra help.`,
+    `Tool loop has run ${Number(params.loopCount || 0)} turns. Consider calling ${String(params.helpToolName || "help")} to read the detailed manual for the tools involved.`,
   "agent.toolChoiceRequiredRetryPrompt":
     "Please use tools to execute tasks. If there is no task, the task is finished, or you need to end proactively, call the final_answer tool.",
   "agent.taskSummarySingleToolPrompt":
@@ -158,47 +158,6 @@ export default {
     "Operation risk level: low, medium, high, or critical. Reads that may involve privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
   "tools.file.writeOverwriteField": "Whether to overwrite when file exists.",
   "tools.file.writeRiskLevelField":
-    "Operation risk level: low, medium, high, or critical. Classify impact and destructiveness using the same standard as script execution.",
-  "tools.search.description": "Search files or text, returning matched lines with context.",
-  "tools.search.fieldSource": "Search source: files or text.",
-  "tools.search.fieldQuery":
-    "Required non-empty keyword or regex. Do not call search with an empty string.",
-  "tools.search.queryRequired": "A non-empty search keyword or regex is required.",
-  "tools.search.fieldIsRegex": "Search query as regex.",
-  "tools.search.fieldCaseSensitive": "Case-sensitive search.",
-  "tools.search.fieldPath": "Path for file search.",
-  "tools.search.fieldGlob": "File pattern, e.g. *.js.",
-  "tools.search.fieldText": "Text to search (used when source=text).",
-  "tools.search.fieldContextLines": "Number of context lines.",
-  "tools.search.fieldMaxResults": "Maximum matches.",
-  "tools.search.fieldRiskLevel":
-    "Operation risk level: low, medium, high, or critical. Searches that may retrieve or return privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
-  "tools.patch_file.description":
-    "Read/search the file first, then use its complete returned path; omit root and do not add project, a/, or b/ prefixes.",
-  "tools.patch_file.fieldFormat":
-    "Patch format; omit it to detect the format from the content. An explicit mismatch is rejected.",
-  "tools.patch_file.fieldPatch":
-    "Patch content; reuse the complete path and exact context returned by read_file/search.",
-  "tools.patch_file.fieldPatchPathHintHost":
-    "Regular users must copy the workspace path returned by read_file/search exactly; do not rewrite it or add prefixes.",
-  "tools.patch_file.fieldPatchPathHintSuperHost":
-    "Super administrators must also copy the path returned by read_file/search exactly; host absolute paths must not be rewritten or prefixed.",
-  "tools.patch_file.fieldStrip":
-    "Set strip only for a/ or b/ prefixes; use 0 with a complete path.",
-  "tools.patch_file.fieldRoot":
-    "Usually omit; if set, use only a workspace-relative child directory, never an absolute path or .. .",
-  "tools.patch_file.fieldRootPathHintSandbox":
-    "Usually omit root; sandbox absolute paths are not allowed.",
-  "tools.patch_file.fieldRootPathHintHost":
-    "Usually omit root; use only a workspace-relative child directory.",
-  "tools.patch_file.fieldRootPathHintSuperHost":
-    "Usually omit root; host absolute paths are not allowed.",
-  "tools.patch_file.rootInvalidHintHost":
-    "Usually omit root; if set, use only a workspace-relative child directory, never an absolute path or .. .",
-  "tools.patch_file.rootInvalidHintSuperHost":
-    "Usually omit root; if set, use only a workspace-relative child directory, never a host absolute path or .. .",
-  "tools.patch_file.fieldDryRun": "Validate only, do not write.",
-  "tools.patch_file.fieldRiskLevel":
     "Operation risk level: low, medium, high, or critical. Classify impact and destructiveness using the same standard as script execution.",
   "tools.risk.criticalConfirmation": (params = {}) =>
     [

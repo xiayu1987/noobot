@@ -10,17 +10,17 @@ import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../shared/utils/
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { isModelOutputArtifactContentBlock } from "@noobot/model-protocol";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
   const mediaCandidates = [];
   let mediaIndex = 0;
   for (const contentPart of aiContent) {
-    if (!contentPart || typeof contentPart !== "object") continue;
+    if (!isModelOutputArtifactContentBlock(contentPart)) continue;
     const partType = String(contentPart?.type || "")
       .trim()
       .toLowerCase();
-    if (!partType.includes("image") && !partType.includes("video")) continue;
 
     const imageUrl = String(contentPart?.image_url?.url || "").trim();
     const videoUrl = String(contentPart?.video_url?.url || "").trim();
@@ -161,11 +161,7 @@ export async function persistModelGeneratedArtifacts({
 
     const fetchPromises = [];
     for (const contentPart of aiContent) {
-      if (!contentPart || typeof contentPart !== "object") continue;
-      const partType = String(contentPart?.type || "")
-        .trim()
-        .toLowerCase();
-      if (!partType.includes("image") && !partType.includes("video")) continue;
+      if (!isModelOutputArtifactContentBlock(contentPart)) continue;
       const imageUrl = String(contentPart?.image_url?.url || "").trim();
       const videoUrl = String(contentPart?.video_url?.url || "").trim();
       const directUrl = String(contentPart?.url || "").trim();

@@ -22,9 +22,9 @@ export default {
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
     `工具「${String(params.toolName || "").trim() || "unknown"}」连续失败达到 ${Number(params.maxFails || 5)} 次，已自动停止循环。`,
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
-    `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若需要补充外部信息或排查方向，可调用 ${String(params.helpToolName || "request_help")} 工具并传入求助内容。`,
+    `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若不确定该工具的用法或参数语义，可调用 ${String(params.helpToolName || "help")} 工具查看该工具的详细使用说明。`,
   "agent.helpToolLoopPrompt": (params = {}) =>
-    `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "request_help")} 工具获取额外帮助。`,
+    `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "help")} 工具查看相关工具的详细使用说明。`,
   "agent.toolChoiceRequiredRetryPrompt":
     "请使用工具执行任务，如没有任务或者任务结束或需要主动结束请调用 final_answer 工具",
   "agent.taskSummarySingleToolPrompt":

@@ -5,23 +5,20 @@
  */
 
 export const ASSISTANCE_TOOL_SCHEMA = {
-  request_help: {
+  help: {
     description: {
-      key: "tools.request_help.description",
-      text: "请求帮助工具。输入 helpContent 和 requestType。可请求模型帮助、网页搜索帮助、经验帮助。",
+      key: "tools.help.description",
+      text: "查询使用说明。输入 helpType 和 toolName，返回对应的详细说明。",
     },
     params: {
-      helpContent: {
-        key: "tools.request_help.fieldHelpContent",
-        text: "请求帮助内容。",
+      helpType: {
+        key: "tools.help.fieldHelpType",
+        text: "说明类型：tool（工具使用说明）、experience（经验记忆目录）。",
       },
-      requestType: {
-        key: "tools.request_help.fieldRequestType",
-        text: "请求类型：all_help（默认，模型+网页搜索）、model_help（仅模型）、web_search_help（仅网页搜索）、experience_help（返回记忆目录供后续查询）。",
+      toolName: {
+        key: "tools.help.fieldToolName",
+        text: "工具名，helpType 为 tool 时使用；不传则返回可查询的工具名清单。",
       },
-    },
-    texts: {
-      "tools.request_help.helpContentRequired": "helpContent 必填",
     },
   },
   web_search: {

@@ -5,6 +5,7 @@
 export const DEFAULT_RETRY_POLICY = Object.freeze({
   transport: Object.freeze({ maxAttempts: 3, baseDelayMs: 250 }),
   reasoningOnly: Object.freeze({ maxAttempts: 1 }),
+  emptyResponse: Object.freeze({ maxAttempts: 1 }),
   toolCallMismatch: Object.freeze({ maxAttempts: 1, downgradeStreaming: true }),
   providerFallback: Object.freeze({ enabled: false, candidates: Object.freeze([]) }),
 });
@@ -25,6 +26,7 @@ export function normalizeRetryPolicy(input = {}) {
   return Object.freeze({
     transport: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.transport, input.transport),
     reasoningOnly: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.reasoningOnly, input.reasoningOnly),
+    emptyResponse: normalizeAttemptPolicy(DEFAULT_RETRY_POLICY.emptyResponse, input.emptyResponse),
     toolCallMismatch: normalizeAttemptPolicy(
       DEFAULT_RETRY_POLICY.toolCallMismatch,
       input.toolCallMismatch,

@@ -5,23 +5,20 @@
  */
 
 export const ASSISTANCE_TOOL_SCHEMA = {
-  request_help: {
+  help: {
     description: {
-      key: "tools.request_help.description",
-      text: "Request help tool. Input helpContent and requestType. Supports model help, web-search help, and experience help.",
+      key: "tools.help.description",
+      text: "Look up usage manuals. Input helpType and toolName to get the detailed manual.",
     },
     params: {
-      helpContent: {
-        key: "tools.request_help.fieldHelpContent",
-        text: "Help request content.",
+      helpType: {
+        key: "tools.help.fieldHelpType",
+        text: "Manual type: tool (tool usage manual), experience (memory directories).",
       },
-      requestType: {
-        key: "tools.request_help.fieldRequestType",
-        text: "Request type: all_help (default, model + web search), model_help (model only), web_search_help (web search only), experience_help (returns memory directories for follow-up lookup).",
+      toolName: {
+        key: "tools.help.fieldToolName",
+        text: "Tool name, used when helpType is tool. Omit it to list the queryable tool names.",
       },
-    },
-    texts: {
-      "tools.request_help.helpContentRequired": "helpContent is required",
     },
   },
   web_search: {

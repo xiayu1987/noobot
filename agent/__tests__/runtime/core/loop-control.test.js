@@ -109,7 +109,7 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
     },
   };
   const loopState = {
-    tools: [{ name: "request_help" }],
+    tools: [{ name: "help" }],
     toolFailureHelpCount: 3,
     toolConsecutiveFailureCount: 3,
     modelContext: createModelContext({
@@ -151,7 +151,7 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
     },
   };
   const loopState = {
-    tools: [{ name: "request_help" }],
+    tools: [{ name: "help" }],
     helpPromptLoopTurns: 2,
     modelContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: [] },

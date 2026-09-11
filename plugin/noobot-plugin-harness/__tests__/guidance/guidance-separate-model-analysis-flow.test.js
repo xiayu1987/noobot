@@ -7,6 +7,7 @@ import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { appendMessage } from "../../src/core/message-store.js";
+import { clearAuxiliarySnapshotsForContext } from "../../src/capabilities/handlers/shared/model/auxiliary-snapshot-store.js";
 
 import {
   createGuidanceHandler,
@@ -379,7 +380,11 @@ test("separate_model guidance pending triggers guidance invoker without analysis
     },
   };
 
-  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  const ctx = {
+    sessionId: "guidance-failure-request-role",
+    messages: [{ role: "user", content: "继续" }],
+    agentContext,
+  };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.deepEqual(
@@ -391,6 +396,19 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   assert.equal(agentContext.payload.harness.state.pending.guidance, null);
   assert.equal(agentContext.payload.harness.state.counters.consecutiveToolFailures, 0);
   assert.equal(agentContext.payload.harness.state.counters.totalToolFailures, 0);
+  const failureRequest = invocations[0]?.messages.find((item = {}) =>
+    String(item?.content || "").includes("工具失败达到阈值"),
+  );
+  assert.equal(failureRequest?.role, "user");
+  assert.match(String(failureRequest?.content || ""), /^<!-- harness-guidance -->/);
+  assert.equal(
+    invocations[0]?.messages.some(
+      (item = {}) =>
+        String(item?.role || "").toLowerCase() === "system" &&
+        String(item?.content || "").includes("工具失败达到阈值"),
+    ),
+    false,
+  );
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
@@ -400,6 +418,20 @@ test("separate_model guidance pending triggers guidance invoker without analysis
     ),
     true,
   );
+
+  agentContext.payload.harness.state.pending.analysis = true;
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
+  assert.equal(invocations[1]?.pluginFlow, "analysis");
+  assert.equal(
+    invocations[1]?.messages.some(
+      (item = {}) =>
+        String(item?.role || "").toLowerCase() === "system" &&
+        String(item?.content || "").includes("工具失败达到阈值"),
+    ),
+    false,
+  );
+  clearAuxiliarySnapshotsForContext(ctx);
+
   const executionLog = agentContext.payload.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_execution_result",
   );

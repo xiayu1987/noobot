@@ -17,7 +17,7 @@ import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-to
 import { createMultimodalParseTool } from "./ai-models/multimodal-parse-tool.js";
 import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
-import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
+import { createHelpTool } from "./collaboration/help-tool.js";
 import { emitEvent } from "../events/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
@@ -91,7 +91,7 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.MULTIMODAL_PARSE]: [TOOL_NAME.MULTIMODAL_PARSE],
   [TOOL_NAME.TASK_SUMMARY]: [TOOL_NAME.TASK_SUMMARY],
   [TOOL_NAME.TASK_CHECK]: [TOOL_NAME.TASK_CHECK],
-  [TOOL_NAME.REQUEST_HELP]: [TOOL_NAME.REQUEST_HELP],
+  [TOOL_NAME.HELP]: [TOOL_NAME.HELP],
 };
 
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
@@ -147,7 +147,7 @@ async function buildToolsDefault(ctx) {
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
     ...createTaskCheckTool(ctx),
-    ...createRequestHelpTool(ctx),
+    ...createHelpTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
   const pluginTools = (

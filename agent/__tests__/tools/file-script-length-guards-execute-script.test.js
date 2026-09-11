@@ -65,7 +65,7 @@ test("execute_script: ordinary users require sandbox isolation", async () => {
   );
   assert.match(sandboxTools.find((item) => item?.name === "execute_script").description, /bash/);
 });
-import { run } from "../../src/tools/execution/script-tool/process-exec.js";
+import { run, runFileBacked } from "../../src/tools/execution/script-tool/process-exec.js";
 import { enqueueDockerContainerTask } from "../../src/tools/execution/script-tool/docker-queue.js";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 
@@ -260,6 +260,35 @@ test("execute_script: foreground 大输出通过 V2 附件身份保留", async (
   assert.equal(result.stdoutPath, undefined);
 });
 
+test("execute_script: output artifact limit returns a settled tool failure", async (t) => {
+  if (process.platform === "win32") return t.skip("POSIX process-group semantics");
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-output-failure-"));
+  t.after(() => fs.rm(basePath, { recursive: true, force: true }));
+  const tool = createScriptTool({
+    agentContext: buildHostScriptAgentContext(basePath, "primary-user", {
+      runtime: {
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
+        attachmentService: buildAttachmentService(),
+      },
+    }),
+  }).find((item) => item?.name === "execute_script");
+  const maxOutputBytes = LENGTH_THRESHOLDS.attachments.maxFileSizeBytes;
+
+  const result = parseToolResult(
+    await invokeScript(tool, {
+      command: `node -e "process.stdout.write(Buffer.alloc(${maxOutputBytes + 65536}, 120))"`,
+      riskLevel: "low",
+    }),
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 125);
+  assert.equal(result.outputLimitExceeded, true);
+  assert.equal(result.outputLimitBytes, maxOutputBytes);
+  assert.match(result.message, /execution was terminated/i);
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].size, maxOutputBytes);
+});
+
 test("execute_script: background 模式将 stdout/stderr 交给附件层并返回 V2 身份", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-background-mode-"));
   const savedArtifacts = [];
@@ -409,6 +438,46 @@ test("execute_script: foreground timeout terminates the process group and settle
   assert.equal(result.code, 124);
   assert.ok(Date.now() - startedAt < 4000);
   assert.match(result.stderr, /timed out after 50ms/);
+});
+
+test("execute_script: foreground output limit terminates the process group and settles", async (t) => {
+  if (process.platform === "win32") return t.skip("POSIX process-group semantics");
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-output-limit-"));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true }));
+  const maxOutputBytes = LENGTH_THRESHOLDS.attachments.maxFileSizeBytes;
+  const result = await run(
+    `node -e "process.stdout.write(Buffer.alloc(${maxOutputBytes + 65536}, 120))"`,
+    cwd,
+    60000,
+    null,
+    { generatedDataRoot: cwd },
+  );
+
+  assert.equal(result.code, 125);
+  assert.equal(result.outputLimitExceeded, true);
+  assert.equal(result.outputLimitBytes, maxOutputBytes);
+  assert.equal(result.stdoutBytes, maxOutputBytes);
+  assert.match(result.stderr, /output exceeded.*bytes/i);
+});
+
+test("execute_script: background output limit terminates the process group and settles", async (t) => {
+  if (process.platform === "win32") return t.skip("POSIX process-group semantics");
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-background-limit-"));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true }));
+  const maxOutputBytes = LENGTH_THRESHOLDS.attachments.maxFileSizeBytes;
+  const result = await runFileBacked(
+    `node -e "process.stdout.write(Buffer.alloc(${maxOutputBytes + 65536}, 120))"`,
+    cwd,
+    60000,
+    null,
+    { generatedDataRoot: cwd },
+  );
+
+  assert.equal(result.code, 125);
+  assert.equal(result.outputLimitExceeded, true);
+  assert.equal(result.outputLimitBytes, maxOutputBytes);
+  assert.equal(result.stdoutBytes, maxOutputBytes);
+  assert.match(await fs.readFile(result.stderrPath, "utf8"), /output exceeded.*bytes/i);
 });
 
 test("execute_script: foreground abort terminates the process group and settles", async (t) => {

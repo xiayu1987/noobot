@@ -33,9 +33,9 @@ test("execute_native_script injects capabilities and persists task output", asyn
     },
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
-  assert.match(tool.schema.shape.script_body.description, /await output\.file\(/);
-  assert.match(tool.schema.shape.script_body.description, /await output\.tempFile\(/);
-  assert.match(tool.schema.shape.script_body.description, /await output\.tempDirectory\(/);
+  assert.match(tool.description, /help.*execute_native_script/);
+  assert.doesNotMatch(tool.description, /output:\/\//);
+  assert.match(tool.schema.shape.script_body.description, /help.*execute_native_script/);
   assert.match(tool.schema.shape.inputs.description, /\{ source:/);
   const result = JSON.parse(
     await tool.invoke(

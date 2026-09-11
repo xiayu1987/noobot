@@ -15,6 +15,8 @@
     "./agent/locales/en-US/system-prompt": "./src/agent/locales/en-US/system-prompt.js",
     "./agent/locales/zh-CN/tool-schema": "./src/agent/locales/zh-CN/tool-schema.js",
     "./agent/locales/zh-CN/system-prompt": "./src/agent/locales/zh-CN/system-prompt.js",
+    "./agent/locales/en-US/tool-manual": "./src/agent/locales/en-US/tool-manual.js",
+    "./agent/locales/zh-CN/tool-manual": "./src/agent/locales/zh-CN/tool-manual.js",
     "./service": "./src/service/index.js",
     "./service/backend-messages": "./src/service/backend-messages.js",
     "./client/messages": "./src/client/messages.js",

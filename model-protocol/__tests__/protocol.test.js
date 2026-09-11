@@ -334,6 +334,66 @@ test("model response accepts only the canonical protocol shape", () => {
     () => validateModelResponse({ ...response, output: { text: "ok" } }),
     /reasoning must be a string/,
   );
+
+  const emptyOutput = {
+    text: "",
+    reasoning: "",
+    toolCalls: [],
+    finishReason: "end_turn",
+    usage: {},
+    content: [{ type: "thinking", thinking: "", signature: "signed" }],
+  };
+  const emptyResponse = createModelResponse({
+    invocation,
+    output: emptyOutput,
+    attempts: [
+      {
+        attempt: 1,
+        status: "completed",
+        kind: "response",
+        streaming: false,
+        output: emptyOutput,
+      },
+    ],
+    model,
+    provider: { operatorId: "anthropic", adapterId: "anthropic-messages" },
+  });
+  assert.throws(
+    () => validateModelResponse(emptyResponse),
+    /chat output must contain text, a tool call, or an artifact/,
+  );
+
+  const imageOutput = {
+    ...emptyOutput,
+    content: [{ type: "image_url", image_url: { url: "data:image/png;base64,ZmFrZQ==" } }],
+  };
+  const imageResponse = createModelResponse({
+    invocation,
+    output: imageOutput,
+    attempts: [
+      {
+        attempt: 1,
+        status: "completed",
+        kind: "response",
+        streaming: false,
+        output: imageOutput,
+      },
+    ],
+    model,
+    provider: { operatorId: "openai", adapterId: "openai-compatible" },
+  });
+  assert.equal(validateModelResponse(imageResponse), imageResponse);
+  assert.throws(
+    () =>
+      validateModelResponse({
+        ...imageResponse,
+        output: {
+          ...imageOutput,
+          content: [{ type: "image_url", image_url: { url: "not-a-media-reference" } }],
+        },
+      }),
+    /chat output must contain text, a tool call, or an artifact/,
+  );
 });
 
 test("model response preserves structured provider content blocks", () => {

@@ -401,3 +401,102 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
   );
   assert.equal(response.execution.attempts[0].output.reasoning, "thinking");
 });
+
+test("empty signed thinking responses are retried before completion", async () => {
+  let calls = 0;
+  const adapter = {
+    id: "anthropic-messages",
+    classifyError: () => ({ retryable: false }),
+    createClient: () => ({
+      invoke: async () =>
+        ++calls === 1
+          ? {
+              content: [{ type: "thinking", thinking: "", signature: "signed" }],
+              response_metadata: { finish_reason: "end_turn" },
+            }
+          : { content: "final answer" },
+    }),
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  const response = await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    policies: { retry: { emptyResponse: { maxAttempts: 1 } } },
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(response.output.text, "final answer");
+  assert.deepEqual(
+    response.execution.attempts.map(({ status, kind }) => ({ status, kind })),
+    [
+      { status: "retry", kind: "empty_response" },
+      { status: "completed", kind: "response" },
+    ],
+  );
+});
+
+test("empty signed thinking response exhaustion is a typed protocol error", async () => {
+  const adapter = {
+    id: "anthropic-messages",
+    classifyError: () => ({ retryable: false }),
+    createClient: () => ({
+      invoke: async () => ({
+        content: [{ type: "thinking", thinking: "", signature: "signed" }],
+        response_metadata: { finish_reason: "end_turn" },
+      }),
+    }),
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  await assert.rejects(
+    port.invoke({
+      invocation,
+      model,
+      messages: [],
+      policies: { retry: { emptyResponse: { maxAttempts: 1 } } },
+    }),
+    (error) =>
+      error?.code === "MODEL_EMPTY_RESPONSE_RETRY_EXHAUSTED" && error?.kind === "empty_response",
+  );
+});
+
+test("image-only chat output completes without an empty-response retry", async () => {
+  let calls = 0;
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: false }),
+    createClient: () => ({
+      invoke: async () => {
+        calls += 1;
+        return {
+          content: [{ type: "image_url", image_url: { url: "data:image/png;base64,ZmFrZQ==" } }],
+          response_metadata: { finish_reason: "stop" },
+        };
+      },
+    }),
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  const response = await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    policies: { retry: { emptyResponse: { maxAttempts: 1 } } },
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(response.output.text, "");
+  assert.equal(response.execution.attempts[0]?.status, "completed");
+  assert.equal(response.execution.attempts[0]?.kind, "response");
+});

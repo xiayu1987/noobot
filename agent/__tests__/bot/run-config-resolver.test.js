@@ -94,7 +94,7 @@ test("resolveToolBindings should keep custom_only as the complete tool boundary"
         { name: "search" },
         { name: "patch_file" },
         { name: "execute_script" },
-        { name: "request_help" },
+        { name: "help" },
       ],
     },
   };
@@ -102,8 +102,8 @@ test("resolveToolBindings should keep custom_only as the complete tool boundary"
     scenario: "coding",
     toolPolicy: {
       mode: "custom_only",
-      customTools: [{ name: "request_help" }],
-      allowToolNames: ["request_help"],
+      customTools: [{ name: "help" }],
+      allowToolNames: ["help"],
       denyToolNames: ["read_file", "write_file", "search", "patch_file", "execute_script"],
     },
   };
@@ -115,7 +115,7 @@ test("resolveToolBindings should keep custom_only as the complete tool boundary"
     .map((tool) => tool.name)
     .sort();
 
-  assert.deepEqual(toolNames, ["request_help"]);
+  assert.deepEqual(toolNames, ["help"]);
 });
 
 test("resolveScenarioRunConfig should use builtin programming shape and only accept model override", () => {
@@ -153,7 +153,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "user_interaction",
     "task_summary",
     "task_check",
-    "request_help",
+    "help",
     "web_search",
   ]);
   assert.deepEqual(resolved.scenarioProfile.context, [

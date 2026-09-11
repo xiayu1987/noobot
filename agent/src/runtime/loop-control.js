@@ -14,7 +14,7 @@ import {
   resolveContextMessageContent,
   resolveContextMessageSummarized,
 } from "@noobot/context-protocol/message/codec";
-import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
+import { HELP_TOOL_NAME } from "../tools/collaboration/help-tool.js";
 import { TOOL_NAME } from "../tools/constants/index.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
 import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
@@ -211,7 +211,7 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   if (!systemRuntime) return false;
   const threshold = Number(loopState?.helpPromptLoopTurns || 0);
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
-  if (!hasTool(loopState?.tools || [], REQUEST_HELP_TOOL_NAME)) return false;
+  if (!hasTool(loopState?.tools || [], HELP_TOOL_NAME)) return false;
   const currentCount = Number(systemRuntime.helpPromptLoopCount || 0);
   const nextCount = Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
   systemRuntime.helpPromptLoopCount = nextCount;
@@ -223,7 +223,7 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
     content: tEngine(runtime, "helpToolLoopPrompt", {
       loopCount: nextCount,
       threshold,
-      helpToolName: REQUEST_HELP_TOOL_NAME,
+      helpToolName: HELP_TOOL_NAME,
     }),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
   });
@@ -234,18 +234,14 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   return true;
 }
 
-export function maybePromptHelpToolByFailure({
-  modelState,
-  loopState,
-  hasRequestHelpCall = false,
-}) {
+export function maybePromptHelpToolByFailure({ modelState, loopState, hasHelpCall = false }) {
   const runtime = modelState?.runtime || {};
   const systemRuntime = getSystemRuntime(runtime);
   const threshold = Number(loopState?.toolFailureHelpCount || 0);
   if (!systemRuntime) return false;
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
-  if (!hasTool(loopState?.tools || [], REQUEST_HELP_TOOL_NAME)) return false;
-  if (hasRequestHelpCall) return false;
+  if (!hasTool(loopState?.tools || [], HELP_TOOL_NAME)) return false;
+  if (hasHelpCall) return false;
   const failureCount = Number(loopState?.toolConsecutiveFailureCount || 0);
   if (!Number.isFinite(failureCount) || failureCount < threshold) return false;
   appendTurnContextControlMessage({
@@ -254,7 +250,7 @@ export function maybePromptHelpToolByFailure({
     content: tEngine(runtime, "toolConsecutiveFailureHelpPrompt", {
       failureCount,
       threshold,
-      helpToolName: REQUEST_HELP_TOOL_NAME,
+      helpToolName: HELP_TOOL_NAME,
     }),
     internalType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_FAILURE_PROMPT,
   });

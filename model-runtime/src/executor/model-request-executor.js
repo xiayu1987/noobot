@@ -25,6 +25,7 @@ import {
   classifyReasoningOnly,
   appendReasoningContext,
 } from "../policies/reasoning-retry-policy.js";
+import { classifyEmptyResponse } from "../policies/empty-response-retry-policy.js";
 import { isToolCallStreamingMismatch } from "../policies/tool-call-retry-policy.js";
 import { runModelAttempt } from "./attempt-runner.js";
 import { executeTransportRetry } from "./retry-coordinator.js";
@@ -87,7 +88,8 @@ export function createModelRequestExecutor({
       const retry = normalizeRetryPolicy(input.policies?.retry);
       let messages = normalizeMessages(input.messages);
       let streaming = input.options?.streaming === true;
-      let semanticAttempts = 0;
+      let reasoningOnlyAttempts = 0;
+      let emptyResponseAttempts = 0;
       let mismatchAttempts = 0;
       let totalAttempts = 0;
       const attempts = [];
@@ -300,7 +302,7 @@ export function createModelRequestExecutor({
         }
 
         if (classifyReasoningOnly(result.value) && output.toolCalls.length === 0) {
-          if (semanticAttempts < retry.reasoningOnly.maxAttempts) {
+          if (reasoningOnlyAttempts < retry.reasoningOnly.maxAttempts) {
             attempts.push({
               attempt: totalAttempts,
               status: MODEL_ATTEMPT_STATUS.RETRY,
@@ -308,7 +310,7 @@ export function createModelRequestExecutor({
               streaming,
               output,
             });
-            semanticAttempts += 1;
+            reasoningOnlyAttempts += 1;
             messages = appendReasoningContext(messages, output.reasoning);
             observe("model.invocation.semantic_retry", {
               kind: MODEL_ATTEMPT_KIND.REASONING_ONLY,
@@ -325,6 +327,41 @@ export function createModelRequestExecutor({
             attempt: totalAttempts,
             status: MODEL_ATTEMPT_STATUS.FAILED,
             kind: MODEL_ATTEMPT_KIND.REASONING_ONLY,
+            streaming,
+            output,
+          });
+          observe("model.invocation.failed", {
+            attemptCount: totalAttempts,
+            code: error.code,
+            kind: error.kind,
+          });
+          throw error;
+        }
+        if (classifyEmptyResponse(output)) {
+          if (emptyResponseAttempts < retry.emptyResponse.maxAttempts) {
+            attempts.push({
+              attempt: totalAttempts,
+              status: MODEL_ATTEMPT_STATUS.RETRY,
+              kind: MODEL_ATTEMPT_KIND.EMPTY_RESPONSE,
+              streaming,
+              output,
+            });
+            emptyResponseAttempts += 1;
+            observe("model.invocation.semantic_retry", {
+              kind: MODEL_ATTEMPT_KIND.EMPTY_RESPONSE,
+              attempt: totalAttempts,
+            });
+            continue;
+          }
+          const error = new ModelProtocolError("model returned no final text or tool call", {
+            code: MODEL_ERROR_CODE.EMPTY_RESPONSE_RETRY_EXHAUSTED,
+            kind: MODEL_ERROR_KIND.EMPTY_RESPONSE,
+            details: { attemptCount: totalAttempts, finishReason: output.finishReason },
+          });
+          attempts.push({
+            attempt: totalAttempts,
+            status: MODEL_ATTEMPT_STATUS.FAILED,
+            kind: MODEL_ATTEMPT_KIND.EMPTY_RESPONSE,
             streaming,
             output,
           });

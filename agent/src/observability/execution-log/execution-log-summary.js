@@ -44,7 +44,7 @@ const TOOL_LABELS = {
   search: "搜索代码/文件",
   execute_script: "执行命令",
   call_service: "调用外部服务",
-  request_help: "请求帮助",
+  help: "查看使用说明",
   task_summary: "提交阶段小结",
   task_check: "提交任务检查",
 };

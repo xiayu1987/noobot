@@ -318,6 +318,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     workflowPurpose = "guidance";
     reason = state.pending.guidance;
     prompt = buildGuidancePromptContent(locale, reason, {
+      includeMarker: true,
       programmingMode,
       textMode,
       dynamicPolicyPrompt,
@@ -378,24 +379,25 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
           includeWorkflowPolicy: false,
         })
       : "";
-  const invokerMessages =
-    workflowPurpose === "analysis"
-      ? buildCapabilityModelMessages({
-          locale,
-          agentMessages: modelMessages,
-          task: prompt,
-          taskRole: "user",
-          postTaskMessages: [...workflowContextContents, responsibilityPrompt],
-          postTaskRole: "user",
-        })
-      : buildCapabilityProtocolModelMessages({
-          locale,
-          agentMessages: modelMessages,
-          contextMessages: workflowContextContents,
-          protocolPrompt: prompt,
-          workflowPolicyPrompt,
-          responsibilityPrompt,
-        });
+  const isGuidanceRequest = workflowPurpose === "guidance" || workflowPurpose === "analysis";
+  const invokerMessages = isGuidanceRequest
+    ? buildCapabilityModelMessages({
+        locale,
+        agentMessages: modelMessages,
+        task: prompt,
+        taskRole: "user",
+        postTaskSystemMessages: workflowPurpose === "guidance" ? [workflowPolicyPrompt] : [],
+        postTaskMessages: [...workflowContextContents, responsibilityPrompt],
+        postTaskRole: "user",
+      })
+    : buildCapabilityProtocolModelMessages({
+        locale,
+        agentMessages: modelMessages,
+        contextMessages: workflowContextContents,
+        protocolPrompt: prompt,
+        workflowPolicyPrompt,
+        responsibilityPrompt,
+      });
 
   let response = null;
   const summaryStartedAt = purpose === "summary" ? Date.now() : 0;
