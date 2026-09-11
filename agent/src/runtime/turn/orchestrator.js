@@ -223,7 +223,6 @@ export function createTurnOrchestrator({
 
       if (!calls.length) {
         if (isOverMaxTurns) {
-          loopState.toolChoiceRetryPrompted = false;
           return buildLoopResultFn({
             output: aiContentText,
             assistantMessageId: withToolsResult.assistantMessageId,
@@ -235,7 +234,6 @@ export function createTurnOrchestrator({
             finalStreaming: withToolsResult.finalStreaming,
           });
         }
-        loopState.toolChoiceRetryPrompted = false;
         return buildLoopResultFn({
           output: aiContentText,
           assistantMessageId: withToolsResult.assistantMessageId,
@@ -247,7 +245,6 @@ export function createTurnOrchestrator({
           finalStreaming: withToolsResult.finalStreaming,
         });
       }
-      loopState.toolChoiceRetryPrompted = false;
 
       const taskSummaryCall = resolveTaskSummaryCall(calls);
       const taskCheckCall = resolveTaskCheckCall(calls);
@@ -307,15 +304,14 @@ export function createTurnOrchestrator({
         });
       }
 
-      const { toolCallResults, hasTaskSummaryCall, hasHelpCall, hasFinalAnswerCall } =
-        await processToolResultsFn({
-          modelState,
-          loopState,
-          turn,
-          calls,
-          toolMap: withToolsResult.toolMap,
-          stateCommitter,
-        });
+      const { toolCallResults, hasTaskSummaryCall, hasHelpCall } = await processToolResultsFn({
+        modelState,
+        loopState,
+        turn,
+        calls,
+        toolMap: withToolsResult.toolMap,
+        stateCommitter,
+      });
 
       loopState.turnMessages = turnMessageStore.toArray();
       loopState.turnTasks = turnTaskStore.toArray();
@@ -351,26 +347,6 @@ export function createTurnOrchestrator({
             .filter(Boolean),
         });
         await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
-      }
-
-      if (hasFinalAnswerCall) {
-        const nextTurn = turn + Math.max(1, calls.length);
-        const finalResult = await invokeNoToolsTurnFn({
-          modelState,
-          loopState,
-          turn: nextTurn,
-          forceToolChoiceNone: true,
-        });
-        return buildLoopResultFn({
-          output: finalResult.output,
-          assistantMessageId: finalResult.assistantMessageId,
-          traces,
-          loopState,
-          turnTaskStore: finalResult.turnTaskStore,
-          turnMessageStore: finalResult.turnMessageStore,
-          modelMessages: finalResult.modelMessages,
-          finalStreaming: finalResult.finalStreaming,
-        });
       }
 
       return runFunctionCallLoop({

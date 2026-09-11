@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 
-import { DEFAULT_WORKFLOW_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
+import { normalizeOptions } from "../../src/core/options.js";
 import { createWorkflowRegistration } from "../../src/core/plugin.js";
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
 import { PLUGIN_NAME, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
@@ -122,12 +122,12 @@ test("normalizeOptions keeps valid workflow execution overrides", () => {
   assert.equal(options.miniRunnerMaxTurns, 1);
 });
 
-test("normalizeOptions provides default workflow denyToolNames", () => {
+test("normalizeOptions defaults workflow denyToolNames to empty", () => {
   const options = normalizeOptions({
     enabled: true,
     mode: "on",
   });
-  assert.deepEqual(options.denyToolNames, [...DEFAULT_WORKFLOW_DENY_TOOL_NAMES]);
+  assert.deepEqual(options.denyToolNames, []);
 });
 
 test("normalizeOptions keeps custom denyToolNames from workflow plugin config", () => {
@@ -336,7 +336,7 @@ test("createWorkflowRegistration declares denyToolNames through policy.patch", (
       options: {
         enabled: true,
         mode: "on",
-        denyToolNames: ["delegate_task_async"],
+        denyToolNames: ["help"],
       },
       hookManager: createMockBotHookManager(),
     }),
@@ -351,7 +351,7 @@ test("createWorkflowRegistration declares denyToolNames through policy.patch", (
   });
 
   assert.equal(result?.name, PLUGIN_NAME);
-  assert.deepEqual(calls, [{ denyToolNames: ["delegate_task_async"] }]);
+  assert.deepEqual(calls, [{ denyToolNames: ["help"] }]);
 });
 
 test("workflow hook skips when source text is empty", async () => {

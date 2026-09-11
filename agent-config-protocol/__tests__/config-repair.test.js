@@ -125,7 +125,7 @@ test("config repair recursively adds template nodes through one protocol", () =>
       tools: {
         execute_script: { enabled: true, sandbox_mode: true },
         read_file: { enabled: true },
-        delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
+        task_summary: { enabled: true, phaseSummaryLoopTurns: 10 },
       },
     },
     target: {
@@ -152,7 +152,7 @@ test("config repair recursively adds template nodes through one protocol", () =>
   assert.deepEqual(synchronized.tools, {
     execute_script: { enabled: true },
     read_file: { enabled: true },
-    delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
+    task_summary: { enabled: true, phaseSummaryLoopTurns: 10 },
   });
 });
 

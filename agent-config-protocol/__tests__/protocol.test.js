@@ -361,11 +361,6 @@ test("current config migration preserves active tool and runtime configuration",
       allowedExtensions: [".pdf"],
     },
     tools: {
-      delegate_task_async: {
-        enabled: true,
-        waitTimeoutMs: 30000,
-        maxSubAgentDepth: 2,
-      },
       task_summary: {
         enabled: true,
         phaseSummaryLoopTurns: 10,

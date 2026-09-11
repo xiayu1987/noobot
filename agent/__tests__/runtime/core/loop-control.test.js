@@ -120,7 +120,6 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
   const triggered = maybePromptHelpToolByFailure({
     modelState,
     loopState,
-    hasRequestHelpCall: false,
   });
   assert.equal(triggered, true);
   assert.equal(loopState.toolConsecutiveFailureCount, 0);

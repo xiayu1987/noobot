@@ -18,9 +18,6 @@ export const TOOL_NAME = Object.freeze({
   LIST_SKILLS: "list_skills",
   CALL_SERVICE: "call_service",
   CALL_MCP_TASK: "call_mcp_task",
-  DELEGATE_TASK_ASYNC: "delegate_task_async",
-  WAIT_ASYNC_TASK_RESULT: "wait_async_task_result",
-  PLAN_MULTI_TASK_COLLABORATION: "plan_multi_task_collaboration",
   SWITCH_MODEL: "switch_model",
   USER_INTERACTION: "user_interaction",
   ACCESS_CONNECTOR: "access_connector",
@@ -30,7 +27,6 @@ export const TOOL_NAME = Object.freeze({
   TASK_SUMMARY: "task_summary",
   TASK_CHECK: "task_check",
   HELP: "help",
-  FINAL_ANSWER: "final_answer",
 });
 
 export const TOOL_CONFIG_ALIAS_KEY = Object.freeze({
@@ -38,7 +34,6 @@ export const TOOL_CONFIG_ALIAS_KEY = Object.freeze({
   SKILL: "skill",
   SERVICE: "service",
   MCP: "mcp",
-  AGENT_COLLAB: "agent_collab",
   MODEL: "model",
 });
 

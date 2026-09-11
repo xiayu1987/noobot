@@ -57,14 +57,13 @@ test("sanitizeUserConfig: 用户不能写入默认模板之外的 attachments �
   assert.equal(out.attachments, undefined);
 });
 
-test("sanitizeUserConfig: 用户不能扩大全局路径策略或子 Agent 深度", () => {
+test("sanitizeUserConfig: 用户不能扩大全局路径策略", () => {
   const out = sanitizeUserConfig({
     security: { path_policy: { roles: { regular_user: { host: { access: "allow" } } } } },
-    tools: { delegate_task_async: { maxSubAgentDepth: 99, enabled: false } },
+    tools: { read_file: { enabled: false } },
   });
   assert.equal(out.security, undefined);
-  assert.equal(out.tools.delegate_task_async.maxSubAgentDepth, undefined);
-  assert.equal(out.tools.delegate_task_async.enabled, false);
+  assert.equal(out.tools.read_file.enabled, false);
 });
 
 test("sanitizeUserConfig: execute_native_script 允许用户覆盖默认启用状态", () => {

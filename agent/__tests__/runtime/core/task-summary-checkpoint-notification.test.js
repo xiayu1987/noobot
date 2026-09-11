@@ -76,8 +76,6 @@ test("task_summary sends one checkpoint command without mutating messages before
     processToolResultsFn: async () => ({
       toolCallResults: [],
       hasTaskSummaryCall: true,
-      hasRequestHelpCall: false,
-      hasFinalAnswerCall: false,
     }),
     buildLoopResultFn: ({ output }) => ({ output }),
     maybeRequestPhaseSummaryFn: () => {},

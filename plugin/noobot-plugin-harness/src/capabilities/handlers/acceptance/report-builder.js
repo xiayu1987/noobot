@@ -34,15 +34,18 @@ function resolveKeywordSet(i18nKey = "") {
   const values = [LOCALE.ZH_CN, LOCALE.EN_US]
     .map((locale) => translateI18nText(locale, i18nKey))
     .flatMap((line) => String(line || "").split("|"))
-    .map((item) => String(item || "").trim().toLowerCase())
+    .map((item) =>
+      String(item || "")
+        .trim()
+        .toLowerCase(),
+    )
     .filter(Boolean);
   return [...new Set(values)];
 }
 
-const ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS = resolveKeywordSet("acceptanceSignalAttachmentKeywords");
-const ACCEPTANCE_SIGNAL_SUBTASK_KEYWORDS = resolveKeywordSet("acceptanceSignalSubtaskKeywords");
-const ACCEPTANCE_SIGNAL_SUBTASK_START_KEYWORDS = resolveKeywordSet("acceptanceSignalSubtaskStartKeywords");
-const ACCEPTANCE_SIGNAL_SUBTASK_WAIT_KEYWORDS = resolveKeywordSet("acceptanceSignalSubtaskWaitKeywords");
+const ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS = resolveKeywordSet(
+  "acceptanceSignalAttachmentKeywords",
+);
 
 function includesAnyKeyword(text = "", keywords = []) {
   const source = String(text || "").toLowerCase();
@@ -52,7 +55,10 @@ function includesAnyKeyword(text = "", keywords = []) {
 function parseModelAcceptanceItemsFromText(text = "") {
   return parseAcceptanceItemsFromText(text, {
     normalizePlanId: (value = "") => String(value || "").trim(),
-    normalizeStatus: (value = "") => String(value || "").trim().toLowerCase(),
+    normalizeStatus: (value = "") =>
+      String(value || "")
+        .trim()
+        .toLowerCase(),
   });
 }
 
@@ -61,7 +67,9 @@ function parseSemanticAcceptanceItemsFromText(text = "") {
 }
 
 function mapModelAcceptanceStatusToTaskStatus(status = "") {
-  const normalized = String(status || "").trim().toLowerCase();
+  const normalized = String(status || "")
+    .trim()
+    .toLowerCase();
   return mapPlanAcceptanceStatusToTaskStatus(normalized);
 }
 
@@ -77,9 +85,8 @@ function resolveAcceptanceStatusForChecklistItem(item = {}, byPlan = {}) {
 }
 
 function resolveModelAcceptanceForChecklistItem(normalized = {}, modelAcceptanceByPlan = {}) {
-  const byPlan = modelAcceptanceByPlan && typeof modelAcceptanceByPlan === "object"
-    ? modelAcceptanceByPlan
-    : {};
+  const byPlan =
+    modelAcceptanceByPlan && typeof modelAcceptanceByPlan === "object" ? modelAcceptanceByPlan : {};
   const exactKey = String(normalized?.index ?? "").trim();
   if (exactKey && byPlan[exactKey]) return byPlan[exactKey];
   const isMainStep = normalized?.isMainStep !== false;
@@ -90,7 +97,9 @@ function resolveModelAcceptanceForChecklistItem(normalized = {}, modelAcceptance
 }
 
 function resolveLatestModelAcceptance(bucket = {}) {
-  const reports = Array.isArray(bucket?.phaseAcceptanceReports) ? bucket.phaseAcceptanceReports : [];
+  const reports = Array.isArray(bucket?.phaseAcceptanceReports)
+    ? bucket.phaseAcceptanceReports
+    : [];
   const latest = reports.length ? reports[reports.length - 1] : null;
   const content = String(latest?.content || "").trim();
   const items = parseModelAcceptanceItemsFromText(content);
@@ -115,20 +124,6 @@ const ACCEPTANCE_TASK_STATUS_RULES = Object.freeze([
       includesAnyKeyword(text, ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS),
     resolve: ({ signals = {} } = {}) =>
       signals.parsedAttachment ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
-  },
-  {
-    matches: ({ text = "" } = {}) =>
-      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_KEYWORDS) &&
-      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_START_KEYWORDS),
-    resolve: ({ signals = {} } = {}) =>
-      signals.subtaskStarted ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
-  },
-  {
-    matches: ({ text = "" } = {}) =>
-      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_WAIT_KEYWORDS) &&
-      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_KEYWORDS),
-    resolve: ({ signals = {} } = {}) =>
-      signals.subtaskWaited ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
   },
 ]);
 
@@ -162,8 +157,7 @@ function buildAcceptanceValidationState(report = null) {
     acceptedAt: String(source.acceptedAt || "").trim(),
     summary: source.summary && typeof source.summary === "object" ? source.summary : {},
     planAcceptanceStatusByPlanId:
-      source.planAcceptanceStatusByPlanId &&
-      typeof source.planAcceptanceStatusByPlanId === "object"
+      source.planAcceptanceStatusByPlanId && typeof source.planAcceptanceStatusByPlanId === "object"
         ? source.planAcceptanceStatusByPlanId
         : {},
   };
@@ -187,7 +181,9 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
       isMainStep: true,
       task: mainTask,
     });
-    const subPlans = Array.isArray(subPlansByMainId[String(mainId)]) ? subPlansByMainId[String(mainId)] : [];
+    const subPlans = Array.isArray(subPlansByMainId[String(mainId)])
+      ? subPlansByMainId[String(mainId)]
+      : [];
     for (const sub of subPlans) {
       const subIndex = Number(sub?.subIndex);
       const subTask = String(sub?.content || "").trim();
@@ -214,12 +210,11 @@ export function buildAcceptanceReport({
   const planText = String(bucket?.planText || "").trim();
   const parsedPlan = parsePlanDocumentFromText(planText);
   const checklistFromPlanText = buildChecklistFromParsedPlan(parsedPlan);
-  const checklist =
-    checklistFromPlanText.length
-      ? checklistFromPlanText
-      : Array.isArray(bucket.taskChecklist) && bucket.taskChecklist.length
-        ? bucket.taskChecklist
-        : defaultTaskChecklist(locale);
+  const checklist = checklistFromPlanText.length
+    ? checklistFromPlanText
+    : Array.isArray(bucket.taskChecklist) && bucket.taskChecklist.length
+      ? bucket.taskChecklist
+      : defaultTaskChecklist(locale);
   const latestModelAcceptance = resolveLatestModelAcceptance(bucket);
   const modelAcceptanceByPlan =
     latestModelAcceptance?.byPlan && typeof latestModelAcceptance.byPlan === "object"
@@ -228,8 +223,12 @@ export function buildAcceptanceReport({
   const items = checklist.map((task, index) => {
     const normalized = normalizeChecklistItem(task, index, locale);
     const persistedAcceptance = resolvePlanAcceptanceForChecklistItem(bucket, normalized);
-    const modelAcceptance = resolveModelAcceptanceForChecklistItem(normalized, modelAcceptanceByPlan);
-    const persistedMappedStatus = String(persistedAcceptance?.taskStatus || "").trim() ||
+    const modelAcceptance = resolveModelAcceptanceForChecklistItem(
+      normalized,
+      modelAcceptanceByPlan,
+    );
+    const persistedMappedStatus =
+      String(persistedAcceptance?.taskStatus || "").trim() ||
       mapModelAcceptanceStatusToTaskStatus(persistedAcceptance?.status);
     const modelMappedStatus = mapModelAcceptanceStatusToTaskStatus(modelAcceptance?.status);
     const baseStatus = evaluateTaskStatus(normalized, state);
@@ -245,26 +244,26 @@ export function buildAcceptanceReport({
       statusSource,
       planAcceptance: persistedAcceptance
         ? {
-          acceptanceId: persistedAcceptance.acceptanceId,
-          status: persistedAcceptance.status,
-          taskStatus: persistedAcceptance.taskStatus,
-          risk: persistedAcceptance.risk,
-          evidence: persistedAcceptance.evidence,
-          conclusion: persistedAcceptance.conclusion,
-          source: persistedAcceptance.source,
-          acceptedAt: persistedAcceptance.acceptedAt,
-          resetAt: persistedAcceptance.resetAt,
-          resetReason: persistedAcceptance.resetReason,
-        }
+            acceptanceId: persistedAcceptance.acceptanceId,
+            status: persistedAcceptance.status,
+            taskStatus: persistedAcceptance.taskStatus,
+            risk: persistedAcceptance.risk,
+            evidence: persistedAcceptance.evidence,
+            conclusion: persistedAcceptance.conclusion,
+            source: persistedAcceptance.source,
+            acceptedAt: persistedAcceptance.acceptedAt,
+            resetAt: persistedAcceptance.resetAt,
+            resetReason: persistedAcceptance.resetReason,
+          }
         : undefined,
       modelAcceptance: modelAcceptance
         ? {
-          acceptanceId: modelAcceptance.acceptanceId,
-          status: modelAcceptance.status,
-          risk: modelAcceptance.risk,
-          evidence: modelAcceptance.evidence,
-          conclusion: modelAcceptance.conclusion,
-        }
+            acceptanceId: modelAcceptance.acceptanceId,
+            status: modelAcceptance.status,
+            risk: modelAcceptance.risk,
+            evidence: modelAcceptance.evidence,
+            conclusion: modelAcceptance.conclusion,
+          }
         : undefined,
     };
   });
@@ -281,17 +280,18 @@ export function buildAcceptanceReport({
     plan,
     modelAcceptance: latestModelAcceptance.items.length
       ? {
-        source: latestModelAcceptance.source,
-        acceptedAt: latestModelAcceptance.acceptedAt,
-        rawContent: latestModelAcceptance.rawContent,
-      }
+          source: latestModelAcceptance.source,
+          acceptedAt: latestModelAcceptance.acceptedAt,
+          rawContent: latestModelAcceptance.rawContent,
+        }
       : null,
     planAcceptanceStatusByPlanId: getPlanAcceptanceStatusMap(bucket),
   };
 }
 
 function resolveCurrentMainPlanVersion(bucket = {}) {
-  if (Number.isFinite(Number(bucket?.currentMainPlanVersion))) return Number(bucket.currentMainPlanVersion);
+  if (Number.isFinite(Number(bucket?.currentMainPlanVersion)))
+    return Number(bucket.currentMainPlanVersion);
   if (Number.isFinite(Number(bucket?.mainPlanVersion))) return Number(bucket.mainPlanVersion);
   return 1;
 }
@@ -324,15 +324,18 @@ function buildFallbackMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
       nextPhase: bucket?.nextPhase,
       taskChecklist: bucket.taskChecklist,
     }),
-    taskOwner: String(bucket.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
+    taskOwner:
+      String(bucket.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
     mainPlanVersion: resolveCurrentMainPlanVersion(bucket),
     stage: "main_plan",
   };
 }
 
 function resolveTaskOwner(taskOwner = "", fallbackTaskOwner = "", locale = LOCALE.ZH_CN) {
-  return String(taskOwner || fallbackTaskOwner || getDefaultTaskOwner(locale)).trim() ||
-    getDefaultTaskOwner(locale);
+  return (
+    String(taskOwner || fallbackTaskOwner || getDefaultTaskOwner(locale)).trim() ||
+    getDefaultTaskOwner(locale)
+  );
 }
 
 function normalizeMainPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) {
@@ -380,8 +383,12 @@ function buildOrderedFallbackPlanRecord(bucket = {}, locale = LOCALE.ZH_CN) {
 
 function resolveFinalMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
   const revisions = Array.isArray(bucket.planRevisions) ? bucket.planRevisions : [];
-  const mainCandidates = revisions.filter((plan = {}) => String(plan?.stage || "").trim() !== "refinement");
-  const selected = (mainCandidates.length ? mainCandidates[mainCandidates.length - 1] : null) || buildFallbackMainPlan(bucket, locale);
+  const mainCandidates = revisions.filter(
+    (plan = {}) => String(plan?.stage || "").trim() !== "refinement",
+  );
+  const selected =
+    (mainCandidates.length ? mainCandidates[mainCandidates.length - 1] : null) ||
+    buildFallbackMainPlan(bucket, locale);
   return normalizeMainPlanRecord(selected, bucket, locale);
 }
 
@@ -396,7 +403,9 @@ function collectRefinementsForMainPlanVersion(bucket = {}, mainPlanVersion = 1) 
       source: String(item?.source || "").trim() || "planning_refinement",
       refinedAt: String(item?.refinedAt || "").trim() || undefined,
       mainPlanVersion: Number(mainPlanVersion),
-      targetMainStepIndexes: Array.isArray(item?.targetMainStepIndexes) ? item.targetMainStepIndexes : [],
+      targetMainStepIndexes: Array.isArray(item?.targetMainStepIndexes)
+        ? item.targetMainStepIndexes
+        : [],
       taskChecklist: Array.isArray(item?.taskChecklist) ? item.taskChecklist : [],
     }));
 }
@@ -450,11 +459,7 @@ export function applySemanticAcceptanceToReport(report = {}) {
     const phaseStatus = String(item?.phaseStatus || "").trim() || phaseMappedStatus || "";
     const fallbackStatus = String(item?.status || "").trim() || "pending";
     const effectiveStatus = semanticMappedStatus || phaseStatus || fallbackStatus;
-    const statusSource = semanticMappedStatus
-      ? "semantic"
-      : phaseStatus
-        ? "phase"
-        : "signal";
+    const statusSource = semanticMappedStatus ? "semantic" : phaseStatus ? "phase" : "signal";
     return {
       ...item,
       phaseStatus: phaseStatus || "",
@@ -464,12 +469,12 @@ export function applySemanticAcceptanceToReport(report = {}) {
       status: effectiveStatus,
       semanticAcceptance: semanticAcceptance
         ? {
-          acceptanceId: semanticAcceptance.acceptanceId,
-          status: semanticAcceptance.status,
-          risk: semanticAcceptance.risk,
-          evidence: semanticAcceptance.evidence,
-          conclusion: semanticAcceptance.conclusion,
-        }
+            acceptanceId: semanticAcceptance.acceptanceId,
+            status: semanticAcceptance.status,
+            risk: semanticAcceptance.risk,
+            evidence: semanticAcceptance.evidence,
+            conclusion: semanticAcceptance.conclusion,
+          }
         : item?.semanticAcceptance,
     };
   });
@@ -521,7 +526,9 @@ export function buildSemanticValidationPromptPayload({
     bucket,
     finalMainPlan.mainPlanVersion,
   );
-  const finalMainPlanChecklist = Array.isArray(finalMainPlan.taskChecklist) ? finalMainPlan.taskChecklist : [];
+  const finalMainPlanChecklist = Array.isArray(finalMainPlan.taskChecklist)
+    ? finalMainPlan.taskChecklist
+    : [];
   const finalRefinementChecklist = refinementPlansForFinalMainPlan.flatMap((item = {}) =>
     Array.isArray(item?.taskChecklist) ? item.taskChecklist : [],
   );

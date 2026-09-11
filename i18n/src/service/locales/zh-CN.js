@@ -25,8 +25,6 @@ export default {
     `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若不确定该工具的用法或参数语义，可调用 ${String(params.helpToolName || "help")} 工具查看该工具的详细使用说明。`,
   "agent.helpToolLoopPrompt": (params = {}) =>
     `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "help")} 工具查看相关工具的详细使用说明。`,
-  "agent.toolChoiceRequiredRetryPrompt":
-    "请使用工具执行任务，如没有任务或者任务结束或需要主动结束请调用 final_answer 工具",
   "agent.taskSummarySingleToolPrompt":
     "task_summary 必须单独调用，不能和其它工具出现在同一轮工具调用中。",
   "agent.taskCheckSingleToolPrompt":

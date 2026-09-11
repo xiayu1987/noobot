@@ -118,11 +118,7 @@ detached 子 Session 返回时，从 canonical `turnMessages[*].transferEnvelope
 
 阶段明细由 `plugin-stage-transfer.js` 物化；summary injection 可以同时产生一个 detail attachment envelope 和一个 direct summary envelope。
 
-## 11. 异步协作任务
-
-`wait_async_task_result` 可以携带子任务已经产生的 `transferEnvelopes`，并在容器结果中去重传播。普通异步任务附件保存仍由 attachment service 负责；只有已有 canonical semantic-transfer envelope 时才作为传输事实继续传播，不能从普通附件路径反向制造 envelope。
-
-## 12. Runtime、Turn 和 Session 消费
+## 11. Runtime、Turn 和 Session 消费
 
 | 阶段            | 文件/模块                                               | 行为                                                      |
 | --------------- | ------------------------------------------------------- | --------------------------------------------------------- |
@@ -135,7 +131,7 @@ detached 子 Session 返回时，从 canonical `turnMessages[*].transferEnvelope
 
 Session 中的普通用户上传附件仍属于 attachment-protocol 事实。只有发生语义传递时才出现 semantic-transfer envelope。
 
-## 13. 前端消费
+## 12. 前端消费
 
 前端 `modules/chat/model/transferEnvelopes.js` 只接受 V2 envelope，并拒绝包含路径字段的对象。处理流程：
 
@@ -149,7 +145,7 @@ message.transferEnvelopes
 
 前端不得从 `resolvedPath`、工具日志或文件名推测 attachment identity。
 
-## 14. 不经过 Semantic Transfer 的场景
+## 13. 不经过 Semantic Transfer 的场景
 
 以下场景本身只属于附件资源管理；除非随后发生明确语义传递，否则不创建 envelope：
 
@@ -161,7 +157,7 @@ message.transferEnvelopes
 
 判断规则不是“是否存在文件”，而是“该内容是否跨模型、工具、插件或子流程形成语义传递事实”。
 
-## 15. 禁止模式
+## 14. 禁止模式
 
 - 工具直接调用 attachment service 后返回顶层 `attachments` 作为第二传输事实。
 - 从路径、文件名或 MIME 推测 attachment identity。
@@ -170,7 +166,7 @@ message.transferEnvelopes
 - 遇到非法 envelope 时降级、过滤成旧协议或从路径补全。
 - 在工具、插件、Session 或前端重复实现 V2 envelope schema。
 
-## 16. 主要代码索引
+## 15. 主要代码索引
 
 - Wire contract：`semantic-transfer-protocol/src/index.js`
 - Attachment contract：`attachment-protocol/src/`

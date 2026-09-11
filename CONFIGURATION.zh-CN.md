@@ -105,13 +105,6 @@ Session 日志 WebSocket：
 | `tools.list_skills.enabled`                                 | boolean      | 启用技能列表工具                                                                          |
 | `tools.call_service.enabled`                                | boolean      | 启用外部服务调用工具                                                                      |
 | `tools.call_mcp_task.enabled`                               | boolean      | 启用 MCP 任务工具                                                                         |
-| `tools.delegate_task_async.enabled`                         | boolean      | 启用异步委派工具                                                                          |
-| `tools.delegate_task_async.wait_timeout_ms`                 | number       | 异步委派等待超时                                                                          |
-| `tools.delegate_task_async.poll_interval_ms`                | number       | 异步委派轮询间隔                                                                          |
-| `tools.delegate_task_async.max_sub_agent_depth`             | number       | 子任务最大深度                                                                            |
-| `tools.wait_async_task_result.enabled`                      | boolean      | 启用等待异步结果工具                                                                      |
-| `tools.wait_async_task_result.poll_interval_ms`             | number       | 等待工具轮询间隔                                                                          |
-| `tools.plan_multi_task_collaboration.enabled`               | boolean      | 启用任务规划工具                                                                          |
 | `tools.switch_model.enabled`                                | boolean      | 启用模型切换工具                                                                          |
 | `tools.user_interaction.enabled`                            | boolean      | 启用用户交互工具                                                                          |
 | `tools.execute_native_script.enabled`                       | boolean      | 启用受控 Playwright、LibreOffice、FFmpeg 和 FFprobe 执行能力（默认 `true`，支持用户配置） |

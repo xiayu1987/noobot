@@ -13,14 +13,12 @@ import { EXECUTE_NATIVE_SCRIPT_MANUAL } from "./tool-manual/execute-native-scrip
 import { LIST_SKILLS_MANUAL } from "./tool-manual/list-skills.js";
 import { CALL_SERVICE_MANUAL } from "./tool-manual/call-service.js";
 import { CALL_MCP_TASK_MANUAL } from "./tool-manual/call-mcp-task.js";
-import { AGENT_COLLABORATION_MANUAL } from "./tool-manual/agent-collaboration.js";
 import { SWITCH_MODEL_MANUAL } from "./tool-manual/switch-model.js";
 import { USER_INTERACTION_MANUAL } from "./tool-manual/user-interaction.js";
 import { ACCESS_CONNECTOR_MANUAL } from "./tool-manual/access-connector.js";
 import { WEB_SEARCH_MANUAL } from "./tool-manual/web-search.js";
 import { MULTIMODAL_MANUAL } from "./tool-manual/multimodal.js";
 import { TASK_ORCHESTRATION_MANUAL } from "./tool-manual/task-orchestration.js";
-import { ASSISTANCE_TOOL_MANUAL } from "./tool-manual/assistance.js";
 import { HELP_MANUAL } from "./tool-manual/help.js";
 
 export const TOOL_MANUAL_BY_TOOL = {
@@ -33,13 +31,11 @@ export const TOOL_MANUAL_BY_TOOL = {
   ...LIST_SKILLS_MANUAL,
   ...CALL_SERVICE_MANUAL,
   ...CALL_MCP_TASK_MANUAL,
-  ...AGENT_COLLABORATION_MANUAL,
   ...SWITCH_MODEL_MANUAL,
   ...USER_INTERACTION_MANUAL,
   ...ACCESS_CONNECTOR_MANUAL,
   ...WEB_SEARCH_MANUAL,
   ...MULTIMODAL_MANUAL,
   ...TASK_ORCHESTRATION_MANUAL,
-    ...ASSISTANCE_TOOL_MANUAL,
   ...HELP_MANUAL,
 };

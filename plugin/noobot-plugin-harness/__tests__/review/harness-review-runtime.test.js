@@ -508,8 +508,6 @@ test("harness resets acceptance lifecycle and checklist artifacts on next turn s
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
           signals: {
             parsedAttachment: false,
-            subtaskStarted: false,
-            subtaskWaited: false,
             successfulToolCount: 0,
           },
           pending: { guidance: null, summary: false },
@@ -545,8 +543,6 @@ test("harness forced acceptance is owned by acceptance without appending to fina
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
           signals: {
             parsedAttachment: false,
-            subtaskStarted: false,
-            subtaskWaited: false,
             successfulToolCount: 1,
           },
           pending: { guidance: null, summary: false },

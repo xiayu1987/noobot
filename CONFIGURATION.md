@@ -105,13 +105,6 @@ Every referenced provider must explicitly declare the corresponding capability. 
 | `tools.list_skills.enabled`                                 | boolean      | Enable skill listing tool                                                                                   |
 | `tools.call_service.enabled`                                | boolean      | Enable external service call tool                                                                           |
 | `tools.call_mcp_task.enabled`                               | boolean      | Enable MCP task tool                                                                                        |
-| `tools.delegate_task_async.enabled`                         | boolean      | Enable async delegation tool                                                                                |
-| `tools.delegate_task_async.wait_timeout_ms`                 | number       | Async task wait timeout                                                                                     |
-| `tools.delegate_task_async.poll_interval_ms`                | number       | Async task poll interval                                                                                    |
-| `tools.delegate_task_async.max_sub_agent_depth`             | number       | Max sub-agent depth                                                                                         |
-| `tools.wait_async_task_result.enabled`                      | boolean      | Enable wait async result tool                                                                               |
-| `tools.wait_async_task_result.poll_interval_ms`             | number       | Poll interval for wait tool                                                                                 |
-| `tools.plan_multi_task_collaboration.enabled`               | boolean      | Enable task planning tool                                                                                   |
 | `tools.switch_model.enabled`                                | boolean      | Enable model switch tool                                                                                    |
 | `tools.user_interaction.enabled`                            | boolean      | Enable user interaction tool                                                                                |
 | `tools.execute_native_script.enabled`                       | boolean      | Enable controlled Playwright, LibreOffice, FFmpeg and FFprobe execution (default `true`; user configurable) |

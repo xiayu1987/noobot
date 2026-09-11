@@ -30,8 +30,6 @@ const forbidden = [
   ["legacy runtime surface option", /\bruntimeSurface\b/],
   ["legacy API version option", /\brequiredApiVersion\b/],
   ["legacy snake-case policy", /\bdeny_tool_names\b/],
-  ["legacy collaboration policy", /\bdisableAgentCollabTools\b/],
-  ["legacy snake-case collaboration policy", /\bdisable_agent_collab_tools\b/],
   ["legacy fixed plugin slot", /["'](?:agentPlugin|botPlugin)["']/],
   ["plugin identity alias", /(?:\.|["'])pluginKey\b/],
 ];

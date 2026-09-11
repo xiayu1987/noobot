@@ -49,8 +49,6 @@ const IDENTITY = Object.freeze({
   messageId: "msg-1",
 });
 
-// 可用工具集的事实源是 bindings.tools，夹具必须注入带 name 的实例，否则 resolveAvailableTools
-// 会走降级分支返回空集，所有断言只能验到 UNAVAILABLE 路径而验不到真实收窄形态。
 const FIXTURE_TOOL_NAMES = Object.freeze(["help", "read_file", "search"]);
 
 function createScope({
@@ -81,9 +79,6 @@ function createScope({
   });
 }
 
-// sessionId 属 REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS，合法 envelope 下不可能为空，且
-// buildContextSection 的第二取值链会从 envelope identity 把它兜回来，所以这条分支无法经
-// createAgentExecutionScope 构造，只能直接注入桩 scope（该路径不做 envelope 校验）。
 function createStubScope({ attachmentService = null, identity = IDENTITY } = {}) {
   return {
     context: { identity },
@@ -162,14 +157,19 @@ test("isolation section narrows to the available tools and keeps empty classes",
   const isolation = buildIsolationSection(FIXTURE_TOOL_NAMES);
   assert.ok(isolation.modes.length > 0);
   assert.ok(isolation.executionClasses.length > 0);
-  // 空类目必须保留空数组键，形态才稳定，调用方无需区分「键不存在」与「该类无可用工具」。
   const covered = Object.keys(isolation.toolsByExecutionClass);
-  assert.deepEqual(covered.sort(), [...isolation.executionClasses].sort());
+  assert.deepEqual(
+    covered.sort(),
+    [...isolation.executionClasses].sort(),
+    "every execution class must keep its key even when it holds no available tool",
+  );
   const flattened = Object.values(isolation.toolsByExecutionClass).flat();
   assert.ok(flattened.includes("help"), "help itself must be classified");
-  // 收窄的关键断言：未装配的工具不得出现在分类里，即使它在静态注册表中。
   for (const toolName of flattened) {
-    assert.ok(FIXTURE_TOOL_NAMES.includes(toolName), `${toolName} must be an available tool`);
+    assert.ok(
+      FIXTURE_TOOL_NAMES.includes(toolName),
+      `${toolName} is in the static registry but was not assembled, so it must not be classified`,
+    );
   }
   assert.deepEqual(
     Object.keys(buildIsolationSection().toolsByExecutionClass).sort(),
@@ -197,14 +197,24 @@ test("attachment projection strips host paths and emits an attachment ref", () =
   assert.equal(projected.name, "note.txt");
   assert.equal(projected.mimeType, "text/plain");
   assert.equal(projected.size, 12);
-  // 模型投影层要求附件只有唯一一种表示：裸身份字段不得与 attachmentRef 同层。
-  assert.equal("attachmentId" in projected, false, "raw attachment id must not survive");
-  assert.equal("sessionId" in projected, false, "raw session id must not survive");
-  assert.equal("attachmentSource" in projected, false, "raw attachment source must not survive");
+  assert.equal(
+    "attachmentId" in projected,
+    false,
+    "raw attachment id must not sit beside attachmentRef",
+  );
+  assert.equal("sessionId" in projected, false, "raw session id must not sit beside attachmentRef");
+  assert.equal(
+    "attachmentSource" in projected,
+    false,
+    "raw attachment source must not sit beside attachmentRef",
+  );
   assert.equal(projected.pathRef.view, PATH_REF_VIEWS.WORKSPACE);
   assert.equal(isAbsoluteAnyPlatform(projected.pathRef.path), false);
-  // attachmentRef 走 formatAttachmentIdentityRef 直出扁平字符串，与既有工具约定一致。
-  assert.equal(typeof projected.attachmentRef, "string");
+  assert.equal(
+    typeof projected.attachmentRef,
+    "string",
+    "attachmentRef must stay a flat string produced by formatAttachmentIdentityRef",
+  );
   assert.equal(
     projected.attachmentRef,
     formatAttachmentIdentityRef({
@@ -235,9 +245,8 @@ test("runtime section keeps the host filesystem sentinel out of path projection"
   const runtime = buildRuntimeSection(createScope());
   for (const ref of runtime.allowedRoots) {
     if (!isHostFilesystemSentinel(ref.scope)) continue;
-    // 哨兵不是真实路径，必须以 scope 表达，不能被投影成 path。
     assert.equal(ref.view, PATH_REF_VIEWS.HOST);
-    assert.equal(ref.path, undefined);
+    assert.equal(ref.path, undefined, "a sentinel is not a real path and must stay in scope only");
   }
   const projected = runtime.allowedRoots.filter((ref) => typeof ref.path === "string");
   for (const ref of projected) {
@@ -274,10 +283,7 @@ test("context section exposes only whitelisted identity plus harmless metadata",
   }
 });
 
-// 回归守卫：--attachs 的返回值必须能通过模型投影层。此前 bySource 用裸 attachmentSource 作键、
-// 附件同层保留裸身份字段与 attachmentRef，触发 incomplete_attachment_identity 与
-// mixed_attachment_identity_representations，单元测试测不到，只有过一遍投影层才能拦住。
-test("attachs results survive the model projection layer", async () => {
+test("attachs results survive the model projection layer without mixed or incomplete attachment identity", async () => {
   const record = {
     attachmentId: "att-1",
     sessionId: IDENTITY.sessionId,
@@ -331,8 +337,6 @@ test("parse failures surface a translated reason rather than the raw key", async
   );
 });
 
-// 回归守卫：--tools 曾返回 i18n 手册键全集，与本次会话真实装配零关联，导致模型看到并调用
-// 被 config 关闭或被 harness 覆盖掉的工具。可用集必须来自 bindings.tools 这一唯一事实源。
 test("tools listing comes from runtime bindings rather than the static registry", async () => {
   const available = resolveAvailableTools(createScope());
   assert.equal(available.source, TOOL_SOURCE.RUNTIME_BINDINGS);
@@ -342,13 +346,14 @@ test("tools listing comes from runtime bindings rather than the static registry"
   const listed = JSON.parse(await tool.func({ command: "--tools" }));
   assert.equal(listed.toolSource, TOOL_SOURCE.RUNTIME_BINDINGS);
   assert.deepEqual(listed.toolNames, [...FIXTURE_TOOL_NAMES].sort());
-  // 静态注册表里存在但本会话未装配的工具，绝不能出现在清单中。
-  assert.equal(listed.toolNames.includes(TOOL_NAME.EXECUTE_SCRIPT), false);
+  assert.equal(
+    listed.toolNames.includes(TOOL_NAME.EXECUTE_SCRIPT),
+    false,
+    "a registered but unassembled tool must never reach the listing",
+  );
 });
 
-// 回归守卫：手册存在与本会话可调用是两件事，未装配工具必须走 toolNotAvailable 且不返回手册，
-// 否则模型会把一个查得到用法却调不动的工具当成可用能力。
-test("querying a registered but unassembled tool reports it as unavailable", async () => {
+test("querying a registered but unassembled tool reports it as unavailable and hides its manual", async () => {
   const [tool] = createHelpTool({ agentContext: createScope() });
   const parsed = JSON.parse(
     await tool.func({ command: `--tools --name ${TOOL_NAME.EXECUTE_SCRIPT}` }),
@@ -363,9 +368,7 @@ test("querying a registered but unassembled tool reports it as unavailable", asy
   assert.notEqual(availableQuery.manual, null, "an available tool must expose its manual");
 });
 
-// 回归守卫：--models 必须复用 resolveModelSection 这一事实源，available 已按 enabled !== false
-// 过滤，被禁用的 provider 不得出现在模型清单里。
-test("models section aligns with the runtime enabled providers", async () => {
+test("models section excludes providers disabled by enabled false", async () => {
   const globalConfig = {
     providers: {
       alpha: { model: "alpha-1", description: "on" },
@@ -388,8 +391,6 @@ test("models section aligns with the runtime enabled providers", async () => {
   assert.equal(typeof parsed.current, "object");
 });
 
-// 回归守卫：--attachs 的三种前置缺失曾压成同一条 attachmentContextMissing，调用方无法区分
-// 「附件服务未装配」（运行时装配问题）与「身份缺失」（会话上下文问题），处置动作完全不同。
 test("attachs reports each missing precondition with its own reason", async () => {
   const attachmentService = {
     async readAttachmentMetas() {
@@ -424,9 +425,16 @@ test("attachs reports each missing precondition with its own reason", async () =
   });
 
   const reasons = [serviceMissing, userIdMissing, sessionIdMissing];
-  assert.equal(new Set(reasons).size, 3, "three distinct preconditions must not share one reason");
-  // 文案必须是翻译结果而非回落的键名，否则中英任一份缺键都会静默漏出内部标识。
+  assert.equal(
+    new Set(reasons).size,
+    3,
+    "a missing attachment service and a missing identity need different handling, so they must not share one reason",
+  );
   for (const reason of reasons) {
-    assert.equal(reason.startsWith("tools.help."), false, `${reason} must not be a raw i18n key`);
+    assert.equal(
+      reason.startsWith("tools.help."),
+      false,
+      `${reason} must be a translated message, not a raw i18n key leaked by a missing entry`,
+    );
   }
 });

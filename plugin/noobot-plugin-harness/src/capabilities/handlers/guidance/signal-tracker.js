@@ -76,18 +76,6 @@ export function markToolSignals(ctx = {}) {
       state.signals.parsedAttachment = true;
       changed = true;
     }
-    if (
-      [TOOL_NAME_SET.DELEGATE_TASK_ASYNC, TOOL_NAME_SET.PLAN_MULTI_TASK_COLLABORATION].includes(
-        toolName,
-      )
-    ) {
-      state.signals.subtaskStarted = true;
-      changed = true;
-    }
-    if (toolName === TOOL_NAME_SET.WAIT_ASYNC_TASK_RESULT) {
-      state.signals.subtaskWaited = true;
-      changed = true;
-    }
   }
   if (
     ctx?.commitType === "attachments" &&

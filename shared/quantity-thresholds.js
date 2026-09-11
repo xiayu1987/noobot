@@ -32,10 +32,6 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     maxFileCount: QUANTITY_TIERS.smallFiles,
   },
 
-  agentCollab: {
-    maxSubAgentDepth: QUANTITY_TIERS.shallowDepth,
-  },
-
   toolIO: {
     logSummaryLimit: 180,
 

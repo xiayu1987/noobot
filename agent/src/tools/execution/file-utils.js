@@ -31,9 +31,7 @@ export function splitLines(content = "") {
 }
 
 export function formatLinesWithNumbers(lines = [], startLine = 1) {
-  return lines
-    .map((lineText, index) => `${startLine + index} | ${lineText}`)
-    .join("\n");
+  return lines.map((lineText, index) => `${startLine + index} | ${lineText}`).join("\n");
 }
 
 export function escapeRegExp(value = "") {
@@ -87,12 +85,15 @@ export function matchesGlob(relativePath = "", glob = "") {
   return matcher.test(normalizedPath) || matcher.test(fileName);
 }
 
-
 export function toTextLine(value = "") {
   return String(value || "").replace(/\r?\n$/, "");
 }
 
-export function normalizeRgPathToWorkspace({ rootPath = "", workspacePath = "", rgPath = "" } = {}) {
+export function normalizeRgPathToWorkspace({
+  rootPath = "",
+  workspacePath = "",
+  rgPath = "",
+} = {}) {
   const absolutePath = path.resolve(rootPath, String(rgPath || ""));
   return toWorkspaceRelativePath(workspacePath, absolutePath);
 }

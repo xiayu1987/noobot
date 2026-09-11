@@ -8,7 +8,6 @@ import {
   ChatDotRound,
   CircleCheck,
   CircleClose,
-  Clock,
   Collection,
   Connection,
   Document,
@@ -17,15 +16,12 @@ import {
   Headset,
   Link,
   MagicStick,
-  Message,
   Monitor,
   Picture,
-  Promotion,
   Refresh,
   Search,
   Share,
   Switch,
-  Tickets,
   Tools,
 } from "@element-plus/icons-vue";
 
@@ -39,9 +35,6 @@ const TOOL_CALL_ICONS = Object.freeze({
   list_skills: Collection,
   call_service: Connection,
   call_mcp_task: Share,
-  delegate_task_async: Promotion,
-  wait_async_task_result: Clock,
-  plan_multi_task_collaboration: Tickets,
   switch_model: Switch,
   user_interaction: ChatDotRound,
   access_connector: Link,
@@ -51,7 +44,6 @@ const TOOL_CALL_ICONS = Object.freeze({
   task_summary: Document,
   task_check: Finished,
   help: Headset,
-  final_answer: Message,
 });
 
 function normalize(value = "") {

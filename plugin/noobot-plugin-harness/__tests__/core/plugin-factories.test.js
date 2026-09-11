@@ -174,7 +174,7 @@ test("createHarnessRegistration patches denyToolNames via unified policy api", (
   const calls = [];
   const registerHarnessCore = createHarnessRegistration({
     createPluginRuntimeContext: () => ({
-      options: { enabled: true, denyToolNames: ["plan_multi_task_collaboration"] },
+      options: { enabled: true, denyToolNames: ["task_summary"] },
       hookManager: { on() {} },
       capabilityRuntime: {},
     }),
@@ -191,7 +191,7 @@ test("createHarnessRegistration patches denyToolNames via unified policy api", (
   });
 
   assert.equal(result.name, PLUGIN_NAME);
-  assert.deepEqual(calls, [{ denyToolNames: ["plan_multi_task_collaboration"] }]);
+  assert.deepEqual(calls, [{ denyToolNames: ["task_summary"] }]);
 });
 
 test("createHarnessCoreFactory binds normalized options into register", () => {
