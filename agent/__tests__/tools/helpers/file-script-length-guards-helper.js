@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createFileTool } from "../../../src/tools/execution/file-tool.js";
+import { createFileTool } from "../../../src/tools/execution/file-tools.js";
 import { executeToolCall } from "../../../src/runtime/tool-execution/tool-runner.js";
 import { transferSemanticContent } from "../../../src/transfer-adapter/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";

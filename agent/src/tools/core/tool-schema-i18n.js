@@ -49,11 +49,6 @@ export function tToolManual(runtime = {}, toolName = "") {
   return manual || null;
 }
 
-export function listManualToolNames(runtime = {}) {
-  const manualMap = resolveLocaleToolManualMap(runtime) || {};
-  return Object.keys(manualMap).sort();
-}
-
 export function tToolDescription(runtime = {}, toolName = "") {
   const schema =
     resolveLocaleToolSchemaMap(runtime)?.[String(toolName || "").trim()] ||
@@ -72,22 +67,4 @@ export function tToolParamDescription(runtime = {}, toolName = "", paramName = "
     );
   }
   return String(text).trim();
-}
-
-export function getLocalizedToolSchemaCatalog(runtime = {}) {
-  const schemaMap = resolveLocaleToolSchemaMap(runtime) || {};
-  const output = {};
-  for (const [toolName, schema] of Object.entries(schemaMap)) {
-    const params = schema?.params && typeof schema.params === "object" ? schema.params : {};
-    output[toolName] = {
-      descriptions: String(schema?.description?.text || "").trim(),
-      params: Object.fromEntries(
-        Object.entries(params).map(([paramName, paramSpec]) => [
-          paramName,
-          String(paramSpec?.text || "").trim(),
-        ]),
-      ),
-    };
-  }
-  return output;
 }

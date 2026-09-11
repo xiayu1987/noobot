@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createFileTool } from "./execution/file-tool.js";
+import { createFileTool } from "./execution/file-tools.js";
 import { createScriptTool } from "./execution/script-tool.js";
 import { createNativeScriptTool } from "./execution/native-script-tool.js";
 import { createSkillTool } from "./execution/skill-tool.js";
@@ -39,14 +39,11 @@ export {
   resetToolBuilderAdapter,
 } from "./adapter.js";
 
-const DEFAULT_MAX_SUB_AGENT_DEPTH = BUILTIN_THRESHOLDS.agentCollab.maxSubAgentDepth;
+const MAX_SUB_AGENT_DEPTH = BUILTIN_THRESHOLDS.agentCollab.maxSubAgentDepth;
 const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
   TOOL_NAME.DELEGATE_TASK_ASYNC,
   TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
   TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION,
-  "delegateTaskAsync",
-  "waitAsyncTaskResult",
-  "planMultiTaskCollaboration",
 ]);
 
 function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled = true) {
@@ -123,10 +120,6 @@ function hasEnabledMultimodalParsingProvider(effectiveConfig = {}) {
   );
 }
 
-function resolveMaxSubAgentDepth(_effectiveConfig = {}) {
-  return DEFAULT_MAX_SUB_AGENT_DEPTH;
-}
-
 async function buildToolsDefault(ctx) {
   const runtime = getRuntimeFromAgentContext(ctx.agentContext);
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
@@ -190,7 +183,7 @@ async function filterToolsByRuntimePolicy({
   const parentSessionId = identity.parentSessionId;
   const userId = identity.userId;
   const sessionManager = runtime?.sessionManager || null;
-  const maxSubAgentDepth = resolveMaxSubAgentDepth(effectiveConfig);
+  const maxSubAgentDepth = MAX_SUB_AGENT_DEPTH;
   const depthTargetSessionId = sessionId || parentSessionId;
   if (!sessionManager || !userId) {
     return sourceTools;

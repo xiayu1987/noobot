@@ -22,7 +22,7 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 
-export const TASK_CHECK_TOOL_NAME = TOOL_NAME.TASK_CHECK;
+const TASK_CHECK_TOOL_NAME = TOOL_NAME.TASK_CHECK;
 
 export function createTaskCheckTool(ctx = {}) {
   const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});

@@ -98,10 +98,6 @@ function resolveRuntimeBasePath(agentContext = {}) {
   return path.resolve(basePath);
 }
 
-function resolveUserWorkspacePath(agentContext = {}) {
-  return resolveRuntimeBasePath(agentContext);
-}
-
 function resolveWorkspaceRoot(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
@@ -145,7 +141,7 @@ function resolveSessionContext(agentContext = {}) {
   return { sessionManager, userId };
 }
 
-export function assertValidSimpleFileName({ fileName = "", fieldName = "fileName" }) {
+function assertValidSimpleFileName({ fileName = "", fieldName = "fileName" }) {
   const normalizedFileName = String(fileName || "").trim();
   if (!normalizedFileName) {
     throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fieldRequired")}`, {
@@ -286,7 +282,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
     });
   }
 
-  const workspacePath = resolveUserWorkspacePath(agentContext);
+  const workspacePath = resolveRuntimeBasePath(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
   const isolation = resolveRuntimeIsolation(runtime);
   const isSuperUser = isSuperUserAgentContext(agentContext);

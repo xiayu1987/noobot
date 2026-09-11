@@ -113,7 +113,7 @@ async function ensureDockerContainer(built) {
   await execFileAsync(built.executable, built.startArgs, { windowsHide: true });
 }
 
-export function terminateDockerExecution(built) {
+function terminateDockerExecution(built) {
   void signalDockerExecution(built, "TERM");
   const forceKillTimer = setTimeout(
     () => void signalDockerExecution(built, "KILL"),

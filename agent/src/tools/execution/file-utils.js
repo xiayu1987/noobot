@@ -5,19 +5,12 @@
  */
 import { access } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-export const MAX_FILE_CONTENT_CHARS = LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars;
-export const MAX_FILE_CONTENT_BYTES_PRECHECK =
-  LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars *
-  LENGTH_THRESHOLDS.toolIO.fileContentBytesPrecheckMultiplier;
-export const MAX_SEARCH_TEXT_CHARS = LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars;
 export const DEFAULT_READ_MAX_LINES = QUANTITY_THRESHOLDS.toolIO.readMaxLines;
 export const DEFAULT_SEARCH_MAX_RESULTS = QUANTITY_THRESHOLDS.toolIO.searchMaxResults;
 export const DEFAULT_SEARCH_CONTEXT_LINES = QUANTITY_THRESHOLDS.toolIO.searchContextLines;
 export const DEFAULT_MAX_SEARCH_FILES = QUANTITY_THRESHOLDS.toolIO.searchMaxFiles;
-export const MAX_SEARCH_BUFFER_SIZE = LENGTH_THRESHOLDS.toolIO.searchBufferBytes;
 export const DEFAULT_SEARCH_EXCLUDED_DIRS = new Set([
   ".git",
   "node_modules",
@@ -62,7 +55,7 @@ export function isForbiddenWorkspaceRelativePath(relativePath = "") {
     .some((segment) => segment === ".git");
 }
 
-export function globToRegExp(glob = "") {
+function globToRegExp(glob = "") {
   const normalized = normalizeSlash(glob).trim();
   if (!normalized) return null;
   let out = "^";

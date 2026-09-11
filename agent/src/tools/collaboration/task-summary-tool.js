@@ -26,28 +26,8 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
-import { resolveToolCallName } from "@noobot/shared/tool-name";
 
-export const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
-
-export function isTaskSummaryMessage(messageItem = {}) {
-  const role = String(messageItem?.role || "").trim();
-  if (role === "assistant") {
-    const toolCalls = Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls : [];
-    return toolCalls.some((toolCall) => resolveToolCallName(toolCall) === TASK_SUMMARY_TOOL_NAME);
-  }
-  if (role === "tool") {
-    const toolName = String(messageItem?.toolName || messageItem?.tool_name || "").trim();
-    if (toolName === TASK_SUMMARY_TOOL_NAME) return true;
-    try {
-      const parsed = JSON.parse(String(messageItem?.content || ""));
-      return String(parsed?.toolName || "").trim() === TASK_SUMMARY_TOOL_NAME;
-    } catch {
-      return false;
-    }
-  }
-  return false;
-}
+const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
 
 export function createTaskSummaryTool(ctx = {}) {
   const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});

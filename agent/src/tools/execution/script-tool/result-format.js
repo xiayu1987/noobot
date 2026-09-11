@@ -10,7 +10,7 @@ import { EXECUTE_SCRIPT_TOOL_NAME } from "./constants.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { readFile } from "node:fs/promises";
 
-export function formatCommandOutputWithLineNumbers(value = "") {
+function formatCommandOutputWithLineNumbers(value = "") {
   const text = String(value || "");
   if (!text) return "";
   const lines = splitLines(text);
@@ -18,7 +18,7 @@ export function formatCommandOutputWithLineNumbers(value = "") {
   return formatLinesWithNumbers(lines, 1);
 }
 
-export function normalizeExecOutput(r = {}, { includeLineNumbers = false } = {}) {
+function normalizeExecOutput(r = {}, { includeLineNumbers = false } = {}) {
   if (includeLineNumbers !== true) return r;
   return {
     ...r,
