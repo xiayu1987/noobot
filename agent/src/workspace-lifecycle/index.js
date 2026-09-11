@@ -21,21 +21,22 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
 import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
+import { MEMORY_RELATIVE_PATHS } from "../memory/storage/paths.js";
 
 const RESET_SECTION_PATHS = {
-  memory: ["memory"],
+  memory: [MEMORY_RELATIVE_PATHS.MEMORY_DIR],
   runtime: ["runtime"],
   service: ["services"],
   skill: ["skills"],
   config: ["config.json", "config.example.json"],
 };
 
-const SYNC_PRESERVE_EXISTING_ROOTS = new Set(["memory"]);
+const SYNC_PRESERVE_EXISTING_ROOTS = new Set([MEMORY_RELATIVE_PATHS.MEMORY_DIR]);
 const CANONICAL_MEMORY_TEMPLATE_FILES = Object.freeze([
-  "memory/short-memory.json",
-  "memory/long-memory.md",
-  "memory/long-memory-model.md",
-  "memory/experience-model.md",
+  MEMORY_RELATIVE_PATHS.SHORT_MEMORY,
+  MEMORY_RELATIVE_PATHS.LONG_MEMORY,
+  MEMORY_RELATIVE_PATHS.LONG_MEMORY_MODEL,
+  MEMORY_RELATIVE_PATHS.EXPERIENCE_MODEL,
 ]);
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
