@@ -19,11 +19,6 @@ export const BUILTIN_THRESHOLDS = Object.freeze({
     allowedMimeTypes: Object.freeze([]),
     allowedExtensions: Object.freeze([]),
   }),
-  agentCollab: Object.freeze({
-    waitTimeoutMs: TIME_THRESHOLDS.agentCollab.waitTimeoutMs,
-    pollIntervalMs: TIME_THRESHOLDS.agentCollab.pollIntervalMs,
-    maxSubAgentDepth: QUANTITY_THRESHOLDS.agentCollab.maxSubAgentDepth,
-  }),
   subTasks: Object.freeze({
     processContentTaskMaxToolLoopTurns: TURN_THRESHOLDS.subTasks.processContentTaskMaxToolLoopTurns,
     processConnectorToolMaxToolLoopTurns:

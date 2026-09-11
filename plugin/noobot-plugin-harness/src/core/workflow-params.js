@@ -20,16 +20,77 @@ export const WORKFLOW_PARAMS = deepFreeze({
   workflow: {
     scheduler: {
       order: [
-        { flow: "final_acceptance", subflow: "forced", action: "forced_acceptance", executor: "acceptance", kind: "guard", hardOverride: true },
-        { flow: "planning", subflow: "bootstrap", action: "planning_bootstrap", executor: "planning", kind: "workflow" },
-        { flow: "guidance", subflow: "failure_recovery", action: "guidance", executor: "guidance", kind: "workflow" },
-        { flow: "plan_update", subflow: "revision", action: "plan_update_revision", executor: "guidance", kind: "workflow" },
-        { flow: "plan_update", subflow: "refinement", action: "plan_update_refinement", executor: "guidance", kind: "workflow" },
-        { flow: "summary", subflow: "overflow", action: "summary_overflow", executor: "guidance", kind: "workflow" },
-        { flow: "summary", subflow: "turns", action: "summary_turns", executor: "guidance", kind: "workflow" },
-        { flow: "phase_acceptance", subflow: "phase", action: "phase_acceptance", executor: "acceptance", kind: "workflow" },
-        { flow: "phase_acceptance", subflow: "semantic_validation", action: "acceptance_semantic_validation", executor: "acceptance", kind: "workflow" },
-        { flow: "guidance", subflow: "analysis", action: "analysis", executor: "guidance", kind: "workflow" },
+        {
+          flow: "final_acceptance",
+          subflow: "forced",
+          action: "forced_acceptance",
+          executor: "acceptance",
+          kind: "guard",
+          hardOverride: true,
+        },
+        {
+          flow: "planning",
+          subflow: "bootstrap",
+          action: "planning_bootstrap",
+          executor: "planning",
+          kind: "workflow",
+        },
+        {
+          flow: "guidance",
+          subflow: "failure_recovery",
+          action: "guidance",
+          executor: "guidance",
+          kind: "workflow",
+        },
+        {
+          flow: "plan_update",
+          subflow: "revision",
+          action: "plan_update_revision",
+          executor: "guidance",
+          kind: "workflow",
+        },
+        {
+          flow: "plan_update",
+          subflow: "refinement",
+          action: "plan_update_refinement",
+          executor: "guidance",
+          kind: "workflow",
+        },
+        {
+          flow: "summary",
+          subflow: "overflow",
+          action: "summary_overflow",
+          executor: "guidance",
+          kind: "workflow",
+        },
+        {
+          flow: "summary",
+          subflow: "turns",
+          action: "summary_turns",
+          executor: "guidance",
+          kind: "workflow",
+        },
+        {
+          flow: "phase_acceptance",
+          subflow: "phase",
+          action: "phase_acceptance",
+          executor: "acceptance",
+          kind: "workflow",
+        },
+        {
+          flow: "phase_acceptance",
+          subflow: "semantic_validation",
+          action: "acceptance_semantic_validation",
+          executor: "acceptance",
+          kind: "workflow",
+        },
+        {
+          flow: "guidance",
+          subflow: "analysis",
+          action: "analysis",
+          executor: "guidance",
+          kind: "workflow",
+        },
       ],
     },
     events: {
@@ -45,7 +106,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
         rawOutputRecorded: "planning_raw_output_recorded",
         checklistCaptured: "planning_checklist_captured",
         checklistRetryScheduled: "planning_checklist_retry_scheduled",
-        checklistRetryScheduledBySeparateModel: "planning_checklist_retry_scheduled_by_separate_model",
+        checklistRetryScheduledBySeparateModel:
+          "planning_checklist_retry_scheduled_by_separate_model",
         checklistCapturedBySeparateModel: "planning_checklist_captured_by_separate_model",
         separateModelSkippedInflight: "planning_separate_model_skipped_inflight",
         separateModelCallFailed: "planning_separate_model_call_failed",
@@ -102,7 +164,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
         semanticValidationPromptInjected: "acceptance_semantic_validation_prompt_injected",
         semanticValidationScheduledByInject: "acceptance_semantic_validation_scheduled_by_inject",
         semanticValidationCompletedInject: "acceptance_semantic_validation_completed_inject",
-        semanticValidationCaptureFailedInject: "acceptance_semantic_validation_capture_failed_inject",
+        semanticValidationCaptureFailedInject:
+          "acceptance_semantic_validation_capture_failed_inject",
         semanticValidationFailed: "acceptance_semantic_validation_failed",
         semanticValidationEmptyOutput: "acceptance_semantic_validation_empty_output",
         semanticValidationCompleted: "acceptance_semantic_validation_completed",
@@ -121,7 +184,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
         capabilityOutputAttachmentSaveFailed: "capability_output_attachment_save_failed",
         separateModelRelaySkippedDuplicate: "planning_separate_model_relay_skipped_duplicate",
         separateModelRelaySkippedTurnEnded: "planning_separate_model_relay_skipped_turn_ended",
-        separateModelRelayInjectedAsSystemContext: "planning_separate_model_relay_injected_as_system_context",
+        separateModelRelayInjectedAsSystemContext:
+          "planning_separate_model_relay_injected_as_system_context",
         capabilityModelTrace: "capability_model_trace",
         capabilityFlowFailed: "capability_flow_failed",
       },
@@ -139,8 +203,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
       planning: {
         planUpdate: {
-          triggerTurnsThreshold:
-            TURN_THRESHOLDS.harness.modeThresholds.full.planUpdateTriggerTurns,
+          triggerTurnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.full.planUpdateTriggerTurns,
         },
         planRefinement: {
           enabled: true,
@@ -189,8 +252,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
       planning: {
         planUpdate: {
-          triggerTurnsThreshold:
-            TURN_THRESHOLDS.harness.modeThresholds.text.planUpdateTriggerTurns,
+          triggerTurnsThreshold: TURN_THRESHOLDS.harness.modeThresholds.text.planUpdateTriggerTurns,
         },
         planRefinement: {
           enabled: true,
@@ -207,8 +269,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
   planning: {
     planUpdate: {
       revisionMaxAttempts: TURN_THRESHOLDS.harness.planning.planUpdateRevisionMaxAttempts,
-      refinementMaxAttempts:
-        TURN_THRESHOLDS.harness.planning.planUpdateRefinementMaxAttempts,
+      refinementMaxAttempts: TURN_THRESHOLDS.harness.planning.planUpdateRefinementMaxAttempts,
       triggerTurnsThreshold: TURN_THRESHOLDS.harness.planning.planUpdateTriggerTurns,
     },
     capture: {
@@ -327,7 +388,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     guards: {
       overflowForcedAcceptanceSystemPrompt:
         "Context overflow remains after summary/pruning. Call {tool} with mode=forced now.",
-      blockedAgentToolNames: ["plan_multi_task_collaboration", "task_summary"],
+      blockedAgentToolNames: ["task_summary"],
     },
     decisions: {
       category: {
@@ -373,7 +434,11 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
   },
   review: {
-    hooks: [HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, HOOK_POINT.AGENT.ON_ERROR, HOOK_POINT.AGENT.ON_ABORT],
+    hooks: [
+      HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+      HOOK_POINT.AGENT.ON_ERROR,
+      HOOK_POINT.AGENT.ON_ABORT,
+    ],
     decisions: {
       action: {
         reviewReport: "review_report",

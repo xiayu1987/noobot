@@ -55,9 +55,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceLatestCompleteSummaryTitle: "## 最后一次完整小结",
     acceptanceCollapseAcceptanceTitle: "Harness-验收",
     acceptanceSignalAttachmentKeywords: "附件|attachment",
-    acceptanceSignalSubtaskKeywords: "子任务|subtask",
-    acceptanceSignalSubtaskStartKeywords: "开启|start",
-    acceptanceSignalSubtaskWaitKeywords: "等待|wait",
     planningToolDescriptionFallback: "（无说明）",
     auxiliaryModelNoScriptConstraint:
       "Harness 非主链路不能执行工具：禁止直接输出可执行脚本或命令，也禁止输出工具调用语法；仅返回当前流程要求的内容，不得把上下文工具结果未证明的动作或结果写成已执行。",
@@ -289,9 +286,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceLatestCompleteSummaryTitle: "## Latest complete summary",
     acceptanceCollapseAcceptanceTitle: "Harness-Acceptance",
     acceptanceSignalAttachmentKeywords: "attachment|附件",
-    acceptanceSignalSubtaskKeywords: "subtask|子任务",
-    acceptanceSignalSubtaskStartKeywords: "start|开启",
-    acceptanceSignalSubtaskWaitKeywords: "wait|等待",
     planningToolDescriptionFallback: "(no description)",
     auxiliaryModelNoScriptConstraint:
       "Harness auxiliary flows cannot execute tools. Do not output executable scripts, commands, or tool-call syntax. Return only the requested content, and never claim an action or result without a supporting tool result in the supplied context.",

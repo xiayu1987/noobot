@@ -17,10 +17,7 @@ export function resolveHarnessDenyToolNames(input = null) {
   return Array.from(new Set(input.map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
-export const DEFAULT_HARNESS_DENY_TOOL_NAMES = Object.freeze([
-  "plan_multi_task_collaboration",
-  "task_summary",
-]);
+export const DEFAULT_HARNESS_DENY_TOOL_NAMES = Object.freeze(["task_summary"]);
 
 export const DEFAULT_OPTIONS = Object.freeze({
   enabled: true,

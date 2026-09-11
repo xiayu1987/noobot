@@ -109,15 +109,6 @@ const TOOLS_STRUCTURE = object({
   list_skills: toolToggle(),
   call_service: toolToggle(),
   call_mcp_task: toolToggle({ maxToolLoopTurns: integer({ minimum: 1, policy: GLOBAL_ONLY }) }),
-  delegate_task_async: toolToggle({
-    waitTimeoutMs: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-    pollIntervalMs: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-    maxSubAgentDepth: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-  }),
-  wait_async_task_result: toolToggle({
-    pollIntervalMs: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-  }),
-  plan_multi_task_collaboration: toolToggle(),
   switch_model: toolToggle(),
   user_interaction: toolToggle(),
   execute_script: object({ enabled: boolean() }, { policy: GLOBAL_ONLY }),

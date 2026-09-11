@@ -58,10 +58,8 @@ function buildToolsResult({ runtime, availableTools, options }) {
   if (!toolName) {
     return completed(HELP_COMMAND.TOOLS, { toolNames, toolSource: source });
   }
-  // 手册存在与否和本次会话是否可调用是两件事：未装配的工具即使有手册也不应被当成可用。
   const isAvailable = toolNames.includes(toolName);
   const manual = isAvailable ? tToolManual(runtime, toolName) : null;
-  // 字段名不能用 toolName：toToolJsonResult 先写工具身份再展开 payload，同名字段会污染身份。
   if (manual) {
     return completed(HELP_COMMAND.TOOLS, { queriedTool: toolName, manual });
   }
@@ -91,7 +89,6 @@ function attachsFailure(runtime, reasonKey) {
 async function buildAttachsResult({ runtime, agentContext, options }) {
   const attachmentService = runtime?.attachmentService || null;
   const { userId, sessionId } = buildContextSection(agentContext).identity;
-  // 三种缺失的处置动作不同：服务缺失属运行时装配问题，身份缺失属会话上下文问题，压成一码会掩盖差异。
   if (!attachmentService) {
     return attachsFailure(runtime, "tools.help.attachmentServiceMissing");
   }
@@ -143,7 +140,6 @@ async function buildAttachsResult({ runtime, agentContext, options }) {
         sessionId,
         attachmentSource,
       });
-      // 字段名不能用 attachmentSource：模型投影层把裸身份字段视为附件身份对象并要求三字段齐全。
       return {
         source: attachmentSource,
         attachments: (records || []).map(projectAttachmentRecord),
@@ -180,7 +176,6 @@ async function dispatchHelpCommand({ runtime, agentContext, command, options }) 
         options,
       });
     case HELP_COMMAND.MODELS:
-      // 与其余命令保持同一返回形态：段内字段平铺在根层，不额外包一层命令同名键。
       return completed(HELP_COMMAND.MODELS, buildModelsSection(agentContext));
     case HELP_COMMAND.EXPERIENCE:
       return completed(HELP_COMMAND.EXPERIENCE, {

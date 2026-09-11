@@ -47,9 +47,6 @@ export const GUIDANCE_REASON = Object.freeze({
 export const TOOL_NAME_SET = Object.freeze({
   CALL_SERVICE: "call_service",
   MULTIMODAL_PARSE: "multimodal_parse",
-  DELEGATE_TASK_ASYNC: "delegate_task_async",
-  PLAN_MULTI_TASK_COLLABORATION: "plan_multi_task_collaboration",
-  WAIT_ASYNC_TASK_RESULT: "wait_async_task_result",
 });
 
 export const CAPABILITY_DOMAIN = Object.freeze({
@@ -132,8 +129,6 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
 
 export const DEFAULT_HARNESS_SIGNALS = Object.freeze({
   parsedAttachment: false,
-  subtaskStarted: false,
-  subtaskWaited: false,
   successfulToolCount: 0,
   activeDialogProcessId: "",
 });

@@ -40,11 +40,11 @@ test("createPluginPolicyApi patches deny tool names without dropping base policy
     },
     normalizeStringArray,
   });
-  const merged = policyApi.patch({ denyToolNames: ["delegate_task_async"] });
+  const merged = policyApi.patch({ denyToolNames: ["execute_script"] });
 
   assert.equal(merged.mode, "append_custom");
   assert.deepEqual(merged.allowToolNames, ["read_file"]);
-  assert.deepEqual(merged.denyToolNames, ["delegate_task_async"]);
+  assert.deepEqual(merged.denyToolNames, ["execute_script"]);
 });
 
 test("createPluginPolicyApi accumulates deny declarations from multiple plugins", () => {
@@ -77,7 +77,7 @@ test("hasToolPolicyPatchContent handles empty/deny-only patches", () => {
   assert.equal(hasToolPolicyPatchContent({ toolPolicyPatch: {}, normalizeStringArray }), false);
   assert.equal(
     hasToolPolicyPatchContent({
-      toolPolicyPatch: { denyToolNames: ["delegate_task_async"] },
+      toolPolicyPatch: { denyToolNames: ["execute_script"] },
       normalizeStringArray,
     }),
     true,

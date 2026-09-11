@@ -4,16 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  WORKFLOW_PLUGIN_DEFAULTS,
-} from "./constants.js";
+import { WORKFLOW_PLUGIN_DEFAULTS } from "./constants.js";
 import { getWorkflowDefaultSemanticPrompt, normalizeWorkflowLocale } from "./i18n.js";
-
-export const DEFAULT_WORKFLOW_DENY_TOOL_NAMES = Object.freeze([
-  "delegate_task_async",
-  "wait_async_task_result",
-  "plan_multi_task_collaboration",
-]);
 
 function normalizeToolNameList(input = []) {
   if (!Array.isArray(input)) return [];
@@ -22,8 +14,7 @@ function normalizeToolNameList(input = []) {
 
 export function resolveWorkflowDenyToolNames(input = null) {
   const normalized = normalizeToolNameList(input);
-  if (normalized.length) return Array.from(new Set(normalized));
-  return [...DEFAULT_WORKFLOW_DENY_TOOL_NAMES];
+  return Array.from(new Set(normalized));
 }
 
 function normalizePriority(input = null) {
@@ -53,7 +44,9 @@ function normalizeWorkflowExtensions(input = null) {
 
 export function normalizeOptions(input = {}) {
   const source = input && typeof input === "object" ? input : {};
-  const mode = String(source?.mode ?? WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF).trim().toLowerCase();
+  const mode = String(source?.mode ?? WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF)
+    .trim()
+    .toLowerCase();
   const locale = normalizeWorkflowLocale(source?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE);
   const maxAutoTransitions = Number(source?.maxAutoTransitions);
   const maxParallelNodeAgents = Number(source?.maxParallelNodeAgents);
@@ -102,10 +95,10 @@ export function normalizeOptions(input = {}) {
     workflowDialogPersister:
       typeof source?.workflowDialogPersister === "function" ? source.workflowDialogPersister : null,
     workflowNodeStateRepository:
-      source?.workflowNodeStateRepository
-      && typeof source.workflowNodeStateRepository.initialize === "function"
-      && typeof source.workflowNodeStateRepository.commit === "function"
-      && typeof source.workflowNodeStateRepository.getSnapshot === "function"
+      source?.workflowNodeStateRepository &&
+      typeof source.workflowNodeStateRepository.initialize === "function" &&
+      typeof source.workflowNodeStateRepository.commit === "function" &&
+      typeof source.workflowNodeStateRepository.getSnapshot === "function"
         ? source.workflowNodeStateRepository
         : null,
     workflowNodeSystemMessageBuilder:
@@ -113,7 +106,9 @@ export function normalizeOptions(input = {}) {
         ? source.workflowNodeSystemMessageBuilder
         : null,
     workflowExtensionMounter:
-      typeof source?.workflowExtensionMounter === "function" ? source.workflowExtensionMounter : null,
+      typeof source?.workflowExtensionMounter === "function"
+        ? source.workflowExtensionMounter
+        : null,
     workflowExtensions: normalizeWorkflowExtensions(source?.workflowExtensions),
     denyToolNames: resolveWorkflowDenyToolNames(source?.denyToolNames),
   };

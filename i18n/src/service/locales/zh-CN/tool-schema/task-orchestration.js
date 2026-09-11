@@ -5,58 +5,6 @@
  */
 
 export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
-  delegate_task_async: {
-    description: {
-      key: "tools.agent_collab.delegateDescription",
-      text: "并发委派多个子任务。输入 tasks 列表（每项含 taskName、taskContent）。返回异步任务容器结果。",
-    },
-    params: {
-      tasks: {
-        key: "tools.agent_collab.fieldTasks",
-        text: "子任务列表。",
-      },
-      "tasks[].taskContent": {
-        key: "tools.agent_collab.fieldTaskContent",
-        text: "子任务内容。",
-      },
-      "tasks[].taskName": {
-        key: "tools.agent_collab.fieldTaskName",
-        text: "子任务名称。",
-      },
-    },
-    texts: {
-      "tools.agent_collab.childAsyncResultContainersRequired": "childAsyncResultContainers 必填",
-      "tools.agent_collab.dialogContextHint": "delegate_task_async 需要当前对话流程上下文",
-      "tools.agent_collab.humanTaskPrefix": "任务文本：",
-      "tools.agent_collab.noResult": "(无结果)",
-      "tools.agent_collab.parentSessionIdRequired": "parentSessionId 必填",
-      "tools.agent_collab.planPrompt1": "多任务协作规划。",
-      "tools.agent_collab.planPrompt2": "请输出规划内容与任务调用链。",
-      "tools.agent_collab.planPrompt3": "输出必须是 JSON，不要使用 markdown 代码块。",
-      "tools.agent_collab.planPrompt4": "JSON 格式：",
-      "tools.agent_collab.planPrompt5":
-        '{ "tasks":[{ "taskName":"任务a", "taskContent":"任务目标、内容","subTasks":[] }] }',
-      "tools.agent_collab.runtimeDialogProcessIdMissing": "运行时缺少 dialogProcessId",
-      "tools.agent_collab.runtimeMissingBotManagerUserId": "运行时缺少 bot manager/user id",
-      "tools.agent_collab.runtimeSessionIdMissing": "运行时缺少 sessionId",
-      "tools.agent_collab.sessionContextHint": "delegate_task_async 需要当前会话上下文",
-      "tools.agent_collab.taskNameTaskContentRequired": "taskName 与 taskContent 必填",
-      "tools.agent_collab.tasksRequired": "tasks 必填",
-    },
-  },
-  plan_multi_task_collaboration: {
-    description: {
-      key: "tools.agent_collab.planDescription",
-      text: "规划多任务协作方案。输入 task。返回拆解后的协作计划结果。",
-    },
-    params: {
-      task: {
-        key: "tools.agent_collab.fieldPlanTask",
-        text: "任务描述。",
-      },
-    },
-    texts: {},
-  },
   task_summary: {
     description: {
       key: "tools.task_summary.description",
@@ -92,23 +40,6 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       "tools.task_check.checkProtocolInvalid": "checkContent 不符合 NOOBOT_TASK_CHECK/1 协议",
       "tools.task_check.completed": "任务检查已记录，请根据检查状态、摘要和下一步继续处理。",
     },
-  },
-  wait_async_task_result: {
-    description: {
-      key: "tools.agent_collab.waitDescription",
-      text: "等待异步子任务结果汇总。输入 timeoutMs、pollIntervalMs（可选）。返回子任务执行结果。",
-    },
-    params: {
-      pollIntervalMs: {
-        key: "tools.agent_collab.fieldPollIntervalMs",
-        text: "轮询间隔毫秒（可选）。",
-      },
-      timeoutMs: {
-        key: "tools.agent_collab.fieldTimeoutMs",
-        text: "超时时间毫秒（可选）。",
-      },
-    },
-    texts: {},
   },
   list_skills: {
     description: {

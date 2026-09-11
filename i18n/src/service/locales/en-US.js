@@ -25,8 +25,6 @@ export default {
     `Tool calls have failed consecutively ${Number(params.failureCount || 0)} times. If the tool usage or parameter semantics are unclear, call ${String(params.helpToolName || "help")} to read the detailed manual for that tool.`,
   "agent.helpToolLoopPrompt": (params = {}) =>
     `Tool loop has run ${Number(params.loopCount || 0)} turns. Consider calling ${String(params.helpToolName || "help")} to read the detailed manual for the tools involved.`,
-  "agent.toolChoiceRequiredRetryPrompt":
-    "Please use tools to execute tasks. If there is no task, the task is finished, or you need to end proactively, call the final_answer tool.",
   "agent.taskSummarySingleToolPrompt":
     "task_summary must be called alone and cannot appear in the same tool-call turn as other tools.",
   "agent.taskCheckSingleToolPrompt":

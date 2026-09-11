@@ -70,7 +70,7 @@ test("normalizeOptions can explicitly enable non-main model context clipping", (
 
 test("normalizeOptions keeps custom harness denyToolNames", () => {
   const options = normalizeOptions({
-    denyToolNames: ["plan_multi_task_collaboration", "", "plan_multi_task_collaboration"],
+    denyToolNames: ["task_summary", "", "task_summary"],
   });
-  assert.deepEqual(options.denyToolNames, ["plan_multi_task_collaboration"]);
+  assert.deepEqual(options.denyToolNames, ["task_summary"]);
 });

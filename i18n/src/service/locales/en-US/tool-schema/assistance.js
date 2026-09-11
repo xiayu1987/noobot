@@ -119,22 +119,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "Model switched and will take effect in subsequent calls of this turn",
     },
   },
-  final_answer: {
-    description: {
-      key: "tools.final_answer.description",
-      text: "Output the final text response.",
-    },
-    params: {
-      reason: {
-        key: "tools.final_answer.fieldReason",
-        text: "Reason",
-      },
-    },
-    texts: {
-      "tools.final_answer.finalizeMessage":
-        "Conversation is ending, please provide the final summary.",
-    },
-  },
   user_interaction: {
     description: {
       key: "tools.user_interaction.description",

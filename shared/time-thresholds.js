@@ -84,11 +84,6 @@ export const TIME_THRESHOLDS = deepFreeze({
     dockerLockWaitTimeoutMs: TIME_TIERS.oneHourMs,
   },
 
-  agentCollab: {
-    waitTimeoutMs: TIME_TIERS.fiveMinutesMs,
-    pollIntervalMs: TIME_TIERS.fiveSecondsMs,
-  },
-
   agentProxy: {
     webSocketHeartbeatIntervalMs: TIME_TIERS.standardCommandMs,
     webSocketHeartbeatTimeoutMs: TIME_TIERS.startupMs,

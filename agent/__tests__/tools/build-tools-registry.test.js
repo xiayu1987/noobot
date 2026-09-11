@@ -123,15 +123,6 @@ test("buildTools: 重组后应注册关键工具", async () => {
   const compiledInput = multimodalOpenAiSchema.function.parameters.properties.inputs.items;
   assert.deepEqual(Object.keys(compiledInput.properties), ["source"]);
   assert.deepEqual(compiledInput.required, ["source"]);
-
-  const hardDisabled = [
-    "delegate_task_async",
-    "wait_async_task_result",
-    "plan_multi_task_collaboration",
-  ];
-  for (const toolName of hardDisabled) {
-    assert.equal(names.has(toolName), false, `多 agent 协作工具不应注册: ${toolName}`);
-  }
 });
 
 test("buildTools: every path-aware tool declares an authoritative path contract", async () => {
@@ -183,7 +174,6 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
           access_connector: { enabled: false },
           help: { enabled: false },
           web_search: { enabled: false },
-          agent_collab: { enabled: false },
           user_interaction: { enabled: false },
         },
       },
@@ -197,9 +187,6 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     "access_connector",
     "help",
     "web_search",
-    "delegate_task_async",
-    "wait_async_task_result",
-    "plan_multi_task_collaboration",
     "user_interaction",
   ];
 
@@ -212,31 +199,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
   assert.equal(names.has("call_mcp_task"), true);
 });
 
-test("buildTools: runtime toolPolicy.denyToolNames 可按统一字段禁用工具", async () => {
-  const tools = await buildTools(
-    createContext({
-      runtimePatch: {
-        runConfig: {
-          toolPolicy: {
-            denyToolNames: [
-              "delegate_task_async",
-              "wait_async_task_result",
-              "plan_multi_task_collaboration",
-            ],
-          },
-        },
-      },
-    }),
-  );
-  const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
-
-  assert.equal(names.has("delegate_task_async"), false);
-  assert.equal(names.has("wait_async_task_result"), false);
-  assert.equal(names.has("plan_multi_task_collaboration"), false);
-  assert.equal(names.has("help"), true);
-});
-
-test("buildTools: coding 场景不能绕过 denyToolNames", async () => {
+test("buildTools: coding 场景不能绕过 enabled=false 的工具配置", async () => {
   const tools = await buildTools(
     createContext({
       globalConfig: {
@@ -253,9 +216,6 @@ test("buildTools: coding 场景不能绕过 denyToolNames", async () => {
         basePath: "/tmp",
         runConfig: {
           scenario: "coding",
-          toolPolicy: {
-            denyToolNames: ["read_file", "write_file", "search", "patch_file", "execute_script"],
-          },
         },
       },
     }),

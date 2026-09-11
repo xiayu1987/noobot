@@ -10,7 +10,7 @@ import { RunConfigResolver, resolveToolBindings } from "@noobot/agent-config-pro
 
 test("resolveToolBindings should only keep tools allowed by runtime policy", () => {
   const agentContext = {
-    bindings: { tools: [{ name: "final_answer" }, { name: "read_file" }] },
+    bindings: { tools: [{ name: "write_file" }, { name: "read_file" }] },
   };
   const runConfig = {
     safeConfirm: true,
@@ -27,34 +27,15 @@ test("resolveToolBindings should only keep tools allowed by runtime policy", () 
   assert.deepEqual(toolNames, ["read_file"]);
 });
 
-test("resolveToolBindings should not force keep final_answer when safety confirmation is disabled", () => {
-  const agentContext = {
-    bindings: { tools: [{ name: "final_answer" }, { name: "read_file" }] },
-  };
-  const runConfig = {
-    safeConfirm: false,
-    toolPolicy: {
-      allowToolNames: ["read_file"],
-    },
-  };
-
-  const toolNames = resolveToolBindings({
-    sourceTools: agentContext.bindings.tools,
-    runConfig,
-  }).map((tool) => tool.name);
-
-  assert.deepEqual(toolNames, ["read_file"]);
-});
-
 test("resolveToolBindings should support denyToolNames as unified runtime field", () => {
   const agentContext = {
     bindings: {
-      tools: [{ name: "read_file" }, { name: "read_file" }, { name: "delegate_task_async" }],
+      tools: [{ name: "read_file" }, { name: "read_file" }, { name: "execute_script" }],
     },
   };
   const runConfig = {
     toolPolicy: {
-      denyToolNames: ["delegate_task_async", "read_file"],
+      denyToolNames: ["execute_script", "read_file"],
     },
   };
 

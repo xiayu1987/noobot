@@ -6,7 +6,6 @@
 import { emitEvent } from "../../events/index.js";
 import { HELP_TOOL_NAME } from "../../tools/collaboration/help-tool.js";
 import { settleToolCallInTurn } from "../tool-execution/tool-runner.js";
-import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
 import { TOOL_NAME } from "../../tools/constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
@@ -83,9 +82,6 @@ export async function processToolResults({
   const hasHelpCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === HELP_TOOL_NAME,
   );
-  const hasFinalAnswerCall = toolCallResults.some(
-    (result) => String(result?.call?.name || "").trim() === FINAL_ANSWER_TOOL_NAME,
-  );
 
   if (hasTaskSummaryCall) {
     loopState.taskSummaryTriggered = true;
@@ -133,7 +129,6 @@ export async function processToolResults({
       toolCallResults,
       hasTaskSummaryCall,
       hasHelpCall,
-      hasFinalAnswerCall,
       agentContext: modelState?.agentContext || null,
     }),
   });
@@ -142,6 +137,5 @@ export async function processToolResults({
     toolCallResults,
     hasTaskSummaryCall,
     hasHelpCall,
-    hasFinalAnswerCall,
   };
 }

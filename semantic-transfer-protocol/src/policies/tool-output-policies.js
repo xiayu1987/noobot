@@ -12,9 +12,6 @@ const TEXT_TOOLS = [
   "list_skills",
   "call_service",
   "call_mcp_task",
-  "delegate_task_async",
-  "wait_async_task_result",
-  "plan_multi_task_collaboration",
   "switch_model",
   "user_interaction",
   "access_connector",
@@ -22,7 +19,6 @@ const TEXT_TOOLS = [
   "task_summary",
   "task_check",
   "help",
-  "final_answer",
 ];
 
 export function registerToolOutputPolicies(register) {

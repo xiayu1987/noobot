@@ -62,15 +62,6 @@
     "call_mcp_task": {
       "enabled": true
     },
-    "delegate_task_async": {
-      "enabled": true
-    },
-    "wait_async_task_result": {
-      "enabled": true
-    },
-    "plan_multi_task_collaboration": {
-      "enabled": true
-    },
     "switch_model": {
       "enabled": true
     },

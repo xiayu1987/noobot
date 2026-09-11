@@ -73,8 +73,6 @@ test("harness acceptance semantic validation uses separate model when enabled", 
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
           signals: {
             parsedAttachment: false,
-            subtaskStarted: false,
-            subtaskWaited: false,
             successfulToolCount: 1,
           },
           pending: { guidance: null, summary: false },

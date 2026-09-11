@@ -125,11 +125,7 @@ END
 
 ## Tool policy
 
-Workflow 通过插件宿主的 `policy.patch({ denyToolNames })` 声明节点执行期间禁用的工具。默认禁用以下多 Agent 协作工具，避免节点子会话再次进入协作回路：
-
-- `delegate_task_async`
-- `wait_async_task_result`
-- `plan_multi_task_collaboration`
+Workflow 通过插件宿主的 `policy.patch({ denyToolNames })` 声明节点执行期间禁用的工具。插件自身不预置默认禁用项，仅对配置中显式声明的 `denyToolNames` 做去重归一后声明；未配置时不下发工具策略。
 
 `policy.patch` 是插件与 Agent 之间的唯一工具策略端口；插件不直接修改 Agent 内部配置。
 
@@ -138,11 +134,7 @@ Workflow 通过插件宿主的 `policy.patch({ denyToolNames })` 声明节点执
 ```json
 {
   "toolPolicy": {
-    "denyToolNames": [
-      "delegate_task_async",
-      "wait_async_task_result",
-      "plan_multi_task_collaboration"
-    ]
+    "denyToolNames": ["execute_script"]
   },
   "plugins": {
     "workflow": {

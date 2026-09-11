@@ -18,8 +18,7 @@ import { createMultimodalParseTool } from "./ai-models/multimodal-parse-tool.js"
 import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createHelpTool } from "./collaboration/help-tool.js";
-import { emitEvent } from "../events/index.js";
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
+import { mergeConfig } from "../config/index.js";
 import { TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 import { assertToolPathContract } from "@noobot/path-resolver";
@@ -28,23 +27,12 @@ import {
   supportsModelMultimodalGeneration,
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
-import {
-  getRuntimeFromAgentContext,
-  getSessionIdsFromAgentContext,
-  getToolsFromAgentContext,
-} from "../context/agent-context-accessor.js";
+import { getRuntimeFromAgentContext } from "../context/agent-context-accessor.js";
 export {
   setToolBuilderAdapter,
   getToolBuilderAdapter,
   resetToolBuilderAdapter,
 } from "./adapter.js";
-
-const MAX_SUB_AGENT_DEPTH = BUILTIN_THRESHOLDS.agentCollab.maxSubAgentDepth;
-const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
-  TOOL_NAME.DELEGATE_TASK_ASYNC,
-  TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
-  TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION,
-]);
 
 function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled = true) {
   const normalized = String(toolName || "").trim();
@@ -68,18 +56,6 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.LIST_SKILLS]: [TOOL_NAME.LIST_SKILLS, TOOL_CONFIG_ALIAS_KEY.SKILL],
   [TOOL_NAME.CALL_SERVICE]: [TOOL_NAME.CALL_SERVICE, TOOL_CONFIG_ALIAS_KEY.SERVICE],
   [TOOL_NAME.CALL_MCP_TASK]: [TOOL_NAME.CALL_MCP_TASK, TOOL_CONFIG_ALIAS_KEY.MCP],
-  [TOOL_NAME.DELEGATE_TASK_ASYNC]: [
-    TOOL_NAME.DELEGATE_TASK_ASYNC,
-    TOOL_CONFIG_ALIAS_KEY.AGENT_COLLAB,
-  ],
-  [TOOL_NAME.WAIT_ASYNC_TASK_RESULT]: [
-    TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
-    TOOL_CONFIG_ALIAS_KEY.AGENT_COLLAB,
-  ],
-  [TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION]: [
-    TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION,
-    TOOL_CONFIG_ALIAS_KEY.AGENT_COLLAB,
-  ],
   [TOOL_NAME.SWITCH_MODEL]: [TOOL_NAME.SWITCH_MODEL, TOOL_CONFIG_ALIAS_KEY.MODEL],
   [TOOL_NAME.USER_INTERACTION]: [TOOL_NAME.USER_INTERACTION],
   [TOOL_NAME.ACCESS_CONNECTOR]: [TOOL_NAME.ACCESS_CONNECTOR],
@@ -158,65 +134,9 @@ async function buildToolsDefault(ctx) {
   for (const tool of enabledTools) {
     if (tool?.metadata?.pathContract) assertToolPathContract(tool.metadata.pathContract);
   }
-  return await filterToolsByRuntimePolicy({
-    agentContext: ctx?.agentContext || {},
-    tools: enabledTools,
-    effectiveConfig,
-    eventListener: runtime?.eventListener || null,
-  });
+  return enabledTools;
 }
 
 export async function buildTools(ctx) {
   return runBuildToolsAdapter(ctx, buildToolsDefault);
-}
-
-async function filterToolsByRuntimePolicy({
-  agentContext,
-  tools,
-  effectiveConfig,
-  eventListener = null,
-}) {
-  const sourceTools = Array.isArray(tools) ? tools : getToolsFromAgentContext(agentContext);
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const identity = getSessionIdsFromAgentContext(agentContext);
-  const sessionId = identity.sessionId;
-  const parentSessionId = identity.parentSessionId;
-  const userId = identity.userId;
-  const sessionManager = runtime?.sessionManager || null;
-  const maxSubAgentDepth = MAX_SUB_AGENT_DEPTH;
-  const depthTargetSessionId = sessionId || parentSessionId;
-  if (!sessionManager || !userId) {
-    return sourceTools;
-  }
-
-  if (!depthTargetSessionId) return sourceTools;
-
-  let currentDepth = 0;
-  try {
-    currentDepth = Number(
-      (await sessionManager.getSessionDepth({
-        userId,
-        sessionId: depthTargetSessionId,
-      })) || 0,
-    );
-  } catch {
-    currentDepth = 0;
-  }
-
-  if (currentDepth < maxSubAgentDepth) return sourceTools;
-
-  const filteredTools = sourceTools.filter(
-    (toolDefinition) => !BLOCKED_AGENT_COLLAB_TOOL_NAMES.has(normalizeToolName(toolDefinition)),
-  );
-
-  if (filteredTools.length !== sourceTools.length) {
-    emitEvent(eventListener, "agent_collab_tools_disabled_by_depth", {
-      sessionId: depthTargetSessionId,
-      parentSessionId,
-      currentDepth,
-      maxSubAgentDepth,
-      disabledTools: Array.from(BLOCKED_AGENT_COLLAB_TOOL_NAMES),
-    });
-  }
-  return filteredTools;
 }
