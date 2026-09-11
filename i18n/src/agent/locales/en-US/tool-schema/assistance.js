@@ -26,8 +26,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.unknownTool": "Unknown tool name, pick one from the queryable list",
       "tools.help.experienceHint":
         "The following are memory paths. Use read_file or search to inspect the actual content.",
-      "tools.help.workspaceUnavailable":
-        "No workspace is available in the current context, cannot resolve memory paths",
     },
   },
   web_search: {

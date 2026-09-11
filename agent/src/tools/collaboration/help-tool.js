@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
@@ -12,6 +11,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { listManualToolNames, tToolManual } from "../core/tool-schema-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { MEMORY_RELATIVE_PATHS } from "../../memory/storage/paths.js";
 
 export const HELP_TOOL_NAME = TOOL_NAME.HELP;
 
@@ -20,52 +20,31 @@ export const HELP_TYPES = Object.freeze({
   EXPERIENCE: "experience",
 });
 
-const MEMORY_PATHS = Object.freeze({
-  MEMORY_DIR: "memory",
-  LONG_MEMORY: "long-memory.md",
-  LONG_MEMORY_METADATA: "long-memory/metadata.md",
-  SHORT_MEMORY: "short-memory.json",
-  LONG_MEMORY_MODEL: "long-memory-model.md",
-  EXPERIENCE_MODEL: "experience-model.md",
-  EXPERIENCE_DIR: "experience",
-  DAILY_SUMMARY_DIR: "daily_summary",
-  WEEKLY_SUMMARY_DIR: "weekly_summary",
-  MONTHLY_SUMMARY_DIR: "monthly_summary",
-  YEARLY_SUMMARY_DIR: "yearly_summary",
-});
-
 function normalizeName(value = "") {
   return String(value || "").trim();
 }
 
-function resolveWorkspaceBasePath(agentContext = {}) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  return normalizeName(
-    agentContext?.context?.environment?.workspace?.basePath || runtime?.basePath || "",
+const MEMORY_HELP_PATH_FIELDS = Object.freeze({
+  memoryDir: MEMORY_RELATIVE_PATHS.MEMORY_DIR,
+  longMemoryPath: MEMORY_RELATIVE_PATHS.LONG_MEMORY,
+  longMemoryMetadataPath: MEMORY_RELATIVE_PATHS.LONG_MEMORY_METADATA,
+  shortMemoryPath: MEMORY_RELATIVE_PATHS.SHORT_MEMORY,
+  longMemoryModelPath: MEMORY_RELATIVE_PATHS.LONG_MEMORY_MODEL,
+  experienceModelPath: MEMORY_RELATIVE_PATHS.EXPERIENCE_MODEL,
+  experienceDir: MEMORY_RELATIVE_PATHS.EXPERIENCE_DIR,
+  dailySummaryDir: MEMORY_RELATIVE_PATHS.DAILY_SUMMARY_DIR,
+  weeklySummaryDir: MEMORY_RELATIVE_PATHS.WEEKLY_SUMMARY_DIR,
+  monthlySummaryDir: MEMORY_RELATIVE_PATHS.MONTHLY_SUMMARY_DIR,
+  yearlySummaryDir: MEMORY_RELATIVE_PATHS.YEARLY_SUMMARY_DIR,
+});
+
+function resolveMemoryHelpPaths() {
+  return Object.fromEntries(
+    Object.entries(MEMORY_HELP_PATH_FIELDS).map(([field, relativePath]) => [
+      field,
+      projectToolPathRef(relativePath),
+    ]),
   );
-}
-
-function projectMemoryPath(basePath = "", ...segments) {
-  return projectToolPathRef(path.join(basePath, ...segments));
-}
-
-function resolveMemoryHelpPaths(agentContext = {}) {
-  const basePath = resolveWorkspaceBasePath(agentContext);
-  if (!basePath) return null;
-  const memoryDir = path.join(basePath, MEMORY_PATHS.MEMORY_DIR);
-  return {
-    memoryDir: projectToolPathRef(memoryDir),
-    longMemoryPath: projectMemoryPath(memoryDir, MEMORY_PATHS.LONG_MEMORY),
-    longMemoryMetadataPath: projectMemoryPath(memoryDir, MEMORY_PATHS.LONG_MEMORY_METADATA),
-    shortMemoryPath: projectMemoryPath(memoryDir, MEMORY_PATHS.SHORT_MEMORY),
-    longMemoryModelPath: projectMemoryPath(memoryDir, MEMORY_PATHS.LONG_MEMORY_MODEL),
-    experienceModelPath: projectMemoryPath(memoryDir, MEMORY_PATHS.EXPERIENCE_MODEL),
-    experienceDir: projectMemoryPath(memoryDir, MEMORY_PATHS.EXPERIENCE_DIR),
-    dailySummaryDir: projectMemoryPath(memoryDir, MEMORY_PATHS.DAILY_SUMMARY_DIR),
-    weeklySummaryDir: projectMemoryPath(memoryDir, MEMORY_PATHS.WEEKLY_SUMMARY_DIR),
-    monthlySummaryDir: projectMemoryPath(memoryDir, MEMORY_PATHS.MONTHLY_SUMMARY_DIR),
-    yearlySummaryDir: projectMemoryPath(memoryDir, MEMORY_PATHS.YEARLY_SUMMARY_DIR),
-  };
 }
 
 function buildToolManualResult({ runtime, toolName }) {
@@ -103,23 +82,13 @@ function buildToolManualResult({ runtime, toolName }) {
   };
 }
 
-function buildExperienceResult({ runtime, agentContext }) {
-  const memoryHelpPaths = resolveMemoryHelpPaths(agentContext);
-  if (!memoryHelpPaths) {
-    return {
-      ok: true,
-      status: TOOL_RESULT_STATUS.COMPLETED,
-      helpType: HELP_TYPES.EXPERIENCE,
-      memoryHelpPaths: null,
-      reason: tTool(runtime, "tools.help.workspaceUnavailable"),
-    };
-  }
+function buildExperienceResult({ runtime }) {
   return {
     ok: true,
     status: TOOL_RESULT_STATUS.COMPLETED,
     helpType: HELP_TYPES.EXPERIENCE,
     hint: tTool(runtime, "tools.help.experienceHint"),
-    memoryHelpPaths,
+    memoryHelpPaths: resolveMemoryHelpPaths(),
   };
 }
 
@@ -138,12 +107,10 @@ export function createHelpTool({ agentContext } = {}) {
     }),
     func: async ({ helpType, toolName }) => {
       const normalizedHelpType =
-        normalizeName(helpType) === HELP_TYPES.EXPERIENCE
-          ? HELP_TYPES.EXPERIENCE
-          : HELP_TYPES.TOOL;
+        normalizeName(helpType) === HELP_TYPES.EXPERIENCE ? HELP_TYPES.EXPERIENCE : HELP_TYPES.TOOL;
       const payload =
         normalizedHelpType === HELP_TYPES.EXPERIENCE
-          ? buildExperienceResult({ runtime, agentContext })
+          ? buildExperienceResult({ runtime })
           : buildToolManualResult({ runtime, toolName });
       return toToolJsonResult(HELP_TOOL_NAME, payload, true);
     },

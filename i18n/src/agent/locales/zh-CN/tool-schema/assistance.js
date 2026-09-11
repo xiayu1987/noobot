@@ -24,7 +24,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.manualNotFound": "该工具没有详细说明，其 schema 描述已是完整说明",
       "tools.help.unknownTool": "工具名不存在，请从可查询清单中选择",
       "tools.help.experienceHint": "以下为经验记忆路径，需再用 read_file 或 search 读取具体内容。",
-      "tools.help.workspaceUnavailable": "当前上下文没有可用工作区，无法定位记忆路径",
     },
   },
   web_search: {
