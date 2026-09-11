@@ -59,15 +59,15 @@ export const FILE_TOOL_SCHEMA = {
       },
       path: {
         key: "tools.search.fieldPath",
-        text: "Path for file search.",
+        text: "Path for file search. Only applies when source=files; ignored when source=text.",
       },
       glob: {
         key: "tools.search.fieldGlob",
-        text: "File pattern, e.g. *.js.",
+        text: "File pattern, e.g. *.js. Only applies when source=files; ignored when source=text.",
       },
       text: {
         key: "tools.search.fieldText",
-        text: "Text to search (used when source=text).",
+        text: "Text to search. Required and must be non-empty when source=text.",
       },
       contextLines: {
         key: "tools.search.fieldContextLines",
@@ -84,6 +84,7 @@ export const FILE_TOOL_SCHEMA = {
     },
     texts: {
       "tools.search.queryRequired": "A non-empty search keyword or regex is required.",
+      "tools.search.textRequired": "When source=text, a non-empty text to search is required.",
     },
   },
   patch_file: {

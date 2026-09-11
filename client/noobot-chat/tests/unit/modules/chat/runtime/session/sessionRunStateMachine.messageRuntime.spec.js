@@ -69,6 +69,28 @@ describe("sessionRunStateMachine message runtime", () => {
     });
   });
 
+  it("does not infer an active run from an unfinished timing record", () => {
+    const view = resolveTurnRuntimeView({
+      messageItem: {
+        role: "assistant",
+        pending: false,
+        turnScopeId: "client-turn:stopped-history",
+      },
+      turnTiming: {
+        thinkingStartedAt: "2026-09-10T13:51:21.730Z",
+        thinkingFinishedAt: "",
+      },
+    });
+
+    expect(view).toMatchObject({
+      state: "",
+      running: false,
+      inFlightAssistant: false,
+      startedAt: "2026-09-10T13:51:21.730Z",
+      finishedAt: "",
+    });
+  });
+
   it("does not resolve message runtime from the identity-free global lock", () => {
     const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1" };
     expect(

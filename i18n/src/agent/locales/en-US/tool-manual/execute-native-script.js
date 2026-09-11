@@ -23,8 +23,10 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
         "Document conversion: await libreoffice.convert({ input, outputDirectory, outputFormat }).",
       ffmpeg: "Media processing: await ffmpeg.run({ args: [...] }).",
       ffprobe: "Media probing: await ffprobe.run({ args: [...] }).",
-      files: "File access: files.input(index), readText, readJson, writeText, writeJson.",
-      output: "Artifacts: output.file(path), output.tempFile(path), output.tempDirectory(path).",
+      files:
+        "File access, every method is async and must be awaited: const token = await files.input(index) returns an input:// token; await files.readText(token), readJson(token), writeText(token, text), writeJson(token, value). Reads and writes accept only input://, output://, or temp:// tokens, never logical or host paths.",
+      output:
+        "Artifacts, every method is async and must be awaited: await output.file(relativePath) returns an output:// token; await output.tempDirectory(relativePath) returns a temp:// directory token; await output.tempFile(relativePath) or await output.tempFile(tempDirectoryToken, fileName) returns a temp:// file token.",
       ui: "User interaction channel, see the ui section.",
       args: "The arguments object passed to this call.",
       log: "log(message) writes to the execution log.",

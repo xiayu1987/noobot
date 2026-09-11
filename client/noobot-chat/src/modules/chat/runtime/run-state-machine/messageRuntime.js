@@ -137,15 +137,11 @@ export function resolveTurnRuntimeView({
     ? persistedStatus
     : realtimeStatus || persistedStatus || messageStatus;
   const pending = messageItem?.pending === true;
-  const hasStartedAt = Boolean(turnTiming?.thinkingStartedAt);
-  const hasFinishedAt = Boolean(turnTiming?.thinkingFinishedAt);
   const terminal = isTerminalMessageRuntimeState(state);
-  const running = !hasFinishedAt && !terminal && (
-    hasStartedAt || pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state)
-  );
-  const inFlightAssistant = getMessageRole(messageItem) === "assistant" && (
-    running || (!hasFinishedAt && !terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state))
-  );
+  const running = !terminal && (pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
+  const inFlightAssistant =
+    getMessageRole(messageItem) === "assistant" &&
+    (running || (!terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state)));
   const canStopTarget = inFlightAssistant && MESSAGE_CAN_STOP_TARGET_STATES.includes(state);
   return {
     state,

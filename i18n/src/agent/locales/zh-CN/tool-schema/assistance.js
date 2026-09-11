@@ -8,22 +8,42 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   help: {
     description: {
       key: "tools.help.description",
-      text: "查询使用说明。输入 helpType 和 toolName，返回对应的详细说明。",
+      text:
+        "查询自身运行说明，命令行风格。不传 command 返回可用命令清单；" +
+        "command 形如 --tools、--tools --name read_file、--models、--runtime、--context、--attachs --id xxx。",
     },
     params: {
-      helpType: {
-        key: "tools.help.fieldHelpType",
-        text: "说明类型：tool（工具使用说明）、experience（经验记忆目录）。",
-      },
-      toolName: {
-        key: "tools.help.fieldToolName",
-        text: "工具名，helpType 为 tool 时使用；不传则返回可查询的工具名清单。",
+      command: {
+        key: "tools.help.fieldCommand",
+        text: "命令行字符串，如 --tools --name read_file；不传则返回命令清单。",
       },
     },
     texts: {
+      "tools.help.commandIndexHint": "以下为 help 可用命令，按需选择后再次调用。",
+      "tools.help.command.tools": "工具手册：不带选项列出可查工具名，--name 查指定工具明细。",
+      "tools.help.command.experience": "经验记忆目录路径。",
+      "tools.help.command.memory": "长短记忆与日周月年摘要目录路径。",
+      "tools.help.command.runtime": "当前运行时路径上下文、工作目录与沙箱形态。",
+      "tools.help.command.context": "当前轮身份与调用上下文。",
+      "tools.help.command.attachs": "会话附件清单，--id 查单个附件明细，--source 按来源过滤。",
+      "tools.help.command.isolation": "执行隔离模式与本会话可用工具的执行面分类。",
+      "tools.help.command.models": "当前使用中的模型与本会话可用模型清单及其多模态能力。",
       "tools.help.manualNotFound": "该工具没有详细说明，其 schema 描述已是完整说明",
+      "tools.help.toolNotAvailable":
+        "该工具已注册但未在本会话装配，当前不可调用；请从 toolNames 中选择",
       "tools.help.unknownTool": "工具名不存在，请从可查询清单中选择",
       "tools.help.experienceHint": "以下为经验记忆路径，需再用 read_file 或 search 读取具体内容。",
+      "tools.help.memoryHint": "以下为记忆与摘要路径，需再用 read_file 或 search 读取具体内容。",
+      "tools.help.attachmentServiceMissing": "附件服务未装配，无法查询附件",
+      "tools.help.attachmentUserIdMissing": "当前上下文缺少用户身份，无法查询附件",
+      "tools.help.attachmentSessionIdMissing": "当前上下文缺少会话身份，无法查询附件",
+      "tools.help.unknownAttachmentSource": "附件来源不存在，请从 attachmentSources 中选择",
+      "tools.help.attachmentNotFound": "附件不存在或不属于当前会话",
+      "tools.help.parseError.unknown_command": "命令不存在，请从 commands 中选择",
+      "tools.help.parseError.multiple_commands": "一次只能指定一个命令",
+      "tools.help.parseError.unknown_option": "选项不存在，请参考 usage",
+      "tools.help.parseError.option_not_supported": "当前命令不支持该选项",
+      "tools.help.parseError.malformed": "命令格式不正确，需以 --命令 开头",
     },
   },
   web_search: {
@@ -216,7 +236,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `缺少必填字段: ${String(params.key || "").trim()}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "存在敏感字段，请在客户端管理连接器，并仅通过 access_connector 访问已勾选实例",
+        "字段名、显示名或说明命中凭据类敏感词，交互已被拦截。不得向用户索取密码、令牌、密钥、连接串等凭据；如确实不是凭据字段，请改用不含敏感词的字段名后重发。数据库或终端等需要凭据的场景由用户在客户端配置连接器，再通过 access_connector 访问。",
     },
   },
 };

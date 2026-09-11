@@ -8,16 +8,17 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   help: {
     description: {
       key: "tools.help.description",
-      text: "Look up usage manuals. Input helpType and toolName to get the detailed manual.",
+      text:
+        "Look up your own runtime documentation, command-line style. Omit command to list " +
+        "available commands; command looks like --tools, --tools --name read_file, --models, --runtime, " +
+        "--context, --attachs --id xxx.",
     },
     params: {
-      helpType: {
-        key: "tools.help.fieldHelpType",
-        text: "Manual type: tool (tool usage manual), experience (memory directories).",
-      },
-      toolName: {
-        key: "tools.help.fieldToolName",
-        text: "Tool name, used when helpType is tool. Omit it to list the queryable tool names.",
+      command: {
+        key: "tools.help.fieldCommand",
+        text:
+          "Command-line string such as --tools --name read_file. " +
+          "Omit it to list available commands.",
       },
     },
   },
@@ -164,7 +165,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `missing required field: ${String(params.key || "").trim()}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "Sensitive fields detected. Manage connectors in the client and use access_connector only with a selected instance.",
+        "A field name, display name, or description matched a credential keyword, so the interaction was blocked. Never ask the user for passwords, tokens, keys, or connection strings; if the field is not a credential, rename it without the sensitive keyword and send the request again. For database or terminal access that genuinely needs credentials, the user configures a connector in the client and you reach it through access_connector.",
     },
   },
 };
