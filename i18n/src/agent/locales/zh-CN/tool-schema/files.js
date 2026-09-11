@@ -59,15 +59,15 @@ export const FILE_TOOL_SCHEMA = {
       },
       path: {
         key: "tools.search.fieldPath",
-        text: "文件搜索路径。",
+        text: "文件搜索路径；仅 source=files 时生效，source=text 时该字段不参与检索。",
       },
       glob: {
         key: "tools.search.fieldGlob",
-        text: "文件匹配，例如 *.js。",
+        text: "文件匹配，例如 *.js；仅 source=files 时生效，source=text 时该字段不参与检索。",
       },
       text: {
         key: "tools.search.fieldText",
-        text: "待搜索文本（source=text 时使用）。",
+        text: "待搜索文本；source=text 时必填且不能为空，缺失会直接报错而不是返回空命中。",
       },
       contextLines: {
         key: "tools.search.fieldContextLines",
@@ -84,6 +84,8 @@ export const FILE_TOOL_SCHEMA = {
     },
     texts: {
       "tools.search.queryRequired": "必须提供非空的搜索关键词或正则。",
+      "tools.search.textRequired":
+        "source=text 时必须提供非空的 text；如需按路径搜索请改用 source=files。",
     },
   },
   patch_file: {

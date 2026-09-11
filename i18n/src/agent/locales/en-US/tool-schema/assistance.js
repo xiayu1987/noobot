@@ -8,24 +8,61 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   help: {
     description: {
       key: "tools.help.description",
-      text: "Look up usage manuals. Input helpType and toolName to get the detailed manual.",
+      text:
+        "Look up your own runtime documentation, command-line style. Omit command to list " +
+        "available commands; command looks like --tools, --tools --name read_file, --models, " +
+        "--runtime, --context, --attachs --id xxx.",
     },
     params: {
-      helpType: {
-        key: "tools.help.fieldHelpType",
-        text: "Manual type: tool (tool usage manual), experience (memory directories).",
-      },
-      toolName: {
-        key: "tools.help.fieldToolName",
-        text: "Tool name, used when helpType is tool. Omit it to list the queryable tool names.",
+      command: {
+        key: "tools.help.fieldCommand",
+        text:
+          "Command-line string such as --tools --name read_file. " +
+          "Omit it to list available commands.",
       },
     },
     texts: {
+      "tools.help.commandIndexHint":
+        "Available help commands. Pick one and call help again with it.",
+      "tools.help.command.tools":
+        "Tool manuals: without options lists queryable tool names, --name shows one manual.",
+      "tools.help.command.experience": "Experience memory directory paths.",
+      "tools.help.command.memory":
+        "Long and short memory plus daily, weekly, monthly and yearly summary paths.",
+      "tools.help.command.runtime":
+        "Current runtime path context, working directories and sandbox shape.",
+      "tools.help.command.context": "Current turn identity and call context.",
+      "tools.help.command.attachs":
+        "Session attachments; --id shows one attachment, --source filters by source.",
+      "tools.help.command.isolation":
+        "Execution isolation modes and the execution class of every available tool.",
+      "tools.help.command.models":
+        "The model currently in use plus the models available in this session and their multimodal capabilities.",
       "tools.help.manualNotFound":
         "This tool has no extended manual; its schema description is already complete",
+      "tools.help.toolNotAvailable":
+        "This tool is registered but not assembled in this session and cannot be called; pick one from toolNames",
       "tools.help.unknownTool": "Unknown tool name, pick one from the queryable list",
       "tools.help.experienceHint":
         "The following are memory paths. Use read_file or search to inspect the actual content.",
+      "tools.help.memoryHint":
+        "The following are memory and summary paths. Use read_file or search to inspect content.",
+      "tools.help.attachmentServiceMissing":
+        "Attachment service is not assembled, cannot query attachments",
+      "tools.help.attachmentUserIdMissing":
+        "Current context has no user identity, cannot query attachments",
+      "tools.help.attachmentSessionIdMissing":
+        "Current context has no session identity, cannot query attachments",
+      "tools.help.unknownAttachmentSource":
+        "Unknown attachment source, pick one from attachmentSources",
+      "tools.help.attachmentNotFound":
+        "Attachment does not exist or does not belong to the current session",
+      "tools.help.parseError.unknown_command": "Unknown command, pick one from commands",
+      "tools.help.parseError.multiple_commands": "Only one command is allowed per call",
+      "tools.help.parseError.unknown_option": "Unknown option, check usage",
+      "tools.help.parseError.option_not_supported":
+        "The current command does not support this option",
+      "tools.help.parseError.malformed": "Malformed command, it must start with --command",
     },
   },
   web_search: {
@@ -222,7 +259,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `missing required field: ${String(params.key || "").trim()}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "Sensitive fields detected. Manage connectors in the client and use access_connector only with a selected instance.",
+        "A field name, display name, or description matched a credential keyword, so the interaction was blocked. Never ask the user for passwords, tokens, keys, or connection strings; if the field is not a credential, rename it without the sensitive keyword and send the request again. For database or terminal access that genuinely needs credentials, the user configures a connector in the client and you reach it through access_connector.",
     },
   },
 };

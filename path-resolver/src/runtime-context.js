@@ -5,6 +5,7 @@
  */
 import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.js";
 import { resolveSandboxPathMappings, resolveRuntimeUserId } from "./sandbox-mapping.js";
+import { HOST_FILESYSTEM_ROOT } from "./path-contract.js";
 import {
   WORKSPACE_SANDBOX_PATHS,
   assertToolExecutionPolicy,
@@ -47,8 +48,8 @@ function resolveStaticPathDirectories({ runtime = {}, agentContext = null } = {}
   return objectOrEmpty(contextStaticInfo.directories || runtimeStaticInfo.directories);
 }
 
-function isHostFilesystemSentinel(value = "") {
-  return String(value || "").trim() === "<host-filesystem>";
+export function isHostFilesystemSentinel(value = "") {
+  return String(value || "").trim() === HOST_FILESYSTEM_ROOT;
 }
 
 export function resolveRuntimePathContext({

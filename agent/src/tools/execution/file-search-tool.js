@@ -313,6 +313,12 @@ async function runSearch({ agentContext, runtime, workspaceIo, args }) {
     });
   }
   if (normalizedSource === "text") {
+    if (!String(text || "")) {
+      return toToolJsonResult(TOOL_NAME.SEARCH, {
+        ok: false,
+        message: tTool(agentContext, "tools.search.textRequired"),
+      });
+    }
     return searchTextSource({
       runtime,
       query: normalizedQuery,

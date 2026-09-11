@@ -20,6 +20,7 @@ export const PATCH_FILE_MANUAL = {
       "这是修改既有文件的首选手段，优先使用精确上下文补丁，避免手算 unified diff 行数。",
       "补丁失败时先重新 read_file 拿到当前真实内容再改，不要在旧上下文上反复试。",
       "同一文件多处改动可放在一个补丁里，减少往返。",
+      "changes[].action 表示补丁声明的意图（write 或 delete），不代表已经落盘；判断是否真的写入要看 changes[].mutation 与顶层 mutations 是否为空。dryRun 时 action 仍是 write 而 mutation 恒为 null。",
     ],
     pitfalls: [
       "root 要省略就整个不传该字段，传空字符串会被当成字面路径而报文件不存在。",

@@ -50,7 +50,7 @@ export const PLATFORM_PROTECTED_ROOTS = deepFreeze({
 
 export const TRUST_ALL_DIRECTORIES = "*";
 
-const HOST_FILESYSTEM_ROOT = "<host-filesystem>";
+export const HOST_FILESYSTEM_ROOT = "<host-filesystem>";
 const WORKSPACE_ACCESS_LEVELS = Object.freeze(["deny", "read_only", "read_write"]);
 const HOST_ACCESS_LEVELS = Object.freeze(["deny", "allow"]);
 const HOST_ROLE_REQUIREMENTS = Object.freeze(["deny", "super_admin"]);

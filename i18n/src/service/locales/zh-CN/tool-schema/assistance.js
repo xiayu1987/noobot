@@ -8,16 +8,14 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   help: {
     description: {
       key: "tools.help.description",
-      text: "查询使用说明。输入 helpType 和 toolName，返回对应的详细说明。",
+      text:
+        "查询自身运行说明，命令行风格。不传 command 返回可用命令清单；" +
+        "command 形如 --tools、--tools --name read_file、--models、--runtime、--context、--attachs --id xxx。",
     },
     params: {
-      helpType: {
-        key: "tools.help.fieldHelpType",
-        text: "说明类型：tool（工具使用说明）、experience（经验记忆目录）。",
-      },
-      toolName: {
-        key: "tools.help.fieldToolName",
-        text: "工具名，helpType 为 tool 时使用；不传则返回可查询的工具名清单。",
+      command: {
+        key: "tools.help.fieldCommand",
+        text: "命令行字符串，如 --tools --name read_file；不传则返回命令清单。",
       },
     },
   },
@@ -161,7 +159,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `缺少必填字段: ${String(params.key || "").trim()}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "存在敏感字段，请在客户端管理连接器，并仅通过 access_connector 访问已勾选实例",
+        "字段名、显示名或说明命中凭据类敏感词，交互已被拦截。不得向用户索取密码、令牌、密钥、连接串等凭据；如确实不是凭据字段，请改用不含敏感词的字段名后重发。数据库或终端等需要凭据的场景由用户在客户端配置连接器，再通过 access_connector 访问。",
     },
   },
 };

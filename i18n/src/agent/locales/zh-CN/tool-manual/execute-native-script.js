@@ -20,8 +20,10 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
       libreoffice: "文档转换：await libreoffice.convert({ input, outputDirectory, outputFormat })。",
       ffmpeg: "音视频处理：await ffmpeg.run({ args: [...] })。",
       ffprobe: "媒体探测：await ffprobe.run({ args: [...] })。",
-      files: "读写：files.input(index)、readText、readJson、writeText、writeJson。",
-      output: "产物：output.file(path)、output.tempFile(path)、output.tempDirectory(path)。",
+      files:
+        "读写，全部为异步方法必须 await：const token = await files.input(index) 取 input:// 令牌；await files.readText(token)、readJson(token)、writeText(token, text)、writeJson(token, value)。读写只接受 input://、output:// 或 temp:// 令牌，不接受逻辑路径或宿主路径。",
+      output:
+        "产物，全部为异步方法必须 await：await output.file(relativePath) 返回 output:// 令牌；await output.tempDirectory(relativePath) 返回 temp:// 目录令牌；await output.tempFile(relativePath) 或 await output.tempFile(tempDirectoryToken, fileName) 返回 temp:// 文件令牌。",
       ui: "用户操作通道，见 ui 段。",
       args: "本次调用传入的 arguments 对象。",
       log: "log(message) 输出到执行日志。",
