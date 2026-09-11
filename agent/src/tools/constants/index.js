@@ -56,10 +56,6 @@ export const TOOL_RESULT_STATUS = Object.freeze({
   ERROR: "error",
 });
 
-export const TOOL_CALLER = Object.freeze({
-  BOT: "bot",
-});
-
 export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",
   MULTIMODAL_PARSE_TOOL: "multimodal_parse_tool",

@@ -50,7 +50,7 @@ export const MEMORY_PATH_FIELDS = Object.freeze({
   yearlySummaryDir: MEMORY_RELATIVE_PATHS.YEARLY_SUMMARY_DIR,
 });
 
-export const CONTEXT_IDENTITY_FIELDS = Object.freeze([
+const CONTEXT_IDENTITY_FIELDS = Object.freeze([
   "userId",
   "sessionId",
   "rootSessionId",

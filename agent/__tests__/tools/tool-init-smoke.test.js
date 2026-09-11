@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { createModelTool } from "../../src/tools/ai-models/model-tool.js";
 import { createServiceTool } from "../../src/tools/execution/service-tool.js";
 import { createConnectorAccessTool } from "../../src/tools/connectors/connector-access-tool.js";
-import { createFileTool } from "../../src/tools/execution/file-tool.js";
+import { createFileTool } from "../../src/tools/execution/file-tools.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function buildAgentContext(runtime = {}) {

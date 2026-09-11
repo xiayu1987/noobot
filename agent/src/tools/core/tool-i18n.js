@@ -14,7 +14,7 @@ export function resolveToolLocale(runtimeOrContext = {}, fallback = "zh-CN") {
   return resolveLocaleFromRuntime(runtime, fallback);
 }
 
-export function pickToolText({
+function pickToolText({
   locale = "zh-CN",
   dict = {},
   key = "",

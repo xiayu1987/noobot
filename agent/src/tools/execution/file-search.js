@@ -152,7 +152,7 @@ async function resolveBundledRipgrepPath() {
   }
 }
 
-export async function resolveRipgrepPath() {
+async function resolveRipgrepPath() {
   if (!ripgrepPathPromise) {
     ripgrepPathPromise = (async () => {
       const bundledPath = await probeRipgrepPath(await resolveBundledRipgrepPath());
