@@ -98,19 +98,6 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
         "Task check recorded. Continue according to its state, abstract, and next action.",
     },
   },
-  wait: {
-    description: {
-      key: "tools.wait.description",
-      text: "Wait synchronously for a duration. Input waitMs. Returns wait completion result.",
-    },
-    params: {
-      waitMs: {
-        key: "tools.wait.fieldWaitMs",
-        text: "Wait duration in milliseconds.",
-      },
-    },
-    texts: {},
-  },
   wait_async_task_result: {
     description: {
       key: "tools.agent_collab.waitDescription",

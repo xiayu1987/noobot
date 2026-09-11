@@ -92,7 +92,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "access_connector",
     "switch_model",
     "task_summary",
-    "request_help",
+    "help",
     "user_interaction",
     "web_search",
     "multimodal_parse",
@@ -181,7 +181,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
           service: { enabled: false },
           model: { enabled: false },
           access_connector: { enabled: false },
-          request_help: { enabled: false },
+          help: { enabled: false },
           web_search: { enabled: false },
           agent_collab: { enabled: false },
           user_interaction: { enabled: false },
@@ -195,7 +195,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     "call_service",
     "switch_model",
     "access_connector",
-    "request_help",
+    "help",
     "web_search",
     "delegate_task_async",
     "wait_async_task_result",
@@ -233,7 +233,7 @@ test("buildTools: runtime toolPolicy.denyToolNames 可按统一字段禁用工�
   assert.equal(names.has("delegate_task_async"), false);
   assert.equal(names.has("wait_async_task_result"), false);
   assert.equal(names.has("plan_multi_task_collaboration"), false);
-  assert.equal(names.has("request_help"), true);
+  assert.equal(names.has("help"), true);
 });
 
 test("buildTools: coding 场景不能绕过 denyToolNames", async () => {

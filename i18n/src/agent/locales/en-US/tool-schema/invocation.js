@@ -162,12 +162,12 @@ export const INVOCATION_TOOL_SCHEMA = {
   execute_native_script: {
     description: {
       key: "tools.nativeScript.description",
-      text: "Run a Node.js function with browser, document, media, and file capabilities. output:// artifacts become attachments; pass only attachmentRef across tools.",
+      text: "Run a Node.js function with browser, document, media, and file capabilities; query help for execute_native_script for detailed usage.",
     },
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "Async function body. Available bindings: browser, libreoffice, ffmpeg, ffprobe, files, output, args, and log(message). Exact signatures: await ffmpeg.run({ args: [...] }); await ffprobe.run({ args: [...] }); await libreoffice.convert({ input, outputDirectory, outputFormat }); await output.file(relativePath); await output.tempFile(relativePath); await output.tempDirectory(relativePath); await output.tempFile(tempDirectoryToken, fileName). First obtain input:// tokens with await files.input(index). LibreOffice input may be an existing input://, output://, or temp:// file from this task; outputDirectory accepts output.directory or an awaited temp:// directory token. browser.newPage() returns a restricted page supporting goto, setContent, title, url, content, DOM operations, screenshot, and close; evaluate is unavailable. files.readText/readJson read all three token kinds; files.writeText/writeJson write output:// and temp:// file tokens. Only output:// files are returned as formal attachments. Script return values are not file outputs.",
+        text: "Async function body source; query help for execute_native_script for detailed usage.",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
@@ -183,7 +183,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       arguments: {
         key: "tools.nativeScript.fieldArguments",
-        text: "Structured non-secret values exposed as args.",
+        text: "Optional structured non-sensitive parameter object, read by the script as args.",
       },
     },
   },

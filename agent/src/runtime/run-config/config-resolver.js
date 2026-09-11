@@ -33,11 +33,11 @@ export function resolvePhaseSummaryMessageCharsThreshold(_effectiveConfig = {}) 
 }
 
 export function resolveHelpPromptLoopTurns(_effectiveConfig = {}) {
-  return BUILTIN_THRESHOLDS.requestHelp.helpPromptLoopTurns;
+  return BUILTIN_THRESHOLDS.help.helpPromptLoopTurns;
 }
 
 export function resolveToolFailureHelpCount(_effectiveConfig = {}) {
-  return BUILTIN_THRESHOLDS.requestHelp.toolFailureHelpCount;
+  return BUILTIN_THRESHOLDS.help.toolFailureHelpCount;
 }
 
 export function resolveMaxToolLoopTurns({

@@ -15,6 +15,9 @@ export const SCRIPT_EXECUTION_MODE = Object.freeze({
   FOREGROUND: "foreground",
   BACKGROUND: "background",
 });
+export const SCRIPT_RESULT_CODE = Object.freeze({
+  OUTPUT_LIMIT_EXCEEDED: 125,
+});
 export const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = normalizeTimeMs(
   process.env.NOOBOT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   {

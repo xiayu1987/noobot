@@ -307,7 +307,7 @@ export function createTurnOrchestrator({
         });
       }
 
-      const { toolCallResults, hasTaskSummaryCall, hasRequestHelpCall, hasFinalAnswerCall } =
+      const { toolCallResults, hasTaskSummaryCall, hasHelpCall, hasFinalAnswerCall } =
         await processToolResultsFn({
           modelState,
           loopState,
@@ -326,7 +326,7 @@ export function createTurnOrchestrator({
       maybePromptHelpToolByFailureFn({
         modelState,
         loopState,
-        hasRequestHelpCall,
+        hasHelpCall,
       });
 
       if (hasTaskSummaryCall) {

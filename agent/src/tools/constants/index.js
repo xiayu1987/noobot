@@ -29,7 +29,7 @@ export const TOOL_NAME = Object.freeze({
   MULTIMODAL_PARSE: "multimodal_parse",
   TASK_SUMMARY: "task_summary",
   TASK_CHECK: "task_check",
-  REQUEST_HELP: "request_help",
+  HELP: "help",
   FINAL_ANSWER: "final_answer",
 });
 

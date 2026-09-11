@@ -134,9 +134,9 @@ test("normalizeOptions keeps custom denyToolNames from workflow plugin config", 
   const options = normalizeOptions({
     enabled: true,
     mode: "on",
-    denyToolNames: ["request_help", "", "request_help"],
+    denyToolNames: ["help", "", "help"],
   });
-  assert.deepEqual(options.denyToolNames, ["request_help"]);
+  assert.deepEqual(options.denyToolNames, ["help"]);
 });
 
 test("parseWorkflowDslText keeps action node task field", () => {

@@ -145,6 +145,13 @@ export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options
     executionMode: SCRIPT_EXECUTION_MODE.BACKGROUND,
     ...extra,
     code: Number(r?.code || 0),
+    ...(r?.outputLimitExceeded === true
+      ? {
+          message: `Command output exceeded ${Number(r?.outputLimitBytes || 0)} bytes; execution was terminated and retained output is available through the returned file references.`,
+          outputLimitExceeded: true,
+          outputLimitBytes: Number(r?.outputLimitBytes || 0),
+        }
+      : {}),
     ...(r?.signal ? { signal: r.signal } : {}),
     transferEnvelopes,
   });

@@ -19,12 +19,14 @@ export const MODEL_ERROR_KIND = Object.freeze({
   TEMPORARY_UNAVAILABLE: "temporary_unavailable",
   TOOL_CALL_MISMATCH: "tool_call_mismatch",
   REASONING_ONLY: "reasoning_only",
+  EMPTY_RESPONSE: "empty_response",
   UNKNOWN: "unknown",
 });
 export const MODEL_ERROR_CODE = Object.freeze({
   PROTOCOL: "MODEL_PROTOCOL_ERROR",
   CREDENTIAL_MISSING: "MODEL_CREDENTIAL_MISSING",
   REASONING_RETRY_EXHAUSTED: "MODEL_REASONING_RETRY_EXHAUSTED",
+  EMPTY_RESPONSE_RETRY_EXHAUSTED: "MODEL_EMPTY_RESPONSE_RETRY_EXHAUSTED",
 });
 export const MODEL_ATTEMPT_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -35,5 +37,6 @@ export const MODEL_ATTEMPT_KIND = Object.freeze({
   TRANSPORT: "transport",
   RESPONSE: "response",
   REASONING_ONLY: "reasoning_only",
+  EMPTY_RESPONSE: "empty_response",
   TOOL_CALL_STREAMING_MISMATCH: "tool_call_streaming_mismatch",
 });

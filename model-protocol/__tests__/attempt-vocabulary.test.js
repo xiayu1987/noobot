@@ -33,6 +33,7 @@ test("attempt status carries the retry state that request status does not model"
 
 test("attempt kind and error kind stay separate semantic slots despite the shared reasoning value", () => {
   assert.equal(MODEL_ATTEMPT_KIND.REASONING_ONLY, MODEL_ERROR_KIND.REASONING_ONLY);
+  assert.equal(MODEL_ATTEMPT_KIND.EMPTY_RESPONSE, MODEL_ERROR_KIND.EMPTY_RESPONSE);
   assert.ok(!Object.values(MODEL_ATTEMPT_KIND).includes(MODEL_ERROR_KIND.TOOL_CALL_MISMATCH));
   assert.ok(
     !Object.values(MODEL_ERROR_KIND).includes(MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH),

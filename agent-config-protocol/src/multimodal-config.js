@@ -108,12 +108,6 @@ export function applyPrimaryModelReferencesToConfigFile(config = {}, modelAlias 
   if (isPlainObject(config?.tools?.web_search?.responses_api)) {
     config.tools.web_search.responses_api.model = alias;
   }
-  if (
-    isPlainObject(config?.tools?.request_help) &&
-    Object.prototype.hasOwnProperty.call(config.tools.request_help, "help_model")
-  ) {
-    config.tools.request_help.help_model = alias;
-  }
 
   setStringValues(config?.plugins?.harness?.stepModels, alias);
   setStringValues(config?.plugins?.harness?.capabilityModelByPurpose, alias);

@@ -31,7 +31,7 @@ test("harness planning disables blocked tools (except help) and injects request_
         tools: {
           registry: [
             { name: "task_summary", invoke: async () => ({ ok: true }) },
-            { name: "request_help", invoke: async () => ({ ok: true }) },
+            { name: "help", invoke: async () => ({ ok: true }) },
             { name: "read_file", invoke: async () => ({ ok: true }) },
           ],
         },
@@ -43,7 +43,7 @@ test("harness planning disables blocked tools (except help) and injects request_
   await hookManager.emit("agent.before_turn", ctx);
   const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
   assert.equal(names.includes("task_summary"), false);
-  assert.equal(names.includes("request_help"), true);
+  assert.equal(names.includes("help"), true);
   assert.equal(names.includes("read_file"), true);
   assert.equal(names.includes("request_task_acceptance"), true);
 });

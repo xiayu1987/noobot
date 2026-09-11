@@ -50,7 +50,7 @@ const TOOL_CALL_ICONS = Object.freeze({
   multimodal_parse: Picture,
   task_summary: Document,
   task_check: Finished,
-  request_help: Headset,
+  help: Headset,
   final_answer: Message,
 });
 

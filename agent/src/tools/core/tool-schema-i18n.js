@@ -5,11 +5,18 @@
  */
 import { TOOL_SCHEMA_BY_TOOL as zhToolSchemaByTool } from "noobot-i18n/agent/locales/zh-CN";
 import { TOOL_SCHEMA_BY_TOOL as enToolSchemaByTool } from "noobot-i18n/agent/locales/en-US";
+import { TOOL_MANUAL_BY_TOOL as zhToolManualByTool } from "noobot-i18n/agent/locales/zh-CN/tool-manual";
+import { TOOL_MANUAL_BY_TOOL as enToolManualByTool } from "noobot-i18n/agent/locales/en-US/tool-manual";
 import { resolveToolLocale } from "./tool-i18n.js";
 
 const TOOL_SCHEMA_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhToolSchemaByTool || {}),
   "en-US": Object.freeze(enToolSchemaByTool || {}),
+});
+
+const TOOL_MANUAL_I18N = Object.freeze({
+  "zh-CN": Object.freeze(zhToolManualByTool || {}),
+  "en-US": Object.freeze(enToolManualByTool || {}),
 });
 
 function resolveToolSchema(toolName = "") {
@@ -27,6 +34,24 @@ function resolveToolSchema(toolName = "") {
 function resolveLocaleToolSchemaMap(runtime = {}) {
   const locale = resolveToolLocale(runtime);
   return locale === "en-US" ? TOOL_SCHEMA_I18N["en-US"] : TOOL_SCHEMA_I18N["zh-CN"];
+}
+
+function resolveLocaleToolManualMap(runtime = {}) {
+  const locale = resolveToolLocale(runtime);
+  return locale === "en-US" ? TOOL_MANUAL_I18N["en-US"] : TOOL_MANUAL_I18N["zh-CN"];
+}
+
+export function tToolManual(runtime = {}, toolName = "") {
+  const normalizedToolName = String(toolName || "").trim();
+  const manual =
+    resolveLocaleToolManualMap(runtime)?.[normalizedToolName] ||
+    TOOL_MANUAL_I18N["zh-CN"]?.[normalizedToolName];
+  return manual || null;
+}
+
+export function listManualToolNames(runtime = {}) {
+  const manualMap = resolveLocaleToolManualMap(runtime) || {};
+  return Object.keys(manualMap).sort();
 }
 
 export function tToolDescription(runtime = {}, toolName = "") {

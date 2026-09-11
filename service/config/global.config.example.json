@@ -96,10 +96,8 @@
     "task_summary": {
       "enabled": true
     },
-    "request_help": {
-      "enabled": true,
-      "help_services": [],
-      "help_model": ""
+    "help": {
+      "enabled": true
     }
   },
   "scenarios": {

@@ -93,19 +93,6 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       "tools.task_check.completed": "任务检查已记录，请根据检查状态、摘要和下一步继续处理。",
     },
   },
-  wait: {
-    description: {
-      key: "tools.wait.description",
-      text: "同步等待一段时间。输入 waitMs。返回等待完成结果。",
-    },
-    params: {
-      waitMs: {
-        key: "tools.wait.fieldWaitMs",
-        text: "等待时长（毫秒）。",
-      },
-    },
-    texts: {},
-  },
   wait_async_task_result: {
     description: {
       key: "tools.agent_collab.waitDescription",

@@ -137,9 +137,7 @@ const TOOLS_STRUCTURE = object({
     phaseSummaryMessageCharsThreshold: integer({ minimum: 1, policy: GLOBAL_ONLY }),
     maxToolLoopTurns: integer({ minimum: 1, policy: GLOBAL_ONLY }),
   }),
-  request_help: toolToggle({
-    help_services: array({ item: string({ nonEmpty: true }) }),
-    help_model: string({ modelReference: "model" }),
+  help: toolToggle({
     helpPromptLoopTurns: integer({ minimum: 1, policy: GLOBAL_ONLY }),
     toolFailureHelpCount: integer({ minimum: 1, policy: GLOBAL_ONLY }),
   }),

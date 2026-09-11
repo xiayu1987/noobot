@@ -146,11 +146,9 @@ Execution isolation is defined by the `@noobot/execution-isolation-protocol` wor
 | `tools.multimodal_generate.enabled` | boolean | Enable multimodal generation tool |
 | `tools.task_summary.enabled` | boolean | Enable task summary tool |
 | `tools.task_summary.phase_summary_loop_turns` | number | Number of turns threshold to trigger phase summary |
-| `tools.request_help.enabled` | boolean | Enable request-help tool |
-| `tools.request_help.help_services` | string[]/object[] | Help service list (empty by default; use the `web_search` tool for web search) |
-| `tools.request_help.help_model` | string | Help model alias/name (empty = current/default model logic) |
-| `tools.request_help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
-| `tools.request_help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
+| `tools.help.enabled` | boolean | Enable help tool |
+| `tools.help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
+| `tools.help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
 | `tools.web_search.enabled` | boolean | Enable web search tool |
 | `tools.web_search.mode` | enum | Search backend: `responses_api` / `search_engine` |
 | `tools.web_search.responses_api.model` | string | Provider alias/name used by Responses API web search |

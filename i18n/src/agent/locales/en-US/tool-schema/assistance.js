@@ -5,28 +5,29 @@
  */
 
 export const ASSISTANCE_TOOL_SCHEMA = {
-  request_help: {
+  help: {
     description: {
-      key: "tools.request_help.description",
-      text: "Request help tool. Input helpContent and requestType. Supports model help, web-search help, and experience help.",
+      key: "tools.help.description",
+      text: "Look up usage manuals. Input helpType and toolName to get the detailed manual.",
     },
     params: {
-      helpContent: {
-        key: "tools.request_help.fieldHelpContent",
-        text: "Help request content.",
+      helpType: {
+        key: "tools.help.fieldHelpType",
+        text: "Manual type: tool (tool usage manual), experience (memory directories).",
       },
-      requestType: {
-        key: "tools.request_help.fieldRequestType",
-        text: "Request type: all_help (default, model + web search), model_help (model only), web_search_help (web search only), experience_help (returns memory directories for follow-up lookup).",
+      toolName: {
+        key: "tools.help.fieldToolName",
+        text: "Tool name, used when helpType is tool. Omit it to list the queryable tool names.",
       },
     },
     texts: {
-      "tools.request_help.modelSystemPrompt":
-        "You are an independent assistance model. Analyze the help request and return concise, actionable guidance. Do not claim actions that were not actually performed.",
-      "tools.request_help.helpContentRequired": "helpContent is required",
-      "tools.request_help.requestFailed": "Help request failed",
-      "tools.request_help.webSearchHelpUnavailable":
-        "Web-search help is unavailable: request_help.help_services has no configured search service",
+      "tools.help.manualNotFound":
+        "This tool has no extended manual; its schema description is already complete",
+      "tools.help.unknownTool": "Unknown tool name, pick one from the queryable list",
+      "tools.help.experienceHint":
+        "The following are memory paths. Use read_file or search to inspect the actual content.",
+      "tools.help.workspaceUnavailable":
+        "No workspace is available in the current context, cannot resolve memory paths",
     },
   },
   web_search: {

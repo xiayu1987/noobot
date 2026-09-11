@@ -10,3 +10,4 @@ export * from "./response.js";
 export * from "./error.js";
 export * from "./capability.js";
 export * from "./operation.js";
+export * from "./output.js";

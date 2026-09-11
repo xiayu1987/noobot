@@ -86,7 +86,9 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     ...(r?.outputOverflow === true
       ? {
           message:
-            "Command output exceeded the inline limit; full stdout/stderr remain available through the returned file references.",
+            r?.outputLimitExceeded === true
+              ? `Command output exceeded ${Number(r?.outputLimitBytes || 0)} bytes; execution was terminated and retained output is available through the returned file references.`
+              : "Command output exceeded the inline limit; full stdout/stderr remain available through the returned file references.",
           outputOverflow: true,
           transferEnvelopes,
         }

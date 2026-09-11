@@ -21,7 +21,7 @@ const TEXT_TOOLS = [
   "web_search",
   "task_summary",
   "task_check",
-  "request_help",
+  "help",
   "final_answer",
 ];
 

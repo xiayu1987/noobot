@@ -157,12 +157,12 @@ export const INVOCATION_TOOL_SCHEMA = {
   execute_native_script: {
     description: {
       key: "tools.nativeScript.description",
-      text: "执行具备浏览器、文档、媒体和文件能力的 Node.js 函数。output:// 产物返回附件；跨工具只传 attachmentRef。",
+      text: "执行具备浏览器、文档、媒体和文件能力的 Node.js 函数；具体用法请通过 help 查询 execute_native_script。",
     },
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "异步函数体。可用绑定：browser、libreoffice、ffmpeg、ffprobe、files、output、args、log(message)。精确签名：await ffmpeg.run({ args: [...] })；await ffprobe.run({ args: [...] })；await libreoffice.convert({ input, outputDirectory, outputFormat })；await output.file(relativePath)；await output.tempFile(relativePath)；await output.tempDirectory(relativePath)；await output.tempFile(tempDirectoryToken, fileName)。先用 await files.input(index) 获取 input:// 令牌。LibreOffice 输入可使用本轮存在的 input://、output:// 或 temp:// 文件；outputDirectory 接受 output.directory 或已 await 的 temp:// 目录令牌。browser.newPage() 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。files.readText/readJson 可读取三类令牌，files.writeText/writeJson 可写 output:// 和 temp:// 文件令牌。只有 output:// 文件会作为正式附件返回，脚本 return 值不作为文件输出。",
+        text: "异步函数体源码；详细用法请通过 help 查询 execute_native_script。",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
@@ -178,7 +178,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       arguments: {
         key: "tools.nativeScript.fieldArguments",
-        text: "通过 args 暴露的结构化非敏感参数。",
+        text: "可选的结构化非敏感参数对象；脚本内通过 args 读取。",
       },
     },
   },

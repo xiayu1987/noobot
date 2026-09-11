@@ -249,7 +249,6 @@ test("primary model alignment updates every config-file model reference", () => 
     scenarios: { definitions: { programming: { model: "old" }, text: { model: "old" } } },
     tools: {
       web_search: { responses_api: { model: "old" } },
-      request_help: { help_model: "" },
     },
     plugins: {
       harness: { stepModels: { planning: "old" } },
@@ -267,7 +266,6 @@ test("primary model alignment updates every config-file model reference", () => 
   assert.equal(config.multimodal.generation.default_models.image, "selected");
   assert.equal(config.scenarios.definitions.programming.model, "selected");
   assert.equal(config.tools.web_search.responses_api.model, "selected");
-  assert.equal(config.tools.request_help.help_model, "selected");
   assert.equal(config.plugins.harness.stepModels.planning, "selected");
   assert.equal(config.plugins.workflow.semanticModel, "selected");
 });
@@ -372,7 +370,7 @@ test("current config migration preserves active tool and runtime configuration",
         enabled: true,
         phaseSummaryLoopTurns: 10,
       },
-      request_help: {
+      help: {
         enabled: true,
         helpPromptLoopTurns: 10,
       },

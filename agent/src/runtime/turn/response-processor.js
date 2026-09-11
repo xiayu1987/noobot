@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../events/index.js";
-import { REQUEST_HELP_TOOL_NAME } from "../../tools/collaboration/request-help-tool.js";
+import { HELP_TOOL_NAME } from "../../tools/collaboration/help-tool.js";
 import { settleToolCallInTurn } from "../tool-execution/tool-runner.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
 import { TOOL_NAME } from "../../tools/constants/index.js";
@@ -80,8 +80,8 @@ export async function processToolResults({
   const hasTaskSummaryCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === TOOL_NAME.TASK_SUMMARY,
   );
-  const hasRequestHelpCall = toolCallResults.some(
-    (result) => String(result?.call?.name || "").trim() === REQUEST_HELP_TOOL_NAME,
+  const hasHelpCall = toolCallResults.some(
+    (result) => String(result?.call?.name || "").trim() === HELP_TOOL_NAME,
   );
   const hasFinalAnswerCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === FINAL_ANSWER_TOOL_NAME,
@@ -117,7 +117,7 @@ export async function processToolResults({
   );
   if (rejectedSettlement) throw rejectedSettlement.error;
 
-  if (hasRequestHelpCall) {
+  if (hasHelpCall) {
     loopState.toolConsecutiveFailureCount = 0;
     systemRuntime.toolConsecutiveFailureCount = 0;
   }
@@ -132,7 +132,7 @@ export async function processToolResults({
       calls,
       toolCallResults,
       hasTaskSummaryCall,
-      hasRequestHelpCall,
+      hasHelpCall,
       hasFinalAnswerCall,
       agentContext: modelState?.agentContext || null,
     }),
@@ -141,7 +141,7 @@ export async function processToolResults({
   return {
     toolCallResults,
     hasTaskSummaryCall,
-    hasRequestHelpCall,
+    hasHelpCall,
     hasFinalAnswerCall,
   };
 }

@@ -22,9 +22,9 @@ export default {
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
     `工具「${String(params.toolName || "").trim() || "unknown"}」连续失败达到 ${Number(params.maxFails || 5)} 次，已自动停止循环。`,
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
-    `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若需要补充外部信息或排查方向，可调用 ${String(params.helpToolName || "request_help")} 工具并传入求助内容。`,
+    `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若不确定该工具的用法或参数语义，可调用 ${String(params.helpToolName || "help")} 工具查看该工具的详细使用说明。`,
   "agent.helpToolLoopPrompt": (params = {}) =>
-    `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "request_help")} 工具获取额外帮助。`,
+    `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "help")} 工具查看相关工具的详细使用说明。`,
   "agent.toolChoiceRequiredRetryPrompt":
     "请使用工具执行任务，如没有任务或者任务结束或需要主动结束请调用 final_answer 工具",
   "agent.taskSummarySingleToolPrompt":
@@ -149,40 +149,6 @@ export default {
     "操作风险等级：low、medium、high 或 critical。读取可能涉及隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
   "tools.file.writeOverwriteField": "文件存在时是否覆盖。",
   "tools.file.writeRiskLevelField":
-    "操作风险等级：low、medium、high 或 critical。按与脚本执行相同的影响和破坏性标准分级。",
-  "tools.search.description": "搜索文件或文本，返回命中行与上下文。",
-  "tools.search.fieldSource": "搜索来源：files 或 text。",
-  "tools.search.fieldQuery": "必填且不能为空的关键词或正则；不要使用空字符串调用 search。",
-  "tools.search.queryRequired": "必须提供非空的搜索关键词或正则。",
-  "tools.search.fieldIsRegex": "是否按正则搜索。",
-  "tools.search.fieldCaseSensitive": "是否区分大小写。",
-  "tools.search.fieldPath": "文件搜索路径。",
-  "tools.search.fieldGlob": "文件匹配，例如 *.js。",
-  "tools.search.fieldText": "待搜索文本（source=text 时使用）。",
-  "tools.search.fieldContextLines": "上下文行数。",
-  "tools.search.fieldMaxResults": "最大命中数。",
-  "tools.search.fieldRiskLevel":
-    "操作风险等级：low、medium、high 或 critical。搜索可能检索或返回隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
-  "tools.patch_file.description":
-    "先 read_file/search 确认文件，再按返回的完整 path 修改；省略 root，不要自行添加 project、a/ 或 b/ 前缀。",
-  "tools.patch_file.fieldFormat": "补丁格式；省略时根据内容识别，显式格式与内容不一致会被拒绝。",
-  "tools.patch_file.fieldPatch":
-    "补丁内容；使用 read_file/search 返回的完整 path 和精确上下文，不要改写路径。",
-  "tools.patch_file.fieldPatchPathHintHost":
-    "普通用户必须原样使用 read_file/search 返回的 workspace path，不要改写或添加前缀。",
-  "tools.patch_file.fieldPatchPathHintSuperHost":
-    "超级管理员也必须原样使用 read_file/search 返回的 path；host 绝对路径同样不得改写或添加前缀。",
-  "tools.patch_file.fieldStrip": "路径含 a/、b/ 前缀时才设置对应 strip；使用完整 path 时设为 0。",
-  "tools.patch_file.fieldRoot": "通常省略；填写时只能是工作区相对子目录，不要用绝对路径或 ..。",
-  "tools.patch_file.fieldRootPathHintSandbox": "通常省略 root；不得填写沙箱绝对路径。",
-  "tools.patch_file.fieldRootPathHintHost": "通常省略 root；填写时只能是工作区相对子目录。",
-  "tools.patch_file.fieldRootPathHintSuperHost": "通常省略 root；不得填写 host 绝对路径。",
-  "tools.patch_file.rootInvalidHintHost":
-    "root 通常省略；填写时只能是工作区相对子目录，不得使用绝对路径或 ..。",
-  "tools.patch_file.rootInvalidHintSuperHost":
-    "root 通常省略；填写时只能是工作区相对子目录，不得使用 host 绝对路径或 ..。",
-  "tools.patch_file.fieldDryRun": "只验证不写入。",
-  "tools.patch_file.fieldRiskLevel":
     "操作风险等级：low、medium、high 或 critical。按与脚本执行相同的影响和破坏性标准分级。",
   "tools.risk.criticalConfirmation": (params = {}) =>
     [

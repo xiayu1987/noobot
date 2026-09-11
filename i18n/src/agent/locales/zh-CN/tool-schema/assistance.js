@@ -5,28 +5,26 @@
  */
 
 export const ASSISTANCE_TOOL_SCHEMA = {
-  request_help: {
+  help: {
     description: {
-      key: "tools.request_help.description",
-      text: "请求帮助工具。输入 helpContent 和 requestType。可请求模型帮助、网页搜索帮助、经验帮助。",
+      key: "tools.help.description",
+      text: "查询使用说明。输入 helpType 和 toolName，返回对应的详细说明。",
     },
     params: {
-      helpContent: {
-        key: "tools.request_help.fieldHelpContent",
-        text: "请求帮助内容。",
+      helpType: {
+        key: "tools.help.fieldHelpType",
+        text: "说明类型：tool（工具使用说明）、experience（经验记忆目录）。",
       },
-      requestType: {
-        key: "tools.request_help.fieldRequestType",
-        text: "请求类型：all_help（默认，模型+网页搜索）、model_help（仅模型）、web_search_help（仅网页搜索）、experience_help（返回记忆目录供后续查询）。",
+      toolName: {
+        key: "tools.help.fieldToolName",
+        text: "工具名，helpType 为 tool 时使用；不传则返回可查询的工具名清单。",
       },
     },
     texts: {
-      "tools.request_help.modelSystemPrompt":
-        "你是独立帮助模型。分析帮助请求并返回简洁、可执行的建议；不得声称已执行未实际发生的操作。",
-      "tools.request_help.helpContentRequired": "helpContent 必填",
-      "tools.request_help.requestFailed": "帮助请求失败",
-      "tools.request_help.webSearchHelpUnavailable":
-        "网页搜索帮助不可用：request_help.help_services 未配置可用的搜索服务",
+      "tools.help.manualNotFound": "该工具没有详细说明，其 schema 描述已是完整说明",
+      "tools.help.unknownTool": "工具名不存在，请从可查询清单中选择",
+      "tools.help.experienceHint": "以下为经验记忆路径，需再用 read_file 或 search 读取具体内容。",
+      "tools.help.workspaceUnavailable": "当前上下文没有可用工作区，无法定位记忆路径",
     },
   },
   web_search: {
