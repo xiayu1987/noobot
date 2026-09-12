@@ -88,6 +88,7 @@ export function injectMessageWithPolicy(
     purpose = "",
     pluginFlow = "",
     chain = "",
+    relayCorrelationId = "",
     avoidBreakToolCallContinuity = true,
     persistToCurrentTurn = true,
   } = {},
@@ -109,6 +110,7 @@ export function injectMessageWithPolicy(
     purpose,
     pluginFlow,
     chain,
+    relayCorrelationId,
   });
 
   if (dedupe && dedupeExists(messages, message)) {

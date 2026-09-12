@@ -237,6 +237,7 @@ function normalizeSessionTurnInput(input = {}) {
     noobotInternalMessageType: valueOrDefault(input.noobotInternalMessageType, ""),
     injectedBy: valueOrDefault(input.injectedBy, ""),
     injectedMessageType: valueOrDefault(input.injectedMessageType, ""),
+    relayCorrelationId: valueOrDefault(input.relayCorrelationId, ""),
     messageOrigin: String(input.messageOrigin || "")
       .trim()
       .toLowerCase(),
@@ -288,6 +289,7 @@ function buildFullTurnPayload(input) {
     noobotInternalMessageType: stringValue(input.noobotInternalMessageType).trim(),
     injectedBy: stringValue(input.injectedBy).trim(),
     injectedMessageType: stringValue(input.injectedMessageType).trim(),
+    relayCorrelationId: stringValue(input.relayCorrelationId).trim(),
     messageOrigin: input.messageOrigin,
     userMetaMaterialized: input.userMetaMaterialized,
     pluginMessage: input.pluginMessage,

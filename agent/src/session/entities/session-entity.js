@@ -183,6 +183,8 @@ function applyMessageInjection(target, message) {
   const injectedMessageType = String(message?.injectedMessageType || "").trim();
   if (injectedBy) target.injectedBy = injectedBy;
   if (injectedMessageType) target.injectedMessageType = injectedMessageType;
+  const relayCorrelationId = String(message?.relayCorrelationId || "").trim();
+  if (relayCorrelationId) target.relayCorrelationId = relayCorrelationId;
 }
 
 function applyMessageOrigin(target, message) {

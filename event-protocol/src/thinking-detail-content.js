@@ -97,6 +97,12 @@ function activityContentFact(activity = {}, index) {
 export function projectThinkingDetailContentTimeline(messages = [], activityTimeline = []) {
   const timeline = [];
   const activities = mergeCanonicalActivityTimelines(activityTimeline);
+  const supersededRelayCorrelationIds = new Set(
+    (Array.isArray(messages) ? messages : [])
+      .filter((message = {}) => isThinkingDetailInjectedMessage(message))
+      .map((message = {}) => text(message?.relayCorrelationId))
+      .filter(Boolean),
+  );
   const hasUnboundMainModelActivity = activities.some(
     (item) => item.eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT && !text(item.messageId),
   );
@@ -143,6 +149,12 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
     }
   }
   for (const [index, activity] of activities.entries()) {
+    if (
+      supersededRelayCorrelationIds.size &&
+      supersededRelayCorrelationIds.has(text(activity?.relayCorrelationId))
+    ) {
+      continue;
+    }
     const fact = activityContentFact(activity, index);
     if (fact) timeline.push(fact);
   }

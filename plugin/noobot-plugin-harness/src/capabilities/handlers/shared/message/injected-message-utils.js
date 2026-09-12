@@ -35,6 +35,7 @@ export function buildHarnessInjectedMessage(
     purpose = "",
     pluginFlow = "",
     chain = "",
+    relayCorrelationId = "",
     promptInjectionId = "",
     messageBlockPolicy = null,
     preserveSystemMessage = false,
@@ -65,6 +66,10 @@ export function buildHarnessInjectedMessage(
   const normalizedChain = String(chain || "").trim();
   if (normalizedChain) {
     message.chain = normalizedChain;
+  }
+  const normalizedRelayCorrelationId = String(relayCorrelationId || "").trim();
+  if (normalizedRelayCorrelationId) {
+    message.relayCorrelationId = normalizedRelayCorrelationId;
   }
   const normalizedPromptInjectionId = String(promptInjectionId || "").trim();
   if (normalizedPromptInjectionId) {
