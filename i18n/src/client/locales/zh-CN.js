@@ -292,6 +292,7 @@ export const zhCNMessages = {
     copyText: "文本复制",
     thinkingExpand: "💡 展开思考过程",
     thinkingElapsed: "思考耗时：{duration}",
+    thinkingModelLoopRound: "轮次：{round}",
     executionCommandStarted: "调用：{command}",
     executionCommandCompleted: "返回：{command}",
     executionCommandCompletedWithStatus: "返回：{command} · {status}",

@@ -189,6 +189,7 @@ export class SessionExecutionFinalizer {
       turnScopeId,
       dialogProcessId,
       thinkingFinishedAt,
+      modelLoopRound: agentResult?.modelLoopRound,
       persistenceContext,
     });
     await this.session.saveCurrentTurnTasks({

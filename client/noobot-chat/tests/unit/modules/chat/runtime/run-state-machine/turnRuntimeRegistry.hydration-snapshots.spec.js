@@ -153,6 +153,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
           dialogProcessId: "dp-first",
           thinkingStartedAt: "2026-07-21T10:00:00.000Z",
           thinkingFinishedAt: "2026-07-21T10:00:15.000Z",
+          modelLoopRound: 7,
         },
         {
           turnScopeId: "client-turn:second",
@@ -171,12 +172,30 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     expect(first).toMatchObject({
       startedAt: "2026-07-21T10:00:00.000Z",
       finishedAt: "2026-07-21T10:00:15.000Z",
+      modelLoopRound: 7,
     });
     expect(first).not.toHaveProperty("state");
     expect(first).not.toHaveProperty("terminal");
     expect(
       resolveTurnRuntimeByScope(registry, "client-turn:second", { sessionId: "s1" })?.finishedAt,
     ).toBe("2026-07-21T11:00:09.000Z");
+    expect(
+      resolveTurnRuntimeByScope(registry, "client-turn:second", { sessionId: "s1" })
+        ?.modelLoopRound,
+    ).toBe(0);
+  });
+
+  it("hydrates a turn timing carrying only the model loop round", () => {
+    const registry = createTurnRuntimeRegistryState();
+    expect(
+      applyTurnTimingSnapshot(registry, {
+        sessionId: "s1",
+        turnTimings: [{ turnScopeId: "client-turn:round-only", modelLoopRound: 4 }],
+      }),
+    ).toMatchObject({ applied: true, hydratedTurnScopeIds: ["client-turn:round-only"] });
+    expect(
+      resolveTurnRuntimeByScope(registry, "client-turn:round-only", { sessionId: "s1" }),
+    ).toMatchObject({ startedAt: "", finishedAt: "", modelLoopRound: 4 });
   });
 
   it("strictly validates snapshots and rejects same-sequence content conflicts", () => {

@@ -153,6 +153,7 @@ export function resolveTurnRuntimeView({
     canStopTarget,
     startedAt: turnTiming?.thinkingStartedAt || "",
     finishedAt: turnTiming?.thinkingFinishedAt || "",
+    modelLoopRound: Number(turnTiming?.modelLoopRound || 0),
     source: isTerminalMessageRuntimeState(persistedStatus)
       ? "persisted"
       : realtimeStatus

@@ -29,6 +29,7 @@ const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
   thinkingDurationLabel: { type: String, default: "0s" },
+  thinkingModelLoopRound: { type: Number, default: 0 },
   isRunning: Boolean,
   latestPluginAnalysisLog: { type: Object, default: null },
   latestMainModelContentLog: { type: Object, default: null },
@@ -141,6 +142,11 @@ watch(
             duration: thinkingDurationLabel,
           })
         }}</span>
+        <span v-if="thinkingModelLoopRound > 0" class="thinking-loop-round noobot-flat-chip">{{
+          translate("message.thinkingModelLoopRound", {
+            round: thinkingModelLoopRound,
+          })
+        }}</span>
       </div>
     </template>
     <BaseTabPanelBody class="thinking-realtime-body">
@@ -212,6 +218,7 @@ watch(
 .thinking-title-row {
   display: flex;
   align-items: center;
+  gap: var(--noobot-space-xs);
   width: 100%;
 }
 
@@ -220,7 +227,8 @@ watch(
   background: transparent;
 }
 
-.thinking-elapsed {
+.thinking-elapsed,
+.thinking-loop-round {
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-thinking-muted);
   gap: var(--noobot-space-2xs);

@@ -10,14 +10,22 @@ import {
   runtimeText,
 } from "./turnRuntimeRegistryIdentity.js";
 
+function normalizeModelLoopRound(value) {
+  const round = Number(value || 0);
+  return Number.isFinite(round) && round > 0 ? round : 0;
+}
+
 export function applyTurnTimingUpdate(registry, update = {}) {
   const sessionId = runtimeText(update?.sessionId);
   const turnScopeId = canonicalTurnScopeId(update?.turnScopeId);
   const dialogProcessId = runtimeText(update?.dialogProcessId);
   const startedAt = runtimeText(update?.thinkingStartedAt || update?.startedAt);
   const finishedAt = runtimeText(update?.thinkingFinishedAt || update?.finishedAt);
+  const modelLoopRound = normalizeModelLoopRound(update?.modelLoopRound);
   if (!sessionId || !turnScopeId) return { applied: false, reason: "missing_timing_identity" };
-  if (!startedAt && !finishedAt) return { applied: false, reason: "missing_timing_value" };
+  if (!startedAt && !finishedAt && !modelLoopRound) {
+    return { applied: false, reason: "missing_timing_value" };
+  }
   if (isTurnRuntimeDeleted(registry, { sessionId, turnScopeId })) {
     return { applied: false, reason: "turn_runtime_deleted" };
   }
@@ -33,12 +41,14 @@ export function applyTurnTimingUpdate(registry, update = {}) {
   const nextStartedAt = runtimeText(current.startedAt || startedAt);
   const nextFinishedAt = runtimeText(current.finishedAt || finishedAt);
   const nextDialogProcessId = runtimeText(current.dialogProcessId || dialogProcessId);
+  const nextModelLoopRound = modelLoopRound || normalizeModelLoopRound(current.modelLoopRound);
   const canonicalTimingObserved =
     update.canonical === true || current.canonicalTimingObserved === true;
   if (
     runtimeText(current.startedAt) === nextStartedAt &&
     runtimeText(current.finishedAt) === nextFinishedAt &&
     runtimeText(current.dialogProcessId) === nextDialogProcessId &&
+    normalizeModelLoopRound(current.modelLoopRound) === nextModelLoopRound &&
     current.canonicalTimingObserved === canonicalTimingObserved
   ) {
     return { applied: false, deduplicated: true, reason: "timing_unchanged", turn: current };
@@ -54,6 +64,7 @@ export function applyTurnTimingUpdate(registry, update = {}) {
     finishedAtMs: nextFinishedAt
       ? Date.parse(nextFinishedAt) || 0
       : Number(current.finishedAtMs || 0),
+    modelLoopRound: nextModelLoopRound,
     canonicalTimingObserved,
     timingSource: runtimeText(update?.source || current.timingSource || "turn_runtime_event"),
   };
@@ -72,8 +83,14 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
     dialogProcessId: runtimeText(item?.dialogProcessId),
     startedAt: runtimeText(item?.thinkingStartedAt || item?.startedAt),
     finishedAt: runtimeText(item?.thinkingFinishedAt || item?.finishedAt),
+    modelLoopRound: normalizeModelLoopRound(item?.modelLoopRound),
   }));
-  if (timings.some((item) => !item.turnScopeId || (!item.startedAt && !item.finishedAt))) {
+  if (
+    timings.some(
+      (item) =>
+        !item.turnScopeId || (!item.startedAt && !item.finishedAt && !item.modelLoopRound),
+    )
+  ) {
     return { applied: false, reason: "invalid_timing_snapshot" };
   }
   const bucket = ensureSessionBucket(registry, sessionId);
@@ -86,6 +103,7 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
       dialogProcessId: timing.dialogProcessId,
       startedAt: timing.startedAt,
       finishedAt: timing.finishedAt,
+      modelLoopRound: timing.modelLoopRound,
       canonical: true,
       source: "session_turn_timing_snapshot",
     });

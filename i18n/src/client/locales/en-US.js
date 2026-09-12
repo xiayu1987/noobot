@@ -293,6 +293,7 @@ export const enUSMessages = {
     copyText: "Copy Text",
     thinkingExpand: "💡 Expand Thinking",
     thinkingElapsed: "Thinking time: {duration}",
+    thinkingModelLoopRound: "Round: {round}",
     executionCommandStarted: "Call: {command}",
     executionCommandCompleted: "Return: {command}",
     executionCommandCompletedWithStatus: "Return: {command} · {status}",

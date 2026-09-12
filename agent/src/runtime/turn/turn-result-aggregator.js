@@ -61,6 +61,7 @@ export function buildLoopResult({
     modelMessages,
     turnMessageStore,
   });
+  const modelLoopRound = Number(loopState?.systemRuntime?.modelLoopRound || 0);
   return attachFinalStreamingResultMeta(
     {
       output,
@@ -68,6 +69,7 @@ export function buildLoopResult({
       traces,
       turnMessages: finalTurnMessages,
       modelMessages: Array.isArray(modelMessages) ? modelMessages : [],
+      modelLoopRound: Number.isFinite(modelLoopRound) && modelLoopRound > 0 ? modelLoopRound : 0,
       turnTasks: turnTaskStore
         ? turnTaskStore.toArray()
         : Array.isArray(loopState?.turnTasks)

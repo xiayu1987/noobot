@@ -263,6 +263,7 @@ const messageRuntime = computed(() => {
       ? {
           thinkingStartedAt: realtimeRuntime.startedAt,
           thinkingFinishedAt: realtimeRuntime.finishedAt,
+          modelLoopRound: realtimeRuntime.modelLoopRound,
         }
       : null,
     turnStatus: realtimeRuntime?.state ? { status: realtimeRuntime.state } : null,

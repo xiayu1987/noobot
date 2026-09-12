@@ -219,6 +219,7 @@ function updateSessionMetadata(service, session, turn, input) {
       "turnTimingThinkingFinishedAt",
       "thinkingFinishedAt",
     ),
+    modelLoopRound: resolveTimingField(input, "turnTimingModelLoopRound", "modelLoopRound"),
   });
   session.updatedAt = service.now();
   if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;

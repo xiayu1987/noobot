@@ -212,6 +212,7 @@ export function createStateBuilder({
       toolFailureHelpCount,
       taskSummaryTriggered: false,
       toolConsecutiveFailureCount: Number(sys?.toolConsecutiveFailureCount || 0),
+      systemRuntime: sys,
       errorLogger,
     };
     runtime.activeMessageContext = modelContext;

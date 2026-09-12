@@ -437,6 +437,7 @@ export async function upsertTurnTiming({
   dialogProcessId = "",
   thinkingStartedAt = "",
   thinkingFinishedAt = "",
+  modelLoopRound = 0,
 } = {}) {
   if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
   return this._withSessionMutation(
@@ -462,6 +463,7 @@ export async function upsertTurnTiming({
         dialogProcessId,
         thinkingStartedAt,
         thinkingFinishedAt,
+        modelLoopRound,
       });
       if (JSON.stringify(session.turnTimings || []) === before) {
         return { upserted: false, reason: "unchanged", session };
