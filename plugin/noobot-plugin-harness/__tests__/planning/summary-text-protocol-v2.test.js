@@ -481,7 +481,7 @@ test("programming prompts add action-first execution principles only in programm
   );
   assert.doesNotMatch(normalResponsibilityPrompt, /编程场景策略/);
   assert.match(normalResponsibilityPrompt, /初始场景与当前用户实际意图不匹配/);
-  assert.match(normalResponsibilityPrompt, /不得执行或继续任务/);
+  assert.match(normalResponsibilityPrompt, /此请求是协助请求，无需执行工具/);
   assert.match(normalResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
   assert.match(normalResponsibilityPrompt, /scenario = general\|text\|programming/);
   assert.doesNotMatch(normalResponsibilityPrompt, new RegExp("workflow" + "_mode"));
@@ -492,7 +492,7 @@ test("programming prompts add action-first execution principles only in programm
   );
   assert.match(revisionResponsibilityPrompt, /初始场景与当前用户实际意图不匹配/);
   assert.match(revisionResponsibilityPrompt, /只返回「计划修正」结果/);
-  assert.match(revisionResponsibilityPrompt, /不得执行或继续任务/);
+  assert.match(revisionResponsibilityPrompt, /此请求是协助请求，无需执行工具/);
   assert.match(revisionResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
 
   const refinementResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(

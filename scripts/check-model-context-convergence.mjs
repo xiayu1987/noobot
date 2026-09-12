@@ -570,12 +570,17 @@ assertFileContains("agent/src/runtime/turn/turn-executor.js", [
 
 assertFileContains("agent/src/context/index.js", [
   {
-    name: "new-session context resolves session history",
-    pattern: /async\s+buildNewSessionContext[\s\S]*?_resolveSessionRecords/,
+    name: "shared session context resolves session history and long memory",
+    pattern: /async\s+_buildSessionContext[\s\S]*?_resolveSessionRecords[\s\S]*?resolveLongMemory/,
   },
   {
-    name: "existing-session context resolves session history",
-    pattern: /async\s+buildExistingSessionContext[\s\S]*?_resolveSessionRecords/,
+    name: "new-session context delegates to the shared session context builder",
+    pattern: /async\s+buildNewSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?"new_session"/,
+  },
+  {
+    name: "existing-session context delegates to the shared session context builder",
+    pattern:
+      /async\s+buildExistingSessionContext[\s\S]*?_buildSessionContext\([\s\S]*?"existing_session"/,
   },
   {
     name: "context passes current turnScopeId to session history",

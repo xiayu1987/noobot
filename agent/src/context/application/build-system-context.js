@@ -9,42 +9,22 @@ import {
 } from "@noobot/agent-config-protocol/enums";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
-import { resolveConfiguredSuperUserId } from "../../shared/utils/super-user.js";
+import { isConfiguredSuperUser } from "../../shared/utils/super-user.js";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "../formatters/system-prompt-formatter.js";
 import { resolveAttachments } from "../providers/attachment-resolver.js";
 import { resolveConnectorStatusSection } from "../providers/connector-status-provider.js";
-import { buildDynamicInfo, buildStaticInfo } from "../providers/environment-provider.js";
+import {
+  buildDynamicInfo,
+  buildIdentityAwareStaticInfo,
+  resolveContextIdentityInfo,
+} from "../providers/environment-provider.js";
 import { resolveAvailableMcpServers } from "../providers/mcp-provider.js";
 import { resolveModelSection } from "../providers/model-provider.js";
 import { resolveServices } from "../providers/service-provider.js";
 import { resolveSessionTreeWithRootSessionId } from "../providers/session-tree-resolver.js";
 import { resolveSkills } from "../providers/skills-resolver.js";
 import { loadSystemPrompt } from "../providers/system-prompt-loader.js";
-
-function resolveSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
-  const configuredSuperUserId = resolveConfiguredSuperUserId(globalConfig);
-  return Boolean(configuredSuperUserId) && String(userId || "").trim() === configuredSuperUserId;
-}
-
-export function applyIdentityToStaticPathInfo(staticInfo = {}, identityInfo = {}) {
-  const sourceInfo = staticInfo && typeof staticInfo === "object" ? staticInfo : {};
-  const directories =
-    sourceInfo?.directories && typeof sourceInfo.directories === "object"
-      ? sourceInfo.directories
-      : null;
-  if (!directories || directories.view !== "host" || identityInfo?.isSuperUser !== true) {
-    return sourceInfo;
-  }
-  return {
-    ...sourceInfo,
-    directories: {
-      ...directories,
-      allowedRoots: ["<host-filesystem>"],
-      hostAbsolutePaths: true,
-    },
-  };
-}
 
 export function buildSystemRuntime({
   userId = "",
@@ -94,7 +74,7 @@ export function buildSystemRuntime({
           currentDialogProcessId: protectedDialogProcessId,
         }
       : {}),
-    isSuperUser: resolveSuperUserFlag({
+    isSuperUser: isConfiguredSuperUser({
       globalConfig,
       userId: dynamicInfo?.userId || userId,
     }),
@@ -172,18 +152,9 @@ export async function buildSystemContext({
   const modelSection = enabled("model")
     ? resolveModelSection({ globalConfig, userConfig, effectiveConfig })
     : {};
-  const identityInfo = {
-    userId: String(identity.userId || "").trim(),
-    isSuperUser: resolveSuperUserFlag({ globalConfig, userId: identity.userId }),
-  };
+  const identityInfo = resolveContextIdentityInfo({ userId: identity.userId, globalConfig });
   const staticInfo = enabled("system_runtime")
-    ? applyIdentityToStaticPathInfo(
-        {
-          ...buildStaticInfo({ runtimeBasePath, userId: identity.userId, globalConfig }),
-          identity: identityInfo,
-        },
-        identityInfo,
-      )
+    ? buildIdentityAwareStaticInfo({ runtimeBasePath, userId: identity.userId, globalConfig })
     : { identity: identityInfo };
   const dynamicInfo = enabled("system_runtime")
     ? buildSystemRuntime({

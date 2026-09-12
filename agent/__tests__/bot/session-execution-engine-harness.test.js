@@ -418,10 +418,10 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     };
     return {
       ...builder,
-      buildInitialContext: (payload) =>
-        bindSessionManager(() => builder.buildInitialContext(payload)),
-      buildContinueContext: (payload) =>
-        bindSessionManager(() => builder.buildContinueContext(payload)),
+      buildNewSessionContext: (payload) =>
+        bindSessionManager(() => builder.buildNewSessionContext(payload)),
+      buildExistingSessionContext: (payload) =>
+        bindSessionManager(() => builder.buildExistingSessionContext(payload)),
     };
   };
 

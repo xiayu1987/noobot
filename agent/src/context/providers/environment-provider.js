@@ -12,6 +12,7 @@ import {
 } from "@noobot/security-assessment-protocol";
 import { hasOwnConfigKey, normalizeBoolean } from "../../config/index.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+import { isConfiguredSuperUser } from "../../shared/utils/super-user.js";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -44,6 +45,44 @@ export function buildStaticInfo({ runtimeBasePath = "", userId = "", globalConfi
     },
     directories: pathContext.directories,
   };
+}
+
+function applyIdentityToStaticPathInfo(staticInfo = {}, identityInfo = {}) {
+  const sourceInfo = staticInfo && typeof staticInfo === "object" ? staticInfo : {};
+  const directories =
+    sourceInfo?.directories && typeof sourceInfo.directories === "object"
+      ? sourceInfo.directories
+      : null;
+  if (!directories || directories.view !== "host" || identityInfo?.isSuperUser !== true) {
+    return sourceInfo;
+  }
+  return {
+    ...sourceInfo,
+    directories: {
+      ...directories,
+      allowedRoots: ["<host-filesystem>"],
+      hostAbsolutePaths: true,
+    },
+  };
+}
+
+export function resolveContextIdentityInfo({ userId = "", globalConfig = {} } = {}) {
+  return {
+    userId: String(userId || "").trim(),
+    isSuperUser: isConfiguredSuperUser({ globalConfig, userId }),
+  };
+}
+
+export function buildIdentityAwareStaticInfo({
+  runtimeBasePath = "",
+  userId = "",
+  globalConfig = {},
+} = {}) {
+  const identity = resolveContextIdentityInfo({ userId, globalConfig });
+  return applyIdentityToStaticPathInfo(
+    { ...buildStaticInfo({ runtimeBasePath, userId, globalConfig }), identity },
+    identity,
+  );
 }
 
 export function buildDynamicInfo({

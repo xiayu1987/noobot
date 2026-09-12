@@ -183,8 +183,8 @@ export class AgentContextFactory {
     emitEvent(eventListener, "context_building", { sessionId, mode });
     let agentContext = null;
     try {
-      const isNewSession = mode === "new_session" || mode === "initial";
-      const isExistingSession = mode === "existing_session" || mode === "continue";
+      const isNewSession = mode === "new_session";
+      const isExistingSession = mode === "existing_session";
       if (!isNewSession && !isExistingSession) {
         const error = new Error(`unsupported context mode: ${String(mode || "<empty>")}`);
         error.statusCode = 400;
@@ -192,13 +192,9 @@ export class AgentContextFactory {
         throw error;
       }
       if (isNewSession) {
-        const buildNewSessionContext =
-          contextBuilder.buildNewSessionContext || contextBuilder.buildInitialContext;
-        agentContext = await buildNewSessionContext.call(contextBuilder, { dialogProcessId });
+        agentContext = await contextBuilder.buildNewSessionContext({ dialogProcessId });
       } else {
-        const buildExistingSessionContext =
-          contextBuilder.buildExistingSessionContext || contextBuilder.buildContinueContext;
-        agentContext = await buildExistingSessionContext.call(contextBuilder, { dialogProcessId });
+        agentContext = await contextBuilder.buildExistingSessionContext({ dialogProcessId });
       }
     } catch (error) {
       const failedAtMs = Date.now();

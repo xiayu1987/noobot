@@ -6,28 +6,20 @@
 import { mergeConfig } from "../config/index.js";
 import { normalizeContextPolicy } from "@noobot/agent-config-protocol/enums";
 import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/message/session-projection";
-import { resolveRuntimeBasePath, buildStaticInfo } from "./providers/environment-provider.js";
+import {
+  resolveRuntimeBasePath,
+  buildIdentityAwareStaticInfo,
+} from "./providers/environment-provider.js";
 import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
 import { resolveAllEnabledProviders } from "./providers/model-provider.js";
 import { resolveSessionTreeWithRootSessionId } from "./providers/session-tree-resolver.js";
 import { resolveLongMemory } from "./providers/memory-resolver.js";
 import { buildAgentExecutionContext } from "./application/build-agent-execution-context.js";
-import {
-  applyIdentityToStaticPathInfo,
-  buildSystemContext,
-  buildSystemRuntime,
-} from "./application/build-system-context.js";
+import { buildSystemContext, buildSystemRuntime } from "./application/build-system-context.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/assembly/diagnostics";
-import { resolveConfiguredSuperUserId } from "../shared/utils/super-user.js";
-
-function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
-  const configuredSuperUserId = resolveConfiguredSuperUserId(globalConfig);
-  if (!configuredSuperUserId) return false;
-  return String(userId || "").trim() === configuredSuperUserId;
-}
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
@@ -122,12 +114,7 @@ export class ContextBuilder {
     return this._workspaceDirectoriesPromise;
   }
 
-  async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
-    const staticInfo = buildStaticInfo({
-      runtimeBasePath,
-      userId: this.userId,
-      globalConfig: this.globalConfig,
-    });
+  async _buildStaticAgentContext({ runtimeBasePath = "", staticInfo = {} } = {}) {
     return {
       cwd: staticInfo.cwd || process.cwd(),
       userId: staticInfo.userId || "",
@@ -178,33 +165,16 @@ export class ContextBuilder {
             now: this._now(),
           });
 
+    const runtimeStaticInfo = buildIdentityAwareStaticInfo({
+      runtimeBasePath: resolvedRuntimeBasePath,
+      userId: this.userId,
+      globalConfig: this.globalConfig,
+    });
     const staticAgentContext = await this._buildStaticAgentContext({
       runtimeBasePath: resolvedRuntimeBasePath,
+      staticInfo: runtimeStaticInfo,
     });
     const effectiveConfig = this._getEffectiveConfig();
-    const runtimeStaticInfo = applyIdentityToStaticPathInfo(
-      {
-        ...buildStaticInfo({
-          runtimeBasePath: resolvedRuntimeBasePath,
-          userId: this.userId,
-          globalConfig: this.globalConfig,
-        }),
-        identity: {
-          userId: String(this.userId || "").trim(),
-          isSuperUser: resolveRuntimeSuperUserFlag({
-            globalConfig: this.globalConfig,
-            userId: this.userId,
-          }),
-        },
-      },
-      {
-        userId: String(this.userId || "").trim(),
-        isSuperUser: resolveRuntimeSuperUserFlag({
-          globalConfig: this.globalConfig,
-          userId: this.userId,
-        }),
-      },
-    );
     const runtimeModel = String(this.runConfig?.runtimeModel || "").trim();
     const allEnabledProviders = resolveAllEnabledProviders(effectiveConfig);
     const systemRuntime = buildSystemRuntime({
@@ -299,7 +269,7 @@ export class ContextBuilder {
     });
   }
 
-  async buildNewSessionContext({ dialogProcessId = "" } = {}) {
+  async _buildSessionContext({ dialogProcessId = "", mode = "" } = {}) {
     const sessionProjection = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
       dialogProcessId,
@@ -309,41 +279,7 @@ export class ContextBuilder {
       { ...(this.runConfig || {}), eventListener: this.eventListener },
       "context_records_resolved",
       {
-        mode: "new_session",
-        sessionId: this.sessionId || "",
-        dialogProcessId,
-        currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
-        records: summarizeDiagnosticMessages(sessionRecords),
-      },
-    );
-    const { systemContext, runtimeBasePath, sessionTree, rootSessionId, attachments } =
-      await this._buildSystemContext({ dialogProcessId });
-    return this.buildAgentContext(
-      systemContext,
-      projectSessionRecordsToContextMessages(sessionRecords),
-      {
-        runtimeBasePath,
-        dialogProcessId,
-        sessionTree,
-        rootSessionId,
-        attachments,
-        sourceRevision: sessionProjection?.sourceRevision || "",
-        contextBuildMode: "new_session",
-      },
-    );
-  }
-
-  async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
-    const sessionProjection = await this._resolveSessionRecords({
-      sessionId: this.sessionId || "",
-      dialogProcessId,
-    });
-    const sessionRecords = sessionProjection?.messages || [];
-    emitModelContextTrace(
-      { ...(this.runConfig || {}), eventListener: this.eventListener },
-      "context_records_resolved",
-      {
-        mode: "existing_session",
+        mode,
         sessionId: this.sessionId || "",
         dialogProcessId,
         currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
@@ -367,16 +303,16 @@ export class ContextBuilder {
         rootSessionId,
         attachments,
         sourceRevision: sessionProjection?.sourceRevision || "",
-        contextBuildMode: "existing_session",
+        contextBuildMode: mode,
       },
     );
   }
 
-  async buildInitialContext(payload = {}) {
-    return this.buildNewSessionContext(payload);
+  async buildNewSessionContext({ dialogProcessId = "" } = {}) {
+    return this._buildSessionContext({ dialogProcessId, mode: "new_session" });
   }
 
-  async buildContinueContext(payload = {}) {
-    return this.buildExistingSessionContext(payload);
+  async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
+    return this._buildSessionContext({ dialogProcessId, mode: "existing_session" });
   }
 }
