@@ -105,7 +105,18 @@ test("state-builder canonicalizes model messages and block views through one sto
     messages: loopState.modelContext.messages,
     messageBlocks: loopState.modelContext.messageBlocks,
     userMetaBackwrites: [],
+    systemRuntime: {
+      sessionId: "s1",
+      parentSessionId: "parent-s1",
+      dialogProcessId: "dlg-1",
+      phaseSummaryLoopCount: 0,
+      toolConsecutiveFailureCount: 0,
+    },
   });
+  assert.equal(
+    agentContext.bindings.runtime.stoppedModelMessageSnapshotCandidate.systemRuntime,
+    agentContext.bindings.runtime.systemRuntime,
+  );
   const contextIdentityEvents = identityEvents.filter((event) =>
     event.event.startsWith("agent.contextIdentity."),
   );

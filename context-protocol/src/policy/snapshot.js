@@ -172,10 +172,16 @@ export function composeMessagesFromBlocks(blocks = {}) {
   ];
 }
 
+function normalizeTurnProgress(turnProgress) {
+  if (!turnProgress || typeof turnProgress !== "object" || Array.isArray(turnProgress)) return {};
+  return cloneJson(turnProgress) || {};
+}
+
 export function createModelContextSnapshot({
   identity = {},
   messageBlocks = {},
   userMetaBackwrites = [],
+  turnProgress = {},
   now = new Date().toISOString(),
 } = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
@@ -192,6 +198,7 @@ export function createModelContextSnapshot({
     messageBlocks: blocks,
     messages: serializeList(composeMessagesFromBlocks(messageBlocks)),
     userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
+    turnProgress: normalizeTurnProgress(turnProgress),
   };
 }
 
@@ -226,6 +233,7 @@ export function hydrateModelContextSnapshot(
     },
     messages: hydrate(snapshot?.messages),
     userMetaBackwrites: normalizeUserMetaBackwrites(snapshot?.userMetaBackwrites || []),
+    turnProgress: normalizeTurnProgress(snapshot?.turnProgress),
   };
 }
 

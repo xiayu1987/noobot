@@ -225,6 +225,7 @@ export function createStateBuilder({
       userMetaBackwrites: Array.isArray(modelContext.userMetaBackwrites)
         ? modelContext.userMetaBackwrites
         : [],
+      systemRuntime: sys,
     };
     const sourceMessageUid = String(currentUserMessage?.messageUid || "").trim();
     const modelMessageIds = modelContext.messages.map(canonicalMessageId).filter(Boolean);

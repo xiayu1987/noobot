@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-message-snapshot-store.js";
@@ -12,7 +15,10 @@ import {
   projectSnapshotIncrementalToContinuation,
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
 } from "@noobot/context-protocol/policy/snapshot";
-import { resolveToolBindings } from "@noobot/agent-config-protocol";
+import {
+  applySystemRuntimeTurnProgress,
+  resolveToolBindings,
+} from "@noobot/agent-config-protocol";
 
 async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, messageBlocks = {}) {
   if (typeof engine?.session?.getSessionContextSource !== "function") {
@@ -215,6 +221,10 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
   runtime.userMetaBackwrites = restoredUserMetaBackwrites;
   runtime.resumeFromStoppedSnapshot = true;
   runtime.resumedStoppedSnapshotIdentity = identity;
+  runtime.resumedStoppedSnapshotTurnProgress = applySystemRuntimeTurnProgress(
+    getSystemRuntimeFromRuntime(runtime),
+    snapshot?.turnProgress,
+  );
   return {
     agentContext: scopedAgentContext,
     runtimeAgentContext,
