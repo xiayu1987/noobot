@@ -3,17 +3,47 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import {
+  authorityOutboxDir,
+  authorityOutboxJournalPath,
+  readAuthorityOutbox,
+} from "../../src/session/authority-outbox-store/outbox-journal.js";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
+// Delivery state lives in the per-session outbox journal, not in the session
+// entity, so the fake repository has to expose a real directory for it.
+const sessionDirs = [];
+
+after(() => {
+  for (const dir of sessionDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+function createSessionDir() {
+  const dir = mkdtempSync(join(tmpdir(), "noobot-outbox-"));
+  sessionDirs.push(dir);
+  return dir;
+}
+
 function harness(initial = {}) {
+  const sessionDir = createSessionDir();
   let persisted = structuredClone({
     sessionId: "s1",
     parentSessionId: "",
@@ -29,6 +59,9 @@ function harness(initial = {}) {
     },
     async resolveParentSessionId() {
       return "";
+    },
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir };
     },
     async findById() {
       return normalizeSessionEntity(structuredClone(persisted), { now });
@@ -48,6 +81,10 @@ function harness(initial = {}) {
   };
   return {
     service: new SessionMessageService({ sessionRepo: repo, now }),
+    sessionDir,
+    outbox: () => readAuthorityOutbox(sessionDir),
+    outboxEntry: async (eventId) =>
+      (await readAuthorityOutbox(sessionDir)).find((item) => item.eventId === eventId) || null,
     reload: () => normalizeSessionEntity(structuredClone(persisted), { now }),
     reloadDisplaySummarySession: () =>
       displaySummarySession &&
@@ -55,10 +92,28 @@ function harness(initial = {}) {
     failNextSave: (error = new Error("session_save_failed")) => {
       saveFailure = error;
     },
+    // attempt/ack/compact no longer touch session save, so delivery-side
+    // atomicity has to be injected at the journal itself. Occupying the outbox
+    // directory path with a regular file makes every journal I/O fail with
+    // ENOTDIR regardless of uid; the committed records are snapshotted so the
+    // post-failure projection can be compared against the pre-failure one.
+    failOutboxJournal: () => {
+      const journalDir = authorityOutboxDir(sessionDir);
+      const journalFile = authorityOutboxJournalPath(sessionDir);
+      const snapshot = existsSync(journalFile) ? readFileSync(journalFile) : null;
+      rmSync(journalDir, { recursive: true, force: true });
+      writeFileSync(journalDir, "");
+      return () => {
+        rmSync(journalDir, { force: true });
+        mkdirSync(journalDir, { recursive: true });
+        if (snapshot !== null) writeFileSync(journalFile, snapshot);
+      };
+    },
   };
 }
 
 function newSessionHarness() {
+  const sessionDir = createSessionDir();
   let persisted = null;
   const repo = {
     async withSessionMutation(_u, _s, _p, operation) {
@@ -66,6 +121,9 @@ function newSessionHarness() {
     },
     async resolveParentSessionId() {
       return "";
+    },
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir };
     },
     createInitialSession({ sessionId }) {
       return normalizeSessionEntity(
@@ -84,6 +142,8 @@ function newSessionHarness() {
   };
   return {
     service: new SessionMessageService({ sessionRepo: repo, now }),
+    sessionDir,
+    outbox: () => readAuthorityOutbox(sessionDir),
     reload: () => persisted && normalizeSessionEntity(structuredClone(persisted), { now }),
   };
 }
@@ -135,7 +195,7 @@ test("first send creates the session before committing action accepted", async (
   assert.equal(accepted.applied, true);
   assert.equal(accepted.turn.state, TURN_STATE.ACTION_REQUESTING);
   assert.equal(Boolean(eventIdOf(accepted.envelope)), true);
-  assert.equal(eventIdOf(accepted.envelope), h.reload().authorityEventOutbox[0]?.eventId);
+  assert.equal(eventIdOf(accepted.envelope), (await h.outbox())[0]?.eventId);
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
   assert.equal(accepted.aggregateVersion, 1);
   assert.equal(h.reload().aggregateVersion, 1);
@@ -160,34 +220,39 @@ test("authority outbox delivery is read, attempted, and acknowledged through the
   );
   assert.equal(pending.events[0].delivery.attempts, 0);
 
-  const attempted = await h.service.recordAuthorityEventAttempt({
+  const attempted = await h.service.recordAuthorityEventAttempts({
     userId: "u1",
     sessionId: "s1",
-    eventId,
+    eventIds: [eventId],
   });
   assert.equal(attempted.recorded, true);
-  assert.equal(h.reload().authorityEventOutbox[0].delivery.attempts, 1);
-  assert.equal(h.reload().authorityEventOutbox[0].delivery.lastAttemptAt, now());
+  assert.equal((await h.outboxEntry(eventId)).delivery.attempts, 1);
+  assert.equal((await h.outboxEntry(eventId)).delivery.lastAttemptAt, now());
 
-  const acknowledged = await h.service.acknowledgeAuthorityEvent({
+  const acknowledged = await h.service.acknowledgeAuthorityEvents({
     userId: "u1",
     sessionId: "s1",
-    ...receipt,
+    consumerId: receipt.consumerId,
+    acknowledgements: [receipt],
   });
   assert.equal(acknowledged.acknowledged, true);
+  assert.equal(acknowledged.delivered, 1);
+  assert.equal(acknowledged.deduplicated, 0);
   assert.equal(
     (await h.service.getPendingAuthorityEvents({ userId: "u1", sessionId: "s1" })).events.length,
     0,
   );
-  assert.equal(h.reload().authorityEventOutbox[0].delivery.deliveredAt, now());
+  assert.equal((await h.outboxEntry(eventId)).delivery.deliveredAt, now());
 
-  const replay = await h.service.acknowledgeAuthorityEvent({
+  const replay = await h.service.acknowledgeAuthorityEvents({
     userId: "u1",
     sessionId: "s1",
-    ...receipt,
+    consumerId: receipt.consumerId,
+    acknowledgements: [receipt],
   });
   assert.equal(replay.acknowledged, true);
-  assert.equal(replay.deduplicated, true);
+  assert.equal(replay.delivered, 1);
+  assert.equal(replay.deduplicated, 1);
 });
 
 test("authority outbox delivery mutations remain atomic when session persistence fails", async () => {
@@ -201,17 +266,24 @@ test("authority outbox delivery mutations remain atomic when session persistence
   const receipt = deliveryReceiptOf(accepted.envelope);
   const { eventId } = receipt;
 
-  h.failNextSave();
+  let restore = h.failOutboxJournal();
   await assert.rejects(() =>
-    h.service.recordAuthorityEventAttempt({ userId: "u1", sessionId: "s1", eventId }),
+    h.service.recordAuthorityEventAttempts({ userId: "u1", sessionId: "s1", eventIds: [eventId] }),
   );
-  assert.equal(h.reload().authorityEventOutbox[0].delivery.attempts, 0);
+  restore();
+  assert.equal((await h.outboxEntry(eventId)).delivery.attempts, 0);
 
-  h.failNextSave();
+  restore = h.failOutboxJournal();
   await assert.rejects(() =>
-    h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", ...receipt }),
+    h.service.acknowledgeAuthorityEvents({
+      userId: "u1",
+      sessionId: "s1",
+      consumerId: receipt.consumerId,
+      acknowledgements: [receipt],
+    }),
   );
-  assert.equal(h.reload().authorityEventOutbox[0].delivery.deliveredAt, "");
+  restore();
+  assert.equal((await h.outboxEntry(eventId)).delivery.deliveredAt, "");
 });
 
 test("authority outbox compaction is explicit, receipt-safe, and atomic on persistence failure", async () => {
@@ -224,7 +296,12 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
   );
   const receipt = deliveryReceiptOf(accepted.envelope);
   const { eventId } = receipt;
-  await h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", ...receipt });
+  await h.service.acknowledgeAuthorityEvents({
+    userId: "u1",
+    sessionId: "s1",
+    consumerId: receipt.consumerId,
+    acknowledgements: [receipt],
+  });
 
   const invalid = await h.service.compactAuthorityEvents({
     userId: "u1",
@@ -235,9 +312,9 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
     orderingScopeId: receipt.orderingScopeId,
   });
   assert.equal(invalid.reason, "invalid_retention_cutoff");
-  assert.equal(h.reload().authorityEventOutbox.length, 1);
+  assert.equal((await h.outbox()).length, 1);
 
-  h.failNextSave();
+  const restore = h.failOutboxJournal();
   await assert.rejects(() =>
     h.service.compactAuthorityEvents({
       userId: "u1",
@@ -249,7 +326,8 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
       retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
     }),
   );
-  assert.equal(h.reload().authorityEventOutbox.length, 1);
+  restore();
+  assert.equal((await h.outbox()).length, 1);
 
   const compacted = await h.service.compactAuthorityEvents({
     userId: "u1",
@@ -262,7 +340,7 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
   });
   assert.equal(compacted.compacted, true);
   assert.equal(compacted.removed, 1);
-  assert.equal(h.reload().authorityEventOutbox.length, 0);
+  assert.equal((await h.outbox()).length, 0);
 
   const replay = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "compact-r1", 0, {
@@ -305,7 +383,7 @@ test("initial provision replay is idempotent and concurrent first actions are mu
   assert.equal(eventIdOf(replay.envelope), eventIdOf(accepted.envelope));
   assert.equal(competing.reason, "session_action_conflict");
   assert.equal(h.reload().turnLifecycle.sequence, 1);
-  assert.equal(h.reload().authorityEventOutbox.length, 1);
+  assert.equal((await h.outbox()).length, 1);
 });
 
 test("resend and continue do not create a missing session", async () => {
@@ -361,8 +439,8 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   assert.equal(restored.turns.t1.summaryVersion, 1);
   assert.equal(restored.turns.t1.terminalStatus.status, "completed");
   assert.equal(restored.turns.t1.terminalStatus.status, "completed");
-  assert.equal(h.reload().authorityEventOutbox.length, 4);
-  assert.equal(eventIdOf(completed.envelope), h.reload().authorityEventOutbox[3].eventId);
+  assert.equal((await h.outbox()).length, 4);
+  assert.equal(eventIdOf(completed.envelope), (await h.outbox())[3].eventId);
   assert.equal(h.reload().turnTerminalCommits, undefined);
 });
 
@@ -379,7 +457,7 @@ test("repository save failure atomically preserves lifecycle, terminal status an
     /session_save_failed/,
   );
   assert.equal(h.reload().turnLifecycle.sequence, 0);
-  assert.equal(h.reload().authorityEventOutbox.length, 0);
+  assert.equal((await h.outbox()).length, 0);
   assert.deepEqual(h.reload().turnLifecycle.turns, {});
 
   await h.service.applyTurnLifecycleEvent(
@@ -395,6 +473,7 @@ test("repository save failure atomically preserves lifecycle, terminal status an
     event(TURN_EVENT.PROCESSING_COMPLETED, "atomic-pc", 2, { phase: TURN_PHASE.COMPLETION }),
   );
   const beforeTerminal = structuredClone(h.reload());
+  const beforeTerminalOutbox = await h.outbox();
   h.failNextSave();
   await assert.rejects(
     h.service.applyTurnLifecycleEvent(
@@ -407,7 +486,7 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   );
   const afterTerminal = h.reload();
   assert.deepEqual(afterTerminal.turnLifecycle, beforeTerminal.turnLifecycle);
-  assert.deepEqual(afterTerminal.authorityEventOutbox, beforeTerminal.authorityEventOutbox);
+  assert.deepEqual(await h.outbox(), beforeTerminalOutbox);
 });
 
 test("terminal materialization rejection does not mutate lifecycle or outbox", async () => {
@@ -428,6 +507,7 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
     event(TURN_EVENT.PROCESSING_COMPLETED, "materialize-pc", 2, { phase: TURN_PHASE.COMPLETION }),
   );
   const before = structuredClone(h.reload());
+  const beforeOutbox = await h.outbox();
   const rejected = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.COMPLETED, "materialize-c", 3, {
       phase: TURN_PHASE.COMPLETION,
@@ -437,7 +517,7 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
   assert.equal(rejected.reason, "invalid_turn_terminal_status");
   const after = h.reload();
   assert.deepEqual(after.turnLifecycle, before.turnLifecycle);
-  assert.deepEqual(after.authorityEventOutbox, before.authorityEventOutbox);
+  assert.deepEqual(await h.outbox(), beforeOutbox);
 });
 
 test("terminal resolution reads status from the Turn without returning messages", async () => {

@@ -208,7 +208,9 @@ export async function startServerWithWs({
         });
         if (result.applied) {
           turnLifecycle = result.lifecycle;
-          authorityEventOutbox = result.eventOutbox;
+          if (result.committedEvent) {
+            authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
+          }
         }
         return result;
       }),
@@ -218,26 +220,38 @@ export async function startServerWithWs({
         found: true,
         events: listPendingAuthorityEvents(authorityEventOutbox),
       })),
-    recordAuthorityEventAttempt:
-      suppliedBot.recordAuthorityEventAttempt ||
-      (async ({ eventId } = {}) => {
-        const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
-        if (result.found) authorityEventOutbox = result.outbox;
-        return { recorded: result.found };
+    recordAuthorityEventAttempts:
+      suppliedBot.recordAuthorityEventAttempts ||
+      (async ({ eventIds = [] } = {}) => {
+        let recorded = 0;
+        for (const eventId of eventIds) {
+          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
+          if (!result.found) return { recorded: false, reason: result.reason, attempted: recorded };
+          authorityEventOutbox = result.outbox;
+          recorded += 1;
+        }
+        return { recorded: true, attempted: recorded };
       }),
-    acknowledgeAuthorityEvent:
-      suppliedBot.acknowledgeAuthorityEvent ||
-      (async ({ eventId, consumerId, orderingDomain, orderingScopeId, sequence } = {}) => {
-        const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
-          eventId,
-          consumerId,
-          orderingDomain,
-          orderingScopeId,
-          sequence,
-          deliveredAt: new Date().toISOString(),
-        });
-        if (result.found) authorityEventOutbox = result.outbox;
-        return { acknowledged: result.found };
+    acknowledgeAuthorityEvents:
+      suppliedBot.acknowledgeAuthorityEvents ||
+      (async ({ consumerId, acknowledgements = [] } = {}) => {
+        let delivered = 0;
+        for (const receipt of acknowledgements) {
+          const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
+            eventId: receipt?.eventId,
+            consumerId,
+            orderingDomain: receipt?.orderingDomain,
+            orderingScopeId: receipt?.orderingScopeId,
+            sequence: receipt?.sequence,
+            deliveredAt: new Date().toISOString(),
+          });
+          if (!result.found) {
+            return { acknowledged: false, reason: result.reason, delivered };
+          }
+          authorityEventOutbox = result.outbox;
+          delivered += 1;
+        }
+        return { acknowledged: true, delivered };
       }),
     commitTestAuthorityEvent: async ({
       family,

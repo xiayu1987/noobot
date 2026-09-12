@@ -66,6 +66,58 @@ export function listPendingAuthorityEvents(source = [], { limit = 100 } = {}) {
     .slice(0, normalizedLimit);
 }
 
+export const AUTHORITY_OUTBOX_JOURNAL_OP = Object.freeze({
+  COMMIT: "commit",
+  ATTEMPT: "attempt",
+  ACK: "ack",
+  REMOVE: "remove",
+});
+
+export function projectAuthorityOutboxJournal(records = []) {
+  const byEventId = new Map();
+  for (const record of Array.isArray(records) ? records : []) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) continue;
+    const eventId = text(record.eventId);
+    if (!eventId) continue;
+    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
+      if (byEventId.has(eventId)) continue;
+      byEventId.set(eventId, {
+        eventId,
+        envelope: record.envelope,
+        committedAt: text(record.committedAt),
+        delivery: normalizeDelivery({}),
+      });
+      continue;
+    }
+    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE) {
+      byEventId.delete(eventId);
+      continue;
+    }
+    const entry = byEventId.get(eventId);
+    if (!entry || entry.delivery.deliveredAt) continue;
+    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT) {
+      entry.delivery = {
+        ...entry.delivery,
+        attempts: entry.delivery.attempts + 1,
+        lastAttemptAt: text(record.attemptedAt),
+      };
+      continue;
+    }
+    if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ACK) {
+      entry.delivery = {
+        ...entry.delivery,
+        status: AUTHORITY_EVENT_DELIVERY_STATUS.DELIVERED,
+        deliveredAt: text(record.deliveredAt),
+        consumerId: text(record.consumerId),
+        orderingDomain: text(record.orderingDomain),
+        orderingScopeId: text(record.orderingScopeId),
+        sequence: Number(record.sequence) || 0,
+      };
+    }
+  }
+  return normalizeAuthorityEventOutbox([...byEventId.values()]);
+}
+
 export function recordAuthorityEventDeliveryAttempt(
   source = [],
   { eventId = "", attemptedAt = "" } = {},

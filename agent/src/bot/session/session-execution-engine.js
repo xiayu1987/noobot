@@ -595,12 +595,12 @@ export class SessionExecutionEngine {
     return this.session?.getPendingAuthorityEvents?.(payload);
   }
 
-  async recordAuthorityEventAttempt(payload = {}) {
-    return this.session?.recordAuthorityEventAttempt?.(payload);
+  async recordAuthorityEventAttempts(payload = {}) {
+    return this.session?.recordAuthorityEventAttempts?.(payload);
   }
 
-  async acknowledgeAuthorityEvent(payload = {}) {
-    return this.session?.acknowledgeAuthorityEvent?.(payload);
+  async acknowledgeAuthorityEvents(payload = {}) {
+    return this.session?.acknowledgeAuthorityEvents?.(payload);
   }
 
   async compactAuthorityEvents(payload = {}) {

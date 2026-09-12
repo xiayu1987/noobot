@@ -15,16 +15,41 @@ import {
   recordAuthorityEventDeliveryAttempt,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
-import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
+import {
+  AUTHORITY_OUTBOX_JOURNAL_OP,
+  normalizeAuthorityEventOutbox,
+} from "@noobot/event-protocol/outbox";
 import {
   PLUGIN_ARTIFACT_ERROR_CODE,
   PLUGIN_ARTIFACT_FAMILY,
 } from "@noobot/event-protocol/plugin-artifact-event";
-import { resolveAggregateVersion } from "./anchor-utils.js";
+import {
+  appendAuthorityOutboxRecords,
+  authorityOutboxCommitRecord,
+  authorityOutboxSequenceKey,
+  mergeAuthorityOutboxSequenceFloors,
+  readAuthorityOutbox,
+  readAuthorityOutboxCheckpoint,
+  authorityOutboxRecordsFromOutbox,
+  replaceAuthorityOutboxRecords,
+  withAuthorityOutboxMutation,
+  writeAuthorityOutboxCheckpoint,
+} from "../../authority-outbox-store/outbox-journal.js";
+import { requireOutboxSessionDir, resolveOutboxSessionDir } from "./outbox-scope.js";
 
 const text = (value) => String(value || "").trim();
 
-function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "") {
+async function readOutboxSessionDir(service, userId, sessionId, parentSessionId, context) {
+  const resolvedParentSessionId = await service._resolveParentSessionId(
+    userId,
+    sessionId,
+    parentSessionId,
+    context,
+  );
+  return resolveOutboxSessionDir(service, userId, sessionId, resolvedParentSessionId, context);
+}
+
+function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "", floor = 0) {
   const envelopes = [
     ...normalizeAuthorityEventOutbox(outbox).map((item) => item.envelope),
     ...(Array.isArray(artifactEvents) ? artifactEvents : []),
@@ -34,7 +59,7 @@ function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "
       const ordering = envelope?.ordering;
       if (ordering?.domain !== domain || ordering?.scopeId !== scopeId) return maximum;
       return Math.max(maximum, Number(ordering.sequence) || 0);
-    }, 0) + 1
+    }, Math.max(0, Number(floor) || 0)) + 1
   );
 }
 
@@ -118,11 +143,23 @@ export async function commitAuthorityEvent({
       }
       const actualVersion = Math.max(0, Number(session.aggregateVersion) || 0);
       const occurredAt = this.now();
+      const outboxSessionDir = await requireOutboxSessionDir(
+        this,
+        owner.userId,
+        owner.sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
+      );
+      const persistedOutbox = await readAuthorityOutbox(outboxSessionDir);
+      const outboxCheckpoint = await readAuthorityOutboxCheckpoint(outboxSessionDir);
       const sequence = nextSequence(
-        session.authorityEventOutbox,
+        persistedOutbox,
         session.sessionArtifactEvents,
         orderingDomain,
         orderingScopeId,
+        outboxCheckpoint.sequenceFloors[
+          authorityOutboxSequenceKey(orderingDomain, orderingScopeId)
+        ],
       );
       const envelope = createEventEnvelope({
         family,
@@ -149,19 +186,23 @@ export async function commitAuthorityEvent({
       if (!validation.valid) {
         throw new TypeError(`invalid committed authority event: ${validation.errors.join(",")}`);
       }
-      session.authorityEventOutbox = [
-        ...normalizeAuthorityEventOutbox(session.authorityEventOutbox),
-        {
-          eventId: envelope.identity.eventId,
-          envelope,
-          committedAt: occurredAt,
-          delivery: { status: "pending", attempts: 0, lastAttemptAt: "", deliveredAt: "" },
-        },
-      ];
-      if (validation.descriptor?.sessionArtifact === true) {
+      const isSessionArtifactEvent = validation.descriptor?.sessionArtifact === true;
+      if (isSessionArtifactEvent) {
         session.sessionArtifactEvents = [...(session.sessionArtifactEvents || []), envelope];
+        session.updatedAt = occurredAt;
       }
-      session.updatedAt = occurredAt;
+      await withAuthorityOutboxMutation(outboxSessionDir, () =>
+        appendAuthorityOutboxRecords(outboxSessionDir, [
+          authorityOutboxCommitRecord({
+            eventId: envelope.identity.eventId,
+            envelope,
+            committedAt: occurredAt,
+          }),
+        ]),
+      );
+      if (!isSessionArtifactEvent) {
+        return { committed: true, envelope, aggregateVersion: actualVersion };
+      }
       const saved = await this.sessionRepo.save(owner.userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: actualVersion,
         persistenceContext,
@@ -185,129 +226,135 @@ export async function getPendingAuthorityEvents({
   limit = 100,
 } = {}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session", events: [] };
-  const resolvedParentSessionId = await this._resolveParentSessionId(
+  const sessionDir = await readOutboxSessionDir(
+    this,
     userId,
     sessionId,
     parentSessionId,
     persistenceContext,
   );
-  const session = await this.sessionRepo.findById(
-    userId,
-    sessionId,
-    resolvedParentSessionId,
-    persistenceContext,
-  );
-  if (!session) return { found: false, reason: "session_not_found", events: [] };
+  if (!sessionDir) return { found: false, reason: "session_not_found", events: [] };
+  const outbox = await readAuthorityOutbox(sessionDir);
   return {
     found: true,
-    events: listPendingAuthorityEvents(session.authorityEventOutbox, { limit }),
-    aggregateVersion: resolveAggregateVersion(session),
+    events: listPendingAuthorityEvents(outbox, { limit }),
   };
 }
 
-export async function recordAuthorityEventAttempt({
+/**
+ * Batch attempt recording: the journal is appended once for the whole drain
+ * batch instead of once per event, so delivery cost stops scaling with the
+ * number of pending events.
+ */
+export async function recordAuthorityEventAttempts({
   userId,
   sessionId,
   parentSessionId = "",
   persistenceContext = null,
-  eventId = "",
+  eventIds = [],
 } = {}) {
-  if (!userId || !sessionId || !eventId) return { recorded: false, reason: "missing_identity" };
-  return this._withSessionMutation(
+  const requested = (Array.isArray(eventIds) ? eventIds : []).map(text).filter(Boolean);
+  if (!userId || !sessionId || !requested.length) {
+    return { recorded: false, reason: "missing_identity", events: [] };
+  }
+  const sessionDir = await readOutboxSessionDir(
+    this,
     userId,
     sessionId,
-    async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
-      if (!session) return { recorded: false, reason: "session_not_found" };
-      const actualVersion = resolveAggregateVersion(session);
-      const result = recordAuthorityEventDeliveryAttempt(session.authorityEventOutbox, {
-        eventId,
-        attemptedAt: this.now(),
-      });
-      if (!result.found) return { recorded: false, reason: "event_not_found" };
-      session.authorityEventOutbox = result.outbox;
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
-        expectedAggregateVersion: actualVersion,
-        persistenceContext,
-      });
-      return {
-        recorded: true,
-        event: result.outbox.find((item) => item.eventId === eventId),
-        aggregateVersion: resolveAggregateVersion(session),
-      };
-    },
     parentSessionId,
     persistenceContext,
   );
+  if (!sessionDir) return { recorded: false, reason: "session_not_found", events: [] };
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    const attemptedAt = this.now();
+    let outbox = await readAuthorityOutbox(sessionDir);
+    const records = [];
+    for (const eventId of requested) {
+      const result = recordAuthorityEventDeliveryAttempt(outbox, { eventId, attemptedAt });
+      if (!result.found) return { recorded: false, reason: "event_not_found", events: [] };
+      outbox = result.outbox;
+      records.push({ op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT, eventId, attemptedAt });
+    }
+    await appendAuthorityOutboxRecords(sessionDir, records);
+    const attempted = new Set(requested);
+    return { recorded: true, events: outbox.filter((item) => attempted.has(item.eventId)) };
+  });
 }
 
-export async function acknowledgeAuthorityEvent({
+/**
+ * Batch acknowledgement: already-delivered events stay idempotent (they simply
+ * contribute no journal record), so a partially delivered batch can be safely
+ * re-acknowledged on the next drain.
+ */
+export async function acknowledgeAuthorityEvents({
   userId,
   sessionId,
   parentSessionId = "",
   persistenceContext = null,
-  eventId = "",
   consumerId = "",
-  orderingDomain = "",
-  orderingScopeId = "",
-  sequence,
+  acknowledgements = [],
 } = {}) {
-  if (!userId || !sessionId || !eventId || !consumerId || !orderingDomain || !orderingScopeId) {
-    return { acknowledged: false, reason: "missing_identity" };
+  const requested = Array.isArray(acknowledgements) ? acknowledgements : [];
+  if (!userId || !sessionId || !consumerId || !requested.length) {
+    return { acknowledged: false, reason: "missing_identity", delivered: 0, deduplicated: 0 };
   }
-  return this._withSessionMutation(
+  const sessionDir = await readOutboxSessionDir(
+    this,
     userId,
     sessionId,
-    async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
-      if (!session) return { acknowledged: false, reason: "session_not_found" };
-      const actualVersion = resolveAggregateVersion(session);
-      const result = acknowledgeAuthorityEventDelivery(session.authorityEventOutbox, {
+    parentSessionId,
+    persistenceContext,
+  );
+  if (!sessionDir) {
+    return { acknowledged: false, reason: "session_not_found", delivered: 0, deduplicated: 0 };
+  }
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    const deliveredAt = this.now();
+    let outbox = await readAuthorityOutbox(sessionDir);
+    const records = [];
+    let delivered = 0;
+    let deduplicated = 0;
+    for (const entry of requested) {
+      const eventId = text(entry?.eventId);
+      const orderingDomain = text(entry?.orderingDomain);
+      const orderingScopeId = text(entry?.orderingScopeId);
+      const sequence = Number(entry?.sequence);
+      if (!eventId || !orderingDomain || !orderingScopeId) {
+        return { acknowledged: false, reason: "missing_identity", delivered, deduplicated };
+      }
+      const result = acknowledgeAuthorityEventDelivery(outbox, {
         eventId,
         consumerId,
         orderingDomain,
         orderingScopeId,
         sequence,
-        deliveredAt: this.now(),
+        deliveredAt,
       });
-      if (result.reason) return { acknowledged: false, reason: result.reason };
-      if (!result.found) return { acknowledged: false, reason: "event_not_found" };
-      if (!result.changed)
-        return { acknowledged: true, deduplicated: true, aggregateVersion: actualVersion };
-      session.authorityEventOutbox = result.outbox;
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
-        expectedAggregateVersion: actualVersion,
-        persistenceContext,
+      if (result.reason) {
+        return { acknowledged: false, reason: result.reason, delivered, deduplicated };
+      }
+      if (!result.found) {
+        return { acknowledged: false, reason: "event_not_found", delivered, deduplicated };
+      }
+      delivered += 1;
+      if (!result.changed) {
+        deduplicated += 1;
+        continue;
+      }
+      outbox = result.outbox;
+      records.push({
+        op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,
+        eventId,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
+        deliveredAt,
       });
-      return { acknowledged: true, aggregateVersion: resolveAggregateVersion(session) };
-    },
-    parentSessionId,
-    persistenceContext,
-  );
+    }
+    if (records.length) await appendAuthorityOutboxRecords(sessionDir, records);
+    return { acknowledged: true, delivered, deduplicated };
+  });
 }
 
 export async function compactAuthorityEvents({
@@ -324,41 +371,32 @@ export async function compactAuthorityEvents({
   if (!userId || !sessionId || !consumerId || !orderingDomain || !orderingScopeId) {
     return { compacted: false, reason: "missing_compaction_identity" };
   }
-  return this._withSessionMutation(
+  const sessionDir = await readOutboxSessionDir(
+    this,
     userId,
     sessionId,
-    async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
-      if (!session) return { compacted: false, reason: "session_not_found" };
-      const actualVersion = resolveAggregateVersion(session);
-      const result = compactAuthorityEventOutbox(session.authorityEventOutbox, {
-        deliveredThroughSequence,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        retainDeliveredAfter,
-      });
-      if (result.reason || !result.compacted) return { ...result, aggregateVersion: actualVersion };
-      session.authorityEventOutbox = result.outbox;
-      session.updatedAt = this.now();
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
-        expectedAggregateVersion: actualVersion,
-        persistenceContext,
-      });
-      return { ...result, aggregateVersion: resolveAggregateVersion(session) };
-    },
     parentSessionId,
     persistenceContext,
   );
+  if (!sessionDir) return { compacted: false, reason: "session_not_found" };
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    const outbox = await readAuthorityOutbox(sessionDir);
+    const result = compactAuthorityEventOutbox(outbox, {
+      deliveredThroughSequence,
+      consumerId,
+      orderingDomain,
+      orderingScopeId,
+      retainDeliveredAfter,
+    });
+    if (result.reason || !result.compacted) return result;
+    const checkpoint = await readAuthorityOutboxCheckpoint(sessionDir);
+    await writeAuthorityOutboxCheckpoint(sessionDir, {
+      sequenceFloors: mergeAuthorityOutboxSequenceFloors(checkpoint.sequenceFloors, outbox),
+    });
+    await replaceAuthorityOutboxRecords(
+      sessionDir,
+      authorityOutboxRecordsFromOutbox(result.outbox),
+    );
+    return result;
+  });
 }

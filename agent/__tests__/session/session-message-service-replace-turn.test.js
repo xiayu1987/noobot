@@ -119,7 +119,12 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
     commandId: "idem-1",
   });
 
-  assert.deepEqual(Object.keys(result).sort(), ["deduplicated", "session", "turnReplacement"]);
+  assert.deepEqual(Object.keys(result).sort(), [
+    "deduplicated",
+    "removedAuthorityOutboxEvents",
+    "session",
+    "turnReplacement",
+  ]);
   assert.deepEqual(result.turnReplacement, {
     protocolVersion: 1,
     eventType: "turn.replaced",

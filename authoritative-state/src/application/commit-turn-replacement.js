@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { assertTurnReplacementCommit } from "@noobot/session-protocol";
-import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 
 const clean = (value) => String(value || "").trim();
@@ -28,7 +27,7 @@ function sameReplacement(left = {}, right = {}) {
   );
 }
 
-export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replacement = {} } = {}) {
+export function commitTurnReplacement({ lifecycle = {}, replacement = {} } = {}) {
   try {
     assertTurnReplacementCommit(replacement);
   } catch (error) {
@@ -37,12 +36,10 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
       reason: "invalid_turn_replacement",
       error: String(error?.message || error || ""),
       lifecycle: normalizeTurnLifecycleEntity(lifecycle),
-      eventOutbox: normalizeAuthorityEventOutbox(eventOutbox),
     };
   }
 
   const normalizedLifecycle = normalizeTurnLifecycleEntity(lifecycle);
-  const normalizedOutbox = normalizeAuthorityEventOutbox(eventOutbox);
   const replacedTurnScopeIds = replacement.replacedTurnScopeIds.map(clean);
   const existingCommandTombstones = Object.values(normalizedLifecycle.replacedTurns).filter(
     (item) => clean(item.commandId) === clean(replacement.commandId),
@@ -52,7 +49,6 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
       applied: false,
       reason: "turn_replacement_conflict",
       lifecycle: normalizedLifecycle,
-      eventOutbox: normalizedOutbox,
     };
   }
   for (const turnScopeId of replacedTurnScopeIds) {
@@ -62,7 +58,6 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
         applied: false,
         reason: "turn_replacement_conflict",
         lifecycle: normalizedLifecycle,
-        eventOutbox: normalizedOutbox,
       };
     }
   }
@@ -76,7 +71,6 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
       deduplicated: true,
       reason: "duplicate_turn_replacement",
       lifecycle: normalizedLifecycle,
-      eventOutbox: normalizedOutbox,
     };
   }
 
@@ -91,7 +85,6 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
       applied: false,
       reason: "turn_replacement_breaks_continuation_source",
       lifecycle: normalizedLifecycle,
-      eventOutbox: normalizedOutbox,
     };
   }
   const sequence = normalizedLifecycle.sequence + 1;
@@ -122,13 +115,9 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
   normalizedLifecycle.commandReceipts = normalizedLifecycle.commandReceipts.filter(
     (receipt) => !replacedScopes.has(clean(receipt.turnScopeId)),
   );
-  const nextOutbox = normalizedOutbox.filter(
-    (item) => !replacedScopes.has(clean(item?.envelope?.identity?.turnScopeId)),
-  );
   return {
     applied: true,
     lifecycle: normalizedLifecycle,
-    eventOutbox: nextOutbox,
     replacement,
     removedTurnScopeIds: replacedTurnScopeIds,
   };

@@ -24,6 +24,21 @@ import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
 import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";
+import {
+  appendAuthorityOutboxRecords,
+  authorityOutboxCommitRecord,
+  readCommittedAuthorityEventIds,
+  withAuthorityOutboxMutation,
+} from "../../authority-outbox-store/outbox-journal.js";
+import { requireOutboxSessionDir } from "./outbox-scope.js";
+
+async function appendCommittedTurnLifecycleEvent(sessionDir, committedEvent) {
+  const eventId = String(committedEvent?.eventId || "").trim();
+  if (!sessionDir || !eventId) return;
+  await withAuthorityOutboxMutation(sessionDir, () =>
+    appendAuthorityOutboxRecords(sessionDir, [authorityOutboxCommitRecord(committedEvent)]),
+  );
+}
 
 function validateAcceptedUserMessage(event = {}) {
   const validation = assertTurnAcceptanceUserMessage(event);
@@ -199,6 +214,14 @@ export async function applyTurnLifecycleEvent({
           currentVersion: actualVersion,
         };
       }
+      const outboxSessionDir = await requireOutboxSessionDir(
+        this,
+        userId,
+        sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
+      );
+      const committedEventIds = await readCommittedAuthorityEventIds(outboxSessionDir);
       const result = commitTurnLifecycle({
         lifecycle: session.turnLifecycle,
         event: {
@@ -207,7 +230,7 @@ export async function applyTurnLifecycleEvent({
           sessionId,
           parentSessionId: resolvedParentSessionId,
         },
-        eventOutbox: session.authorityEventOutbox,
+        isCommittedEventId: (eventId) => committedEventIds.has(eventId),
         materializeTerminal: ({ terminalStatus, previousSummaryVersion }) =>
           materializeTurnTerminalMessages({
             messages: session.messages,
@@ -249,13 +272,13 @@ export async function applyTurnLifecycleEvent({
       if (userMessage) session.aggregateVersion = concurrency.nextAggregateVersion;
       if (result.terminalMaterialization)
         session.messages = [...result.terminalMaterialization.messages];
-      session.authorityEventOutbox = result.eventOutbox;
       session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: actualVersion,
         persistenceContext,
       });
+      await appendCommittedTurnLifecycleEvent(outboxSessionDir, result.committedEvent);
 
       await this.sessionRepo.writeSessionDisplaySummary(userId, session, { persistenceContext });
       return {
@@ -333,6 +356,14 @@ export async function provisionSessionWithInitialTurn({
           currentVersion: actualVersion,
         };
       }
+      const outboxSessionDir = await requireOutboxSessionDir(
+        this,
+        userId,
+        sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
+      );
+      const committedEventIds = await readCommittedAuthorityEventIds(outboxSessionDir);
       const result = commitTurnLifecycle({
         lifecycle: session.turnLifecycle,
         event: {
@@ -341,7 +372,7 @@ export async function provisionSessionWithInitialTurn({
           sessionId,
           parentSessionId: resolvedParentSessionId,
         },
-        eventOutbox: session.authorityEventOutbox,
+        isCommittedEventId: (eventId) => committedEventIds.has(eventId),
         createEventId: randomUUID,
         now: this.now,
       });
@@ -374,7 +405,6 @@ export async function provisionSessionWithInitialTurn({
         nowValue,
       });
       if (userMessage) session.aggregateVersion = actualVersion + 1;
-      session.authorityEventOutbox = result.eventOutbox;
       session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
@@ -383,6 +413,7 @@ export async function provisionSessionWithInitialTurn({
         persistenceContext,
       });
       if (saved === false) return { applied: false, reason: "session_not_found" };
+      await appendCommittedTurnLifecycleEvent(outboxSessionDir, result.committedEvent);
       return {
         ...result,
         session,

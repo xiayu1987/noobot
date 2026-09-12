@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
+import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/outbox-journal.js";
 
 import {
   createDetachedSubSessionRunner,
@@ -336,12 +337,16 @@ test("agent detached strategy resolves through the authoritative scoped persiste
 test("detached sub-session persists its complete authoritative lifecycle outbox", async () => {
   let persisted = null;
   const fixedNow = () => "2026-07-30T12:53:35.738Z";
+  const sessionDir = await mkdtemp(path.join(os.tmpdir(), "noobot-detached-outbox-"));
   const repo = {
     async withSessionMutation(_userId, _sessionId, _context, operation) {
       return operation();
     },
     async resolveParentSessionId() {
       return "parent1";
+    },
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "parent1", sessionDir };
     },
     createInitialSession({ sessionId, parentSessionId }) {
       return normalizeSessionEntity(
@@ -397,8 +402,9 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     }),
   });
 
+  const outbox = await readAuthorityOutbox(sessionDir);
   assert.deepEqual(
-    persisted.authorityEventOutbox.map((entry) => entry.envelope.payload.eventType),
+    outbox.map((entry) => entry.envelope.payload.eventType),
     [
       "turn.action_accepted",
       "turn.processing_started",
@@ -408,13 +414,10 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   );
   assert.equal(persisted.turnLifecycle.turns["turn-persisted"].state, "completed");
   assert.equal(
-    persisted.authorityEventOutbox[3].envelope.payload.summaryVersion,
+    outbox[3].envelope.payload.summaryVersion,
     persisted.turnLifecycle.turns["turn-persisted"].summaryVersion,
   );
-  assert.equal(
-    persisted.authorityEventOutbox[3].envelope.payload.completionCommitId,
-    "turn-persisted:completed",
-  );
+  assert.equal(outbox[3].envelope.payload.completionCommitId, "turn-persisted:completed");
 });
 
 test("detached sub-session rejects a runner result with a second dialog identity", async () => {

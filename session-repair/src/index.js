@@ -481,9 +481,6 @@ export function reconcileUncommittedAggregateConflictContinuations(document = {}
   next.turnLifecycle.commandReceipts = (
     Array.isArray(next.turnLifecycle.commandReceipts) ? next.turnLifecycle.commandReceipts : []
   ).filter((receipt) => !repairedSet.has(text(receipt?.turnScopeId)));
-  next.authorityEventOutbox = (
-    Array.isArray(next.authorityEventOutbox) ? next.authorityEventOutbox : []
-  ).filter((entry) => !repairedSet.has(text(entry?.envelope?.turnScopeId)));
   return { document: next, changed: true, repaired };
 }
 
@@ -723,8 +720,17 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
     delete next.turnTerminalCommits;
     changed = true;
   }
+  let legacyAuthorityEventOutbox = [];
+  if (Object.hasOwn(next, "authorityEventOutbox")) {
+    legacyAuthorityEventOutbox = Array.isArray(next.authorityEventOutbox)
+      ? next.authorityEventOutbox
+      : [];
+    delete next.authorityEventOutbox;
+    changed = true;
+    migrations.push("authority-event-outbox-journal-v1");
+  }
   if (changed && migrations.length === 0) migrations.push("session-document-v1");
-  return { document: next, changed, migrations };
+  return { document: next, changed, migrations, legacyAuthorityEventOutbox };
 }
 
 export function reconcileExecutionSegmentIndex(index = {}, segments = []) {

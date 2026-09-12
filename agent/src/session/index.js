@@ -390,12 +390,12 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.getPendingAuthorityEvents(bindPersistenceScope(payload));
     },
 
-    async recordAuthorityEventAttempt(payload = {}) {
-      return sessionMessageService.recordAuthorityEventAttempt(bindPersistenceScope(payload));
+    async recordAuthorityEventAttempts(payload = {}) {
+      return sessionMessageService.recordAuthorityEventAttempts(bindPersistenceScope(payload));
     },
 
-    async acknowledgeAuthorityEvent(payload = {}) {
-      return sessionMessageService.acknowledgeAuthorityEvent(bindPersistenceScope(payload));
+    async acknowledgeAuthorityEvents(payload = {}) {
+      return sessionMessageService.acknowledgeAuthorityEvents(bindPersistenceScope(payload));
     },
 
     async compactAuthorityEvents(payload = {}) {

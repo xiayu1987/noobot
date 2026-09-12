@@ -10,7 +10,6 @@ import {
   TURN_LIFECYCLE_WIRE_EVENT,
 } from "@noobot/session-protocol";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
-import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import {
   isTerminalTurnLifecycleState,
   transitionTurnLifecycle,
@@ -86,12 +85,11 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
 export function commitTurnLifecycle({
   lifecycle = {},
   event = {},
-  eventOutbox = [],
+  isCommittedEventId,
   materializeTerminal,
   createEventId,
   now = () => new Date().toISOString(),
 } = {}) {
-  const normalizedOutbox = normalizeAuthorityEventOutbox(eventOutbox);
   let lifecycleEvent = event;
   let terminalMaterialization = null;
   const requestedTerminal =
@@ -143,7 +141,7 @@ export function commitTurnLifecycle({
             receipt.commandId === clean(event.commandId) && receipt.type === clean(event.eventType),
         )?.envelope || null
       : null;
-    return { ...transition, envelope: receiptEnvelope, eventOutbox: normalizedOutbox };
+    return { ...transition, envelope: receiptEnvelope, committedEvent: null };
   }
 
   const turn = transition.turn;
@@ -159,7 +157,7 @@ export function commitTurnLifecycle({
   const eventId =
     clean(event.eventId) || clean(typeof createEventId === "function" ? createEventId() : "");
   if (!eventId) return { applied: false, reason: "event_id_unavailable", lifecycle };
-  if (normalizedOutbox.some((item) => item.eventId === eventId)) {
+  if (typeof isCommittedEventId === "function" && isCommittedEventId(eventId) === true) {
     return { applied: false, reason: "event_id_conflict", lifecycle };
   }
   const envelope = createCommittedTurnLifecycleEnvelope({ event: lifecycleEvent, turn, eventId });
@@ -169,14 +167,10 @@ export function commitTurnLifecycle({
   if (!receipt) return { applied: false, reason: "command_receipt_unavailable", lifecycle };
   receipt.eventId = eventId;
   receipt.envelope = envelope;
-  const nextOutbox = normalizeAuthorityEventOutbox([
-    ...normalizedOutbox,
-    { eventId, envelope, committedAt: turn.updatedAt },
-  ]);
   return {
     ...transition,
     envelope,
-    eventOutbox: nextOutbox,
+    committedEvent: { eventId, envelope, committedAt: turn.updatedAt },
     terminalMaterialization,
   };
 }

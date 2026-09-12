@@ -45,13 +45,15 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
         events: delivered ? [] : [{ eventId: envelope.identity.eventId, envelope }],
       };
     },
-    async recordAuthorityEventAttempt(identity) {
+    async recordAuthorityEventAttempts(identity) {
       identities.push(identity);
-      return { recorded: identity.eventId === envelope.identity.eventId };
+      return { recorded: identity.eventIds.includes(envelope.identity.eventId) };
     },
-    async acknowledgeAuthorityEvent(identity) {
+    async acknowledgeAuthorityEvents(identity) {
       identities.push(identity);
-      delivered = identity.eventId === envelope.identity.eventId;
+      delivered = identity.acknowledgements.some(
+        (receipt) => receipt.eventId === envelope.identity.eventId,
+      );
       return { acknowledged: delivered };
     },
   };
@@ -101,11 +103,11 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
         events: [{ eventId: invalidEnvelope.eventId, envelope: invalidEnvelope }],
       };
     },
-    async recordAuthorityEventAttempt() {
+    async recordAuthorityEventAttempts() {
       calls.attempts += 1;
       return { recorded: true };
     },
-    async acknowledgeAuthorityEvent() {
+    async acknowledgeAuthorityEvents() {
       calls.acknowledgements += 1;
       return { acknowledged: true };
     },

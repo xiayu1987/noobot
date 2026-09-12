@@ -10,6 +10,9 @@ const clean = (value) => String(value || "").trim();
 
 export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
   const inFlightByScope = new Map();
+  // Compaction rewrites the outbox journal, so it is throttled per ordering
+  // stream instead of running at the tail of every drain.
+  const lastCompactAtByStream = new Map();
 
   const drainAuthorityEvents = async (
     { userId, sessionId, parentSessionId = "", persistenceScope = null, limit = 100 } = {},
@@ -27,8 +30,8 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
     const bot = resolveBot?.();
     if (
       typeof bot?.getPendingAuthorityEvents !== "function" ||
-      typeof bot?.recordAuthorityEventAttempt !== "function" ||
-      typeof bot?.acknowledgeAuthorityEvent !== "function"
+      typeof bot?.recordAuthorityEventAttempts !== "function" ||
+      typeof bot?.acknowledgeAuthorityEvents !== "function"
     ) {
       throw new Error("authority event outbox API is required");
     }
@@ -46,6 +49,8 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       }
       const events = Array.isArray(pending.events) ? pending.events : [];
       if (!events.length) break;
+      // Envelopes are validated up front so a malformed event never causes a
+      // partially attempted batch.
       for (const item of events) {
         const eventId = clean(item?.eventId);
         const validation = validateProtocolEvent(item?.envelope);
@@ -57,31 +62,46 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
             errors: validation.errors,
           };
         }
-        const attempt = await bot.recordAuthorityEventAttempt({ ...identity, eventId });
-        if (!attempt?.recorded) {
-          return {
-            dispatched: false,
-            reason: attempt?.reason || "authority_event_attempt_failed",
-            delivered,
-          };
-        }
-        if (typeof publishEvent !== "function") {
-          return { dispatched: false, reason: "authority_event_transport_unavailable", delivered };
-        }
+      }
+      if (typeof publishEvent !== "function") {
+        return { dispatched: false, reason: "authority_event_transport_unavailable", delivered };
+      }
+      // One journal append records the attempt for the whole batch, keeping
+      // at-least-once semantics: anything not acknowledged below is retried on
+      // the next drain.
+      const attempt = await bot.recordAuthorityEventAttempts({
+        ...identity,
+        eventIds: events.map((item) => clean(item.eventId)),
+      });
+      if (!attempt?.recorded) {
+        return {
+          dispatched: false,
+          reason: attempt?.reason || "authority_event_attempt_failed",
+          delivered,
+        };
+      }
+      const acknowledgements = [];
+      let sendFailed = false;
+      for (const item of events) {
         const sent = await publishEvent(item.envelope.identity.eventType, item.envelope);
         if (sent !== true) {
-          return { dispatched: false, reason: "authority_event_send_failed", delivered };
+          sendFailed = true;
+          break;
         }
-        const orderingDomain = clean(item.envelope.ordering.domain);
-        const orderingScopeId = clean(item.envelope.ordering.scopeId);
-        const sequence = Number(item.envelope.ordering.sequence);
-        const acknowledged = await bot.acknowledgeAuthorityEvent({
+        acknowledgements.push({
+          eventId: clean(item.eventId),
+          orderingDomain: clean(item.envelope.ordering.domain),
+          orderingScopeId: clean(item.envelope.ordering.scopeId),
+          sequence: Number(item.envelope.ordering.sequence),
+        });
+      }
+      // Acknowledge whatever actually reached the transport, even when the batch
+      // stopped early, so successful sends are never re-delivered.
+      if (acknowledgements.length) {
+        const acknowledged = await bot.acknowledgeAuthorityEvents({
           ...identity,
-          eventId,
           consumerId,
-          orderingDomain,
-          orderingScopeId,
-          sequence,
+          acknowledgements,
         });
         if (!acknowledged?.acknowledged) {
           return {
@@ -90,29 +110,47 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
             delivered,
           };
         }
-        delivered += 1;
-        const streamKey = `${orderingDomain}\u0000${orderingScopeId}`;
-        watermarks.set(streamKey, {
-          orderingDomain,
-          orderingScopeId,
-          deliveredThroughSequence: Math.max(
-            sequence,
-            watermarks.get(streamKey)?.deliveredThroughSequence || 0,
-          ),
-        });
+        delivered += acknowledgements.length;
+        for (const receipt of acknowledgements) {
+          const streamKey = `${receipt.orderingDomain}\u0000${receipt.orderingScopeId}`;
+          watermarks.set(streamKey, {
+            orderingDomain: receipt.orderingDomain,
+            orderingScopeId: receipt.orderingScopeId,
+            deliveredThroughSequence: Math.max(
+              receipt.sequence,
+              watermarks.get(streamKey)?.deliveredThroughSequence || 0,
+            ),
+          });
+        }
+      }
+      if (sendFailed) {
+        return { dispatched: false, reason: "authority_event_send_failed", delivered };
       }
     }
     if (watermarks.size && typeof bot.compactAuthorityEvents === "function") {
       const retainDeliveredAfter = new Date(
         Date.now() - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
       ).toISOString();
-      for (const watermark of watermarks.values()) {
+      const now = Date.now();
+      for (const [streamKey, watermark] of watermarks) {
+        // Accounting key carries the session identity because one dispatcher
+        // instance serves every session, while streamKey alone is only unique
+        // within a session.
+        const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${streamKey}`;
+        const lastCompactAt = lastCompactAtByStream.get(accountingKey);
+        if (
+          lastCompactAt !== undefined &&
+          now - lastCompactAt < TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs
+        ) {
+          continue;
+        }
         await bot.compactAuthorityEvents({
           ...identity,
           consumerId,
           ...watermark,
           retainDeliveredAfter,
         });
+        lastCompactAtByStream.set(accountingKey, now);
       }
     }
     return { dispatched: true, delivered };

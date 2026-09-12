@@ -164,8 +164,8 @@ test("createSessionFacade resolves authority outbox access from the protocol per
     sessionMessageService: Object.fromEntries(
       [
         "getPendingAuthorityEvents",
-        "recordAuthorityEventAttempt",
-        "acknowledgeAuthorityEvent",
+        "recordAuthorityEventAttempts",
+        "acknowledgeAuthorityEvents",
         "compactAuthorityEvents",
       ].map((method) => [
         method,
@@ -192,8 +192,11 @@ test("createSessionFacade resolves authority outbox access from the protocol per
   };
 
   await session.getPendingAuthorityEvents(identity);
-  await session.recordAuthorityEventAttempt({ ...identity, eventId: "event-1" });
-  await session.acknowledgeAuthorityEvent({ ...identity, eventId: "event-1" });
+  await session.recordAuthorityEventAttempts({ ...identity, eventIds: ["event-1"] });
+  await session.acknowledgeAuthorityEvents({
+    ...identity,
+    acknowledgements: [{ eventId: "event-1" }],
+  });
   await session.compactAuthorityEvents({ ...identity, deliveredThroughSequence: 4 });
 
   assert.equal(calls.length, 4);

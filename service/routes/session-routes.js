@@ -422,9 +422,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           .map((value) => String(value || "").trim())
           .filter(Boolean),
         tombstonedTurnScopeIds: Object.keys(replacedTurns).sort(),
-        authorityOutboxCount: Array.isArray(result?.session?.authorityEventOutbox)
-          ? result.session.authorityEventOutbox.length
-          : 0,
+        removedAuthorityOutboxEvents: Number(result?.removedAuthorityOutboxEvents || 0),
         deduplicated: result?.deduplicated === true,
       },
     });

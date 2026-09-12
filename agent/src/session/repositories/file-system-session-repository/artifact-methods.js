@@ -7,6 +7,10 @@ import { filePath as path } from "@noobot/path-resolver";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import {
+  authorityOutboxRecordsFromOutbox,
+  replaceAuthorityOutboxRecords,
+} from "../../authority-outbox-store/outbox-journal.js";
+import {
   buildSessionArtifactFileMap,
   readSessionDisplaySummaryArtifact,
   readSessionArtifact,
@@ -217,6 +221,12 @@ class SessionArtifactMethods {
                 sessionPayload: normalized,
                 now: this.now,
               });
+              if (migration.legacyAuthorityEventOutbox?.length) {
+                await replaceAuthorityOutboxRecords(
+                  stagingDir,
+                  authorityOutboxRecordsFromOutbox(migration.legacyAuthorityEventOutbox),
+                );
+              }
               await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
               const artifactRepair = await repairSessionArtifacts({
                 sessionDir: stagingDir,

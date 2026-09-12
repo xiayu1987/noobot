@@ -52,7 +52,6 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
 
   const committed = commitTurnReplacement({
     lifecycle: accepted.lifecycle,
-    eventOutbox: accepted.eventOutbox,
     replacement: replacement(),
   });
 
@@ -61,7 +60,7 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
   assert.deepEqual(committed.lifecycle.turns, {});
   assert.equal(committed.lifecycle.activeTurnScopeId, "");
   assert.deepEqual(committed.lifecycle.commandReceipts, []);
-  assert.deepEqual(committed.eventOutbox, []);
+  assert.deepEqual(committed.removedTurnScopeIds, ["turn-old"]);
   assert.deepEqual(committed.lifecycle.replacedTurns["turn-old"], {
     turnScopeId: "turn-old",
     replacementDialogProcessId: "dialog-new",
@@ -87,7 +86,6 @@ test("replaced Turn tombstone rejects delayed lifecycle events and replacement c
   const accepted = acceptedTurn();
   const committed = commitTurnReplacement({
     lifecycle: accepted.lifecycle,
-    eventOutbox: accepted.eventOutbox,
     replacement: replacement(),
   });
   const delayed = transitionTurnLifecycle(committed.lifecycle, {
@@ -104,7 +102,6 @@ test("replaced Turn tombstone rejects delayed lifecycle events and replacement c
 
   const duplicate = commitTurnReplacement({
     lifecycle: committed.lifecycle,
-    eventOutbox: committed.eventOutbox,
     replacement: replacement(),
   });
   assert.equal(duplicate.deduplicated, true);
@@ -112,7 +109,6 @@ test("replaced Turn tombstone rejects delayed lifecycle events and replacement c
 
   const conflict = commitTurnReplacement({
     lifecycle: committed.lifecycle,
-    eventOutbox: committed.eventOutbox,
     replacement: replacement("replace-again", "turn-other"),
   });
   assert.equal(conflict.applied, false);

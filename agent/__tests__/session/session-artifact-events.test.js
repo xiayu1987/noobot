@@ -5,8 +5,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import { mkdtempSync } from "node:fs";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
+import { readAuthorityOutbox } from "../../src/session/authority-outbox-store/outbox-journal.js";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   PLUGIN_ARTIFACT_SCHEMA_VERSION,
@@ -81,17 +85,20 @@ const protocol = {
 };
 
 test("plugin artifact commits persist an independent Session artifact fact", async () => {
+  const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
   let session = {
     sessionId: "session-1",
     parentSessionId: "",
     aggregateVersion: 0,
     messages: [],
-    authorityEventOutbox: [],
     sessionArtifactEvents: [],
   };
   const repo = {
     async resolveParentSessionId() {
       return "";
+    },
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir };
     },
     async findById() {
       return structuredClone(session);
@@ -154,7 +161,7 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     },
   });
 
-  assert.equal(session.authorityEventOutbox.length, 1);
+  assert.equal((await readAuthorityOutbox(sessionDir)).length, 1);
   assert.equal(session.sessionArtifactEvents.length, 1);
   assert.equal(
     session.sessionArtifactEvents[0].payload.data.protocol.animationId,
@@ -213,17 +220,20 @@ test("Session normalization never derives artifact history from the delivery out
 });
 
 test("plugin artifact replacement increments revision and rejects a stale base revision", async () => {
+  const sessionDir = mkdtempSync(path.join(os.tmpdir(), "noobot-artifact-outbox-"));
   let session = {
     sessionId: "session-1",
     parentSessionId: "",
     aggregateVersion: 0,
     messages: [],
-    authorityEventOutbox: [],
     sessionArtifactEvents: [],
   };
   const repo = {
     async resolveParentSessionId() {
       return "";
+    },
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir };
     },
     async findById() {
       return structuredClone(session);

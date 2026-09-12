@@ -178,8 +178,10 @@ test("migrates duplicate terminal and command facts into the canonical lifecycle
     result.document.turnLifecycle.turns["turn-1"].completionCommitId,
     "send-1:completed:turn.completed",
   );
+  assert.equal(Object.hasOwn(result.document, "authorityEventOutbox"), false);
+  assert.ok(result.migrations.includes("authority-event-outbox-journal-v1"));
   assert.equal(
-    result.document.authorityEventOutbox[0].envelope.commandId,
+    result.legacyAuthorityEventOutbox[0].envelope.commandId,
     "send-1:completed:turn.completed",
   );
 });
@@ -283,9 +285,7 @@ test("removes an uncommitted aggregate-conflict continuation as one lifecycle re
   assert.deepEqual(result.document.turnLifecycle.commandReceipts, [
     { turnScopeId: "unrelated-turn", sequence: 1 },
   ]);
-  assert.deepEqual(result.document.authorityEventOutbox, [
-    { eventId: "unrelated", envelope: { turnScopeId: "unrelated-turn" } },
-  ]);
+  assert.deepEqual(result.document.authorityEventOutbox, source.authorityEventOutbox);
   assert.equal(result.document.aggregateVersion, 3);
   assert.equal(result.document.turnLifecycle.sequence, 14);
   assert.deepEqual(result.document.messages, source.messages);

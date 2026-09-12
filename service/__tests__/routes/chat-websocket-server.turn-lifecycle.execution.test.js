@@ -245,34 +245,37 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
       });
       if (result.applied) {
         lifecycle = result.lifecycle;
-        eventOutbox = result.eventOutbox;
+        if (result.committedEvent) {
+          eventOutbox = [...eventOutbox, result.committedEvent];
+        }
       }
       return result;
     },
     async getPendingAuthorityEvents() {
       return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
     },
-    async recordAuthorityEventAttempt({ eventId } = {}) {
-      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
-      if (result.found) eventOutbox = result.outbox;
-      return { recorded: result.found, reason: result.reason };
+    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+      for (const eventId of eventIds) {
+        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
+        if (!result.found) return { recorded: false, reason: result.reason };
+        eventOutbox = result.outbox;
+      }
+      return { recorded: true };
     },
-    async acknowledgeAuthorityEvent({
-      eventId,
-      consumerId,
-      orderingDomain,
-      orderingScopeId,
-      sequence,
-    } = {}) {
-      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-        eventId,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        sequence,
-        deliveredAt: new Date().toISOString(),
-      });
-      if (result.found) eventOutbox = result.outbox;
+    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
+      let result = { found: true };
+      for (const receipt of acknowledgements) {
+        result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+          eventId: receipt.eventId,
+          consumerId,
+          orderingDomain: receipt.orderingDomain,
+          orderingScopeId: receipt.orderingScopeId,
+          sequence: receipt.sequence,
+          deliveredAt: new Date().toISOString(),
+        });
+        if (!result.found) break;
+        eventOutbox = result.outbox;
+      }
       return {
         acknowledged: result.found,
         deduplicated: result.deduplicated,

@@ -28,6 +28,11 @@ import {
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
 import { commitTurnReplacement } from "@noobot/authoritative-state/application";
+import {
+  removeAuthorityOutboxTurnScopes,
+  withAuthorityOutboxMutation,
+} from "../../authority-outbox-store/outbox-journal.js";
+import { resolveOutboxSessionDir } from "./outbox-scope.js";
 
 function assertIdempotencyDecision(decision) {
   if (decision.allowed) return;
@@ -313,14 +318,12 @@ export async function replaceTurn({
       });
       const lifecycleReplacement = commitTurnReplacement({
         lifecycle: session.turnLifecycle,
-        eventOutbox: session.authorityEventOutbox,
         replacement: turnReplacement,
       });
       if (!lifecycleReplacement.applied && !lifecycleReplacement.deduplicated) {
         throw new Error(`turn replacement lifecycle commit failed: ${lifecycleReplacement.reason}`);
       }
       session.turnLifecycle = lifecycleReplacement.lifecycle;
-      session.authorityEventOutbox = lifecycleReplacement.eventOutbox;
       const result = { turnReplacement };
       session.turnLifecycle.commandReceipts = appendCommandReceipt(
         session.turnLifecycle.commandReceipts,
@@ -339,7 +342,25 @@ export async function replaceTurn({
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      return { session, ...result, deduplicated: false };
+      const replacementSessionDir = await resolveOutboxSessionDir(
+        this,
+        userId,
+        sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
+      );
+      let removedAuthorityOutboxEvents = 0;
+      if (replacementSessionDir && lifecycleReplacement.removedTurnScopeIds?.length) {
+        removedAuthorityOutboxEvents = await withAuthorityOutboxMutation(
+          replacementSessionDir,
+          () =>
+            removeAuthorityOutboxTurnScopes(
+              replacementSessionDir,
+              lifecycleReplacement.removedTurnScopeIds,
+            ),
+        );
+      }
+      return { session, ...result, removedAuthorityOutboxEvents, deduplicated: false };
     },
     parentSessionId,
     persistenceContext,
