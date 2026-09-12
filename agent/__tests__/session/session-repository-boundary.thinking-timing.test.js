@@ -80,3 +80,58 @@ test("session save persists thinking timing fields to full session and display s
     assert.equal(summaryAssistant[1].thinkingFinishedAt, "2026-07-08T10:00:04.000Z");
   });
 });
+
+test("session save keeps the model loop round on persisted turn timings", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-loop-round";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      { now: () => "2026-07-08T10:00:10.000Z" },
+    );
+
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "S" });
+    await runtime.sessionCrudService.ensureSession(userId, "S", "");
+    const session = await runtime.repositories.sessionRepository.findById(userId, "S", "");
+    session.messages = [
+      {
+        messageUid: "sm_round_user",
+        role: "user",
+        content: "hello",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+      },
+      {
+        messageUid: "sm_round_assistant",
+        role: "assistant",
+        content: "answer",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+      },
+    ];
+    session.turnTimings = [
+      {
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+        thinkingStartedAt: "2026-07-08T10:00:00.000Z",
+        thinkingFinishedAt: "2026-07-08T10:00:04.000Z",
+        modelLoopRound: 6,
+      },
+    ];
+    await runtime.repositories.sessionRepository.save(userId, session, "");
+
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "S", "");
+    const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    const displaySummary = JSON.parse(
+      await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
+    );
+
+    const fullTiming = (full.turnTimings || []).find((item) => item.turnScopeId === "turn-1");
+    assert.equal(fullTiming?.modelLoopRound, 6);
+    const summaryTiming = (displaySummary.turnTimings || []).find(
+      (item) => item.turnScopeId === "turn-1",
+    );
+    assert.equal(summaryTiming?.modelLoopRound, 6);
+  });
+});

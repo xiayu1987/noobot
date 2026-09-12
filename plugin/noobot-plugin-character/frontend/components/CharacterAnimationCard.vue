@@ -149,9 +149,9 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: var(--noobot-space-xs);
-  margin-bottom: var(--noobot-space-2xs-plus);
+  margin-bottom: var(--noobot-space-xs);
   color: #dbeafe;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-card__title {
   display: flex;
@@ -163,7 +163,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--noobot-space-2xs-plus);
+  gap: var(--noobot-space-xs);
   flex-wrap: wrap;
 }
 button {
@@ -187,14 +187,14 @@ button:disabled {
 }
 .character-animation-card__diagnostics {
   display: grid;
-  gap: var(--noobot-space-2xs-plus);
-  margin: 0 0 var(--noobot-space-2xs-plus);
+  gap: var(--noobot-space-xs);
+  margin: 0 0 var(--noobot-space-xs);
   color: #93a4bb;
   font-size: 10px;
 }
 .character-animation-card__diagnostic-row {
   min-width: 0;
-  padding: var(--noobot-space-2xs) var(--noobot-space-2xs-plus);
+  padding: var(--noobot-space-2xs) var(--noobot-space-xs);
   border: 1px solid #1f3047;
   background: #0d1829;
 }
@@ -206,7 +206,7 @@ button:disabled {
 .character-animation-card__diagnostic-row dl {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--noobot-space-2xs-plus);
+  gap: var(--noobot-space-xs);
   margin: 0;
 }
 .character-animation-card__diagnostics dt {

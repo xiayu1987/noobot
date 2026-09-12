@@ -264,12 +264,6 @@ watch(
 </template>
 
 <style scoped>
-.workspace-panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .dark-btn {
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-panel-border);

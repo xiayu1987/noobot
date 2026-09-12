@@ -97,8 +97,6 @@ export function useChatSession({
   isImageMime,
   classifyRealtimeLog,
   navigateToLastMessage,
-  locateSendingStartedMessage,
-  locateDoneMessage,
   notify = () => {},
   clearUploadSelection = () => {},
 }) {
@@ -496,8 +494,6 @@ export function useChatSession({
     isImageMime,
     classifyRealtimeLog,
     navigateToLastMessage,
-    locateSendingStartedMessage,
-    locateDoneMessage,
     activeSession,
     activeSessionId,
     sessions,

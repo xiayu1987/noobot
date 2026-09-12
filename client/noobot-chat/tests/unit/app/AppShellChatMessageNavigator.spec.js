@@ -236,6 +236,39 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).not.toContain("scrollToBottom");
   });
 
+  it("locates the last message only on send and on authoritative turn terminal", () => {
+    const useChatEngineSource = readFileSync(
+      path.resolve(__dirname, "../../../src/modules/chat/composables/useChatEngine.js"),
+      "utf8",
+    );
+    const messageProjectionRouterSource = readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../src/modules/chat/runtime/engine/messageProjectionRouter.js",
+      ),
+      "utf8",
+    );
+    const sessionDetailApplySource = readFileSync(
+      path.resolve(__dirname, "../../../src/modules/session/model/list/sessionDetailApply.js"),
+      "utf8",
+    );
+    const batchReplaySource = readFileSync(
+      path.resolve(__dirname, "../../../src/modules/chat/runtime/reconnect/batchReplay.js"),
+      "utf8",
+    );
+    expect(messageProjectionRouterSource).toContain("context.navigateOnFirstResponseOnce?.();");
+    expect(messageProjectionRouterSource).not.toContain("locateSendingStartedMessageOnce");
+    expect(useChatEngineSource).toContain(
+      "navigateToLastMessageOnTurnTerminalOnce(sessionId, turnScopeId);",
+    );
+    expect(useChatEngineSource).toContain("if (turnTerminalNavigatedKeys.has(key)) return;");
+    expect(useChatEngineSource).not.toContain("locateDoneMessage");
+    expect(sessionDetailApplySource).toContain(
+      "if (options.navigateToLastMessage === true) navigateToLastMessage?.();",
+    );
+    expect(batchReplaySource).not.toContain("navigateToLastMessage");
+  });
+
   it("syncs the highlighted navigator item from scroll position", () => {
     expect(chatMessageNavigatorPanelSource).toContain(
       'import { createChatMessageScrollSync } from "../runtime/chatMessageScrollSync.js";',

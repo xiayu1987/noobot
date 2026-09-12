@@ -19,7 +19,6 @@
   --noobot-msg-error-text: var(--noobot-status-error);
   --noobot-msg-file-card-bg: var(--noobot-control-bg);
   --noobot-msg-file-card-border: var(--noobot-panel-border);
-  --noobot-msg-file-icon-bg: var(--noobot-surface-primary-soft);
   --noobot-msg-file-name: var(--noobot-text-main);
   --noobot-msg-file-size: var(--noobot-text-muted);
   --noobot-msg-inline-code-bg: var(--noobot-control-bg);

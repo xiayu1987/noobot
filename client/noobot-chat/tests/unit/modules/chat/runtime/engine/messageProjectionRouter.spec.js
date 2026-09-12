@@ -37,7 +37,6 @@ function contextFor(messages, logSessionEvent = vi.fn()) {
     },
     logSessionEvent,
     navigateOnFirstResponseOnce: vi.fn(),
-    locateSendingStartedMessageOnce: vi.fn(),
   };
 }
 

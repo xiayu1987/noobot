@@ -100,14 +100,14 @@ function onWorkflowSemanticModelChange(value = "") {
 }
 
 .plugin-model-title {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
   font-weight: 700;
   color: var(--noobot-text-strong, var(--el-text-color-primary));
 }
 
 .plugin-model-description {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.45;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
@@ -130,7 +130,7 @@ function onWorkflowSemanticModelChange(value = "") {
 }
 
 .plugin-model-label {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: 650;
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
@@ -141,8 +141,8 @@ function onWorkflowSemanticModelChange(value = "") {
 }
 
 .composer-select :deep(.el-select__wrapper) {
-  min-height: 38px;
-  height: 38px;
+  min-height: var(--noobot-control-height-lg);
+  height: var(--noobot-control-height-lg);
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
   background: color-mix(
@@ -194,7 +194,7 @@ function onWorkflowSemanticModelChange(value = "") {
 .model-option-meta,
 .model-option-description,
 .plugin-empty-text {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.35;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
@@ -207,11 +207,6 @@ function onWorkflowSemanticModelChange(value = "") {
 @media (max-width: 768px) {
   .plugin-model-card {
     padding: 12px;
-  }
-
-  .composer-select :deep(.el-select__wrapper) {
-    min-height: 38px;
-    height: 38px;
   }
 }
 </style>

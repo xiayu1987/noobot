@@ -187,7 +187,6 @@ function projectMainSessionEvent(messageEvent, context) {
   });
   if (reduction.applied) {
     context.navigateOnFirstResponseOnce?.();
-    context.locateSendingStartedMessageOnce?.();
   }
   return true;
 }

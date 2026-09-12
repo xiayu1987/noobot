@@ -78,17 +78,9 @@ const composerMorePanelVisible = ref(false);
 let chatMessageNavigatorPanel = null;
 let appShellPanelActions = null;
 
-async function locateDoneMessageAfterRender() {
+async function navigateToLastMessageAfterRender() {
   await nextTick();
   navigateToLastMessage();
-}
-
-function locateSendingStartedMessage() {
-  chatMessageNavigatorPanel?.navigateToLastMessage?.();
-}
-
-function locateDoneMessage() {
-  chatMessageNavigatorPanel?.navigateToLastMessage?.();
 }
 
 const {
@@ -148,7 +140,7 @@ const {
       forceCurrentSessionRerender: true,
     });
     await applyInitialPseudoRoute(route);
-    await locateDoneMessageAfterRender();
+    await navigateToLastMessageAfterRender();
     chatWebSocketClient.connect();
     await reconnectActiveSession({ force: true });
   },
@@ -233,8 +225,6 @@ const {
   isImageMime,
   classifyRealtimeLog,
   navigateToLastMessage,
-  locateSendingStartedMessage,
-  locateDoneMessage,
   notify: notifyUi,
   clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
 });
@@ -437,7 +427,7 @@ async function onAppMounted() {
   const autoConnected = await tryAutoConnect();
   if (autoConnected || connected.value) return;
   await initSessionsAfterMount({ navigateToLastMessage: false });
-  await locateDoneMessageAfterRender();
+  await navigateToLastMessageAfterRender();
 }
 
 function onAppUnmounted() {

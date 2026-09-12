@@ -23,15 +23,6 @@ function markFirstStreamEvent(botMessage) {
   botMessage.hasFirstStreamEvent = true;
 }
 
-function resolveFirstResponseNavigator({
-  navigateOnFirstResponseOnce,
-  scrollOnFirstResponseOnce,
-} = {}) {
-  if (typeof navigateOnFirstResponseOnce === "function") return navigateOnFirstResponseOnce;
-  if (typeof scrollOnFirstResponseOnce === "function") return scrollOnFirstResponseOnce;
-  return () => {};
-}
-
 function canonicalAttachmentProjectionKey(attachment = {}) {
   const attachmentId = String(attachment?.attachmentId || "").trim();
   const sessionId = String(attachment?.sessionId || "").trim();
@@ -49,16 +40,11 @@ export function handleAttachmentsStreamEvent({
   botMessage,
   mergeAssistantAttachments,
   navigateOnFirstResponseOnce,
-  scrollOnFirstResponseOnce,
 }) {
-  const notifyFirstResponse = resolveFirstResponseNavigator({
-    navigateOnFirstResponseOnce,
-    scrollOnFirstResponseOnce,
-  });
   markFirstStreamEvent(botMessage);
   if (!getMessageTurnScopeId(botMessage)) return;
   mergeAssistantAttachments(botMessage, data?.attachments || []);
-  notifyFirstResponse();
+  navigateOnFirstResponseOnce?.();
 }
 
 export function handleAttachmentLifecycleStreamEvent({
@@ -121,15 +107,10 @@ export function handleInteractionRequestStreamEvent({
   data,
   clearMissingInteractionPayloadTimer,
   navigateOnFirstResponseOnce,
-  scrollOnFirstResponseOnce,
   tryAutoResolveInteraction,
   setPendingInteractionRequest,
   clearPendingInteraction,
 }) {
-  const notifyFirstResponse = resolveFirstResponseNavigator({
-    navigateOnFirstResponseOnce,
-    scrollOnFirstResponseOnce,
-  });
   const normalizedInteractionRequest = normalizeInteractionRequestPayload({
     ...(data || {}),
     interactionType: normalizeTrimmedString(data?.interactionType),
@@ -138,7 +119,7 @@ export function handleInteractionRequestStreamEvent({
     sessionId: normalizeTrimmedString(normalizedInteractionRequest?.sessionId),
     dialogProcessId: normalizeTrimmedString(normalizedInteractionRequest?.dialogProcessId),
   });
-  notifyFirstResponse();
+  navigateOnFirstResponseOnce?.();
   if (tryAutoResolveInteraction(normalizedInteractionRequest)) {
     return true;
   }
