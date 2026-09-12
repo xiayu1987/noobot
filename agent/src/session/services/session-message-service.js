@@ -7,17 +7,19 @@ import { commitTurn } from "./session-message-service/commit-turn.js";
 import { bindTurnAttachments } from "./session-message-service/bind-turn-attachments.js";
 import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
 import { commitMessageEvent } from "./session-message-service/message-event.js";
-import { commitAuthorityEvent } from "./session-message-service/authority-event.js";
+import {
+  acknowledgeAuthorityEvent,
+  commitAuthorityEvent,
+  compactAuthorityEvents,
+  getPendingAuthorityEvents,
+  recordAuthorityEventAttempt,
+} from "./session-message-service/authority-event.js";
 import { pluginArtifactKey, projectPluginArtifacts } from "@noobot/event-protocol";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import {
-  acknowledgeAuthorityEvent,
   applyTurnLifecycleEvent,
   assertReusedUserTurnIdentity,
-  compactAuthorityEvents,
-  getPendingAuthorityEvents,
   getTurnLifecycleSnapshot,
-  recordAuthorityEventAttempt,
   upsertTurnTiming,
 } from "./session-message-service/turn-state.js";
 import {

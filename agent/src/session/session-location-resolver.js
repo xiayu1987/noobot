@@ -6,8 +6,8 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { buildSessionArtifactFileMap } from "./session-artifact-store.js";
 
-export const SESSION_PERSISTENCE_SCOPE_KIND = "noobot.session_persistence_scope";
-export const SESSION_PERSISTENCE_SCOPE_VERSION = 1;
+const SESSION_PERSISTENCE_SCOPE_KIND = "noobot.session_persistence_scope";
+const SESSION_PERSISTENCE_SCOPE_VERSION = 1;
 
 function buildScope(sessionDir, resolvedParentSessionId = "") {
   const files = buildSessionArtifactFileMap(sessionDir);

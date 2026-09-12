@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
+import { createSessionMessageUid } from "../../../context/session/message-uid.js";
+import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import {
   resolveAggregateVersion,

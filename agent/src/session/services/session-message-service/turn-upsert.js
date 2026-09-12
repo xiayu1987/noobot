@@ -6,7 +6,8 @@
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
+import { createSessionMessageUid } from "../../../context/session/message-uid.js";
+import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";

@@ -32,7 +32,7 @@ export function selectPresentedSessionLifecycleTurns(lifecycle = null) {
     .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
 }
 
-export function collectSessionPresentationTurnScopeIds(session = {}) {
+function collectSessionPresentationTurnScopeIds(session = {}) {
   return [
     ...new Set(
       [

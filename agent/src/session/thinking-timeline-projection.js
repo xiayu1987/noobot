@@ -40,7 +40,7 @@ export function isMessageInThinkingRound(rootMessage = {}, candidateMessage = {}
   return candidateMessage === rootMessage;
 }
 
-export function selectThinkingRootMessage(messages = [], filters = {}) {
+function selectThinkingRootMessage(messages = [], filters = {}) {
   const hasRouteFilter = Boolean(
     normalizeThinkingRoute(filters.turnScopeId) || normalizeThinkingRoute(filters.dialogProcessId),
   );
