@@ -284,3 +284,81 @@ test("_resolveStoppedResumeAttachments ingests raw attachments into the current 
     },
   ]);
 });
+
+test("stopped snapshot resume restores turn progress onto the live system runtime", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-resume-turn-progress-"));
+  const stoppedIdentity = {
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "",
+    dialogProcessId: "dialog-stopped",
+    turnScopeId: "turn-stopped",
+  };
+  await saveStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity: stoppedIdentity,
+    messageBlocks: { system: [], history: [], incremental: [] },
+    turnProgress: {
+      phaseSummaryLoopCount: 7,
+      taskCheckLoopCount: 3,
+      helpPromptLoopCount: 1,
+      toolConsecutiveFailureCount: 2,
+      needsPhaseSummary: true,
+      phaseSummaryByCharsPrompted: true,
+    },
+  });
+
+  const systemRuntime = { modelLoopRound: 4 };
+  const engine = Object.create(SessionExecutionEngine.prototype);
+  engine.globalConfig = { workspaceRoot };
+  engine.session = {
+    async getSessionContextSource() {
+      return { messages: [] };
+    },
+  };
+  engine.agentRuntimeFacade = {
+    buildRunTurnContext(context) {
+      return context;
+    },
+  };
+  const contextBuilder = {
+    attachmentService: null,
+    _resolveRuntimeBasePath() {
+      return "";
+    },
+    _getEffectiveConfig() {
+      return {};
+    },
+    async buildAgentContext() {
+      return createTestAgentExecutionScope({ systemRuntime });
+    },
+  };
+
+  try {
+    await engine._prepareStoppedSnapshotResumeTurnExecution({
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dialog-current",
+        turnScopeId: "turn-current",
+        runConfig: {
+          resumeFromStoppedSnapshot: true,
+          resumeDialogProcessId: stoppedIdentity.dialogProcessId,
+          resumeTurnScopeId: stoppedIdentity.turnScopeId,
+          turnScopeId: "turn-current",
+        },
+      },
+      contextBuilder,
+    });
+
+    assert.equal(systemRuntime.phaseSummaryLoopCount, 7);
+    assert.equal(systemRuntime.taskCheckLoopCount, 3);
+    assert.equal(systemRuntime.helpPromptLoopCount, 1);
+    assert.equal(systemRuntime.toolConsecutiveFailureCount, 2);
+    assert.equal(systemRuntime.needsPhaseSummary, true);
+    assert.equal(systemRuntime.phaseSummaryByCharsPrompted, true);
+    assert.equal(systemRuntime.modelLoopRound, 4);
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});

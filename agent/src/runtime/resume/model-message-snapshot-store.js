@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { isWorkspaceSessionDeleted } from "@noobot/runtime-events";
+import { projectSystemRuntimeTurnProgress } from "@noobot/agent-config-protocol";
 import {
   createModelContextSnapshot,
   hydrateModelContextSnapshot,
@@ -146,9 +147,9 @@ function buildSnapshotPersistenceResult({
 export async function saveStoppedModelMessageSnapshot({
   globalConfig = {},
   identity = {},
-  messages = [],
   messageBlocks = {},
   userMetaBackwrites = [],
+  turnProgress = {},
 } = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
   if (
@@ -176,6 +177,7 @@ export async function saveStoppedModelMessageSnapshot({
     identity: normalizedIdentity,
     messageBlocks,
     userMetaBackwrites,
+    turnProgress,
   });
   const filePath = snapshotPath(normalizedIdentity, globalConfig);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -230,9 +232,9 @@ export async function saveStoppedModelMessageSnapshotCandidate({
     const snapshot = await saveStoppedModelMessageSnapshot({
       globalConfig,
       identity,
-      messages: candidate.messages,
       messageBlocks: candidate.messageBlocks,
       userMetaBackwrites: candidate.userMetaBackwrites,
+      turnProgress: projectSystemRuntimeTurnProgress(candidate.systemRuntime),
     });
     if (!snapshot) {
       const result = buildSnapshotPersistenceResult({

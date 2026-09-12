@@ -9,7 +9,69 @@ import {
   SYSTEM_RUNTIME_COUNTER_KEYS,
   normalizeSystemRuntimeCounterValue,
   normalizeSystemRuntimeCounters,
+  projectSystemRuntimeTurnProgress,
+  applySystemRuntimeTurnProgress,
 } from "../src/index.js";
+
+test("projects turn progress counters and summary flags only", () => {
+  const progress = projectSystemRuntimeTurnProgress({
+    phaseSummaryLoopCount: 7,
+    taskCheckLoopCount: -2,
+    helpPromptLoopCount: "3",
+    toolConsecutiveFailureCount: 1,
+    needsPhaseSummary: true,
+    phaseSummaryByCharsPrompted: "yes",
+    modelLoopRound: 9,
+    mainFlowFinalNoToolsTurnActive: true,
+  });
+  assert.deepEqual(progress, {
+    phaseSummaryLoopCount: 7,
+    taskCheckLoopCount: 0,
+    helpPromptLoopCount: 3,
+    toolConsecutiveFailureCount: 1,
+    needsPhaseSummary: true,
+    phaseSummaryByCharsPrompted: false,
+  });
+});
+
+test("projects an all-zero turn progress for missing sources", () => {
+  assert.deepEqual(projectSystemRuntimeTurnProgress(null), {
+    phaseSummaryLoopCount: 0,
+    taskCheckLoopCount: 0,
+    helpPromptLoopCount: 0,
+    toolConsecutiveFailureCount: 0,
+    needsPhaseSummary: false,
+    phaseSummaryByCharsPrompted: false,
+  });
+});
+
+test("applies restored turn progress onto the system runtime in place", () => {
+  const systemRuntime = { phaseSummaryLoopCount: 0, modelLoopRound: 4 };
+  const applied = applySystemRuntimeTurnProgress(systemRuntime, {
+    phaseSummaryLoopCount: 5,
+    needsPhaseSummary: true,
+  });
+  assert.equal(systemRuntime.phaseSummaryLoopCount, 5);
+  assert.equal(systemRuntime.needsPhaseSummary, true);
+  assert.equal(systemRuntime.taskCheckLoopCount, 0);
+  assert.equal(systemRuntime.modelLoopRound, 4);
+  assert.equal(applied.phaseSummaryLoopCount, 5);
+  assert.equal(applySystemRuntimeTurnProgress(null, {}), null);
+});
+
+test("restored turn progress survives the per-turn counter normalization", () => {
+  const systemRuntime = {};
+  applySystemRuntimeTurnProgress(systemRuntime, {
+    phaseSummaryLoopCount: 6,
+    needsPhaseSummary: true,
+    phaseSummaryByCharsPrompted: true,
+  });
+  normalizeSystemRuntimeCounters(systemRuntime, "next message");
+  assert.equal(systemRuntime.phaseSummaryLoopCount, 6);
+  assert.equal(systemRuntime.needsPhaseSummary, true);
+  assert.equal(systemRuntime.phaseSummaryByCharsPrompted, true);
+  assert.equal(systemRuntime.modelLoopRound, 0);
+});
 
 test("ignores non-object system runtime", () => {
   assert.equal(normalizeSystemRuntimeCounters(null, "hi"), undefined);

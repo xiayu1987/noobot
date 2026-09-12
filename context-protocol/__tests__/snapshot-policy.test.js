@@ -224,6 +224,42 @@ test("persisted snapshot user sources must exist in Session authority", () => {
   );
 });
 
+test("snapshot carries turn progress through persistence and hydration", () => {
+  const turnProgress = {
+    phaseSummaryLoopCount: 6,
+    taskCheckLoopCount: 2,
+    helpPromptLoopCount: 0,
+    toolConsecutiveFailureCount: 1,
+    needsPhaseSummary: true,
+    phaseSummaryByCharsPrompted: false,
+  };
+  const snapshot = createModelContextSnapshot({
+    identity,
+    now: "2026-08-03T00:00:00.000Z",
+    messageBlocks: { system: [], history: [], incremental: [] },
+    turnProgress,
+  });
+  assert.deepEqual(snapshot.turnProgress, turnProgress);
+  const roundTripped = hydrateModelContextSnapshot(
+    JSON.parse(JSON.stringify(snapshot)),
+    identity,
+  );
+  assert.deepEqual(roundTripped.turnProgress, turnProgress);
+});
+
+test("snapshot without turn progress hydrates to an empty progress fact", () => {
+  const snapshot = createModelContextSnapshot({
+    identity,
+    now: "2026-08-03T00:00:00.000Z",
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
+  assert.deepEqual(snapshot.turnProgress, {});
+  const legacySnapshot = JSON.parse(JSON.stringify(snapshot));
+  delete legacySnapshot.turnProgress;
+  const hydrated = hydrateModelContextSnapshot(legacySnapshot, identity);
+  assert.deepEqual(hydrated.turnProgress, {});
+});
+
 test("snapshot user source identity cannot resolve to another Session role", () => {
   assert.throws(
     () =>
