@@ -28,7 +28,11 @@ function resolveRuntimeHostRoot({
   ).trim();
 }
 
-function resolveRuntimeWorkspaceRoot({ runtime = {}, globalConfig = {}, workspaceRoot = "" } = {}) {
+export function resolveRuntimeWorkspaceRoot({
+  runtime = {},
+  globalConfig = {},
+  workspaceRoot = "",
+} = {}) {
   return String(
     workspaceRoot || globalConfig?.workspaceRoot || runtime?.globalConfig?.workspaceRoot || "",
   ).trim();

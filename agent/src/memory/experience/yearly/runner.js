@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { buildYearlySummaryPrompt } from "../../prompts/builders.js";
+import { buildSubcategoryModelEntries } from "../model-entry-builder.js";
 import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 
 export async function runYearlySummaryIfNeeded({
@@ -13,6 +14,7 @@ export async function runYearlySummaryIfNeeded({
   promptI18n = {},
   abortSignal = null,
   basePath = "",
+  listMonthDirs,
   mergeDomainText,
   normalizeYearlySummary,
   saveYearlySummary,
@@ -22,12 +24,7 @@ export async function runYearlySummaryIfNeeded({
   if (!basePath || typeof invokeModel !== "function") return false;
   let hasWrittenSummary = false;
   while (true) {
-    const monthEntries = await storage.safeReadDirEntries(storage.monthlySummaryDir(basePath));
-    const monthDirs = monthEntries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => String(entry.name || "").trim())
-      .filter((key) => /^\d{4}-\d{2}$/.test(key))
-      .sort();
+    const monthDirs = await listMonthDirs(basePath);
     if (monthDirs.length < 12) break;
 
     const targetMonths = monthDirs.slice(0, 12);
@@ -68,20 +65,7 @@ export async function runYearlySummaryIfNeeded({
         sourceMonths: targetMonths,
       });
       if (!saved) continue;
-      const modelEntries = [];
-      for (const category of Array.isArray(parsedSummary?.categories)
-        ? parsedSummary.categories
-        : []) {
-        for (const subcategory of Array.isArray(category?.subcategories)
-          ? category.subcategories
-          : []) {
-          modelEntries.push({
-            domain_name: parsedSummary.domain_name || domainName,
-            category_name: category?.category_name,
-            subcategory_name: subcategory?.subcategory_name,
-          });
-        }
-      }
+      const modelEntries = buildSubcategoryModelEntries(parsedSummary, domainName);
       if (modelEntries.length) {
         await upsertModelEntries(basePath, modelEntries);
       }

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { ASYNC_JOB_STATUS } from "./constants.js";
+import { ASYNC_JOB_STATUS } from "../config/constants.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export class AsyncJobResponseBuilder {
   build(job, options = {}) {
@@ -29,7 +30,10 @@ export class AsyncJobResponseBuilder {
   }
 
   buildWaitResponse(job, options = {}) {
-    const { pollInterval = 1000, maxWaitTime = 30000 } = options;
+    const {
+      pollInterval = TIME_THRESHOLDS.async.defaultPollIntervalMs,
+      maxWaitTime = TIME_THRESHOLDS.async.defaultMaxWaitTimeMs,
+    } = options;
 
     return {
       jobId: job.id,

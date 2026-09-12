@@ -94,11 +94,9 @@ export class ExperienceManager {
     const lessonsDir = this.storage.dailySummaryDir(basePath);
     const entries = await this.storage.safeReadDirEntries(lessonsDir);
     return entries
-      .filter(
-        (entry) =>
-          entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(String(entry.name || "").trim()),
-      )
-      .map((entry) => entry.name)
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => String(entry.name || "").trim())
+      .filter((key) => /^\d{4}-\d{2}-\d{2}$/.test(key))
       .sort();
   }
 
@@ -106,8 +104,9 @@ export class ExperienceManager {
     const weeklyDir = this.storage.weeklySummaryDir(basePath);
     const entries = await this.storage.safeReadDirEntries(weeklyDir);
     return entries
-      .filter((entry) => entry.isDirectory() && /^\d{4}-W\d{2}$/.test(entry.name || ""))
-      .map((entry) => entry.name)
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => String(entry.name || "").trim())
+      .filter((key) => /^\d{4}-W\d{2}$/.test(key))
       .sort();
   }
 
@@ -115,8 +114,9 @@ export class ExperienceManager {
     const monthlyDir = this.storage.monthlySummaryDir(basePath);
     const entries = await this.storage.safeReadDirEntries(monthlyDir);
     return entries
-      .filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}$/.test(entry.name || ""))
-      .map((entry) => entry.name)
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => String(entry.name || "").trim())
+      .filter((key) => /^\d{4}-\d{2}$/.test(key))
       .sort();
   }
 
@@ -215,6 +215,7 @@ export class ExperienceManager {
       promptI18n,
       abortSignal,
       basePath,
+      listWeekDirs: (bp) => this.listWeekDirs(bp),
       mergeDomainText: (bp, weekKeys) => this.mergeDomainTextForWeeks(bp, weekKeys),
       normalizeMonthlySummary: (raw, fallback, options) =>
         this.normalizeMonthly(raw, fallback, options),
@@ -251,6 +252,7 @@ export class ExperienceManager {
       promptI18n,
       abortSignal,
       basePath,
+      listMonthDirs: (bp) => this.listMonthDirs(bp),
       mergeDomainText: (bp, monthKeys) => this.mergeDomainTextForMonths(bp, monthKeys),
       normalizeYearlySummary: (raw, fallback, options) =>
         this.normalizeYearly(raw, fallback, options),

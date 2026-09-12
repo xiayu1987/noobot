@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 export function normalizeToolCallArgs(rawArgs = null) {
   if (isPlainObject(rawArgs)) return rawArgs;
@@ -58,33 +55,17 @@ export function normalizeToolCalls(ai = {}) {
   const calls = rawCalls
     .map((call = {}) => {
       const fn = isPlainObject(call?.function) ? call.function : {};
-      const name = String(
-        call?.name ??
-          call?.tool_name ??
-          call?.toolName ??
-          fn?.name ??
-          "",
-      ).trim();
+      const name = String(call?.name ?? call?.tool_name ?? call?.toolName ?? fn?.name ?? "").trim();
       if (!name) return null;
       return {
         ...call,
         id: String(
-          call?.id ??
-            call?.tool_call_id ??
-            call?.toolCallId ??
-            call?.call_id ??
-            "",
+          call?.id ?? call?.tool_call_id ?? call?.toolCallId ?? call?.call_id ?? "",
         ).trim(),
         name,
-        args: normalizeToolCallArgs(
-          call?.args ??
-            call?.arguments ??
-            fn?.arguments ??
-            {},
-        ),
+        args: normalizeToolCallArgs(call?.args ?? call?.arguments ?? fn?.arguments ?? {}),
       };
     })
     .filter(Boolean);
   return { rawCalls, calls };
 }
-

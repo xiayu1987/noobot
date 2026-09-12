@@ -122,19 +122,10 @@ export async function buildSystemContext({
 } = {}) {
   const includeSet = normalizeContextSectionSelection(contextPolicy.promptSections);
   const enabled = (section) => isContextSectionSelected(includeSet, section);
-  const includeBasePrompt = enabled("base_prompt");
-  const includeSystemRuntime = enabled("system_runtime");
-  const includeScenario = enabled("scenario");
-  const includeLongMemory = enabled("long_memory");
-  const includeModel = enabled("model");
-  const includeSkills = enabled("skills");
-  const includeServices = enabled("services");
-  const includeMcpServers = enabled("mcp_servers");
-
   const selectedConnectorIds = normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds);
   const includeConnectors = enabled("connectors") || selectedConnectorIds.length > 0;
-  const includeAttachments = enabled("attachments");
   const locale = runConfig?.locale || "zh-CN";
+  const scenarioProfile = resolveScenarioProfile({ runConfig, effectiveConfig });
 
   const treeInfo = await resolveSessionTreeWithRootSessionId({
     runtimeBasePath,
@@ -145,45 +136,47 @@ export async function buildSystemContext({
     now: now(),
   });
   const attachmentsAvailableToRuntime = contextPolicy.runtimeCapabilities.attachments;
-  const [systemPrompt, skills, attachments, workspaceDirectories] = await Promise.all([
-    includeBasePrompt ? loadSystemPrompt({ locale }) : "",
-    includeSkills ? resolveSkills({ skillService, runtimeBasePath, userId: identity.userId }) : [],
-    attachmentsAvailableToRuntime
-      ? resolveAttachments({
-          attachmentService,
-          runtimeBasePath,
-          effectiveConfig,
-          userMessageAttachments,
-          userId: identity.userId,
-          sessionId: identity.sessionId,
-        })
-      : [],
-    includeSystemRuntime ? resolveWorkspaceDirectories(runtimeBasePath) : [],
-  ]);
-  const scenarioProfile = resolveScenarioProfile({ runConfig, effectiveConfig });
-  const services = includeServices
+  const [systemPrompt, skills, attachments, workspaceDirectories, connectorStatusSection] =
+    await Promise.all([
+      enabled("base_prompt") ? loadSystemPrompt({ locale }) : "",
+      enabled("skills")
+        ? resolveSkills({ skillService, runtimeBasePath, userId: identity.userId })
+        : [],
+      attachmentsAvailableToRuntime
+        ? resolveAttachments({
+            attachmentService,
+            runtimeBasePath,
+            effectiveConfig,
+            userMessageAttachments,
+            userId: identity.userId,
+            sessionId: identity.sessionId,
+          })
+        : [],
+      enabled("system_runtime") ? resolveWorkspaceDirectories(runtimeBasePath) : [],
+      includeConnectors
+        ? resolveConnectorStatusSection({
+            userId: identity.userId,
+            selectedConnectorIds,
+            connectorAccessPort: botManager?.connectorAccessPort,
+          })
+        : {},
+    ]);
+  const services = enabled("services")
     ? resolveServices(effectiveConfig, { includeRefs: scenarioProfile?.services || [] })
     : [];
-  const mcpServers = includeMcpServers
+  const mcpServers = enabled("mcp_servers")
     ? resolveAvailableMcpServers(effectiveConfig, {
         includeNames: scenarioProfile?.mcpServers || [],
       })
     : [];
-  const modelSection = includeModel
+  const modelSection = enabled("model")
     ? resolveModelSection({ globalConfig, userConfig, effectiveConfig })
-    : {};
-  const connectorStatusSection = includeConnectors
-    ? await resolveConnectorStatusSection({
-        userId: identity.userId,
-        selectedConnectorIds,
-        connectorAccessPort: botManager?.connectorAccessPort,
-      })
     : {};
   const identityInfo = {
     userId: String(identity.userId || "").trim(),
     isSuperUser: resolveSuperUserFlag({ globalConfig, userId: identity.userId }),
   };
-  const staticInfo = includeSystemRuntime
+  const staticInfo = enabled("system_runtime")
     ? applyIdentityToStaticPathInfo(
         {
           ...buildStaticInfo({ runtimeBasePath, userId: identity.userId, globalConfig }),
@@ -192,7 +185,7 @@ export async function buildSystemContext({
         identityInfo,
       )
     : { identity: identityInfo };
-  const dynamicInfo = includeSystemRuntime
+  const dynamicInfo = enabled("system_runtime")
     ? buildSystemRuntime({
         ...identity,
         caller,
@@ -209,14 +202,14 @@ export async function buildSystemContext({
       systemPrompt,
       staticInfo,
       dynamicInfo,
-      scenarioSection: includeScenario ? scenarioProfile : {},
-      longMemory: includeLongMemory ? longMemory : null,
+      scenarioSection: enabled("scenario") ? scenarioProfile : {},
+      longMemory: enabled("long_memory") ? longMemory : null,
       workspaceDirectories,
       modelSection,
       skills,
       services,
       mcpServers,
-      attachments: includeAttachments ? attachments : [],
+      attachments: enabled("attachments") ? attachments : [],
       connectorStatusSection,
     }),
     runtimeBasePath,

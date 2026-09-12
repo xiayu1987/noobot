@@ -3,26 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { sanitizeFileName } from "../../utils/text.js";
-import { collectPatchItemsByFieldMap } from "../patch-utils.js";
-import { EXPERIENCE_PATCH_SCHEMA } from "../schema-config.js";
+import { normalizeDomainSummaryOutput } from "../domain-summary-parser.js";
 
 export function normalizeWeeklySummaryOutput(
   rawContent,
   fallbackDomainName = "",
   { onParseError = null } = {},
 ) {
-  const schema = EXPERIENCE_PATCH_SCHEMA.weekly;
-  const stage = `weekly_summary:${fallbackDomainName}`;
-  const categories = collectPatchItemsByFieldMap({
+  return normalizeDomainSummaryOutput({
+    schemaKey: "weekly",
     rawContent,
-    idPrefix: schema.idPrefix,
-    stage,
-    parseErrorCode: schema.parseErrorCode,
+    fallbackDomainName,
     onParseError,
-    fieldMap: schema.fieldMap,
-    requiredFields: schema.requiredFields,
   });
-  const domainName = sanitizeFileName(fallbackDomainName, fallbackDomainName);
-  return { domain_name: domainName, categories };
 }

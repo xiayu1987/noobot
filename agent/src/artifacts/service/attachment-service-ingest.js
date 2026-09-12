@@ -12,7 +12,7 @@ import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 import { fsMkdir, fsWriteFile } from "../../shared/storage/fs-adapter.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
-import { safeStr } from "../../shared/utils/shared-utils.js";
+import { isPlainObject, safeStr } from "../../shared/utils/shared-utils.js";
 import { readAttachIndex, withAttachIndexLock, writeAttachIndex } from "../index-manager.js";
 import {
   resolveAttachmentPolicy,
@@ -96,7 +96,7 @@ export async function ingestAttachments(
   const basePath = resolveBasePath(service.globalConfig, userId);
   if (!attachments?.length) return [];
 
-  const scope = resolveAttachmentScope({ sessionId, attachmentSource, requireSessionId: true });
+  const scope = resolveAttachmentScope({ sessionId, attachmentSource });
   const policy = resolveAttachmentPolicy(attachmentPolicy);
   const entries = requireArtifactEntries(attachments, "attachments");
 
@@ -229,7 +229,7 @@ export async function ingestGeneratedArtifacts(
   if (!list.length) return [];
   const entries = requireArtifactEntries(list, "artifacts");
 
-  const scope = resolveAttachmentScope({ sessionId, attachmentSource, requireSessionId: true });
+  const scope = resolveAttachmentScope({ sessionId, attachmentSource });
   return withAttachIndexLock(basePath, scope, async () => {
     const index = await readAttachIndex(basePath, scope);
     const saved = [];
@@ -244,14 +244,8 @@ export async function ingestGeneratedArtifacts(
         contentBytes: Buffer.from(artifactContent, "base64"),
         generatedByModel: true,
         generationSource,
-        owner:
-          item?.owner && typeof item.owner === "object" && !Array.isArray(item.owner)
-            ? item.owner
-            : owner,
-        turnScope:
-          item?.turnScope && typeof item.turnScope === "object" && !Array.isArray(item.turnScope)
-            ? item.turnScope
-            : turnScope,
+        owner: isPlainObject(item?.owner) ? item.owner : owner,
+        turnScope: isPlainObject(item?.turnScope) ? item.turnScope : turnScope,
         turnScopeId: safeStr(item?.turnScopeId || turnScopeId),
         dialogProcessId: safeStr(item?.dialogProcessId || dialogProcessId),
         isSandbox: typeof item?.isSandbox === "boolean" ? item.isSandbox : undefined,

@@ -4,15 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { safeStr, safeNum } from "../shared/utils/shared-utils.js";
+import { isPlainObject, safeStr, safeNum } from "../shared/utils/shared-utils.js";
 import {
   attachmentIdentityKey,
   formatAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 
-function isPlainObject(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+export const INVALID_CANONICAL_ATTACHMENT_ERROR_CODE = "INVALID_CANONICAL_ATTACHMENT";
+
+function invalidCanonicalAttachmentError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.errorCode = INVALID_CANONICAL_ATTACHMENT_ERROR_CODE;
+  return error;
+}
+
+function rethrowAsInvalidCanonicalAttachment(error) {
+  error.statusCode ??= 400;
+  error.errorCode ??= INVALID_CANONICAL_ATTACHMENT_ERROR_CODE;
+  throw error;
 }
 
 function cleanPlainObject(value = {}) {
@@ -44,26 +55,20 @@ export function projectCanonicalAttachmentIdentity(attachmentItem = {}, expected
   try {
     identity = projectAttachmentIdentity(attachmentItem);
   } catch (error) {
-    error.statusCode ??= 400;
-    error.errorCode ??= "INVALID_CANONICAL_ATTACHMENT";
-    throw error;
+    rethrowAsInvalidCanonicalAttachment(error);
   }
   const normalizedExpectedSessionId = safeStr(expectedSessionId);
   if (normalizedExpectedSessionId && identity.sessionId !== normalizedExpectedSessionId) {
-    const error = new Error("attachment must be canonical and belong to the current session");
-    error.statusCode = 400;
-    error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
-    throw error;
+    throw invalidCanonicalAttachmentError(
+      "attachment must be canonical and belong to the current session",
+    );
   }
   return identity;
 }
 
 export function projectCanonicalAttachmentIdentities(attachments = [], expectedSessionId = "") {
   if (!Array.isArray(attachments)) {
-    const error = new Error("attachments must be a canonical array");
-    error.statusCode = 400;
-    error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
-    throw error;
+    throw invalidCanonicalAttachmentError("attachments must be a canonical array");
   }
   return attachments.map((attachmentItem) =>
     projectCanonicalAttachmentIdentity(attachmentItem, expectedSessionId),
@@ -86,9 +91,7 @@ export function canonicalAttachmentIdentityKey(attachmentItem = {}) {
   try {
     return attachmentIdentityKey(attachmentItem);
   } catch (error) {
-    error.statusCode ??= 400;
-    error.errorCode ??= "INVALID_CANONICAL_ATTACHMENT";
-    throw error;
+    rethrowAsInvalidCanonicalAttachment(error);
   }
 }
 

@@ -5,8 +5,8 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 
-export const MEMORY_DIR_RELATIVE_PATH = "memory";
-export const SESSION_DIR_RELATIVE_PATH = "runtime/session";
+const MEMORY_DIR_RELATIVE_PATH = "memory";
+const SESSION_DIR_RELATIVE_PATH = "runtime/session";
 
 export const MEMORY_RELATIVE_PATHS = Object.freeze({
   MEMORY_DIR: MEMORY_DIR_RELATIVE_PATH,

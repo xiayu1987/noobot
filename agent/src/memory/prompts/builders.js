@@ -7,7 +7,9 @@ import { getExperiencePatchPromptMeta } from "../experience/schema-config.js";
 
 function resolveExperiencePatchPromptMeta(promptI18n = {}, key = "") {
   const fallback = getExperiencePatchPromptMeta(key);
-  const normalizedKey = String(key || "").trim().toLowerCase();
+  const normalizedKey = String(key || "")
+    .trim()
+    .toLowerCase();
   const localized =
     promptI18n?.experiencePatchProtocols?.[normalizedKey] ||
     (typeof promptI18n?.experiencePatchProtocol === "function"
@@ -19,24 +21,24 @@ function resolveExperiencePatchPromptMeta(promptI18n = {}, key = "") {
   };
 }
 
+function resolveLocalizedPrompt(builder, payload = {}) {
+  if (typeof builder !== "function") return "";
+  return String(builder(payload) || "").trim();
+}
+
 export function buildDailyExperiencePrompt({
   promptI18n = {},
   knownDomainText = "",
   shortMemoryItems = [],
 } = {}) {
   const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "daily");
-  const builder = promptI18n?.dailyExperiencePrompt;
-  if (typeof builder === "function") {
-    const prompt = String(
-      builder({
-        knownDomainText,
-        shortMemoryItems,
-        patchProtocol: patchMeta.protocol,
-        patchExample: patchMeta.example,
-      }) || "",
-    ).trim();
-    if (prompt) return prompt;
-  }
+  const localized = resolveLocalizedPrompt(promptI18n?.dailyExperiencePrompt, {
+    knownDomainText,
+    shortMemoryItems,
+    patchProtocol: patchMeta.protocol,
+    patchExample: patchMeta.example,
+  });
+  if (localized) return localized;
   return [
     "【系统指令】",
     "分析以下短期记忆，将其归入已知领域或创建新领域。",
@@ -61,19 +63,14 @@ export function buildWeeklySummaryPrompt({
   mergedText = "",
 } = {}) {
   const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "weekly");
-  const builder = promptI18n?.weeklySummaryPrompt;
-  if (typeof builder === "function") {
-    const prompt = String(
-      builder({
-        domainName,
-        knownCategoryText,
-        mergedText,
-        patchProtocol: patchMeta.protocol,
-        patchExample: patchMeta.example,
-      }) || "",
-    ).trim();
-    if (prompt) return prompt;
-  }
+  const localized = resolveLocalizedPrompt(promptI18n?.weeklySummaryPrompt, {
+    domainName,
+    knownCategoryText,
+    mergedText,
+    patchProtocol: patchMeta.protocol,
+    patchExample: patchMeta.example,
+  });
+  if (localized) return localized;
   return [
     "【系统指令】",
     `对以下【${domainName}】领域过去7天的记录进行体系化总结。`,
@@ -99,19 +96,14 @@ export function buildMonthlySummaryPrompt({
   mergedText = "",
 } = {}) {
   const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "monthly");
-  const builder = promptI18n?.monthlySummaryPrompt;
-  if (typeof builder === "function") {
-    const prompt = String(
-      builder({
-        domainName,
-        knownTreeText,
-        mergedText,
-        patchProtocol: patchMeta.protocol,
-        patchExample: patchMeta.example,
-      }) || "",
-    ).trim();
-    if (prompt) return prompt;
-  }
+  const localized = resolveLocalizedPrompt(promptI18n?.monthlySummaryPrompt, {
+    domainName,
+    knownTreeText,
+    mergedText,
+    patchProtocol: patchMeta.protocol,
+    patchExample: patchMeta.example,
+  });
+  if (localized) return localized;
   return [
     "【系统指令】",
     `分析以下【${domainName}】领域过去一个月的总结，聚焦模式识别。`,
@@ -137,19 +129,14 @@ export function buildYearlySummaryPrompt({
   mergedText = "",
 } = {}) {
   const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "yearly");
-  const builder = promptI18n?.yearlySummaryPrompt;
-  if (typeof builder === "function") {
-    const prompt = String(
-      builder({
-        domainName,
-        knownTreeText,
-        mergedText,
-        patchProtocol: patchMeta.protocol,
-        patchExample: patchMeta.example,
-      }) || "",
-    ).trim();
-    if (prompt) return prompt;
-  }
+  const localized = resolveLocalizedPrompt(promptI18n?.yearlySummaryPrompt, {
+    domainName,
+    knownTreeText,
+    mergedText,
+    patchProtocol: patchMeta.protocol,
+    patchExample: patchMeta.example,
+  });
+  if (localized) return localized;
   return [
     "【系统指令】",
     `站在更高视角审视【${domainName}】领域过去一年的复盘。`,

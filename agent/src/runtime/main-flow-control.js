@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const MAIN_FLOW_CONTROL_ACTION = Object.freeze({
+const MAIN_FLOW_CONTROL_ACTION = Object.freeze({
   FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
   SUMMARY_CHECKPOINT: "summary_checkpoint",
 });
@@ -57,7 +57,10 @@ function normalizeSummaryCheckpointInstruction(instruction = null) {
     source: String(value.source || "").trim(),
     summarizedMessageIds: (Array.isArray(value.summarizedMessageIds)
       ? value.summarizedMessageIds
-      : []).map((id) => String(id || "").trim()).filter(Boolean),
+      : []
+    )
+      .map((id) => String(id || "").trim())
+      .filter(Boolean),
   };
 }
 
@@ -88,9 +91,10 @@ export function peekMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
     ? systemRuntime.mainFlowControlInstructions
     : [];
   const pendingIndex = pending.findIndex((item) => normalizeSummaryCheckpointInstruction(item));
-  const instruction = pendingIndex >= 0
-    ? normalizeSummaryCheckpointInstruction(pending[pendingIndex])
-    : normalizeSummaryCheckpointInstruction(systemRuntime.mainFlowControlInstruction);
+  const instruction =
+    pendingIndex >= 0
+      ? normalizeSummaryCheckpointInstruction(pending[pendingIndex])
+      : normalizeSummaryCheckpointInstruction(systemRuntime.mainFlowControlInstruction);
   return instruction;
 }
 
@@ -157,9 +161,4 @@ export function markMainFlowFinalNoToolsTurnActive(runtimeOrSystemRuntime = {}, 
   if (!systemRuntime) return false;
   systemRuntime.mainFlowFinalNoToolsTurnActive = active === true;
   return true;
-}
-
-export function isMainFlowFinalNoToolsTurnActive(runtimeOrSystemRuntime = {}) {
-  const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
-  return systemRuntime?.mainFlowFinalNoToolsTurnActive === true;
 }

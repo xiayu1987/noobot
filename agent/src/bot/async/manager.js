@@ -6,7 +6,8 @@
 
 import { isValidSessionId, now } from "../utils/session-utils.js";
 import { AsyncJobResponseBuilder } from "./response-builder.js";
-import { ASYNC_JOB_STATUS } from "./constants.js";
+import { ASYNC_JOB_STATUS } from "../config/constants.js";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 export class AsyncJobLifecycleManager {
@@ -84,7 +85,10 @@ export class AsyncJobLifecycleManager {
   }
 
   async waitForJob(jobId, options = {}) {
-    const { pollInterval = 1000, maxWaitTime = 30000 } = options;
+    const {
+      pollInterval = TIME_THRESHOLDS.async.defaultPollIntervalMs,
+      maxWaitTime = TIME_THRESHOLDS.async.defaultMaxWaitTimeMs,
+    } = options;
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitTime) {
@@ -113,9 +117,7 @@ export class AsyncJobLifecycleManager {
 
   async listJobs(status) {
     const jobs = Array.from(this.jobs.values());
-    const filtered = status
-      ? jobs.filter((j) => j.status === status)
-      : jobs;
+    const filtered = status ? jobs.filter((j) => j.status === status) : jobs;
     return filtered.map((j) => this.responseBuilder.build(j));
   }
 
@@ -135,9 +137,7 @@ export class AsyncJobLifecycleManager {
   hasRunningJobs(sessionId) {
     if (!isValidSessionId(sessionId)) return false;
     return Array.from(this.jobs.values()).some(
-      (j) =>
-        j.sessionId === sessionId &&
-        j.status === ASYNC_JOB_STATUS.RUNNING,
+      (j) => j.sessionId === sessionId && j.status === ASYNC_JOB_STATUS.RUNNING,
     );
   }
 }

@@ -55,7 +55,8 @@ Provider 配置和模型请求执行不是 Agent Adapter。`@noobot/model-protoc
 
 - `AGENT_GLOBAL_CONFIG_PATH` 或 `NOOBOT_GLOBAL_CONFIG_PATH`
 - `AGENT_SYSTEM_PROMPT_PATH`
-- `AGENT_WORKSPACE_ROOT`
+
+工作区根目录不是环境变量，由全局配置字段 `workspace_root` 经 `@noobot/path-resolver` 统一解析。
 
 ## 插件策略
 

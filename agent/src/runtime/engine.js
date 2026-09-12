@@ -9,7 +9,7 @@ import { runFunctionCallLoop } from "./turn/orchestrator.js";
 import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
 import { runAgentRuntimeHook } from "../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { isAbortError } from "./utils/error-utils.js";
+import { isAbortError } from "../shared/utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent } from "../events/index.js";
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
@@ -272,39 +272,23 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
     return result;
   } catch (error) {
     const failedAtMs = Date.now();
-    if (isAbortError(error) || isAbortError(error?.cause)) {
-      await runAgentRuntimeHook({
-        runtime,
-        point: HOOK_POINT.AGENT.ON_ABORT,
-        context: buildHookContext(HOOK_POINT.AGENT.ON_ABORT, runtime, {
-          phase: "agent_turn",
-          status: "abort",
-          startedAt,
-          endedAt: new Date(failedAtMs).toISOString(),
-          durationMs: failedAtMs - startedAtMs,
-          agentContext,
-          userMessage,
-          error,
-          modelContext,
-        }),
-      });
-    } else {
-      await runAgentRuntimeHook({
-        runtime,
-        point: HOOK_POINT.AGENT.ON_ERROR,
-        context: buildHookContext(HOOK_POINT.AGENT.ON_ERROR, runtime, {
-          phase: "agent_turn",
-          status: "error",
-          startedAt,
-          endedAt: new Date(failedAtMs).toISOString(),
-          durationMs: failedAtMs - startedAtMs,
-          agentContext,
-          userMessage,
-          error,
-          modelContext,
-        }),
-      });
-    }
+    const aborted = isAbortError(error) || isAbortError(error?.cause);
+    const failurePoint = aborted ? HOOK_POINT.AGENT.ON_ABORT : HOOK_POINT.AGENT.ON_ERROR;
+    await runAgentRuntimeHook({
+      runtime,
+      point: failurePoint,
+      context: buildHookContext(failurePoint, runtime, {
+        phase: "agent_turn",
+        status: aborted ? "abort" : "error",
+        startedAt,
+        endedAt: new Date(failedAtMs).toISOString(),
+        durationMs: failedAtMs - startedAtMs,
+        agentContext,
+        userMessage,
+        error,
+        modelContext,
+      }),
+    });
     throw error;
   }
 }

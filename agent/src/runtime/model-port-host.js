@@ -115,17 +115,12 @@ export function createModelPort({ modelSpec, modelState = {} } = {}) {
   return requireModelPort(Object.freeze(port));
 }
 
-export function createAgentModelPort(modelState) {
+function createAgentModelPort(modelState) {
   return createModelPort({ modelState });
 }
 
 export function createAgentAuxiliaryModelPort({ modelSpec, modelState } = {}) {
   return createModelPort({ modelSpec, modelState });
-}
-
-export function attachAgentModelPort(modelState) {
-  modelState.modelPort = createAgentModelPort(modelState);
-  return modelState.modelPort;
 }
 
 export function initializeAgentModelHost({

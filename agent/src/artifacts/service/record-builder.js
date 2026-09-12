@@ -14,7 +14,7 @@ import {
 } from "../meta-ops.js";
 import { safeNum, safeStr } from "../../shared/utils/shared-utils.js";
 
-export function normalizeRelativePath(basePath, absolutePath) {
+function normalizeRelativePath(basePath, absolutePath) {
   return path.relative(basePath, absolutePath).split(path.sep).join("/");
 }
 
