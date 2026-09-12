@@ -437,3 +437,43 @@ test("SessionTurnPersister writes thinking timing to turn timing source when inj
   assert.equal(appendedTurns[1].turnTimingThinkingStartedAt, "");
   assert.equal(appendedTurns[1].turnTimingThinkingFinishedAt, "");
 });
+
+test("appendAgentMessages keeps relayCorrelationId on persisted injected turns", async () => {
+  const appendedTurns = [];
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async () => {},
+      appendTurn: async () => {},
+      appendTurns: async (payload = {}) => {
+        appendedTurns.push(...(Array.isArray(payload.turns) ? payload.turns : []));
+      },
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        messageUid: "sm_relay",
+        role: "user",
+        type: "message",
+        content: "[来自harness外部模型输出/guidance]\n分析中",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        relayCorrelationId: "rc_fixture_1",
+      },
+      {
+        messageUid: "sm_plain",
+        role: "assistant",
+        type: "message",
+        content: "done",
+      },
+    ],
+    dialogProcessId: "dp1",
+  });
+
+  assert.equal(appendedTurns.length, 2);
+  assert.equal(appendedTurns[0].relayCorrelationId, "rc_fixture_1");
+  assert.equal(appendedTurns[1].relayCorrelationId, "");
+});
