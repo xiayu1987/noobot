@@ -69,7 +69,7 @@ function createBuilderForAttachmentRuntimeTest({
   });
 }
 
-test("buildInitialContext always projects explicitly selected connectors", async () => {
+test("buildNewSessionContext always projects explicitly selected connectors", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     promptSections: ["base_prompt", "system_runtime"],
     selectedConnectorIds: ["con_db"],
@@ -93,13 +93,13 @@ test("buildInitialContext always projects explicitly selected connectors", async
     },
   });
 
-  const context = await builder.buildInitialContext({ dialogProcessId: "dp-connectors" });
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp-connectors" });
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
   assert.equal(systemText.includes('"connector_id": "con_db"'), true);
   assert.equal(systemText.includes('"connector_name": "primary"'), true);
 });
 
-test("buildInitialContext emits the default agent context debug structure", async () => {
+test("buildNewSessionContext emits the default agent context debug structure", async () => {
   const events = [];
   const builder = createBuilderForAttachmentRuntimeTest({
     promptSections: ["base_prompt", "system_runtime", "scenario"],
@@ -110,7 +110,7 @@ test("buildInitialContext emits the default agent context debug structure", asyn
     },
   });
 
-  await builder.buildInitialContext({ dialogProcessId: "dp-debug" });
+  await builder.buildNewSessionContext({ dialogProcessId: "dp-debug" });
 
   const event = events.find((item = {}) => item.event === "agent.context.executionScopeCreated");
   assert.ok(event);
@@ -130,7 +130,7 @@ test("buildInitialContext emits the default agent context debug structure", asyn
   assert.equal(JSON.stringify(event.data).includes("abortSignal"), false);
 });
 
-test("buildInitialContext prefers userMessageAttachments over legacy attachments", async () => {
+test("buildNewSessionContext prefers userMessageAttachments over legacy attachments", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     userMessageAttachments: [
       {
@@ -157,12 +157,12 @@ test("buildInitialContext prefers userMessageAttachments over legacy attachments
     promptSections: ["base_prompt", "system_runtime", "scenario"],
   });
 
-  const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
   assert.equal(context?.bindings?.runtime?.userMessageAttachments?.[0]?.attachmentId, "att_input");
   assert.deepEqual(context?.bindings?.runtime?.attachments, []);
 });
 
-test("buildInitialContext marks normalized superAdmin user as super user", async () => {
+test("buildNewSessionContext marks normalized superAdmin user as super user", async () => {
   const configuredSuperUserId = "xiayu-owner";
   const builder = new ContextBuilder({
     config: {
@@ -201,7 +201,7 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
     },
   });
 
-  const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
   assert.equal(context?.bindings?.runtime?.systemRuntime?.isSuperUser, true);
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(
@@ -216,7 +216,7 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
   );
 });
 
-test("buildInitialContext keeps turn identity in runtime but excludes it from system text", async () => {
+test("buildNewSessionContext keeps turn identity in runtime but excludes it from system text", async () => {
   const builder = new ContextBuilder({
     config: { globalConfig: {}, userConfig: {} },
     serviceContainer: {
@@ -240,7 +240,7 @@ test("buildInitialContext keeps turn identity in runtime but excludes it from sy
     },
   });
 
-  const context = await builder.buildInitialContext({ dialogProcessId: "dialog-runtime-only" });
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dialog-runtime-only" });
   const runtime = context.bindings.runtime.systemRuntime;
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
 
@@ -252,7 +252,7 @@ test("buildInitialContext keeps turn identity in runtime but excludes it from sy
   assert.equal(systemText.includes("turn-runtime-only"), false);
 });
 
-test("buildInitialContext keeps super user identity in system message when system_runtime is excluded", async () => {
+test("buildNewSessionContext keeps super user identity in system message when system_runtime is excluded", async () => {
   const configuredSuperUserId = "system-owner";
   const builder = new ContextBuilder({
     config: {
@@ -291,7 +291,7 @@ test("buildInitialContext keeps super user identity in system message when syste
     },
   });
 
-  const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(systemText.includes('"identity"'), true);
@@ -354,7 +354,7 @@ test("buildContextMessageBlocks prefers runtime userMessageAttachments for user 
   assert.equal(String(metaMessage.content || "").includes("att_legacy"), false);
 });
 
-test("buildInitialContext keeps user message attachments separate from runtime generated attachments when attachments section is excluded", async () => {
+test("buildNewSessionContext keeps user message attachments separate from runtime generated attachments when attachments section is excluded", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
     userMessageAttachments: [
       {
@@ -370,7 +370,7 @@ test("buildInitialContext keeps user message attachments separate from runtime g
     promptSections: ["base_prompt", "system_runtime", "scenario"],
   });
 
-  const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp_1" });
   const runtime = context?.bindings?.runtime || {};
   assert.equal(Array.isArray(runtime.userMessageAttachments), true);
   assert.equal(runtime.userMessageAttachments.length, 1);
@@ -378,7 +378,7 @@ test("buildInitialContext keeps user message attachments separate from runtime g
   assert.deepEqual(runtime.attachments, []);
 });
 
-test("buildInitialContext resolves session history and passes edited turnScopeId", async () => {
+test("buildNewSessionContext resolves session history and passes edited turnScopeId", async () => {
   const calls = [];
   const builder = new ContextBuilder({
     config: {
@@ -436,7 +436,7 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
     },
   });
 
-  const context = await builder.buildInitialContext({ dialogProcessId: "dp-current" });
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp-current" });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.currentDialogProcessId, "dp-current");
@@ -507,4 +507,75 @@ test("buildSystemRuntime does not allow systemRuntimePatch to grant super user",
 
   assert.equal(runtime.isSuperUser, false);
   assert.equal(runtime.userId, "super-root-user");
+});
+
+function createBuilderForLongMemoryTest(readLongMemoryCalls) {
+  return new ContextBuilder({
+    config: {
+      globalConfig: { workspaceRoot: "/tmp/noobot-test-workspace" },
+      userConfig: {},
+    },
+    serviceContainer: {
+      sessionManager: null,
+      memoryService: {
+        async readLongMemory(payload = {}) {
+          readLongMemoryCalls.push(payload);
+          return "remembered-long-memory";
+        },
+      },
+      attachmentService: {
+        async ingest() {
+          return [];
+        },
+      },
+      skillService: null,
+      eventListener: null,
+      botManager: null,
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId: "u1",
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      attachments: [],
+      runConfig: executionRunConfig("client-turn:long-memory", {
+        contextPolicy: { promptSections: ["base_prompt", "long_memory"] },
+      }),
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+}
+
+test("buildNewSessionContext resolves user level long memory on the first turn", async () => {
+  const readLongMemoryCalls = [];
+  const builder = createBuilderForLongMemoryTest(readLongMemoryCalls);
+
+  const context = await builder.buildNewSessionContext({ dialogProcessId: "dp-new-memory" });
+
+  assert.deepEqual(readLongMemoryCalls, [{ userId: "u1" }]);
+  assert.equal(
+    context.context.modelContext.messageBlocks.system.some((item) =>
+      String(item || "").includes("remembered-long-memory"),
+    ),
+    true,
+  );
+});
+
+test("buildExistingSessionContext resolves the same long memory as a new session", async () => {
+  const newSessionCalls = [];
+  const existingSessionCalls = [];
+  const newSessionContext = await createBuilderForLongMemoryTest(
+    newSessionCalls,
+  ).buildNewSessionContext({ dialogProcessId: "dp-parity" });
+  const existingSessionContext = await createBuilderForLongMemoryTest(
+    existingSessionCalls,
+  ).buildExistingSessionContext({ dialogProcessId: "dp-parity" });
+
+  assert.deepEqual(existingSessionCalls, newSessionCalls);
+  assert.deepEqual(
+    existingSessionContext.context.modelContext.messageBlocks.system,
+    newSessionContext.context.modelContext.messageBlocks.system,
+  );
 });

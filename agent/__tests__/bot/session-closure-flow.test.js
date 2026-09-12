@@ -220,7 +220,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       caller,
     };
     return {
-      async buildInitialContext({ dialogProcessId = "" } = {}) {
+      async buildNewSessionContext({ dialogProcessId = "" } = {}) {
         const effectiveAttachments =
           Array.isArray(userMessageAttachments) && userMessageAttachments.length
             ? userMessageAttachments
@@ -269,8 +269,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           },
         );
       },
-      async buildContinueContext({ dialogProcessId = "" } = {}) {
-        return this.buildInitialContext({ dialogProcessId });
+      async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
+        return this.buildNewSessionContext({ dialogProcessId });
       },
     };
   };
@@ -459,7 +459,7 @@ test("continue mode closed-loop: should build continue context and persist paren
   });
 
   engine._buildContextBuilder = ({ sessionId = "", runConfig = {} } = {}) => ({
-    async buildInitialContext({ dialogProcessId = "" } = {}) {
+    async buildNewSessionContext({ dialogProcessId = "" } = {}) {
       return createTestAgentExecutionScope(
         {
           currentTurnMessages: createCurrentTurnMessagesStore(),
@@ -474,7 +474,7 @@ test("continue mode closed-loop: should build continue context and persist paren
         },
       );
     },
-    async buildContinueContext({ dialogProcessId = "" } = {}) {
+    async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
       continueContextBuilt = true;
       capturedRunConfig = { ...runConfig };
       return createTestAgentExecutionScope(
@@ -518,7 +518,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     },
   });
 
-  assert.equal(continueContextBuilt, true, "continue 模式应走 buildContinueContext");
+  assert.equal(continueContextBuilt, true, "continue 模式应走 buildExistingSessionContext");
   assert.equal(
     capturedRunConfig?.runtimeModel,
     "anthropic",

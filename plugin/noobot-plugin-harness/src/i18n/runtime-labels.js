@@ -78,7 +78,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStagePhaseAcceptance: "阶段验收",
     responsibilityStageFinalAcceptance: "总体验收",
     responsibilityConstraintTemplate:
-      "只返回「{stage}」结果；有文本协议时必须遵守。不得执行或继续任务。",
+      "只返回「{stage}」结果；有文本协议时必须遵守。注：此请求是协助请求，无需执行工具。",
     responsibilityScenarioMismatchProtocol:
       "如果初始场景与当前用户实际意图不匹配，必须在本次输出中追加且只追加一个 [{block}] 文本协议块，返回当前实际场景；scenario 使用 general|text|programming，reason 简述不匹配原因，prompt 写当前实际场景对应的简洁处理策略。协议格式：\n[{block}]\nscenario = general|text|programming\nreason = 初始场景与当前实际意图不匹配\nprompt:\n<当前实际场景对应的处理策略>\n[/{block}]",
     scenarioPolicyGeneral: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.ZH_CN].general,
@@ -310,7 +310,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStagePhaseAcceptance: "phase acceptance",
     responsibilityStageFinalAcceptance: "final acceptance",
     responsibilityConstraintTemplate:
-      "Return only the {stage} result using the text protocol when provided. Do not execute or continue the task.",
+      "Return only the {stage} result using the text protocol when provided. Note: this is an assistance request; no tool execution is needed.",
     responsibilityScenarioMismatchProtocol:
       "If the initial scenario does not match the user's current actual intent, append exactly one [{block}] text-protocol block in this output to return the current actual scenario. Use scenario=general|text|programming; reason briefly explains the mismatch; prompt contains the concise handling policy for the current actual scenario. Protocol format:\n[{block}]\nscenario = general|text|programming\nreason = initial scenario does not match current actual intent\nprompt:\n<handling policy for the current actual scenario>\n[/{block}]",
     scenarioPolicyGeneral: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.EN_US].general,

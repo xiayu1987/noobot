@@ -51,7 +51,7 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
     /harness-phase-acceptance-request/.test(String(item?.content || "")),
   );
   const responsibilityIndex = ctx.modelContext.messages.findIndex((item = {}) =>
-    /只返回「阶段验收」结果；有文本协议时必须遵守。不得执行或继续任务。/.test(
+    /只返回「阶段验收」结果；有文本协议时必须遵守。注：此请求是协助请求，无需执行工具。/.test(
       String(item?.content || ""),
     ),
   );
@@ -301,7 +301,7 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   const phaseReportIndex = indexOf(/harness-phase-acceptance-reports/);
   const requestIndex = indexOf(/harness-phase-acceptance-request/);
   const responsibilityIndex = indexOf(
-    /只返回「阶段验收」结果；有文本协议时必须遵守。不得执行或继续任务。/,
+    /只返回「阶段验收」结果；有文本协议时必须遵守。注：此请求是协助请求，无需执行工具。/,
   );
 
   assert.equal(messages[agentSystemIndex]?.role, "system");

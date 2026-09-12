@@ -31,7 +31,7 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
   );
 
   const contextBuilder = {
-    async buildInitialContext() {
+    async buildNewSessionContext() {
       return createTestAgentExecutionScope(
         { hookManager },
         {
@@ -44,7 +44,7 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
         },
       );
     },
-    async buildContinueContext() {
+    async buildExistingSessionContext() {
       throw new Error("should not be called");
     },
   };
@@ -102,10 +102,10 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
   );
 
   const contextBuilder = {
-    async buildInitialContext() {
+    async buildNewSessionContext() {
       throw new Error("context build failed");
     },
-    async buildContinueContext() {
+    async buildExistingSessionContext() {
       throw new Error("should not be called");
     },
   };

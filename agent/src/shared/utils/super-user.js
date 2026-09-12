@@ -17,11 +17,13 @@ function resolveRuntimeFromAgentContext(agentContext = {}) {
 
 export function resolveConfiguredSuperUserId(globalConfig = {}) {
   const config = asObject(globalConfig) || {};
-  return String(
-    config?.superAdmin?.userId ||
-      config?.super_admin?.user_id ||
-      "",
-  ).trim();
+  return String(config?.superAdmin?.userId || config?.super_admin?.user_id || "").trim();
+}
+
+export function isConfiguredSuperUser({ globalConfig = {}, userId = "" } = {}) {
+  const configuredSuperUserId = resolveConfiguredSuperUserId(globalConfig);
+  if (!configuredSuperUserId) return false;
+  return String(userId || "").trim() === configuredSuperUserId;
 }
 
 export function isSuperAdminRole(role = "") {
@@ -41,12 +43,14 @@ export function isSuperUserAgentContext(agentContext = {}) {
   const runtime = resolveRuntimeFromAgentContext(context);
   const systemRuntime = asObject(runtime?.systemRuntime) || {};
   if (systemRuntime?.isSuperUser === true) return true;
-  if (isSuperAdminRole(
-    context?.environment?.identity?.role ||
-      context?.auth?.role ||
-      runtime?.role ||
-      systemRuntime?.role,
-  )) {
+  if (
+    isSuperAdminRole(
+      context?.environment?.identity?.role ||
+        context?.auth?.role ||
+        runtime?.role ||
+        systemRuntime?.role,
+    )
+  ) {
     return true;
   }
   return false;
