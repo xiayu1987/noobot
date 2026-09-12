@@ -507,7 +507,6 @@ describe("useChatList", () => {
           },
         ],
       },
-      { scrollToBottom: false },
     );
 
     expect(refs.activeSessionId.value).toBe("reload-backend");

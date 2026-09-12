@@ -69,14 +69,6 @@ export function useChatMessageNavigatorPanel({
     });
   }
 
-  function locateSendingStartedMessage() {
-    navigateToLastMessage();
-  }
-
-  function locateDoneMessage() {
-    navigateToLastMessage();
-  }
-
   function openChatMessageNavigator() {
     openChatMessageNavigatorState({
       mobileChatNavigatorVisible,
@@ -126,9 +118,6 @@ export function useChatMessageNavigatorPanel({
     chatMessageNavItems,
     handleSelectChatMessageNavItem,
     navigateToLastMessage,
-    locateLastChatMessageNavItem: navigateToLastMessage,
-    locateSendingStartedMessage,
-    locateDoneMessage,
     openChatMessageNavigator,
     handleMobileChatNavigatorClosed,
     bindChatMessageScrollSync,

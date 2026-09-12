@@ -258,14 +258,14 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .plugin-model-title {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
   font-weight: 700;
   color: var(--noobot-text-strong, var(--el-text-color-primary));
 }
 
 .plugin-model-description {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.45;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
@@ -294,7 +294,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .plugin-model-label {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: 650;
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
@@ -325,7 +325,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
   padding-left: var(--noobot-space-xs);
   padding-right: var(--noobot-space-xs);
   box-sizing: border-box;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 
 .plugin-fixed-text {
@@ -348,7 +348,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
     var(--el-color-primary) 6%,
     var(--noobot-control-bg, var(--el-bg-color))
   );
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 
 .plugin-guidance-analysis-control {
@@ -378,9 +378,9 @@ function isHarnessStepModelDisabled(stepKey = "") {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  gap: var(--noobot-space-2xs-plus);
+  gap: var(--noobot-space-xs);
   max-width: 42%;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.2;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
   white-space: nowrap;
@@ -388,7 +388,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 
 .plugin-guidance-analysis-title strong {
   color: var(--el-color-primary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
   font-weight: 700;
 }
 
@@ -414,8 +414,8 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .composer-select :deep(.el-select__wrapper) {
-  min-height: 38px;
-  height: 38px;
+  min-height: var(--noobot-control-height-lg);
+  height: var(--noobot-control-height-lg);
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
   background: color-mix(
@@ -467,7 +467,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .model-option-meta,
 .model-option-description,
 .plugin-empty-text {
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.35;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
@@ -484,11 +484,6 @@ function isHarnessStepModelDisabled(stepKey = "") {
 
   .plugin-model-grid {
     grid-template-columns: 1fr;
-  }
-
-  .composer-select :deep(.el-select__wrapper) {
-    min-height: 38px;
-    height: 38px;
   }
 }
 </style>

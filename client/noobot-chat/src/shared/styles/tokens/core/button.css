@@ -8,9 +8,7 @@
     opacity var(--noobot-duration-normal) ease;
   --noobot-btn-disabled-opacity: 0.6;
 
-  --noobot-btn-soft-bg: var(--noobot-surface-soft);
   --noobot-btn-soft-bg-hover: var(--noobot-surface-soft-hover);
-  --noobot-btn-soft-border: var(--noobot-panel-border);
   --noobot-btn-soft-text: var(--noobot-text-secondary);
 
   --noobot-btn-primary-bg: var(--noobot-accent);

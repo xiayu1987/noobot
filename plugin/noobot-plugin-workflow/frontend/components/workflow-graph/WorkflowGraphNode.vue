@@ -328,7 +328,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node-name {
   font-weight: 600;
   line-height: 1.25;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   word-break: break-word;
 }
 

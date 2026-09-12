@@ -66,8 +66,6 @@ export function createChatEngineSender({
   interactionSubmitting,
   isImageMime,
   locale,
-  locateSendingStartedMessage,
-  locateDoneMessage,
   makeViewMessage,
   mergeAssistantAttachments,
   notify,
@@ -293,8 +291,6 @@ export function createChatEngineSender({
         botMessage: summarizeDebugMessage(botMsg),
         botThinkingStartedAt: botMsg?.thinkingStartedAt || "",
       }));
-      let locatedSendingStartedMessage = false;
-
       const pendingAuthorityResolutions = [];
       const trackAuthorityResolution = (result) => {
         if (result && typeof result.then === "function") {
@@ -311,11 +307,6 @@ export function createChatEngineSender({
         trackAuthorityResolution(applyRunStateEvent?.(event));
       const applyTrackedTurnLifecycleEnvelope = (envelope) =>
         trackAuthorityResolution(applyTurnLifecycleEnvelope?.(envelope));
-      const locateSendingStartedMessageOnce = () => {
-        if (locatedSendingStartedMessage) return;
-        locatedSendingStartedMessage = true;
-        locateSendingStartedMessage?.();
-      };
       const streamState = {
         get lastStreamErrorEventData() {
           return lastStreamErrorEventData;
@@ -342,8 +333,6 @@ export function createChatEngineSender({
         findCanonicalMessagesById,
         materializeTurnPresentation,
         foldMessagesForView,
-        locateDoneMessage,
-        locateSendingStartedMessageOnce,
         logSessionEvent,
         makeViewMessage,
         mergeAssistantAttachments,

@@ -48,8 +48,6 @@ export function useChatEngine({
   isImageMime,
   classifyRealtimeLog,
   navigateToLastMessage,
-  locateSendingStartedMessage,
-  locateDoneMessage,
   activeSession,
   activeSessionId,
   sessions,
@@ -93,6 +91,13 @@ export function useChatEngine({
   monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
 } = {}) {
   const { translate, locale } = useLocale();
+  const turnTerminalNavigatedKeys = new Set();
+  const navigateToLastMessageOnTurnTerminalOnce = (sessionId, turnScopeId) => {
+    const key = `${sessionId}::${turnScopeId}`;
+    if (turnTerminalNavigatedKeys.has(key)) return;
+    turnTerminalNavigatedKeys.add(key);
+    navigateToLastMessage?.();
+  };
   const applyAuthoritativeTerminalResolution = (response) => {
     const sessionId = String(response?.sessionId || "").trim();
     const turnScopeId = String(response?.turnScopeId || "").trim();
@@ -132,6 +137,7 @@ export function useChatEngine({
         const targetSession = activeSession?.value;
         if (String(targetSession?.sessionId || "").trim() === sessionId) {
           applyLatestSessionAggregateVersion(targetSession, response);
+          navigateToLastMessageOnTurnTerminalOnce(sessionId, turnScopeId);
         }
         const projected = selectSessionTurnRuntime(
           turnRuntimeRegistry?.value,
@@ -382,8 +388,6 @@ export function useChatEngine({
     classifyRealtimeLog,
   };
   const senderUiDeps = {
-    locateSendingStartedMessage,
-    locateDoneMessage,
     navigateToLastMessage,
     notify,
     translate,

@@ -288,7 +288,7 @@ button {
 .character-animation-assets__sample {
   margin-bottom: var(--noobot-space-sm);
   padding: 0;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 button:disabled {
   cursor: wait;
@@ -298,21 +298,21 @@ button:disabled {
   display: block;
   margin-bottom: var(--noobot-space-sm);
   color: #93a4bb;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   cursor: pointer;
 }
 input[type="file"] {
   display: block;
   width: 100%;
-  margin-top: var(--noobot-space-2xs-plus);
+  margin-top: var(--noobot-space-xs);
 }
 .character-animation-assets__item {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  padding: var(--noobot-space-2xs-plus) 0;
-  font-size: 12px;
+  padding: var(--noobot-space-xs) 0;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__item > span {
   min-width: 0;
@@ -340,7 +340,7 @@ input[type="file"] {
   padding: 5px 0;
   border-top: 1px solid color-mix(in srgb, #385170 55%, transparent);
   color: #dbeafe;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__inventory-item > span {
   min-width: 0;
@@ -350,11 +350,11 @@ input[type="file"] {
 }
 .character-animation-assets__error {
   color: #fca5a5;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__empty {
   color: #71839d;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__previews {
   display: grid;
@@ -369,7 +369,7 @@ input[type="file"] {
 .character-animation-assets__preview-title {
   margin: var(--noobot-space-2xs) 0;
   color: #93a4bb;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__preview-header {
   display: flex;

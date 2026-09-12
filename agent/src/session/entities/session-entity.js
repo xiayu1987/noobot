@@ -45,9 +45,13 @@ export function normalizeTurnTimingEntity(timing = {}) {
   if (!turnScopeId) return null;
   const thinkingStartedAt = String(timing?.thinkingStartedAt || "").trim();
   const thinkingFinishedAt = String(timing?.thinkingFinishedAt || "").trim();
+  const modelLoopRoundValue = Number(timing?.modelLoopRound || 0);
+  const modelLoopRound =
+    Number.isFinite(modelLoopRoundValue) && modelLoopRoundValue > 0 ? modelLoopRoundValue : 0;
   const normalized = { turnScopeId, dialogProcessId };
   if (thinkingStartedAt) normalized.thinkingStartedAt = thinkingStartedAt;
   if (thinkingFinishedAt) normalized.thinkingFinishedAt = thinkingFinishedAt;
+  if (modelLoopRound) normalized.modelLoopRound = modelLoopRound;
   return normalized;
 }
 

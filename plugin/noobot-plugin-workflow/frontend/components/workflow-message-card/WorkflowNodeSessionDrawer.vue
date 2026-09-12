@@ -482,7 +482,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 
 .workflow-node-session-drawer__body .workflow-node-empty {
   color: var(--noobot-text-secondary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
 }
 
 .workflow-node-session-item {
@@ -519,7 +519,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 .workflow-execution-directory__stop-error {
   color: var(--el-color-danger);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .workflow-execution-directory__group {
   display: flex;
@@ -530,7 +530,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 .workflow-execution-directory__label {
   flex-basis: 100%;
   color: var(--noobot-text-secondary);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .workflow-execution-directory__item {
   border: 1px solid var(--noobot-msg-assistant-border);
@@ -579,7 +579,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 
 .workflow-runtime-panel-subtitle {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.45;
   color: var(--noobot-text-secondary);
 }
@@ -604,7 +604,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   gap: 10px;
   margin-bottom: 8px;
   color: var(--noobot-text-primary);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: 650;
 }
 
@@ -658,7 +658,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: 600;
 }
 
@@ -693,6 +693,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 .workflow-runtime-step-empty {
   margin-top: 6px;
   color: var(--noobot-text-secondary);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 </style>

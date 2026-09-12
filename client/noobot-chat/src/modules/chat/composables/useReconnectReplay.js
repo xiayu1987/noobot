@@ -273,9 +273,7 @@ export function useReconnectReplay({
         })
         .catch(() => null);
       if (detail) {
-        chatList.applySessionDetail(detail, {
-          scrollToBottom: false,
-        });
+        chatList.applySessionDetail(detail);
         detailApplied = true;
       }
     }
@@ -335,7 +333,6 @@ export function useReconnectReplay({
       dialogProcessId,
       turnScopeId,
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
-      navigateToLastMessage,
       processStore,
     });
   }

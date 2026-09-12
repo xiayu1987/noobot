@@ -560,12 +560,6 @@ watch(
   overflow: hidden;
 }
 
-.workspace-panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .empty-tip :deep(.el-empty__description p) {
   color: var(--noobot-text-muted);
 }

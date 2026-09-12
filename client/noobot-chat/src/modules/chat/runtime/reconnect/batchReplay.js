@@ -149,7 +149,6 @@ export async function applyReconnectReplayBatchToActiveSession({
   messages = [],
   dialogProcessId = "",
   turnScopeId = "",
-  navigateToLastMessage,
 } = {}) {
   if (!activeSession?.value) return false;
   const normalizedDpId = _trimStr(dialogProcessId);
@@ -196,6 +195,5 @@ export async function applyReconnectReplayBatchToActiveSession({
     materializeTurnPresentation,
     normalizedDpId,
   });
-  if (appliedCount > 0) navigateToLastMessage?.();
   return appliedCount > 0;
 }

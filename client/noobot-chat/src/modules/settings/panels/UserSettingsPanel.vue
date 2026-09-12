@@ -511,12 +511,6 @@ watch(
 </template>
 
 <style scoped>
-.workspace-panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .code-row {
   display: flex;
   gap: var(--noobot-space-xs);

@@ -92,7 +92,7 @@ defineEmits([
 
 .workflow-card-subtitle {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   color: var(--noobot-text-secondary);
 }
 
@@ -104,7 +104,7 @@ defineEmits([
   border-radius: var(--noobot-radius-sm);
   background: var(--noobot-accent-soft);
   color: var(--noobot-text-primary);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   cursor: pointer;
 }
 
@@ -126,7 +126,7 @@ defineEmits([
   margin: 0;
   padding: var(--workflow-card-space-sm) var(--workflow-card-space-md);
   color: var(--noobot-text-primary);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.55;
   background: transparent;
   overflow: visible;
@@ -137,13 +137,13 @@ defineEmits([
 }
 
 .workflow-node-title {
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
   margin-bottom: 6px;
   color: var(--noobot-text-secondary);
 }
 
 .workflow-node-empty {
   color: var(--noobot-text-secondary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
 }
 </style>
