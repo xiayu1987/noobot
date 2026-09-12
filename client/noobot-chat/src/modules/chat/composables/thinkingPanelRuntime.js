@@ -66,6 +66,11 @@ export function useThinkingRuntime(props, getRuntimeView) {
     return getRuntimeView(messageItem).running;
   }
 
+  function getThinkingModelLoopRound(messageItem = {}) {
+    const round = Number(getRuntimeView(messageItem)?.modelLoopRound || 0);
+    return Number.isFinite(round) && round > 0 ? round : 0;
+  }
+
   function startTimer() {
     if (timer) return;
     timer = setInterval(() => {
@@ -137,5 +142,6 @@ export function useThinkingRuntime(props, getRuntimeView) {
   return {
     getThinkingDurationLabel,
     isThinkingRuntimeRunning,
+    getThinkingModelLoopRound,
   };
 }

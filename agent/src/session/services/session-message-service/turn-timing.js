@@ -15,12 +15,16 @@ export function upsertSessionTurnTiming(session = {}, timing = {}) {
   const dialogProcessId = resolveContextMessageDialogProcessId(timing);
   const thinkingStartedAt = normalizeAnchorValue(timing?.thinkingStartedAt);
   const thinkingFinishedAt = normalizeAnchorValue(timing?.thinkingFinishedAt);
-  if (!turnScopeId || (!thinkingStartedAt && !thinkingFinishedAt)) return;
+  const modelLoopRoundValue = Number(timing?.modelLoopRound || 0);
+  const modelLoopRound =
+    Number.isFinite(modelLoopRoundValue) && modelLoopRoundValue > 0 ? modelLoopRoundValue : 0;
+  if (!turnScopeId || (!thinkingStartedAt && !thinkingFinishedAt && !modelLoopRound)) return;
   const incoming = {
     turnScopeId,
     dialogProcessId,
     ...(thinkingStartedAt ? { thinkingStartedAt } : {}),
     ...(thinkingFinishedAt ? { thinkingFinishedAt } : {}),
+    ...(modelLoopRound ? { modelLoopRound } : {}),
   };
   const incomingKey = resolveTurnTimingKey(incoming);
   const source = Array.isArray(session.turnTimings) ? session.turnTimings : [];

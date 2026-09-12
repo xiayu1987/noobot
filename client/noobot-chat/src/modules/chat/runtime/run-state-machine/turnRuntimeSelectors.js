@@ -119,6 +119,7 @@ export function selectTurnMessageRuntime(
     running: false,
     startedAt: "",
     finishedAt: "",
+    modelLoopRound: 0,
   };
   let normalizedTurnScopeId = canonicalTurnScopeId(turnScopeId);
   let routeSessionId = "";
@@ -172,6 +173,7 @@ export function selectTurnMessageRuntime(
         ].includes(turn.state)),
     startedAt: turn.startedAt || turn.thinkingStartedAt || "",
     finishedAt: turn.finishedAt || turn.thinkingFinishedAt || "",
+    modelLoopRound: Number(turn.modelLoopRound || 0),
   };
 }
 

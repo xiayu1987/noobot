@@ -126,17 +126,20 @@ test("SessionMessageService.appendTurn stores thinking timing in turnTimings wit
     thinkingFinishedAt: "",
     turnTimingThinkingStartedAt: "2026-07-08T15:45:58.275Z",
     turnTimingThinkingFinishedAt: "2026-07-08T15:47:11.710Z",
+    turnTimingModelLoopRound: 6,
   });
 
   assert.equal(saved.length, 1);
   assert.equal(saved[0].messages[0].thinkingStartedAt, undefined);
   assert.equal(saved[0].messages[0].thinkingFinishedAt, undefined);
+  assert.equal(saved[0].messages[0].modelLoopRound, undefined);
   assert.deepEqual(saved[0].turnTimings, [
     {
       turnScopeId: "turn-1",
       dialogProcessId: "dp-1",
       thinkingStartedAt: "2026-07-08T15:45:58.275Z",
       thinkingFinishedAt: "2026-07-08T15:47:11.710Z",
+      modelLoopRound: 6,
     },
   ]);
 });

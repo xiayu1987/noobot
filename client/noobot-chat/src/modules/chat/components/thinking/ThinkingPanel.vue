@@ -65,6 +65,7 @@ const {
   hasThinking,
   getThinkingDurationLabel,
   isThinkingRuntimeRunning,
+  getThinkingModelLoopRound,
   getLatestPluginAnalysisLog,
   getLatestMainModelContentLog,
   currentExecutionLogs,
@@ -92,6 +93,7 @@ defineExpose({
     :message-item="messageItem"
     :translate="translate"
     :thinking-duration-label="getThinkingDurationLabel()"
+    :thinking-model-loop-round="getThinkingModelLoopRound(messageItem)"
     :is-running="isThinkingRuntimeRunning(messageItem)"
     :latest-plugin-analysis-log="getLatestPluginAnalysisLog(messageItem)"
     :latest-main-model-content-log="getLatestMainModelContentLog(messageItem)"
