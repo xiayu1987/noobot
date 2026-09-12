@@ -48,7 +48,7 @@ export async function readJsonArtifactFile(filePath = "", fallback = null) {
   return readPersistedJsonFile({ filePath, fallback, readFile });
 }
 
-export function createSessionDeletedArtifactError(
+function createSessionDeletedArtifactError(
   sessionId = "",
   operation = "session artifact mutation",
 ) {

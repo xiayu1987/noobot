@@ -7,10 +7,8 @@ import { filePath as path } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { buildSessionDisplaySummary } from "../session-summary-builders.js";
-import {
-  assertSessionMessageIdentityInvariants,
-  normalizeSessionEntity,
-} from "../entities/session-entity.js";
+import { assertSessionMessageIdentityInvariants } from "../entities/message-entity.js";
+import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
   buildSessionArtifactFileMap,
   SESSION_ARTIFACT_FILE_NAMES,

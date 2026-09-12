@@ -19,7 +19,7 @@ import { SessionMessageService } from "../../src/session/services/session-messag
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 import { StorageService } from "../../src/session/storage-service.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { normalizeMessagesEntity } from "../../src/session/entities/session-entity.js";
+import { normalizeMessagesEntity } from "../../src/session/entities/message-entity.js";
 import { normalizeTaskEntity } from "../../src/session/entities/task-entity.js";
 import {
   ScopedSessionLocationResolver,
