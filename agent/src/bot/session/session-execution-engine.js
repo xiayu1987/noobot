@@ -38,32 +38,8 @@ import {
 import { commitSummaryCheckpoint } from "./summary-checkpoint-committer.js";
 
 export class SessionExecutionEngine {
-  constructor({
-    globalConfig = {},
-    session = null,
-    memory = null,
-    attach = null,
-    skill = null,
-    configService = null,
-    workspaceService = null,
-    errorLogger = null,
-    botManager = null,
-    agentRunner = runAgentTurn,
-    pluginRuntimeBundle = null,
-  } = {}) {
-    this._assignCoreDependencies({
-      globalConfig,
-      session,
-      memory,
-      attach,
-      skill,
-      configService,
-      workspaceService,
-      errorLogger,
-      botManager,
-      agentRunner,
-      pluginRuntimeBundle,
-    });
+  constructor(dependencies = {}) {
+    this._assignCoreDependencies(dependencies);
     this._initializeCoreServices();
     this._initializeRuntimeServices();
     this._initializeExecutionServices();
@@ -643,70 +619,12 @@ export class SessionExecutionEngine {
     return this.session?.getExecutionTree?.(payload);
   }
 
-  async _initializeRunSessionRuntime({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    caller = CALLER_ROLE.USER,
-    eventListener = null,
-    dialogProcessId = "",
-    turnScopeId = "",
-    thinkingStartedAt = "",
-    persistenceContext = null,
-  }) {
-    return this.initializer.initializeRunSessionRuntime({
-      userId,
-      sessionId,
-      parentSessionId,
-      caller,
-      eventListener,
-      dialogProcessId,
-      turnScopeId,
-      thinkingStartedAt,
-      persistenceContext,
-    });
+  async _initializeRunSessionRuntime(payload = {}) {
+    return this.initializer.initializeRunSessionRuntime(payload);
   }
 
-  async _finalizeRunSession({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    parentDialogProcessId = "",
-    caller = CALLER_ROLE.USER,
-    dialogProcessId = "",
-    turnScopeId = "",
-    thinkingStartedAt = "",
-    agentResult = {},
-    alreadyPersistedTurnMessageCount = 0,
-    persistedTurnMessages = null,
-    summaryCheckpointPromotionSources = [],
-    executionStartIndex = 0,
-    runtimeEventListener = null,
-    userConfig = {},
-    resolvedParentAsyncResultContainer = null,
-    lifecycle = null,
-    persistenceContext = null,
-  }) {
-    return this.finalizer.finalizeRunSession({
-      userId,
-      sessionId,
-      parentSessionId,
-      parentDialogProcessId,
-      caller,
-      dialogProcessId,
-      turnScopeId,
-      thinkingStartedAt,
-      agentResult,
-      alreadyPersistedTurnMessageCount,
-      persistedTurnMessages,
-      summaryCheckpointPromotionSources,
-      executionStartIndex,
-      runtimeEventListener,
-      userConfig,
-      resolvedParentAsyncResultContainer,
-      lifecycle,
-      persistenceContext,
-    });
+  async _finalizeRunSession(payload = {}) {
+    return this.finalizer.finalizeRunSession(payload);
   }
 
   _mergePluginOptions(...items) {

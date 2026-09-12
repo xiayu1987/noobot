@@ -3,14 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isAbortError } from "../utils/error-utils.js";
+import { isAbortError } from "../../shared/utils/error-utils.js";
 
 export function classifyEngineError(error = null) {
   if (isAbortError(error) || isAbortError(error?.cause)) {
     return "abort";
   }
 
-  const level = String(error?.level || "").trim().toLowerCase();
+  const level = String(error?.level || "")
+    .trim()
+    .toLowerCase();
   const code = String(error?.code || "").trim();
   if (error?.fatal === true || level === "fatal" || code.startsWith("FATAL_")) {
     return "fatal";
@@ -32,10 +34,7 @@ export function classifyEngineError(error = null) {
   }
 
   const message = String(
-    error?.message ??
-      error?.error?.message ??
-      error?.cause?.message ??
-      "",
+    error?.message ?? error?.error?.message ?? error?.cause?.message ?? "",
   ).toLowerCase();
   if (
     message.includes("internal server error") ||

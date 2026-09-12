@@ -36,7 +36,7 @@ export async function linkParsedResultToAttachment(
   return updatedRecord;
 }
 
-export async function linkParsedResultInScopes({
+async function linkParsedResultInScopes({
   basePath = "",
   sourceIdentity,
   targetAttachment,

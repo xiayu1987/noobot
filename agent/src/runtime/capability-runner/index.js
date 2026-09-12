@@ -257,36 +257,42 @@ export function createAgentCapabilityModelInvoker({
     if (!modelPort || typeof modelPort.invoke !== "function") {
       throw new TypeError("capability model execution requires the host ModelPort");
     }
+    const invocationDescriptor = {
+      flow: flowValue,
+      purpose: normalizedPurpose,
+      domain: normalizedDomain,
+      contextSequencePolicy: normalizedContextSequencePolicy,
+    };
+    const baseInvokeOptions = {
+      streaming: false,
+      signal: invocationSignal,
+      headers: additionalHeaders,
+    };
+    const emitCapabilityResponseLog = async (outputText, data = {}) =>
+      emitPluginCapabilityRealtimeLog({
+        ctx,
+        event: "plugin_capability_response",
+        text: `Plugin 模型返回 / ${purpose || "unknown"}${outputText ? `\n${outputText}` : ""}`,
+        data: {
+          ...pluginCapabilityLogBase,
+          output: outputText,
+          ...data,
+        },
+      });
 
     if (enableToolBinding !== true) {
       const ai = validateModelResponse(
         await modelPort.invoke({
           model: modelSpec,
           messages: runMessages,
-          options: {
-            streaming: false,
-            signal: invocationSignal,
-            headers: additionalHeaders,
-          },
-          invocation: {
-            flow: flowValue,
-            purpose: normalizedPurpose,
-            domain: normalizedDomain,
-            contextSequencePolicy: normalizedContextSequencePolicy,
-          },
+          options: { ...baseInvokeOptions },
+          invocation: invocationDescriptor,
         }),
       );
       const text = String(ai?.output?.text || "");
-      await emitPluginCapabilityRealtimeLog({
-        ctx,
-        event: "plugin_capability_response",
-        text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
-        data: {
-          ...pluginCapabilityLogBase,
-          output: text,
-          finishedReason: "tool_binding_disabled",
-          turn: 1,
-        },
+      await emitCapabilityResponseLog(text, {
+        finishedReason: "tool_binding_disabled",
+        turn: 1,
       });
       return ai;
     }
@@ -315,17 +321,10 @@ export function createAgentCapabilityModelInvoker({
           messages: runMessages,
           tools: boundTools,
           options: {
-            streaming: false,
-            signal: invocationSignal,
-            headers: additionalHeaders,
+            ...baseInvokeOptions,
             toolBinding: bindOptions,
           },
-          invocation: {
-            flow: flowValue,
-            purpose: normalizedPurpose,
-            domain: normalizedDomain,
-            contextSequencePolicy: normalizedContextSequencePolicy,
-          },
+          invocation: invocationDescriptor,
         }),
       );
       const text = String(ai?.output?.text || "");
@@ -338,17 +337,7 @@ export function createAgentCapabilityModelInvoker({
         });
       }
       if (!calls.length) {
-        await emitPluginCapabilityRealtimeLog({
-          ctx,
-          event: "plugin_capability_response",
-          text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
-          data: {
-            ...pluginCapabilityLogBase,
-            output: text,
-            finishedReason: "no_tool_call",
-            turn,
-          },
-        });
+        await emitCapabilityResponseLog(text, { finishedReason: "no_tool_call", turn });
         return ai;
       }
 
@@ -404,32 +393,16 @@ export function createAgentCapabilityModelInvoker({
       await modelPort.invoke({
         model: modelSpec,
         messages: [{ role: "system", content: finalizePrompt }, ...runMessages],
-        options: {
-          streaming: false,
-          signal: invocationSignal,
-          headers: additionalHeaders,
-        },
-        invocation: {
-          flow: flowValue,
-          purpose: normalizedPurpose,
-          domain: normalizedDomain,
-          contextSequencePolicy: normalizedContextSequencePolicy,
-        },
+        options: { ...baseInvokeOptions },
+        invocation: invocationDescriptor,
       }),
     );
     const finalizedText = String(finalAi.output.text || "");
 
-    await emitPluginCapabilityRealtimeLog({
-      ctx,
-      event: "plugin_capability_response",
-      text: `Plugin 模型返回 / ${purpose || "unknown"}${finalizedText ? `\n${finalizedText}` : ""}`,
-      data: {
-        ...pluginCapabilityLogBase,
-        output: finalizedText,
-        finishedReason: "max_turn_reached_finalized",
-        turn: maxTurnCount,
-        toolTurnLimitReached: true,
-      },
+    await emitCapabilityResponseLog(finalizedText, {
+      finishedReason: "max_turn_reached_finalized",
+      turn: maxTurnCount,
+      toolTurnLimitReached: true,
     });
 
     return finalAi;

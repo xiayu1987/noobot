@@ -7,25 +7,10 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
-export function encodeAttachmentScopeSegment(value, fieldName) {
+function encodeAttachmentScopeSegment(value, fieldName) {
   const segment = safeStr(value);
   if (!segment) throw new TypeError(`${fieldName} is required`);
   return encodeURIComponent(segment);
-}
-
-export function decodeAttachmentScopeSegment(value, fieldName) {
-  const encoded = safeStr(value);
-  if (!encoded) throw new TypeError(`${fieldName} is required`);
-  let decoded;
-  try {
-    decoded = decodeURIComponent(encoded);
-  } catch {
-    throw new TypeError(`${fieldName} has invalid encoding`);
-  }
-  if (encodeAttachmentScopeSegment(decoded, fieldName) !== encoded) {
-    throw new TypeError(`${fieldName} is not canonically encoded`);
-  }
-  return decoded;
 }
 
 export function attachScopedRoot(basePath) {

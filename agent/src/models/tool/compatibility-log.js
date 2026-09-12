@@ -4,25 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import { filePath as path } from "@noobot/path-resolver";
+import { filePath as path, resolveRuntimeWorkspaceRoot } from "@noobot/path-resolver";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
-
-function resolveWorkspaceRoot({ runtime = {}, modelState = {} } = {}) {
-  const runtimeBasePath = String(runtime?.basePath || "").trim();
-  if (runtimeBasePath) {
-    return path.resolve(runtimeBasePath, "..");
-  }
-  const envWorkspaceRoot = String(process.env?.AGENT_WORKSPACE_ROOT || "").trim();
-  if (envWorkspaceRoot) {
-    return path.resolve(process.cwd(), envWorkspaceRoot);
-  }
-  const globalConfig = modelState?.globalConfig || {};
-  const configuredWorkspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
-  if (configuredWorkspaceRoot) {
-    return path.resolve(process.cwd(), configuredWorkspaceRoot);
-  }
-  return path.resolve(process.cwd(), "workspace");
-}
 
 export function buildToolCompatibilityLogLine({
   modelState = {},
@@ -48,8 +31,14 @@ export async function appendToolCompatibilityLog({
   event = "",
   tools = [],
 } = {}) {
-  const workspaceRoot = resolveWorkspaceRoot({ runtime, modelState });
-  const targetPath = path.join(workspaceRoot, "tool-compatibility.log");
+  const workspaceRoot = resolveRuntimeWorkspaceRoot({
+    runtime,
+    globalConfig: modelState?.globalConfig || {},
+  });
+  if (!workspaceRoot) {
+    throw new Error("tool compatibility log requires an authoritative workspace root");
+  }
+  const targetPath = path.join(path.resolve(workspaceRoot), "tool-compatibility.log");
   await mkdir(path.dirname(targetPath), { recursive: true });
   const line = buildToolCompatibilityLogLine({ modelState, runtime, event, tools });
   await appendFile(targetPath, `${line}\n`, "utf8");

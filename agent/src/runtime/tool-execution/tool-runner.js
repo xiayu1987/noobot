@@ -13,8 +13,12 @@ import {
   projectToolResultForModel,
   toToolJsonResult,
 } from "../../tools/core/tool-json-result.js";
-import { assertNotAborted, isAbortError, resolveAbortStopType } from "../utils/error-utils.js";
-import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
+import { assertNotAborted } from "../utils/error-utils.js";
+import {
+  isAbortError,
+  resolveAbortStopType,
+  resolveErrorMessage,
+} from "../../shared/utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";

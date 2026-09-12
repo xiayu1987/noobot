@@ -5,7 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { TASK_STATUS } from "../../bot/async/constants.js";
+import { TASK_STATUS } from "../../bot/config/constants.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";

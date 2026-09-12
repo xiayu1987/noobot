@@ -113,9 +113,17 @@ export function createAgentLifecycleMachine({
     }
     executionIdentity = {
       executionId: normalizeText(extra?.executionId || executionIdentity.executionId),
-      executionKind: normalizeText(extra?.executionKind || executionIdentity.executionKind) || "agent",
-      parentExecutionId: normalizeText(extra?.parentExecutionId || executionIdentity.parentExecutionId),
-      rootExecutionId: normalizeText(extra?.rootExecutionId || executionIdentity.rootExecutionId || extra?.executionId || executionIdentity.executionId),
+      executionKind:
+        normalizeText(extra?.executionKind || executionIdentity.executionKind) || "agent",
+      parentExecutionId: normalizeText(
+        extra?.parentExecutionId || executionIdentity.parentExecutionId,
+      ),
+      rootExecutionId: normalizeText(
+        extra?.rootExecutionId ||
+          executionIdentity.rootExecutionId ||
+          extra?.executionId ||
+          executionIdentity.executionId,
+      ),
     };
     revision += 1;
     sequence += 1;
@@ -130,7 +138,9 @@ export function createAgentLifecycleMachine({
       sessionId: normalizeText(extra?.sessionId ?? basePayload?.sessionId),
       dialogProcessId: normalizeText(extra?.dialogProcessId ?? basePayload?.dialogProcessId),
       turnScopeId: normalizeText(extra?.turnScopeId ?? basePayload?.turnScopeId),
-      resumeFromStoppedSnapshot: extra?.resumeFromStoppedSnapshot === true || basePayload?.resumeFromStoppedSnapshot === true,
+      resumeFromStoppedSnapshot:
+        extra?.resumeFromStoppedSnapshot === true ||
+        basePayload?.resumeFromStoppedSnapshot === true,
       ...executionIdentity,
       revision,
       sequence,
@@ -163,12 +173,19 @@ export function createAgentLifecycleMachine({
       return emit(AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED, {
         ...extra,
         stopType: "user_stop",
-        canResume: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence).status === "saved",
+        canResume:
+          normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence).status === "saved",
         error: resolveErrorMessage(reason || error),
         stoppedSnapshotPersistence: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence),
       });
     },
-    interrupt({ reason = "", error = "", stopType = "interrupted", stoppedSnapshotPersistence = null, ...extra } = {}) {
+    interrupt({
+      reason = "",
+      error = "",
+      stopType = "interrupted",
+      stoppedSnapshotPersistence = null,
+      ...extra
+    } = {}) {
       return emit(AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED, {
         ...extra,
         stopType: normalizeText(stopType) || "interrupted",
@@ -193,15 +210,4 @@ export function createAgentLifecycleMachine({
       return latestSnapshot ? { ...latestSnapshot } : null;
     },
   };
-}
-
-export function isResumeInitializingFirstModelTurn(runtime = {}, turn = 0) {
-  return (
-    runtime?.resumeFromStoppedSnapshot === true &&
-    (runtime?.agentLifecycleState === AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING ||
-      runtime?.agentLifecycleInitialState === AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING ||
-      runtime?.agentLifecycle?.state === AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING ||
-      !runtime?.agentLifecycleState) &&
-    Number(turn) === 1
-  );
 }

@@ -11,7 +11,7 @@ function normalizeText(text = "") {
     .trim();
 }
 
-export function splitPatchLines(text = "") {
+function splitPatchLines(text = "") {
   return normalizeText(text)
     .split("\n")
     .map((line) => String(line || "").trim())

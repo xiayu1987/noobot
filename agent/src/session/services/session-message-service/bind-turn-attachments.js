@@ -12,7 +12,11 @@ import {
   decideCommandIdempotency,
   normalizeExpectedAggregateVersion,
 } from "@noobot/session-protocol";
-import { assertCanonicalAttachments, dedupeAttachments } from "./attachment-helpers.js";
+import {
+  INVALID_CANONICAL_ATTACHMENT_ERROR_CODE,
+  assertCanonicalAttachments,
+  dedupeAttachments,
+} from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
 
 const text = (value) => String(value || "").trim();
@@ -43,7 +47,7 @@ function prepareAttachmentBinding({
   if (canonicalAttachments.length === 0) {
     throw Object.assign(new TypeError("attachment binding requires at least one attachment"), {
       statusCode: 400,
-      errorCode: "INVALID_CANONICAL_ATTACHMENT",
+      errorCode: INVALID_CANONICAL_ATTACHMENT_ERROR_CODE,
     });
   }
   return {

@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { buildMonthlySummaryPrompt } from "../../prompts/builders.js";
+import { buildSubcategoryModelEntries } from "../model-entry-builder.js";
 import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 
 function toMonthKey(weekKeys = []) {
@@ -28,6 +29,7 @@ export async function runMonthlySummaryIfNeeded({
   promptI18n = {},
   abortSignal = null,
   basePath = "",
+  listWeekDirs,
   mergeDomainText,
   normalizeMonthlySummary,
   saveMonthlySummary,
@@ -37,12 +39,7 @@ export async function runMonthlySummaryIfNeeded({
   if (!basePath || typeof invokeModel !== "function") return false;
   let hasWrittenSummary = false;
   while (true) {
-    const weekEntries = await storage.safeReadDirEntries(storage.weeklySummaryDir(basePath));
-    const weekDirs = weekEntries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => String(entry.name || "").trim())
-      .filter((key) => /^\d{4}-W\d{2}$/.test(key))
-      .sort();
+    const weekDirs = await listWeekDirs(basePath);
     if (weekDirs.length < 4) break;
 
     const targetWeeks = weekDirs.slice(0, 4);
@@ -82,20 +79,7 @@ export async function runMonthlySummaryIfNeeded({
         sourceWeeks: targetWeeks,
       });
       if (!saved) continue;
-      const modelEntries = [];
-      for (const category of Array.isArray(parsedSummary?.categories)
-        ? parsedSummary.categories
-        : []) {
-        for (const subcategory of Array.isArray(category?.subcategories)
-          ? category.subcategories
-          : []) {
-          modelEntries.push({
-            domain_name: parsedSummary.domain_name || domainName,
-            category_name: category?.category_name,
-            subcategory_name: subcategory?.subcategory_name,
-          });
-        }
-      }
+      const modelEntries = buildSubcategoryModelEntries(parsedSummary, domainName);
       if (modelEntries.length) {
         await upsertModelEntries(basePath, modelEntries);
       }

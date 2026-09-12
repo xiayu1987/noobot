@@ -82,6 +82,11 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     }),
     requiredFields: Object.freeze(["category_name", "subcategory_name"]),
     subFields: Object.freeze(["subcategory_name", "patterns", "methodologies"]),
+    sourceLabel: "来源周",
+    sections: Object.freeze([
+      Object.freeze({ heading: "规律（Patterns）：", field: "patterns" }),
+      Object.freeze({ heading: "方法论（Methodologies）：", field: "methodologies" }),
+    ]),
   }),
   yearly: Object.freeze({
     idPrefix: "Y",
@@ -109,16 +114,22 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
       }),
     }),
     requiredFields: Object.freeze(["category_name", "subcategory_name"]),
-    subFields: Object.freeze([
-      "subcategory_name",
-      "yearly_principles",
-      "strategic_reflections",
+    subFields: Object.freeze(["subcategory_name", "yearly_principles", "strategic_reflections"]),
+    sourceLabel: "来源月",
+    sections: Object.freeze([
+      Object.freeze({ heading: "底层原则（Principles）：", field: "yearly_principles" }),
+      Object.freeze({
+        heading: "战略反思（Strategic Reflections）：",
+        field: "strategic_reflections",
+      }),
     ]),
   }),
 });
 
 export function getExperiencePatchPromptMeta(key = "") {
-  const normalizedKey = String(key || "").trim().toLowerCase();
+  const normalizedKey = String(key || "")
+    .trim()
+    .toLowerCase();
   const schema = EXPERIENCE_PATCH_SCHEMA[normalizedKey] || null;
   return {
     protocol: String(schema?.promptProtocol || "").trim(),

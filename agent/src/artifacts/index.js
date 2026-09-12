@@ -6,6 +6,7 @@
 
 export { AttachmentService } from "./service/attachment-service.js";
 export {
+  INVALID_CANONICAL_ATTACHMENT_ERROR_CODE,
   normalizeAttachmentMetas,
   mapAttachmentRecordsToMetas,
   normalizeAttachmentOwnerMeta,

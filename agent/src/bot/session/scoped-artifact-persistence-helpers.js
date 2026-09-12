@@ -10,6 +10,18 @@ import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { persistSnapshotJsonFiles } from "./session-execution-engine-utils.js";
 
+const assertInsideWorkspace = (resolvedWorkspacePath, resolvedDir) => {
+  const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedDir);
+  if (
+    !relativeFromWorkspace ||
+    relativeFromWorkspace.startsWith("..") ||
+    path.isAbsolute(relativeFromWorkspace)
+  ) {
+    throw new Error("plugin scoped output path must be inside workspace");
+  }
+  return resolvedDir;
+};
+
 export class ScopedArtifactPersistenceHelpers {
   constructor({ session = null, attach = null, workspaceService = null, now = null } = {}) {
     this.session = session;
@@ -23,30 +35,14 @@ export class ScopedArtifactPersistenceHelpers {
     const resolvedWorkspacePath = path.resolve(workspacePath);
     if (absoluteDir && String(absoluteDir || "").trim()) {
       const resolvedAbsoluteDir = path.resolve(String(absoluteDir || "").trim());
-      const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedAbsoluteDir);
-      if (
-        !relativeFromWorkspace ||
-        relativeFromWorkspace.startsWith("..") ||
-        path.isAbsolute(relativeFromWorkspace)
-      ) {
-        throw new Error("plugin scoped output path must be inside workspace");
-      }
-      return resolvedAbsoluteDir;
+      return assertInsideWorkspace(resolvedWorkspacePath, resolvedAbsoluteDir);
     }
     const normalizedRelativeDir = String(relativeDir || "")
       .trim()
       .replaceAll("\\", "/");
     if (!normalizedRelativeDir) return "";
     const resolvedDir = path.resolve(resolvedWorkspacePath, normalizedRelativeDir);
-    const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedDir);
-    if (
-      !relativeFromWorkspace ||
-      relativeFromWorkspace.startsWith("..") ||
-      path.isAbsolute(relativeFromWorkspace)
-    ) {
-      throw new Error("plugin scoped output path must be inside workspace");
-    }
-    return resolvedDir;
+    return assertInsideWorkspace(resolvedWorkspacePath, resolvedDir);
   }
 
   resolveScopedFileTarget({

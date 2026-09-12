@@ -25,7 +25,7 @@ function reportPatchParseError({
   });
 }
 
-export function collectPatchItems({
+function collectPatchItems({
   rawContent = "",
   idPrefix = "",
   stage = "",
@@ -119,7 +119,7 @@ export function collectPatchItemsByFieldMap({
   });
 }
 
-export function groupItemsByCategory(items = [], mapSubItem = null) {
+function groupItemsByCategory(items = [], mapSubItem = null) {
   const categoryMap = new Map();
   for (const item of Array.isArray(items) ? items : []) {
     const key = String(item?.category_name || "").trim();

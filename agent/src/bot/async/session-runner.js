@@ -16,7 +16,7 @@ import {
   MIN_WAIT_ASYNC_TIMEOUT_MS,
   SESSION_ASYNC_STATUS,
   SESSION_ASYNC_TERMINAL_STATUSES,
-} from "./constants.js";
+} from "../config/constants.js";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";

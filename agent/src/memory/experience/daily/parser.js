@@ -7,7 +7,7 @@ import { sanitizeFileName, dedupeTextList } from "../../utils/text.js";
 import { collectPatchItemsByFieldMap } from "../patch-utils.js";
 import { EXPERIENCE_PATCH_SCHEMA } from "../schema-config.js";
 
-export function normalizeDailyDomainResultItems(rawItems = []) {
+function normalizeDailyDomainResultItems(rawItems = []) {
   const out = [];
   for (const item of Array.isArray(rawItems) ? rawItems : []) {
     const domainName = sanitizeFileName(item?.domain_name, "");
