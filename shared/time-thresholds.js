@@ -50,6 +50,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     pendingStopTtlMs: TIME_TIERS.standardCommandMs,
     transientLlmRetryBaseDelayMs: TIME_TIERS.fastProbeMs,
     authorityOutboxDeliveredRetentionMs: TIME_TIERS.fiveMinutesMs,
+    authorityOutboxCompactIntervalMs: TIME_TIERS.standardCommandMs,
   },
 
   async: {

@@ -43,12 +43,13 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
     async getPendingAuthorityEvents() {
       return { found: true, events: pending };
     },
-    async recordAuthorityEventAttempt() {
+    async recordAuthorityEventAttempts() {
       return { recorded: true };
     },
-    async acknowledgeAuthorityEvent({ eventId }) {
-      acknowledged += 1;
-      pending = pending.filter((item) => item.eventId !== eventId);
+    async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
+      acknowledged += acknowledgements.length;
+      const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
+      pending = pending.filter((item) => !ackedIds.has(item.eventId));
       return { acknowledged: true };
     },
   };
@@ -116,7 +117,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
     },
   });
   assert.equal(committed.applied, true);
-  eventOutbox = committed.eventOutbox;
+  eventOutbox = [committed.committedEvent];
 
   const sent = [];
   let socketAvailable = false;
@@ -124,31 +125,31 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
     async getPendingAuthorityEvents() {
       return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
     },
-    async recordAuthorityEventAttempt({ eventId } = {}) {
-      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
-        eventId,
-        attemptedAt: new Date().toISOString(),
-      });
-      if (result.found) eventOutbox = result.outbox;
-      return { recorded: result.found, reason: result.reason };
+    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+      for (const eventId of eventIds) {
+        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+          eventId,
+          attemptedAt: new Date().toISOString(),
+        });
+        if (!result.found) return { recorded: false, reason: result.reason };
+        eventOutbox = result.outbox;
+      }
+      return { recorded: true };
     },
-    async acknowledgeAuthorityEvent({
-      eventId,
-      consumerId,
-      orderingDomain,
-      orderingScopeId,
-      sequence,
-    } = {}) {
-      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-        eventId,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        sequence,
-        deliveredAt: new Date().toISOString(),
-      });
-      if (result.found) eventOutbox = result.outbox;
-      return { acknowledged: result.found, reason: result.reason };
+    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
+      for (const receipt of acknowledgements) {
+        const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+          eventId: receipt.eventId,
+          consumerId,
+          orderingDomain: receipt.orderingDomain,
+          orderingScopeId: receipt.orderingScopeId,
+          sequence: receipt.sequence,
+          deliveredAt: new Date().toISOString(),
+        });
+        if (!result.found) return { acknowledged: false, reason: result.reason };
+        eventOutbox = result.outbox;
+      }
+      return { acknowledged: true };
     },
   };
   const createDispatcher = () =>
@@ -210,11 +211,11 @@ test("authority dispatcher preserves the child persistence scope across every ou
         events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
       };
     },
-    async recordAuthorityEventAttempt(input) {
+    async recordAuthorityEventAttempts(input) {
       calls.push({ method: "attempt", input });
       return { recorded: true };
     },
-    async acknowledgeAuthorityEvent(input) {
+    async acknowledgeAuthorityEvents(input) {
       calls.push({ method: "acknowledge", input });
       pending = false;
       return { acknowledged: true };
@@ -248,8 +249,11 @@ test("authority dispatcher preserves the child persistence scope across every ou
     assert.equal(input.parentSessionId, "root-session");
   }
   assert.equal(calls[0].input.limit, 25);
-  assert.equal(calls[1].input.eventId, envelope.identity.eventId);
-  assert.equal(calls[2].input.eventId, envelope.identity.eventId);
+  assert.deepEqual(calls[1].input.eventIds, [envelope.identity.eventId]);
+  assert.deepEqual(
+    calls[2].input.acknowledgements.map((receipt) => receipt.eventId),
+    [envelope.identity.eventId],
+  );
   assert.equal(calls[4].input.deliveredThroughSequence, 9);
   assert.equal(
     Date.now() - Date.parse(calls[4].input.retainDeliveredAfter) >=
@@ -290,13 +294,15 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
       calls.push({ method: "get", input });
       return { found: true, events: pending };
     },
-    async recordAuthorityEventAttempt(input) {
+    async recordAuthorityEventAttempts(input) {
       calls.push({ method: "attempt", input });
-      return { recorded: pending.some((item) => item.eventId === input.eventId) };
+      const pendingIds = new Set(pending.map((item) => item.eventId));
+      return { recorded: input.eventIds.every((eventId) => pendingIds.has(eventId)) };
     },
-    async acknowledgeAuthorityEvent(input) {
+    async acknowledgeAuthorityEvents(input) {
       calls.push({ method: "acknowledge", input });
-      pending = pending.filter((item) => item.eventId !== input.eventId);
+      const ackedIds = new Set(input.acknowledgements.map((receipt) => receipt.eventId));
+      pending = pending.filter((item) => !ackedIds.has(item.eventId));
       return { acknowledged: true };
     },
   };
@@ -370,11 +376,11 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
         events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
       };
     },
-    async recordAuthorityEventAttempt() {
+    async recordAuthorityEventAttempts() {
       calls.attempt += 1;
       return { recorded: true };
     },
-    async acknowledgeAuthorityEvent() {
+    async acknowledgeAuthorityEvents() {
       calls.acknowledge += 1;
       pending = false;
       return { acknowledged: true };
@@ -438,11 +444,13 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
       }
       return { found: true, events };
     },
-    async recordAuthorityEventAttempt({ eventId }) {
-      return { recorded: pending.some((item) => item.eventId === eventId) };
+    async recordAuthorityEventAttempts({ eventIds = [] }) {
+      const pendingIds = new Set(pending.map((item) => item.eventId));
+      return { recorded: eventIds.every((eventId) => pendingIds.has(eventId)) };
     },
-    async acknowledgeAuthorityEvent({ eventId }) {
-      pending = pending.filter((item) => item.eventId !== eventId);
+    async acknowledgeAuthorityEvents({ acknowledgements = [] }) {
+      const ackedIds = new Set(acknowledgements.map((receipt) => receipt.eventId));
+      pending = pending.filter((item) => !ackedIds.has(item.eventId));
       return { acknowledged: true };
     },
   };
@@ -502,7 +510,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
     },
   });
   assert.equal(committed.applied, true);
-  eventOutbox = committed.eventOutbox;
+  eventOutbox = [committed.committedEvent];
 
   let acknowledgementAvailable = false;
   const sentEventIds = [];
@@ -510,24 +518,23 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
     async getPendingAuthorityEvents() {
       return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
     },
-    async recordAuthorityEventAttempt({ eventId } = {}) {
-      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
-        eventId,
-        attemptedAt: new Date().toISOString(),
-      });
-      if (result.found) eventOutbox = result.outbox;
-      return { recorded: result.found, reason: result.reason };
+    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+      for (const eventId of eventIds) {
+        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+          eventId,
+          attemptedAt: new Date().toISOString(),
+        });
+        if (!result.found) return { recorded: false, reason: result.reason };
+        eventOutbox = result.outbox;
+      }
+      return { recorded: true };
     },
-    async acknowledgeAuthorityEvent({
-      eventId,
-      consumerId,
-      orderingDomain,
-      orderingScopeId,
-      sequence,
-    } = {}) {
+    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
       if (!acknowledgementAvailable) {
         return { acknowledged: false, reason: "session_save_failed" };
       }
+      const [receipt = {}] = acknowledgements;
+      const { eventId, orderingDomain, orderingScopeId, sequence } = receipt;
       const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
         eventId,
         consumerId,

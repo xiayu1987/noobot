@@ -150,7 +150,9 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
       });
       if (result.applied) {
         lifecycle = result.lifecycle;
-        eventOutbox = result.eventOutbox;
+        if (result.committedEvent) {
+          eventOutbox = [...eventOutbox, result.committedEvent];
+        }
         committed.push(input.eventType);
       }
       let userMessage = null;
@@ -185,32 +187,30 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
     async getPendingAuthorityEvents() {
       return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
     },
-    async recordAuthorityEventAttempt({ eventId } = {}) {
-      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
-      if (result.found) eventOutbox = result.outbox;
-      return { recorded: result.found, reason: result.reason };
+    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+      for (const eventId of eventIds) {
+        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
+        if (!result.found) return { recorded: false, reason: result.reason };
+        eventOutbox = result.outbox;
+      }
+      return { recorded: true };
     },
-    async acknowledgeAuthorityEvent({
-      eventId,
-      consumerId,
-      orderingDomain,
-      orderingScopeId,
-      sequence,
-    } = {}) {
-      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-        eventId,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        sequence,
-        deliveredAt: new Date().toISOString(),
-      });
-      if (result.found) eventOutbox = result.outbox;
-      return {
-        acknowledged: result.found,
-        deduplicated: result.deduplicated,
-        reason: result.reason,
-      };
+    async acknowledgeAuthorityEvents({ consumerId, acknowledgements = [] } = {}) {
+      let deduplicated = 0;
+      for (const receipt of acknowledgements) {
+        const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+          eventId: receipt.eventId,
+          consumerId,
+          orderingDomain: receipt.orderingDomain,
+          orderingScopeId: receipt.orderingScopeId,
+          sequence: receipt.sequence,
+          deliveredAt: new Date().toISOString(),
+        });
+        if (!result.found) return { acknowledged: false, reason: result.reason };
+        if (result.deduplicated) deduplicated += 1;
+        eventOutbox = result.outbox;
+      }
+      return { acknowledged: true, deduplicated };
     },
     async runSession({ sessionId, runConfig, turnAcceptance, eventListener }) {
       runCount += 1;

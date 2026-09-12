@@ -220,12 +220,12 @@ export class BotManager {
     return this.sessionRunner.getPendingAuthorityEvents(payload);
   }
 
-  async recordAuthorityEventAttempt(payload = {}) {
-    return this.sessionRunner.recordAuthorityEventAttempt(payload);
+  async recordAuthorityEventAttempts(payload = {}) {
+    return this.sessionRunner.recordAuthorityEventAttempts(payload);
   }
 
-  async acknowledgeAuthorityEvent(payload = {}) {
-    return this.sessionRunner.acknowledgeAuthorityEvent(payload);
+  async acknowledgeAuthorityEvents(payload = {}) {
+    return this.sessionRunner.acknowledgeAuthorityEvents(payload);
   }
 
   async compactAuthorityEvents(payload = {}) {

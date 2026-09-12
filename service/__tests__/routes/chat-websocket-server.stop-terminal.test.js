@@ -409,7 +409,9 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
         });
         if (result.applied) {
           lifecycle = result.lifecycle;
-          authorityEventOutbox = result.eventOutbox;
+          if (result.committedEvent) {
+            authorityEventOutbox = [...authorityEventOutbox, result.committedEvent];
+          }
         }
         return result;
       },
@@ -417,28 +419,28 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
         found: true,
         events: listPendingAuthorityEvents(authorityEventOutbox),
       }),
-      recordAuthorityEventAttempt: async ({ eventId } = {}) => {
-        const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
-        if (result.found) authorityEventOutbox = result.outbox;
-        return { recorded: result.found };
+      recordAuthorityEventAttempts: async ({ eventIds = [] } = {}) => {
+        for (const eventId of eventIds) {
+          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
+          if (!result.found) return { recorded: false, reason: result.reason };
+          authorityEventOutbox = result.outbox;
+        }
+        return { recorded: true };
       },
-      acknowledgeAuthorityEvent: async ({
-        eventId,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        sequence,
-      } = {}) => {
-        const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
-          eventId,
-          consumerId,
-          orderingDomain,
-          orderingScopeId,
-          sequence,
-          deliveredAt: new Date().toISOString(),
-        });
-        if (result.found) authorityEventOutbox = result.outbox;
-        return { acknowledged: result.found };
+      acknowledgeAuthorityEvents: async ({ consumerId, acknowledgements = [] } = {}) => {
+        for (const receipt of acknowledgements) {
+          const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
+            eventId: receipt.eventId,
+            consumerId,
+            orderingDomain: receipt.orderingDomain,
+            orderingScopeId: receipt.orderingScopeId,
+            sequence: receipt.sequence,
+            deliveredAt: new Date().toISOString(),
+          });
+          if (!result.found) return { acknowledged: false, reason: result.reason };
+          authorityEventOutbox = result.outbox;
+        }
+        return { acknowledged: true };
       },
     },
   });

@@ -95,13 +95,13 @@ test("SessionExecutionEngine exposes the complete authority event repository por
       calls.push(["pending", payload]);
       return { found: true, events: [] };
     },
-    async recordAuthorityEventAttempt(payload) {
+    async recordAuthorityEventAttempts(payload) {
       calls.push(["attempt", payload]);
-      return { recorded: true };
+      return { recorded: true, attempted: 1 };
     },
-    async acknowledgeAuthorityEvent(payload) {
+    async acknowledgeAuthorityEvents(payload) {
       calls.push(["acknowledge", payload]);
-      return { acknowledged: true };
+      return { acknowledged: true, delivered: 1 };
     },
     async compactAuthorityEvents(payload) {
       calls.push(["compact", payload]);
@@ -113,8 +113,14 @@ test("SessionExecutionEngine exposes the complete authority event repository por
 
   assert.deepEqual(await engine.commitAuthorityEvent(payload), { committed: true });
   assert.deepEqual(await engine.getPendingAuthorityEvents(payload), { found: true, events: [] });
-  assert.deepEqual(await engine.recordAuthorityEventAttempt(payload), { recorded: true });
-  assert.deepEqual(await engine.acknowledgeAuthorityEvent(payload), { acknowledged: true });
+  assert.deepEqual(await engine.recordAuthorityEventAttempts(payload), {
+    recorded: true,
+    attempted: 1,
+  });
+  assert.deepEqual(await engine.acknowledgeAuthorityEvents(payload), {
+    acknowledged: true,
+    delivered: 1,
+  });
   assert.deepEqual(await engine.compactAuthorityEvents(payload), { compacted: true });
   assert.deepEqual(
     calls.map(([operation]) => operation),

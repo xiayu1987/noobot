@@ -6,7 +6,7 @@
 
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
-import { normalizeAuthorityEventOutbox, validateProtocolEvent } from "@noobot/event-protocol";
+import { validateProtocolEvent } from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
@@ -162,7 +162,6 @@ function createNormalizedSessionEntity(session, context, messages) {
     dialogOrder: normalizeDialogOrderEntity(session?.dialogOrder || [], messages),
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
-    authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
     sessionArtifactEvents: normalizeSessionArtifactEvents(session, context.sessionId),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstTextField([session?.createdAt, context.nowValue]),

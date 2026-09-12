@@ -176,7 +176,8 @@ test("durable command receipt returns the original envelope after outbox compact
   assert.equal(committed.lifecycle.commandReceipts[0].eventId, "durable-event-1");
   assert.equal(committed.lifecycle.commandReceipts[0].envelope.identity.eventId, "durable-event-1");
 
-  const delivered = acknowledgeAuthorityEventDelivery(committed.eventOutbox, {
+  const outbox = [committed.committedEvent];
+  const delivered = acknowledgeAuthorityEventDelivery(outbox, {
     eventId: "durable-event-1",
     consumerId: "service-websocket",
     orderingDomain: committed.envelope.ordering.domain,
@@ -195,14 +196,16 @@ test("durable command receipt returns the original envelope after outbox compact
   assert.equal(compacted.removed, 1);
   assert.deepEqual(compacted.outbox, []);
 
+  const compactedEventIds = new Set(compacted.outbox.map((item) => item.eventId));
   const replay = commitTurnLifecycle({
     lifecycle: committed.lifecycle,
     event,
-    eventOutbox: compacted.outbox,
+    isCommittedEventId: (eventId) => compactedEventIds.has(eventId),
     createEventId: () => "must-not-be-used",
   });
   assert.equal(replay.deduplicated, true);
   assert.equal(replay.envelope.identity.eventId, "durable-event-1");
+  assert.equal(replay.committedEvent, null);
 });
 
 test("outbox compaction never removes pending, unreceipted, recent or above-watermark events", () => {

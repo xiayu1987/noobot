@@ -8,11 +8,11 @@ import { bindTurnAttachments } from "./session-message-service/bind-turn-attachm
 import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
 import { commitMessageEvent } from "./session-message-service/message-event.js";
 import {
-  acknowledgeAuthorityEvent,
+  acknowledgeAuthorityEvents,
   commitAuthorityEvent,
   compactAuthorityEvents,
   getPendingAuthorityEvents,
-  recordAuthorityEventAttempt,
+  recordAuthorityEventAttempts,
 } from "./session-message-service/authority-event.js";
 import { pluginArtifactKey, projectPluginArtifacts } from "@noobot/event-protocol";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
@@ -164,11 +164,11 @@ export class SessionMessageService {
   async getPendingAuthorityEvents(payload = {}) {
     return getPendingAuthorityEvents.call(this, payload);
   }
-  async recordAuthorityEventAttempt(payload = {}) {
-    return recordAuthorityEventAttempt.call(this, payload);
+  async recordAuthorityEventAttempts(payload = {}) {
+    return recordAuthorityEventAttempts.call(this, payload);
   }
-  async acknowledgeAuthorityEvent(payload = {}) {
-    return acknowledgeAuthorityEvent.call(this, payload);
+  async acknowledgeAuthorityEvents(payload = {}) {
+    return acknowledgeAuthorityEvents.call(this, payload);
   }
   async compactAuthorityEvents(payload = {}) {
     return compactAuthorityEvents.call(this, payload);
