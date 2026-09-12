@@ -104,3 +104,82 @@ test("requires persisted message identity and ignores malformed persisted detail
     [],
   );
 });
+
+function relayActivity(overrides = {}) {
+  return {
+    eventId: "activity-1",
+    eventType: "thinking",
+    text: "继续检查缓存事实。",
+    sequence: 1,
+    sequenceScopeId: "message-1",
+    sequenceDomain: "message-event",
+    authority: "authoritative",
+    timestamp: "2026-09-05T03:39:01.897Z",
+    sessionId: "session-1",
+    turnScopeId: "turn-1",
+    messageId: "message-1",
+    presentationMessageId: "presentation-1",
+    ...overrides,
+  };
+}
+
+test("injected relay message supersedes the thinking activity it was minted from", () => {
+  const timeline = projectThinkingDetailContentTimeline(
+    [
+      message({
+        messageUid: "guidance-source",
+        role: "user",
+        type: "message",
+        injectedMessage: true,
+        injectedBy: "harness",
+        relayCorrelationId: "rc_1",
+        content: "[来自harness外部模型输出/guidance]\n继续检查缓存事实。",
+      }),
+    ],
+    [
+      relayActivity({ eventId: "activity-relayed", relayCorrelationId: "rc_1" }),
+      relayActivity({
+        eventId: "activity-unrelayed",
+        relayCorrelationId: "rc_2",
+        text: "另一段未被中继的思考。",
+        sequence: 2,
+      }),
+    ],
+  );
+
+  assert.deepEqual(
+    timeline.map(({ contentId, contentKind }) => ({ contentId, contentKind })),
+    [
+      {
+        contentId: "message:guidance-source",
+        contentKind: THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE,
+      },
+      {
+        contentId: "event:activity-unrelayed",
+        contentKind: THINKING_DETAIL_CONTENT_KIND.THINKING,
+      },
+    ],
+  );
+  assert.equal(timeline.every(isThinkingDetailContentFact), true);
+});
+
+test("activities without relay correlation stay projected for legacy rounds", () => {
+  const timeline = projectThinkingDetailContentTimeline(
+    [
+      message({
+        messageUid: "legacy-guidance",
+        role: "user",
+        type: "message",
+        injectedMessage: true,
+        injectedBy: "harness",
+        content: "[来自harness外部模型输出/guidance]\n历史注入。",
+      }),
+    ],
+    [relayActivity({ eventId: "activity-legacy", text: "历史注入。" })],
+  );
+
+  assert.deepEqual(
+    timeline.map((fact) => fact.contentId),
+    ["message:legacy-guidance", "event:activity-legacy"],
+  );
+});

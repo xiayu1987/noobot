@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { randomUUID } from "node:crypto";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -400,6 +401,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       });
 
   let response = null;
+  const relayCorrelationId = `rc_${randomUUID()}`;
   const summaryStartedAt = purpose === "summary" ? Date.now() : 0;
   if (purpose === "summary") {
     appendCapabilityLog(ctx, {
@@ -419,6 +421,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
         purpose,
         pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
         chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
+        relayCorrelationId,
         promptVersion: PROMPT_ENVELOPE.VERSION,
         envelopeType: PROMPT_ENVELOPE.TYPE,
         domain: CAPABILITY_DOMAIN.GUIDANCE,
@@ -523,6 +526,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     purpose,
     pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
     chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
+    relayCorrelationId,
     content: relayText,
     transferPayload: normalizeTransferPayload(relayAttachments),
   });

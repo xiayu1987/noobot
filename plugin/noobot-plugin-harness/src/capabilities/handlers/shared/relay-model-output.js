@@ -24,6 +24,7 @@ export function relaySeparateModelOutputAsUserMessage(
     purpose = "",
     pluginFlow = undefined,
     chain = undefined,
+    relayCorrelationId = "",
     content = "",
     dedupe = false,
     transferPayload = null,
@@ -44,6 +45,7 @@ export function relaySeparateModelOutputAsUserMessage(
     : "";
   const normalizedPluginFlow = String(pluginFlow || "").trim() || undefined;
   const normalizedChain = String(chain || "").trim() || undefined;
+  const normalizedRelayCorrelationId = String(relayCorrelationId || "").trim() || undefined;
   const resolvedTransferPayload = normalizeTransferPayload(transferPayload || {});
   if (!messages) return false;
   const injection = injectMessageWithPolicy(ctx, {
@@ -53,6 +55,7 @@ export function relaySeparateModelOutputAsUserMessage(
     purpose: String(purpose || "").trim() || undefined,
     pluginFlow: normalizedPluginFlow,
     chain: normalizedChain,
+    relayCorrelationId: normalizedRelayCorrelationId,
     ...resolvedTransferPayload,
     injectAt: "append",
     dedupe,

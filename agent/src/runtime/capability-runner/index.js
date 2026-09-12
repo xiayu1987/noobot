@@ -91,6 +91,7 @@ function buildPluginCapabilityLogBase({
   domain = "",
   pluginFlow = "",
   chain = "",
+  relayCorrelationId = "",
   modelName = "",
   sessionMeta = {},
   ctx = {},
@@ -98,6 +99,7 @@ function buildPluginCapabilityLogBase({
   const runtime = resolveRuntime(ctx);
   const normalizedPluginFlow = String(pluginFlow || "").trim();
   const normalizedChain = String(chain || "").trim();
+  const normalizedRelayCorrelationId = String(relayCorrelationId || "").trim();
   return {
     category: "system",
     type: "system",
@@ -105,6 +107,9 @@ function buildPluginCapabilityLogBase({
     domain: String(domain || "").trim(),
     ...(normalizedPluginFlow ? { pluginFlow: normalizedPluginFlow } : {}),
     ...(normalizedChain ? { chain: normalizedChain } : {}),
+    ...(normalizedRelayCorrelationId
+      ? { relayCorrelationId: normalizedRelayCorrelationId }
+      : {}),
     model: String(modelName || "").trim(),
     sessionId: String(sessionMeta?.sessionId || ""),
     parentSessionId: String(sessionMeta?.parentSessionId || ""),
@@ -145,6 +150,7 @@ async function emitPluginCapabilityRealtimeLog({
       purpose: String(data?.purpose || "").trim(),
       pluginFlow: String(data?.pluginFlow || "").trim(),
       chain: String(data?.chain || "").trim(),
+      relayCorrelationId: String(data?.relayCorrelationId || "").trim(),
       activityKind,
       ...sessionMeta,
       dialogProcessId: String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
@@ -185,6 +191,7 @@ export function createAgentCapabilityModelInvoker({
     domain = "",
     pluginFlow = "",
     chain = "",
+    relayCorrelationId = "",
     model: modelName = "",
     locale = "zh-CN",
     prompt = "",
@@ -210,6 +217,7 @@ export function createAgentCapabilityModelInvoker({
       domain,
       pluginFlow,
       chain,
+      relayCorrelationId,
       modelName: normalizedModelName,
       sessionMeta,
       ctx,

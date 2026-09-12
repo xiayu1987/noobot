@@ -101,6 +101,7 @@ test("main model content projects once and awaits its durable checkpoint", async
     purpose: "",
     pluginFlow: "",
     chain: "",
+    relayCorrelationId: "",
     sequence: 1,
     sequenceScopeId: "message-1",
     sequenceDomain: "message-event",

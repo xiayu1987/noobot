@@ -78,6 +78,7 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       noobotInternalMessageType: normalizedString(input.noobotInternalMessageType),
       injectedBy: normalizedString(input.injectedBy),
       injectedMessageType: normalizedString(input.injectedMessageType),
+      relayCorrelationId: normalizedString(input.relayCorrelationId),
       messageOrigin: String(input.messageOrigin || "")
         .trim()
         .toLowerCase(),
