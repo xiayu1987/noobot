@@ -55,11 +55,14 @@ function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "
     ...(Array.isArray(artifactEvents) ? artifactEvents : []),
   ];
   return (
-    envelopes.reduce((maximum, envelope) => {
-      const ordering = envelope?.ordering;
-      if (ordering?.domain !== domain || ordering?.scopeId !== scopeId) return maximum;
-      return Math.max(maximum, Number(ordering.sequence) || 0);
-    }, Math.max(0, Number(floor) || 0)) + 1
+    envelopes.reduce(
+      (maximum, envelope) => {
+        const ordering = envelope?.ordering;
+        if (ordering?.domain !== domain || ordering?.scopeId !== scopeId) return maximum;
+        return Math.max(maximum, Number(ordering.sequence) || 0);
+      },
+      Math.max(0, Number(floor) || 0),
+    ) + 1
   );
 }
 
@@ -241,11 +244,6 @@ export async function getPendingAuthorityEvents({
   };
 }
 
-/**
- * Batch attempt recording: the journal is appended once for the whole drain
- * batch instead of once per event, so delivery cost stops scaling with the
- * number of pending events.
- */
 export async function recordAuthorityEventAttempts({
   userId,
   sessionId,
@@ -281,11 +279,6 @@ export async function recordAuthorityEventAttempts({
   });
 }
 
-/**
- * Batch acknowledgement: already-delivered events stay idempotent (they simply
- * contribute no journal record), so a partially delivered batch can be safely
- * re-acknowledged on the next drain.
- */
 export async function acknowledgeAuthorityEvents({
   userId,
   sessionId,

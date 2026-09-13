@@ -10,8 +10,6 @@ const clean = (value) => String(value || "").trim();
 
 export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
   const inFlightByScope = new Map();
-  // Compaction rewrites the outbox journal, so it is throttled per ordering
-  // stream instead of running at the tail of every drain.
   const lastCompactAtByStream = new Map();
 
   const drainAuthorityEvents = async (
@@ -49,8 +47,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       }
       const events = Array.isArray(pending.events) ? pending.events : [];
       if (!events.length) break;
-      // Envelopes are validated up front so a malformed event never causes a
-      // partially attempted batch.
       for (const item of events) {
         const eventId = clean(item?.eventId);
         const validation = validateProtocolEvent(item?.envelope);
@@ -66,9 +62,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       if (typeof publishEvent !== "function") {
         return { dispatched: false, reason: "authority_event_transport_unavailable", delivered };
       }
-      // One journal append records the attempt for the whole batch, keeping
-      // at-least-once semantics: anything not acknowledged below is retried on
-      // the next drain.
       const attempt = await bot.recordAuthorityEventAttempts({
         ...identity,
         eventIds: events.map((item) => clean(item.eventId)),
@@ -95,8 +88,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
           sequence: Number(item.envelope.ordering.sequence),
         });
       }
-      // Acknowledge whatever actually reached the transport, even when the batch
-      // stopped early, so successful sends are never re-delivered.
       if (acknowledgements.length) {
         const acknowledged = await bot.acknowledgeAuthorityEvents({
           ...identity,
@@ -133,9 +124,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       ).toISOString();
       const now = Date.now();
       for (const [streamKey, watermark] of watermarks) {
-        // Accounting key carries the session identity because one dispatcher
-        // instance serves every session, while streamKey alone is only unique
-        // within a session.
         const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${streamKey}`;
         const lastCompactAt = lastCompactAtByStream.get(accountingKey);
         if (

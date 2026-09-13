@@ -5,14 +5,7 @@
  */
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
@@ -28,8 +21,6 @@ import {
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
-// Delivery state lives in the per-session outbox journal, not in the session
-// entity, so the fake repository has to expose a real directory for it.
 const sessionDirs = [];
 
 after(() => {
@@ -92,11 +83,6 @@ function harness(initial = {}) {
     failNextSave: (error = new Error("session_save_failed")) => {
       saveFailure = error;
     },
-    // attempt/ack/compact no longer touch session save, so delivery-side
-    // atomicity has to be injected at the journal itself. Occupying the outbox
-    // directory path with a regular file makes every journal I/O fail with
-    // ENOTDIR regardless of uid; the committed records are snapshotted so the
-    // post-failure projection can be compared against the pre-failure one.
     failOutboxJournal: () => {
       const journalDir = authorityOutboxDir(sessionDir);
       const journalFile = authorityOutboxJournalPath(sessionDir);
