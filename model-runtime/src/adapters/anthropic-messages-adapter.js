@@ -7,6 +7,13 @@ import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { classifyTransportError } from "../policies/default-retry-policy.js";
 import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
+import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+
+const ANTHROPIC_VERSION = "2023-06-01";
+const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
+  type: "web_search_20250305",
+  name: "web_search",
+});
 
 function baseMessagesUrl(baseUrl = "") {
   let value = String(baseUrl || "");
@@ -208,34 +215,85 @@ function createClient({ modelSpec, credential, headers = {}, tools = [], toolCho
         ...(system.length ? { system } : {}),
         messages: convertMessages(messages),
       };
-      const response = await fetch(baseMessagesUrl(spec.base_url), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "anthropic-version": "2023-06-01",
-          "x-api-key": credential,
-          ...headers,
-        },
-        body: JSON.stringify(payload),
-        signal: invokeOptions.signal,
-      });
-      const body = await response.text();
-      const parsed = parseJson(body, { error: { message: body } });
-      if (!response.ok) {
-        const error = new Error(
-          parsed?.error?.message || `Anthropic API returned ${response.status}`,
-        );
-        error.status = response.status;
-        error.response = parsed;
-        throw error;
-      }
-      return responseFromAnthropic(parsed);
+      return responseFromAnthropic(
+        await requestAnthropicMessages({
+          spec,
+          credential,
+          headers,
+          payload,
+          signal: invokeOptions.signal,
+        }),
+      );
     },
   };
   client.__modelSpec = modelSpec;
   client.__credential = credential;
   client.__headers = headers;
   return client;
+}
+
+async function requestAnthropicMessages({ spec, credential, headers = {}, payload, signal }) {
+  const response = await fetch(baseMessagesUrl(spec.base_url), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "anthropic-version": ANTHROPIC_VERSION,
+      "x-api-key": credential,
+      ...headers,
+    },
+    body: JSON.stringify(payload),
+    signal: signal || undefined,
+  });
+  const body = await response.text();
+  const parsed = parseJson(body, { error: { message: body } });
+  if (!response.ok) {
+    const error = new Error(parsed?.error?.message || `Anthropic API returned ${response.status}`);
+    error.status = response.status;
+    error.response = parsed;
+    throw error;
+  }
+  return parsed;
+}
+
+async function executeAnthropicOperation({
+  modelSpec,
+  credential,
+  operation,
+  headers = {},
+  signal,
+}) {
+  if (operation.kind !== MODEL_OPERATION_KIND.WEB_SEARCH) {
+    throw new TypeError(
+      `provider adapter anthropic-messages does not support operation: ${operation.kind}`,
+    );
+  }
+  const spec = normalizeRuntimeModelSpec(modelSpec);
+  const parsed = await requestAnthropicMessages({
+    spec,
+    credential,
+    headers,
+    signal,
+    payload: {
+      model: spec.model,
+      max_tokens: Number(spec.max_tokens || 10000),
+      tools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: String(operation.input.query || "").trim() }],
+        },
+      ],
+    },
+  });
+  const blocks = Array.isArray(parsed?.content) ? parsed.content : [];
+  return {
+    rawText: blocks
+      .filter((block) => block?.type === "text")
+      .map((block) => String(block.text || ""))
+      .join("")
+      .trim(),
+    output: blocks.map((block) => ({ ...block })),
+  };
 }
 
 export const anthropicMessagesAdapter = Object.freeze({
@@ -255,6 +313,9 @@ export const anthropicMessagesAdapter = Object.freeze({
   },
   prepareMessages({ messages }) {
     return messages;
+  },
+  executeOperation(input) {
+    return executeAnthropicOperation(input);
   },
 });
 

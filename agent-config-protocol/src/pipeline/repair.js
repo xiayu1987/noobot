@@ -6,8 +6,6 @@
 import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
   resolveDefaultModelLibraryProvider,
-  supportsModelMultimodalGeneration,
-  supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
 import {
   CONFIG_DOCUMENT_SCOPE,
@@ -410,41 +408,8 @@ function setValueAt(root, path, value) {
   node[path.at(-1)] = value;
 }
 
-function providerSupportsReference(provider, requirement) {
-  if (!isPlainObject(provider) || !validatesContract(provider, MODEL_PROVIDER_CONFIG_CONTRACT)) {
-    return false;
-  }
-  if (provider.enabled === false) return false;
-  if (requirement === "conversation") return provider.used_for_conversation !== false;
-  if (requirement.startsWith("parse:")) {
-    return supportsModelMultimodalParsing(provider, [requirement.slice("parse:".length)]);
-  }
-  if (requirement.startsWith("generate:")) {
-    return supportsModelMultimodalGeneration(provider, [requirement.slice("generate:".length)]);
-  }
-  return true;
-}
-
-function restoreProviderReferenceDefaults({ document, values, alias, requirement, changes }) {
-  const provider = document.providers?.[alias];
-  const providerTemplate = values.resolveProviderValues(alias);
-  if (!isPlainObject(provider) || !isPlainObject(providerTemplate)) return;
-  const relativePaths = [["enabled"]];
-  if (requirement === "conversation") relativePaths.push(["used_for_conversation"]);
-  if (requirement.startsWith("parse:")) relativePaths.push(["multimodal_parsing"]);
-  if (requirement.startsWith("generate:")) relativePaths.push(["multimodal_generation"]);
-  for (const relativePath of relativePaths) {
-    const defaultValue = valueAt(providerTemplate, relativePath);
-    if (defaultValue === undefined) continue;
-    if (JSON.stringify(valueAt(provider, relativePath)) === JSON.stringify(defaultValue)) continue;
-    setValueAt(provider, relativePath, clone(defaultValue));
-    recordChange(
-      changes,
-      ["providers", alias, ...relativePath],
-      CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT,
-      "invalid_default_model_capability",
-    );
-  }
+function providerReferenceExists(provider) {
+  return isPlainObject(provider) && validatesContract(provider, MODEL_PROVIDER_CONFIG_CONTRACT);
 }
 
 function collectReferenceRules(document) {
@@ -476,19 +441,12 @@ function repairModelReferences(document, values, changes) {
   for (const rule of collectReferenceRules(document)) {
     const alias = valueAt(document, rule.path);
     if (typeof alias !== "string" || !alias) continue;
-    if (providerSupportsReference(providers[alias], rule.requirement)) continue;
+    if (providerReferenceExists(providers[alias])) continue;
     const fallback = values.resolve(rule.path);
     if (typeof fallback !== "string" || !fallback) {
       throw new TypeError(`config value source has no model reference at ${pathText(rule.path)}`);
     }
-    restoreProviderReferenceDefaults({
-      document,
-      values,
-      alias: fallback,
-      requirement: rule.requirement,
-      changes,
-    });
-    if (!providerSupportsReference(providers[fallback], rule.requirement)) {
+    if (!providerReferenceExists(providers[fallback])) {
       throw new TypeError(`config repair cannot restore model reference at ${pathText(rule.path)}`);
     }
     setValueAt(document, rule.path, fallback);

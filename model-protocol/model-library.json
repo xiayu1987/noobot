@@ -44,9 +44,8 @@
       },
       "multimodal_generation": {
         "support_generation": {
-          "enabled": true,
-          "support_scope": ["image"],
-          "api_type": "openai_responses"
+          "enabled": false,
+          "support_scope": []
         }
       }
     },
@@ -187,6 +186,9 @@
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "Anthropic's most capable broadly released model, accessed through the native Messages API",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -209,6 +211,9 @@
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "Anthropic Fable 5.1 model accessed through the native Messages API",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -231,6 +236,9 @@
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "Anthropic model for complex agentic coding and enterprise work, accessed through the native Messages API",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -253,6 +261,9 @@
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "Anthropic speed and intelligence balanced model, accessed through the native Messages API",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -275,6 +286,9 @@
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "Anthropic fast near-frontier model, accessed through the native Messages API",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -341,6 +355,9 @@
       "reasoning_effort_options": ["low", "high", "max"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "DeepSeek flagship model for reasoning, coding, and tool use",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": false,
         "input_modalities": []
@@ -363,6 +380,9 @@
       "reasoning_effort_options": ["low", "high", "max"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "DeepSeek fast model for cost-sensitive reasoning, coding, and tool use",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": false,
         "input_modalities": []
@@ -385,6 +405,9 @@
       "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh"],
       "reasoning_effort_parameter": "reasoning_effort",
       "description": "xAI general-purpose reasoning, coding, and vision model",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "video"]
@@ -432,6 +455,9 @@
       "reasoning_effort_options": ["none", "medium"],
       "reasoning_effort_parameter": "enable_thinking",
       "description": "Alibaba balanced Qwen model for general-purpose reasoning and coding",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": false,
         "input_modalities": []
@@ -508,6 +534,29 @@
           "support_scope": []
         }
       }
+    },
+    "gpt_image_2_5_flare": {
+      "enabled": true,
+      "used_for_conversation": false,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-image-2.5-flare",
+      "description": "OpenAI native image generation model",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "images_async"
+        }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort"
     },
     "kimi_k3": {
       "enabled": true,

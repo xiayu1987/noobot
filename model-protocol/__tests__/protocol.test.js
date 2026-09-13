@@ -58,7 +58,7 @@ test("model input processing keeps directly readable text out of multimodal pars
 
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
-  assert.equal(options.length, 22);
+  assert.equal(options.length, 23);
   assert.equal(options[0].key, "gpt_5_6_sol");
   assert.equal(
     options.some((item) => item.key === "gpt_5_4"),
@@ -68,6 +68,11 @@ test("model library exposes copy-safe provider templates", () => {
     options.some((item) => item.key === "gpt_6_astra"),
     true,
   );
+  assert.equal(
+    options.some((item) => item.key === "gpt_image_2_5_flare"),
+    true,
+  );
+  assert.equal(resolveModelLibraryProvider("gpt_image_2_5_flare").used_for_conversation, false);
   assert.deepEqual(
     options
       .filter(({ key }) => resolveModelLibraryProvider(key)?.capabilities?.web_search === true)
@@ -79,7 +84,16 @@ test("model library exposes copy-safe provider templates", () => {
       "gpt_5_6_luna",
       "gpt_5_4",
       "gpt_5_5",
+      "claude_fable_5",
+      "claude_fable_5_1",
+      "claude_opus_5",
+      "claude_sonnet_5",
+      "claude_haiku_4_5",
+      "deepseek_v4_pro",
+      "deepseek_v4_flash",
+      "grok_4_6",
       "qwen3_7_max",
+      "qwen3_7_plus",
     ],
   );
   assert.equal(
@@ -126,6 +140,12 @@ test("model library exposes copy-safe provider templates", () => {
   assert.equal(astra.capabilities.web_search, true);
   assert.deepEqual(astra.multimodal_parsing.input_modalities, ["image"]);
   assert.equal(astra.multimodal_generation.support_generation.enabled, false);
+  const sol = resolveModelLibraryProvider("gpt_5_6_sol");
+  assert.equal(sol.multimodal_generation.support_generation.enabled, false);
+  assert.deepEqual(sol.multimodal_generation.support_generation.support_scope, []);
+  const flare = resolveModelLibraryProvider("gpt_image_2_5_flare");
+  assert.equal(flare.used_for_conversation, false);
+  assert.equal(flare.multimodal_generation.support_generation.enabled, true);
   assert.equal(Object.isFrozen(options[0]), true);
 
   const first = resolveModelLibraryProvider("gemini_3_7_flash");
