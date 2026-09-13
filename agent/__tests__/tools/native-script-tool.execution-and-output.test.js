@@ -253,3 +253,81 @@ await files.writeText(target, "");
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "empty.bin");
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].size, 0);
 });
+
+test("execute_native_script promotes temporary binary bytes into a formal output attachment", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-binary-"));
+  const sourceBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff]);
+  await fs.writeFile(path.join(basePath, "source.bin"), sourceBytes);
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `binary-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [{ source: "source.bin" }],
+        script_body: `
+const declared = await files.input(0);
+const encoded = await files.readBase64(declared);
+const staged = await output.tempFile("staged.bin");
+await files.writeBase64(staged, encoded);
+const copied = await output.file("copied.bin");
+await files.copy(staged, copied);
+const promoted = await output.file("promoted.bin");
+await files.writeBase64(promoted, encoded);
+log("encoded:" + encoded);
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, new RegExp(`encoded:${sourceBytes.toString("base64")}`));
+  assert.equal(result.output_file_count, 2);
+  const artifactsByName = new Map(
+    persistedRequest.artifacts.map((artifact) => [artifact.name, artifact]),
+  );
+  assert.deepEqual([...artifactsByName.keys()].sort(), ["copied.bin", "promoted.bin"]);
+  for (const name of ["copied.bin", "promoted.bin"]) {
+    assert.deepEqual(
+      Buffer.from(artifactsByName.get(name).contentBase64, "base64"),
+      sourceBytes,
+      `${name} must preserve the exact source bytes`,
+    );
+  }
+});
+
+test("execute_native_script rejects non-base64 content before writing binary bytes", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-binary-invalid-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const target = await output.file("broken.bin");
+await files.writeBase64(target, "not base64 !!");
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.match(result.error, /files\.writeBase64 requires base64 content/);
+  assert.equal(result.output_file_count, 0);
+});

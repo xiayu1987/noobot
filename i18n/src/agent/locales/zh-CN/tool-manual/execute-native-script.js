@@ -13,15 +13,19 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
       script_body: "异步函数体源码。能力通过绑定注入，不需要也不能自行 import 或 require。",
       inputs: "只读输入数组，每项为 { source: 逻辑路径或 attachmentRef }。",
       arguments: "结构化非敏感参数对象，脚本内通过 args 读取。",
-      riskLevel: "脚本风险等级：low、medium、high 或 critical。具有破坏性的脚本必须标记为 critical。",
+      riskLevel:
+        "脚本风险等级：low、medium、high 或 critical。具有破坏性的脚本必须标记为 critical。",
     },
     bindings: {
       browser: "浏览器能力，见 browser 段。",
-      libreoffice: "文档转换：await libreoffice.convert({ input, outputDirectory, outputFormat })。",
-      ffmpeg: "音视频处理：await ffmpeg.run({ args: [...] })。",
-      ffprobe: "媒体探测：await ffprobe.run({ args: [...] })。",
+      libreoffice:
+        "文档转换：await libreoffice.convert({ input, outputDirectory, outputFormat })。",
+      ffmpeg:
+        "音视频处理：await ffmpeg.run({ args: [...] })，返回 { code, stdout, stderr }，code 恒为 0，非零退出直接抛错。",
+      ffprobe:
+        "媒体探测：await ffprobe.run({ args: [...] })，返回 { code, stdout, stderr }，code 恒为 0，非零退出直接抛错。",
       files:
-        "读写，全部为异步方法必须 await：const token = await files.input(index) 取 input:// 令牌；await files.readText(token)、readJson(token)、writeText(token, text)、writeJson(token, value)。读写只接受 input://、output:// 或 temp:// 令牌，不接受逻辑路径或宿主路径。",
+        "读写，全部为异步方法必须 await：const token = await files.input(index) 取 input:// 令牌；文本用 await files.readText(token)、readJson(token)、writeText(token, text)、writeJson(token, value)；二进制用 await files.readBase64(token)、writeBase64(token, base64) 与 await files.copy(sourceToken, destinationToken)，copy 返回 { path, bytes }，是把 temp:// 二进制产物提升为 output:// 正式附件的通道。读写只接受 input://、output:// 或 temp:// 令牌，不接受逻辑路径或宿主路径。",
       output:
         "产物，全部为异步方法必须 await：await output.file(relativePath) 返回 output:// 令牌；await output.tempDirectory(relativePath) 返回 temp:// 目录令牌；await output.tempFile(relativePath) 或 await output.tempFile(tempDirectoryToken, fileName) 返回 temp:// 文件令牌。",
       ui: "用户操作通道，见 ui 段。",
@@ -30,7 +34,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
     },
     browser: {
       newPage:
-        "await browser.newPage({ headed, profile, viewport }) 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。",
+        'await browser.newPage({ headed, profile, viewport }) 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。page.screenshot 与 locator.screenshot 返回 { path, bytes }，不回传图片字节；省略 path 时改为返回 { path: "", bytes, base64 }。',
       headed:
         "headed 为 true 时启动有头窗口，浏览器由主进程持有，脚本结束后窗口保留，便于人工登录或人工确认。",
       profile:
@@ -40,7 +44,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
     },
     ui: {
       waitForUser:
-        "await ui.waitForUser({ content, fields }) 挂起脚本并向用户提问，返回用户填写结果；等待期间超时计时暂停。",
+        "await ui.waitForUser({ content, fields }) 挂起脚本并向用户提问，返回用户填写结果；等待期间超时计时暂停。fields 接受字段数组或 { fields: [...] }，每项必须含 name 与 displayName，形状不合法直接抛错，不会静默降级为确认弹窗。",
     },
     notes: [
       "有头模式下不做请求拦截，页面可自由访问外部资源；无头模式仍按协议校验。",

@@ -21,10 +21,12 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
       browser: "Browser capability, see the browser section.",
       libreoffice:
         "Document conversion: await libreoffice.convert({ input, outputDirectory, outputFormat }).",
-      ffmpeg: "Media processing: await ffmpeg.run({ args: [...] }).",
-      ffprobe: "Media probing: await ffprobe.run({ args: [...] }).",
+      ffmpeg:
+        "Media processing: await ffmpeg.run({ args: [...] }). Returns { code, stdout, stderr } where code is always 0 because a non-zero exit throws.",
+      ffprobe:
+        "Media probing: await ffprobe.run({ args: [...] }). Returns { code, stdout, stderr } where code is always 0 because a non-zero exit throws.",
       files:
-        "File access, every method is async and must be awaited: const token = await files.input(index) returns an input:// token; await files.readText(token), readJson(token), writeText(token, text), writeJson(token, value). Reads and writes accept only input://, output://, or temp:// tokens, never logical or host paths.",
+        "File access, every method is async and must be awaited: const token = await files.input(index) returns an input:// token; for text use await files.readText(token), readJson(token), writeText(token, text), writeJson(token, value); for binary use await files.readBase64(token), writeBase64(token, base64), and await files.copy(sourceToken, destinationToken), which returns { path, bytes } and is the channel that promotes a temp:// binary artifact into a formal output:// attachment. Reads and writes accept only input://, output://, or temp:// tokens, never logical or host paths.",
       output:
         "Artifacts, every method is async and must be awaited: await output.file(relativePath) returns an output:// token; await output.tempDirectory(relativePath) returns a temp:// directory token; await output.tempFile(relativePath) or await output.tempFile(tempDirectoryToken, fileName) returns a temp:// file token.",
       ui: "User interaction channel, see the ui section.",
@@ -33,7 +35,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
     },
     browser: {
       newPage:
-        "await browser.newPage({ headed, profile, viewport }) returns a restricted page supporting goto, setContent, title, url, content, DOM operations, screenshot, and close, but not evaluate.",
+        'await browser.newPage({ headed, profile, viewport }) returns a restricted page supporting goto, setContent, title, url, content, DOM operations, screenshot, and close, but not evaluate. page.screenshot and locator.screenshot return { path, bytes } instead of image bytes; when path is omitted they return { path: "", bytes, base64 }.',
       headed:
         "With headed true a visible window starts. The browser is owned by the main process, so the window survives after the script ends, which suits manual login or manual confirmation.",
       profile:
@@ -43,7 +45,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
     },
     ui: {
       waitForUser:
-        "await ui.waitForUser({ content, fields }) suspends the script and asks the user, returning what they filled in; the timeout clock pauses while waiting.",
+        "await ui.waitForUser({ content, fields }) suspends the script and asks the user, returning what they filled in; the timeout clock pauses while waiting. fields accepts a field array or { fields: [...] }, every entry requires name and displayName, and an invalid shape throws instead of silently degrading to a confirmation dialog.",
     },
     notes: [
       "Headed mode performs no request interception and pages may reach external resources freely; headless mode still validates against the protocol.",

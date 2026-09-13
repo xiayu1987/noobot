@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { execFile } from "node:child_process";
-import { lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import vm from "node:vm";
 import {
@@ -149,6 +149,7 @@ function redactCapabilityValue(value, roots, seen = new WeakSet()) {
 
 function redactProcessResult(result, roots) {
   return {
+    code: 0,
     stdout: redactCapabilityText(result?.stdout, roots),
     stderr: redactCapabilityText(result?.stderr, roots),
   };
@@ -240,6 +241,47 @@ export function resolveBrowserProxyFromEnv(env = process.env) {
   }
 }
 
+async function captureScreenshot(target, options, resolveOutput) {
+  const source = options && typeof options === "object" ? options : {};
+  const requested = source.path;
+  if (requested === undefined || requested === null || String(requested).trim() === "") {
+    const buffer = await target.screenshot({ ...source, path: undefined });
+    return { path: "", bytes: buffer.byteLength, base64: buffer.toString("base64") };
+  }
+  const resolved = await resolveOutput(requested);
+  const buffer = await target.screenshot({ ...source, path: resolved });
+  return { path: String(requested), bytes: buffer.byteLength };
+}
+
+function normalizeInteractionFields(value) {
+  if (value === undefined || value === null) return [];
+  const declared = Array.isArray(value)
+    ? value
+    : typeof value === "object" && Array.isArray(value.fields)
+      ? value.fields
+      : null;
+  if (!declared) {
+    throw new TypeError(
+      "ui.waitForUser({ fields }) requires a field array or an object with a fields array",
+    );
+  }
+  return declared.map((field, index) => {
+    if (!field || typeof field !== "object" || Array.isArray(field)) {
+      throw new TypeError(`ui.waitForUser field ${index} must be an object`);
+    }
+    const name = String(field.name || "").trim();
+    const displayName = String(field.displayName || "").trim();
+    if (!name) throw new TypeError(`ui.waitForUser field ${index} requires name`);
+    if (!displayName) throw new TypeError(`ui.waitForUser field ${index} requires displayName`);
+    return {
+      name,
+      displayName,
+      required: field.required === true,
+      description: String(field.description || ""),
+    };
+  });
+}
+
 function createLocatorFacade(locator, { resolveInput, resolveOutput }) {
   return opaqueFacade({
     click: (options) => locator.click(options),
@@ -262,11 +304,7 @@ function createLocatorFacade(locator, { resolveInput, resolveOutput }) {
       const paths = await Promise.all(values.map(resolveInput));
       return locator.setInputFiles(paths, options);
     },
-    screenshot: async (options = {}) =>
-      locator.screenshot({
-        ...options,
-        path: await resolveOutput(options.path),
-      }),
+    screenshot: async (options = {}) => captureScreenshot(locator, options, resolveOutput),
   });
 }
 
@@ -302,11 +340,7 @@ function createPageFacade(page, paths) {
     waitForTimeout: (timeout) =>
       page.waitForTimeout(Math.min(30000, Math.max(0, Number(timeout || 0)))),
     locator: (selector) => createLocatorFacade(page.locator(String(selector || "")), paths),
-    screenshot: async (options = {}) =>
-      page.screenshot({
-        ...options,
-        path: await paths.resolveOutput(options.path),
-      }),
+    screenshot: async (options = {}) => captureScreenshot(page, options, paths.resolveOutput),
     close: (options) => page.close(options),
   });
 }
@@ -496,6 +530,34 @@ export async function createNativeScriptRuntime({
   };
   const writeJson = (reference, value) =>
     writeText(reference, `${JSON.stringify(redactCapabilityValue(value, pathRoots), null, 2)}\n`);
+  const resolveBinaryReadable = async (reference, label) => {
+    const { target, linkInfo } = await resolveReadableFile(reference, label);
+    if (linkInfo.size > LENGTH_THRESHOLDS.nativeScript.binaryReadBytes)
+      throw new Error(`${label} file exceeds 200 MB`);
+    return target;
+  };
+  const readBase64 = async (reference) =>
+    (await readFile(await resolveBinaryReadable(reference, "files.readBase64"))).toString("base64");
+  const writeBase64 = async (reference, content) => {
+    const encoded = String(content ?? "");
+    if (encoded && !/^[A-Za-z0-9+/\r\n]*={0,2}$/.test(encoded)) {
+      throw new TypeError("files.writeBase64 requires base64 content");
+    }
+    const { target, token } = await resolveWritableTaskPath(reference, {
+      label: "files.writeBase64",
+    });
+    await writeFile(target, Buffer.from(encoded, "base64"));
+    return token;
+  };
+  const copy = async (source, destination) => {
+    const from = await resolveBinaryReadable(source, "files.copy source");
+    const { target, token } = await resolveWritableTaskPath(destination, {
+      label: "files.copy destination",
+    });
+    await copyFile(from, target);
+    const info = await stat(target);
+    return { path: token, bytes: info.size };
+  };
   const libreoffice = opaqueFacade({
     convert: async (options) => {
       const {
@@ -652,7 +714,16 @@ export async function createNativeScriptRuntime({
     args: Object.freeze(
       redactCapabilityValue(args && typeof args === "object" ? args : {}, pathRoots),
     ),
-    files: opaqueFacade({ input, readText, readJson, writeText, writeJson }),
+    files: opaqueFacade({
+      input,
+      readText,
+      readJson,
+      readBase64,
+      writeText,
+      writeJson,
+      writeBase64,
+      copy,
+    }),
     output: opaqueFacade({
       file: outputFile,
       tempFile,
@@ -697,7 +768,7 @@ export async function createNativeScriptRuntime({
         const source = options && typeof options === "object" ? options : {};
         return callHost(NATIVE_SCRIPT_IPC_CHANNEL.USER_INTERACTION_REQUEST, {
           content: source.content,
-          fields: source.fields,
+          fields: normalizeInteractionFields(source.fields),
         });
       },
     }),
