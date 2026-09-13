@@ -3,10 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
-import { fileURLToPath } from "node:url";
 import { validateModelObservationPolicyCoverage } from "./helpers/model-observation-policy.js";
 import { PROTOCOL_TIMEOUTS } from "./helpers/protocol-timeouts.js";
 
@@ -14,6 +15,7 @@ const protocolRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(protocolRoot, "../../../../..");
 const suiteSessionRegistry = path.join(repositoryRoot, "test-results/protocol/suite-sessions.json");
 process.env.NOOBOT_E2E_SESSION_REGISTRY = suiteSessionRegistry;
+process.env.NOOBOT_E2E_RUN_ID = randomUUID();
 const e2eWorkspaceRoot = String(process.env.NOOBOT_E2E_WORKSPACE_ROOT || "").trim();
 const runtimeEventsWorkspaceRoot = String(
   process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT || "",

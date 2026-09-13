@@ -9,6 +9,8 @@ import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-pr
 import { request as playwrightRequest } from "@playwright/test";
 
 const registryPath = String(process.env.NOOBOT_E2E_SESSION_REGISTRY || "").trim();
+const runId = String(process.env.NOOBOT_E2E_RUN_ID || "").trim();
+const REGISTRY_SOURCE = "playwright-e2e-created-session";
 
 async function deleteSessionWithAdmissionRetry(context, { userId, sessionId, apiKey }) {
   const endpoint = `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`;
@@ -45,19 +47,42 @@ async function readRegistry() {
 
 export async function registerSuiteSession(record) {
   if (!registryPath) throw new Error("NOOBOT_E2E_SESSION_REGISTRY is required");
+  if (!runId) throw new Error("NOOBOT_E2E_RUN_ID is required");
+  const userId = String(record?.userId || "").trim();
+  const sessionId = String(record?.sessionId || "").trim();
+  const apiKey = String(record?.apiKey || "").trim();
+  if (!userId || !sessionId || !apiKey) {
+    throw new Error("E2E cleanup registration requires userId, sessionId, and apiKey");
+  }
   const records = await readRegistry();
-  records.push({
-    userId: String(record?.userId || "").trim(),
-    sessionId: String(record?.sessionId || "").trim(),
-    apiKey: String(record?.apiKey || "").trim(),
-  });
+  const duplicate = records.some(
+    (item) =>
+      item?.runId === runId && item?.userId === userId && item?.sessionId === sessionId,
+  );
+  if (!duplicate) {
+    records.push({
+      source: REGISTRY_SOURCE,
+      runId,
+      userId,
+      sessionId,
+      apiKey,
+    });
+  }
   await fs.mkdir(path.dirname(registryPath), { recursive: true });
   await fs.writeFile(registryPath, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
 }
 
 export default class SuiteSessionCleanupReporter {
   async onEnd(result) {
-    const records = await readRegistry();
+    const allRecords = await readRegistry();
+    const records = allRecords.filter(
+      (record) =>
+        record?.source === REGISTRY_SOURCE &&
+        record?.runId === runId &&
+        String(record?.userId || "").trim() &&
+        String(record?.sessionId || "").trim() &&
+        String(record?.apiKey || "").trim(),
+    );
     if (
       process.env.NOOBOT_E2E_FULL_SUITE !== "1" ||
       result.status !== "passed" ||
@@ -70,19 +95,12 @@ export default class SuiteSessionCleanupReporter {
     const baseURL = String(process.env.NOOBOT_E2E_BASE_URL || defaultBaseUrl).replace(/\/$/, "");
     const context = await playwrightRequest.newContext({ baseURL });
     try {
-      const apiKeyByUserId = new Map();
       for (const record of records) {
         const userId = String(record?.userId || "").trim();
-        const apiKey = String(record?.apiKey || "").trim();
-        if (userId && apiKey) apiKeyByUserId.set(userId, apiKey);
-      }
-      for (const record of records) {
-        const userId = String(record?.userId || "").trim();
-        const apiKey = apiKeyByUserId.get(userId) || "";
         await deleteSessionWithAdmissionRetry(context, {
           userId,
           sessionId: record.sessionId,
-          apiKey,
+          apiKey: record.apiKey,
         });
       }
     } finally {
