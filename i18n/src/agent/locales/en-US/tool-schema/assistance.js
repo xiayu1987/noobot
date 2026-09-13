@@ -147,8 +147,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.taskIdMissing": "image generation task id missing",
       "tools.multimodal.taskTimeout": (params = {}) =>
         `image generation task timeout: ${String(params.taskId || "").trim()}`,
-      "tools.multimodal.trySwitchApiType":
-        "Check the image generation API type configured for this model.",
+      "tools.multimodal.capabilityUnavailable":
+        "This model cannot serve image generation right now. Check the model configuration or use another model.",
     },
   },
   multimodal_parse: {

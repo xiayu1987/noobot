@@ -14,6 +14,28 @@ const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
   type: "web_search_20250305",
   name: "web_search",
 });
+const ANTHROPIC_PAUSE_TURN_STOP_REASON = "pause_turn";
+const ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS = 3;
+const ANTHROPIC_DOCUMENT_MIME_TYPE = "application/pdf";
+
+function splitDataUrl(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw.startsWith("data:")) return { mediaType: "", base64: raw };
+  const separatorIndex = raw.indexOf(",");
+  if (separatorIndex < 0) return { mediaType: "", base64: "" };
+  const descriptor = raw.slice("data:".length, separatorIndex);
+  return {
+    mediaType: descriptor.split(";")[0].trim(),
+    base64: raw.slice(separatorIndex + 1).trim(),
+  };
+}
+
+function anthropicImageSource(url = "") {
+  const raw = String(url || "").trim();
+  if (!raw.startsWith("data:")) return { type: "url", url: raw };
+  const { mediaType, base64 } = splitDataUrl(raw);
+  return { type: "base64", media_type: mediaType, data: base64 };
+}
 
 function baseMessagesUrl(baseUrl = "") {
   let value = String(baseUrl || "");
@@ -49,8 +71,10 @@ function textBlocks(content) {
       return [{ ...block }];
     }
     if (block.type === "image_url" && block.image_url?.url) {
-      return [{ type: "image", source: { type: "url", url: block.image_url.url } }];
+      return [{ type: "image", source: anthropicImageSource(block.image_url.url) }];
     }
+    if (block.type === "image" && block.source) return [{ ...block }];
+    if (block.type === "document" && block.source) return [{ ...block }];
     return [];
   });
 }
@@ -255,36 +279,7 @@ async function requestAnthropicMessages({ spec, credential, headers = {}, payloa
   return parsed;
 }
 
-async function executeAnthropicOperation({
-  modelSpec,
-  credential,
-  operation,
-  headers = {},
-  signal,
-}) {
-  if (operation.kind !== MODEL_OPERATION_KIND.WEB_SEARCH) {
-    throw new TypeError(
-      `provider adapter anthropic-messages does not support operation: ${operation.kind}`,
-    );
-  }
-  const spec = normalizeRuntimeModelSpec(modelSpec);
-  const parsed = await requestAnthropicMessages({
-    spec,
-    credential,
-    headers,
-    signal,
-    payload: {
-      model: spec.model,
-      max_tokens: Number(spec.max_tokens || 10000),
-      tools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
-      messages: [
-        {
-          role: "user",
-          content: [{ type: "text", text: String(operation.input.query || "").trim() }],
-        },
-      ],
-    },
-  });
+function resultFromAnthropicBlocks(parsed = {}) {
   const blocks = Array.isArray(parsed?.content) ? parsed.content : [];
   return {
     rawText: blocks
@@ -294,6 +289,105 @@ async function executeAnthropicOperation({
       .trim(),
     output: blocks.map((block) => ({ ...block })),
   };
+}
+
+export function mapAnthropicMultimodalAttachment(attachment = {}) {
+  const mimeType = String(attachment.mimeType || "").trim();
+  const normalizedMimeType = mimeType.toLowerCase();
+  const { mediaType, base64 } = splitDataUrl(attachment.data);
+  const resolvedMediaType = mediaType || normalizedMimeType;
+  if (normalizedMimeType.startsWith("image/")) {
+    return { type: "image", source: { type: "base64", media_type: resolvedMediaType, data: base64 } };
+  }
+  if (normalizedMimeType === ANTHROPIC_DOCUMENT_MIME_TYPE) {
+    return {
+      type: "document",
+      source: { type: "base64", media_type: ANTHROPIC_DOCUMENT_MIME_TYPE, data: base64 },
+    };
+  }
+  throw new TypeError(
+    `provider adapter anthropic-messages does not support attachment mime type: ${mimeType || "missing"}`,
+  );
+}
+
+async function executeAnthropicServerToolTurn({
+  spec,
+  credential,
+  headers,
+  signal,
+  serverTools,
+  content,
+}) {
+  const messages = [{ role: "user", content }];
+  const collected = [];
+  for (let attempt = 0; attempt <= ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS; attempt += 1) {
+    const parsed = await requestAnthropicMessages({
+      spec,
+      credential,
+      headers,
+      signal,
+      payload: {
+        model: spec.model,
+        max_tokens: Number(spec.max_tokens || 10000),
+        tools: serverTools,
+        messages,
+      },
+    });
+    const turnBlocks = Array.isArray(parsed?.content) ? parsed.content : [];
+    collected.push(...turnBlocks.map((block) => ({ ...block })));
+    if (parsed?.stop_reason !== ANTHROPIC_PAUSE_TURN_STOP_REASON) break;
+    messages.push({ role: "assistant", content: turnBlocks.map((block) => ({ ...block })) });
+  }
+  return resultFromAnthropicBlocks({ content: collected });
+}
+
+async function executeAnthropicOperation({
+  modelSpec,
+  credential,
+  operation,
+  headers = {},
+  signal,
+  mapMultimodalAttachment = mapAnthropicMultimodalAttachment,
+}) {
+  if (
+    operation.kind !== MODEL_OPERATION_KIND.WEB_SEARCH &&
+    operation.kind !== MODEL_OPERATION_KIND.MULTIMODAL_PARSE
+  ) {
+    throw new TypeError(
+      `provider adapter anthropic-messages does not support operation: ${operation.kind}`,
+    );
+  }
+  const spec = normalizeRuntimeModelSpec(modelSpec);
+  if (operation.kind === MODEL_OPERATION_KIND.WEB_SEARCH) {
+    return executeAnthropicServerToolTurn({
+      spec,
+      credential,
+      headers,
+      signal,
+      serverTools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
+      content: [{ type: "text", text: String(operation.input.query || "").trim() }],
+    });
+  }
+  const parsed = await requestAnthropicMessages({
+    spec,
+    credential,
+    headers,
+    signal,
+    payload: {
+      model: spec.model,
+      max_tokens: Number(spec.max_tokens || 10000),
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: String(operation.input.prompt || "").trim() },
+            ...operation.input.attachments.map(mapMultimodalAttachment),
+          ],
+        },
+      ],
+    },
+  });
+  return resultFromAnthropicBlocks(parsed);
 }
 
 export const anthropicMessagesAdapter = Object.freeze({

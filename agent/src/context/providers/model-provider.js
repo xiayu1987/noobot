@@ -12,7 +12,6 @@ function normalizeModelMultimodalInfo(modelSpec = {}) {
     support_generation: {
       enabled: generation.enabled,
       support_scope: [...generation.outputModalities],
-      api_type: generation.apiType,
     },
   };
 }

@@ -74,7 +74,7 @@ function createModelPort(outputs = []) {
           },
         ],
         model: modelSpec,
-        provider: {},
+        provider: { operatorId: modelSpec.providerId, adapterId: modelSpec.adapterId },
       });
     },
   };

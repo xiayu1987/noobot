@@ -95,7 +95,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.taskIdMissing": "图片生成任务 ID 缺失",
       "tools.multimodal.taskTimeout": (params = {}) =>
         `图片生成任务超时：${String(params.taskId || "").trim()}`,
-      "tools.multimodal.trySwitchApiType": "请检查该模型配置的图片生成接口类型。",
+      "tools.multimodal.capabilityUnavailable": "该模型当前无法完成图片生成，请检查模型配置或更换模型。",
     },
   },
   switch_model: {

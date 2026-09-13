@@ -5,7 +5,11 @@
  */
 import OpenAI from "openai";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { IMAGE_GENERATION_API_TYPE, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import {
+  MODEL_IMAGE_GENERATION_API_TYPE,
+  MODEL_OPERATION_KIND,
+  resolveModelImageGenerationApiType,
+} from "@noobot/model-protocol";
 
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
 const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
@@ -243,7 +247,7 @@ async function executeImagesAsync({
   const id = taskId(created);
   if (!id) {
     const error = new Error(String(options.taskIdMissingMessage || localized.taskIdMissing));
-    error.apiTypeSwitchHint = true;
+    error.capabilityUnavailable = true;
     throw error;
   }
   const taskUrl = buildApiUrl(baseUrl, `/v1/tasks/${encodeURIComponent(id)}`);
@@ -267,13 +271,13 @@ async function executeImagesAsync({
       const error = new Error(
         String(task.error || task.message || options.taskFailedMessage || localized.taskFailed),
       );
-      error.apiTypeSwitchHint = true;
+      error.capabilityUnavailable = true;
       throw error;
     }
     await clock.sleep(Number(options.pollIntervalMs || POLL_INTERVAL_MS));
   }
   const error = new Error(String(options.taskTimeoutMessage || localized.taskTimeout(id)));
-  error.apiTypeSwitchHint = true;
+  error.capabilityUnavailable = true;
   throw error;
 }
 
@@ -305,12 +309,12 @@ export async function executeOpenAiOperation({
   clock = { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
   locale = "zh-CN",
   mapMultimodalAttachment = mapOpenAiMultimodalAttachment,
-  multimodalParseTransport = "responses",
   openAiClientFactory = (config) => new OpenAI(config),
 }) {
   if (
     operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION &&
-    operation.options.apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
+    resolveModelImageGenerationApiType(modelSpec) ===
+      MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
   ) {
     return executeImagesAsync({
       modelSpec,
@@ -350,33 +354,6 @@ export async function executeOpenAiOperation({
   }
   if (operation.kind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
     const attachmentContent = operation.input.attachments.map(mapMultimodalAttachment);
-    if (multimodalParseTransport === "chat_completions") {
-      const completion = await client.chat.completions.create(
-        {
-          model: modelSpec.model,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: String(operation.input.prompt || "").trim() },
-                ...attachmentContent,
-              ],
-            },
-          ],
-        },
-        { signal: signal || undefined },
-      );
-      const content = completion?.choices?.[0]?.message?.content;
-      const rawText =
-        typeof content === "string"
-          ? content.trim()
-          : (Array.isArray(content) ? content : [])
-              .filter((item) => String(item?.type || "").trim() === "text")
-              .map((item) => String(item?.text || ""))
-              .join("")
-              .trim();
-      return { rawText, output: [] };
-    }
     const result = await client.responses.create(
       {
         model: modelSpec.model,

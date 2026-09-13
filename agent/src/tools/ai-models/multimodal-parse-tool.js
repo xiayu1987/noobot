@@ -39,7 +39,12 @@ import {
   normalizePersistedAttachments,
   persistParsedTextAttachment,
 } from "../core/parsed-artifact-persistence.js";
-import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import {
+  TOOL_CALL_MODE,
+  TOOL_DATA_MODE,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
+} from "../constants/index.js";
 
 const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
 
@@ -302,7 +307,7 @@ export function createMultimodalParseTool({ agentContext }) {
         {
           ok: true,
           status: TOOL_RESULT_STATUS.COMPLETED,
-          mode: "openai_responses_api",
+          mode: TOOL_CALL_MODE.MULTIMODAL_PARSE,
           inputs,
           resources: [...resolvedInputs.map((item) => item.resourceRef), ...outputResources],
           ...persistedOutput.resultFields,

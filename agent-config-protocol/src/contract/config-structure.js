@@ -12,7 +12,7 @@ import {
   CONFIG_PATH_REPRESENTATION,
 } from "./repair.js";
 import { SNAKE_TO_CANONICAL_KEY_MAP } from "../normalization/keys.js";
-import { MCP_SERVER_TYPE } from "../enums.js";
+import { MCP_SERVER_TYPE, WEB_SEARCH_MODE } from "../enums.js";
 
 export const CONFIG_STRUCTURE_KIND = Object.freeze({
   OBJECT: "object",
@@ -115,8 +115,8 @@ const TOOLS_STRUCTURE = object({
   execute_native_script: toolToggle(),
   access_connector: toolToggle(),
   web_search: toolToggle({
-    mode: string({ nonEmpty: true }),
-    responses_api: object({ model: string({ modelReference: "model" }) }),
+    mode: string({ nonEmpty: true, values: Object.freeze(Object.values(WEB_SEARCH_MODE)) }),
+    model_web_search: object({ model: string({ modelReference: "model" }) }),
     search_engine: object({
       prompt: string(),
       endpoints: object({ search: endpointStructure }),

@@ -12,7 +12,7 @@ import {
   searchWithSearchEngine,
 } from "../../src/tools/ai-models/web-search-tool.js";
 
-test("web_search: Responses API 模式只通过 canonical ModelPort 发起操作", async () => {
+test("web_search: model_web_search 模式只通过 canonical ModelPort 发起操作", async () => {
   let capturedRequest = null;
   const abortController = new AbortController();
   const runtime = {
@@ -37,7 +37,10 @@ test("web_search: Responses API 模式只通过 canonical ModelPort 发起操作
     modelPort: {
       async invoke(request) {
         capturedRequest = request;
-        return { result: { rawText: "search result", output: [{ type: "message" }] } };
+        return {
+          execution: { provider: { operatorId: "openai", adapterId: "openai-compatible" } },
+          result: { rawText: "search result", output: [{ type: "message" }] },
+        };
       },
     },
   };
@@ -53,6 +56,50 @@ test("web_search: Responses API 模式只通过 canonical ModelPort 发起操作
   assert.match(inputText, /latest noobot news/);
   assert.equal(result.text, "search result");
   assert.deepEqual(result.output, [{ type: "message" }]);
+  assert.equal(result.mode, "model_web_search");
+  assert.equal(result.provider.adapterId, "openai-compatible");
+  assert.equal(result.provider.operatorId, "openai");
+});
+
+test("web_search: Claude 家族透传 Anthropic Messages 执行协议身份", async () => {
+  const runtime = {
+    runtimeModel: "claude_opus_5",
+    globalConfig: {
+      providers: {
+        claude_opus_5: {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "test-key",
+          model: "claude-opus-5",
+          providerId: "anthropic",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
+          capabilities: { web_search: true },
+        },
+      },
+    },
+    userConfig: {},
+    modelPort: {
+      async invoke() {
+        return {
+          execution: { provider: { operatorId: "anthropic", adapterId: "anthropic-messages" } },
+          result: {
+            rawText: "anthropic search result",
+            output: [{ type: "server_tool_use" }, { type: "web_search_tool_result" }],
+          },
+        };
+      },
+    },
+  };
+  const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
+  const result = JSON.parse(await tool.invoke({ query: "latest noobot news" }));
+
+  assert.equal(result.mode, "model_web_search");
+  assert.equal(result.provider.adapterId, "anthropic-messages");
+  assert.equal(result.provider.operatorId, "anthropic");
+  assert.equal(result.modelAlias, "claude_opus_5");
+  assert.equal(result.model, "claude-opus-5");
+  assert.equal(result.summary.output_item_count, 2);
 });
 
 test("web_search: search_engine 模式按配置生成直连搜索引擎请求", () => {

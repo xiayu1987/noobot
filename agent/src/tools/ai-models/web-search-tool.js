@@ -13,13 +13,11 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
-import { TOOL_CALL_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { TOOL_NAME, TOOL_RESULT_STATUS, WEB_SEARCH_MODE } from "../constants/index.js";
 
 const WEB_SEARCH_FLOW_NAME = "agent.web_search";
 const WEB_SEARCH_PURPOSE_NAME = "web_search";
 const WEB_SEARCH_DOMAIN_NAME = "tool";
-const WEB_SEARCH_MODE_RESPONSES_API = "responses_api";
-const WEB_SEARCH_MODE_SEARCH_ENGINE = "search_engine";
 const WEB_SEARCH_SERVICE_ENDPOINT_NAME = "search";
 
 function buildWebSearchInputText(query = "") {
@@ -53,12 +51,19 @@ function resolveSearchModelSpec({
   return { resolvedModelName, resolvedModelSpec };
 }
 
+const WEB_SEARCH_MODES = Object.freeze(Object.values(WEB_SEARCH_MODE));
+
 function normalizeWebSearchMode(mode = "") {
   const normalizedMode = String(mode || "")
     .trim()
     .toLowerCase();
-  if (normalizedMode === WEB_SEARCH_MODE_SEARCH_ENGINE) return WEB_SEARCH_MODE_SEARCH_ENGINE;
-  return WEB_SEARCH_MODE_RESPONSES_API;
+  if (!normalizedMode) return WEB_SEARCH_MODE.MODEL_WEB_SEARCH;
+  if (!WEB_SEARCH_MODES.includes(normalizedMode)) {
+    throw new TypeError(
+      `unsupported web search mode: ${normalizedMode}; expected one of ${WEB_SEARCH_MODES.join(", ")}`,
+    );
+  }
+  return normalizedMode;
 }
 
 function resolveWebSearchToolConfig(runtime = {}) {
@@ -66,9 +71,9 @@ function resolveWebSearchToolConfig(runtime = {}) {
   return effectiveConfig?.tools?.[TOOL_NAME.WEB_SEARCH] || {};
 }
 
-function resolveResponsesApiConfig(toolCfg = {}) {
-  return toolCfg?.responses_api && typeof toolCfg.responses_api === "object"
-    ? toolCfg.responses_api
+function resolveModelWebSearchConfig(toolCfg = {}) {
+  return toolCfg?.model_web_search && typeof toolCfg.model_web_search === "object"
+    ? toolCfg.model_web_search
     : {};
 }
 
@@ -80,7 +85,7 @@ function resolveSearchEngineConfig(toolCfg = {}) {
   return {
     ...nestedConfig,
     enabled: toolCfg?.enabled,
-    mode: WEB_SEARCH_MODE_SEARCH_ENGINE,
+    mode: WEB_SEARCH_MODE.SEARCH_ENGINE,
   };
 }
 
@@ -200,7 +205,7 @@ export function createWebSearchTool({ agentContext }) {
         }
         try {
           const mode = normalizeWebSearchMode(toolCfg?.mode);
-          if (mode === WEB_SEARCH_MODE_SEARCH_ENGINE) {
+          if (mode === WEB_SEARCH_MODE.SEARCH_ENGINE) {
             const searchEngineCfg = resolveSearchEngineConfig(toolCfg);
             const searchEngineResult = await searchWithSearchEngine({
               runtime,
@@ -212,7 +217,6 @@ export function createWebSearchTool({ agentContext }) {
               {
                 ok: searchEngineResult?.ok !== false,
                 status: TOOL_RESULT_STATUS.COMPLETED,
-                callMode: "search_engine",
                 mode,
                 query: normalizedQuery,
                 ...searchEngineResult,
@@ -220,9 +224,9 @@ export function createWebSearchTool({ agentContext }) {
               true,
             );
           }
-          const responsesApiCfg = resolveResponsesApiConfig(toolCfg);
+          const modelWebSearchCfg = resolveModelWebSearchConfig(toolCfg);
           const { resolvedModelSpec: selectedModelSpec } = resolveSearchModelSpec({
-            modelName: responsesApiCfg?.model,
+            modelName: modelWebSearchCfg?.model,
             runtimeModel: runtime?.runtimeModel,
             globalConfig,
             userConfig,
@@ -256,7 +260,8 @@ export function createWebSearchTool({ agentContext }) {
             {
               ok: true,
               status: TOOL_RESULT_STATUS.COMPLETED,
-              callMode: TOOL_CALL_MODE.OPENAI_RESPONSES_API,
+              mode,
+              provider: response.execution.provider,
               modelAlias: String(resolvedModelSpec?.alias || "").trim(),
               model: String(resolvedModelSpec?.model || "").trim(),
               query: normalizedQuery,

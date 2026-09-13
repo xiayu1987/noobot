@@ -25,6 +25,11 @@ export const MCP_SERVER_TYPE = {
   SSE: "sse",
 };
 
+export const WEB_SEARCH_MODE = {
+  SEARCH_ENGINE: "search_engine",
+  MODEL_WEB_SEARCH: "model_web_search",
+};
+
 export const DOC2DATA_FORMAT = {
   PNG: "png",
   JPEG: "jpeg",

@@ -63,8 +63,8 @@
     },
     "web_search": {
       "enabled": true,
-      "mode": "responses_api",
-      "responses_api": {
+      "mode": "model_web_search",
+      "model_web_search": {
         "model": "gpt_5_6_sol"
       },
       "search_engine": {

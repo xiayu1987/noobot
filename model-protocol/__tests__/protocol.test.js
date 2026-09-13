@@ -280,7 +280,7 @@ test("model operations are strict discriminated contracts", () => {
           options: { apiType: "legacy" },
         },
       }),
-    /unsupported image generation api type/,
+    /options contains unsupported fields: apiType/,
   );
   assert.throws(
     () =>
@@ -522,7 +522,6 @@ test("multimodal capabilities are governed only by explicit model configuration"
     generation: {
       enabled: true,
       outputModalities: ["image"],
-      apiType: "openai_responses",
     },
   });
   assert.equal(supportsModelMultimodalParsing(configured, ["image", "document"]), true);

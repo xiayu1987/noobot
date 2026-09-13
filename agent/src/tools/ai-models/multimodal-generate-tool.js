@@ -9,7 +9,6 @@ import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_MULTIMODAL_MODALITY,
   MODEL_OPERATION_KIND,
-  resolveModelMultimodalCapabilities,
   supportsModelMultimodalGeneration,
 } from "@noobot/model-protocol";
 import {
@@ -26,7 +25,6 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import {
   TOOL_CALL_MODE,
-  IMAGE_GENERATION_API_TYPE,
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
@@ -55,12 +53,6 @@ function describeBaseUrlForDiagnostics(baseUrl = "") {
   } catch {
     return value.replace(/[?#].*$/, "").replace(/\/+$/, "");
   }
-}
-
-function generationApiTypeToCallMode(apiType = "") {
-  return apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
-    ? TOOL_CALL_MODE.IMAGES_ASYNC_API
-    : TOOL_CALL_MODE.OPENAI_RESPONSES_API;
 }
 
 function resolveGenerateErrorCode(error = {}) {
@@ -105,17 +97,11 @@ function buildFailureDetails({
   modelAlias = "",
   model = "",
   requestedModel = "",
-  generationApiType = "",
   effectiveImageSize = "",
   modelSpec = {},
   requestUrl = "",
   requestMethod = "",
 } = {}) {
-  const resolvedApiType =
-    generationApiType ||
-    normalizeGenerationApiType(
-      resolveModelMultimodalCapabilities(modelSpec || {}).generation.apiType,
-    );
   return {
     ...(message ? { message } : {}),
     modelAlias,
@@ -123,8 +109,7 @@ function buildFailureDetails({
     ...(String(requestedModel || "").trim()
       ? { requestedModel: String(requestedModel).trim() }
       : {}),
-    apiType: resolvedApiType,
-    callMode: generationApiTypeToCallMode(resolvedApiType),
+    callMode: TOOL_CALL_MODE.MULTIMODAL_GENERATION,
     baseUrl: describeBaseUrlForDiagnostics(resolveModelBaseUrl(modelSpec || {})),
     requestUrl: describeBaseUrlForDiagnostics(requestUrl),
     requestMethod: String(requestMethod || "")
@@ -150,49 +135,23 @@ async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
   return imageBytes.toString("base64");
 }
 
-function normalizeImageSize(imageSize = "1024x1024") {
-  const normalizedImageSize = String(imageSize || "1024x1024").trim();
-  return normalizedImageSize || "1024x1024";
-}
-
 function normalizeStringArray(value = []) {
   return (Array.isArray(value) ? value : [])
     .map((item) => String(item || "").trim())
     .filter(Boolean);
 }
 
-function normalizeGenerationApiType(apiType = "") {
-  const normalizedApiType = String(apiType || "")
-    .trim()
-    .toLowerCase();
-  if (normalizedApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC) return normalizedApiType;
-  if (normalizedApiType === IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES) return normalizedApiType;
-  return "";
-}
-
-function resolveGenerationApiType(modelSpec = {}) {
-  const apiType = normalizeGenerationApiType(
-    resolveModelMultimodalCapabilities(modelSpec).generation.apiType,
-  );
-  if (!apiType) {
-    throw new TypeError(
-      "multimodal generation requires configured multimodal_generation.support_generation.api_type",
-    );
-  }
-  return apiType;
-}
-
-function shouldAppendApiTypeHint(error = {}) {
-  if (error?.apiTypeSwitchHint === true) return true;
+function shouldAppendCapabilityHint(error = {}) {
+  if (error?.capabilityUnavailable === true) return true;
   if (error?.code) {
     return String(error.code || "") === ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED;
   }
   return Boolean(error?.status || error?.statusCode || error?.payload);
 }
 
-function appendApiTypeHint(message = "", runtime = {}) {
+function appendCapabilityHint(message = "", runtime = {}) {
   const baseMessage = String(message || "").trim() || tMultimodal(runtime, "generateFailed");
-  const hint = tMultimodal(runtime, "trySwitchApiType");
+  const hint = tMultimodal(runtime, "capabilityUnavailable");
   return hint ? `${baseMessage}\n${hint}` : baseMessage;
 }
 
@@ -271,7 +230,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
       const generationContent = String(generation_content || "").trim();
       let resolvedModelSpec = null;
       let resolvedModelName = "";
-      let generationApiType = "";
       let effectiveImageSize = "";
       if (!generationContent) {
         throw recoverableToolError(tMultimodal(runtime, "generationContentRequired"), {
@@ -323,10 +281,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           );
         }
 
-        generationApiType = resolveGenerationApiType(resolvedModelSpec || {});
-        effectiveImageSize =
-          String(size || image_size || "").trim() ||
-          (generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC ? "1:1" : "1024x1024");
+        effectiveImageSize = String(size || image_size || "").trim();
         const modelPort = runtime?.modelPort;
         if (!modelPort || typeof modelPort.invoke !== "function") {
           throw new TypeError("multimodal generation requires runtime.modelPort");
@@ -338,8 +293,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
             input: { prompt: generationContent },
             options: {
-              apiType: generationApiType,
-              size: normalizeImageSize(effectiveImageSize),
+              size: effectiveImageSize,
               resolution,
               n,
               quality,
@@ -369,7 +323,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
               modelAlias: String(resolvedModelSpec?.alias || "").trim(),
               model: String(resolvedModelSpec?.model || "").trim(),
               requestedModel: resolvedModelName,
-              generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
             }),
@@ -398,7 +351,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           {
             ok: true,
             status: TOOL_RESULT_STATUS.COMPLETED,
-            callMode: generationApiTypeToCallMode(generationApiType),
+            callMode: TOOL_CALL_MODE.MULTIMODAL_GENERATION,
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
@@ -420,7 +373,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const modelName = String(resolvedModelSpec?.model || "").trim();
 
         if (errorStatusCode === 403 && normalizedMessage.includes("images api is not enabled")) {
-          const hintMessage = appendApiTypeHint(
+          const hintMessage = appendCapabilityHint(
             tMultimodal(runtime, "imagesApiNotEnabledError"),
             runtime,
           );
@@ -431,7 +384,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
               modelAlias,
               model: modelName,
               requestedModel: resolvedModelName,
-              generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
               requestUrl: error?.requestUrl,
@@ -439,14 +391,13 @@ export function createMultimodalGenerateTool({ agentContext }) {
             }),
           });
         }
-        if (!shouldAppendApiTypeHint(error)) {
+        if (!shouldAppendCapabilityHint(error)) {
           throw recoverableToolError(errorMessage || tMultimodal(runtime, "generateFailed"), {
             code: resolveGenerateErrorCode(error),
             details: buildFailureDetails({
               modelAlias,
               model: modelName,
               requestedModel: resolvedModelName,
-              generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
               requestUrl: error?.requestUrl,
@@ -454,7 +405,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             }),
           });
         }
-        const hintMessage = appendApiTypeHint(
+        const hintMessage = appendCapabilityHint(
           errorMessage || tMultimodal(runtime, "generateFailed"),
           runtime,
         );
@@ -465,7 +416,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
             modelAlias,
             model: modelName,
             requestedModel: resolvedModelName,
-            generationApiType,
             effectiveImageSize,
             modelSpec: resolvedModelSpec || {},
             requestUrl: error?.requestUrl,

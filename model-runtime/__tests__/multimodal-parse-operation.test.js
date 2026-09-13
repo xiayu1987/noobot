@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeOpenAiOperation } from "../src/adapters/openai-capability-adapter.js";
-import { IMAGE_GENERATION_API_TYPE, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 
 test("Web Search reads text from the canonical Responses output items", async () => {
   const result = await executeOpenAiOperation({
@@ -46,7 +46,7 @@ test("Responses image generation sends the prompt through the canonical input fi
     operation: {
       kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
       input: { prompt: "draw a small red square" },
-      options: { apiType: IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES, size: "1024x1024" },
+      options: { size: "1024x1024" },
     },
     openAiClientFactory: () => ({
       responses: {

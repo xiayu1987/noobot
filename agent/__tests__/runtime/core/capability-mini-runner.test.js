@@ -72,7 +72,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
             },
           ],
           model: request.model,
-          provider: {},
+          provider: { operatorId: "zhipu", adapterId: "openai-compatible" },
         });
       },
     },

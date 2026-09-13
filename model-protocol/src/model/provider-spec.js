@@ -4,6 +4,7 @@
  */
 
 import { resolveModelAdapterId } from "./model-adapter.js";
+import { MODEL_IMAGE_GENERATION_API_TYPE } from "./model-capabilities.js";
 
 export {
   MODEL_ADAPTER_ID,
@@ -258,7 +259,7 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
             support_scope: modalityListField,
             api_type: Object.freeze({
               type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
-              values: Object.freeze(["images_async", "openai_responses"]),
+              values: Object.freeze(Object.values(MODEL_IMAGE_GENERATION_API_TYPE)),
             }),
           }),
         }),

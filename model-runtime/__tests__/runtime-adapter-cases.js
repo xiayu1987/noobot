@@ -15,6 +15,7 @@ import {
   convertTools,
   responseFromAnthropic,
   anthropicMessagesAdapter,
+  mapAnthropicMultimodalAttachment,
   orderOpenAiResponsesRequestBody,
   normalizeModelOutput,
 } from "../src/index.js";
@@ -537,4 +538,110 @@ test("Anthropic Messages keeps reasoning/cache fields before the append-only mes
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+const anthropicOperationSpec = Object.freeze({
+  model: "claude-opus-5",
+  base_url: "https://api.anthropic.com",
+  reasoning_effort: "none",
+  reasoning_effort_options: ["none", "low", "medium", "high"],
+  reasoning_effort_parameter: "reasoning_effort",
+});
+
+test("Anthropic multimodal parse maps image attachments to base64 image blocks", async () => {
+  const previousFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url, body: JSON.parse(init.body) };
+    return new Response(
+      JSON.stringify({ content: [{ type: "text", text: "parsed" }] }),
+      { status: 200 },
+    );
+  };
+  try {
+    const result = await anthropicMessagesAdapter.executeOperation({
+      credential: "sk-test",
+      modelSpec: anthropicOperationSpec,
+      operation: {
+        kind: "multimodal_parse",
+        input: {
+          prompt: "describe",
+          attachments: [{ mimeType: "image/png", data: "data:image/png;base64,AAAB", fileName: "a.png" }],
+        },
+      },
+    });
+    assert.equal(request.url, "https://api.anthropic.com/v1/messages");
+    assert.equal(request.body.messages[0].content[0].text, "describe");
+    assert.deepEqual(request.body.messages[0].content[1], {
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: "AAAB" },
+    });
+    assert.equal(result.rawText, "parsed");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Anthropic multimodal parse maps pdf attachments to document blocks", () => {
+  assert.deepEqual(
+    mapAnthropicMultimodalAttachment({
+      mimeType: "application/pdf",
+      data: "data:application/pdf;base64,JVBER",
+    }),
+    {
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: "JVBER" },
+    },
+  );
+});
+
+test("Anthropic multimodal parse rejects unsupported attachment mime types", () => {
+  assert.throws(
+    () => mapAnthropicMultimodalAttachment({ mimeType: "audio/mp3", data: "data:audio/mp3;base64,QQ" }),
+    /does not support attachment mime type: audio\/mp3/,
+  );
+});
+
+test("Anthropic web search continues the turn when the server tool reports pause_turn", async () => {
+  const previousFetch = globalThis.fetch;
+  const bodies = [];
+  const stopReasons = ["pause_turn", "end_turn"];
+  globalThis.fetch = async (url, init) => {
+    const attempt = bodies.length;
+    bodies.push(JSON.parse(init.body));
+    return new Response(
+      JSON.stringify({
+        stop_reason: stopReasons[attempt],
+        content: [{ type: "text", text: attempt === 0 ? "partial " : "final" }],
+      }),
+      { status: 200 },
+    );
+  };
+  try {
+    const result = await anthropicMessagesAdapter.executeOperation({
+      credential: "sk-test",
+      modelSpec: anthropicOperationSpec,
+      operation: { kind: "web_search", input: { query: "noobot" } },
+    });
+    assert.equal(bodies.length, 2);
+    assert.deepEqual(bodies[0].tools, [{ type: "web_search_20250305", name: "web_search" }]);
+    assert.equal(bodies[1].messages.length, 2);
+    assert.equal(bodies[1].messages[1].role, "assistant");
+    assert.equal(result.rawText, "partial final");
+    assert.equal(result.output.length, 2);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Anthropic adapter rejects operation kinds it cannot serve", async () => {
+  await assert.rejects(
+    () =>
+      anthropicMessagesAdapter.executeOperation({
+        credential: "sk-test",
+        modelSpec: anthropicOperationSpec,
+        operation: { kind: "image_generation", input: { prompt: "cat" } },
+      }),
+    /does not support operation: image_generation/,
+  );
 });

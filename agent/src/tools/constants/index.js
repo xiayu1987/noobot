@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+export { WEB_SEARCH_MODE } from "@noobot/agent-config-protocol";
+
 export const TOOL_POLICY_MODE = Object.freeze({
   CUSTOM_ONLY: "custom_only",
 });
@@ -58,13 +60,8 @@ export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
 });
 
 export const TOOL_CALL_MODE = Object.freeze({
-  OPENAI_RESPONSES_API: "openai_responses_api",
-  IMAGES_ASYNC_API: "images_async_api",
-});
-
-export const IMAGE_GENERATION_API_TYPE = Object.freeze({
-  OPENAI_RESPONSES: "openai_responses",
-  IMAGES_ASYNC: "images_async",
+  MULTIMODAL_GENERATION: "multimodal_generation",
+  MULTIMODAL_PARSE: "multimodal_parse",
 });
 
 export const TOOL_DATA_MODE = Object.freeze({
