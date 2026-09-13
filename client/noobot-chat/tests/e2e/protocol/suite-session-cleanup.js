@@ -45,6 +45,26 @@ async function readRegistry() {
   }
 }
 
+function registryRecordKey(record) {
+  const runIdPart = String(record?.runId || "").trim();
+  const userIdPart = String(record?.userId || "").trim();
+  const sessionIdPart = String(record?.sessionId || "").trim();
+  return `${runIdPart}/${userIdPart}/${sessionIdPart}`;
+}
+
+async function retireRegistryRecords(reclaimedKeys) {
+  const remaining = (await readRegistry()).filter(
+    (record) => !reclaimedKeys.has(registryRecordKey(record)),
+  );
+  if (remaining.length === 0) {
+    await fs.unlink(registryPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+    return;
+  }
+  await fs.writeFile(registryPath, `${JSON.stringify(remaining, null, 2)}\n`, { mode: 0o600 });
+}
+
 export async function registerSuiteSession(record) {
   if (!registryPath) throw new Error("NOOBOT_E2E_SESSION_REGISTRY is required");
   if (!runId) throw new Error("NOOBOT_E2E_RUN_ID is required");
@@ -55,18 +75,10 @@ export async function registerSuiteSession(record) {
     throw new Error("E2E cleanup registration requires userId, sessionId, and apiKey");
   }
   const records = await readRegistry();
-  const duplicate = records.some(
-    (item) =>
-      item?.runId === runId && item?.userId === userId && item?.sessionId === sessionId,
-  );
-  if (!duplicate) {
-    records.push({
-      source: REGISTRY_SOURCE,
-      runId,
-      userId,
-      sessionId,
-      apiKey,
-    });
+  const entry = { source: REGISTRY_SOURCE, runId, userId, sessionId, apiKey };
+  const entryKey = registryRecordKey(entry);
+  if (!records.some((item) => registryRecordKey(item) === entryKey)) {
+    records.push(entry);
   }
   await fs.mkdir(path.dirname(registryPath), { recursive: true });
   await fs.writeFile(registryPath, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
@@ -94,6 +106,7 @@ export default class SuiteSessionCleanupReporter {
     const defaultBaseUrl = `http://${topology.loopbackHost}:${addressPort(topology.clientAddr)}`;
     const baseURL = String(process.env.NOOBOT_E2E_BASE_URL || defaultBaseUrl).replace(/\/$/, "");
     const context = await playwrightRequest.newContext({ baseURL });
+    const reclaimed = new Set();
     try {
       for (const record of records) {
         const userId = String(record?.userId || "").trim();
@@ -102,12 +115,11 @@ export default class SuiteSessionCleanupReporter {
           sessionId: record.sessionId,
           apiKey: record.apiKey,
         });
+        reclaimed.add(registryRecordKey(record));
       }
     } finally {
       await context.dispose();
     }
-    await fs.unlink(registryPath).catch((error) => {
-      if (error?.code !== "ENOENT") throw error;
-    });
+    await retireRegistryRecords(reclaimed);
   }
 }
