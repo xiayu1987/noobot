@@ -19,6 +19,7 @@ export * from "./normalization/config-params.js";
 export * from "./normalization/template.js";
 export * from "./normalization/plugin-selection.js";
 export * from "./multimodal-config.js";
+export * from "./model-reference-config.js";
 export * from "./pipeline/migration.js";
 export * from "./pipeline/validation.js";
 export * from "./pipeline/effective-config.js";

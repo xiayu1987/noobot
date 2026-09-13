@@ -102,8 +102,8 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
         assert.match(error?.message || "", /WebSocket upgrade required/);
         assert.equal(error?.details?.modelAlias, "gpt_image_2");
         assert.equal(error?.details?.model, "gpt-image-2");
-        assert.equal(error?.details?.apiType, "images_async");
-        assert.equal(error?.details?.callMode, "images_async_api");
+        assert.equal(error?.details?.callMode, "multimodal_generation");
+        assert.equal(error?.details?.apiType, undefined);
         assert.equal(error?.details?.baseUrl, "https://models.example.com/v1");
         assert.equal(error?.details?.availableApiTypes, undefined);
         assert.equal(error?.details?.proxyEnv?.HTTPS_PROXY, "http://***:***@127.0.0.1:7890/");
@@ -167,7 +167,11 @@ test("multimodal_generate: model configuration is the only image API type author
     }),
   );
   assert.equal(result.ok, true);
-  assert.equal(modelRequest.operation.options.apiType, "openai_responses");
+  assert.equal("apiType" in modelRequest.operation.options, false);
+  assert.equal(
+    modelRequest.model.multimodal_generation.support_generation.api_type,
+    "openai_responses",
+  );
 });
 
 test("multimodal_generate: an unknown requested model is rejected before capability resolution", async () => {
@@ -276,7 +280,11 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
 
   assert.equal(result.ok, true);
   assert.equal(modelRequest.model.alias, modelAlias);
-  assert.equal(modelRequest.operation.options.apiType, "openai_responses");
+  assert.equal("apiType" in modelRequest.operation.options, false);
+  assert.equal(
+    modelRequest.model.multimodal_generation.support_generation.api_type,
+    "openai_responses",
+  );
 });
 
 test("multimodal_generate: Responses completion without an image artifact is a failure", async () => {
@@ -392,7 +400,7 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
   );
 
   assert.equal(payload.ok, true);
-  assert.equal(payload.callMode, "images_async_api");
+  assert.equal(payload.callMode, "multimodal_generation");
   assert.equal(payload.summary.task_id, "task-1");
   assert.equal(payload.summary.generated_image_count, 1);
   assert.deepEqual(requestedUrls, [

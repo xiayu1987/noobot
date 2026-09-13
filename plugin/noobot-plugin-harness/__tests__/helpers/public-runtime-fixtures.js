@@ -66,9 +66,8 @@ export function createTestModelResponse(
       adapterId: "openai-compatible",
     },
     provider: {
-      providerId: "test-provider",
+      operatorId: "test-provider",
       adapterId: "openai-compatible",
-      format: "openai_compatible",
     },
   });
 }

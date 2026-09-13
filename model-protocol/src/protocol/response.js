@@ -10,9 +10,23 @@ import {
   MODEL_REQUEST_STATUS,
 } from "./constants.js";
 import { MODEL_OPERATION_KIND, normalizeModelOperationResult } from "./operation.js";
+import { MODEL_ADAPTER_ID } from "../model/model-adapter.js";
 
 const MODEL_ATTEMPT_STATUSES = new Set(Object.values(MODEL_ATTEMPT_STATUS));
 const MODEL_ATTEMPT_KINDS = new Set(Object.values(MODEL_ATTEMPT_KIND));
+const MODEL_ADAPTER_IDS = new Set(Object.values(MODEL_ADAPTER_ID));
+
+export function normalizeModelExecutionProvider(provider = {}) {
+  const adapterId = String(provider?.adapterId || "").trim();
+  if (!MODEL_ADAPTER_IDS.has(adapterId)) {
+    throw new TypeError(`invalid model execution adapter id: ${adapterId || "missing"}`);
+  }
+  const operatorId = String(provider?.operatorId || "").trim();
+  if (!operatorId) {
+    throw new TypeError("model execution provider requires operatorId");
+  }
+  return Object.freeze({ adapterId, operatorId });
+}
 
 export function requireModelAttemptStatus(value) {
   const normalized = String(value || "").trim();
@@ -71,7 +85,7 @@ export function createModelResponse({
       attemptCount,
       attempts: normalizedAttempts,
       model: Object.freeze({ ...model }),
-      provider: Object.freeze({ ...provider }),
+      provider: normalizeModelExecutionProvider(provider),
     }),
   });
 }

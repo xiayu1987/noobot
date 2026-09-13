@@ -17,6 +17,7 @@ import {
   normalizeKnownConfigKeys,
   repairConfigDocument,
   sanitizeUserConfig,
+  WEB_SEARCH_MODE,
 } from "../src/index.js";
 
 function readJsonFixture(relativePath) {
@@ -182,4 +183,33 @@ test("config repair restores invalid values and enforces node policies", () => {
       reason: "invalid_node_type",
     },
   ]);
+});
+
+test("config repair restores web_search mode outside the declared enum", () => {
+  const template = {
+    tools: { web_search: { enabled: true, mode: WEB_SEARCH_MODE.MODEL_WEB_SEARCH } },
+  };
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    baseValues: template,
+    target: { tools: { web_search: { enabled: true, mode: "responses_api" } } },
+  });
+  assert.equal(repaired.document.tools.web_search.mode, WEB_SEARCH_MODE.MODEL_WEB_SEARCH);
+  assert.ok(
+    repaired.report.changes.some((change) => change.path === "tools.web_search.mode"),
+    "expected tools.web_search.mode to be reported as repaired",
+  );
+});
+
+test("config repair keeps every declared web_search mode value", () => {
+  for (const mode of Object.values(WEB_SEARCH_MODE)) {
+    const repaired = repairConfigDocument({
+      scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+      baseValues: {
+        tools: { web_search: { enabled: true, mode: WEB_SEARCH_MODE.MODEL_WEB_SEARCH } },
+      },
+      target: { tools: { web_search: { enabled: true, mode } } },
+    });
+    assert.equal(repaired.document.tools.web_search.mode, mode);
+  }
 });

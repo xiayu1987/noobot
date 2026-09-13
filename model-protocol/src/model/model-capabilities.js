@@ -10,6 +10,28 @@ export const MODEL_MULTIMODAL_MODALITY = Object.freeze({
   VIDEO: "video",
 });
 
+/**
+ * 图像生成接口形态，属模型层内部适配事实，仅供 model-protocol 与 model-runtime 消费。
+ * 工具层只声明"需要多模态生成"，不得感知此词表。
+ */
+export const MODEL_IMAGE_GENERATION_API_TYPE = Object.freeze({
+  OPENAI_RESPONSES: "openai_responses",
+  IMAGES_ASYNC: "images_async",
+});
+
+const IMAGE_GENERATION_API_TYPES = new Set(Object.values(MODEL_IMAGE_GENERATION_API_TYPE));
+
+export function resolveModelImageGenerationApiType(modelSpec = {}) {
+  const apiType = String(
+    modelSpec?.multimodal_generation?.support_generation?.api_type || "",
+  )
+    .trim()
+    .toLowerCase();
+  return IMAGE_GENERATION_API_TYPES.has(apiType)
+    ? apiType
+    : MODEL_IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES;
+}
+
 const MULTIMODAL_MODALITIES = new Set(Object.values(MODEL_MULTIMODAL_MODALITY));
 
 function normalizeModalities(value) {
@@ -45,7 +67,6 @@ export function resolveModelMultimodalCapabilities(modelSpec = {}) {
     generation: Object.freeze({
       enabled: generation?.enabled === true,
       outputModalities: normalizeModalities(generation?.support_scope),
-      apiType: String(generation?.api_type || "").trim().toLowerCase(),
     }),
   });
 }

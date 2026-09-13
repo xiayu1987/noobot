@@ -47,7 +47,7 @@ function createCompletedModelResponse(request, text) {
       },
     ],
     model: request.model,
-    provider: {},
+    provider: { operatorId: "openai", adapterId: "openai-compatible" },
   });
 }
 

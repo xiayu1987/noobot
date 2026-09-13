@@ -17,13 +17,6 @@ export const MODEL_OPERATION_KIND = Object.freeze({
 
 const OPERATION_KINDS = new Set(Object.values(MODEL_OPERATION_KIND));
 
-export const IMAGE_GENERATION_API_TYPE = Object.freeze({
-  OPENAI_RESPONSES: "openai_responses",
-  IMAGES_ASYNC: "images_async",
-});
-
-const IMAGE_API_TYPES = new Set(Object.values(IMAGE_GENERATION_API_TYPE));
-
 function requirePlainObject(value, path) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`${path} must be an object`);
@@ -48,14 +41,9 @@ function normalizeImageOptions(input = {}) {
   const source = requirePlainObject(input, "model operation.options");
   rejectUnknownKeys(
     source,
-    ["apiType", "size", "resolution", "n", "quality", "imageUrls"],
+    ["size", "resolution", "n", "quality", "imageUrls"],
     "model operation.options",
   );
-  const apiType = String(source.apiType || IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES)
-    .trim()
-    .toLowerCase();
-  if (!IMAGE_API_TYPES.has(apiType))
-    throw new TypeError(`unsupported image generation api type: ${apiType}`);
   const count = source.n === undefined ? 1 : Number(source.n);
   if (!Number.isInteger(count) || count < 1 || count > 10) {
     throw new TypeError("model operation.options.n must be an integer between 1 and 10");
@@ -65,10 +53,7 @@ function normalizeImageOptions(input = {}) {
     throw new TypeError("model operation.options.imageUrls must be an array of non-empty strings");
   }
   return Object.freeze({
-    apiType,
-    size: String(
-      source.size || (apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC ? "1:1" : "1024x1024"),
-    ).trim(),
+    size: String(source.size || "").trim(),
     resolution: String(source.resolution || "").trim(),
     n: count,
     quality: String(source.quality || "").trim(),
