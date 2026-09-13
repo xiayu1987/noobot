@@ -15,7 +15,7 @@ const protocolRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(protocolRoot, "../../../../..");
 const suiteSessionRegistry = path.join(repositoryRoot, "test-results/protocol/suite-sessions.json");
 process.env.NOOBOT_E2E_SESSION_REGISTRY = suiteSessionRegistry;
-process.env.NOOBOT_E2E_RUN_ID = randomUUID();
+process.env.NOOBOT_E2E_RUN_ID = String(process.env.NOOBOT_E2E_RUN_ID || "").trim() || randomUUID();
 const e2eWorkspaceRoot = String(process.env.NOOBOT_E2E_WORKSPACE_ROOT || "").trim();
 const runtimeEventsWorkspaceRoot = String(
   process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT || "",
