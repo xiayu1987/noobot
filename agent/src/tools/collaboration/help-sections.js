@@ -19,6 +19,7 @@ import {
 import { projectToolPathRef } from "../core/check-tool-input.js";
 import { MEMORY_RELATIVE_PATHS } from "../../memory/storage/paths.js";
 import { ATTACHMENT_SOURCE, formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
+import { resolveToolBindings } from "@noobot/agent-config-protocol";
 import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
@@ -142,7 +143,11 @@ export function buildContextSection(agentContext) {
 
 export function resolveAvailableTools(agentContext) {
   try {
-    const tools = getToolsFromAgentContext(agentContext);
+    const runtime = getRuntimeFromAgentContext(agentContext);
+    const tools = resolveToolBindings({
+      sourceTools: getToolsFromAgentContext(agentContext),
+      runConfig: runtime?.runConfig,
+    });
     const toolNames = [
       ...new Set(
         tools

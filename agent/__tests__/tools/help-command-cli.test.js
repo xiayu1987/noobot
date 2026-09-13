@@ -56,6 +56,7 @@ function createScope({
   toolNames = FIXTURE_TOOL_NAMES,
   globalConfig = {},
   identity = IDENTITY,
+  runConfig = {},
 } = {}) {
   return createAgentExecutionScope({
     context: createAgentContextBuildEnvelope({ identity }),
@@ -64,6 +65,7 @@ function createScope({
       runtime: {
         basePath: "/tmp/help-scope",
         globalConfig,
+        runConfig,
         ...(attachmentService ? { attachmentService } : {}),
         systemRuntime: {
           userId: identity.userId,
@@ -350,6 +352,28 @@ test("tools listing comes from runtime bindings rather than the static registry"
     listed.toolNames.includes(TOOL_NAME.EXECUTE_SCRIPT),
     false,
     "a registered but unassembled tool must never reach the listing",
+  );
+});
+
+test("tools listing applies the same runtime tool policy that narrows the model bindings", async () => {
+  const scopeOptions = {
+    toolNames: [...FIXTURE_TOOL_NAMES, TOOL_NAME.TASK_SUMMARY],
+    runConfig: { toolPolicy: { denyToolNames: [TOOL_NAME.TASK_SUMMARY] } },
+  };
+  const available = resolveAvailableTools(createScope(scopeOptions));
+  assert.equal(available.source, TOOL_SOURCE.RUNTIME_BINDINGS);
+  assert.deepEqual(
+    available.toolNames,
+    [...FIXTURE_TOOL_NAMES].sort(),
+    "a denied tool must not be reported as available",
+  );
+
+  const [tool] = createHelpTool({ agentContext: createScope(scopeOptions) });
+  const listed = JSON.parse(await tool.func({ command: "--tools" }));
+  assert.equal(
+    listed.toolNames.includes(TOOL_NAME.TASK_SUMMARY),
+    false,
+    "help must not advertise a tool the runtime policy denied",
   );
 });
 
