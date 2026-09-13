@@ -366,9 +366,9 @@ onBeforeUnmount(() => {
 @media (max-width: 960px) {
   .session-artifact-panel {
     --noobot-mobile-artifact-top: calc(
-      var(--noobot-space-xl) + var(--noobot-control-height-xl) + var(--noobot-space-xs) +
+        var(--noobot-space-xl) + var(--noobot-control-height-xl) + var(--noobot-space-xs) +
         var(--noobot-control-height-xl) + var(--noobot-space-xs) + var(--noobot-control-height-xl) +
-        var(--noobot-space-md)
+        var(--noobot-space-md) + var(--noobot-space-xs)
     );
 
     top: var(--noobot-mobile-artifact-top);
