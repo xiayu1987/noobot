@@ -258,6 +258,7 @@ test("primary model alignment updates every config-file model reference", () => 
   applyPrimaryModelReferencesToConfigFile(config, "selected");
   assert.equal(config.default_provider, "selected");
   assert.equal(config.providers.selected.enabled, true);
+  assert.equal(config.providers.selected.used_for_conversation, true);
   assert.deepEqual(config.multimodal.parsing.default_models, {
     audio: "selected",
     image: "selected",
@@ -268,6 +269,33 @@ test("primary model alignment updates every config-file model reference", () => 
   assert.equal(config.tools.web_search.responses_api.model, "selected");
   assert.equal(config.plugins.harness.stepModels.planning, "selected");
   assert.equal(config.plugins.workflow.semanticModel, "selected");
+});
+
+test("config repair preserves model references regardless of declared capabilities", () => {
+  const baseValues = {
+    default_provider: "primary",
+    providers: {
+      primary: {
+        enabled: true,
+        used_for_conversation: true,
+        model: "primary-model",
+        reasoning_effort: "medium",
+        tool_reasoning_effort: "medium",
+        reasoning_effort_options: ["low", "medium"],
+        reasoning_effort_parameter: "reasoning_effort",
+        multimodal_generation: {
+          support_generation: { enabled: false, support_scope: [] },
+        },
+      },
+    },
+    multimodal: { generation: { default_models: { image: "primary" } } },
+  };
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    baseValues,
+    target: structuredClone(baseValues),
+  });
+  assert.equal(repaired.document.multimodal.generation.default_models.image, "primary");
 });
 
 test("model provider insertion uses the model library only when the alias is missing", () => {

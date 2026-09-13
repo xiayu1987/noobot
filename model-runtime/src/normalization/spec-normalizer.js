@@ -40,10 +40,6 @@ const CONCRETE_MODEL_RULES = Object.freeze([
     defaults: Object.freeze({ temperature: 0.7 }),
   }),
   Object.freeze({
-    match: /^nano[-_.]?banana(?:[-_.]|$)/,
-    defaults: Object.freeze({ temperature: 0.5 }),
-  }),
-  Object.freeze({
     match: /^qwen3.*thinking(?:[-_.]|$)/,
     defaults: Object.freeze({ temperature: 0.6, top_p: 0.95, top_k: 20, min_p: 0 }),
   }),
@@ -57,7 +53,7 @@ function classifyModelFamily(modelSpec = {}) {
   const model = String(modelSpec.model || "").toLowerCase();
   if (/grok|xai/.test(model)) return MODEL_FAMILY_ID.GROK;
   if (/claude|anthropic/.test(model)) return MODEL_FAMILY_ID.CLAUDE;
-  if (/gemini|nano[-_.]?banana/.test(model)) return MODEL_FAMILY_ID.GEMINI;
+  if (/gemini/.test(model)) return MODEL_FAMILY_ID.GEMINI;
   if (/qwen|qianwen/.test(model)) return MODEL_FAMILY_ID.QWEN;
   if (/glm|zhipu/.test(model)) return MODEL_FAMILY_ID.GLM;
   if (/deepseek/.test(model)) return MODEL_FAMILY_ID.DEEPSEEK;

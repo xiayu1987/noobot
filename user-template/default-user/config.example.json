@@ -11,7 +11,7 @@
     },
     "generation": {
       "default_models": {
-        "image": "gpt_5_6_sol"
+        "image": "gpt_image_2_5_flare"
       }
     }
   },
@@ -150,6 +150,9 @@
       "reasoning_effort_parameter": "reasoning_effort",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -172,6 +175,9 @@
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -203,9 +209,8 @@
       },
       "multimodal_generation": {
         "support_generation": {
-          "enabled": true,
-          "support_scope": ["image"],
-          "api_type": "openai_responses"
+          "enabled": false,
+          "support_scope": []
         }
       }
     },
@@ -293,6 +298,9 @@
       "reasoning_effort_parameter": "reasoning_effort",
       "reasoning_effort": "low",
       "tool_reasoning_effort": "low",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": false,
         "input_modalities": []
@@ -315,6 +323,9 @@
       "reasoning_effort_parameter": "reasoning_effort",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "video"]
@@ -351,27 +362,25 @@
         }
       }
     },
-    "nano_banana": {
+    "gpt_image_2_5_flare": {
       "enabled": true,
       "used_for_conversation": false,
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "${OPENAI_API_ADDRESS}",
-      "model": "nano-banana",
-      "description": "擅长图片生成",
-      "reasoning_effort_options": ["low", "medium", "high"],
-      "reasoning_effort_parameter": "thinking_level",
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
-      "multimodal_parsing": {
-        "enabled": false
-      },
+      "model": "gpt-image-2.5-flare",
+      "description": "OpenAI 原生图片生成模型",
+      "multimodal_parsing": { "enabled": false, "input_modalities": [] },
       "multimodal_generation": {
         "support_generation": {
           "enabled": true,
           "support_scope": ["image"],
           "api_type": "images_async"
         }
-      }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort"
     },
     "glm_5_3": {
       "enabled": true,
