@@ -178,6 +178,60 @@ test("browser.closeProfile reports an untracked profile as already closed", asyn
   assert.match(result.stdout, /CLOSED:false:work/);
 });
 
+test("ui.waitForUser normalizes a nested fields payload without dropping declarations", async () => {
+  const requests = [];
+  const result = await runInteractionScript({
+    scriptBody: `const answer = await ui.waitForUser({ content: "sign in", fields: { fields: [{ name: "code", displayName: "Code", required: true, description: "" }, { name: "num", displayName: "Num", required: false, description: "" }] } });
+log("ANSWER:" + answer.code + ":" + answer.num);`,
+    bridge: {
+      async requestUserInteraction(request) {
+        requests.push(request);
+        return { confirmed: true, code: "hellow", num: "1" };
+      },
+    },
+  });
+
+  assert.equal(result.ok, true, result.error || "");
+  assert.match(result.stdout, /ANSWER:hellow:1/);
+  assert.deepEqual(
+    requests[0].fields.map((field) => field.name),
+    ["code", "num"],
+    "nested fields must reach the bridge instead of being silently discarded",
+  );
+});
+
+test("ui.waitForUser fails loudly when a declared field has no name", async () => {
+  const requests = [];
+  const result = await runInteractionScript({
+    scriptBody:
+      'await ui.waitForUser({ content: "sign in", fields: [{ displayName: "Missing name", required: true, description: "" }] });',
+    bridge: {
+      async requestUserInteraction(request) {
+        requests.push(request);
+        return { confirmed: true };
+      },
+    },
+  });
+
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.match(String(result.error || result.stderr), /name/);
+  assert.deepEqual(requests, [], "an invalid declaration must not reach the interaction bridge");
+});
+
+test("ui.waitForUser rejects a fields payload that is neither an array nor a wrapper", async () => {
+  const result = await runInteractionScript({
+    scriptBody: 'await ui.waitForUser({ content: "sign in", fields: "code,num" });',
+    bridge: {
+      async requestUserInteraction() {
+        return { confirmed: true };
+      },
+    },
+  });
+
+  assert.equal(result.ok, false, JSON.stringify(result));
+  assert.match(String(result.error || result.stderr), /fields/);
+});
+
 test("browser.closeProfile defaults to the default profile name", async () => {
   const result = await runInteractionScript({
     scriptBody:

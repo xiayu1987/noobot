@@ -149,6 +149,7 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   nativeScript: {
     sourceBytes: LENGTH_TIERS.bytes.nativeScriptSource,
     textReadBytes: LENGTH_TIERS.bytes.directText,
+    binaryReadBytes: LENGTH_TIERS.bytes.workspaceAssetFile,
     processOutputBytes: LENGTH_TIERS.bytes.directText,
     inputTotalBytes: LENGTH_TIERS.bytes.nativeScriptArtifact,
     artifactTotalBytes: LENGTH_TIERS.bytes.nativeScriptArtifact,

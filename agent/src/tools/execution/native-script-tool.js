@@ -294,10 +294,13 @@ function createNativeScriptIpcHandlers({
       if (!bridge?.requestUserInteraction) {
         throw new Error("native script user interaction bridge is unavailable");
       }
+      if (fields !== undefined && !Array.isArray(fields)) {
+        throw new Error("native script user interaction fields must be a normalized field array");
+      }
       const result = await bridge.requestUserInteraction({
         interactionId,
         content: String(content || "").trim(),
-        fields: Array.isArray(fields) ? fields : [],
+        fields: fields || [],
         dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
         requireEncryption: false,
         sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
