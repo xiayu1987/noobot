@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  isActivityMessageEvent,
-  isToolMessageEvent,
+  isCanonicalActivityMessageEvent,
   reduceCanonicalActivityTimeline,
+} from "@noobot/event-protocol/activity-timeline";
+import {
+  isCanonicalToolMessageEvent,
   reduceCanonicalToolTimeline,
-} from "./canonical-message-timeline.js";
+} from "@noobot/event-protocol/tool-timeline";
 
 function text(value) {
   return String(value || "").trim();
@@ -30,7 +32,9 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     if (!envelope || typeof envelope !== "object") return null;
     const eventId = text(envelope?.identity?.eventId);
     if (!eventId) return null;
-    if (!isToolMessageEvent(envelope) && !isActivityMessageEvent(envelope)) return envelope;
+    if (!isCanonicalToolMessageEvent(envelope) && !isCanonicalActivityMessageEvent(envelope)) {
+      return envelope;
+    }
 
     const messages = store.toArray();
     const existingAssistantIndex = [...messages]
@@ -44,7 +48,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
       return envelope;
     }
 
-    const isToolEvent = isToolMessageEvent(envelope);
+    const isToolEvent = isCanonicalToolMessageEvent(envelope);
     const currentTimeline = isToolEvent
       ? existingAssistantIndex.item.toolTimeline
       : existingAssistantIndex.item.activityTimeline;
@@ -97,9 +101,9 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
     const facts = pendingMessageEvents.splice(0, pendingMessageEvents.length);
     return facts.reduce(
       (projection, fact) => {
-        if (isToolMessageEvent(fact)) {
+        if (isCanonicalToolMessageEvent(fact)) {
           projection.toolTimeline = reduceCanonicalToolTimeline(projection.toolTimeline, fact);
-        } else if (isActivityMessageEvent(fact)) {
+        } else if (isCanonicalActivityMessageEvent(fact)) {
           projection.activityTimeline = reduceCanonicalActivityTimeline(
             projection.activityTimeline,
             fact,

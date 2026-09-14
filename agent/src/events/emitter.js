@@ -3,11 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { emitByAdapter } from "./adapter.js";
 
 export function emitEvent(eventListener, event, data = {}) {
-  return emitByAdapter({
-    eventListener,
+  return eventListener?.onEvent?.({
     event,
     data,
     ts: new Date().toISOString(),

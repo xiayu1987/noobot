@@ -4,24 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
-import { projectExecutionTransportPayload } from "./transport-payload.js";
+import {
+  projectExecutionRouteIdentity,
+  projectExecutionTransportPayload,
+} from "./transport-payload.js";
 import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
-
-function enrichEventData(rawData = {}, defaults = {}) {
-  const eventData = rawData && typeof rawData === "object" ? rawData : {};
-  return {
-    ...eventData,
-    dialogProcessId: String(eventData?.dialogProcessId || defaults.dialogProcessId || "").trim(),
-    sessionId: String(eventData?.sessionId || defaults.sessionId || ""),
-    turnScopeId: String(eventData?.turnScopeId || defaults.turnScopeId || ""),
-    parentSessionId: normalizeParentSessionId(
-      eventData?.parentSessionId || defaults.parentSessionId,
-    ),
-  };
-}
 
 function projectExecutionLogRecord(event = "", data = {}) {
   if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
@@ -64,7 +54,7 @@ export function createExecutionEventListener({
   const deliveryFailures = [];
 
   const appendExecutionLog = (record) => {
-    const data = enrichEventData(record?.data, defaults);
+    const data = projectExecutionRouteIdentity(record?.data, defaults);
     const canonicalRecord = {
       ...record,
       userId,
