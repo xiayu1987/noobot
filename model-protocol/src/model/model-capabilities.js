@@ -10,10 +10,6 @@ export const MODEL_MULTIMODAL_MODALITY = Object.freeze({
   VIDEO: "video",
 });
 
-/**
- * 图像生成接口形态，属模型层内部适配事实，仅供 model-protocol 与 model-runtime 消费。
- * 工具层只声明"需要多模态生成"，不得感知此词表。
- */
 export const MODEL_IMAGE_GENERATION_API_TYPE = Object.freeze({
   OPENAI_RESPONSES: "openai_responses",
   IMAGES_ASYNC: "images_async",
@@ -22,9 +18,7 @@ export const MODEL_IMAGE_GENERATION_API_TYPE = Object.freeze({
 const IMAGE_GENERATION_API_TYPES = new Set(Object.values(MODEL_IMAGE_GENERATION_API_TYPE));
 
 export function resolveModelImageGenerationApiType(modelSpec = {}) {
-  const apiType = String(
-    modelSpec?.multimodal_generation?.support_generation?.api_type || "",
-  )
+  const apiType = String(modelSpec?.multimodal_generation?.support_generation?.api_type || "")
     .trim()
     .toLowerCase();
   return IMAGE_GENERATION_API_TYPES.has(apiType)
@@ -39,7 +33,11 @@ function normalizeModalities(value) {
     Array.from(
       new Set(
         (Array.isArray(value) ? value : [])
-          .map((item) => String(item || "").trim().toLowerCase())
+          .map((item) =>
+            String(item || "")
+              .trim()
+              .toLowerCase(),
+          )
           .filter((item) => MULTIMODAL_MODALITIES.has(item)),
       ),
     ),
@@ -50,7 +48,11 @@ function normalizeRequiredModalities(value) {
   return Array.from(
     new Set(
       (Array.isArray(value) ? value : [])
-        .map((item) => String(item || "").trim().toLowerCase())
+        .map((item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase(),
+        )
         .filter(Boolean),
     ),
   );

@@ -313,8 +313,7 @@ export async function executeOpenAiOperation({
 }) {
   if (
     operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION &&
-    resolveModelImageGenerationApiType(modelSpec) ===
-      MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
+    resolveModelImageGenerationApiType(modelSpec) === MODEL_IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
   ) {
     return executeImagesAsync({
       modelSpec,

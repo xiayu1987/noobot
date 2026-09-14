@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import { emitEvent } from "../../../events/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { runBotRuntimeHook, withBotHookRuntimeMeta } from "../../hook/index.js";
@@ -20,9 +21,15 @@ function applyCanonicalRunMessageIdentity(runConfig = {}) {
     runConfig?.presentationMessageId || `msg_${turnScopeId}`,
   ).trim();
   const messageId = String(runConfig?.messageId || `msg_event_${presentationMessageId}`).trim();
+  const executionId = deriveAgentExecutionId({
+    executionId: runConfig?.executionId,
+    turnScopeId,
+  });
   runConfig.presentationMessageId = presentationMessageId;
   runConfig.messageId = messageId;
-  return { turnScopeId, presentationMessageId, messageId };
+  runConfig.executionId = executionId;
+  runConfig.rootExecutionId = String(runConfig?.rootExecutionId || executionId).trim();
+  return { turnScopeId, presentationMessageId, messageId, executionId };
 }
 
 export async function initializeSessionRun({
@@ -50,10 +57,7 @@ export async function initializeSessionRun({
 }) {
   const normalizedMessage = normalizeRunMessage(message);
   validateRunInput({ userId, sessionId, caller, parentSessionId });
-  if (
-    runConfig?.reuseExistingUserTurn === true &&
-    !String(requestedDialogProcessId || "").trim()
-  ) {
+  if (runConfig?.reuseExistingUserTurn === true && !String(requestedDialogProcessId || "").trim()) {
     const error = new Error("reused Turn requires its precommitted dialogProcessId");
     error.statusCode = 400;
     error.errorCode = "MISSING_REUSED_TURN_DIALOG_PROCESS_ID";
