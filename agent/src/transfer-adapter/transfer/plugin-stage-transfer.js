@@ -12,15 +12,8 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
-import { firstNormalizedString } from "../core/compact.js";
-
-function normalizeString(value = "") {
-  return String(value || "").trim();
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { firstNormalizedString, normalizeString } from "../core/compact.js";
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 export async function transferAgentPluginStageMessage({
   runtime = {},

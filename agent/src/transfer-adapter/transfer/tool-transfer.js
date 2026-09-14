@@ -15,23 +15,16 @@ import {
   getToolInputPolicy,
 } from "@noobot/semantic-transfer-protocol";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { firstNormalizedString } from "../core/compact.js";
+import { firstNormalizedString, normalizeString } from "../core/compact.js";
 import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-
-function normalizeString(value = "") {
-  return String(value || "").trim();
-}
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 function normalizeRawString(value = "") {
   return String(value || "");
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function toSafePositiveInt(value, fallback = 0, min = 0) {

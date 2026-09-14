@@ -5,14 +5,7 @@
  */
 import { createTransferIdentity } from "@noobot/semantic-transfer-protocol";
 import { currentAssistantMessageId } from "../../events/message-event-stream.js";
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
-
-function plain(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject, safeStr } from "../../shared/utils/shared-utils.js";
 
 export function resolveRuntimeTransferIdentity({
   runtime = {},
@@ -23,30 +16,30 @@ export function resolveRuntimeTransferIdentity({
   strategy = "semantic_transfer",
   transferKey = "",
 } = {}) {
-  if (!plain(producer)) throw new Error("semantic_transfer_producer_required");
-  const producerType = text(producer.type);
-  const producerId = text(producer.id || producer.name);
-  const runConfig = plain(runtime?.runConfig) ? runtime.runConfig : {};
-  const contextIdentity = plain(agentContext?.context?.identity)
+  if (!isPlainObject(producer)) throw new Error("semantic_transfer_producer_required");
+  const producerType = safeStr(producer.type);
+  const producerId = safeStr(producer.id || producer.name);
+  const runConfig = isPlainObject(runtime?.runConfig) ? runtime.runConfig : {};
+  const contextIdentity = isPlainObject(agentContext?.context?.identity)
     ? agentContext.context.identity
     : {};
-  const messageId = text(
+  const messageId = safeStr(
     runConfig.messageId ||
       runtime?.systemRuntime?.messageId ||
       contextIdentity.messageId ||
       currentAssistantMessageId(runtime),
   );
-  const resolvedSessionId = text(
+  const resolvedSessionId = safeStr(
     sessionId || runConfig.sessionId || runtime?.systemRuntime?.sessionId || runtime?.sessionId || contextIdentity.sessionId,
   );
-  const turnScopeId = text(runConfig.turnScopeId || runtime?.systemRuntime?.turnScopeId || contextIdentity.turnScopeId);
-  const runId = text(runConfig.executionId || runtime?.systemRuntime?.executionId || contextIdentity.runId);
+  const turnScopeId = safeStr(runConfig.turnScopeId || runtime?.systemRuntime?.turnScopeId || contextIdentity.turnScopeId);
+  const runId = safeStr(runConfig.executionId || runtime?.systemRuntime?.executionId || contextIdentity.runId);
   if (!messageId || !resolvedSessionId || !turnScopeId || !runId || !producerType || !producerId) {
     throw new Error("semantic_transfer_execution_identity_incomplete");
   }
-  const normalizedDirection = text(direction);
-  const normalizedStrategy = text(strategy);
-  const normalizedTransferKey = text(transferKey);
+  const normalizedDirection = safeStr(direction);
+  const normalizedStrategy = safeStr(strategy);
+  const normalizedTransferKey = safeStr(transferKey);
   const identity = createTransferIdentity({
     sessionId: resolvedSessionId,
     turnScopeId,

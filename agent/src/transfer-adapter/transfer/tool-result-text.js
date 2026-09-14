@@ -44,10 +44,6 @@ export function buildTextResultFields({
   inlineMaxChars = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
   previewChars = DEFAULT_PREVIEW_CHARS,
   forcePreview = false,
-  sessionId = "",
-  identity = null,
-  scenario = "tool",
-  strategy = "tool_result_text",
 } = {}) {
   const normalizedText = String(text || "");
   const normalizedTransferEnvelopes = normalizeTransferEnvelopes(transferEnvelopes);

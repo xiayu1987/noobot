@@ -7,10 +7,7 @@ import {
   attachmentIdentityKey,
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 function validated(value) {
   const source = isPlainObject(value) && Array.isArray(value.transferEnvelopes)

@@ -9,7 +9,7 @@ import {
   TRANSFER_SOURCE,
   assertSemanticTransferRegistration,
 } from "@noobot/semantic-transfer-protocol";
-import { firstNormalizedString } from "../core/compact.js";
+import { firstNormalizedString, normalizeString } from "../core/compact.js";
 import { createDirectTransferEnvelope } from "../storage/attachment-adapter.js";
 import { transferToolInput, transferToolOutput } from "./tool-transfer.js";
 import { normalizeToolResultOverflow } from "./tool-result-overflow.js";
@@ -18,27 +18,12 @@ import {
   composeAgentPluginFinalMessage,
   transferAgentPluginStageMessage,
 } from "./plugin-stage-transfer.js";
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
-export const SEMANTIC_TRANSFER_SCENARIO = SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS;
-
-export const SEMANTIC_TRANSFER_STRATEGY = {
-  TOOL_INPUT: "tool_input",
-  TOOL_OUTPUT: "tool_output",
-  TOOL_RESULT_TEXT: "tool_result_text",
-  WORKFLOW_SUBAGENT: "workflow_subagent",
-  WORKFLOW_FINAL_PLAN: "workflow_final_plan",
-  HARNESS_SUMMARY: "harness_summary",
-  HARNESS_PLANNING: "harness_planning",
-  HARNESS_ACCEPTANCE: "harness_acceptance",
-};
-
-function normalizeString(value = "") {
-  return String(value || "").trim();
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+const SEMANTIC_TRANSFER_SCENARIO = SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS;
+const TOOL_STRATEGY = SEMANTIC_TRANSFER_REGISTRATION.TOOL_STRATEGIES;
+const WORKFLOW_STRATEGY = SEMANTIC_TRANSFER_REGISTRATION.WORKFLOW_STRATEGIES;
+const HARNESS_STRATEGY = SEMANTIC_TRANSFER_REGISTRATION.HARNESS_STRATEGIES;
 
 function normalizeScenario(value = "") {
   return normalizeString(value).toLowerCase();
@@ -46,15 +31,6 @@ function normalizeScenario(value = "") {
 
 function normalizeStrategy(value = "") {
   return normalizeString(value).toLowerCase();
-}
-
-function buildInvalidResult({
-  code = "SEMANTIC_TRANSFER_INVALID_SCENARIO",
-  message = "invalid semantic-transfer request",
-} = {}) {
-  return {
-    transferEnvelopes: [],
-  };
 }
 
 function normalizePayloadAndOptions(options = {}) {
@@ -98,7 +74,7 @@ async function transferToolStrategy({
   agentContext = null,
   ...options
 } = {}) {
-  if (strategy === SEMANTIC_TRANSFER_STRATEGY.TOOL_RESULT_TEXT) {
+  if (strategy === TOOL_STRATEGY.RESULT_TEXT) {
     return normalizeToolResultOverflow({
       ...options,
       runtime,
@@ -107,16 +83,13 @@ async function transferToolStrategy({
       toolResultText: options.toolResultText ?? options.text ?? options.content ?? "",
     });
   }
-  if (strategy === SEMANTIC_TRANSFER_STRATEGY.TOOL_INPUT) {
+  if (strategy === TOOL_STRATEGY.INPUT) {
     return transferToolInput({ ...options, runtime, agentContext });
   }
-  if (strategy === SEMANTIC_TRANSFER_STRATEGY.TOOL_OUTPUT) {
+  if (strategy === TOOL_STRATEGY.OUTPUT) {
     return transferToolOutput({ ...options, runtime, agentContext });
   }
-  return buildInvalidResult({
-    code: "SEMANTIC_TRANSFER_INVALID_STRATEGY",
-    message: "tool scenario requires strategy tool_input/tool_output/tool_result_text",
-  });
+  throw new Error(`semantic_transfer_strategy_unhandled:tool:${strategy}`);
 }
 
 async function transferBotPluginStrategy({
@@ -125,37 +98,14 @@ async function transferBotPluginStrategy({
   agentContext = null,
   ...options
 } = {}) {
-  if (
-    strategy === SEMANTIC_TRANSFER_STRATEGY.WORKFLOW_SUBAGENT ||
-    strategy === SEMANTIC_TRANSFER_STRATEGY.WORKFLOW_FINAL_PLAN
-  ) {
+  if (strategy === WORKFLOW_STRATEGY.SUB_AGENT || strategy === WORKFLOW_STRATEGY.FINAL_PLAN) {
     return transferBotPluginSubagentResult({
       ...options,
       runtime,
       agentContext,
     });
   }
-  if (strategy === SEMANTIC_TRANSFER_STRATEGY.WORKFLOW_SUBAGENT) {
-    const content = firstNormalizedString(options?.content, options?.message, options?.text);
-    if (!content) {
-      return {
-        transferEnvelopes: [],
-      };
-    }
-    return {
-      ...createDirectTextTransfer({
-        text: content,
-        scenario: SEMANTIC_TRANSFER_SCENARIO.WORKFLOW,
-        strategy,
-        identity: options.identity,
-        meta: { ...(options?.meta || {}), injectionMessage: content },
-      }),
-    };
-  }
-  return buildInvalidResult({
-    code: "SEMANTIC_TRANSFER_INVALID_STRATEGY",
-    message: "workflow scenario requires workflow_subagent or workflow_final_plan strategy",
-  });
+  throw new Error(`semantic_transfer_strategy_unhandled:workflow:${strategy}`);
 }
 
 async function transferAgentPluginSummaryInjection({
@@ -227,11 +177,7 @@ async function transferAgentPluginStrategy({
   ...options
 } = {}) {
   if (
-    [
-      SEMANTIC_TRANSFER_STRATEGY.HARNESS_SUMMARY,
-      SEMANTIC_TRANSFER_STRATEGY.HARNESS_PLANNING,
-      SEMANTIC_TRANSFER_STRATEGY.HARNESS_ACCEPTANCE,
-    ].includes(strategy) &&
+    Object.values(HARNESS_STRATEGY).includes(strategy) &&
     options.detail !== undefined &&
     options.fullText === undefined &&
     options.summaryText === undefined
@@ -246,7 +192,7 @@ async function transferAgentPluginStrategy({
     });
   }
   if (
-    strategy === SEMANTIC_TRANSFER_STRATEGY.HARNESS_SUMMARY &&
+    strategy === HARNESS_STRATEGY.SUMMARY &&
     (options.fullText !== undefined || options.summaryText !== undefined)
   ) {
     return transferAgentPluginSummaryInjection({
@@ -256,7 +202,7 @@ async function transferAgentPluginStrategy({
       strategy,
     });
   }
-  if (strategy === SEMANTIC_TRANSFER_STRATEGY.HARNESS_SUMMARY) {
+  if (strategy === HARNESS_STRATEGY.SUMMARY) {
     const finalMessage = composeAgentPluginFinalMessage(options || {});
     return {
       ...createDirectTextTransfer({
@@ -271,10 +217,7 @@ async function transferAgentPluginStrategy({
       }),
     };
   }
-  return buildInvalidResult({
-    code: "SEMANTIC_TRANSFER_INVALID_STRATEGY",
-    message: "harness scenario requires harness_summary strategy",
-  });
+  throw new Error(`semantic_transfer_strategy_unhandled:harness:${strategy}`);
 }
 
 export async function transferSemanticContent({
@@ -316,8 +259,5 @@ export async function transferSemanticContent({
       agentContext,
     });
   }
-  return buildInvalidResult({
-    code: "SEMANTIC_TRANSFER_INVALID_SCENARIO",
-    message: "scenario is not registered",
-  });
+  throw new Error(`semantic_transfer_scenario_unhandled:${normalizedScenario}`);
 }
