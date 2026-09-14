@@ -6,10 +6,7 @@
 import { emitEvent } from "../../events/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-
-function normalizeString(value = "") {
-  return String(value || "").trim();
-}
+import { normalizeString } from "./compact.js";
 
 export async function emitSemanticTransferValidation({
   runtime = {},

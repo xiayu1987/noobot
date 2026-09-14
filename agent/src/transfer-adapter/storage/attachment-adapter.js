@@ -12,32 +12,29 @@ import {
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
 import { AttachmentService } from "../../artifacts/service/attachment-service.js";
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
+import { isPlainObject, safeStr } from "../../shared/utils/shared-utils.js";
 
 function requireIdentity(identity = {}) {
-  if (!identity || typeof identity !== "object" || Array.isArray(identity)) {
+  if (!isPlainObject(identity)) {
     throw new Error("semantic_transfer_identity_required");
   }
   for (const key of ["transferId", "messageId", "sessionId", "turnScopeId", "runId"]) {
-    if (!text(identity[key])) throw new Error(`semantic_transfer_${key}_required`);
+    if (!safeStr(identity[key])) throw new Error(`semantic_transfer_${key}_required`);
   }
   if (!identity.producer || typeof identity.producer !== "object") {
     throw new Error("semantic_transfer_producer_required");
   }
-  if (!text(identity.producer.type) || !text(identity.producer.id)) {
+  if (!safeStr(identity.producer.type) || !safeStr(identity.producer.id)) {
     throw new Error("semantic_transfer_producer_identity_required");
   }
   return {
-    transferId: text(identity.transferId),
-    messageId: text(identity.messageId),
+    transferId: safeStr(identity.transferId),
+    messageId: safeStr(identity.messageId),
     identity: {
-      sessionId: text(identity.sessionId),
-      turnScopeId: text(identity.turnScopeId),
-      runId: text(identity.runId),
-      producer: { type: text(identity.producer.type), id: text(identity.producer.id) },
+      sessionId: safeStr(identity.sessionId),
+      turnScopeId: safeStr(identity.turnScopeId),
+      runId: safeStr(identity.runId),
+      producer: { type: safeStr(identity.producer.type), id: safeStr(identity.producer.id) },
     },
   };
 }
@@ -48,7 +45,7 @@ function encodeContentBase64({
   bytes = null,
   contentEncoding = "utf8",
 } = {}) {
-  if (text(encodedContent)) return text(encodedContent);
+  if (safeStr(encodedContent)) return safeStr(encodedContent);
   if (Buffer.isBuffer(bytes)) return bytes.toString("base64");
   if (bytes instanceof Uint8Array) return Buffer.from(bytes).toString("base64");
   if (Array.isArray(bytes)) return Buffer.from(bytes).toString("base64");
@@ -65,7 +62,7 @@ function serviceFrom(runtime, attachmentService) {
 }
 
 function resolveAttachmentUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
-  const resolved = text(
+  const resolved = safeStr(
     runtime?.userId || runtime?.systemRuntime?.userId || agentContext?.userId || userId,
   );
   if (!resolved) throw new Error("semantic_transfer_user_id_required");
@@ -74,9 +71,9 @@ function resolveAttachmentUserId({ runtime = {}, agentContext = null, userId = "
 
 function recordIdentity(record = {}, sessionId = "") {
   const identity = {
-    attachmentId: text(record.attachmentId),
-    sessionId: text(record.sessionId || sessionId),
-    attachmentSource: text(record.attachmentSource),
+    attachmentId: safeStr(record.attachmentId),
+    sessionId: safeStr(record.sessionId || sessionId),
+    attachmentSource: safeStr(record.attachmentSource),
   };
   if (!identity.attachmentId || !identity.sessionId || !identity.attachmentSource) {
     throw new Error("semantic_transfer_attachment_identity_missing");
@@ -118,8 +115,8 @@ export async function persistTransferArtifacts({
   const records = await service.ingestGeneratedArtifacts({
     userId: resolvedUserId,
     sessionId: ids.identity.sessionId,
-    attachmentSource: text(attachmentSource) || "model",
-    generationSource: text(generationSource) || "semantic_transfer_output",
+    attachmentSource: safeStr(attachmentSource) || "model",
+    generationSource: safeStr(generationSource) || "semantic_transfer_output",
     turnScope: {
       sessionId: ids.identity.sessionId,
       turnScopeId: ids.identity.turnScopeId,
@@ -136,8 +133,8 @@ export async function persistTransferArtifacts({
     createAttachmentReference({
       identity: recordIdentity(record, ids.identity.sessionId),
       role: index === 0 ? "primary" : "secondary",
-      name: text(record.name) || `attachment-${index + 1}`,
-      mimeType: text(record.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+      name: safeStr(record.name) || `attachment-${index + 1}`,
+      mimeType: safeStr(record.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
       size: Number.isSafeInteger(record.size) && record.size >= 0 ? record.size : undefined,
     }),
   );
@@ -195,12 +192,10 @@ export async function persistTransferFile({
     meta,
     artifacts: [
       {
-        name: text(name) || "output.txt",
-        mimeType: text(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+        name: safeStr(name) || "output.txt",
+        mimeType: safeStr(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
         contentBase64: encoded,
       },
     ],
   });
 }
-
-export { requireIdentity };

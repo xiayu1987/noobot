@@ -11,29 +11,26 @@ import {
 } from "./tool-result-text.js";
 import { sourceReferenceTransfer } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
-
-function plain(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 function parseJsonObject(text = "") {
   try {
     const value = JSON.parse(String(text || ""));
-    return plain(value) ? value : null;
+    return isPlainObject(value) ? value : null;
   } catch {
     return null;
   }
 }
 
 function transferIdentityRequired(identity) {
-  if (!plain(identity)) throw new Error("semantic_transfer_overflow_identity_required");
+  if (!isPlainObject(identity)) throw new Error("semantic_transfer_overflow_identity_required");
   for (const key of ["transferId", "messageId", "sessionId", "turnScopeId", "runId"]) {
     if (typeof identity[key] !== "string" || !identity[key].trim()) {
       throw new Error(`semantic_transfer_overflow_${key}_required`);
     }
   }
   if (
-    !plain(identity.producer) ||
+    !isPlainObject(identity.producer) ||
     !String(identity.producer.type || "").trim() ||
     !String(identity.producer.id || "").trim()
   ) {
@@ -47,7 +44,7 @@ function overflowArtifactName(call = {}) {
   return `${toolName}.result.txt`;
 }
 
-function overflowMessage({ measuredLength, maxChars }) {
+function overflowMessage({ measuredLength }) {
   return `工具返回内容过长(${measuredLength}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`;
 }
 
@@ -55,7 +52,7 @@ function buildReadFileSourceReference({ parsed = {}, identity }) {
   const pathRef = parsed?.path && typeof parsed.path === "object" ? parsed.path : null;
   const view = String(pathRef?.view || "").trim();
   const address =
-    view === "attachment" && plain(pathRef?.identity)
+    view === "attachment" && isPlainObject(pathRef?.identity)
       ? pathRef.identity
       : ["workspace", "host"].includes(view)
         ? String(pathRef?.path || "").trim()
@@ -158,7 +155,6 @@ export async function normalizeToolResultOverflow({
     String(parsed?.message || "").trim() ||
     overflowMessage({
       measuredLength: rawText.length,
-      maxChars,
     });
   const normalized = toToolJsonResult(call?.name, {
     ...(typeof parsed?.ok === "boolean" ? { ok: parsed.ok } : { ok: true }),

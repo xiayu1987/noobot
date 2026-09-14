@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 function compactObject(value = {}) {
   return Object.fromEntries(
@@ -27,6 +24,10 @@ export function firstNormalizedString(...values) {
   return "";
 }
 
+export function normalizeString(value = "") {
+  return String(value || "").trim();
+}
+
 export const COMPACT_TRANSFER_PAYLOAD_FIELDS = Object.freeze(["transferEnvelopes"]);
 export const COMPACT_TRANSFER_FILE_FIELDS = Object.freeze([
   "identity",
@@ -42,22 +43,6 @@ function validateAndDedupeEnvelopes(value) {
     ? value.transferEnvelopes
     : value;
   return normalizeTransferEnvelopes(source);
-}
-
-function compactAttachmentReference(reference = {}) {
-  if (!isPlainObject(reference) || !isPlainObject(reference.identity)) return null;
-  return compactObject({
-    identity: reference.identity,
-    role: reference.role,
-    name: reference.name,
-    mimeType: reference.mimeType,
-    size: reference.size,
-    preview: reference.preview,
-  });
-}
-
-export function compactAttachmentReferenceForModel(reference = {}) {
-  return compactAttachmentReference(reference) || {};
 }
 
 export function compactTransferPayloadForModel(payload = {}) {

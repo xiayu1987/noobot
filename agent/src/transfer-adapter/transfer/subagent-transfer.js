@@ -13,15 +13,8 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { firstNormalizedString } from "../core/compact.js";
-
-function normalizeString(value = "") {
-  return String(value || "").trim();
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { firstNormalizedString, normalizeString } from "../core/compact.js";
+import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 function normalizeNextSteps(nextSteps = []) {
   return (Array.isArray(nextSteps) ? nextSteps : [])

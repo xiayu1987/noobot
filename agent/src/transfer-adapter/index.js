@@ -5,7 +5,5 @@
  */
 
 export * from "./core/index.js";
-export * from "./storage/attachment-adapter.js";
-export * from "./storage/materializer.js";
-export * from "./storage/consumer.js";
+export * from "./storage/index.js";
 export * from "./transfer/index.js";
