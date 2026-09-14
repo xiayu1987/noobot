@@ -175,6 +175,8 @@ export const LENGTH_THRESHOLDS = deepFreeze({
 
   harness: {
     jsonlMaxBufferBytes: LENGTH_TIERS.bytes.jsonlBuffer,
+
+    relayInjectionMaxChars: LENGTH_TIERS.chars.mainContext,
   },
 
   sessionLog: {

@@ -9,6 +9,7 @@ import { CAPABILITY_DOMAIN, LOCALE } from "./constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message/injection-utils.js";
 import { containsExecutableScriptText } from "./script-content-risk.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 
 import {
@@ -31,8 +32,17 @@ export function relaySeparateModelOutputAsUserMessage(
   } = {},
 ) {
   const messages = resolveModelMessages(ctx);
-  const text = String(content || "").trim();
-  if (!text) return false;
+  const rawText = String(content || "").trim();
+  if (!rawText) return false;
+  const maxChars = Number(LENGTH_THRESHOLDS.harness.relayInjectionMaxChars || 0);
+  const truncated = maxChars > 0 && rawText.length > maxChars;
+  const text = truncated
+    ? `${rawText.slice(0, maxChars)}\n${translateI18nText(
+        locale,
+        HARNESS_I18N_KEYSET.RELAY.CONTENT_TRUNCATED_NOTICE,
+        { originalLength: rawText.length, maxChars },
+      )}`
+    : rawText;
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: String(purpose || "").trim() || "unknown",
   });
