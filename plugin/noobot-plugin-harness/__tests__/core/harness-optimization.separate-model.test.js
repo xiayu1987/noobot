@@ -15,6 +15,7 @@ import {
   createTestModelResponse,
 } from "../helpers/public-runtime-fixtures.js";
 import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 test("planning separate_model avoids duplicate invoker calls while one run is in-flight", async () => {
   const handler = createPlanningHandler();
@@ -134,6 +135,24 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   assert.equal(Array.isArray(message?.transferEnvelopes), true);
   assert.equal(message.transferEnvelopes.length > 0, true);
   assert.equal(message?.attachments, undefined);
+});
+
+test("relaySeparateModelOutputAsUserMessage truncates oversized relay content and appends truncation notice", () => {
+  const ctx = createTestHookContext();
+  const maxChars = LENGTH_THRESHOLDS.harness.relayInjectionMaxChars;
+  const content = `HEAD-${"y".repeat(maxChars)}-TAIL`;
+  const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
+    purpose: "guidance",
+    content,
+  });
+
+  assert.equal(relayed, true);
+  const relayContent = String(ctx.modelContext.messages[0]?.content || "");
+  assert.equal(relayContent.includes("-TAIL"), false);
+  assert.match(relayContent, /\[内容截断：外部模型输出 /);
+  assert.match(relayContent, new RegExp(`${content.length} 字符`));
+  assert.match(relayContent, new RegExp(`超过注入上限 ${maxChars} 字符`));
+  assert.equal(relayContent.trimEnd().endsWith("]"), true);
 });
 
 test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", async () => {

@@ -435,13 +435,13 @@
     }
   },
   "mcp_servers": {
-    "china-railway": {
+    "market_cmgjmcp": {
       "type": "sse",
-      "description": "提供 12306购票信息查询等服务",
+      "description": "一站式查询国内外快递实时物流轨迹，覆盖近两千家主流快递、快运、邮政、国际物流服务商，支持单号自动识别，同步快递公司官网实时物流数据；完整返回揽收、运输、派件、签收、异常等全流程节点信息，包含网点、快递员、联系电话、运输时长等结构化字段。适用于电商、ERP、售后客服、仓储供应链等系统接入，合规用于物流跟踪、订单对账、售后通知等业务场景。",
       "prompt": "用于铁路票务查询场景，先说明查询条件再调用。",
       "isActive": true,
-      "name": "AliyunBailianMCP_china-railway",
-      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/china-railway/sse",
+      "name": "market-cmgjmcp",
+      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/market-cmgjmcp00074959/sse",
       "headers": {
         "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
       }
