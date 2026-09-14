@@ -553,10 +553,9 @@ test("Anthropic multimodal parse maps image attachments to base64 image blocks",
   let request;
   globalThis.fetch = async (url, init) => {
     request = { url, body: JSON.parse(init.body) };
-    return new Response(
-      JSON.stringify({ content: [{ type: "text", text: "parsed" }] }),
-      { status: 200 },
-    );
+    return new Response(JSON.stringify({ content: [{ type: "text", text: "parsed" }] }), {
+      status: 200,
+    });
   };
   try {
     const result = await anthropicMessagesAdapter.executeOperation({
@@ -566,7 +565,9 @@ test("Anthropic multimodal parse maps image attachments to base64 image blocks",
         kind: "multimodal_parse",
         input: {
           prompt: "describe",
-          attachments: [{ mimeType: "image/png", data: "data:image/png;base64,AAAB", fileName: "a.png" }],
+          attachments: [
+            { mimeType: "image/png", data: "data:image/png;base64,AAAB", fileName: "a.png" },
+          ],
         },
       },
     });
@@ -597,7 +598,8 @@ test("Anthropic multimodal parse maps pdf attachments to document blocks", () =>
 
 test("Anthropic multimodal parse rejects unsupported attachment mime types", () => {
   assert.throws(
-    () => mapAnthropicMultimodalAttachment({ mimeType: "audio/mp3", data: "data:audio/mp3;base64,QQ" }),
+    () =>
+      mapAnthropicMultimodalAttachment({ mimeType: "audio/mp3", data: "data:audio/mp3;base64,QQ" }),
     /does not support attachment mime type: audio\/mp3/,
   );
 });

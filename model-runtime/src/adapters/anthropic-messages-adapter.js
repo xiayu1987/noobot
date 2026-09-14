@@ -297,7 +297,10 @@ export function mapAnthropicMultimodalAttachment(attachment = {}) {
   const { mediaType, base64 } = splitDataUrl(attachment.data);
   const resolvedMediaType = mediaType || normalizedMimeType;
   if (normalizedMimeType.startsWith("image/")) {
-    return { type: "image", source: { type: "base64", media_type: resolvedMediaType, data: base64 } };
+    return {
+      type: "image",
+      source: { type: "base64", media_type: resolvedMediaType, data: base64 },
+    };
   }
   if (normalizedMimeType === ANTHROPIC_DOCUMENT_MIME_TYPE) {
     return {
