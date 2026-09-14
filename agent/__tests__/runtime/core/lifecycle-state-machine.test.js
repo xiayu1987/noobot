@@ -8,13 +8,13 @@ import assert from "node:assert/strict";
 
 import {
   AGENT_LIFECYCLE_BRANCH_STATE,
-  AGENT_LIFECYCLE_EVENT,
   AGENT_LIFECYCLE_STATE,
   bindLifecycleToRuntime,
   createAgentLifecycleMachine,
   resolveInitialLifecycleState,
   syncLifecycleRuntimeState,
 } from "../../../src/runtime/lifecycle/state-machine.js";
+import { AGENT_RUN_EVENT } from "../../../src/events/run-event.js";
 
 test("agent lifecycle machine emits normalized state change payload", () => {
   const events = [];
@@ -35,7 +35,11 @@ test("agent lifecycle machine emits normalized state change payload", () => {
 
   assert.deepEqual(
     events.map((item) => item.event),
-    [AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_EVENT],
+    [
+      AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED,
+      AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED,
+      AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED,
+    ],
   );
   assert.equal(events[0].data.state, "resume_initializing");
   assert.equal(events[0].data.phase, "继续初始化");

@@ -5,6 +5,7 @@
  */
 
 import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
+import { AGENT_RUN_EVENT } from "../../events/run-event.js";
 
 export const AGENT_LIFECYCLE_STATE = Object.freeze({
   INITIALIZING: "initializing",
@@ -20,8 +21,6 @@ export const AGENT_LIFECYCLE_BRANCH_STATE = Object.freeze({
   INTERRUPTED: "interrupted",
   FAILED: "failed",
 });
-
-export const AGENT_LIFECYCLE_EVENT = "agent_lifecycle_state_changed";
 
 const STATE_PHASE_LABEL = Object.freeze({
   [AGENT_LIFECYCLE_STATE.INITIALIZING]: "初始化",
@@ -147,7 +146,7 @@ export function createAgentLifecycleMachine({
     };
     latestSnapshot = { ...payload };
     if (eventListener?.onEvent) {
-      eventListener.onEvent({ event: AGENT_LIFECYCLE_EVENT, data: payload });
+      eventListener.onEvent({ event: AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED, data: payload });
     }
     return payload;
   };

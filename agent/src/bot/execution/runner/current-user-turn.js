@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { emitEvent } from "../../../events/index.js";
+import { AGENT_RUN_EVENT, emitEvent } from "../../../events/index.js";
 import {
   canonicalMessageId,
   emitContextIdentityDebug,
@@ -202,7 +202,7 @@ export async function prepareCurrentUserTurn({
       if (acceptanceReceipt.committedEventPublished !== true) {
         emitEvent(
           eventListener,
-          "turn_committed",
+          AGENT_RUN_EVENT.TURN_COMMITTED,
           assertTurnCommittedEventData({
             sessionId,
             aggregateVersion: committedTurnResult.aggregateVersion,
@@ -235,7 +235,7 @@ export async function prepareCurrentUserTurn({
     currentUserMessage = committedTurnResult?.userMessage;
     emitEvent(
       eventListener,
-      "turn_committed",
+      AGENT_RUN_EVENT.TURN_COMMITTED,
       assertTurnCommittedEventData({
         sessionId: committedTurnResult?.sessionId || sessionId,
         aggregateVersion: committedTurnResult?.aggregateVersion,
@@ -271,7 +271,7 @@ export async function prepareCurrentUserTurn({
       };
       emitEvent(
         eventListener,
-        "turn_attachments_bound",
+        AGENT_RUN_EVENT.TURN_ATTACHMENTS_BOUND,
         assertTurnAttachmentsBoundEventData({
           sessionId: attachmentBinding?.session?.sessionId || sessionId,
           aggregateVersion: attachmentBinding?.aggregateVersion,

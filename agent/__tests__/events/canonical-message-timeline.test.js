@@ -10,7 +10,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
-import { reduceCanonicalToolTimeline } from "../../src/events/canonical-message-timeline.js";
+import { reduceCanonicalToolTimeline } from "@noobot/event-protocol/tool-timeline";
 
 const event = (eventType, eventId, sequence, extra = {}) =>
   createEventEnvelope({

@@ -13,9 +13,9 @@ import { finalizeAgentTurn } from "../../src/bot/execution/runner/result-finaliz
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import {
   AGENT_LIFECYCLE_BRANCH_STATE,
-  AGENT_LIFECYCLE_EVENT,
   AGENT_LIFECYCLE_STATE,
 } from "../../src/runtime/lifecycle/state-machine.js";
+import { AGENT_RUN_EVENT } from "../../src/events/run-event.js";
 import { loadStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
@@ -170,14 +170,14 @@ export function createRunner({
 
 export function collectLifecycleStates(events) {
   return events
-    .filter((item) => item.event === AGENT_LIFECYCLE_EVENT)
+    .filter((item) => item.event === AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED)
     .map((item) => item.data.state);
 }
 
 export function findStoppedLifecycleEvent(events) {
   return events.find(
     (item) =>
-      item.event === AGENT_LIFECYCLE_EVENT &&
+      item.event === AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED &&
       item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED,
   );
 }
@@ -189,8 +189,8 @@ export {
   path,
   finalizeAgentTurn,
   AGENT_LIFECYCLE_BRANCH_STATE,
-  AGENT_LIFECYCLE_EVENT,
   AGENT_LIFECYCLE_STATE,
+  AGENT_RUN_EVENT,
   loadStoppedModelMessageSnapshot,
   createCurrentTurnMessagesStore,
   createTestAgentExecutionScope,

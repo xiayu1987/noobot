@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { emitEvent } from "./emitter.js";
 import { assertMessageEventPayload } from "@noobot/event-protocol/message-event";
+import { AGENT_RUN_EVENT } from "./run-event.js";
 
 export { assertMessageEventPayload };
 
@@ -215,7 +216,7 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
       `canonical message event projector rejected event: ${committed.envelope.identity.eventId}`,
     );
   }
-  await emitEvent(eventListener, "authority_event_committed", {
+  await emitEvent(eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope: committed.envelope,
     persistenceScope: state?.persistenceScope || null,
   });

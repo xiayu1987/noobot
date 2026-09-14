@@ -25,7 +25,7 @@ import {
 import { TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
-import { emitEvent } from "../../events/index.js";
+import { AGENT_RUN_EVENT, emitEvent } from "../../events/index.js";
 import { queueUserMetaBackwrite } from "../../context/assembly/message-builder/user-meta-backwrite.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME } from "../constants/index.js";
 
@@ -135,7 +135,7 @@ export async function backwriteParsedAttachment({
   if (!committed?.committed || !committed?.envelope) {
     throw new Error(`attachment authority event commit failed: ${committed?.reason || "unknown"}`);
   }
-  await emitEvent(runtime?.eventListener || null, "authority_event_committed", {
+  await emitEvent(runtime?.eventListener || null, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope: committed.envelope,
     persistenceScope: runtime?.systemRuntime?.persistenceScope || null,
   });

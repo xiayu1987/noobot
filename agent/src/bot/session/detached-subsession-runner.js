@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { emitEvent } from "../../events/index.js";
+import { AGENT_RUN_EVENT, emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import {
@@ -507,7 +507,7 @@ function createLifecycleCommitter(session, lifecycleIdentity, scopedEventListene
     }
     if (committed.envelope) {
       await scopedEventListener?.onEvent?.({
-        event: "turn_lifecycle_committed",
+        event: AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED,
         data: {
           envelope: committed.envelope,
           persistenceScope: lifecycleIdentity.persistenceScope,
