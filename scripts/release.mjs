@@ -189,7 +189,6 @@ async function main() {
   await runOrPrint("npm", ["run", "check:quality"], args);
   console.log("[release] running full repository regression for the final release version");
   await runOrPrint("npm", ["test"], args);
-  if (!args.dryRun) await assertCleanWorkingTree();
 
   await runOrPrint("git", ["add", "."], args);
   await runOrPrint("git", ["commit", "-m", `chore: release ${tagName}`], args);
