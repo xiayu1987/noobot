@@ -84,22 +84,17 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     RESPONSIBILITY_STAGE_PHASE_ACCEPTANCE: "responsibilityStagePhaseAcceptance",
     RESPONSIBILITY_STAGE_FINAL_ACCEPTANCE: "responsibilityStageFinalAcceptance",
     RESPONSIBILITY_CONSTRAINT_TEMPLATE: "responsibilityConstraintTemplate",
-    RESPONSIBILITY_SCENARIO_MISMATCH_PROTOCOL:
-      "responsibilityScenarioMismatchProtocol",
+    RESPONSIBILITY_SCENARIO_MISMATCH_PROTOCOL: "responsibilityScenarioMismatchProtocol",
     SCENARIO_POLICY_GENERAL: "scenarioPolicyGeneral",
     SCENARIO_POLICY_TEXT: "scenarioPolicyText",
     SCENARIO_POLICY_PROGRAMMING: "scenarioPolicyProgramming",
     GUIDANCE_FAILURE_PROMPT_TEMPLATE: "guidanceFailurePromptTemplate",
-    DYNAMIC_POLICY_PROMPT_PROTOCOL_INSTRUCTION:
-      "dynamicPolicyPromptProtocolInstruction",
+    DYNAMIC_POLICY_PROMPT_PROTOCOL_INSTRUCTION: "dynamicPolicyPromptProtocolInstruction",
     PLANNING_LATEST_USER_GOAL_FALLBACK: "planningLatestUserGoalFallback",
     PLANNING_MAIN_PROMPT_GOAL: "planningMainPromptGoal",
-    PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST:
-      "planningMainPromptGoalProgrammingFast",
-    PLANNING_MAIN_PROMPT_GOAL_ACTION:
-      "planningMainPromptGoalAction",
-    PLANNING_MAIN_PROMPT_GOAL_TEXT:
-      "planningMainPromptGoalText",
+    PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST: "planningMainPromptGoalProgrammingFast",
+    PLANNING_MAIN_PROMPT_GOAL_ACTION: "planningMainPromptGoalAction",
+    PLANNING_MAIN_PROMPT_GOAL_TEXT: "planningMainPromptGoalText",
     PLANNING_MAIN_USER_GOAL_HEADER: "planningMainUserGoalHeader",
     PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL: "planningMainCurrentTaskGoalProtocol",
     PLANNING_MAIN_CONSTRAINT: "planningMainConstraint",
@@ -165,7 +160,8 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PROTOCOL_PLANNING_REFINEMENT_ACTION_UPDATE: "protocolPlanningRefinementActionUpdate",
     PROTOCOL_PLANNING_REFINEMENT_ACTION_DELETE: "protocolPlanningRefinementActionDelete",
     PROTOCOL_PLANNING_REFINEMENT_HARD_CONSTRAINT: "protocolPlanningRefinementHardConstraint",
-    PROTOCOL_PLANNING_REFINEMENT_ONE_LEVEL_CONSTRAINT: "protocolPlanningRefinementOneLevelConstraint",
+    PROTOCOL_PLANNING_REFINEMENT_ONE_LEVEL_CONSTRAINT:
+      "protocolPlanningRefinementOneLevelConstraint",
     PROTOCOL_PLANNING_REFINEMENT_CANONICAL: "protocolPlanningRefinementCanonical",
     PROTOCOL_SUMMARY_TITLE: "protocolSummaryTitle",
     PROTOCOL_SUMMARY_SYNTAX_HEADER: "protocolSummarySyntaxHeader",
@@ -180,8 +176,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PROTOCOL_SUMMARY_TEXT_RULES: "protocolSummaryTextRules",
     PROTOCOL_SUMMARY_PROGRAMMING_RULES: "protocolSummaryProgrammingRules",
     PROTOCOL_SUMMARY_ACTION_RULES: "protocolSummaryActionRules",
-    PROTOCOL_SUMMARY_TEXT_DELIVERY_RULES:
-      "protocolSummaryTextDeliveryRules",
+    PROTOCOL_SUMMARY_TEXT_DELIVERY_RULES: "protocolSummaryTextDeliveryRules",
     PROTOCOL_ACCEPTANCE_TITLE_PHASE: "protocolAcceptanceTitlePhase",
     PROTOCOL_ACCEPTANCE_TITLE_FINAL: "protocolAcceptanceTitleFinal",
     PROTOCOL_ACCEPTANCE_OUTPUT_RULE: "protocolAcceptanceOutputRule",
