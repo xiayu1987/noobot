@@ -18,7 +18,7 @@ import {
   maybeRequestTaskCheck,
 } from "../loop-control.js";
 import { resolveLlmForTurn } from "../../models/runtime/model-manager.js";
-import { assertNotAborted } from "../utils/error-utils.js";
+import { assertNotAborted } from "../../shared/utils/error-utils.js";
 import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
@@ -134,7 +134,7 @@ export function createTurnOrchestrator({
     }
 
     try {
-      assertNotAbortedFn(abortSignal, runtime);
+      assertNotAbortedFn(abortSignal);
 
       if (isBeyondLoopLimitBuffer && loopState?.loopLimitFinalizePrompted === true) {
         emitEvent(eventListener, "tool_loop_limit_reached", {

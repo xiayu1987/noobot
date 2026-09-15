@@ -19,6 +19,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { appendMcpErrorLog } from "../../observability/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
+import { resolveExecutionCancellationScope } from "@noobot/session-protocol/execution-cancellation-scope";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -69,6 +70,8 @@ export function createMcpTool({ agentContext }) {
       const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
       const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
       const maxToolLoopTurns = BUILTIN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns;
+      let mcpToolset = null;
+      let releaseMcpToolset = null;
       try {
         if (typeof botManager?.runDetachedSubSession !== "function" || !userId || !sessionId) {
           throw recoverableToolError(
@@ -78,7 +81,7 @@ export function createMcpTool({ agentContext }) {
             },
           );
         }
-        const mcpToolset = await createMcpAgentTools({
+        mcpToolset = await createMcpAgentTools({
           globalConfig,
           userConfig,
           mcpName: normalizedMcpName,
@@ -86,6 +89,10 @@ export function createMcpTool({ agentContext }) {
           fetchImpl:
             typeof runtime?.sharedTools?.fetch === "function" ? runtime.sharedTools.fetch : null,
         });
+        /** 中止时由取消作用域关闭 MCP 连接，不依赖本函数走到 finally。 */
+        releaseMcpToolset = resolveExecutionCancellationScope(runtime?.cancellationScope).register(
+          () => mcpToolset?.close(),
+        );
         if (!Array.isArray(mcpToolset?.tools) || !mcpToolset.tools.length) {
           throw recoverableToolError(tTool(runtime, "mcp.noToolsAvailable"), {
             code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
@@ -186,6 +193,13 @@ export function createMcpTool({ agentContext }) {
         }
         throw recoverableToolError(error?.message || String(error), {
           code: String(error?.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),
+        });
+      } finally {
+        /** 正常与失败路径都在此收尾并注销登记，避免作用域登记表随调用累积。 */
+        if (releaseMcpToolset) releaseMcpToolset();
+        await runBestEffort(() => mcpToolset?.close(), {
+          operationName: "mcpTool.closeToolset",
+          context: { mcpName: normalizedMcpName },
         });
       }
     },

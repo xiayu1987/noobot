@@ -7,10 +7,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertConnectorAccessPort,
+  assertConnectorInstanceImplementation,
+  CONNECTOR_ACCESS_CANCELLATION,
   connectorField,
   connectorOperation,
   createConnectorSecretAad,
   createConnectorInstanceDefinition,
+  normalizeConnectorAccessContext,
   normalizeConnectorParameters,
   normalizeConnectorSecretEnvelope,
   normalizeSelectedConnectorIds,
@@ -131,4 +134,59 @@ test("connector access port exposes only the generic Agent operations", () => {
     () => assertConnectorAccessPort({ access: async () => ({ ok: true }) }),
     /listUserConnectors/,
   );
+});
+
+test("connector access context keeps one authoritative shape for request cancellation", () => {
+  const controller = new AbortController();
+  const sink = { write: () => {} };
+  const context = normalizeConnectorAccessContext({
+    sessionId: " s1 ",
+    artifactSink: sink,
+    abortSignal: controller.signal,
+    unknown: "dropped",
+  });
+  assert.equal(context.sessionId, "s1");
+  assert.equal(context.artifactSink, sink);
+  assert.equal(context.abortSignal, controller.signal);
+  assert.equal("unknown" in context, false);
+  assert.equal(Object.isFrozen(context), true);
+  const empty = normalizeConnectorAccessContext();
+  assert.deepEqual(empty, { sessionId: "", artifactSink: null, abortSignal: null });
+  assert.throws(
+    () => normalizeConnectorAccessContext({ abortSignal: { aborted: false } }),
+    /must be an AbortSignal/,
+  );
+});
+
+test("connector implementations must declare their access cancellation semantics", () => {
+  const base = {
+    definition: createConnectorInstanceDefinition({
+      instanceType: "example.database.mysql",
+      type: "database",
+      subType: "mysql",
+      fields: [connectorField("host", { required: true })],
+      operations: [
+        connectorOperation("execute", {
+          description: "Execute a command.",
+          inputSchema: { type: "object", properties: {} },
+        }),
+      ],
+    }),
+    create: async () => ({}),
+    health: async () => ({ ok: true }),
+    access: async () => ({ ok: true }),
+    dispose: async () => {},
+  };
+  assert.throws(
+    () => assertConnectorInstanceImplementation(base),
+    /connector access cancellation is invalid/,
+  );
+  assert.throws(
+    () => assertConnectorInstanceImplementation({ ...base, accessCancellation: "maybe" }),
+    /connector access cancellation is invalid/,
+  );
+  for (const semantics of Object.values(CONNECTOR_ACCESS_CANCELLATION)) {
+    const implementation = { ...base, accessCancellation: semantics };
+    assert.equal(assertConnectorInstanceImplementation(implementation), implementation);
+  }
 });

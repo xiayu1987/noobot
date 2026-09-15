@@ -11,6 +11,29 @@ export const CONNECTOR_STATUS = Object.freeze({
   ERROR: "error",
 });
 
+/**
+ * Cancellation semantics an implementation declares for a single access call.
+ *
+ * REQUEST_CANCELLABLE: honours `context.abortSignal` by interrupting only the
+ * in-flight operation. It must not release the connection handle and must leave
+ * the channel in a state where subsequent access calls stay correct.
+ * NOT_CANCELLABLE: cannot interrupt an in-flight operation. The caller may stop
+ * waiting, but the operation runs to completion. Connection-level teardown is
+ * `dispose` and is never a substitute for request cancellation.
+ */
+export const CONNECTOR_ACCESS_CANCELLATION = Object.freeze({
+  REQUEST_CANCELLABLE: "request_cancellable",
+  NOT_CANCELLABLE: "not_cancellable",
+});
+
+export function assertConnectorAccessCancellation(value) {
+  const normalized = String(value || "").trim();
+  if (!Object.values(CONNECTOR_ACCESS_CANCELLATION).includes(normalized)) {
+    throw new TypeError(`connector access cancellation is invalid: ${value}`);
+  }
+  return normalized;
+}
+
 export function assertConnectorInstanceImplementation(implementation = {}) {
   const definition = implementation.definition;
   if (!definition?.instanceType) throw new TypeError("connector definition is required");
@@ -19,6 +42,7 @@ export function assertConnectorInstanceImplementation(implementation = {}) {
       throw new TypeError(`connector implementation method is required: ${method}`);
     }
   }
+  assertConnectorAccessCancellation(implementation.accessCancellation);
   return implementation;
 }
 

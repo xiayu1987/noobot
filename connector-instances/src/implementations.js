@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { CONNECTOR_ACCESS_CANCELLATION } from "@noobot/connector-protocol";
 import {
   executeMysqlCommand,
   executePostgresCommand,
@@ -43,8 +44,8 @@ const outputResult = (result = {}) => ({
     result.ok === true ? {} : { message: String(result.stderr || "connector access failed") },
 });
 
-function databaseImplementation(definition, executeCommand, releaseConnection) {
-  const execute = ({ handle, connector, request }) =>
+function databaseImplementation(definition, executeCommand, releaseConnection, accessCancellation) {
+  const execute = ({ handle, connector, request, context }) =>
     executeSafeDatabaseCommand({
       command: command(request),
       execute: (sql) =>
@@ -52,10 +53,12 @@ function databaseImplementation(definition, executeCommand, releaseConnection) {
           command: sql,
           connectionInfo: connector.parameters,
           channelKey: handle.channelKey,
+          abortSignal: context?.abortSignal || null,
         }),
     });
   return {
     definition,
+    accessCancellation,
     create: async ({ connector }) => ({
       channelKey: `${connector.ownerUserId}::${connector.connectorId}`,
     }),
@@ -72,20 +75,28 @@ function databaseImplementation(definition, executeCommand, releaseConnection) {
   };
 }
 
-const mysql = databaseImplementation(MYSQL_DEFINITION, executeMysqlCommand, releaseMysqlConnection);
+const mysql = databaseImplementation(
+  MYSQL_DEFINITION,
+  executeMysqlCommand,
+  releaseMysqlConnection,
+  CONNECTOR_ACCESS_CANCELLATION.REQUEST_CANCELLABLE,
+);
 const postgres = databaseImplementation(
   POSTGRES_DEFINITION,
   executePostgresCommand,
   releasePostgresConnection,
+  CONNECTOR_ACCESS_CANCELLATION.REQUEST_CANCELLABLE,
 );
 const sqlite = databaseImplementation(
   SQLITE_DEFINITION,
   executeSqliteCommand,
   releaseSqliteConnection,
+  CONNECTOR_ACCESS_CANCELLATION.NOT_CANCELLABLE,
 );
 
 const ssh = {
   definition: SSH_DEFINITION,
+  accessCancellation: CONNECTOR_ACCESS_CANCELLATION.NOT_CANCELLABLE,
   create: async ({ connector }) => ({
     channelKey: `${connector.ownerUserId}::${connector.connectorId}`,
   }),
@@ -113,6 +124,7 @@ const ssh = {
 
 const email = {
   definition: SMTP_IMAP_DEFINITION,
+  accessCancellation: CONNECTOR_ACCESS_CANCELLATION.NOT_CANCELLABLE,
   create: async ({ connector }) => ({ connectorId: connector.connectorId }),
   health: async ({ connector }) => {
     const result = await executeEmailOperation({

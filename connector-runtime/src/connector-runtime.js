@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import {
   CONNECTOR_STATUS,
   createConnectorConnectionResult,
+  normalizeConnectorAccessContext,
   normalizeConnectorAccessRequest,
   normalizeConnectorAccessResult,
   normalizeConnectorParameters,
@@ -266,6 +267,7 @@ export class ConnectorRuntime {
 
   async access({ userId = "", request = {}, context = {} } = {}) {
     const normalized = normalizeConnectorAccessRequest(request);
+    const normalizedContext = normalizeConnectorAccessContext(context);
     const key = this._key(userId, normalized.connectorId);
     return this._withConnectorLock(key, async () => {
       const record = await this._record(userId, normalized.connectorId);
@@ -283,7 +285,7 @@ export class ConnectorRuntime {
           handle: active.handle,
           connector: record,
           request: normalized,
-          context,
+          context: normalizedContext,
         }),
       );
     });

@@ -31,6 +31,42 @@ export class TaskService {
     return operation();
   }
 
+  /**
+   * Resolves the session scope, ensures the session exists and loads it before
+   * delegating to the task-specific handler inside a session mutation guard.
+   * Returns null when the session cannot be loaded.
+   */
+  async _withResolvedSession({ userId, sessionId, parentSessionId, persistenceContext }, handler) {
+    return this._withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      async () => {
+        const resolvedParentSessionId = await this._resolveParentSessionId(
+          userId,
+          sessionId,
+          parentSessionId,
+          persistenceContext,
+        );
+        await this.sessionRepo.ensureSession({
+          userId,
+          sessionId,
+          parentSessionId: resolvedParentSessionId,
+          persistenceContext,
+        });
+        const session = await this.sessionRepo.findById(
+          userId,
+          sessionId,
+          resolvedParentSessionId,
+          persistenceContext,
+        );
+        if (!session) return null;
+        return handler({ session, resolvedParentSessionId });
+      },
+      persistenceContext,
+    );
+  }
+
   async startSkillTask({
     userId,
     sessionId,
@@ -40,69 +76,52 @@ export class TaskService {
     parentSessionId = "",
     persistenceContext = null,
   }) {
-    return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
+    return this._withResolvedSession(
+      { userId, sessionId, parentSessionId, persistenceContext },
+      async ({ session, resolvedParentSessionId }) => {
+        const taskBundle = await this.taskRepo.getBundle(
+          userId,
+          sessionId,
+          resolvedParentSessionId,
+          persistenceContext,
+        );
+        const now = this.now();
+
+        const previousTaskId = taskBundle.currentTaskId || session.currentTaskId || "";
+        if (previousTaskId) {
+          const previousTask = (taskBundle.tasks || []).find(
+            (taskItem) => taskItem.taskId === previousTaskId,
+          );
+          if (previousTask && previousTask.taskStatus !== "completed") {
+            previousTask.taskStatus = "completed";
+            previousTask.endedAt = now;
+          }
+        }
+
+        const taskId = uuidv4();
+        const task = {
+          taskId,
+          skillName,
+          taskName: taskName || `task-${skillName || "unknown"}`,
+          taskStatus: "start",
+          startedAt: now,
+          endedAt: "",
+          result: "",
+          meta,
+        };
+
+        await this.taskRepo.save(userId, sessionId, task, resolvedParentSessionId, persistenceContext);
+
+        session.currentTaskId = taskId;
+        if (session.messages?.length) {
+          const lastMessage = session.messages[session.messages.length - 1];
+          lastMessage.taskId = taskId;
+          lastMessage.taskStatus = "start";
+        }
+        await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+        return task;
+      },
     );
-    await this.sessionRepo.ensureSession({
-      userId,
-      sessionId,
-      parentSessionId: resolvedParentSessionId,
-      persistenceContext,
-    });
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-    if (!session) return null;
-
-    const taskBundle = await this.taskRepo.getBundle(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-    const now = this.now();
-
-    const previousTaskId = taskBundle.currentTaskId || session.currentTaskId || "";
-    if (previousTaskId) {
-      const previousTask = (taskBundle.tasks || []).find(
-        (taskItem) => taskItem.taskId === previousTaskId,
-      );
-      if (previousTask && previousTask.taskStatus !== "completed") {
-        previousTask.taskStatus = "completed";
-        previousTask.endedAt = now;
-      }
-    }
-
-    const taskId = uuidv4();
-    const task = {
-      taskId,
-      skillName,
-      taskName: taskName || `task-${skillName || "unknown"}`,
-      taskStatus: "start",
-      startedAt: now,
-      endedAt: "",
-      result: "",
-      meta,
-    };
-
-    await this.taskRepo.save(userId, sessionId, task, resolvedParentSessionId, persistenceContext);
-
-    session.currentTaskId = taskId;
-    if (session.messages?.length) {
-      const lastMessage = session.messages[session.messages.length - 1];
-      lastMessage.taskId = taskId;
-      lastMessage.taskStatus = "start";
-    }
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-    return task;
-    }, persistenceContext);
   }
 
   async finishSkillTask({
@@ -113,67 +132,49 @@ export class TaskService {
     parentSessionId = "",
     persistenceContext = null,
   }) {
-    return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
+    return this._withResolvedSession(
+      { userId, sessionId, parentSessionId, persistenceContext },
+      async ({ session, resolvedParentSessionId }) => {
+        const taskBundle = await this.taskRepo.getBundle(
+          userId,
+          sessionId,
+          resolvedParentSessionId,
+          persistenceContext,
+        );
+
+        const currentTaskId = taskId || taskBundle.currentTaskId || session.currentTaskId;
+        if (!currentTaskId) return null;
+        const task = (taskBundle.tasks || []).find(
+          (taskItem) => taskItem.taskId === currentTaskId,
+        );
+        if (!task) return null;
+
+        task.taskStatus = "completed";
+        task.endedAt = this.now();
+        if (result) task.result = result;
+
+        const nextCurrentTaskId =
+          String(taskBundle.currentTaskId || "").trim() === currentTaskId ? "" : taskBundle.currentTaskId;
+        await this.taskRepo.saveBatch(
+          userId,
+          sessionId,
+          taskBundle.tasks,
+          resolvedParentSessionId,
+          nextCurrentTaskId,
+          persistenceContext,
+        );
+
+        if (String(session.currentTaskId || "").trim() === currentTaskId) {
+          session.currentTaskId = "";
+        }
+        if (session.messages?.length) {
+          const lastMessage = session.messages[session.messages.length - 1];
+          lastMessage.taskStatus = "completed";
+        }
+        await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+        return task;
+      },
     );
-    await this.sessionRepo.ensureSession({
-      userId,
-      sessionId,
-      parentSessionId: resolvedParentSessionId,
-      persistenceContext,
-    });
-
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-    if (!session) return null;
-
-    const taskBundle = await this.taskRepo.getBundle(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-
-    const currentTaskId = taskId || taskBundle.currentTaskId || session.currentTaskId;
-    if (!currentTaskId) return null;
-    const task = (taskBundle.tasks || []).find(
-      (taskItem) => taskItem.taskId === currentTaskId,
-    );
-    if (!task) return null;
-
-    task.taskStatus = "completed";
-    task.endedAt = this.now();
-    if (result) task.result = result;
-
-    const nextCurrentTaskId =
-      String(taskBundle.currentTaskId || "").trim() === currentTaskId ? "" : taskBundle.currentTaskId;
-    await this.taskRepo.saveBatch(
-      userId,
-      sessionId,
-      taskBundle.tasks,
-      resolvedParentSessionId,
-      nextCurrentTaskId,
-      persistenceContext,
-    );
-
-    if (String(session.currentTaskId || "").trim() === currentTaskId) {
-      session.currentTaskId = "";
-    }
-    if (session.messages?.length) {
-      const lastMessage = session.messages[session.messages.length - 1];
-      lastMessage.taskStatus = "completed";
-    }
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-    return task;
-    }, persistenceContext);
   }
 
   async saveCurrentTurnTasks({
@@ -183,49 +184,31 @@ export class TaskService {
     currentTurnTasks = [],
     persistenceContext = null,
   }) {
-    return this._withSessionMutation(userId, sessionId, parentSessionId, async () => {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
+    return this._withResolvedSession(
+      { userId, sessionId, parentSessionId, persistenceContext },
+      async ({ session, resolvedParentSessionId }) => {
+        const normalizedTurnTasks = (Array.isArray(currentTurnTasks)
+          ? currentTurnTasks
+          : []
+        ).filter((task) => String(task?.taskId || "").trim());
+
+        const lastTask = normalizedTurnTasks[normalizedTurnTasks.length - 1] || null;
+        const currentTaskId = String(lastTask?.taskId || "").trim();
+
+        await this.taskRepo.saveBatch(
+          userId,
+          sessionId,
+          normalizedTurnTasks,
+          resolvedParentSessionId,
+          currentTaskId,
+          persistenceContext,
+        );
+
+        session.currentTaskId = currentTaskId;
+        await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+
+        return this.taskRepo.getBundle(userId, sessionId, resolvedParentSessionId, persistenceContext);
+      },
     );
-    await this.sessionRepo.ensureSession({
-      userId,
-      sessionId,
-      parentSessionId: resolvedParentSessionId,
-      persistenceContext,
-    });
-
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-    if (!session) return null;
-
-    const normalizedTurnTasks = (Array.isArray(currentTurnTasks)
-      ? currentTurnTasks
-      : []
-    ).filter((task) => String(task?.taskId || "").trim());
-
-    const lastTask = normalizedTurnTasks[normalizedTurnTasks.length - 1] || null;
-    const currentTaskId = String(lastTask?.taskId || "").trim();
-
-    await this.taskRepo.saveBatch(
-      userId,
-      sessionId,
-      normalizedTurnTasks,
-      resolvedParentSessionId,
-      currentTaskId,
-      persistenceContext,
-    );
-
-    session.currentTaskId = currentTaskId;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-
-    return this.taskRepo.getBundle(userId, sessionId, resolvedParentSessionId, persistenceContext);
-    }, persistenceContext);
   }
 }

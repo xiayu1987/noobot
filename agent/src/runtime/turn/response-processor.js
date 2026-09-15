@@ -36,7 +36,7 @@ export async function processToolResults({
   stateCommitter,
 }) {
   const { errorLogger } = loopState;
-  const { eventListener, runtime, abortSignal } = modelState;
+  const { eventListener, runtime } = modelState;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
@@ -59,7 +59,6 @@ export async function processToolResults({
       return settleToolCallInTurn({
         call,
         tool,
-        abortSignal,
         eventListener,
         turn,
         errorLogger,

@@ -13,9 +13,10 @@ import {
   projectToolResultForModel,
   toToolJsonResult,
 } from "../../tools/core/tool-json-result.js";
-import { assertNotAborted } from "../utils/error-utils.js";
 import {
+  assertNotAborted,
   isAbortError,
+  raceWithAbort,
   resolveAbortStopType,
   resolveErrorMessage,
 } from "../../shared/utils/error-utils.js";
@@ -228,13 +229,20 @@ function optionValue(value, fallback) {
   return value === undefined ? fallback : value;
 }
 
+/**
+ * 取消信号的唯一读取口：runtime.abortSignal 由 runtime-context-factory 写入，
+ * 每轮（含 resume）重新绑定当轮 signal，不在执行态里另存派生副本。
+ */
+function toolAbortSignal(source = {}) {
+  return source?.runtime?.abortSignal || null;
+}
+
 function createToolCallExecutionState(options = {}) {
   const toolStartedAtMs = Date.now();
   const call = optionValue(options.call, {});
   return {
     call,
     tool: optionValue(options.tool, null),
-    abortSignal: optionValue(options.abortSignal, null),
     eventListener: optionValue(options.eventListener, null),
     turn: optionValue(options.turn, 1),
     executionScope: optionValue(options.executionScope, "primary"),
@@ -380,7 +388,6 @@ async function prepareToolInputTransfer(state) {
 function toolInvocationConfig(state) {
   const producer = toolProducer(state.call);
   return {
-    signal: state.abortSignal,
     configurable: {
       transferIdentity: resolveRuntimeTransferIdentity({
         runtime: state.runtime,
@@ -513,10 +520,15 @@ async function handleToolInvocationError(state, error) {
 
 async function invokeConfiguredTool(state) {
   try {
-    state.rawResult = await runWithToolRiskAssessment(state.riskAssessment, () =>
-      state.tool.invoke(state.call?.args || {}, toolInvocationConfig(state)),
+    await raceWithAbort(
+      (async () => {
+        state.rawResult = await runWithToolRiskAssessment(state.riskAssessment, () =>
+          state.tool.invoke(state.call?.args || {}, toolInvocationConfig(state)),
+        );
+        await materializeToolInvocationResult(state);
+      })(),
+      toolAbortSignal(state),
     );
-    await materializeToolInvocationResult(state);
   } catch (error) {
     await handleToolInvocationError(state, error);
   }
@@ -617,13 +629,14 @@ function recordOrEmpty(value) {
 
 function createTurnToolExecutionContext(options = {}) {
   const call = recordOrEmpty(options.call);
+  const runtime = recordOrEmpty(options.runtime);
   return {
     call,
-    runtime: recordOrEmpty(options.runtime),
+    runtime,
     eventListener: options.eventListener || null,
     turn: Number(options.turn || 1),
     toolCallId: resolveToolCallId(call),
-    abortSignal: options.abortSignal || null,
+    abortSignal: toolAbortSignal({ runtime }),
   };
 }
 
@@ -645,7 +658,7 @@ export async function executeToolCallInTurn(options = {}) {
     riskLevel: initialRiskLevel,
     securityAssessment: initialRiskAssessment.current,
   });
-  assertNotAborted(abortSignal, runtime);
+  assertNotAborted(abortSignal);
   const result = await executeToolCall(options);
   await emitMessageEvent(eventListener, runtime, "tool_call_end", {
     turn,

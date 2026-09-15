@@ -9,6 +9,7 @@ import {
   createConnectorInstanceDefinition,
   connectorField,
   connectorOperation,
+  CONNECTOR_ACCESS_CANCELLATION,
 } from "@noobot/connector-protocol";
 
 const executeOperation = () =>
@@ -72,6 +73,7 @@ test("runtime rejects unregistered instances and owns their lifecycle", async ()
       fields: [connectorField("token", { required: true, secret: true })],
       operations: [executeOperation()],
     }),
+    accessCancellation: CONNECTOR_ACCESS_CANCELLATION.REQUEST_CANCELLABLE,
     create: async () => ({ ready: true }),
     health: async () => ({ ok: true }),
     access: async ({ request }) => ({ ok: true, output: request.input }),
@@ -118,6 +120,7 @@ test("runtime resolves workspace fields inside the authoritative user workspace"
       fields: [connectorField("file", { required: true, kind: "workspace_path" })],
       operations: [executeOperation()],
     }),
+    accessCancellation: CONNECTOR_ACCESS_CANCELLATION.NOT_CANCELLABLE,
     create: async () => ({}),
     health: async () => ({ ok: true }),
     access: async () => ({ ok: true, output: {} }),
@@ -164,6 +167,7 @@ test("runtime serializes access and disposal for one connector", async () => {
       fields: [],
       operations: [executeOperation()],
     }),
+    accessCancellation: CONNECTOR_ACCESS_CANCELLATION.NOT_CANCELLABLE,
     create: async () => ({}),
     health: async () => ({ ok: true }),
     access: async () => {

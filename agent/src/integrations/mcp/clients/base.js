@@ -83,6 +83,14 @@ export class BaseMcpClient {
     return this._doNotify({ method, params });
   }
 
+  /**
+   * 关闭连接并释放传输层资源。基类无长连接可关，按传输形态由子类覆写。
+   * 关闭必须幂等：取消作用域在中止时调用，正常结束路径也会调用。
+   */
+  async close() {
+    return undefined;
+  }
+
   async initialize() {
     await this._request({
       method: "initialize",

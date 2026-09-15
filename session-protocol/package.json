@@ -10,6 +10,7 @@
     "./package.json": "./package.json",
     "./execution-lifecycle": "./src/execution-lifecycle.js",
     "./execution-abort": "./src/lifecycle/execution-abort.js",
+    "./execution-cancellation-scope": "./src/lifecycle/execution-cancellation-scope.js",
     "./turn-commit": "./src/turn-commit.js",
     "./turn-attachment-bind": "./src/turn-attachment-bind.js",
     "./turn-scope-identity": "./src/turn-scope-identity.js"

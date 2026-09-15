@@ -19,8 +19,12 @@ import {
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
-function createRuntime() {
+/**
+ * 取消信号只能从 runtime.abortSignal 注入，与生产链路的唯一读取口一致。
+ */
+function createRuntime(abortSignal = null) {
   const runtime = {
+    abortSignal,
     userId: "admin",
     basePath: os.tmpdir(),
     globalConfig: { workspaceRoot: os.tmpdir() },
@@ -170,9 +174,9 @@ test("processToolResults commits result policy from its authoritative batch call
 });
 
 test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool", async () => {
-  const runtime = createRuntime();
   const abortController = new AbortController();
   abortController.abort({ type: "user_stop", reason: "user stop action" });
+  const runtime = createRuntime(abortController.signal);
   let invocationCount = 0;
 
   const settlement = await settleToolCallInTurn({
@@ -183,7 +187,6 @@ test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool",
         return { ok: true };
       },
     },
-    abortSignal: abortController.signal,
     eventListener: () => {},
     turn: 1,
     runtime,

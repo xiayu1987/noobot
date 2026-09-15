@@ -68,6 +68,71 @@ function resolveTurnAcceptance(service, session, event = {}) {
   };
 }
 
+function findTurnScopeUserMessage(session, turnScopeId) {
+  const scope = String(turnScopeId || "").trim();
+  return (
+    (Array.isArray(session?.messages) ? session.messages : []).find(
+      (message) =>
+        String(message?.role || "").trim() === "user" &&
+        String(message?.turnScopeId || "").trim() === scope,
+    ) || null
+  );
+}
+
+function resolveTurnAggregateConcurrency(session, expectedAggregateVersion) {
+  const actualVersion = resolveAggregateVersion(session);
+  const concurrency = decideAggregateConcurrency({
+    expectedAggregateVersion:
+      expectedAggregateVersion === undefined ? null : Number(expectedAggregateVersion),
+    aggregateVersion: actualVersion,
+  });
+  return {
+    actualVersion,
+    nextAggregateVersion: concurrency.nextAggregateVersion,
+    conflict: concurrency.allowed
+      ? null
+      : {
+          applied: false,
+          reason: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+          currentVersion: actualVersion,
+        },
+  };
+}
+
+async function commitTurnLifecycleWithOutbox({
+  service,
+  userId,
+  sessionId,
+  resolvedParentSessionId,
+  persistenceContext,
+  session,
+  lifecycleEvent,
+  materializeTerminal = null,
+}) {
+  const outboxSessionDir = await requireOutboxSessionDir(
+    service,
+    userId,
+    sessionId,
+    resolvedParentSessionId,
+    persistenceContext,
+  );
+  const committedEventIds = await readCommittedAuthorityEventIds(outboxSessionDir);
+  const result = commitTurnLifecycle({
+    lifecycle: session.turnLifecycle,
+    event: {
+      ...lifecycleEvent,
+      userId,
+      sessionId,
+      parentSessionId: resolvedParentSessionId,
+    },
+    isCommittedEventId: (eventId) => committedEventIds.has(eventId),
+    ...(materializeTerminal ? { materializeTerminal } : {}),
+    createEventId: randomUUID,
+    now: service.now,
+  });
+  return { outboxSessionDir, result };
+}
+
 function materializeAcceptedUserMessage({
   session,
   event,
@@ -78,11 +143,7 @@ function materializeAcceptedUserMessage({
   nowValue,
 }) {
   if (!input) return null;
-  const existing = (Array.isArray(session.messages) ? session.messages : []).find(
-    (message) =>
-      String(message?.role || "").trim() === "user" &&
-      String(message?.turnScopeId || "").trim() === String(event.turnScopeId || "").trim(),
-  );
+  const existing = findTurnScopeUserMessage(session, event.turnScopeId);
   if (existing) return existing;
   const userMessage = normalizeMessageEntity(
     {
@@ -201,36 +262,19 @@ export async function applyTurnLifecycleEvent({
         session,
         event,
       );
-      const actualVersion = resolveAggregateVersion(session);
-      const concurrency = decideAggregateConcurrency({
-        expectedAggregateVersion:
-          expectedAggregateVersion === undefined ? null : Number(expectedAggregateVersion),
-        aggregateVersion: actualVersion,
-      });
-      if (!concurrency.allowed) {
-        return {
-          applied: false,
-          reason: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
-          currentVersion: actualVersion,
-        };
-      }
-      const outboxSessionDir = await requireOutboxSessionDir(
-        this,
+      const { actualVersion, nextAggregateVersion, conflict } = resolveTurnAggregateConcurrency(
+        session,
+        expectedAggregateVersion,
+      );
+      if (conflict) return conflict;
+      const { outboxSessionDir, result } = await commitTurnLifecycleWithOutbox({
+        service: this,
         userId,
         sessionId,
         resolvedParentSessionId,
         persistenceContext,
-      );
-      const committedEventIds = await readCommittedAuthorityEventIds(outboxSessionDir);
-      const result = commitTurnLifecycle({
-        lifecycle: session.turnLifecycle,
-        event: {
-          ...lifecycleEvent,
-          userId,
-          sessionId,
-          parentSessionId: resolvedParentSessionId,
-        },
-        isCommittedEventId: (eventId) => committedEventIds.has(eventId),
+        session,
+        lifecycleEvent,
         materializeTerminal: ({ terminalStatus, previousSummaryVersion }) =>
           materializeTurnTerminalMessages({
             messages: session.messages,
@@ -238,17 +282,10 @@ export async function applyTurnLifecycleEvent({
             assistantMessage: lifecycleEvent.terminalStatus?.assistantMessage,
             previousSummaryVersion,
           }),
-        createEventId: randomUUID,
-        now: this.now,
       });
       if (!result.applied) {
         const userMessage = acceptedUserMessageInput
-          ? (session.messages || []).find(
-              (message) =>
-                String(message?.role || "").trim() === "user" &&
-                String(message?.turnScopeId || "").trim() ===
-                  String(lifecycleEvent.turnScopeId || "").trim(),
-            )
+          ? findTurnScopeUserMessage(session, lifecycleEvent.turnScopeId)
           : null;
         return {
           ...result,
@@ -269,7 +306,7 @@ export async function applyTurnLifecycleEvent({
         parentSessionId: resolvedParentSessionId,
         nowValue,
       });
-      if (userMessage) session.aggregateVersion = concurrency.nextAggregateVersion;
+      if (userMessage) session.aggregateVersion = nextAggregateVersion;
       if (result.terminalMaterialization)
         session.messages = [...result.terminalMaterialization.messages];
       session.updatedAt = nowValue;
@@ -345,45 +382,23 @@ export async function provisionSessionWithInitialTurn({
         session,
         event,
       );
-      const actualVersion = resolveAggregateVersion(session);
-      if (
-        expectedAggregateVersion !== undefined &&
-        Number(expectedAggregateVersion) !== actualVersion
-      ) {
-        return {
-          applied: false,
-          reason: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
-          currentVersion: actualVersion,
-        };
-      }
-      const outboxSessionDir = await requireOutboxSessionDir(
-        this,
+      const { actualVersion, nextAggregateVersion, conflict } = resolveTurnAggregateConcurrency(
+        session,
+        expectedAggregateVersion,
+      );
+      if (conflict) return conflict;
+      const { outboxSessionDir, result } = await commitTurnLifecycleWithOutbox({
+        service: this,
         userId,
         sessionId,
         resolvedParentSessionId,
         persistenceContext,
-      );
-      const committedEventIds = await readCommittedAuthorityEventIds(outboxSessionDir);
-      const result = commitTurnLifecycle({
-        lifecycle: session.turnLifecycle,
-        event: {
-          ...lifecycleEvent,
-          userId,
-          sessionId,
-          parentSessionId: resolvedParentSessionId,
-        },
-        isCommittedEventId: (eventId) => committedEventIds.has(eventId),
-        createEventId: randomUUID,
-        now: this.now,
+        session,
+        lifecycleEvent,
       });
       if (!result.applied) {
         const userMessage = acceptedUserMessageInput
-          ? (session.messages || []).find(
-              (message) =>
-                String(message?.role || "").trim() === "user" &&
-                String(message?.turnScopeId || "").trim() ===
-                  String(lifecycleEvent.turnScopeId || "").trim(),
-            )
+          ? findTurnScopeUserMessage(session, lifecycleEvent.turnScopeId)
           : null;
         return {
           ...result,
@@ -404,7 +419,7 @@ export async function provisionSessionWithInitialTurn({
         parentSessionId: resolvedParentSessionId,
         nowValue,
       });
-      if (userMessage) session.aggregateVersion = actualVersion + 1;
+      if (userMessage) session.aggregateVersion = nextAggregateVersion;
       session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {

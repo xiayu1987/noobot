@@ -118,5 +118,6 @@ export async function invokeServiceHandler({
     custom_param: String(customParam || "").trim(),
     queryString,
     body,
+    abortSignal: runtime?.abortSignal || null,
   });
 }

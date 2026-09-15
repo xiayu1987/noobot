@@ -99,6 +99,7 @@ export function createConnectorAccessTool({ agentContext }) {
           context: {
             artifactSink: createArtifactSink(runtime),
             sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
+            abortSignal: runtime?.abortSignal || null,
           },
         });
         return toToolJsonResult(
