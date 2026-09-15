@@ -23,6 +23,19 @@ export function normalizeConnectorAccessRequest(request = {}) {
   });
 }
 
+export function normalizeConnectorAccessContext(context = {}) {
+  const source = objectValue(context ?? {}, "connector access context");
+  const abortSignal = source.abortSignal ?? null;
+  if (abortSignal !== null && typeof abortSignal?.addEventListener !== "function") {
+    throw new TypeError("connector access abortSignal must be an AbortSignal");
+  }
+  return Object.freeze({
+    sessionId: String(source.sessionId || "").trim(),
+    artifactSink: source.artifactSink ?? null,
+    abortSignal,
+  });
+}
+
 export function normalizeConnectorAccessResult(result = {}) {
   const source = objectValue(result, "connector result");
   if (typeof source.ok !== "boolean") throw new TypeError("connector result ok must be boolean");

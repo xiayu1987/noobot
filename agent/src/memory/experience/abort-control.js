@@ -4,16 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { assertNotAborted, isAbortError } from "../../shared/utils/error-utils.js";
+
 export function isAbortLikeError(error = {}) {
-  const name = String(error?.name || "").toLowerCase();
-  const message = String(error?.message || "").toLowerCase();
-  return name.includes("abort") || message.includes("abort");
+  return isAbortError(error);
 }
 
 export function throwIfAborted(abortSignal = null) {
-  if (!abortSignal?.aborted) return;
-  const abortError = new Error("memory summarize aborted");
-  abortError.name = "AbortError";
-  throw abortError;
+  assertNotAborted(abortSignal);
 }
-

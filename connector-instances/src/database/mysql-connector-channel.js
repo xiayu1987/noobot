@@ -62,6 +62,7 @@ export async function executeMysqlCommand({
   command = "",
   connectionInfo = {},
   channelKey = "",
+  abortSignal = null,
 } = {}) {
   const sql = String(command || "").trim();
   if (!sql) {
@@ -88,8 +89,19 @@ export async function executeMysqlCommand({
     };
   }
   const pool = getMysqlPool(mysql, conn, channelKey);
+  if (abortSignal?.aborted === true) {
+    return { ok: false, code: 499, stdout: "", stderr: "mysql query aborted" };
+  }
+  let connection = null;
+  let aborted = false;
+  const abortConnection = () => {
+    aborted = true;
+    connection?.destroy?.();
+  };
   try {
-    const [rows] = await pool.query({
+    connection = await pool.getConnection();
+    abortSignal?.addEventListener?.("abort", abortConnection, { once: true });
+    const [rows] = await connection.query({
       sql,
       timeout: conn.timeoutMs,
     });
@@ -108,12 +120,18 @@ export async function executeMysqlCommand({
       stderr: "",
     };
   } catch (error) {
+    if (aborted) {
+      return { ok: false, code: 499, stdout: "", stderr: "mysql query aborted" };
+    }
     return {
       ok: false,
       code: Number(error?.errno || 1),
       stdout: "",
       stderr: String(error?.message || error || "mysql query failed"),
     };
+  } finally {
+    abortSignal?.removeEventListener?.("abort", abortConnection);
+    if (!aborted) connection?.release?.();
   }
 }
 

@@ -64,6 +64,7 @@ export async function executePostgresCommand({
   command = "",
   connectionInfo = {},
   channelKey = "",
+  abortSignal = null,
 } = {}) {
   const sql = String(command || "").trim();
   if (!sql) {
@@ -111,8 +112,19 @@ export async function executePostgresCommand({
       stderr: "pg pool unavailable",
     };
   }
+  if (abortSignal?.aborted === true) {
+    return { ok: false, code: 499, stdout: "", stderr: "postgres query aborted" };
+  }
+  let client = null;
+  let aborted = false;
+  const abortClient = () => {
+    aborted = true;
+    client?.release?.(new Error("postgres query aborted"));
+  };
   try {
-    const result = await pool.query({
+    client = await pool.connect();
+    abortSignal?.addEventListener?.("abort", abortClient, { once: true });
+    const result = await client.query({
       text: sql,
       statement_timeout: conn.timeoutMs,
       query_timeout: conn.timeoutMs,
@@ -132,12 +144,18 @@ export async function executePostgresCommand({
       stderr: "",
     };
   } catch (error) {
+    if (aborted) {
+      return { ok: false, code: 499, stdout: "", stderr: "postgres query aborted" };
+    }
     return {
       ok: false,
       code: 1,
       stdout: "",
       stderr: String(error?.message || error || "postgres query failed"),
     };
+  } finally {
+    abortSignal?.removeEventListener?.("abort", abortClient);
+    if (!aborted) client?.release?.();
   }
 }
 

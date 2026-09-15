@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createExecutionCancellationScope } from "@noobot/session-protocol/execution-cancellation-scope";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
@@ -29,6 +30,7 @@ export function createRuntimeContext({
 } = {}) {
   const normalizedRunConfig =
     runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
+  const normalizedAbortSignal = abortSignal || null;
   return {
     userId: String(userId || "").trim(),
     basePath: String(basePath || "").trim(),
@@ -39,7 +41,12 @@ export function createRuntimeContext({
     attachmentService,
     botManager,
     userInteractionBridge,
-    abortSignal: abortSignal || null,
+    abortSignal: normalizedAbortSignal,
+    /**
+     * 取消作用域与 abortSignal 同源同轮绑定：工具在此登记资源收尾函数，
+     * 中止发生时由作用域自身回收，不新开第二条取消通道。
+     */
+    cancellationScope: createExecutionCancellationScope({ abortSignal: normalizedAbortSignal }),
     runtimeModel: String(runtimeModel || "").trim(),
     runConfig: normalizedRunConfig,
     allEnabledProviders:

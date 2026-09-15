@@ -17,6 +17,61 @@ import { writeAgentProxyRouteDebugEvent } from "../../runtime-events/route-debug
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
 import { AGENT_COMMAND, RUN_COMMAND_TYPES } from "@noobot/agent-transport-protocol";
 
+function projectForwardCommandType(payload) {
+  const envelope = payload ?? {};
+  return envelope.commandType || envelope.action || "message";
+}
+
+function projectForwardLogIdentity(payload) {
+  const envelope = payload ?? {};
+  const identity = envelope.identity ?? {};
+  const interaction = envelope.interaction ?? {};
+  return {
+    commandType: projectForwardCommandType(envelope),
+    sessionId: identity.sessionId || envelope.sessionId,
+    dialogProcessId: identity.dialogProcessId || envelope.dialogProcessId,
+    turnScopeId: identity.turnScopeId || envelope.turnScopeId,
+    requestId: interaction.requestId || envelope.requestId,
+  };
+}
+
+function describeForwardError(error) {
+  return String(error?.message || error || "send failed");
+}
+
+function projectResolvedInteractionIdentity(resolvedEnvelope) {
+  const envelope = resolvedEnvelope ?? {};
+  const identity = envelope.identity ?? {};
+  const ordering = envelope.ordering ?? {};
+  return {
+    dialogProcessId: String((envelope.payload ?? {}).dialogProcessId || "").trim(),
+    turnScopeId: String(identity.turnScopeId || "").trim(),
+    sessionId: String(identity.sessionId || "").trim(),
+    sequence: Number(ordering.sequence || 0),
+  };
+}
+
+function buildInteractionConversationPatch({
+  resolved,
+  currentState,
+  hasRemainingInteraction,
+  requestId,
+}) {
+  const current = currentState ?? {};
+  return {
+    sessionId: resolved.sessionId || String(current.sessionId || "").trim(),
+    dialogProcessId: resolved.dialogProcessId,
+    turnScopeId: resolved.turnScopeId || String(current.turnScopeId || "").trim(),
+    state: hasRemainingInteraction
+      ? CONVERSATION_STATE.INTERACTION_PENDING
+      : CONVERSATION_STATE.SENDING,
+    sourceEvent: AGENT_COMMAND.INTERACTION_RESPONSE,
+    seq: Math.max(Number(current.seq || 0), resolved.sequence),
+    createdAtMs: Number(current.createdAtMs || 0),
+    requestId,
+  };
+}
+
 class ChannelFlowMethods {
   resolveChannelFromSocketMessage(socket, payload = {}) {
     const commandType = String(payload?.commandType || "")
@@ -121,141 +176,130 @@ class ChannelFlowMethods {
     return null;
   }
 
+  logForwardSkipped(channel, payload = {}) {
+    void writeAgentTransportDebugEvent({
+      event: "agentProxy.agentTransport.forwardFailed",
+      command: payload,
+      channel,
+      data: { forwarded: false, reason: "upstream_not_open" },
+    });
+    void writeAgentProxyRouteDebugEvent({
+      event: "agentProxy.route.forward.skipped",
+      payload,
+      channel,
+      data: { reason: "upstream_not_open" },
+    });
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "warn",
+      event: "agentProxy.upstream.forward.skipped",
+      data: {
+        channelKey: channel?.key,
+        commandType: payload?.commandType || "message",
+        reason: "upstream_not_open",
+      },
+    });
+  }
+
+  logForwardSent(channel, payload = {}) {
+    void writeAgentTransportDebugEvent({
+      event: "agentProxy.agentTransport.commandForwarded",
+      command: payload,
+      channel,
+      data: { forwarded: true, transport: "websocket" },
+    });
+    void writeAgentProxyRouteDebugEvent({
+      event: "agentProxy.route.forward.sent",
+      payload,
+      channel,
+      data: { reason: "forwarded" },
+    });
+    this.logSessionEvent(channel, {
+      category: "transport",
+      event: "agentProxy.upstream.forward",
+      data: {
+        channelKey: channel.key,
+        ...projectForwardLogIdentity(payload),
+      },
+    });
+  }
+
+  logForwardError(channel, payload = {}, error) {
+    void writeAgentTransportDebugEvent({
+      event: "agentProxy.agentTransport.forwardFailed",
+      command: payload,
+      channel,
+      data: {
+        forwarded: false,
+        reason: "send_error",
+        errorType: String(error?.name || "Error"),
+        errorCode: String(error?.code || ""),
+      },
+    });
+    void writeAgentProxyRouteDebugEvent({
+      event: "agentProxy.route.forward.error",
+      payload,
+      channel,
+      data: {
+        reason: "send_error",
+        errorMessage: describeForwardError(error).slice(0, 300),
+      },
+    });
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "warn",
+      event: "agentProxy.upstream.forward.error",
+      data: {
+        channelKey: channel.key,
+        commandType: projectForwardCommandType(payload),
+        error: describeForwardError(error),
+      },
+    });
+  }
+
+  settleForwardedInteractionResponse(channel, payload = {}) {
+    const requestId = String((payload?.interaction ?? {}).requestId || "").trim();
+    if (!requestId) return;
+    const resolvedEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
+    channel.pendingInteractionRequests.delete(requestId);
+    this.requestChannelMap.delete(requestId);
+    if (!resolvedEnvelope) return;
+    const resolved = projectResolvedInteractionIdentity(resolvedEnvelope);
+    const stateKey = resolved.dialogProcessId || CONVERSATION_SCOPE_KEY;
+    const currentState = channel.conversationStateByDialogProcessId.get(stateKey) || null;
+    const hasRemainingInteraction = Array.from(channel.pendingInteractionRequests.values()).some(
+      (envelope) =>
+        String((envelope?.payload ?? {}).dialogProcessId || "").trim() === resolved.dialogProcessId,
+    );
+    this.updateConversationState(
+      channel,
+      buildInteractionConversationPatch({
+        resolved,
+        currentState,
+        hasRemainingInteraction,
+        requestId,
+      }),
+    );
+  }
+
   forwardToUpstream(channel, payload = {}) {
     if (!channel?.upstreamSocket || channel.upstreamSocket.readyState !== this.WebSocket.OPEN) {
-      void writeAgentTransportDebugEvent({
-        event: "agentProxy.agentTransport.forwardFailed",
-        command: payload,
-        channel,
-        data: { forwarded: false, reason: "upstream_not_open" },
-      });
-      void writeAgentProxyRouteDebugEvent({
-        event: "agentProxy.route.forward.skipped",
-        payload,
-        channel,
-        data: { reason: "upstream_not_open" },
-      });
-      this.logSessionEvent(channel, {
-        category: "transport",
-        level: "warn",
-        event: "agentProxy.upstream.forward.skipped",
-        data: {
-          channelKey: channel?.key,
-          commandType: payload?.commandType || "message",
-          reason: "upstream_not_open",
-        },
-      });
+      this.logForwardSkipped(channel, payload);
       return false;
     }
+    const commandType = String(payload?.commandType || "")
+      .trim()
+      .toLowerCase();
     try {
       channel.upstreamSocket.send(JSON.stringify(payload || {}));
-      if (
-        RUN_COMMAND_TYPES.includes(
-          String(payload?.commandType || "")
-            .trim()
-            .toLowerCase(),
-        )
-      ) {
-        channel.transport.claimPurpose("run");
-      }
-      void writeAgentTransportDebugEvent({
-        event: "agentProxy.agentTransport.commandForwarded",
-        command: payload,
-        channel,
-        data: { forwarded: true, transport: "websocket" },
-      });
-      void writeAgentProxyRouteDebugEvent({
-        event: "agentProxy.route.forward.sent",
-        payload,
-        channel,
-        data: { reason: "forwarded" },
-      });
-      this.logSessionEvent(channel, {
-        category: "transport",
-        event: "agentProxy.upstream.forward",
-        data: {
-          channelKey: channel.key,
-          commandType: payload?.commandType || payload?.action || "message",
-          sessionId: payload?.identity?.sessionId || payload?.sessionId,
-          dialogProcessId: payload?.identity?.dialogProcessId || payload?.dialogProcessId,
-          turnScopeId: payload?.identity?.turnScopeId || payload?.turnScopeId,
-          requestId: payload?.interaction?.requestId || payload?.requestId,
-        },
-      });
-      if (
-        String(payload?.commandType || "")
-          .trim()
-          .toLowerCase() === AGENT_COMMAND.INTERACTION_RESPONSE
-      ) {
-        const requestId = String(payload?.interaction?.requestId || "").trim();
-        if (requestId) {
-          const resolvedEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
-          channel.pendingInteractionRequests.delete(requestId);
-          this.requestChannelMap.delete(requestId);
-          if (resolvedEnvelope) {
-            const interactionData = resolvedEnvelope?.payload || {};
-            const dialogProcessId = String(interactionData?.dialogProcessId || "").trim();
-            const turnScopeId = String(resolvedEnvelope?.identity?.turnScopeId || "").trim();
-            const stateKey = dialogProcessId || CONVERSATION_SCOPE_KEY;
-            const currentState = channel.conversationStateByDialogProcessId.get(stateKey) || null;
-            const hasRemainingInteraction = Array.from(
-              channel.pendingInteractionRequests.values(),
-            ).some(
-              (envelope) =>
-                String(envelope?.payload?.dialogProcessId || "").trim() === dialogProcessId,
-            );
-            this.updateConversationState(channel, {
-              sessionId: String(
-                resolvedEnvelope?.identity?.sessionId || currentState?.sessionId || "",
-              ).trim(),
-              dialogProcessId,
-              turnScopeId: turnScopeId || String(currentState?.turnScopeId || "").trim(),
-              state: hasRemainingInteraction
-                ? CONVERSATION_STATE.INTERACTION_PENDING
-                : CONVERSATION_STATE.SENDING,
-              sourceEvent: AGENT_COMMAND.INTERACTION_RESPONSE,
-              seq: Math.max(
-                Number(currentState?.seq || 0),
-                Number(resolvedEnvelope?.ordering?.sequence || 0),
-              ),
-              createdAtMs: Number(currentState?.createdAtMs || 0),
-              requestId,
-            });
-          }
-        }
+      if (RUN_COMMAND_TYPES.includes(commandType)) channel.transport.claimPurpose("run");
+      this.logForwardSent(channel, payload);
+      if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
+        this.settleForwardedInteractionResponse(channel, payload);
       }
       return true;
     } catch (error) {
-      void writeAgentTransportDebugEvent({
-        event: "agentProxy.agentTransport.forwardFailed",
-        command: payload,
-        channel,
-        data: {
-          forwarded: false,
-          reason: "send_error",
-          errorType: String(error?.name || "Error"),
-          errorCode: String(error?.code || ""),
-        },
-      });
-      void writeAgentProxyRouteDebugEvent({
-        event: "agentProxy.route.forward.error",
-        payload,
-        channel,
-        data: {
-          reason: "send_error",
-          errorMessage: String(error?.message || error || "send failed").slice(0, 300),
-        },
-      });
-      this.logSessionEvent(channel, {
-        category: "transport",
-        level: "warn",
-        event: "agentProxy.upstream.forward.error",
-        data: {
-          channelKey: channel.key,
-          commandType: payload?.commandType || payload?.action || "message",
-          error: String(error?.message || error || "send failed"),
-        },
-      });
+      this.logForwardError(channel, payload, error);
       return false;
     }
   }

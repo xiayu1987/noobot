@@ -13,7 +13,6 @@ export const ENGINE_I18N_KEY_MAP = {
   taskCheckSingleToolPrompt: "agent.taskCheckSingleToolPrompt",
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
   fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
-  abortError: "agent.abortError",
   phaseSummaryPrompt: "agent.phaseSummaryPrompt",
   taskCheckPrompt: "agent.taskCheckPrompt",
 };
