@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -32,7 +33,7 @@ test("persistTransferArtifacts maps storage records to canonical attachment refe
     sessionId: "session-test-1",
     attachmentSource: "model",
     identity: identity(),
-    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
     artifacts: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "YWJj" }],
   });
   assertTransferProtocolOnly(assert, result);
@@ -51,7 +52,7 @@ test("persistence requires an attachment service instead of returning a direct f
         userId: "u1",
         sessionId: "session-test-1",
         identity: identity(),
-        intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+        intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
         artifacts: [{ name: "a.txt", contentBase64: "YQ==" }],
       }),
     /semantic_transfer_attachment_service_required/,

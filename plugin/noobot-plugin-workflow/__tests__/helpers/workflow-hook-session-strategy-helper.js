@@ -12,6 +12,7 @@ import {
   createTransferIdentity,
   createAttachmentReference,
   TRANSFER_DIRECTION,
+  TRANSFER_REASON,
 } from "@noobot/semantic-transfer-protocol";
 
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
@@ -133,7 +134,7 @@ export function createV2AttachmentTransferEnvelope({
   mimeType = "text/markdown",
   strategy = "workflow_subagent",
   scenario = "workflow",
-  reason = "workflow_node_result",
+  reason = TRANSFER_REASON.WORKFLOW_SUBAGENT,
 } = {}) {
   return createTransferEnvelope({
     transferId,
@@ -208,7 +209,7 @@ export function createSemanticTransferTool({ prefix = "att", counterRef = { valu
         },
         intent: {
           source: "subagent",
-          reason: "workflow_node_result",
+          reason: TRANSFER_REASON.WORKFLOW_SUBAGENT,
           scenario: expectedScenario,
           strategy,
         },

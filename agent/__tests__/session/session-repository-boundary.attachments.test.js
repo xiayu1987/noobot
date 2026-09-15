@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -242,7 +243,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
                   },
                   intent: {
                     source: "tool",
-                    reason: "tool_result",
+                    reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
                     scenario: "tool",
                     strategy: "tool_result_text",
                   },
@@ -297,7 +298,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
             },
             intent: {
               source: "tool",
-              reason: "tool_result",
+              reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
               scenario: "tool",
               strategy: "tool_result_text",
             },
@@ -370,7 +371,7 @@ test("session display summary does not guess ownership for an unmatched tool art
             },
             intent: {
               source: "tool",
-              reason: "tool_result",
+              reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
               scenario: "tool",
               strategy: "tool_result_text",
             },

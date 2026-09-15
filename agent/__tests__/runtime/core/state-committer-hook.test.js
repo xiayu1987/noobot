@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -344,7 +345,7 @@ test("state-committer persists transferEnvelopes only", async () => {
     payload: { mode: "direct", content: "already persisted by transfer protocol" },
     intent: {
       source: "tool",
-      reason: "tool_result",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
       scenario: "tool",
       strategy: "tool_result_text",
     },

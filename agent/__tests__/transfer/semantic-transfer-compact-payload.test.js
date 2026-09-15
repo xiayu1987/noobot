@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -35,7 +36,7 @@ test("compact model view retains only V2 transfer envelopes and canonical attach
     identity: identity(),
     direction: "output",
     attachments: [attachment("att-1", "generated.txt")],
-    intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" },
+    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
   });
   const compacted = JSON.parse(
     compactToolResultTextForModel(
@@ -61,14 +62,14 @@ test("consumer returns only validated V2 envelopes and canonical attachment refe
       identity: identity({ transferId: "t-1", messageId: "m-1" }),
       direction: "output",
       attachments: [attachment("att-1")],
-      intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" },
+      intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
     }),
     attachmentTransfer({
       ...identity({ transferId: "t-2", messageId: "m-2" }),
       identity: identity({ transferId: "t-2", messageId: "m-2" }),
       direction: "output",
       attachments: [attachment("att-2")],
-      intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" },
+      intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
     }),
   ];
   assert.equal(getTransferEnvelopes({ transferEnvelopes: envelopes }).length, 2);

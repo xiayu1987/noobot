@@ -12,6 +12,8 @@ import { resolveModelMessages } from "../../../core/message-store.js";
 import {
   mergeTransferEnvelopes,
   normalizeTransferEnvelopes,
+  TRANSFER_REASON,
+  TRANSFER_SOURCE,
 } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
@@ -184,6 +186,12 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         : domain === CAPABILITY_DOMAIN.PLANNING
           ? "planning"
           : "summary";
+    const reason =
+      domain === CAPABILITY_DOMAIN.ACCEPTANCE
+        ? TRANSFER_REASON.HARNESS_ACCEPTANCE_OUTPUT
+        : domain === CAPABILITY_DOMAIN.PLANNING
+          ? TRANSFER_REASON.HARNESS_PLANNING_OUTPUT
+          : TRANSFER_REASON.HARNESS_SUMMARY;
     if (!strategy) return { transferEnvelopes: [] };
     if (typeof transferSemanticContent === "function") {
       const staged = await transferSemanticContent({
@@ -197,8 +205,8 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         mimeType: normalizeString(mimeType) || "text/markdown",
         attachmentSource: ATTACHMENT_SOURCE.MODEL,
         generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
-        source: "plugin",
-        reason: String(purpose || "harness_capability_output").trim(),
+        source: TRANSFER_SOURCE.PLUGIN,
+        reason,
         producer: { type: "plugin", id: `harness:${producerId}` },
         transferKey: transferOperationId,
         direction: "output",

@@ -22,7 +22,7 @@ import {
   getTransferAttachments,
   materializeTextForToolResult,
 } from "../../transfer-adapter/index.js";
-import { TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_SOURCE, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { AGENT_RUN_EVENT, emitEvent } from "../../events/index.js";
@@ -55,7 +55,7 @@ export async function persistParsedTextAttachment({
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_PARSE_TOOL,
     source: TRANSFER_SOURCE.TOOL,
-    reason: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_PARSE_TOOL,
+    reason: TRANSFER_REASON.MULTIMODAL_PARSE_ARTIFACT,
     alwaysPersist: true,
     producer: { type: "tool", name: TOOL_NAME.MULTIMODAL_PARSE },
     identity,

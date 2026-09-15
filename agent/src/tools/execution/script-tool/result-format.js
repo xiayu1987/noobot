@@ -5,8 +5,10 @@
  */
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { formatLinesWithNumbers, splitLines } from "../file-utils.js";
 import { EXECUTE_SCRIPT_TOOL_NAME } from "./constants.js";
+import { buildOutputTransferDeclaration } from "./output-transfer-declaration.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { readFile } from "node:fs/promises";
 
@@ -64,13 +66,13 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
       userId: String(runtime?.userId || runtime?.systemRuntime?.userId || "").trim(),
       artifacts,
       attachmentSource: ATTACHMENT_SOURCE.MODEL,
-      generationSource: "execute_script_output_overflow",
+      generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
       source: "tool",
-      reason: "execute_script_output_overflow",
+      reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
       identity: options.identity,
       intent: {
         source: "tool",
-        reason: "execute_script_output_overflow",
+        reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
         scenario: "tool",
         strategy: "tool_output",
       },
@@ -85,12 +87,13 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     ...normalizedResult,
     ...(r?.outputOverflow === true
       ? {
-          message:
-            r?.outputLimitExceeded === true
-              ? `Command output exceeded ${Number(r?.outputLimitBytes || 0)} bytes; execution was terminated and retained output is available through the returned file references.`
-              : "Command output exceeded the inline limit; full stdout/stderr remain available through the returned file references.",
+          ...buildOutputTransferDeclaration({
+            reason: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,
+            transferEnvelopes,
+            outputLimitExceeded: r?.outputLimitExceeded === true,
+            outputLimitBytes: Number(r?.outputLimitBytes || 0),
+          }),
           outputOverflow: true,
-          transferEnvelopes,
         }
       : {}),
     includeLineNumbers,

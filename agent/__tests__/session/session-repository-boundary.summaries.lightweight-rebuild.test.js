@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -69,7 +70,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
       },
       intent: {
         source: "plugin",
-        reason: "workflow_result",
+        reason: TRANSFER_REASON.HARNESS_SUMMARY,
         scenario: "harness",
         strategy: "harness_summary",
       },

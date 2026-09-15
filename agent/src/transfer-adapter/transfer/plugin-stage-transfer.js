@@ -38,11 +38,8 @@ export async function transferAgentPluginStageMessage({
   const intent = resolveTransferIntent({
     source,
     reason,
-    generationSource,
     fallbackSource: TRANSFER_SOURCE.PLUGIN,
     fallbackReason: TRANSFER_REASON.HARNESS_SUMMARY,
-    defaultGenerationSource: TRANSFER_REASON.HARNESS_SUMMARY,
-    allowCustom: true,
   });
 
   if (!normalizedDetail) {
@@ -73,7 +70,7 @@ export async function transferAgentPluginStageMessage({
     attachmentSource,
     userId,
     identity,
-    generationSource: intent.generationSource,
+    generationSource,
     source: intent.source,
     reason: intent.reason,
     intent: {

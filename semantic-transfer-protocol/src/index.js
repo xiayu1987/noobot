@@ -9,6 +9,7 @@ import {
   attachmentIdentityKey,
 } from "@noobot/attachment-protocol";
 import { assertSemanticTransferRegistration } from "./registry.js";
+import { assertTransferIntentVocabulary } from "./policies/transfer-intent.js";
 import {
   TRANSFER_PROTOCOL,
   TRANSFER_VERSION,
@@ -275,6 +276,10 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
     } else throw new Error("invalid_payload_mode");
     if (!plain(value.intent)) throw new Error("invalid_intent");
     known(value.intent, INTENT_KEYS, "unknown_intent_field");
+    assertTransferIntentVocabulary({
+      source: value.intent.source,
+      reason: value.intent.reason,
+    });
     assertSemanticTransferRegistration({
       scenario: value.intent.scenario,
       strategy: value.intent.strategy,

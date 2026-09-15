@@ -35,7 +35,11 @@ import {
 } from "../../transfer-adapter/index.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { sanitizeToolResultText } from "@noobot/sanitize";
-import { getToolOutputPolicy, hasToolInputPolicy } from "@noobot/semantic-transfer-protocol";
+import {
+  getToolOutputPolicy,
+  hasToolInputPolicy,
+  TRANSFER_REASON,
+} from "@noobot/semantic-transfer-protocol";
 import { registerTransferAttachmentResources } from "../../tools/core/resource-broker.js";
 import {
   createToolRiskAssessment,
@@ -160,11 +164,11 @@ async function materializeToolOutputArtifacts({
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: `${toolName}_output`,
     source: "tool",
-    reason: "tool_output_artifact",
+    reason: TRANSFER_REASON.TOOL_OUTPUT_ARTIFACT,
     identity,
     intent: {
       source: "tool",
-      reason: "tool_output_artifact",
+      reason: TRANSFER_REASON.TOOL_OUTPUT_ARTIFACT,
       scenario: "tool",
       strategy: "tool_output",
     },

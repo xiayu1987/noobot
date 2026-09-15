@@ -11,7 +11,7 @@ import {
   deferCapabilityLogs,
   saveCapabilityOutputAsTransferArtifacts,
 } from "../../src/capabilities/handlers/shared/attachment-log-utils.js";
-import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
+import { attachmentTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { containsExecutableScriptText } from "../../src/capabilities/handlers/shared/script-content-risk.js";
 
 test("containsExecutableScriptText recognizes executable script signals only", () => {
@@ -37,7 +37,12 @@ test("transfer payload binds and deduplicates complete V2 envelopes by stable tr
       mimeType: "text/plain",
       size: 12,
     }],
-    intent: { source: "plugin", reason: "acceptance_report", scenario: "harness", strategy: "harness_summary" },
+    intent: {
+      source: "plugin",
+      reason: TRANSFER_REASON.HARNESS_SUMMARY,
+      scenario: "harness",
+      strategy: "harness_summary",
+    },
   });
   const message = applyTransferPayloadToMessage(
     { role: "assistant", transferEnvelopes: [envelope] },

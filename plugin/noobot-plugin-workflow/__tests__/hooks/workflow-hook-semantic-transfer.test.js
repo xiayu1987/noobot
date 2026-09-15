@@ -15,6 +15,7 @@ import {
   workflowTurn,
   createRegisterWorkflowHooks,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 test("workflow hook uses injected sub-session strategy and marks workflow message", async () => {
   const hookManager = createMockBotHookManager();
@@ -318,7 +319,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
                             name: "final-summary.md",
                             scenario: "workflow",
                             strategy: "workflow_final_plan",
-                            reason: "workflow_completed_attachment_summary",
+                            reason: TRANSFER_REASON.WORKFLOW_FINAL_ATTACHMENT_SUMMARY,
                           })
                         : envelope,
                     ],
@@ -425,7 +426,7 @@ test("workflow hook routes final attachment summary composition through semantic
                     name: `${suffix}-summary.md`,
                     scenario: String(payload?.scenario || "").trim(),
                     strategy: String(payload?.strategy || "").trim(),
-                    reason: "workflow_completed_attachment_summary",
+                    reason: TRANSFER_REASON.WORKFLOW_FINAL_ATTACHMENT_SUMMARY,
                   });
                   return {
                     transferEnvelopes: [envelope],

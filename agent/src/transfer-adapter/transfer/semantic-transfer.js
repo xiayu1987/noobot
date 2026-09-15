@@ -8,6 +8,7 @@ import {
   TRANSFER_REASON,
   TRANSFER_SOURCE,
   assertSemanticTransferRegistration,
+  resolveTransferIntent,
 } from "@noobot/semantic-transfer-protocol";
 import { firstNormalizedString, normalizeString } from "../core/compact.js";
 import { createDirectTransferEnvelope } from "../storage/attachment-adapter.js";
@@ -55,8 +56,7 @@ function createDirectTextTransfer({
     identity,
     content: normalizedText,
     intent: {
-      source: meta?.source || TRANSFER_SOURCE.SERVICE,
-      reason: meta?.reason || TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+      ...resolveTransferIntent({ source: meta?.source, reason: meta?.reason }),
       scenario,
       strategy,
     },
@@ -146,8 +146,12 @@ async function transferAgentPluginSummaryInjection({
       mimeType: options?.mimeType,
       attachmentSource: options?.attachmentSource,
       generationSource: options?.generationSource || "agent_plugin_summary_detail",
-      source: options?.source || "plugin",
-      reason: options?.reason || "harness_summary",
+      ...resolveTransferIntent({
+        source: options?.source,
+        reason: options?.reason,
+        fallbackSource: TRANSFER_SOURCE.PLUGIN,
+        fallbackReason: TRANSFER_REASON.HARNESS_SUMMARY,
+      }),
       meta: options?.meta || {},
     });
   }

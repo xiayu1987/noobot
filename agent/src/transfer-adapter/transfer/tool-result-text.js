@@ -93,11 +93,8 @@ export async function materializeTextForToolResult({
   const intent = resolveTransferIntent({
     source,
     reason,
-    generationSource,
     fallbackSource: TRANSFER_SOURCE.TOOL,
     fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
-    defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
-    allowCustom: true,
   });
   const maxInline =
     inlineMaxChars == null
@@ -117,7 +114,7 @@ export async function materializeTextForToolResult({
       name: firstNormalizedString(name, "tool-result.txt"),
       mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
       attachmentSource,
-      generationSource: intent.generationSource,
+      generationSource,
       source: intent.source,
       reason: intent.reason,
       intent: { source: intent.source, reason: intent.reason, scenario, strategy },

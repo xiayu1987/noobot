@@ -9,7 +9,7 @@ import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
-import { sourceReferenceTransfer } from "@noobot/semantic-transfer-protocol";
+import { sourceReferenceTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
@@ -74,7 +74,7 @@ function buildReadFileSourceReference({ parsed = {}, identity }) {
     reference,
     intent: {
       source: "tool",
-      reason: "read_file_source_reference",
+      reason: TRANSFER_REASON.READ_FILE_SOURCE_REFERENCE,
       scenario: "tool",
       strategy: "tool_output",
     },

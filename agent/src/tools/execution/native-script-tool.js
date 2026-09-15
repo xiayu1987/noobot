@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import {
   TASK_PATH_KINDS,
   PATH_CAPABILITIES,
@@ -464,11 +465,11 @@ export function createNativeScriptTool({ agentContext }) {
             attachmentSource: ATTACHMENT_SOURCE.MODEL,
             generationSource: "execute_native_script",
             source: "tool",
-            reason: "execute_native_script_output",
+            reason: TRANSFER_REASON.EXECUTE_NATIVE_SCRIPT_OUTPUT,
             identity,
             intent: {
               source: "tool",
-              reason: "execute_native_script_output",
+              reason: TRANSFER_REASON.EXECUTE_NATIVE_SCRIPT_OUTPUT,
               scenario: "tool",
               strategy: "tool_output",
             },

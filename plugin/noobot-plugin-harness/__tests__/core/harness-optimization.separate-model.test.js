@@ -14,7 +14,7 @@ import {
   createTestHookContext,
   createTestModelResponse,
 } from "../helpers/public-runtime-fixtures.js";
-import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
+import { attachmentTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 test("planning separate_model avoids duplicate invoker calls while one run is in-flight", async () => {
@@ -99,7 +99,7 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
           direction: "output",
           intent: {
             source: "plugin",
-            reason: "planning_refinement",
+            reason: TRANSFER_REASON.HARNESS_SUMMARY,
             scenario: "harness",
             strategy: "harness_summary",
           },

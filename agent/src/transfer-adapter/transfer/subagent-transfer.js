@@ -69,11 +69,8 @@ export async function transferBotPluginSubagentResult({
   const intent = resolveTransferIntent({
     source,
     reason,
-    generationSource,
     fallbackSource: TRANSFER_SOURCE.PLUGIN,
     fallbackReason: TRANSFER_REASON.WORKFLOW_SUBAGENT,
-    defaultGenerationSource: TRANSFER_REASON.WORKFLOW_SUBAGENT,
-    allowCustom: true,
   });
   normalizeNextSteps(nextSteps);
   const persistedItems = [];
@@ -128,7 +125,7 @@ export async function transferBotPluginSubagentResult({
       attachmentSource,
       userId,
       identity: itemIdentity,
-      generationSource: intent.generationSource,
+      generationSource,
       source: intent.source,
       reason: intent.reason,
       intent: {
