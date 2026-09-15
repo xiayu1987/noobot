@@ -10,8 +10,7 @@ import { createTurnRuntimeStoreActions } from "./chatStoreTurnRuntime.js";
 import { createChatExecutionSelectors } from "./chatStoreExecutionSelectors.js";
 import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatStoreSubSessions.js";
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
-import { logTurnRuntimeDiagnostics } from "../../debug/loggers/turnRuntimeDiagnosticsLogger.js";
-import { projectTurnRuntimeToMessages } from "../runtime/engine/turnProjectionStore.js";
+import { createTurnRuntimeStoreCallbacks } from "./turnRuntimeStoreCallbacks.js";
 import { isFinalTurnState } from "../runtime/run-state-machine/turnReducer.js";
 
 export const useChatStore = defineStore("chat", () => {
@@ -55,85 +54,16 @@ export const useChatStore = defineStore("chat", () => {
     if (!pendingInteractionRequest.value) interactionSubmitting.value = false;
     return before - pendingInteractionRequests.value.length;
   }
-  const turnActions = createTurnRuntimeStoreActions(turnRuntimeRegistry, {
-    onTurnEvaluated: ({ reducer, input, result, applied }) => {
-      const turn = result?.turn;
-      logTurnRuntimeDiagnostics("frontend.turnRuntime.commitEvaluated", () => ({
-        sessionId: String(
-          turn?.parentSessionId ||
-            input?.parentSessionId ||
-            turn?.sessionId ||
-            input?.sessionId ||
-            "",
-        ).trim(),
-        nodeSessionId: String(turn?.sessionId || input?.sessionId || "").trim(),
-        parentSessionId: String(turn?.parentSessionId || input?.parentSessionId || "").trim(),
-        dialogProcessId: String(turn?.dialogProcessId || input?.dialogProcessId || "").trim(),
-        turnScopeId: String(turn?.turnScopeId || input?.turnScopeId || "").trim(),
-        reducer,
-        eventType: String(input?.eventType || input?.type || "").trim(),
-        applied,
-        reason: String(result?.reason || "").trim(),
-        state: String(turn?.state || "").trim(),
-        terminal: String(turn?.terminal || "").trim(),
-      }));
-    },
-    onTurnCommitted: (result) => {
-      const turn = result?.turn;
-      closePendingInteractionsForTerminalTurn(turn);
-      const sessionId = String(turn?.sessionId || "").trim();
-      const parentSessionId = String(turn?.parentSessionId || "").trim();
-      const existingSubSession = Boolean(
-        sessionId && subSessions?.selectSubSessionMessages(sessionId),
-      );
-      logTurnRuntimeDiagnostics("frontend.turnRuntime.commitProjectionEvaluated", () => ({
-        sessionId: parentSessionId || sessionId,
-        nodeSessionId: sessionId,
-        parentSessionId,
-        dialogProcessId: String(turn?.dialogProcessId || "").trim(),
-        turnScopeId: String(turn?.turnScopeId || "").trim(),
-        state: String(turn?.state || "").trim(),
-        terminal: String(turn?.terminal || "").trim(),
-        applied: result?.applied === true,
-        existingSubSession,
-        projectionEligible: Boolean(
-          sessionId && subSessions && (existingSubSession || parentSessionId),
-        ),
-      }));
-      const mainSessionProjection = projectTurnRuntimeToMessages({
-        sessions,
-        activeSession,
-        turnRuntimeRegistry,
-        turn,
-      });
-      let container = { applied: false, reason: "not_sub_session" };
-      let subSessionProjection = {
-        applied: false,
-        patchedMessageCount: 0,
-        reason: "not_sub_session",
-      };
-      if (sessionId && subSessions && (existingSubSession || parentSessionId)) {
-        container = subSessions.ensureSubSessionMessageContainer(turn);
-        subSessionProjection = subSessions.applyTurnRuntimeMessageProjection(turn);
-      }
-      logTurnRuntimeDiagnostics("frontend.turnRuntime.messageProjectionCommitted", () => ({
-        sessionId: parentSessionId || sessionId,
-        nodeSessionId: sessionId,
-        parentSessionId,
-        dialogProcessId: String(turn?.dialogProcessId || "").trim(),
-        turnScopeId: String(turn?.turnScopeId || "").trim(),
-        messageId: String(turn?.messageId || "").trim(),
-        presentationMessageId: String(turn?.presentationMessageId || "").trim(),
-        state: String(turn?.state || "").trim(),
-        terminal: String(turn?.terminal || "").trim(),
-        mainSessionProjectionReason: String(mainSessionProjection?.reason || "").trim(),
-        mainSessionPatchedMessageCount: Number(mainSessionProjection?.patchedMessageCount || 0),
-        subSessionProjectionReason: String(subSessionProjection?.reason || "").trim(),
-        subSessionPatchedMessageCount: Number(subSessionProjection?.patchedMessageCount || 0),
-      }));
-      return { container, mainSessionProjection, subSessionProjection };
-    },
-  });
+  const turnActions = createTurnRuntimeStoreActions(
+    turnRuntimeRegistry,
+    createTurnRuntimeStoreCallbacks({
+      sessions,
+      activeSession,
+      turnRuntimeRegistry,
+      getSubSessions: () => subSessions,
+      closePendingInteractionsForTerminalTurn,
+    }),
+  );
   subSessions = createSubSessionStore({
     subSessionMessageRegistry,
     subSessionMessageRegistryVersion,

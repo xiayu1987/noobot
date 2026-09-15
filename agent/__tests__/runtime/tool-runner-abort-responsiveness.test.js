@@ -36,7 +36,7 @@ test("tool runner aborts a tool that never observes the signal", async () => {
         setTimeout(() => {
           settled = true;
           resolve("late result");
-        }, 60_000).unref?.();
+        }, 60000).unref?.();
       }),
   };
 

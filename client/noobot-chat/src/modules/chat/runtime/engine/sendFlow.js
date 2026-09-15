@@ -3,42 +3,21 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { buildChatPayload } from "./payload.js";
 import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
-import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { applySendErrorState, finalizeSendCleanup } from "./sendFinalize.js";
 import { prepareChatSend } from "./sendPrepare.js";
-import { createSendStreamEventHandler } from "./sendStreamEventRouter.js";
-import { normalizeTrimmedString } from "./utils.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
-import {
-  resolveSessionTurnRuntime,
-  selectSessionTurnRuntime,
-} from "../run-state-machine/turnRuntimeRegistry.js";
-import {
-  logResendDebug,
-  summarizeDebugAttachments,
-  summarizeDebugMessage,
-  summarizeDebugMessages,
-} from "../../../debug/loggers/resendDebugLogger.js";
-import {
-  logStateMachineDebug,
-  summarizeStateMachineMessage,
-  summarizeStateMachineTurn,
-} from "../../../debug/loggers/stateMachineLogger.js";
-import {
-  createAssistantMessageId,
-  createUserMessageId,
-  createTurnScopeId,
-  hasActiveTurnInFlight,
-} from "./sendFlowSupport.js";
+import { selectSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import { logResendDebug } from "../../../debug/loggers/resendDebugLogger.js";
+import { createSendFlowDebugLogger } from "./sendFlowDebugLogger.js";
+import { resolveSendRequest } from "./sendRequestResolver.js";
+import { executeSendStream } from "./sendStreamExecutor.js";
 
 export { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport.js";
 
 export function createChatEngineSender({
   activeSession,
   activeSessionId,
-  applyAssistantFailureState,
   allowUserInteraction,
   applyConversationState,
   applyConversationStateFromEvent,
@@ -86,89 +65,86 @@ export function createChatEngineSender({
   tryAutoResolveInteraction,
   setPendingInteractionRequest,
   uploadFiles,
-  userId,
-  finalizePendingResendOperation,
 }) {
   const logSessionEvent = (event = {}) => sessionLogWebSocketClient?.log?.(event);
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     log: logResendDebug,
   });
+  const payloadPreferences = {
+    allowUserInteraction,
+    safeConfirm,
+    safeConfirmLevel,
+    sanitizeOutput,
+    botScenario,
+    selectedModel,
+    memoryModel,
+    pluginModelConfig,
+    frontendThresholdsEnabled,
+    summaryPolicy,
+    locale,
+    selectedPlugins,
+  };
+  const streamHandlerDependencies = {
+    activeSession,
+    activeSessionId,
+    applyConversationState,
+    applyConversationStateFromEvent,
+    applyWorkflowRuntimeEvent,
+    reduceSubSessionMessageEvent,
+    classifyRealtimeLog,
+    clearMissingInteractionPayloadTimer,
+    clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
+    findCanonicalMessageById,
+    findCanonicalMessagesById,
+    materializeTurnPresentation,
+    foldMessagesForView,
+    logSessionEvent,
+    makeViewMessage,
+    mergeAssistantAttachments,
+    setPendingInteractionRequest,
+    tryAutoResolveInteraction,
+  };
   return async function send(options = {}) {
-    const explicitMessageText =
-      typeof options?.messageText === "string" ? options.messageText.trim() : "";
-    const explicitAttachmentFiles = Array.isArray(options?.attachmentFiles)
-      ? options.attachmentFiles
-      : null;
-    const explicitUserAttachments = Array.isArray(options?.userAttachments)
-      ? options.userAttachments
-      : null;
-    const explicitTransportAttachments = Array.isArray(options?.transportAttachments)
-      ? options.transportAttachments
-      : null;
-    const hasExplicitAttachments = Boolean(
-      explicitAttachmentFiles?.length || explicitTransportAttachments?.length,
-    );
-    const hasTextToSend = Boolean(explicitMessageText || input.value.trim());
-    const continueFromUserStopped = options?.continueFromUserStopped === true;
-    const composerRequestStarted = options?.composerRequestStarted === true;
-    const resumeDialogProcessId = normalizeTrimmedString(options?.resumeDialogProcessId);
-    const resumeTurnScopeId = normalizeTrimmedString(options?.resumeTurnScopeId);
-    const dialogProcessId = normalizeTrimmedString(options?.dialogProcessId);
-    if (!ensureConnected()) return false;
-    const allowCurrentContinuationRequest = continueFromUserStopped === true;
-    const currentSessionInFlight = hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry });
-    if (
-      (currentSessionInFlight &&
-        !composerRequestStarted &&
-        options?.allowDuringResend !== true &&
-        !allowCurrentContinuationRequest) ||
-      !activeSession.value
-    )
-      return false;
-    if (
-      !continueFromUserStopped &&
-      !hasTextToSend &&
-      uploadFiles.value.length === 0 &&
-      !hasExplicitAttachments
-    )
-      return false;
-
-    const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
-    const reuseExistingUserTurn = options?.reuseExistingUserTurn === true;
-    const requestedUserMessageId = normalizeTrimmedString(options?.userMessageId);
-    if (reuseExistingUserTurn) {
-      const existingUserMessage = (activeSession.value?.messages || []).find(
-        (message) => normalizeTrimmedString(message?.messageId) === requestedUserMessageId,
-      );
-      if (!requestedUserMessageId || !existingUserMessage) return false;
-    }
-    const userMessageId = requestedUserMessageId || createUserMessageId();
-    const assistantMessageId =
-      normalizeTrimmedString(options?.assistantMessageId) || createAssistantMessageId();
-    const sessionId = String(activeSession.value?.sessionId || activeSessionId?.value || "");
+    const request = resolveSendRequest(options, {
+      activeSession,
+      activeSessionId,
+      ensureConnected,
+      input,
+      turnRuntimeRegistry,
+      uploadFiles,
+    });
+    if (!request) return false;
+    const {
+      explicitMessageText,
+      explicitAttachmentFiles,
+      explicitUserAttachments,
+      explicitTransportAttachments,
+      hasTextToSend,
+      allowDuringResend,
+      reuseExistingUserTurn,
+      turnScopeId,
+      userMessageId,
+      assistantMessageId,
+      sessionId,
+    } = request;
     const runtimeView = () =>
       selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
-    logSessionEvent({
-      category: "message",
-      event: "send.begin",
+    const debugLogger = createSendFlowDebugLogger({
+      activeSession,
+      logSessionEvent,
+      runtimeView,
       sessionId,
+      turnRuntimeRegistry,
       turnScopeId,
-      data: {
-        reuseExistingUserTurn,
-        allowDuringResend: options?.allowDuringResend === true,
-        hasText: hasTextToSend,
-        uploadCount: explicitAttachmentFiles?.length ?? uploadFiles.value.length,
-      },
     });
-    logResendDebug("send.begin", () => ({
-      sessionId,
-      turnScopeId,
+    debugLogger.begin({
       reuseExistingUserTurn,
-      allowDuringResend: options?.allowDuringResend === true,
-      ...runtimeView(),
-      messages: summarizeDebugMessages(activeSession?.value?.messages),
-    }));
+      allowDuringResend,
+      hasText: hasTextToSend,
+      uploadCount: explicitAttachmentFiles?.length ?? uploadFiles.value.length,
+    });
     const turnStartedAtMs = Date.now();
     const thinkingStartedAt = new Date(turnStartedAtMs).toISOString();
     applyRunStateEvent?.({
@@ -203,183 +179,42 @@ export function createChatEngineSender({
       userAttachments: explicitUserAttachments,
       turnStartedAtMs,
     });
-    logStateMachineDebug("stateMachine.send.presentationCreated", () => ({
-      sessionId,
-      turnScopeId,
+    debugLogger.prepareAfter({
       reuseExistingUserTurn,
-      requestedUserMessageId: userMessageId,
-      requestedPresentationMessageId: assistantMessageId,
-      userMessage: summarizeStateMachineMessage(userMessage),
-      assistantMessage: summarizeStateMachineMessage(botMsg),
-      messages: (Array.isArray(activeSession?.value?.messages)
-        ? activeSession.value.messages
-        : []
-      ).map(summarizeStateMachineMessage),
-    }));
-    logResendDebug("send.prepare.after", () => ({
-      sessionId,
-      turnScopeId,
-      explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
-      explicitTransportAttachments: summarizeDebugAttachments(explicitTransportAttachments),
-      filesToSend: summarizeDebugAttachments(filesToSend),
-      botMessage: summarizeDebugMessage(botMsg),
-      messages: summarizeDebugMessages(activeSession?.value?.messages),
-    }));
+      userMessageId,
+      assistantMessageId,
+      userMessage,
+      botMessage: botMsg,
+      explicitUserAttachments,
+      explicitTransportAttachments,
+      filesToSend,
+    });
 
-    let lastStreamErrorEventData = null;
+    const errorRef = { value: null };
     try {
-      if (!explicitAttachmentFiles) clearUploads();
-      const attachments = explicitTransportAttachments || (await serializeAttachments(filesToSend));
-      const requestedTextStreaming = streamOutput?.value === true;
-
-      const buildPayloadForCurrentVersion = ({ expectedAggregateVersion } = {}) =>
-        buildChatPayload({
-          activeSession,
-          message: text,
-          commandId: turnScopeId,
-          expectedAggregateVersion: expectedAggregateVersion ?? 0,
-          attachments,
-          allowUserInteraction,
-          safeConfirm,
-          safeConfirmLevel,
-          sanitizeOutput,
-          requestedTextStreaming,
-          botScenario,
-          selectedModel,
-          memoryModel,
-          pluginModelConfig,
-          frontendThresholdsEnabled,
-          summaryPolicy,
-          locale,
-          selectedPlugins,
-          dialogProcessId,
-          turnScopeId,
-          userMessageId: normalizeTrimmedString(
-            userMessage?.messageId || userMessage?.id || userMessageId,
-          ),
-          assistantMessageId,
-          continueFromStopped: continueFromUserStopped,
-          resumeDialogProcessId: continueFromUserStopped ? resumeDialogProcessId : "",
-          resumeTurnScopeId: continueFromUserStopped ? resumeTurnScopeId : "",
-          uploadHint: translate("chat.uploadHint"),
-          reuseExistingUserTurn,
-        });
-      let payload = buildPayloadForCurrentVersion({
-        expectedAggregateVersion: sessionAggregateVersionManager.getVersion(),
-      });
-      logSessionEvent({
-        category: "transport",
-        event: "stream.start",
-        sessionId,
-        turnScopeId,
-        data: {
-          requestedTextStreaming,
-          attachmentCount: attachments.length,
-          reuseExistingUserTurn: payload?.commandType === AGENT_COMMAND.RESEND,
-        },
-      });
-      logResendDebug("send.stream.before", () => ({
-        sessionId,
-        turnScopeId,
-        payloadTurnScopeId: payload?.identity?.turnScopeId,
-        reuseExistingUserTurn: payload?.commandType === AGENT_COMMAND.RESEND,
-        explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
-        explicitTransportAttachments: summarizeDebugAttachments(explicitTransportAttachments),
-        filesToSend: summarizeDebugAttachments(filesToSend),
-        attachments: summarizeDebugAttachments(attachments),
-        payloadAttachments: summarizeDebugAttachments(payload?.input?.attachments),
-        botMessage: summarizeDebugMessage(botMsg),
-        botThinkingStartedAt: botMsg?.thinkingStartedAt || "",
-      }));
-      const pendingAuthorityResolutions = [];
-      const trackAuthorityResolution = (result) => {
-        if (result && typeof result.then === "function") {
-          const pending = Promise.resolve(result);
-          pendingAuthorityResolutions.push(pending);
-          void pending.finally(() => {
-            const index = pendingAuthorityResolutions.indexOf(pending);
-            if (index >= 0) pendingAuthorityResolutions.splice(index, 1);
-          });
-        }
-        return result;
-      };
-      const applyTrackedRunStateEvent = (event) =>
-        trackAuthorityResolution(applyRunStateEvent?.(event));
-      const applyTrackedTurnLifecycleEnvelope = (envelope) =>
-        trackAuthorityResolution(applyTurnLifecycleEnvelope?.(envelope));
-      const streamState = {
-        get lastStreamErrorEventData() {
-          return lastStreamErrorEventData;
-        },
-        set lastStreamErrorEventData(value) {
-          lastStreamErrorEventData = value;
-        },
-      };
-      const handleStreamEvent = createSendStreamEventHandler({
+      return await executeSendStream({
         activeSession,
-        activeSessionId,
-        applyConversationState,
-        applyConversationStateFromEvent,
-        applyRunStateEvent: applyTrackedRunStateEvent,
-        applyTurnLifecycleEnvelope: applyTrackedTurnLifecycleEnvelope,
-        applyWorkflowRuntimeEvent,
-        reduceSubSessionMessageEvent,
-        botMessage: botMsg,
-        classifyRealtimeLog,
-        clearMissingInteractionPayloadTimer,
-        clearPendingInteraction,
-        clearPendingInteractionIfObsolete,
-        findCanonicalMessageById,
-        findCanonicalMessagesById,
-        materializeTurnPresentation,
-        foldMessagesForView,
-        logSessionEvent,
-        makeViewMessage,
-        mergeAssistantAttachments,
+        applyRunStateEvent,
+        applyTurnLifecycleEnvelope,
+        chatWebSocketClient,
+        clearUploads,
+        debugLogger,
+        errorRef,
+        filesToSend,
         navigateOnFirstResponseOnce,
-        requestedTextStreaming,
-        sessionId,
-        setPendingInteractionRequest,
-        streamState,
-        tryAutoResolveInteraction,
-        turnScopeId,
+        payloadPreferences,
+        prepared: { botMessage: botMsg, text, userMessage },
+        request,
+        serializeAttachments,
+        sessionAggregateVersionManager,
+        streamHandlerDependencies,
+        streamOutput,
+        translate,
       });
-      const streamOnce = (streamPayload) =>
-        chatWebSocketClient.stream(streamPayload, handleStreamEvent);
-      const streamResult = await sessionAggregateVersionManager.runAggregateVersionedStream({
-        buildPayload: buildPayloadForCurrentVersion,
-        stream: streamOnce,
-        conflictOptions: {
-          sessionId,
-          logContext: { turnScopeId },
-        },
-      });
-      payload = streamResult.payload;
-
-      while (pendingAuthorityResolutions.length > 0) {
-        await Promise.all([...pendingAuthorityResolutions]);
-      }
-      logStateMachineDebug("stateMachine.stream.resolved", () => ({
-        sessionId,
-        turnScopeId,
-        botMessage: summarizeStateMachineMessage(botMsg),
-      }));
-      logSessionEvent({
-        category: "message",
-        event: "send.resolved",
-        sessionId,
-        turnScopeId,
-      });
-
-      logResendDebug("send.doneReturn", () => ({
-        turnScopeId,
-        messages: summarizeDebugMessages(activeSession?.value?.messages),
-      }));
-      return true;
     } catch (error) {
       applySendErrorState({
         error,
-        errorEventData: lastStreamErrorEventData || error?.data || null,
+        errorEventData: errorRef.value || error?.data || null,
         activeSession,
         botMessage: botMsg,
         applyConversationState,
@@ -387,56 +222,19 @@ export function createChatEngineSender({
         notify,
         translate,
       });
-      logResendDebug("send.catch.error", () => ({
-        turnScopeId,
-        error: String(error?.message || error || ""),
-        messages: summarizeDebugMessages(activeSession?.value?.messages),
-      }));
-      logSessionEvent({
-        category: "message",
-        level: "error",
-        event: "send.error",
-        sessionId,
-        turnScopeId,
-        message: String(error?.message || error || ""),
-        data: {
-          error: String(error?.message || error || ""),
-          hasStreamErrorEventData: Boolean(lastStreamErrorEventData),
-        },
+      debugLogger.error({
+        error,
+        hasStreamErrorEventData: Boolean(errorRef.value),
       });
       return false;
     } finally {
-      logResendDebug("send.cleanup", () => ({
-        turnScopeId,
-        ...runtimeView(),
-        messages: summarizeDebugMessages(activeSession?.value?.messages),
-      }));
-      logSessionEvent({
-        category: "message",
-        event: "send.cleanup",
-        sessionId,
-        turnScopeId,
-        data: runtimeView(),
-      });
       finalizeSendCleanup({
         pendingInteractionRequest,
         interactionSubmitting,
       });
-      logStateMachineDebug("stateMachine.send.cleanup", () => {
-        const messages = Array.isArray(activeSession?.value?.messages)
-          ? activeSession.value.messages
-          : [];
-        const runtime = runtimeView();
-        const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
-        return {
-          sessionId,
-          turnScopeId,
-          runtime: summarizeStateMachineTurn(turn, runtime),
-          pendingMessageCount: messages.filter((message) => message?.pending === true).length,
-          messageCount: messages.length,
-          interactionPending: Boolean(pendingInteractionRequest?.value),
-          interactionSubmitting: interactionSubmitting?.value === true,
-        };
+      debugLogger.cleanup({
+        pendingInteractionRequest,
+        interactionSubmitting,
       });
     }
   };

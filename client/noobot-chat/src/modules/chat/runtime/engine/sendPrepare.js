@@ -10,6 +10,61 @@ import { BackendChannelState } from "../sessionRunStateMachine.js";
 import { nowMs, toIsoTime } from "../../model/timeFields.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 
+function toDraftAttachmentMeta(fileItem, isImageMime) {
+  const clientAttachmentId = String(
+    fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",
+  ).trim();
+  return {
+    ...(clientAttachmentId ? { clientAttachmentId } : {}),
+    name: fileItem.name,
+    mimeType: fileItem.mimeType,
+    size: fileItem.size,
+    previewUrl: isImageMime(fileItem.mimeType || "") ? URL.createObjectURL(fileItem.raw) : "",
+  };
+}
+
+function resolveUserAttachments({ userAttachments, filesToSend, isImageMime }) {
+  if (Array.isArray(userAttachments)) return [...userAttachments];
+  return filesToSend.map((fileItem) => toDraftAttachmentMeta(fileItem, isImageMime));
+}
+
+function findExistingUserMessage(activeSession, userMessageId) {
+  const targetId = String(userMessageId || "").trim();
+  return (activeSession.value?.messages || []).find(
+    (message) => String(message?.messageId || "").trim() === targetId,
+  );
+}
+
+function applyUserMessageIdentity({
+  userMessage,
+  normalizedTurnScopeId,
+  userAttachments,
+  resolvedUserAttachments,
+}) {
+  if (!userMessage) return;
+  if (normalizedTurnScopeId) {
+    userMessage.turnScopeId = normalizedTurnScopeId;
+  }
+  if (!Array.isArray(userAttachments)) return;
+  userMessage.attachments =
+    resolvedUserAttachments.length === 0
+      ? []
+      : mergeAttachments(userMessage.attachments || [], resolvedUserAttachments).map(
+          (attachment) => ({ ...attachment }),
+        );
+}
+
+function applySessionTitleFromText({ activeSession, translate, text }) {
+  if (!text) return;
+  const defaultTitles = [
+    String(translate("chat.newSession") || "").trim(),
+    String(zhCNMessages?.chat?.newSession || "").trim(),
+    String(enUSMessages?.chat?.newSession || "").trim(),
+  ];
+  if (!defaultTitles.includes(String(activeSession.value.title || "").trim())) return;
+  activeSession.value.title = text.slice(0, 20);
+}
+
 export function prepareChatSend({
   input,
   uploadFiles,
@@ -38,24 +93,13 @@ export function prepareChatSend({
     ? [...attachmentFiles]
     : [...uploadFiles.value];
   const sessionId = String(activeSession.value?.sessionId || "");
-  const resolvedUserAttachments = Array.isArray(userAttachments)
-    ? [...userAttachments]
-    : filesToSend.map((fileItem) => {
-        const clientAttachmentId = String(
-          fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",
-        ).trim();
-        return {
-          ...(clientAttachmentId ? { clientAttachmentId } : {}),
-          name: fileItem.name,
-          mimeType: fileItem.mimeType,
-          size: fileItem.size,
-          previewUrl: isImageMime(fileItem.mimeType || "") ? URL.createObjectURL(fileItem.raw) : "",
-        };
-      });
+  const resolvedUserAttachments = resolveUserAttachments({
+    userAttachments,
+    filesToSend,
+    isImageMime,
+  });
   const userMessage = reuseExistingUserTurn
-    ? (activeSession.value?.messages || []).find(
-        (message) => String(message?.messageId || "").trim() === String(userMessageId || "").trim(),
-      )
+    ? findExistingUserMessage(activeSession, userMessageId)
     : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), resolvedUserAttachments, {
         id: userMessageId,
         messageId: userMessageId,
@@ -64,27 +108,13 @@ export function prepareChatSend({
         messageOrigin: "natural",
         userMetaMaterialized: true,
       });
-  if (userMessage && normalizedTurnScopeId) {
-    userMessage.turnScopeId = normalizedTurnScopeId;
-  }
-  if (userMessage && Array.isArray(userAttachments)) {
-    userMessage.attachments =
-      resolvedUserAttachments.length === 0
-        ? []
-        : mergeAttachments(userMessage.attachments || [], resolvedUserAttachments).map(
-            (attachment) => ({ ...attachment }),
-          );
-  }
-  if (
-    [
-      String(translate("chat.newSession") || "").trim(),
-      String(zhCNMessages?.chat?.newSession || "").trim(),
-      String(enUSMessages?.chat?.newSession || "").trim(),
-    ].includes(String(activeSession.value.title || "").trim()) &&
-    text
-  ) {
-    activeSession.value.title = text.slice(0, 20);
-  }
+  applyUserMessageIdentity({
+    userMessage,
+    normalizedTurnScopeId,
+    userAttachments,
+    resolvedUserAttachments,
+  });
+  applySessionTitleFromText({ activeSession, translate, text });
 
   const botMessage = upsertCanonicalAssistantMessage(assistantMessageId, {
     sessionId,
