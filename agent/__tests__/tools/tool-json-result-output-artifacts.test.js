@@ -10,7 +10,7 @@ import {
   parseToolOutputArtifacts,
   projectToolResultForModel,
 } from "../../src/tools/core/tool-json-result.js";
-import { attachmentTransfer, createTransferIdentity } from "@noobot/semantic-transfer-protocol";
+import { attachmentTransfer, createTransferIdentity, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 test("failed tool results use one required result shape", () => {
   assert.deepEqual(buildToolResultPayload({ ok: false, message: "blocked" }), {
@@ -151,7 +151,7 @@ test("model tool results expose only canonical attachment references", () => {
     direction: "output",
     intent: {
       source: "tool",
-      reason: "result",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
       scenario: "tool",
       strategy: "tool_output",
     },

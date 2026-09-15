@@ -128,11 +128,8 @@ export async function transferToolOutput({
   const intent = resolveTransferIntent({
     source,
     reason,
-    generationSource,
     fallbackSource: TRANSFER_SOURCE.TOOL,
     fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_OUTPUT,
-    defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_OUTPUT,
-    allowCustom: true,
   });
   const maxInline =
     inlineMaxChars == null
@@ -145,7 +142,7 @@ export async function transferToolOutput({
     name,
     mimeType,
     attachmentSource,
-    generationSource: intent.generationSource,
+    generationSource,
     source: intent.source,
     reason: intent.reason,
     storage,
@@ -208,11 +205,8 @@ export async function transferToolInput({
   const intent = resolveTransferIntent({
     source: resolvedSource,
     reason: resolvedReason,
-    generationSource,
     fallbackSource: TRANSFER_SOURCE.TOOL,
     fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
-    defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
-    allowCustom: true,
   });
   const resolvedInlineLimit =
     inlineMaxChars == null
@@ -261,7 +255,7 @@ export async function transferToolInput({
     name: firstNormalizedString(resolvedName, "tool-input.txt"),
     mimeType: firstNormalizedString(resolvedMimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
-    generationSource: intent.generationSource,
+    generationSource,
     source: intent.source,
     reason: intent.reason,
     storage,

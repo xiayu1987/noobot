@@ -5,6 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import {
   assertToolExecutionPolicy,
   projectToolExecutionMeta,
@@ -12,6 +13,7 @@ import {
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { EXECUTE_SCRIPT_TOOL_NAME, SCRIPT_EXECUTION_MODE } from "./constants.js";
+import { buildOutputTransferDeclaration } from "./output-transfer-declaration.js";
 
 function compactObject(value = {}) {
   return Object.fromEntries(
@@ -115,13 +117,13 @@ async function persistBackgroundScriptOutput({
     userId,
     artifacts,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
-    generationSource: "execute_script_background",
+    generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_BACKGROUND,
     source: "tool",
-    reason: "execute_script_background",
+    reason: TRANSFER_REASON.EXECUTE_SCRIPT_BACKGROUND,
     identity,
     intent: {
       source: "tool",
-      reason: "execute_script_background",
+      reason: TRANSFER_REASON.EXECUTE_SCRIPT_BACKGROUND,
       scenario: "tool",
       strategy: "tool_output",
     },
@@ -145,14 +147,18 @@ export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options
     executionMode: SCRIPT_EXECUTION_MODE.BACKGROUND,
     ...extra,
     code: Number(r?.code || 0),
+    ...buildOutputTransferDeclaration({
+      reason: TRANSFER_REASON.EXECUTE_SCRIPT_BACKGROUND,
+      transferEnvelopes,
+      outputLimitExceeded: r?.outputLimitExceeded === true,
+      outputLimitBytes: Number(r?.outputLimitBytes || 0),
+    }),
     ...(r?.outputLimitExceeded === true
       ? {
-          message: `Command output exceeded ${Number(r?.outputLimitBytes || 0)} bytes; execution was terminated and retained output is available through the returned file references.`,
           outputLimitExceeded: true,
           outputLimitBytes: Number(r?.outputLimitBytes || 0),
         }
       : {}),
     ...(r?.signal ? { signal: r.signal } : {}),
-    transferEnvelopes,
   });
 }

@@ -15,6 +15,7 @@ import {
 } from "../../../../../src/modules/chat/model/messageModel.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 describe("detailMessages", () => {
   it("builds one normalized detail message list for replace and preserve inputs", () => {
@@ -56,7 +57,7 @@ describe("detailMessages", () => {
             },
             intent: {
               source: "plugin",
-              reason: "workflow_task_result",
+              reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
               scenario: "workflow",
               strategy: "workflow_subagent",
             },
@@ -105,7 +106,7 @@ describe("detailMessages", () => {
                 },
                 intent: {
                   source: "plugin",
-                  reason: "workflow_task_result",
+                  reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
                   scenario: "workflow",
                   strategy: "workflow_subagent",
                 },
@@ -215,7 +216,7 @@ describe("detailMessages", () => {
                   },
                   intent: {
                     source: "plugin",
-                    reason: "workflow_task_result",
+                    reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
                     scenario: "workflow",
                     strategy: "workflow_subagent",
                   },
@@ -292,7 +293,7 @@ describe("detailMessages", () => {
                   },
                   intent: {
                     source: "subagent",
-                    reason: "workflow_task_result",
+                    reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
                     scenario: "workflow",
                     strategy: "workflow_subagent",
                   },
@@ -355,7 +356,7 @@ describe("detailMessages", () => {
                   },
                   intent: {
                     source: "plugin",
-                    reason: "workflow_task_result",
+                    reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
                     scenario: "workflow",
                     strategy: "workflow_subagent",
                   },
@@ -392,7 +393,7 @@ describe("detailMessages", () => {
                   },
                   intent: {
                     source: "plugin",
-                    reason: "workflow_task_result",
+                    reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
                     scenario: "workflow",
                     strategy: "workflow_subagent",
                   },
@@ -431,7 +432,7 @@ describe("detailMessages", () => {
                       },
                       intent: {
                         source: "plugin",
-                        reason: "workflow_task_result",
+                        reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
                         scenario: "workflow",
                         strategy: "workflow_subagent",
                       },

@@ -15,6 +15,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
 import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
+import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 
 function normalizeString(value) {
   return String(value || "").trim();
@@ -214,8 +215,8 @@ export async function persistWorkflowNodeResultAttachment({
     forceAttachment: true,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: "workflow_node_agent_result",
-    source: "plugin",
-    reason: "workflow_node_agent_result",
+    source: TRANSFER_SOURCE.PLUGIN,
+    reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
     producer: { type: "plugin", id: `workflow-node:${nodeId}` },
     mimeType: artifact.mimeType,
   });
@@ -274,8 +275,8 @@ async function transferWorkflowFinalAttachment({
     forceAttachment: true,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: `workflow_${normalizedPhase}_attachment_summary`,
-    source: "plugin",
-    reason: `workflow_${normalizedPhase}_attachment_summary`,
+    source: TRANSFER_SOURCE.PLUGIN,
+    reason: TRANSFER_REASON.WORKFLOW_FINAL_ATTACHMENT_SUMMARY,
     producer: { type: "plugin", id: "workflow-final-attachment-summary" },
     mimeType: "text/markdown",
   });

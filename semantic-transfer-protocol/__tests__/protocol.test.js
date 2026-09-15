@@ -19,6 +19,7 @@ import {
   getTransferAttachmentReferences,
   mergeTransferEnvelopes,
   transferIdentityKey,
+  TRANSFER_REASON,
 } from "../src/index.js";
 import { decideTransfer } from "../src/policy.js";
 
@@ -37,7 +38,7 @@ test("creates strict direct V2 envelope", () => {
     direction: "output",
     intent: {
       source: "tool",
-      reason: "result",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
       scenario: "tool",
       strategy: "tool_output",
     },
@@ -55,7 +56,7 @@ test("creates attachment envelope from canonical identity and rejects paths", ()
     direction: "output",
     intent: {
       source: "tool",
-      reason: "result",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
       scenario: "tool",
       strategy: "tool_output",
     },
@@ -192,7 +193,12 @@ test("rejects unregistered scenarios and strategies", () => {
         messageId: "m-unregistered",
         identity,
         direction: "output",
-        intent: { source: "tool", reason: "test", scenario: "tool", strategy: "unknown" },
+        intent: {
+          source: "tool",
+          reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+          scenario: "tool",
+          strategy: "unknown",
+        },
         content: "blocked",
       }),
     /semantic_transfer_strategy_not_registered/,
@@ -236,7 +242,12 @@ test("strict validation rejects unregistered incoming semantics", () => {
     messageId: "m-strict-registration",
     identity,
     direction: "output",
-    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
     content: "ok",
   });
   const invalid = { ...envelope, intent: { ...envelope.intent, strategy: "unknown" } };
@@ -256,7 +267,12 @@ test("mergeTransferEnvelopes is ordered, idempotent, and rejects identity confli
     messageId: "merge-message",
     identity,
     direction: "output",
-    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
     content: "same",
   });
   assert.deepEqual(mergeTransferEnvelopes([envelope], envelope), [envelope]);
@@ -272,7 +288,12 @@ test("attachment references have one canonical conflict-aware projection", () =>
     messageId: "refs-message",
     identity,
     direction: "output",
-    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
     attachments: [{
       identity: { attachmentId: "ref-1", sessionId: "s1", attachmentSource: "model" },
       name: "result.txt",

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -156,7 +157,7 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
         },
       ],
     },
-    intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
+    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
     meta: {},
   });
   const message = {

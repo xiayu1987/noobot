@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -260,7 +261,7 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
             },
             direction: "output",
             payload: { mode: "direct", content: "tool result" },
-            intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
+            intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
             meta: {},
           },
         ],

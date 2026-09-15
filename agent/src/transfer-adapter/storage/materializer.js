@@ -37,11 +37,8 @@ export async function materializeOutputResult({
   const intent = resolveTransferIntent({
     source,
     reason,
-    generationSource,
     fallbackSource: TRANSFER_SOURCE.SERVICE,
     fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
-    defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
-    allowCustom: true,
   });
   const decision = decideTransfer({
     content: text,
@@ -84,7 +81,7 @@ export async function materializeOutputResult({
       strategy: "tool_output",
     },
     attachmentSource,
-    generationSource: intent.generationSource,
+    generationSource,
     storage,
     producer,
     identity,

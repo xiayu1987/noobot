@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import {
   buildWorkflowTransferPayloadFromAttachments,
@@ -117,7 +118,7 @@ test("workflow attachment operations reject incomplete identity", () => {
             },
             intent: {
               source: "plugin",
-              reason: "workflow_task_result",
+              reason: TRANSFER_REASON.WORKFLOW_SUBAGENT,
               scenario: "workflow",
               strategy: "workflow_subagent",
             },
@@ -147,7 +148,7 @@ test("workflow transfer preserves canonical identity isolation without flattenin
     },
     intent: {
       source: "plugin",
-      reason: "test",
+      reason: TRANSFER_REASON.WORKFLOW_SUBAGENT,
       scenario: "workflow",
       strategy: "workflow_subagent",
     },

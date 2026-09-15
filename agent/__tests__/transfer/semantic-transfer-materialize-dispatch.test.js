@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -17,7 +18,7 @@ test("materializeOutputResult creates direct V2 envelope below the threshold", a
     content: "abcdef",
     policy: { preference: "auto", maxDirectChars: 10 },
     identity: identity(),
-    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
   });
   assert.equal(result.ok, true);
   assert.equal(result.status, "direct");
@@ -58,7 +59,7 @@ test("persistTransferFile returns only V2 transfer envelopes", async () => {
     mimeType: "application/octet-stream",
     contentBase64: "AQID",
     identity: identity(),
-    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
   });
   assertTransferProtocolOnly(assert, result);
   const envelope = result.transferEnvelopes[0];

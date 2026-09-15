@@ -23,53 +23,40 @@ test("vocabulary exposes frozen reason table and default mime type", () => {
   assert.equal(Object.isFrozen(TRANSFER_REASON_ALIAS), true);
 });
 
-test("normalizeTransferSource lowercases known sources and falls back on blanks", () => {
+test("normalizeTransferSource lowercases known sources, falls back on blanks and rejects unknown", () => {
   assert.equal(normalizeTransferSource(" TOOL "), TRANSFER_SOURCE.TOOL);
   assert.equal(normalizeTransferSource(""), TRANSFER_SOURCE.SERVICE);
-  assert.equal(normalizeTransferSource("custom_source"), "custom_source");
-  assert.equal(
-    normalizeTransferSource("custom_source", { allowCustom: false }),
-    TRANSFER_SOURCE.SERVICE,
+  assert.throws(
+    () => normalizeTransferSource("custom_source"),
+    /unknown_transfer_source:custom_source/,
   );
 });
 
-test("normalizeTransferReason resolves aliases before custom passthrough", () => {
+test("normalizeTransferReason resolves aliases and rejects values outside the vocabulary", () => {
   for (const [alias, canonical] of Object.entries(TRANSFER_REASON_ALIAS)) {
     assert.equal(normalizeTransferReason(alias), canonical);
     assert.equal(Object.values(TRANSFER_REASON).includes(canonical), true);
   }
   assert.equal(normalizeTransferReason(""), TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT);
-  assert.equal(normalizeTransferReason("free_form"), "free_form");
-  assert.equal(
-    normalizeTransferReason("free_form", { allowCustom: false }),
-    TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
-  );
+  assert.throws(() => normalizeTransferReason("free_form"), /unknown_transfer_reason:free_form/);
 });
 
-test("resolveTransferIntent keeps an explicit generation source", () => {
+test("resolveTransferIntent resolves only the transfer semantic slots", () => {
   const intent = resolveTransferIntent({
     source: "TOOL",
     reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
-    generationSource: TRANSFER_REASON.WORKFLOW_SUBAGENT,
   });
   assert.deepEqual(intent, {
     source: TRANSFER_SOURCE.TOOL,
     reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
-    generationSource: TRANSFER_REASON.WORKFLOW_SUBAGENT,
   });
 });
 
-test("resolveTransferIntent falls back to reason then default", () => {
-  const fromReason = resolveTransferIntent({
-    source: TRANSFER_SOURCE.TOOL,
-    reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
-  });
-  assert.equal(fromReason.generationSource, TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT);
-
+test("resolveTransferIntent falls back to protocol defaults on blanks", () => {
   const allDefault = resolveTransferIntent();
   assert.equal(allDefault.source, TRANSFER_SOURCE.SERVICE);
   assert.equal(allDefault.reason, TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT);
-  assert.equal(allDefault.generationSource, TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT);
+  assert.equal(Object.keys(allDefault).sort().join(","), "reason,source");
 });
 
 test("createTransferResult normalizes status and drops empty meta", () => {

@@ -29,6 +29,7 @@ function resolveRepoRoot() {
 const ROOT = resolveRepoRoot();
 const TARGET_DIRS = [
   "agent/src",
+  "semantic-transfer-protocol/src",
   "service",
   "agent-proxy",
   "client/noobot-chat/src",
@@ -41,6 +42,8 @@ const IGNORE_PATH_PARTS = ignorePathParts(["vendor", "generated", "__tests__", "
 const FORBIDDEN_FIELDS = [
   { field: "transferResult", regex: /\btransferResult\b/ },
   { field: "nodeResultTransferResult", regex: /\bnodeResultTransferResult\b/ },
+  { field: "allowCustom", regex: /\ballowCustom\b/ },
+  { field: "defaultGenerationSource", regex: /\bdefaultGenerationSource\b/ },
 ];
 const ATTACHMENT_LEGACY_FIELDS = [
   { field: "attachmentMetas", regex: /\battachmentMetas\b/ },
