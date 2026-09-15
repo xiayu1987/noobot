@@ -114,8 +114,11 @@ describe("workflow runtime architecture guard", () => {
 
   it("keeps canonical workflow nodes on status without persisting stepStatus", () => {
     const workflowStore = source("src/modules/chat/stores/chatStoreWorkflows.js");
-    expect(workflowStore).toMatch(/stepStatus:\s*_incomingStepStatus/);
-    expect(workflowStore).toMatch(/stepStatus:\s*_currentStepStatus/);
+    const nodeProjection = source(
+      "src/modules/chat/stores/workflowNodeStateProjection.js",
+    );
+    expect(nodeProjection).toMatch(/stepStatus:\s*_incomingStepStatus/);
+    expect(nodeProjection).toMatch(/stepStatus:\s*_currentStepStatus/);
     expect(workflowStore).not.toMatch(/next\s*=\s*\{[\s\S]*?stepStatus\s*:/);
   });
 

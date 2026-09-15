@@ -19,6 +19,7 @@ import {
   routeMessageProjectionEvent,
 } from "./messageProjectionRouter.js";
 import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
+import { buildStreamEventLogEntry } from "./streamEventLogEntry.js";
 import { logPluginRuntimeDiagnostics } from "../../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
 
 function routePostProjectionEvent(event, data, context) {
@@ -181,50 +182,18 @@ export function createSendStreamEventHandler(context) {
     });
     const authoritativeEvent = protocolEnvelope;
     const authoritativeIdentity = authoritativeEvent?.identity || {};
-    const authoritativeOrdering = authoritativeEvent?.ordering || {};
     const authoritativePayload = authoritativeEvent?.payload || {};
-    const lifecycleChildSessionId =
-      event === StreamEventEnum.TURN_LIFECYCLE ? normalizeTrimmedString(data?.sessionId) : "";
-    const lifecycleRootSessionId = normalizeTrimmedString(
-      data?.parentSessionId || activeSession?.value?.sessionId || sessionId,
+    logSessionEvent(
+      buildStreamEventLogEntry({
+        activeSession,
+        authoritativeEvent,
+        botMsg,
+        data,
+        event,
+        sessionId,
+        turnScopeId,
+      }),
     );
-    logSessionEvent({
-      category: event === StreamEventEnum.INTERACTION_REQUEST ? "interaction" : "transport",
-      event: `stream.${event || "event"}`,
-      sessionId:
-        lifecycleChildSessionId && lifecycleChildSessionId !== lifecycleRootSessionId
-          ? lifecycleRootSessionId
-          : authoritativeIdentity.sessionId || data?.sessionId || sessionId,
-      dialogProcessId:
-        authoritativePayload.dialogProcessId ||
-        data?.dialogProcessId ||
-        normalizeTrimmedString(botMsg.dialogProcessId),
-      turnScopeId: authoritativeIdentity.turnScopeId || data?.turnScopeId || turnScopeId,
-      data: {
-        streamEvent: event,
-        state: data?.state || "",
-        seq: data?.seq || 0,
-        hasContent: typeof data?.payload?.text === "string",
-        protocolName: String(authoritativeEvent?.protocol?.name || ""),
-        protocolVersion: Number(authoritativeEvent?.protocol?.version || 0),
-        eventFamily: String(authoritativeEvent?.protocol?.family || ""),
-        schemaVersion: Number(authoritativeEvent?.protocol?.schemaVersion || 0),
-        eventId: String(authoritativeIdentity.eventId || ""),
-        eventType: String(authoritativeIdentity.eventType || ""),
-        messageId: String(authoritativeIdentity.messageId || ""),
-        presentationMessageId: String(authoritativePayload.presentationMessageId || ""),
-        sequence: Number(authoritativeOrdering.sequence || 0),
-        sequenceDomain: String(authoritativeOrdering.domain || ""),
-        sequenceScopeId: String(authoritativeOrdering.scopeId || ""),
-        textLength: String(authoritativePayload.text || "").length,
-        childSessionId: lifecycleChildSessionId,
-        parentSessionId: String(data?.parentSessionId || ""),
-        lifecycleEventType: String(data?.eventType || ""),
-        lifecycleRevision: Number(data?.revision || 0),
-        lifecycleSequence: Number(data?.sequence || 0),
-        lifecyclePersistenceScopeId: String(data?.persistenceScope?.scopeId || ""),
-      },
-    });
     logResendDebug("send.stream.event", () => ({
       event,
       eventTurnScopeId: data?.turnScopeId,

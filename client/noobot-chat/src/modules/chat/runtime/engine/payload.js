@@ -19,6 +19,71 @@ function normalizeSelectedPluginKeys(selectedPlugins) {
   return source.map((pluginKey) => normalizeTrimmedString(pluginKey)).filter(Boolean);
 }
 
+/** Unwraps a possibly reactive ref and defaults to true unless explicitly false. */
+const unwrap = (source) => source?.value ?? source;
+const trueUnlessFalse = (source) => unwrap(source) !== false;
+const plainObjectOrNull = (source) => {
+  const value = unwrap(source);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+};
+
+/** Resolves the command type from the mutually exclusive send intents. */
+function resolveCommandType({ continueFromStopped, reuseExistingUserTurn }) {
+  if (continueFromStopped) return AGENT_COMMAND.CONTINUE;
+  if (reuseExistingUserTurn) return AGENT_COMMAND.RESEND;
+  return AGENT_COMMAND.SEND;
+}
+
+/** Builds the preferences block, omitting optional keys that resolve to empty. */
+function buildPreferences(options) {
+  const scenario = normalizeTrimmedString(unwrap(options.botScenario));
+  const selectedModel = normalizeTrimmedString(unwrap(options.selectedModel));
+  const memoryModel = normalizeTrimmedString(unwrap(options.memoryModel));
+  const pluginModelConfig = plainObjectOrNull(options.pluginModelConfig);
+  const summaryPolicy = plainObjectOrNull(options.summaryPolicy);
+  return {
+    allowUserInteraction: trueUnlessFalse(options.allowUserInteraction),
+    safeConfirm: trueUnlessFalse(options.safeConfirm),
+    sanitizeOutput: trueUnlessFalse(options.sanitizeOutput),
+    confirmationLevel: normalizeSecurityRiskLevel(
+      unwrap(options.safeConfirmLevel),
+      SECURITY_RISK_LEVEL.LOW,
+    ),
+    streaming: options.requestedTextStreaming,
+    frontendThresholdsEnabled: unwrap(options.frontendThresholdsEnabled) === true,
+    ...(scenario ? { scenario } : {}),
+    ...(selectedModel ? { selectedModel } : {}),
+    ...(memoryModel ? { memoryModel } : {}),
+    ...(pluginModelConfig ? { pluginModelConfig } : {}),
+    ...(summaryPolicy ? { summaryPolicy } : {}),
+    locale: normalizeTrimmedString(unwrap(options.locale)),
+    selectedPlugins: normalizeSelectedPluginKeys(options.selectedPlugins),
+  };
+}
+
+/** Builds the session block; only a fresh local send may create a session. */
+function buildSessionBlock({ activeSession, commandType }) {
+  const createsLocalSession =
+    commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true;
+  return {
+    createIfAbsent: createsLocalSession,
+    selectedConnectorIds: createsLocalSession
+      ? activeSession.value.connectorPanelState?.selectedConnectorIds || []
+      : [],
+  };
+}
+
+/** Builds the identity block from the active session and requested scopes. */
+function buildIdentity({ activeSession, dialogProcessId, turnScopeId }) {
+  return {
+    sessionId: activeSession?.value?.sessionId,
+    parentSessionId: activeSession?.value?.parentSessionId,
+    dialogProcessId: normalizeTrimmedString(dialogProcessId),
+    parentDialogProcessId: activeSession?.value?.parentDialogProcessId,
+    turnScopeId,
+  };
+}
+
 export function buildChatPayload({
   activeSession,
   message,
@@ -48,78 +113,44 @@ export function buildChatPayload({
   expectedAggregateVersion = 0,
   commandId = "",
 } = {}) {
-  const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
-  const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
-  const normalizedMemoryModel = normalizeTrimmedString(memoryModel?.value ?? memoryModel);
-  const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
-  const normalizedSummaryPolicy = summaryPolicy?.value ?? summaryPolicy;
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
-  const normalizedUserMessageId = normalizeTrimmedString(userMessageId);
-  const normalizedAssistantMessageId = normalizeTrimmedString(assistantMessageId);
-  const normalizedResumeDialogProcessId = normalizeTrimmedString(resumeDialogProcessId);
-  const normalizedResumeTurnScopeId = normalizeTrimmedString(resumeTurnScopeId);
-  const commandType = continueFromStopped
-    ? AGENT_COMMAND.CONTINUE
-    : reuseExistingUserTurn
-      ? AGENT_COMMAND.RESEND
-      : AGENT_COMMAND.SEND;
+  const commandType = resolveCommandType({ continueFromStopped, reuseExistingUserTurn });
   return createTurnRunCommand({
     commandType,
     commandId: normalizeTrimmedString(commandId) || normalizedTurnScopeId,
-    identity: {
-      sessionId: activeSession?.value?.sessionId,
-      parentSessionId: activeSession?.value?.parentSessionId,
-      dialogProcessId: normalizeTrimmedString(dialogProcessId),
-      parentDialogProcessId: activeSession?.value?.parentDialogProcessId,
+    identity: buildIdentity({
+      activeSession,
+      dialogProcessId,
       turnScopeId: normalizedTurnScopeId,
-    },
+    }),
     input: { message: message || uploadHint, attachments },
-    preferences: {
-      allowUserInteraction:
-        (allowUserInteraction?.value ?? allowUserInteraction) === false ? false : true,
-      safeConfirm: (safeConfirm?.value ?? safeConfirm) === false ? false : true,
-      sanitizeOutput: (sanitizeOutput?.value ?? sanitizeOutput) === false ? false : true,
-      confirmationLevel: normalizeSecurityRiskLevel(
-        safeConfirmLevel?.value ?? safeConfirmLevel,
-        SECURITY_RISK_LEVEL.LOW,
-      ),
-      streaming: requestedTextStreaming,
-      frontendThresholdsEnabled:
-        (frontendThresholdsEnabled?.value ?? frontendThresholdsEnabled) === true,
-      ...(normalizedScenario ? { scenario: normalizedScenario } : {}),
-      ...(normalizedSelectedModel ? { selectedModel: normalizedSelectedModel } : {}),
-      ...(normalizedMemoryModel ? { memoryModel: normalizedMemoryModel } : {}),
-      ...(normalizedPluginModelConfig &&
-      typeof normalizedPluginModelConfig === "object" &&
-      !Array.isArray(normalizedPluginModelConfig)
-        ? { pluginModelConfig: normalizedPluginModelConfig }
-        : {}),
-      ...(normalizedSummaryPolicy &&
-      typeof normalizedSummaryPolicy === "object" &&
-      !Array.isArray(normalizedSummaryPolicy)
-        ? { summaryPolicy: normalizedSummaryPolicy }
-        : {}),
-      locale: normalizeTrimmedString(locale?.value ?? locale),
-      selectedPlugins: normalizeSelectedPluginKeys(selectedPlugins),
-    },
+    preferences: buildPreferences({
+      allowUserInteraction,
+      safeConfirm,
+      safeConfirmLevel,
+      sanitizeOutput,
+      requestedTextStreaming,
+      frontendThresholdsEnabled,
+      botScenario,
+      selectedModel,
+      memoryModel,
+      pluginModelConfig,
+      summaryPolicy,
+      locale,
+      selectedPlugins,
+    }),
     presentation: {
-      userMessageId: normalizedUserMessageId,
-      assistantMessageId: normalizedAssistantMessageId,
+      userMessageId: normalizeTrimmedString(userMessageId),
+      assistantMessageId: normalizeTrimmedString(assistantMessageId),
     },
     concurrency: {
       expectedTurnRevision: 0,
       expectedAggregateVersion,
     },
-    session: {
-      createIfAbsent: commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true,
-      selectedConnectorIds:
-        commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true
-          ? activeSession.value.connectorPanelState?.selectedConnectorIds || []
-          : [],
-    },
+    session: buildSessionBlock({ activeSession, commandType }),
     continuation: {
-      dialogProcessId: normalizedResumeDialogProcessId,
-      turnScopeId: normalizedResumeTurnScopeId,
+      dialogProcessId: normalizeTrimmedString(resumeDialogProcessId),
+      turnScopeId: normalizeTrimmedString(resumeTurnScopeId),
     },
   });
 }
