@@ -5,6 +5,7 @@
 
 import { resolveModelAdapterId } from "./model-adapter.js";
 import { MODEL_IMAGE_GENERATION_API_TYPE } from "./model-capabilities.js";
+import { MODEL_FAMILY_ID } from "./model-family.js";
 
 export {
   MODEL_ADAPTER_ID,
@@ -34,12 +35,68 @@ export const MODEL_PROVIDER_CONFIG_VALUE_TYPE = Object.freeze({
   STRING: "string",
 });
 
+export const MODEL_PROVIDER_CONFIG_ACCESS = Object.freeze({
+  USER: "user",
+  SYSTEM: "system",
+});
+
+export const MODEL_PROVIDER_DECLARATION_VISIBILITY = Object.freeze({
+  HIDDEN: "hidden",
+  USER: "user",
+});
+
 const stringField = Object.freeze({ type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING });
 const nonEmptyStringField = Object.freeze({
   type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
   nonEmpty: true,
 });
 const booleanField = Object.freeze({ type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.BOOLEAN });
+
+export const MODEL_PROVIDER_FIELD_GROUP = Object.freeze({
+  CONNECTION: "connection",
+  SAMPLING: "sampling",
+  REASONING: "reasoning",
+  CACHE: "cache",
+  CAPABILITY: "capability",
+  TRANSPORT: "transport",
+});
+
+function providerField(spec, configAccess, meta = {}) {
+  return Object.freeze({
+    ...spec,
+    configAccess,
+    declarationVisibility: MODEL_PROVIDER_DECLARATION_VISIBILITY.HIDDEN,
+    ...meta,
+  });
+}
+
+function internalField(spec, meta = {}) {
+  return providerField(spec, MODEL_PROVIDER_CONFIG_ACCESS.SYSTEM, meta);
+}
+
+function userField(spec, meta = {}) {
+  return providerField(spec, MODEL_PROVIDER_CONFIG_ACCESS.USER, meta);
+}
+
+function connectionField(spec) {
+  return userField(spec, { group: MODEL_PROVIDER_FIELD_GROUP.CONNECTION });
+}
+
+function samplingField(spec) {
+  return userField(spec, { group: MODEL_PROVIDER_FIELD_GROUP.SAMPLING });
+}
+
+function reasoningField(spec, meta = {}) {
+  return userField(spec, { group: MODEL_PROVIDER_FIELD_GROUP.REASONING, ...meta });
+}
+
+function cacheField(spec, familyScope) {
+  return internalField(spec, {
+    group: MODEL_PROVIDER_FIELD_GROUP.CACHE,
+    ...(familyScope ? { familyScope: Object.freeze([...familyScope]) } : {}),
+  });
+}
+
 const modalityField = Object.freeze({
   type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
   values: Object.freeze(["audio", "document", "image", "video"]),
@@ -149,122 +206,144 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
   additionalProperties: false,
   normalize: normalizeModelReasoningConfiguration,
   properties: Object.freeze({
-    enabled: booleanField,
-    used_for_conversation: booleanField,
-    api_key: stringField,
-    base_url: stringField,
-    model: nonEmptyStringField,
-    description: stringField,
-    temperature: Object.freeze({
+    enabled: connectionField(booleanField),
+    used_for_conversation: connectionField(booleanField),
+    api_key: connectionField(stringField),
+    base_url: connectionField(stringField),
+    model: connectionField(nonEmptyStringField),
+    description: connectionField(stringField),
+    temperature: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
       minimum: 0,
       maximum: 2,
     }),
-    top_p: Object.freeze({
+    top_p: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
       minimum: 0,
       maximum: 1,
     }),
-    top_k: Object.freeze({
+    top_k: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.INTEGER,
       minimum: 1,
       maximum: 100,
     }),
-    min_p: Object.freeze({
+    min_p: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
       minimum: 0,
       maximum: 1,
     }),
-    frequency_penalty: Object.freeze({
+    frequency_penalty: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
       minimum: -2,
       maximum: 2,
     }),
-    presence_penalty: Object.freeze({
+    presence_penalty: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
       minimum: -2,
       maximum: 2,
     }),
-    max_tokens: Object.freeze({
+    max_tokens: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.INTEGER,
       minimum: 1,
     }),
-    reasoning_effort: nonEmptyStringField,
-    tool_reasoning_effort: nonEmptyStringField,
-    reasoning_effort_options: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.ARRAY,
-      items: nonEmptyStringField,
+    reasoning_effort: reasoningField(nonEmptyStringField, {
+      optionsField: "reasoning_effort_options",
     }),
-    reasoning_effort_parameter: reasoningEffortParameterField,
-    use_responses_api: booleanField,
-    extra_body: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-      additionalProperties: true,
+    tool_reasoning_effort: reasoningField(nonEmptyStringField, {
+      optionsField: "reasoning_effort_options",
     }),
-    prompt_cache_key: stringField,
-    prompt_cache_retention: stringField,
-    prompt_cache_options: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-      additionalProperties: true,
+    reasoning_effort_options: internalField(
+      {
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.ARRAY,
+        items: nonEmptyStringField,
+      },
+      {
+        group: MODEL_PROVIDER_FIELD_GROUP.REASONING,
+        declarationVisibility: MODEL_PROVIDER_DECLARATION_VISIBILITY.USER,
+      },
+    ),
+    reasoning_effort_parameter: internalField(reasoningEffortParameterField, {
+      group: MODEL_PROVIDER_FIELD_GROUP.REASONING,
     }),
-    cache_control: Object.freeze({
-      oneOf: Object.freeze([
-        booleanField,
-        Object.freeze({
-          type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-          additionalProperties: true,
+    use_responses_api: internalField(booleanField, {
+      group: MODEL_PROVIDER_FIELD_GROUP.TRANSPORT,
+    }),
+    extra_body: internalField(
+      {
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
+        additionalProperties: true,
+      },
+      { group: MODEL_PROVIDER_FIELD_GROUP.TRANSPORT },
+    ),
+    prompt_cache_key: cacheField(stringField, [MODEL_FAMILY_ID.GPT, MODEL_FAMILY_ID.CLAUDE]),
+    prompt_cache_retention: cacheField(stringField, [MODEL_FAMILY_ID.GPT, MODEL_FAMILY_ID.CLAUDE]),
+    prompt_cache_options: cacheField(
+      {
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
+        additionalProperties: true,
+      },
+      [MODEL_FAMILY_ID.GPT, MODEL_FAMILY_ID.CLAUDE],
+    ),
+    cache_control: cacheField(
+      {
+        oneOf: Object.freeze([
+          booleanField,
+          Object.freeze({
+            type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
+            additionalProperties: true,
+          }),
+        ]),
+      },
+      [MODEL_FAMILY_ID.CLAUDE, MODEL_FAMILY_ID.QWEN],
+    ),
+    cached_content: cacheField(stringField, [MODEL_FAMILY_ID.GEMINI]),
+    capabilities: internalField(
+      {
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
+        additionalProperties: false,
+        properties: Object.freeze({
+          image_generation: booleanField,
+          reasoning: booleanField,
+          streaming: booleanField,
+          tools: booleanField,
+          vision: booleanField,
+          web_search: booleanField,
         }),
-      ]),
-    }),
-    prompt_cache_control: Object.freeze({
-      oneOf: Object.freeze([
-        booleanField,
-        Object.freeze({
-          type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-          additionalProperties: true,
+      },
+      { group: MODEL_PROVIDER_FIELD_GROUP.CAPABILITY },
+    ),
+    multimodal_parsing: internalField(
+      {
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
+        additionalProperties: false,
+        properties: Object.freeze({
+          enabled: booleanField,
+          input_modalities: modalityListField,
         }),
-      ]),
-    }),
-    cached_content: stringField,
-    gemini_cached_content: stringField,
-    capabilities: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-      additionalProperties: false,
-      properties: Object.freeze({
-        image_generation: booleanField,
-        reasoning: booleanField,
-        streaming: booleanField,
-        tools: booleanField,
-        vision: booleanField,
-        web_search: booleanField,
-      }),
-    }),
-    multimodal_parsing: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-      additionalProperties: false,
-      properties: Object.freeze({
-        enabled: booleanField,
-        input_modalities: modalityListField,
-      }),
-    }),
-    multimodal_generation: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-      additionalProperties: false,
-      properties: Object.freeze({
-        support_generation: Object.freeze({
-          type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-          additionalProperties: false,
-          properties: Object.freeze({
-            enabled: booleanField,
-            support_scope: modalityListField,
-            api_type: Object.freeze({
-              type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
-              values: Object.freeze(Object.values(MODEL_IMAGE_GENERATION_API_TYPE)),
+      },
+      { group: MODEL_PROVIDER_FIELD_GROUP.CAPABILITY },
+    ),
+    multimodal_generation: internalField(
+      {
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
+        additionalProperties: false,
+        properties: Object.freeze({
+          support_generation: Object.freeze({
+            type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
+            additionalProperties: false,
+            properties: Object.freeze({
+              enabled: booleanField,
+              support_scope: modalityListField,
+              api_type: Object.freeze({
+                type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
+                values: Object.freeze(Object.values(MODEL_IMAGE_GENERATION_API_TYPE)),
+              }),
             }),
           }),
         }),
-      }),
-    }),
+      },
+      { group: MODEL_PROVIDER_FIELD_GROUP.CAPABILITY },
+    ),
   }),
   required: Object.freeze(["model"]),
 });

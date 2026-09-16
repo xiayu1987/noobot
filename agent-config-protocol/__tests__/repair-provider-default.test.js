@@ -30,7 +30,7 @@ test("config repair fills only invalid fields for an unknown provider", () => {
   assert.equal("format" in provider, false);
   assert.equal(provider.api_key, "${DASHSCOPE_API_KEY}");
   assert.equal(provider.base_url, "${DASHSCOPE_API_ADDRESS}");
-  assert.deepEqual(provider.reasoning_effort_options, ["low", "medium", "high"]);
+  assert.equal(provider.reasoning_effort_options, undefined);
   assert.equal(provider.reasoning_effort, "medium");
   assert.equal(provider.tool_reasoning_effort, "medium");
 });

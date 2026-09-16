@@ -21,6 +21,11 @@ export const CONFIG_ITEM_TYPE = Object.freeze({
   EXPLICIT: "explicit",
 });
 
+export const CONFIG_NODE_ACCESS = Object.freeze({
+  USER: "user",
+  SYSTEM: "system",
+});
+
 export const CONFIG_PATH_REPRESENTATION = Object.freeze({
   PERSISTED: "persisted",
   RUNTIME: "runtime",

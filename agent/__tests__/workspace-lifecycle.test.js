@@ -312,10 +312,7 @@ test("explicit workspace sync adds every nested config node through the config p
       providers: {
         primary: {
           reasoning_effort: "high",
-          reasoning_effort_options: ["low", "medium", "high"],
-          reasoning_effort_parameter: "reasoning_effort",
           tool_reasoning_effort: "medium",
-          capabilities: { web_search: true },
         },
         added: { enabled: true },
       },

@@ -48,14 +48,12 @@ export function resolveCacheVendor(spec = {}) {
 
 export function resolvePromptCacheHeaders(spec = {}, flow = "agent.main") {
   if (modelFamily(spec) !== MODEL_FAMILY_ID.GROK) return {};
-  const key =
-    String(spec.prompt_cache_key ?? spec.promptCacheKey ?? "").trim() ||
-    buildCacheIdentity(spec, flow);
+  const key = String(spec.prompt_cache_key ?? "").trim() || buildCacheIdentity(spec, flow);
   return key ? { "x-grok-conv-id": key } : {};
 }
 
 function cacheControlValue(spec = {}) {
-  const value = spec.cache_control ?? spec.prompt_cache_control ?? spec.promptCacheControl;
+  const value = spec.cache_control;
   if (value === false) return null;
   return value && typeof value === "object"
     ? { type: value.type || "ephemeral", ...(value.ttl === "1h" ? { ttl: "1h" } : {}) }
@@ -137,23 +135,17 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
     "prompt_cache_options",
     "cache_control",
     "cached_content",
-    "cachedContent",
   ])
     delete out[key];
 
   if (usesPromptCacheKeyProtocol(spec)) {
-    const key =
-      String(spec.prompt_cache_key ?? spec.promptCacheKey ?? "").trim() ||
-      buildCacheIdentity(spec, flow);
+    const key = String(spec.prompt_cache_key ?? "").trim() || buildCacheIdentity(spec, flow);
     if (key) out.prompt_cache_key = key;
     const version = gptVersion(spec.model);
     if (version?.major === 5 && version.minor >= 6) {
-      out.prompt_cache_options = spec.prompt_cache_options ||
-        spec.promptCacheOptions || { ttl: "30m" };
+      out.prompt_cache_options = spec.prompt_cache_options || { ttl: "30m" };
     } else {
-      out.prompt_cache_retention = String(
-        spec.prompt_cache_retention || spec.promptCacheRetention || "24h",
-      );
+      out.prompt_cache_retention = String(spec.prompt_cache_retention || "24h");
     }
   }
 
@@ -167,16 +159,14 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
     vendor === MODEL_PROVIDER_ID.GOOGLE ||
     vendor === MODEL_PROVIDER_ID.GEMINI
   ) {
-    const value = String(
-      spec.cached_content ?? spec.cachedContent ?? spec.gemini_cached_content ?? "",
-    ).trim();
+    const value = String(spec.cached_content ?? "").trim();
     if (value) out.cached_content = value;
   }
 
   if (spec.reasoning_effort !== undefined) {
     Object.assign(out, buildModelReasoningEffortTransport(spec, spec.reasoning_effort));
   }
-  for (const key of ["frequency_penalty", "presence_penalty"]) {
+  for (const key of ["frequency_penalty", "presence_penalty", "top_k", "min_p"]) {
     if (spec[key] !== undefined) out[key] = spec[key];
   }
   if (

@@ -1,10 +1,35 @@
 .el-input__wrapper,
 .el-textarea__inner,
-.el-select__wrapper {
+.el-select__wrapper,
+.el-input-number .el-input__wrapper {
   background: var(--noobot-control-bg);
   border: 1px solid var(--noobot-panel-border);
   box-shadow: none;
   color: var(--noobot-text-main);
+}
+
+.el-input__inner,
+.el-textarea__inner,
+.el-input-number .el-input__inner {
+  color: var(--noobot-text-main);
+}
+
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder,
+.el-input-number .el-input__inner::placeholder {
+  color: var(--noobot-text-muted);
+}
+
+.el-input-number__increase,
+.el-input-number__decrease {
+  background: var(--noobot-panel-muted);
+  border-color: var(--noobot-panel-border);
+  color: var(--noobot-text-secondary);
+}
+
+.el-input-number__increase:hover,
+.el-input-number__decrease:hover {
+  color: var(--noobot-text-accent);
 }
 
 .el-input__wrapper,
@@ -32,6 +57,19 @@
   border: 1px solid var(--noobot-panel-border);
 }
 
+.el-popper.is-light,
+.el-popper.is-dark {
+  background: var(--noobot-control-menu-bg);
+  border-color: var(--noobot-panel-border);
+  color: var(--noobot-text-main);
+}
+
+.el-popper.is-light .el-popper__arrow::before,
+.el-popper.is-dark .el-popper__arrow::before {
+  background: var(--noobot-control-menu-bg);
+  border-color: var(--noobot-panel-border);
+}
+
 .el-select-dropdown__item {
   color: var(--noobot-text-main);
 }
@@ -49,6 +87,71 @@
 
 .el-select-dropdown__item.is-disabled {
   color: var(--noobot-text-muted);
+}
+
+.noobot-select-popper {
+  width: auto;
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 82%, transparent);
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-control-menu-bg);
+}
+
+.noobot-select-popper .el-select-dropdown,
+.noobot-select-popper .el-popper__content,
+.noobot-select-popper .el-scrollbar,
+.noobot-select-popper .el-scrollbar__view,
+.noobot-select-popper .el-select-dropdown__list,
+.noobot-select-popper .el-select-dropdown__wrap {
+  background: var(--noobot-control-menu-bg);
+}
+
+.noobot-select-popper .el-select-dropdown__wrap {
+  max-height: min(40vh, 300px);
+}
+
+.noobot-select-popper .el-select-dropdown__list {
+  box-sizing: border-box;
+  padding: var(--noobot-space-2xs);
+}
+
+.noobot-select-popper .el-select-dropdown__item {
+  height: auto;
+  min-height: var(--noobot-control-height-xl);
+  margin: 0;
+  padding: var(--noobot-space-xs) var(--noobot-space-sm);
+  border-radius: var(--noobot-radius-xs);
+  background: transparent;
+  color: var(--noobot-text-main);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.noobot-select-popper .el-select-dropdown__item.hover,
+.noobot-select-popper .el-select-dropdown__item:hover {
+  background: color-mix(in srgb, var(--noobot-accent) 10%, var(--noobot-control-menu-bg));
+  color: var(--noobot-text-strong);
+}
+
+.noobot-select-popper .el-select-dropdown__item.is-selected {
+  background: color-mix(in srgb, var(--noobot-accent) 14%, var(--noobot-control-menu-bg));
+  color: var(--noobot-text-accent);
+}
+
+.noobot-select-popper .el-select-dropdown__item.is-selected.hover,
+.noobot-select-popper .el-select-dropdown__item.is-selected:hover {
+  background: color-mix(in srgb, var(--noobot-accent) 18%, var(--noobot-control-menu-bg));
+}
+
+.noobot-select-popper .el-select-dropdown__empty {
+  background: var(--noobot-control-menu-bg);
+  color: var(--noobot-text-muted);
+}
+
+.noobot-select-popper .el-popper__arrow::before {
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 82%, transparent);
+  background: var(--noobot-control-menu-bg);
 }
 
 .el-input__wrapper.is-focus,
@@ -234,8 +337,17 @@
   font-weight: 600;
 }
 
+.el-collapse,
+.el-collapse-item__wrap,
+.el-collapse-item__content {
+  background: transparent;
+  border-color: var(--noobot-divider);
+  color: var(--noobot-text-main);
+}
+
 .el-collapse-item__header {
   background: transparent;
+  border-color: var(--noobot-divider);
   color: var(--noobot-text-main);
 }
 
@@ -245,6 +357,27 @@
 }
 
 @media (max-width: 768px) {
+  .noobot-select-popper {
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+    max-height: min(44vh, 320px);
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+  }
+
+  .noobot-select-popper .el-select-dropdown__wrap {
+    max-height: min(36vh, 280px);
+    overscroll-behavior: contain;
+  }
+
+  .noobot-select-popper .el-select-dropdown__item {
+    min-height: 42px;
+  }
+
+  .noobot-select-popper .el-popper__arrow {
+    display: none;
+  }
+
   .el-drawer {
     width: 100vw;
     max-width: 100vw;

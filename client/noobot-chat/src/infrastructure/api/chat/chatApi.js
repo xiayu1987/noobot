@@ -332,6 +332,11 @@ export async function getWorkspaceFileApi(
   });
 }
 
+export async function getWorkspaceConfigDeclarationsApi({ userId = "" }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/config-declarations`);
+}
+
 export async function downloadWorkspaceFileApi(
   { userId = "", path = "", traceId = "" },
   { fetcher } = {},

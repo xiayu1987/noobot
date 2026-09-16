@@ -66,7 +66,7 @@ Claude 系列通过适配层在请求顶层写入 `cache_control: { "type": "eph
 
 ### Google / Gemini
 
-Gemini 系列仅在显式配置 `cached_content` 或 `gemini_cached_content` 后发送 `cached_content`。其他供应商缓存字段不会透传。
+Gemini 系列仅在显式配置 `cached_content` 后发送 `cached_content`。其他供应商缓存字段不会透传。
 官方依据：[Gemini Context caching](https://ai.google.dev/gemini-api/docs/caching)。
 
 ### Grok

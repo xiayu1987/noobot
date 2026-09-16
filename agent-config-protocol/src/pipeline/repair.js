@@ -95,64 +95,16 @@ function repairInvalidNode({ template, path, changes, reason }) {
   return REMOVE_NODE;
 }
 
-function repairContractNode({
-  contract,
-  template,
-  valueTemplate = template,
+function repairDeclaredContractProperties({
+  properties,
+  templateObject,
+  valueObject,
   target,
   path,
   changes,
-  normalizationFallback = {},
+  scope,
 }) {
-  if (target === undefined) {
-    if (valueTemplate === undefined) return REMOVE_NODE;
-    recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
-    return clone(valueTemplate);
-  }
-  if (Array.isArray(contract.oneOf)) {
-    const variant = contract.oneOf.find((item) => validatesContract(target, item));
-    if (!variant) {
-      return repairInvalidNode({
-        template: valueTemplate,
-        path,
-        changes,
-        reason: "invalid_node_value",
-      });
-    }
-    return repairContractNode({
-      contract: variant,
-      template,
-      valueTemplate,
-      target,
-      path,
-      changes,
-    });
-  }
-  if (!validatesScalar(target, contract)) {
-    return repairInvalidNode({
-      template: valueTemplate,
-      path,
-      changes,
-      reason: "invalid_node_value",
-    });
-  }
-  if (contract.type === "array") {
-    if (!contract.items || target.every((item) => validatesContract(item, contract.items))) {
-      return clone(target);
-    }
-    return repairInvalidNode({
-      template: valueTemplate,
-      path,
-      changes,
-      reason: "invalid_array_item",
-    });
-  }
-  if (contract.type !== "object") return clone(target);
-
   const output = {};
-  const templateObject = isPlainObject(template) ? template : {};
-  const valueObject = isPlainObject(valueTemplate) ? valueTemplate : {};
-  const properties = isPlainObject(contract.properties) ? contract.properties : {};
   for (const [key, childContract] of Object.entries(properties)) {
     const child = repairContractNode({
       contract: childContract,
@@ -161,9 +113,24 @@ function repairContractNode({
       target: target[key],
       path: [...path, key],
       changes,
+      scope,
     });
     if (child !== REMOVE_NODE) output[key] = child;
   }
+  return output;
+}
+
+function repairTemplateAdditionalProperties({
+  contract,
+  properties,
+  templateObject,
+  valueObject,
+  target,
+  output,
+  path,
+  changes,
+  scope,
+}) {
   for (const [key, child] of Object.entries(templateObject)) {
     if (properties[key]) continue;
     if (contract.additionalProperties === true) {
@@ -188,6 +155,7 @@ function repairContractNode({
         target: target[key],
         path: [...path, key],
         changes,
+        scope,
       });
       if (repaired !== REMOVE_NODE) output[key] = repaired;
       continue;
@@ -196,6 +164,17 @@ function repairContractNode({
       `config value source contains unsupported node: ${pathText([...path, key])}`,
     );
   }
+}
+
+function repairTargetAdditionalProperties({
+  contract,
+  properties,
+  target,
+  output,
+  path,
+  changes,
+  scope,
+}) {
   for (const [key, child] of Object.entries(target)) {
     if (properties[key] || Object.prototype.hasOwnProperty.call(output, key)) continue;
     if (contract.additionalProperties === true) {
@@ -208,6 +187,7 @@ function repairContractNode({
         target: child,
         path: [...path, key],
         changes,
+        scope,
       });
       if (repaired !== REMOVE_NODE) output[key] = repaired;
       continue;
@@ -219,23 +199,40 @@ function repairContractNode({
       "unsupported_node",
     );
   }
+}
 
-  const shouldNormalizeModel =
-    contract !== MODEL_PROVIDER_CONFIG_CONTRACT ||
+function normalizeContractObject({
+  contract,
+  properties,
+  templateObject,
+  valueObject,
+  output,
+  normalizationFallback,
+  path,
+  changes,
+  scope,
+}) {
+  const isModelProviderContract =
+    contract === MODEL_PROVIDER_CONFIG_CONTRACT ||
+    contract.agentConfigContract === "model_provider";
+  const shouldNormalize =
+    !isModelProviderContract ||
     Object.keys({ ...templateObject, ...valueObject, ...output }).some((key) =>
       key.startsWith("reasoning_effort"),
     );
-  const normalized =
-    shouldNormalizeModel && typeof contract.normalize === "function"
-      ? contract.normalize(output, {
-          ...(contract === MODEL_PROVIDER_CONFIG_CONTRACT
-            ? resolveDefaultModelLibraryProvider()
-            : {}),
-          ...normalizationFallback,
-          ...valueObject,
-        })
-      : output;
+  if (!shouldNormalize || typeof contract.normalize !== "function") return output;
+
+  const normalized = contract.normalize(
+    { ...templateObject, ...output },
+    {
+      ...(isModelProviderContract ? resolveDefaultModelLibraryProvider() : {}),
+      ...normalizationFallback,
+      ...valueObject,
+    },
+  );
   for (const [key, value] of Object.entries(normalized)) {
+    const childContract = properties[key];
+    if (childContract && !structureAllowsScope(childContract, scope)) continue;
     if (JSON.stringify(output[key]) === JSON.stringify(value)) continue;
     output[key] = clone(value);
     recordChange(
@@ -246,6 +243,91 @@ function repairContractNode({
     );
   }
   return output;
+}
+
+function repairContractNode({
+  contract,
+  template,
+  valueTemplate = template,
+  target,
+  path,
+  changes,
+  normalizationFallback = {},
+  scope = CONFIG_DOCUMENT_SCOPE.GLOBAL,
+}) {
+  if (!structureAllowsScope(contract, scope)) {
+    if (target !== undefined) {
+      recordChange(changes, path, CONFIG_REPAIR_ACTION.REMOVE_SCOPE_FORBIDDEN, "scope_forbidden");
+    }
+    return REMOVE_NODE;
+  }
+  if (target === undefined) {
+    if (valueTemplate === undefined) return REMOVE_NODE;
+    recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
+    return clone(valueTemplate);
+  }
+  if (Array.isArray(contract.oneOf)) {
+    const variant = contract.oneOf.find((item) => validatesContract(target, item));
+    if (!variant) {
+      return repairInvalidNode({
+        template: valueTemplate,
+        path,
+        changes,
+        reason: "invalid_node_value",
+      });
+    }
+    return repairContractNode({
+      contract: variant,
+      template,
+      valueTemplate,
+      target,
+      path,
+      changes,
+      scope,
+    });
+  }
+  if (!validatesScalar(target, contract)) {
+    return repairInvalidNode({
+      template: valueTemplate,
+      path,
+      changes,
+      reason: "invalid_node_value",
+    });
+  }
+  if (contract.type === "array") {
+    if (!contract.items || target.every((item) => validatesContract(item, contract.items))) {
+      return clone(target);
+    }
+    return repairInvalidNode({
+      template: valueTemplate,
+      path,
+      changes,
+      reason: "invalid_array_item",
+    });
+  }
+  if (contract.type !== "object") return clone(target);
+
+  const templateObject = isPlainObject(template) ? template : {};
+  const valueObject = isPlainObject(valueTemplate) ? valueTemplate : {};
+  const properties = isPlainObject(contract.properties) ? contract.properties : {};
+  const repairContext = {
+    contract,
+    properties,
+    templateObject,
+    valueObject,
+    target,
+    path,
+    changes,
+    scope,
+  };
+  const output = repairDeclaredContractProperties(repairContext);
+  repairTemplateAdditionalProperties({ ...repairContext, output });
+  repairTargetAdditionalProperties({ ...repairContext, output });
+  return normalizeContractObject({
+    ...repairContext,
+    output,
+    normalizationFallback,
+  });
 }
 
 function repairStructureNode({ node, target, path, values, scope, changes }) {
@@ -266,6 +348,7 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
       target,
       path,
       changes,
+      scope,
     });
   }
 

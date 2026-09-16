@@ -123,18 +123,22 @@ describe("5. 配置优先级测试", () => {
       const userConfig = createBaseUserConfig({
         providers: {
           openai: {
-            type: "openai",
-            apiKey: "user-custom-key",
+            api_key: "user-custom-key",
             model: "gpt-4-turbo",
             reasoning_effort_parameter: "reasoning_effort",
-            reasoning_effort_options: ["none", "low", "medium", "high"],
+            reasoning_effort_options: ["user-forged-option"],
           },
         },
       });
 
       const merged = getProviders(globalConfig, userConfig);
-      assert.equal(merged.openai.apiKey, "user-custom-key", "user provider 应覆盖 global");
+      assert.equal(merged.openai.api_key, "user-custom-key", "user provider 应覆盖 global");
       assert.equal(merged.openai.model, "gpt-4-turbo", "user provider 的 model 应覆盖");
+      assert.deepEqual(
+        merged.openai.reasoning_effort_options,
+        ["none", "low", "medium", "high"],
+        "user provider 不应覆盖系统维护的推理强度候选",
+      );
     });
 
     it("同名 provider 应按配置协议深合并多模态能力", () => {
@@ -192,13 +196,14 @@ describe("5. 配置优先级测试", () => {
       const globalConfig = createBaseGlobalConfig();
       const userConfig = createBaseUserConfig({
         providers: {
-          custom: { type: "custom", apiKey: "custom-key", model: "custom-model" },
+          custom: { api_key: "custom-key", model: "custom-model" },
         },
       });
 
       const merged = getProviders(globalConfig, userConfig);
       assert.ok("custom" in merged, "新增的 provider 应存在");
-      assert.equal(merged.custom.apiKey, "custom-key");
+      assert.equal(merged.custom.api_key, "custom-key");
+      assert.equal(merged.custom.model, "custom-model");
     });
   });
 

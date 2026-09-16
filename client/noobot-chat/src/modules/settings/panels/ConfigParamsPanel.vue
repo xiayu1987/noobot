@@ -9,15 +9,26 @@ import { ElMessage } from "element-plus";
 import {
   getConfigParamsApi,
   putConfigParamsApi,
+  getWorkspaceConfigDeclarationsApi,
+  getWorkspaceFileApi,
+  putWorkspaceFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
-import { SettingsJsonListEditorLayout } from "../public-api.js";
+import { ConfigDocumentForm, SettingsJsonListEditorLayout } from "../public-api.js";
 import {
   assertConfigParamListMatchesCatalog,
   configParamsFromCatalog,
   normalizeConfigParamList,
 } from "../state/configParamsState.js";
+import {
+  CONFIG_DOCUMENT_PATH,
+  buildConfigDocumentForSave,
+  cloneConfigDocument,
+  parseConfigDocument,
+  serializeConfigDocument,
+} from "../state/configDocumentState.js";
+import { buildConfigNavTree, firstConfigNavPath } from "../state/configNavigation.js";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
@@ -27,6 +38,9 @@ const props = defineProps({
   isSuperAdmin: { type: Boolean, default: false },
 });
 
+const CONFIG_SCOPE = "config";
+const PARAM_SCOPES = Object.freeze(["user", "system"]);
+
 const activeScope = ref("user");
 const loading = ref(false);
 const saving = ref(false);
@@ -34,6 +48,12 @@ const params = ref([]);
 const catalog = ref([]);
 const paramsJsonDraft = ref("");
 const jsonParseError = ref("");
+const configDocument = ref({});
+const configDocumentBaseline = ref({});
+const configDeclarations = ref({});
+const activeConfigPath = ref(firstConfigNavPath(buildConfigNavTree({})));
+const configLoading = ref(false);
+const configSaving = ref(false);
 const { translate } = useLocale();
 const activeScopeLabel = computed(() =>
   activeScope.value === "system"
@@ -43,11 +63,14 @@ const activeScopeLabel = computed(() =>
 const activeScopeFilePath = computed(() =>
   activeScope.value === "system"
     ? "workspace/config-params.json"
-    : `workspace/${String(props.userId || "").trim() || "<user>"}/config-params.json`,
+    : `workspace/${String(props.userId || "").trim() || "<user>"}/${
+        activeScope.value === CONFIG_SCOPE ? CONFIG_DOCUMENT_PATH : "config-params.json"
+      }`,
 );
 const visibleScopes = computed(() => [
   { name: "user", label: translate("settings.userParams") },
   ...(props.isSuperAdmin ? [{ name: "system", label: translate("settings.systemParams") }] : []),
+  { name: CONFIG_SCOPE, label: translate("settings.userConfig") },
 ]);
 const editorActions = computed(() => [
   {
@@ -165,19 +188,112 @@ async function saveParams() {
   }
 }
 
+function resolveConfigErrorText(error) {
+  switch (error?.code) {
+    case "INVALID_CONFIG_JSON":
+      return translate("settings.invalidConfigJson");
+    case "INVALID_CONFIG_ENTRY_KEY":
+      return translate("settings.invalidConfigEntryKey", { field: error.field || "" });
+    case "MISSING_CONFIG_FIELD":
+      return translate("settings.missingConfigField", { field: error.field || "" });
+    case "EMPTY_CONFIG_FIELD":
+      return translate("settings.emptyConfigField", { field: error.field || "" });
+    default:
+      return error?.message || translate("settings.saveConfigFailed");
+  }
+}
+
+async function loadConfigDocument() {
+  if (!props.connected || !props.apiKey || !props.userId) return;
+  configLoading.value = true;
+  try {
+    const [documentResponse, declarationsResponse] = await Promise.all([
+      getWorkspaceFileApi(
+        { userId: props.userId, path: CONFIG_DOCUMENT_PATH },
+        { fetcher: authFetch },
+      ),
+      getWorkspaceConfigDeclarationsApi({ userId: props.userId }, { fetcher: authFetch }),
+    ]);
+    const [documentData, declarationsData] = await Promise.all([
+      documentResponse.json(),
+      declarationsResponse.json(),
+    ]);
+    if (!documentResponse.ok || !documentData.ok) {
+      throw new Error(documentData.error || translate("settings.loadConfigFailed"));
+    }
+    if (!declarationsResponse.ok || !declarationsData.ok) {
+      throw new Error(declarationsData.error || translate("settings.loadConfigFailed"));
+    }
+    const loadedDocument = parseConfigDocument(documentData.content || "{}");
+    configDocument.value = loadedDocument;
+    configDocumentBaseline.value = cloneConfigDocument(loadedDocument);
+    configDeclarations.value = cloneConfigDocument(declarationsData.declarations || {});
+  } catch (error) {
+    ElMessage.error(resolveConfigErrorText(error));
+  } finally {
+    configLoading.value = false;
+  }
+}
+
+async function saveConfigDocument() {
+  if (!props.connected || !props.apiKey || !props.userId) return;
+  configSaving.value = true;
+  try {
+    const nextDocument = buildConfigDocumentForSave(
+      configDocument.value,
+      configDocumentBaseline.value,
+    );
+    const res = await putWorkspaceFileApi(
+      {
+        userId: props.userId,
+        path: CONFIG_DOCUMENT_PATH,
+        content: serializeConfigDocument(nextDocument),
+      },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || translate("settings.saveConfigFailed"));
+    }
+    configDocument.value = nextDocument;
+    configDocumentBaseline.value = cloneConfigDocument(nextDocument);
+    ElMessage.success(translate("settings.configSaved"));
+  } catch (error) {
+    ElMessage.error(resolveConfigErrorText(error));
+  } finally {
+    configSaving.value = false;
+  }
+}
+
+function selectConfigPath(navPath = "") {
+  activeConfigPath.value = String(navPath || "");
+}
+
+function loadActiveScope(scope = activeScope.value) {
+  if (scope === CONFIG_SCOPE) {
+    loadConfigDocument();
+    return;
+  }
+  loadParams(scope);
+}
+
 function onScopeChanged(scope = "user") {
-  activeScope.value = String(scope || "user") === "system" ? "system" : "user";
-  loadParams(activeScope.value);
+  const nextScope = String(scope || "user");
+  activeScope.value =
+    nextScope === CONFIG_SCOPE || PARAM_SCOPES.includes(nextScope) ? nextScope : "user";
+  loadActiveScope(activeScope.value);
 }
 
 function handleEditorAction(command = "") {
-  if (command === "save") saveParams();
+  if (command !== "save") return;
+  if (activeScope.value === CONFIG_SCOPE) saveConfigDocument();
+  else saveParams();
 }
 
 watch(
   () => props.active,
   (visible) => {
-    if (visible) loadParams(activeScope.value);
+    if (visible) loadActiveScope(activeScope.value);
   },
   { immediate: true },
 );
@@ -185,14 +301,14 @@ watch(
 watch(
   () => props.apiKey,
   () => {
-    if (props.active && props.connected) loadParams(activeScope.value);
+    if (props.active && props.connected) loadActiveScope(activeScope.value);
   },
 );
 
 watch(
   () => props.connected,
   (isConnected) => {
-    if (isConnected && props.active) loadParams(activeScope.value);
+    if (isConnected && props.active) loadActiveScope(activeScope.value);
   },
 );
 
@@ -224,7 +340,19 @@ watch(
       :label="scopeItem.label"
       :name="scopeItem.name"
     >
+      <ConfigDocumentForm
+        v-if="scopeItem.name === CONFIG_SCOPE"
+        :document="configDocument"
+        :declarations="configDeclarations"
+        :active-path="activeConfigPath"
+        :loading="configLoading"
+        :saving="configSaving"
+        :file-path="activeScopeFilePath"
+        @select-path="selectConfigPath"
+        @save="saveConfigDocument()"
+      />
       <SettingsJsonListEditorLayout
+        v-else
         v-model="paramsJsonText"
         :loading="loading"
         :left-title="translate('settings.paramsList', { label: activeScopeLabel })"
