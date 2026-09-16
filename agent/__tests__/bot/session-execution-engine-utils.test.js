@@ -157,7 +157,12 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
         },
       ],
     },
-    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
     meta: {},
   });
   const message = {

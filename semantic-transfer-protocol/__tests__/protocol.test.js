@@ -235,7 +235,6 @@ test("tool input and output policies come from the protocol registry", () => {
   assert.throws(() => getToolOutputPolicy("unknown"), /tool_output_policy_not_registered/);
 });
 
-
 test("strict validation rejects unregistered incoming semantics", () => {
   const envelope = directTransfer({
     transferId: "strict-registration",
@@ -277,7 +276,11 @@ test("mergeTransferEnvelopes is ordered, idempotent, and rejects identity confli
   });
   assert.deepEqual(mergeTransferEnvelopes([envelope], envelope), [envelope]);
   assert.throws(
-    () => mergeTransferEnvelopes(envelope, { ...envelope, payload: { ...envelope.payload, content: "different" } }),
+    () =>
+      mergeTransferEnvelopes(envelope, {
+        ...envelope,
+        payload: { ...envelope.payload, content: "different" },
+      }),
     /transfer_identity_conflict/,
   );
 });
@@ -294,10 +297,12 @@ test("attachment references have one canonical conflict-aware projection", () =>
       scenario: "tool",
       strategy: "tool_output",
     },
-    attachments: [{
-      identity: { attachmentId: "ref-1", sessionId: "s1", attachmentSource: "model" },
-      name: "result.txt",
-    }],
+    attachments: [
+      {
+        identity: { attachmentId: "ref-1", sessionId: "s1", attachmentSource: "model" },
+        name: "result.txt",
+      },
+    ],
   });
   assert.equal(getTransferAttachmentReferences([envelope, envelope]).length, 1);
 });

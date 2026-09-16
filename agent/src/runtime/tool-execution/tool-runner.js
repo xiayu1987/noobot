@@ -233,10 +233,6 @@ function optionValue(value, fallback) {
   return value === undefined ? fallback : value;
 }
 
-/**
- * 取消信号的唯一读取口：runtime.abortSignal 由 runtime-context-factory 写入，
- * 每轮（含 resume）重新绑定当轮 signal，不在执行态里另存派生副本。
- */
 function toolAbortSignal(source = {}) {
   return source?.runtime?.abortSignal || null;
 }

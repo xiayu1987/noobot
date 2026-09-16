@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
+import { SessionMutationCoordinator } from "../session-mutation-coordinator.js";
 import { sessionAccessMethods } from "./file-system-session-repository/access-methods.js";
 import { sessionArtifactMethods } from "./file-system-session-repository/artifact-methods.js";
 import { sessionCrudMethods } from "./file-system-session-repository/crud-methods.js";
@@ -32,9 +32,12 @@ export class FileSystemSessionRepository {
     this.mutationLockTimeoutMs = Math.max(1, Number(mutationLockTimeoutMs) || 30000);
     this.mutationLockStaleMs = Math.max(1, Number(mutationLockStaleMs) || 60000);
     this.mutationLockPollMs = Math.max(1, Number(mutationLockPollMs) || 10);
-    this.mutationCoordinator = sessionMutationCoordinator;
+    this.mutationCoordinator = new SessionMutationCoordinator({
+      timeoutMs: this.mutationLockTimeoutMs,
+      staleMs: this.mutationLockStaleMs,
+      pollMs: this.mutationLockPollMs,
+    });
     this._deletedSessionCache = new Map();
-    this._heldMutationLocks = new Map();
   }
 }
 

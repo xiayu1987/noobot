@@ -34,7 +34,6 @@ export async function createMcpAgentTools({
     server,
     tools,
     toolNames: mcpTools.map((item) => String(item?.name || "").trim()).filter(Boolean),
-    /** 传输层收尾出口：调用方（含取消作用域）据此关闭连接，幂等。 */
     close: () => client.close(),
   };
 }

@@ -19,9 +19,6 @@ import {
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
-/**
- * 取消信号只能从 runtime.abortSignal 注入，与生产链路的唯一读取口一致。
- */
 function createRuntime(abortSignal = null) {
   const runtime = {
     abortSignal,

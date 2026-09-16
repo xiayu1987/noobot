@@ -23,7 +23,12 @@ test("V2 envelopes use one payload model and reject path-shaped fields", () => {
     identity: identity(),
     direction: "input",
     content: "hello",
-    intent: { source: "user", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT, scenario: "tool", strategy: "tool_input" },
+    intent: {
+      source: "user",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
+      scenario: "tool",
+      strategy: "tool_input",
+    },
   });
   assert.equal(direct.payload.mode, "direct");
   assert.equal(direct.payload.content, "hello");
@@ -45,7 +50,12 @@ test("V2 envelopes use one payload model and reject path-shaped fields", () => {
         preview: "preview",
       },
     ],
-    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
   });
   assert.deepEqual(attachment.payload.attachments[0].identity, {
     attachmentId: "att-1",

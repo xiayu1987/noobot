@@ -18,10 +18,6 @@ function createStreamStateView(errorRef) {
   };
 }
 
-/**
- * 执行一次发送的流式阶段：附件序列化、payload 装配、事件处理器组装与聚合版本化流。
- * lastStreamErrorEventData 通过 errorRef 显式共享给调用方的 catch 分支。
- */
 export async function executeSendStream({
   activeSession,
   applyRunStateEvent,

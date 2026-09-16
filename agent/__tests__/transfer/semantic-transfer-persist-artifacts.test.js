@@ -33,7 +33,12 @@ test("persistTransferArtifacts maps storage records to canonical attachment refe
     sessionId: "session-test-1",
     attachmentSource: "model",
     identity: identity(),
-    intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
+    intent: {
+      source: "tool",
+      reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+      scenario: "tool",
+      strategy: "tool_output",
+    },
     artifacts: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "YWJj" }],
   });
   assertTransferProtocolOnly(assert, result);
@@ -52,7 +57,12 @@ test("persistence requires an attachment service instead of returning a direct f
         userId: "u1",
         sessionId: "session-test-1",
         identity: identity(),
-        intent: { source: "tool", reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT, scenario: "tool", strategy: "tool_output" },
+        intent: {
+          source: "tool",
+          reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+          scenario: "tool",
+          strategy: "tool_output",
+        },
         artifacts: [{ name: "a.txt", contentBase64: "YQ==" }],
       }),
     /semantic_transfer_attachment_service_required/,

@@ -18,9 +18,7 @@ import {
   toPendingDisplayAttachment,
 } from "./resendAttachments.js";
 
-/** 操作已被其它抢占：静默返回 false，不再补偿。 */
 const ABORTED = Object.freeze({ aborted: true });
-/** 前置条件不满足：需要补偿关闭操作后返回 false。 */
 const REJECTED = Object.freeze({ rejected: true });
 
 async function resolveResendAttachments({
@@ -66,11 +64,6 @@ async function resolveResendAttachments({
   return { finalAttachments, pendingDisplayAttachments };
 }
 
-/**
- * 重发前置阶段：动作预处理、附件解析与锚点校验。
- * rejected 表示需补偿后返回 false，aborted 表示已被抢占需静默返回 false，
- * 抛错由调用方补偿并向上传播。
- */
 export async function prepareResendTransaction({
   buildMonotonicMessageAnchor,
   operationGuard,

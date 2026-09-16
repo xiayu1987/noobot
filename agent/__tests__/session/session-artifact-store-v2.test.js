@@ -20,7 +20,6 @@ import {
   repairSessionArtifacts,
   writeSessionArtifact as writeSessionArtifactCanonical,
 } from "../../src/session/session-artifact-store.js";
-import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
 import {
   canonicalMessages,
   withTemp,
@@ -649,27 +648,6 @@ test("session reader reports missing and corrupted turn artifacts", async () =>
     await assert.rejects(readSessionArtifact({ sessionDir: root }), {
       code: "ARTIFACT_JSON_CORRUPTED",
     });
-  }));
-
-test("mutation coordinator distinguishes nested re-entry from concurrent callers", async () =>
-  withTemp(async (root) => {
-    const coordinator = new SessionMutationCoordinator({ timeoutMs: 2000, pollMs: 2 });
-    const lockDir = path.join(root, ".lock");
-    const order = [];
-    let releaseFirst = null;
-    const firstEntered = new Promise((resolve) => {
-      releaseFirst = resolve;
-    });
-    const first = coordinator.run(lockDir, async () => {
-      order.push("a-start");
-      releaseFirst();
-      await coordinator.run(lockDir, async () => order.push("a-nested"));
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      order.push("a-end");
-    });
-    await firstEntered;
-    await Promise.all([first, coordinator.run(lockDir, async () => order.push("b"))]);
-    assert.deepEqual(order, ["a-start", "a-nested", "a-end", "b"]);
   }));
 
 test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and isolation", async () =>

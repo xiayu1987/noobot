@@ -89,7 +89,6 @@ export function createMcpTool({ agentContext }) {
           fetchImpl:
             typeof runtime?.sharedTools?.fetch === "function" ? runtime.sharedTools.fetch : null,
         });
-        /** 中止时由取消作用域关闭 MCP 连接，不依赖本函数走到 finally。 */
         releaseMcpToolset = resolveExecutionCancellationScope(runtime?.cancellationScope).register(
           () => mcpToolset?.close(),
         );
@@ -195,7 +194,6 @@ export function createMcpTool({ agentContext }) {
           code: String(error?.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),
         });
       } finally {
-        /** 正常与失败路径都在此收尾并注销登记，避免作用域登记表随调用累积。 */
         if (releaseMcpToolset) releaseMcpToolset();
         await runBestEffort(() => mcpToolset?.close(), {
           operationName: "mcpTool.closeToolset",
