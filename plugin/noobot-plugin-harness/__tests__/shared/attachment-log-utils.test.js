@@ -30,13 +30,19 @@ test("transfer payload binds and deduplicates complete V2 envelopes by stable tr
       producer: { type: "plugin", id: "harness" },
     },
     direction: "output",
-    attachments: [{
-      identity: { attachmentId: "attachment-1", sessionId: "session-1", attachmentSource: "model" },
-      role: "primary",
-      name: "report.txt",
-      mimeType: "text/plain",
-      size: 12,
-    }],
+    attachments: [
+      {
+        identity: {
+          attachmentId: "attachment-1",
+          sessionId: "session-1",
+          attachmentSource: "model",
+        },
+        role: "primary",
+        name: "report.txt",
+        mimeType: "text/plain",
+        size: 12,
+      },
+    ],
     intent: {
       source: "plugin",
       reason: TRANSFER_REASON.HARNESS_SUMMARY,
@@ -49,7 +55,10 @@ test("transfer payload binds and deduplicates complete V2 envelopes by stable tr
     { transferEnvelopes: [{ ...envelope }] },
   );
   assert.equal(message.transferEnvelopes.length, 1);
-  assert.equal(message.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "attachment-1");
+  assert.equal(
+    message.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "attachment-1",
+  );
   assert.equal(message.attachments, undefined);
 });
 

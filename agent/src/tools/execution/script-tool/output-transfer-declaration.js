@@ -19,11 +19,6 @@ function resolveMessage({ reason = "", outputLimitExceeded = false, outputLimitB
   return `Command output exceeded ${Number(outputLimitBytes || 0)} bytes and execution was terminated; ${base}`;
 }
 
-/**
- * Single source of the "script output is not inlined, read it from attachments" declaration.
- * Both the foreground overflow path and the background path project the same contract so a
- * caller never has to infer output location from the absence of stdout.
- */
 export function buildOutputTransferDeclaration({
   reason = "",
   transferEnvelopes = [],

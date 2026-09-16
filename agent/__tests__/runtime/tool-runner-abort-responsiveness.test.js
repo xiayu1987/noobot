@@ -9,9 +9,6 @@ import test from "node:test";
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { isAbortError } from "../../src/shared/utils/error-utils.js";
 
-/**
- * 取消信号只能从 runtime.abortSignal 注入，与生产链路的唯一读取口一致。
- */
 function runtime(abortSignal = null) {
   return {
     abortSignal,

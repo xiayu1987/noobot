@@ -162,11 +162,6 @@ function logCleanup(ctx, { pendingInteractionRequest, interactionSubmitting }) {
   });
 }
 
-/**
- * Collects the six diagnostic log points of the chat send flow behind one
- * facade. Mutable closure state (runtime view, turn registry) is passed as
- * getters so every emission observes the value at call time.
- */
 export function createSendFlowDebugLogger(context) {
   return {
     begin: (params) => logBegin(context, params),

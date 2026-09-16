@@ -29,6 +29,7 @@ import {
   hasDialogProcessIdInSession,
 } from "./session-message-service/message-queries.js";
 import { commitTurnSummaryCheckpoint } from "./session-message-service/turn-summary-checkpoint.js";
+import { readRepositoryParentSessionId } from "./session-scope-resolution.js";
 
 export class SessionMessageService {
   constructor({
@@ -50,16 +51,13 @@ export class SessionMessageService {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    if (typeof this.sessionRepo?.resolveSessionScope === "function") {
-      const scope = await this.sessionRepo.resolveSessionScope(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      return scope?.resolvedParentSessionId || "";
-    }
-    return this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+    return readRepositoryParentSessionId(
+      this.sessionRepo,
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
   }
 
   async _withSessionMutation(

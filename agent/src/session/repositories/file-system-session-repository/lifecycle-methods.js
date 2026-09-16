@@ -4,15 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { runBestEffort } from "@noobot/shared/best-effort";
 import { randomUUID } from "node:crypto";
-import {
-  fsMkdir,
-  fsReadFile,
-  fsRm,
-  fsStat,
-  fsWriteFile,
-} from "../../../shared/storage/fs-adapter.js";
+import { fsMkdir } from "../../../shared/storage/fs-adapter.js";
 
 class SessionLifecycleMethods {
   _sessionLifecycleLockDir(userId = "", sessionId = "") {
@@ -120,68 +113,8 @@ class SessionLifecycleMethods {
     });
   }
 
-  async _withMutationLock(lockDir, operation) {
-    if (this.mutationCoordinator?.run) return this.mutationCoordinator.run(lockDir, operation);
-    const held = this._heldMutationLocks.get(lockDir);
-    if (held) {
-      held.depth += 1;
-      try {
-        return await operation();
-      } finally {
-        held.depth -= 1;
-      }
-    }
-    const deadline = Date.now() + this.mutationLockTimeoutMs;
-    const ownerFile = path.join(lockDir, "owner");
-    const ownerToken = `${process.pid}:${randomUUID()}`;
-    await fsMkdir(path.dirname(lockDir), { recursive: true });
-    while (true) {
-      try {
-        await fsMkdir(lockDir);
-        await fsWriteFile(ownerFile, ownerToken, "utf8");
-        break;
-      } catch (error) {
-        if (error?.code !== "EEXIST") throw error;
-        try {
-          const stat = await fsStat(ownerFile).catch(() => fsStat(lockDir));
-          if (Date.now() - stat.mtimeMs > this.mutationLockStaleMs) {
-            await fsRm(lockDir, { recursive: true, force: true });
-            continue;
-          }
-        } catch (statError) {
-          if (statError?.code === "ENOENT") continue;
-          throw statError;
-        }
-        if (Date.now() >= deadline) {
-          const timeout = new Error("session mutation lock timeout");
-          timeout.statusCode = 409;
-          timeout.errorCode = "SESSION_MUTATION_BUSY";
-          throw timeout;
-        }
-        await new Promise((resolve) => setTimeout(resolve, this.mutationLockPollMs));
-      }
-    }
-    const heartbeat = setInterval(
-      () => {
-        void runBestEffort(() => fsWriteFile(ownerFile, ownerToken, "utf8"), {
-          operationName: "fileSystemSessionRepository.refreshMutationLock",
-          context: { lockDir },
-        });
-      },
-      Math.max(1000, Math.floor(this.mutationLockStaleMs / 3)),
-    );
-    heartbeat.unref?.();
-    this._heldMutationLocks.set(lockDir, { depth: 1 });
-    try {
-      return await operation();
-    } finally {
-      this._heldMutationLocks.delete(lockDir);
-      clearInterval(heartbeat);
-      const currentOwner = await fsReadFile(ownerFile, "utf8").catch(() => "");
-      if (currentOwner === ownerToken) {
-        await fsRm(lockDir, { recursive: true, force: true });
-      }
-    }
+  _withMutationLock(lockPath, operation) {
+    return this.mutationCoordinator.run(lockPath, operation);
   }
 
   async _withSessionSummaryMutation(userId, operation) {

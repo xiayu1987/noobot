@@ -78,11 +78,6 @@ export function assertNotAborted(abortSignal = null) {
   assertExecutionNotAborted({ abortSignal });
 }
 
-/**
- * 让任意 promise 对中止信号具备响应性。中止事实与错误构造均由
- * session-protocol 的 execution-abort 唯一提供，此处只做转发；
- * 中止文案由协议从 reason 派生，调用方不注入。
- */
 export function raceWithAbort(promise, abortSignal = null) {
   return raceExecutionAbort(promise, { abortSignal });
 }

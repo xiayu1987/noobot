@@ -9,6 +9,7 @@ import { runBestEffort } from "@noobot/shared/best-effort";
 import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
+import { logWarn } from "../../observability/console/logger.js";
 import {
   canonicalMessageId,
   emitContextIdentityDebug,
@@ -234,7 +235,16 @@ export class SessionExecutionFinalizer {
 
     lifecycle?.complete?.();
     await runtimeEventListener?.flushDelivery?.();
-    await runtimeEventListener?.flushPersistence?.();
+    try {
+      await runtimeEventListener?.flushPersistence?.();
+    } catch (error) {
+      logWarn("[execution][execution_log_persistence_unavailable]", {
+        sessionId,
+        turnScopeId: String(turnScopeId || "").trim(),
+        error: error?.message || String(error),
+        errorCode: error?.code || "EXECUTION_LOG_PERSISTENCE_FAILED",
+      });
+    }
 
     const executionBundleTimeoutMs = this.resolveExecutionBundleTimeoutMs(userConfig);
     let executionLogs = [];

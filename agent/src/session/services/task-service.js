@@ -4,38 +4,49 @@
  * SPDX-License-Identifier: MIT
  */
 import { v4 as uuidv4 } from "uuid";
+import { readRepositoryParentSessionId } from "./session-scope-resolution.js";
 
 export class TaskService {
-  constructor({
-    taskRepo,
-    sessionRepo,
-    now = () => new Date().toISOString(),
-  } = {}) {
+  constructor({ taskRepo, sessionRepo, now = () => new Date().toISOString() } = {}) {
     this.taskRepo = taskRepo;
     this.sessionRepo = sessionRepo;
     this.now = now;
   }
 
-  async _resolveParentSessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    if (typeof this.sessionRepo?.resolveSessionScope === "function") {
-      const scope = await this.sessionRepo.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
-      return scope?.resolvedParentSessionId || "";
-    }
-    return this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+  async _resolveParentSessionId(
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    return readRepositoryParentSessionId(
+      this.sessionRepo,
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
   }
 
-  async _withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext = null) {
+  async _withSessionMutation(
+    userId,
+    sessionId,
+    parentSessionId,
+    operation,
+    persistenceContext = null,
+  ) {
     if (typeof this.sessionRepo?.withSessionMutation === "function") {
-      return this.sessionRepo.withSessionMutation(userId, sessionId, parentSessionId, operation, persistenceContext);
+      return this.sessionRepo.withSessionMutation(
+        userId,
+        sessionId,
+        parentSessionId,
+        operation,
+        persistenceContext,
+      );
     }
     return operation();
   }
 
-  /**
-   * Resolves the session scope, ensures the session exists and loads it before
-   * delegating to the task-specific handler inside a session mutation guard.
-   * Returns null when the session cannot be loaded.
-   */
   async _withResolvedSession({ userId, sessionId, parentSessionId, persistenceContext }, handler) {
     return this._withSessionMutation(
       userId,
@@ -110,7 +121,13 @@ export class TaskService {
           meta,
         };
 
-        await this.taskRepo.save(userId, sessionId, task, resolvedParentSessionId, persistenceContext);
+        await this.taskRepo.save(
+          userId,
+          sessionId,
+          task,
+          resolvedParentSessionId,
+          persistenceContext,
+        );
 
         session.currentTaskId = taskId;
         if (session.messages?.length) {
@@ -118,7 +135,9 @@ export class TaskService {
           lastMessage.taskId = taskId;
           lastMessage.taskStatus = "start";
         }
-        await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+        await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
+          persistenceContext,
+        });
         return task;
       },
     );
@@ -144,9 +163,7 @@ export class TaskService {
 
         const currentTaskId = taskId || taskBundle.currentTaskId || session.currentTaskId;
         if (!currentTaskId) return null;
-        const task = (taskBundle.tasks || []).find(
-          (taskItem) => taskItem.taskId === currentTaskId,
-        );
+        const task = (taskBundle.tasks || []).find((taskItem) => taskItem.taskId === currentTaskId);
         if (!task) return null;
 
         task.taskStatus = "completed";
@@ -154,7 +171,9 @@ export class TaskService {
         if (result) task.result = result;
 
         const nextCurrentTaskId =
-          String(taskBundle.currentTaskId || "").trim() === currentTaskId ? "" : taskBundle.currentTaskId;
+          String(taskBundle.currentTaskId || "").trim() === currentTaskId
+            ? ""
+            : taskBundle.currentTaskId;
         await this.taskRepo.saveBatch(
           userId,
           sessionId,
@@ -171,7 +190,9 @@ export class TaskService {
           const lastMessage = session.messages[session.messages.length - 1];
           lastMessage.taskStatus = "completed";
         }
-        await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+        await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
+          persistenceContext,
+        });
         return task;
       },
     );
@@ -187,9 +208,8 @@ export class TaskService {
     return this._withResolvedSession(
       { userId, sessionId, parentSessionId, persistenceContext },
       async ({ session, resolvedParentSessionId }) => {
-        const normalizedTurnTasks = (Array.isArray(currentTurnTasks)
-          ? currentTurnTasks
-          : []
+        const normalizedTurnTasks = (
+          Array.isArray(currentTurnTasks) ? currentTurnTasks : []
         ).filter((task) => String(task?.taskId || "").trim());
 
         const lastTask = normalizedTurnTasks[normalizedTurnTasks.length - 1] || null;
@@ -205,9 +225,16 @@ export class TaskService {
         );
 
         session.currentTaskId = currentTaskId;
-        await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+        await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
+          persistenceContext,
+        });
 
-        return this.taskRepo.getBundle(userId, sessionId, resolvedParentSessionId, persistenceContext);
+        return this.taskRepo.getBundle(
+          userId,
+          sessionId,
+          resolvedParentSessionId,
+          persistenceContext,
+        );
       },
     );
   }

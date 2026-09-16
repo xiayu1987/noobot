@@ -15,6 +15,7 @@ import {
   assertPreparedBackendRuntimeWorkspaces,
   resolveDesktopBackendRuntimeWorkspaces,
 } from "./backend-runtime-workspaces.js";
+import { shouldCopyBackendRuntimeFile } from "./backend-runtime-copy-filter.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), "../../..");
@@ -25,23 +26,6 @@ const outRoot = path.join(desktopProjectDir, "build/backend-runtime");
 const backendRoot = path.join(outRoot, "backend");
 
 const runtimeAssetDirs = ["user-template"];
-const ignore =
-  /(^|[/\\])(?:node_modules|\.git|__tests__|test|tests|\.cache|dist|coverage)([/\\]|$)|\.(?:map|md)$/i;
-const privateConfigFileNames = new Set([
-  "global.config.json",
-  "config.json",
-  "agent-proxy.config.json",
-  "model-proxy.config.json",
-]);
-
-function shouldCopyRuntimeFile(fromRoot, src) {
-  const relativePath = path.relative(fromRoot, src);
-  const normalizedRelativePath = relativePath.split(path.sep).join("/");
-  if (normalizedRelativePath.startsWith("src/prompts/")) return true;
-  if (ignore.test(relativePath)) return false;
-  if (privateConfigFileNames.has(path.basename(src))) return false;
-  return true;
-}
 
 function log(message) {
   console.log(`[prepare-backend] ${message}`);
@@ -78,7 +62,7 @@ async function copyDir(name) {
   log(`Copying ${name}: ${from} -> ${to}`);
   await cp(from, to, {
     recursive: true,
-    filter: (src) => shouldCopyRuntimeFile(from, src),
+    filter: (src) => shouldCopyBackendRuntimeFile(from, src),
   });
 }
 

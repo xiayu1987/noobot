@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Tracks in-flight authoritative state resolutions so the send flow can await
- * every pending projection before reporting the turn as resolved.
- */
 export function createAuthorityResolutionTracker({
   applyRunStateEvent,
   applyTurnLifecycleEnvelope,

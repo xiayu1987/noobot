@@ -302,7 +302,10 @@ function mergeWorkflowTransferEnvelopes(baseTransferPayload, composedTransferPay
 
 function resolveWorkflowMessageId(ctx = {}) {
   const messageId = String(
-    ctx?.messageId || ctx?.runConfig?.messageId || resolveWorkflowParentRunConfig(ctx)?.messageId || "",
+    ctx?.messageId ||
+      ctx?.runConfig?.messageId ||
+      resolveWorkflowParentRunConfig(ctx)?.messageId ||
+      "",
   ).trim();
   if (!messageId) {
     throw new Error("Workflow final message requires canonical messageId");

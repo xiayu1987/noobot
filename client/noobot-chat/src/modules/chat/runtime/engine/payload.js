@@ -19,7 +19,6 @@ function normalizeSelectedPluginKeys(selectedPlugins) {
   return source.map((pluginKey) => normalizeTrimmedString(pluginKey)).filter(Boolean);
 }
 
-/** Unwraps a possibly reactive ref and defaults to true unless explicitly false. */
 const unwrap = (source) => source?.value ?? source;
 const trueUnlessFalse = (source) => unwrap(source) !== false;
 const plainObjectOrNull = (source) => {
@@ -27,14 +26,12 @@ const plainObjectOrNull = (source) => {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 };
 
-/** Resolves the command type from the mutually exclusive send intents. */
 function resolveCommandType({ continueFromStopped, reuseExistingUserTurn }) {
   if (continueFromStopped) return AGENT_COMMAND.CONTINUE;
   if (reuseExistingUserTurn) return AGENT_COMMAND.RESEND;
   return AGENT_COMMAND.SEND;
 }
 
-/** Builds the preferences block, omitting optional keys that resolve to empty. */
 function buildPreferences(options) {
   const scenario = normalizeTrimmedString(unwrap(options.botScenario));
   const selectedModel = normalizeTrimmedString(unwrap(options.selectedModel));
@@ -61,7 +58,6 @@ function buildPreferences(options) {
   };
 }
 
-/** Builds the session block; only a fresh local send may create a session. */
 function buildSessionBlock({ activeSession, commandType }) {
   const createsLocalSession =
     commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true;
@@ -73,7 +69,6 @@ function buildSessionBlock({ activeSession, commandType }) {
   };
 }
 
-/** Builds the identity block from the active session and requested scopes. */
 function buildIdentity({ activeSession, dialogProcessId, turnScopeId }) {
   return {
     sessionId: activeSession?.value?.sessionId,

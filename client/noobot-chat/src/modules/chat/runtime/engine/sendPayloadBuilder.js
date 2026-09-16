@@ -6,10 +6,6 @@
 import { buildChatPayload } from "./payload.js";
 import { normalizeTrimmedString } from "./utils.js";
 
-/**
- * Builds the per-attempt chat payload factory. The returned function is called
- * once per aggregate-version attempt, so only the expected version varies.
- */
 export function createTurnPayloadBuilder({ preferences, request, turn }) {
   const { continueFromUserStopped } = request;
   return ({ expectedAggregateVersion } = {}) =>

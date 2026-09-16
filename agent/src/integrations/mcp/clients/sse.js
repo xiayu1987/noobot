@@ -194,10 +194,6 @@ export class SseMcpClient extends BaseMcpClient {
     await this._endpointPromise;
   }
 
-  /**
-   * 关闭 SSE 长连接：中止流请求即可，待处理请求由 _startSseStream 既有的
-   * catch 路径统一 reject，不在此另立第二条清理逻辑。幂等。
-   */
   async close() {
     const controller = this._streamAbortController;
     this._streamAbortController = null;

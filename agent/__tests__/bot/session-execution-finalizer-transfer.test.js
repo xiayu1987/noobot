@@ -92,6 +92,50 @@ test("SessionExecutionFinalizer waits for execution event durability before read
   assert.deepEqual(order.slice(-3), ["completed", "flush", "bundle"]);
 });
 
+test("SessionExecutionFinalizer keeps persistence failures out of the runtime event channel after completion", async () => {
+  const events = [];
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => ({ role: "assistant", type: "message", content: "done" }),
+      async appendAgentMessages() {},
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+
+  const result = await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "turn-1",
+    agentResult: { output: "done", turnTasks: [] },
+    lifecycle: {
+      complete: () => events.push("completed"),
+    },
+    runtimeEventListener: {
+      onEvent: ({ event, data }) => events.push({ event, data }),
+      async flushPersistence() {
+        const error = new Error("EPERM: operation not permitted");
+        error.code = "EPERM";
+        throw error;
+      },
+    },
+  });
+
+  assert.equal(result.answer, "done");
+  assert.equal(
+    events.some((event) => event?.event === "execution_log_persistence_unavailable"),
+    false,
+  );
+  assert.equal(events.includes("completed"), true);
+});
+
 test("SessionExecutionFinalizer promotes semantic-transfer attachments as transfer envelopes without mirror", async () => {
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({

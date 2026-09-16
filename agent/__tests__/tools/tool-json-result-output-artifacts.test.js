@@ -10,7 +10,11 @@ import {
   parseToolOutputArtifacts,
   projectToolResultForModel,
 } from "../../src/tools/core/tool-json-result.js";
-import { attachmentTransfer, createTransferIdentity, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
+import {
+  attachmentTransfer,
+  createTransferIdentity,
+  TRANSFER_REASON,
+} from "@noobot/semantic-transfer-protocol";
 
 test("failed tool results use one required result shape", () => {
   assert.deepEqual(buildToolResultPayload({ ok: false, message: "blocked" }), {
