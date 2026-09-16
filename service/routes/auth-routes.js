@@ -7,6 +7,7 @@ import { resolveLocalizedBuiltinScenarios } from "#agent/config";
 import { getProviders, resolveDefaultModelSpec } from "#agent/model";
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import { withJsonError } from "./route-wrapper.js";
+import { normalizePluginMode } from "@noobot/agent-config-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -15,14 +16,6 @@ import {
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function normalizePluginMode(value = "off") {
-  return String(value || "")
-    .trim()
-    .toLowerCase() === "on"
-    ? "on"
-    : "off";
 }
 
 function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {

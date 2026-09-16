@@ -138,6 +138,14 @@ test("model defaults follow provider-specific sampling guidance", async () => {
     { temperature: qwen.temperature, top_p: qwen.top_p, top_k: qwen.top_k, min_p: qwen.min_p },
     { temperature: 0.7, top_p: 0.8, top_k: 20, min_p: 0 },
   );
+  assert.deepEqual(
+    {
+      top_p: compileProviderModelKwargs(qwen).top_p,
+      top_k: compileProviderModelKwargs(qwen).top_k,
+      min_p: compileProviderModelKwargs(qwen).min_p,
+    },
+    { top_p: 0.8, top_k: 20, min_p: 0 },
+  );
   const thinking = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
     reasoning_effort_parameter: "enable_thinking",
@@ -225,6 +233,21 @@ test("normalized ordinary requests compile their configured reasoning effort", a
     reasoning_effort: "high",
   });
   assert.equal(compileProviderModelKwargs(spec).reasoning_effort, "high");
+});
+
+test("normalized sampling parameters reach provider model kwargs", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  const { compileProviderModelKwargs } = await import("../src/policies/cache-policy-engine.js");
+  const spec = normalizeRuntimeModelSpec({
+    model: "qwen3.7-plus",
+    top_k: 40,
+    min_p: 0.05,
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
+  });
+  const kwargs = compileProviderModelKwargs(spec);
+  assert.equal(kwargs.top_k, 40);
+  assert.equal(kwargs.min_p, 0.05);
 });
 
 test("model series use their provider reasoning parameter names", async () => {

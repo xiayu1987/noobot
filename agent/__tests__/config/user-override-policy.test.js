@@ -37,14 +37,14 @@ test("sanitizeUserConfig: runTimeoutMs 阈值配置应被过滤", () => {
   assert.equal("runTimeoutMs" in out, false);
 });
 
-test("sanitizeUserConfig: 应剔除 tools.execute_script 覆盖", () => {
+test("sanitizeUserConfig: 应剔除系统工具和未声明工具覆盖", () => {
   const out = sanitizeUserConfig({
     tools: {
       execute_script: { enabled: false },
       safe_tool: { enabled: true },
     },
   });
-  assert.deepEqual(out.tools, { safe_tool: { enabled: true } });
+  assert.deepEqual(out.tools, {});
 });
 
 test("sanitizeUserConfig: 用户不能写入默认模板之外的 attachments 节点", () => {
@@ -145,7 +145,7 @@ test("mergeConfig: providers 应深度合并并保留 tool_reasoning_effort", ()
   assert.equal(out.providers.openai.temperature, 0.6);
 });
 
-test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并", () => {
+test("mergeConfig: 系统配置保持权威且仅允许契约声明的用户偏好", () => {
   const out = mergeConfig(
     {
       session: {
@@ -156,7 +156,7 @@ test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并
         sections: { services: true, tools: true },
       },
       preferences: {
-        locale: "zh-CN",
+        language: "zh-CN",
         theme: { mode: "light", density: "comfortable" },
       },
     },
@@ -168,25 +168,26 @@ test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并
         sections: { tools: false },
       },
       preferences: {
+        language: "en-US",
         theme: { density: "compact" },
       },
     },
   );
 
   assert.deepEqual(out.session, {
-    contextWindow: { maxTokens: 1000, reserveTokens: 300 },
+    contextWindow: { maxTokens: 1000, reserveTokens: 200 },
   });
   assert.deepEqual(out.context, {
     mode: "full",
-    sections: { services: true, tools: false },
+    sections: { services: true, tools: true },
   });
   assert.deepEqual(out.preferences, {
-    locale: "zh-CN",
-    theme: { mode: "light", density: "compact" },
+    language: "en-US",
+    theme: { mode: "light", density: "comfortable" },
   });
 });
 
-test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置", () => {
+test("mergeConfig: 仅合并契约允许的用户字段且不污染全局配置", () => {
   const globalConfig = {
     defaultProvider: "global-provider",
     providers: {
@@ -222,7 +223,7 @@ test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置"
       workflow: { enabled: true, timeoutMs: 1000 },
     },
     preferences: {
-      locale: "zh-CN",
+      language: "zh-CN",
       theme: { mode: "light", density: "comfortable" },
     },
     scenarios: {
@@ -256,7 +257,7 @@ test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置"
       adminPlugin: { enabled: true },
       workflow: { enabled: false, timeoutMs: 9999 },
     },
-    preferences: { locale: "en-US", theme: { density: "compact" } },
+    preferences: { language: "en-US", theme: { density: "compact" } },
     scenarios: {
       default: "programming",
       definitions: { programming: { model: "admin-programming-model" } },
@@ -276,23 +277,24 @@ test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置"
     globalConfig.attachments,
     "附件策略属于全局系统配置，用户不能覆盖",
   );
-  assert.equal(out.session.mode, "admin-mode");
+  assert.equal(out.session.mode, "global-mode");
   assert.equal(out.session.contextWindow.maxTokens, 1000);
-  assert.equal(out.session.contextWindow.reserveTokens, 250);
-  assert.equal(out.context.mode, "admin-context");
+  assert.equal(out.session.contextWindow.reserveTokens, 100);
+  assert.equal(out.context.mode, "global-context");
   assert.equal(out.context.sections.services, true);
-  assert.equal(out.context.sections.tools, false);
-  assert.equal(out.services.sharedService.endpoint, "https://admin.example.com");
+  assert.equal(out.context.sections.tools, true);
+  assert.equal(out.services.sharedService.endpoint, "https://global.example.com");
+  assert.equal(out.services.adminService.enabled, true);
   assert.equal(out.mcpServers.sharedServer.url, "https://global.example.com");
   assert.equal(out.mcpServers.sharedServer.headers.authorization, "admin-token");
-  assert.equal(out.tools.sharedTool.mode, "admin-mode");
+  assert.equal(out.tools.sharedTool.mode, "global-mode");
   assert.equal(out.tools.execute_script, undefined, "execute_script 不允许用户覆盖");
-  assert.equal(out.plugins.adminPlugin.enabled, true);
+  assert.equal(out.plugins.adminPlugin, undefined);
   assert.equal(out.plugins.workflow.enabled, false);
   assert.equal(out.plugins.workflow.timeoutMs, 1000, "工作流超时仍来自全局");
-  assert.equal(out.preferences.locale, "en-US");
+  assert.equal(out.preferences.language, "en-US");
   assert.equal(out.preferences.theme.mode, "light");
-  assert.equal(out.preferences.theme.density, "compact");
+  assert.equal(out.preferences.theme.density, "comfortable");
   assert.equal(out.scenarios.default, "programming");
   assert.equal(out.scenarios.definitions.programming.model, "admin-programming-model");
   assert.equal(out.configParams, undefined);

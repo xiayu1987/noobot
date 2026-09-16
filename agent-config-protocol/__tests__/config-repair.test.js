@@ -94,6 +94,42 @@ test("default user template is the user-scope source of truth for system-owned n
   }
 });
 
+test("provider system declarations cannot be overridden by user config", () => {
+  const globalConfig = {
+    providers: {
+      primary: {
+        model: "global-model",
+        reasoning_effort_options: ["none", "high"],
+        reasoning_effort_parameter: "reasoning_effort",
+        use_responses_api: true,
+        cache_control: { type: "ephemeral" },
+        capabilities: { reasoning: true, tools: true },
+      },
+    },
+  };
+  const userConfig = {
+    providers: {
+      primary: {
+        model: "user-model",
+        reasoning_effort_options: ["forged"],
+        reasoning_effort_parameter: "enable_thinking",
+        use_responses_api: false,
+        cache_control: false,
+        capabilities: { reasoning: false, tools: false },
+      },
+    },
+  };
+
+  assert.deepEqual(mergeConfig(globalConfig, userConfig).providers.primary, {
+    model: "user-model",
+    reasoning_effort_options: ["none", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
+    use_responses_api: true,
+    cache_control: { type: "ephemeral" },
+    capabilities: { reasoning: true, tools: true },
+  });
+});
+
 test("global config delegates path-policy content without creating a second schema", () => {
   const pathPolicy = {
     roles: {
@@ -143,9 +179,9 @@ test("config repair recursively adds template nodes through one protocol", () =>
   assert.deepEqual(synchronized.providers.primary, {
     reasoning_effort: "high",
     tool_reasoning_effort: "medium",
-    reasoning_effort_options: ["low", "medium", "high"],
-    reasoning_effort_parameter: "reasoning_effort",
     capabilities: { web_search: true },
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["low", "medium", "high"],
   });
   assert.deepEqual(synchronized.providers.added, { enabled: true });
   assert.equal(synchronized.providers.custom.model, "custom-model");

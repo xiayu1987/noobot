@@ -16,6 +16,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import { projectUserVisibleConfigDeclarations } from "@noobot/agent-config-protocol";
 
 const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
   "memory",
@@ -71,7 +72,9 @@ export function registerWorkspaceRoutes(
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
   const maskHostPath = (pathValue = "") => {
-    const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+    const normalized = String(pathValue || "")
+      .trim()
+      .replaceAll("\\", "/");
     if (!normalized) return "";
     const parts = normalized.split("/").filter(Boolean);
     if (parts.length <= 2) return normalized;
@@ -97,7 +100,9 @@ export function registerWorkspaceRoutes(
   };
 
   const assertHostAccessAllowed = (req) => {
-    const isSandbox = String(req?.query?.isSandbox || "").trim().toLowerCase();
+    const isSandbox = String(req?.query?.isSandbox || "")
+      .trim()
+      .toLowerCase();
     if (isSandbox !== "false") {
       const error = new Error("Host file access requires non-sandbox attachment metadata.");
       error.status = 403;
@@ -128,7 +133,6 @@ export function registerWorkspaceRoutes(
     }
     return { hostPath, fileStats };
   };
-
 
   app.get(
     "/internal/host-file/file",
@@ -188,15 +192,15 @@ export function registerWorkspaceRoutes(
     "/internal/workspace/reset/:userId",
     jsonRoute(
       async (req, res) => {
-      const { userId } = req.params;
-      const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
-      const basePath = await workspaceService.resetUserWorkspace(userId, { sections });
-      res.json({
-        ok: true,
-        userId,
-        root: basePath,
-        sections,
-      });
+        const { userId } = req.params;
+        const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
+        const basePath = await workspaceService.resetUserWorkspace(userId, { sections });
+        res.json({
+          ok: true,
+          userId,
+          root: basePath,
+          sections,
+        });
       },
       { fallbackErrorKey: "common.resetWorkspaceFailed" },
     ),
@@ -206,11 +210,24 @@ export function registerWorkspaceRoutes(
     "/internal/workspace/sync/:userId",
     jsonRoute(
       async (req, res) => {
-      const { userId } = req.params;
-      const basePath = await workspaceService.syncUserWorkspace(userId);
-      res.json({ ok: true, userId, root: basePath });
+        const { userId } = req.params;
+        const basePath = await workspaceService.syncUserWorkspace(userId);
+        res.json({ ok: true, userId, root: basePath });
       },
       { fallbackErrorKey: "common.syncWorkspaceFailed" },
+    ),
+  );
+
+  app.get(
+    "/internal/workspace/:userId/config-declarations",
+    jsonRoute(
+      async (_req, res) => {
+        res.json({
+          ok: true,
+          declarations: projectUserVisibleConfigDeclarations(globalConfig),
+        });
+      },
+      { fallbackErrorKey: "common.readWorkspaceFileFailed" },
     ),
   );
 
@@ -227,9 +244,7 @@ export function registerWorkspaceRoutes(
       const userId = String(req?.params?.userId || "").trim();
       const sessionId = String(req?.query?.sessionId || req?.body?.sessionId || "").trim();
       const parentSessionId = String(
-        req?.query?.parentSessionId ||
-          req?.body?.parentSessionId ||
-          "",
+        req?.query?.parentSessionId || req?.body?.parentSessionId || "",
       ).trim();
       const scopeId = String(req?.query?.scopeId || req?.body?.scopeId || "").trim();
       const relativeDir = String(req?.query?.relativeDir || req?.body?.relativeDir || "").trim();
@@ -266,38 +281,37 @@ export function registerWorkspaceRoutes(
     },
   });
 
-
   app.post(
     "/internal/admin/workspace-all/sync",
     requireApiKey,
     requireSuperAdmin,
     jsonRoute(
       async (req, res) => {
-      const root = workspaceRootPath();
-      const userDirs = await listWorkspaceUserDirs(root, globalConfig);
-      const syncedUsers = [];
-      for (const userId of userDirs) {
-        try {
-          await workspaceService.syncUserWorkspace(userId);
-          syncedUsers.push(userId);
-        } catch (error) {
-          void writeRoutedRuntimeEvent({
-            source: "service",
-            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-            category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-            level: "warn",
-            event: "service.workspaceRoutes.syncUserWorkspace.failed",
-            data: { userIdLength: String(userId || "").length },
-            error,
-          });
+        const root = workspaceRootPath();
+        const userDirs = await listWorkspaceUserDirs(root, globalConfig);
+        const syncedUsers = [];
+        for (const userId of userDirs) {
+          try {
+            await workspaceService.syncUserWorkspace(userId);
+            syncedUsers.push(userId);
+          } catch (error) {
+            void writeRoutedRuntimeEvent({
+              source: "service",
+              channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+              category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+              level: "warn",
+              event: "service.workspaceRoutes.syncUserWorkspace.failed",
+              data: { userIdLength: String(userId || "").length },
+              error,
+            });
+          }
         }
-      }
-      res.json({
-        ok: true,
-        syncedUsers,
-        total: userDirs.length,
-        success: syncedUsers.length,
-      });
+        res.json({
+          ok: true,
+          syncedUsers,
+          total: userDirs.length,
+          success: syncedUsers.length,
+        });
       },
       { fallbackErrorKey: "common.syncAllWorkspaceFailed" },
     ),
@@ -309,41 +323,40 @@ export function registerWorkspaceRoutes(
     requireSuperAdmin,
     jsonRoute(
       async (req, res) => {
-      const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
-      const root = workspaceRootPath();
-      const userDirs = await listWorkspaceUserDirs(root, globalConfig);
-      const resetUsers = [];
-      for (const userId of userDirs) {
-        try {
-          await workspaceService.resetUserWorkspace(userId, { sections });
-          resetUsers.push(userId);
-        } catch (error) {
-          void writeRoutedRuntimeEvent({
-            source: "service",
-            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-            category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-            level: "warn",
-            event: "service.workspaceRoutes.resetUserWorkspace.failed",
-            data: {
-              userIdLength: String(userId || "").length,
-              sectionCount: sections.length,
-            },
-            error,
-          });
+        const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
+        const root = workspaceRootPath();
+        const userDirs = await listWorkspaceUserDirs(root, globalConfig);
+        const resetUsers = [];
+        for (const userId of userDirs) {
+          try {
+            await workspaceService.resetUserWorkspace(userId, { sections });
+            resetUsers.push(userId);
+          } catch (error) {
+            void writeRoutedRuntimeEvent({
+              source: "service",
+              channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+              category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+              level: "warn",
+              event: "service.workspaceRoutes.resetUserWorkspace.failed",
+              data: {
+                userIdLength: String(userId || "").length,
+                sectionCount: sections.length,
+              },
+              error,
+            });
+          }
         }
-      }
-      res.json({
-        ok: true,
-        resetUsers,
-        total: userDirs.length,
-        success: resetUsers.length,
-        sections,
-      });
+        res.json({
+          ok: true,
+          resetUsers,
+          total: userDirs.length,
+          success: resetUsers.length,
+          sections,
+        });
       },
       { fallbackErrorKey: "common.resetAllWorkspaceFailed" },
     ),
   );
-
 
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/admin/workspace-all",

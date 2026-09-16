@@ -27,7 +27,9 @@ import {
   validateModelResponse,
   resolveModelAdapterId,
   MODEL_ADAPTER_ID,
+  MODEL_PROVIDER_CONFIG_ACCESS,
   MODEL_PROVIDER_CONFIG_CONTRACT,
+  MODEL_PROVIDER_DECLARATION_VISIBILITY,
 } from "../src/index.js";
 
 test("model input processing keeps directly readable text out of multimodal parsing", () => {
@@ -500,6 +502,38 @@ test("model-family facts select the transport adapter without config fields", ()
   assert.equal(claude.model.adapterId, MODEL_ADAPTER_ID.ANTHROPIC_MESSAGES);
   assert.equal("adapter_id" in claude.model, false);
   assert.equal("adapter_id" in MODEL_PROVIDER_CONFIG_CONTRACT.properties, false);
+});
+
+test("provider config contract owns field configurability and declaration visibility", () => {
+  const fields = MODEL_PROVIDER_CONFIG_CONTRACT.properties;
+  assert.equal(
+    Object.values(fields).every((field) => "configAccess" in field),
+    true,
+  );
+  assert.equal(
+    Object.values(fields).every((field) => "declarationVisibility" in field),
+    true,
+  );
+  assert.equal(
+    Object.values(fields).some((field) => "access" in field),
+    false,
+  );
+  assert.equal(
+    Object.values(fields).some((field) => "itemType" in field),
+    false,
+  );
+  assert.equal(fields.model.configAccess, MODEL_PROVIDER_CONFIG_ACCESS.USER);
+  assert.equal(fields.cache_control.configAccess, MODEL_PROVIDER_CONFIG_ACCESS.SYSTEM);
+  assert.equal(
+    fields.reasoning_effort_options.declarationVisibility,
+    MODEL_PROVIDER_DECLARATION_VISIBILITY.USER,
+  );
+  assert.equal(
+    fields.reasoning_effort_parameter.declarationVisibility,
+    MODEL_PROVIDER_DECLARATION_VISIBILITY.HIDDEN,
+  );
+  assert.equal(fields.reasoning_effort.optionsField, "reasoning_effort_options");
+  assert.equal(fields.tool_reasoning_effort.optionsField, "reasoning_effort_options");
 });
 
 test("multimodal capabilities are governed only by explicit model configuration", () => {

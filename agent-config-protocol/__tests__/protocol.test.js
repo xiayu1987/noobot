@@ -29,10 +29,104 @@ import {
   CONFIG_ERROR_CODE,
   resolveMultimodalDefaultModelSelection,
   CONFIG_DOCUMENT_SCOPE,
+  CONFIG_ITEM_TYPE,
+  CONFIG_NODE_ACCESS,
   CONFIG_NODE_POLICY,
   CONFIG_REPAIR_ACTION,
   repairConfigDocument,
+  CONFIG_STRUCTURE,
+  MODEL_PROVIDER_AGENT_CONFIG_CONTRACT,
+  projectUserVisibleConfigDeclarations,
+  resolveConfigNodeSemantics,
 } from "../src/index.js";
+import { MODEL_PROVIDER_CONFIG_CONTRACT } from "@noobot/model-protocol";
+
+test("config source and edit access form four independent quadrants", () => {
+  const quadrants = [
+    [CONFIG_STRUCTURE.fields.providers.entry, CONFIG_ITEM_TYPE.EXPLICIT, CONFIG_NODE_ACCESS.USER],
+    [
+      CONFIG_STRUCTURE.fields.preferences.fields.language,
+      CONFIG_ITEM_TYPE.BUILTIN,
+      CONFIG_NODE_ACCESS.USER,
+    ],
+    [CONFIG_STRUCTURE.fields.session, CONFIG_ITEM_TYPE.BUILTIN, CONFIG_NODE_ACCESS.SYSTEM],
+    [CONFIG_STRUCTURE.fields.workspace_root, CONFIG_ITEM_TYPE.EXPLICIT, CONFIG_NODE_ACCESS.SYSTEM],
+  ];
+  for (const [node, itemType, access] of quadrants) {
+    const semantics = resolveConfigNodeSemantics(node, CONFIG_DOCUMENT_SCOPE.GLOBAL);
+    assert.equal(semantics.itemType, itemType);
+    assert.equal(semantics.access, access);
+  }
+  assert.throws(
+    () =>
+      resolveConfigNodeSemantics(
+        { itemType: CONFIG_ITEM_TYPE.BUILTIN },
+        CONFIG_DOCUMENT_SCOPE.USER,
+      ),
+    /unsupported config node access/,
+  );
+});
+
+test("every config contract node explicitly declares source and access", () => {
+  const visit = (node, path) => {
+    assert.ok(
+      Object.values(CONFIG_ITEM_TYPE).includes(node?.itemType),
+      `${path} must declare a supported itemType`,
+    );
+    assert.ok(
+      Object.values(CONFIG_NODE_ACCESS).includes(node?.access),
+      `${path} must declare a supported access`,
+    );
+    if (node.delegatedContract) {
+      for (const [key, child] of Object.entries(node.delegatedContract.properties || {})) {
+        visit(child, `${path}.${key}`);
+      }
+    }
+    if (node.kind === "object" && node.fields) {
+      for (const [key, child] of Object.entries(node.fields)) visit(child, `${path}.${key}`);
+    }
+    if (node.kind === "collection" && node.entry) visit(node.entry, `${path}.<entry>`);
+    if (node.kind === "array" && node.item && typeof node.item === "object") {
+      visit(node.item, `${path}.<item>`);
+    }
+  };
+
+  visit(CONFIG_STRUCTURE, "config");
+});
+
+test("user-visible declarations expose fixed choices without provider credentials", () => {
+  const fixedChoices = resolveConfigNodeSemantics(
+    MODEL_PROVIDER_AGENT_CONFIG_CONTRACT.properties.reasoning_effort_options,
+    CONFIG_DOCUMENT_SCOPE.GLOBAL,
+  );
+  assert.equal(fixedChoices.itemType, CONFIG_ITEM_TYPE.EXPLICIT);
+  assert.equal(fixedChoices.access, CONFIG_NODE_ACCESS.SYSTEM);
+  const declarations = projectUserVisibleConfigDeclarations({
+    providers: {
+      primary: {
+        api_key: "secret",
+        reasoning_effort_options: ["none", "high"],
+        reasoning_effort_parameter: "reasoning_effort",
+        use_responses_api: true,
+      },
+    },
+  });
+  assert.deepEqual(declarations, {
+    providers: { primary: { reasoning_effort_options: ["none", "high"] } },
+  });
+  assert.equal(Object.isFrozen(declarations.providers.primary), true);
+});
+
+test("agent provider access is projected from the model provider contract", () => {
+  for (const [field, modelNode] of Object.entries(MODEL_PROVIDER_CONFIG_CONTRACT.properties)) {
+    const agentNode = MODEL_PROVIDER_AGENT_CONFIG_CONTRACT.properties[field];
+    assert.equal(
+      agentNode.access,
+      modelNode.configAccess === "user" ? CONFIG_NODE_ACCESS.USER : CONFIG_NODE_ACCESS.SYSTEM,
+      field,
+    );
+  }
+});
 
 test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
@@ -453,8 +547,6 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
     model: "ZHIPU/GLM-5.3",
     reasoning_effort: "low",
     tool_reasoning_effort: "low",
-    reasoning_effort_options: ["low", "high", "max"],
-    reasoning_effort_parameter: "reasoning_effort",
   };
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
@@ -477,24 +569,12 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
   assert.deepEqual(repaired.document.providers["glm_5_3"], {
     reasoning_effort: "low",
     tool_reasoning_effort: "low",
-    reasoning_effort_options: ["low", "high", "max"],
-    reasoning_effort_parameter: "reasoning_effort",
     enabled: true,
     used_for_conversation: true,
     api_key: "${DASHSCOPE_API_KEY}",
     base_url: "${DASHSCOPE_API_ADDRESS}",
     model: "ZHIPU/GLM-5.3",
     description: "Z.AI GLM-5.3 reasoning model (official OpenAI-compatible API)",
-    multimodal_parsing: {
-      enabled: false,
-      input_modalities: [],
-    },
-    multimodal_generation: {
-      support_generation: {
-        enabled: false,
-        support_scope: [],
-      },
-    },
   });
 });
 
@@ -683,12 +763,12 @@ test("config repair enforces defaulted, optional, and system-owned node policies
   assert.equal(first.document.providers.primary.temperature, 0.4);
   assert.equal(first.document.providers.primary.enabled, false);
   assert.equal(first.document.providers.custom.top_p, 0.8);
-  assert.equal(first.document.providers.custom.cache_control, false);
+  assert.equal(first.document.providers.custom.cache_control, undefined);
   assert.equal(first.document.providers.incomplete.model, "missing-format");
   assert.equal("format" in first.document.providers.incomplete, false);
   assert.equal(first.document.default_provider, "incomplete");
-  assert.deepEqual(first.document.context, { customSection: { enabled: true } });
-  assert.deepEqual(first.document.session, {});
+  assert.equal(first.document.context, undefined);
+  assert.equal(first.document.session, undefined);
   assert.equal(first.document.unknown_root, undefined);
   assert.equal(
     first.report.changes.some(({ path }) => path === "tools.execute_native_script"),

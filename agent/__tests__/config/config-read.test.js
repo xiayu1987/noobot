@@ -205,7 +205,11 @@ test("ConfigService.loadUserConfig: 应按 user、workspace、env 顺序解析�
     const loaded = await service.loadUserConfig(userDir);
     assert.equal(loaded.providers?.openai?.api_key, "user-key");
     assert.equal(loaded.providers?.openai?.base_url, "https://workspace.example.com");
-    assert.equal(loaded.providers?.openai?.env_fallback, "environment-fallback");
+    assert.equal(
+      loaded.providers?.openai?.env_fallback,
+      undefined,
+      "未声明的 provider 字段不应进入用户配置",
+    );
     assert.equal(loaded.configParams, undefined);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

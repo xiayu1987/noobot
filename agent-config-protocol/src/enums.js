@@ -25,6 +25,16 @@ export const MCP_SERVER_TYPE = {
   SSE: "sse",
 };
 
+export const PLUGIN_MODE = {
+  ON: "on",
+  OFF: "off",
+};
+
+export const PREFERENCE_LANGUAGE = {
+  ZH_CN: "zh-CN",
+  EN_US: "en-US",
+};
+
 export const WEB_SEARCH_MODE = {
   SEARCH_ENGINE: "search_engine",
   MODEL_WEB_SEARCH: "model_web_search",
@@ -110,6 +120,13 @@ export function normalizeProviderFormat(input = "") {
 export function normalizeMcpServerType(input = "") {
   const value = String(input || "").trim();
   return Object.values(MCP_SERVER_TYPE).includes(value) ? value : "";
+}
+
+export function normalizePluginMode(input = PLUGIN_MODE.OFF) {
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
+  return value === PLUGIN_MODE.ON ? PLUGIN_MODE.ON : PLUGIN_MODE.OFF;
 }
 
 export function normalizeDoc2DataFormat(input = "") {
