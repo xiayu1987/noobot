@@ -8,6 +8,7 @@ import {
   AUTHORITY_OUTBOX_JOURNAL_OP,
   projectAuthorityOutboxJournal,
 } from "@noobot/event-protocol/outbox";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
 
 export const AUTHORITY_OUTBOX_DIR = "authority-outbox";
@@ -16,6 +17,7 @@ export const AUTHORITY_OUTBOX_CHECKPOINT_FILE = "outbox-checkpoint.json";
 export const AUTHORITY_OUTBOX_CHECKPOINT_SCHEMA_VERSION = 1;
 
 const mutationTails = new Map();
+const mutationContext = new AsyncLocalStorage();
 
 export function authorityOutboxSequenceKey(orderingDomain = "", orderingScopeId = "") {
   return `${String(orderingDomain || "").trim()}\u0000${String(orderingScopeId || "").trim()}`;
@@ -23,19 +25,27 @@ export function authorityOutboxSequenceKey(orderingDomain = "", orderingScopeId 
 
 export async function withAuthorityOutboxMutation(sessionDir = "", operation) {
   const key = String(sessionDir || "").trim();
+  const inheritedContext = mutationContext.getStore();
+  if (inheritedContext?.key === key && inheritedContext.active) return operation();
   const previous = mutationTails.get(key) || Promise.resolve();
-  const current = previous.then(operation, operation);
-  mutationTails.set(
-    key,
-    current.then(
-      () => {},
-      () => {},
-    ),
+  const runOperation = async () => {
+    const context = { key, active: true };
+    try {
+      return await mutationContext.run(context, operation);
+    } finally {
+      context.active = false;
+    }
+  };
+  const current = previous.then(runOperation, runOperation);
+  const tail = current.then(
+    () => {},
+    () => {},
   );
+  mutationTails.set(key, tail);
   try {
     return await current;
   } finally {
-    if (mutationTails.get(key) === current) mutationTails.delete(key);
+    if (mutationTails.get(key) === tail) mutationTails.delete(key);
   }
 }
 
@@ -66,7 +76,9 @@ export async function readAuthorityOutboxCheckpoint(sessionDir = "") {
     return { sequenceFloors: {} };
   }
   const source =
-    payload?.sequenceFloors && typeof payload.sequenceFloors === "object" ? payload.sequenceFloors : {};
+    payload?.sequenceFloors && typeof payload.sequenceFloors === "object"
+      ? payload.sequenceFloors
+      : {};
   const sequenceFloors = {};
   for (const [key, value] of Object.entries(source)) {
     const floor = Math.max(0, Number(value) || 0);
@@ -75,7 +87,10 @@ export async function readAuthorityOutboxCheckpoint(sessionDir = "") {
   return { sequenceFloors };
 }
 
-export async function writeAuthorityOutboxCheckpoint(sessionDir = "", { sequenceFloors = {} } = {}) {
+export async function writeAuthorityOutboxCheckpoint(
+  sessionDir = "",
+  { sequenceFloors = {} } = {},
+) {
   const file = authorityOutboxCheckpointPath(sessionDir);
   await mkdir(path.dirname(file), { recursive: true });
   const payload = {
@@ -106,27 +121,29 @@ export function mergeAuthorityOutboxSequenceFloors(sequenceFloors = {}, outbox =
 }
 
 export async function readAuthorityOutboxRecords(sessionDir = "") {
-  const file = authorityOutboxJournalPath(sessionDir);
-  let raw;
-  try {
-    raw = await readFile(file, "utf8");
-  } catch (error) {
-    if (error?.code === "ENOENT") return [];
-    throw error;
-  }
-  const records = [];
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    const file = authorityOutboxJournalPath(sessionDir);
+    let raw;
     try {
-      records.push(JSON.parse(line));
+      raw = await readFile(file, "utf8");
     } catch (error) {
-      const failure = new Error(`authority outbox journal is corrupted: ${file}`);
-      failure.code = "ARTIFACT_JSON_CORRUPTED";
-      failure.cause = error;
-      throw failure;
+      if (error?.code === "ENOENT") return [];
+      throw error;
     }
-  }
-  return records;
+    const records = [];
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        records.push(JSON.parse(line));
+      } catch (error) {
+        const failure = new Error(`authority outbox journal is corrupted: ${file}`);
+        failure.code = "ARTIFACT_JSON_CORRUPTED";
+        failure.cause = error;
+        throw failure;
+      }
+    }
+    return records;
+  });
 }
 
 export async function readAuthorityOutbox(sessionDir = "") {
@@ -138,35 +155,39 @@ export async function appendAuthorityOutboxRecords(sessionDir = "", records = []
     (record) => record && typeof record === "object" && !Array.isArray(record),
   );
   if (!normalized.length) return 0;
-  const file = authorityOutboxJournalPath(sessionDir);
-  await mkdir(path.dirname(file), { recursive: true });
-  const payload = normalized.map((record) => `${JSON.stringify(record)}\n`).join("");
-  const handle = await open(file, "a");
-  try {
-    await handle.writeFile(payload, "utf8");
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  return normalized.length;
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    const file = authorityOutboxJournalPath(sessionDir);
+    await mkdir(path.dirname(file), { recursive: true });
+    const payload = normalized.map((record) => `${JSON.stringify(record)}\n`).join("");
+    const handle = await open(file, "a");
+    try {
+      await handle.writeFile(payload, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    return normalized.length;
+  });
 }
 
 export async function replaceAuthorityOutboxRecords(sessionDir = "", records = []) {
-  const file = authorityOutboxJournalPath(sessionDir);
-  await mkdir(path.dirname(file), { recursive: true });
-  const payload = (Array.isArray(records) ? records : [])
-    .map((record) => `${JSON.stringify(record)}\n`)
-    .join("");
-  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  const handle = await open(temp, "w");
-  try {
-    await handle.writeFile(payload, "utf8");
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  await rename(temp, file);
-  return payload.length;
+  return withAuthorityOutboxMutation(sessionDir, async () => {
+    const file = authorityOutboxJournalPath(sessionDir);
+    await mkdir(path.dirname(file), { recursive: true });
+    const payload = (Array.isArray(records) ? records : [])
+      .map((record) => `${JSON.stringify(record)}\n`)
+      .join("");
+    const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+    const handle = await open(temp, "w");
+    try {
+      await handle.writeFile(payload, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temp, file);
+    return payload.length;
+  });
 }
 
 export function authorityOutboxCommitRecord(entry = {}) {
