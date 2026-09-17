@@ -31,11 +31,12 @@ describe("ChatMessageNavigator theme colors", () => {
     expect(navigatorSource).toContain("color: var(--noobot-text-strong);");
   });
 
-  it("renders the current marker on the active link instead of Element Plus absolute marker", () => {
+  it("keeps the current state restrained without markers or position shifts", () => {
     expect(navigatorSource).toContain(":marker=\"false\"");
-    expect(navigatorSource).toContain(":deep(.el-anchor__link::before)");
-    expect(navigatorSource).toContain(":deep(.el-anchor__item.is-current .el-anchor__link::before)");
-    expect(navigatorSource).toContain("background: var(--noobot-accent);");
-    expect(navigatorSource).toContain("transform: translateY(-50%);");
+    expect(navigatorSource).toContain(
+      "border-color: color-mix(in srgb, var(--noobot-accent) 42%, var(--noobot-panel-border));",
+    );
+    expect(navigatorSource).not.toContain(":deep(.el-anchor__link::before)");
+    expect(navigatorSource).not.toContain("transform: translateX(");
   });
 });

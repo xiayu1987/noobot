@@ -275,13 +275,8 @@ defineExpose({ focusTextarea });
   flex-direction: column;
   gap: var(--noobot-space-xs);
   padding: var(--noobot-space-xl);
-  transition: box-shadow var(--noobot-duration-slow) ease;
   background: var(--noobot-panel-bg);
   border-color: var(--noobot-panel-border);
-}
-
-.monotonic-edit-card:hover {
-  box-shadow: none;
 }
 
 .monotonic-edit-heading {
@@ -353,10 +348,7 @@ defineExpose({ focusTextarea });
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease,
-    opacity var(--noobot-duration-normal) ease,
-    transform var(--noobot-duration-normal) ease;
+    box-shadow var(--noobot-duration-normal) ease;
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
@@ -422,10 +414,7 @@ defineExpose({ focusTextarea });
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease,
-    opacity var(--noobot-duration-normal) ease,
-    transform var(--noobot-duration-normal) ease;
+    border-color var(--noobot-duration-normal) ease;
   position: relative;
   background: var(--noobot-control-bg);
   border-color: var(--noobot-panel-border);
@@ -508,25 +497,20 @@ defineExpose({ focusTextarea });
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: var(--noobot-radius-xs);
   border: none;
   background: var(--noobot-surface-soft);
   color: var(--noobot-text-secondary);
   cursor: pointer;
   opacity: 0;
-  transform: scale(0.9);
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease,
-    opacity var(--noobot-duration-normal) ease,
-    transform var(--noobot-duration-normal) ease;
+    opacity var(--noobot-duration-normal) ease;
 }
 
 .monotonic-attachment-item:hover .monotonic-attachment-remove {
   opacity: 1;
-  transform: scale(1);
 }
 
 .monotonic-attachment-remove:hover {
@@ -555,10 +539,7 @@ defineExpose({ focusTextarea });
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease,
-    opacity var(--noobot-duration-normal) ease,
-    transform var(--noobot-duration-normal) ease;
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .monotonic-add-attachment-btn:hover:not(:disabled) {
@@ -637,7 +618,6 @@ defineExpose({ focusTextarea });
 
   .monotonic-attachment-remove {
     opacity: 1;
-    transform: scale(1);
     background: var(--noobot-surface-soft-hover);
   }
 }
