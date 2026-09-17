@@ -331,6 +331,10 @@ watch(
   gap: var(--noobot-space-xs);
   padding: var(--noobot-space-xs) var(--noobot-space-sm);
   cursor: pointer;
+  border-radius: var(--noobot-radius-sm);
+  transition:
+    background-color var(--noobot-duration-normal) ease,
+    color var(--noobot-duration-normal) ease;
 }
 
 .session-item.unavailable {
@@ -348,10 +352,11 @@ watch(
 }
 
 .session-item:hover {
-  transform: none;
+  background: var(--noobot-surface-soft-hover);
 }
 
 .session-item.active {
+  background: var(--noobot-surface-primary-soft);
 }
 
 .session-icon-wrapper {
@@ -369,9 +374,8 @@ watch(
 }
 
 .session-item.active .session-icon-wrapper {
-  background: transparent;
+  background: var(--noobot-accent-soft);
   color: var(--noobot-text-strong);
-  box-shadow: none;
 }
 
 .session-icon {
@@ -411,7 +415,6 @@ watch(
 .session-item.active .session-rename-btn,
 .session-item.active .session-delete-btn {
   opacity: 1;
-  transform: none;
 }
 
 .session-rename-btn:hover {
@@ -462,22 +465,18 @@ watch(
   height: 6px;
   border-radius: 50%;
   background-color: var(--noobot-status-idle);
-  box-shadow: none;
 }
 
 .status-dot.running {
   background-color: var(--noobot-status-running);
-  box-shadow: none;
 }
 
 .status-dot.done {
   background-color: var(--noobot-status-done);
-  box-shadow: none;
 }
 
 .status-dot.error {
   background-color: var(--noobot-status-error);
-  box-shadow: none;
 }
 
 .session-list-panel.collapsed .title,
@@ -496,7 +495,7 @@ watch(
 
 .session-list-panel.collapsed .session-list-inner {
   align-items: center;
-  padding-inline: 4px;
+  padding-inline: var(--noobot-space-2xs);
 }
 
 .session-list-panel.collapsed .session-date-collapse :deep(.el-collapse-item__header) {
