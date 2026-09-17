@@ -203,12 +203,6 @@ const { translate } = useLocale();
   justify-content: center;
   flex: 0 0 var(--noobot-msg-avatar-size);
   background: var(--noobot-msg-avatar-bg);
-  filter: none;
-  transition: transform var(--noobot-duration-slow) ease;
-}
-
-.brand-logo:hover {
-  transform: none;
 }
 
 .brand-logo-img {
@@ -226,13 +220,11 @@ const { translate } = useLocale();
 }
 
 .collapse-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
-  max-width: 32px;
-  max-height: 32px;
-  flex: 0 0 32px;
+  width: var(--noobot-control-icon-size-lg);
+  height: var(--noobot-control-icon-size-lg);
+  min-width: var(--noobot-control-icon-size-lg);
+  min-height: var(--noobot-control-icon-size-lg);
+  flex: 0 0 var(--noobot-control-icon-size-lg);
   padding: 0;
   line-height: 1;
   border-radius: var(--noobot-radius-xs);
@@ -243,8 +235,7 @@ const { translate } = useLocale();
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease;
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .collapse-btn :deep(.el-icon) {
@@ -323,27 +314,18 @@ const { translate } = useLocale();
 }
 
 .new-chat-btn {
-  background: color-mix(in srgb, var(--noobot-btn-primary-bg) 88%, var(--noobot-panel-bg));
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 22%, transparent);
+  background: var(--noobot-btn-primary-bg);
+  border: 1px solid transparent;
   box-shadow: none;
   color: var(--noobot-text-on-accent);
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease;
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .new-chat-btn:not(:disabled):hover {
-  opacity: 1;
-  box-shadow: none;
-  transform: none;
-  background: color-mix(in srgb, var(--noobot-btn-primary-bg) 94%, var(--noobot-panel-bg));
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 30%, transparent);
-}
-
-.new-chat-btn:not(:disabled):active {
-  transform: none;
+  background: var(--noobot-btn-primary-bg-hover);
 }
 
 .tail-btn {
@@ -363,8 +345,7 @@ const { translate } = useLocale();
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    box-shadow var(--noobot-duration-normal) ease;
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .tail-btn :deep(.el-icon) {

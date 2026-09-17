@@ -243,18 +243,9 @@ function isHarnessStepModelDisabled(stepKey = "") {
   flex-direction: column;
   gap: var(--noobot-space-md);
   padding: var(--noobot-space-lg);
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--el-color-primary) 18%,
-      var(--noobot-panel-border, var(--el-border-color))
-    );
+  border: 1px solid var(--noobot-panel-border, var(--el-border-color));
   border-radius: var(--noobot-radius-lg);
-  background: color-mix(
-    in srgb,
-    var(--noobot-surface-sidebar, var(--el-bg-color)) 94%,
-    var(--el-color-primary)
-  );
+  background: var(--noobot-surface-sidebar, var(--el-bg-color));
 }
 
 .plugin-model-title {
@@ -264,7 +255,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .plugin-model-description {
-  margin: 3px 0 0;
+  margin: var(--noobot-space-3xs) 0 0;
   font-size: var(--noobot-font-size-xs);
   line-height: 1.45;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
@@ -280,17 +271,12 @@ function isHarnessStepModelDisabled(stepKey = "") {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 7px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
   padding: var(--noobot-space-sm);
-  border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
+  border: 1px solid var(--noobot-panel-border, var(--el-border-color));
   border-radius: var(--noobot-radius-md);
-  background: color-mix(
-    in srgb,
-    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%,
-    transparent
-  );
+  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
 }
 
 .plugin-model-label {
@@ -340,29 +326,6 @@ function isHarnessStepModelDisabled(stepKey = "") {
   box-shadow: none;
 }
 
-.plugin-fixed-text {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  height: 28px;
-  padding: 0 9px;
-  box-sizing: border-box;
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--el-color-primary) 22%,
-      var(--noobot-panel-border, var(--el-border-color))
-    );
-  border-radius: var(--noobot-radius-xs);
-  color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  background: color-mix(
-    in srgb,
-    var(--el-color-primary) 6%,
-    var(--noobot-control-bg, var(--el-bg-color))
-  );
-  font-size: var(--noobot-font-size-xs);
-}
-
 .plugin-guidance-analysis-control {
   display: flex;
   align-items: center;
@@ -402,7 +365,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
   min-width: 0;
   height: 28px;
   margin: 0;
-  padding: 0 7px;
+  padding: 0 var(--noobot-space-xs);
   box-sizing: border-box;
 }
 
@@ -424,16 +387,8 @@ function isHarnessStepModelDisabled(stepKey = "") {
   height: var(--noobot-control-height-lg);
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
-  background: color-mix(
-    in srgb,
-    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%,
-    var(--el-color-primary)
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-panel-border, var(--el-border-color)) 78%,
-    transparent
-  );
+  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  border-color: var(--noobot-panel-border, var(--el-border-color));
   transition:
     background-color var(--noobot-duration-normal) ease,
     border-color var(--noobot-duration-normal) ease;
