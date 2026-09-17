@@ -40,6 +40,7 @@ vi.mock("../../../../src/shared/i18n/useLocale", () => ({
         "composer.recordingWillCancel": "松开取消",
         "composer.scenarioProgramming": "编程",
         "composer.send": "发送",
+        "composer.interject": "插话",
         "composer.sending": "发送中",
         "composer.requesting": "请求中",
         "composer.completing": "完成中",
@@ -254,13 +255,14 @@ describe("ChatComposer interactions", () => {
         displayState: "sending",
         sendRequesting: false,
         stopRequesting: false,
+        canInterject: true,
       },
     });
 
     expect(inputActions(backendSendingWrapper).props("sendRequesting")).toBe(false);
     expect(inputActions(backendSendingWrapper).props("stopRequesting")).toBe(false);
-    expect(inputActions(backendSendingWrapper).props("sendDisabled")).toBe(true);
-    expect(inputActions(backendSendingWrapper).props("sendButtonText")).toBe("发送中");
+    expect(inputActions(backendSendingWrapper).props("sendDisabled")).toBe(false);
+    expect(inputActions(backendSendingWrapper).props("sendButtonText")).toBe("插话");
     expect(inputActions(backendSendingWrapper).props("sending")).toBe(true);
     expect(inputActions(backendSendingWrapper).props("canStop")).toBe(true);
   });

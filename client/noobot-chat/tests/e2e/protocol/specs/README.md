@@ -22,6 +22,8 @@ specs. See the [English plan](../../../../../../docs/browser-protocol-e2e-test-p
   two browser contexts.
 - `047`: connector creation, Session selection ordering, database query, model context, and persistence.
 - `048`: animated GLB import, model tool call, authoritative Session artifact, and desktop/mobile rendering.
+- `049`: stopped-turn deletion followed by a new send on the same page.
+- `050`: first-turn stop plus FIFO user-interjection injection, persistence, and refresh recovery.
 
 PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-047 covers
 connector creation, persisted-Session selection write ordering, database access, model context, and
@@ -75,6 +77,8 @@ the final answer.
 - `046`：双浏览器用户消息、assistant 消息、Workflow 卡片、DSL 折叠和停止状态实时一致。
 - `047`：连接器创建、Session 选择写入顺序、数据库查询、模型上下文和持久化。
 - `048`：动画 GLB 导入、模型工具调用、权威 Session 产物及桌面/移动端渲染。
+- `049`：停止 Turn 删除后同页重新发送。
+- `050`：首轮停止及用户插话 FIFO 注入、持久化与刷新恢复。
 - PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 

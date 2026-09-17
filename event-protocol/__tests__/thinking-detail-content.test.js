@@ -9,9 +9,46 @@ import {
   THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
   isThinkingDetailInjectedMessage,
+  isThinkingDetailUserInterjection,
   projectThinkingDetailContentTimeline,
   selectThinkingDetailContentTimeline,
 } from "../src/thinking-detail-content.js";
+
+test("projects user interjections as their own kind in deterministic chronological order", () => {
+  const timeline = projectThinkingDetailContentTimeline(
+    [
+      message({
+        messageUid: "interjection-source",
+        role: "user",
+        type: "message",
+        injectedMessage: true,
+        noobotInternalMessageType: "noobot.user_interjection",
+        ts: "2026-09-05T03:39:02.000Z",
+        content: "use the second constraint",
+      }),
+    ],
+    [relayActivity({ eventId: "earlier-thinking", timestamp: "2026-09-05T03:39:01.000Z" })],
+  );
+
+  assert.equal(
+    isThinkingDetailUserInterjection(
+      message({
+        noobotInternalMessageType: "noobot.user_interjection",
+      }),
+    ),
+    true,
+  );
+  assert.deepEqual(
+    timeline.map(({ contentId, contentKind }) => ({ contentId, contentKind })),
+    [
+      { contentId: "event:earlier-thinking", contentKind: THINKING_DETAIL_CONTENT_KIND.THINKING },
+      {
+        contentId: "message:interjection-source",
+        contentKind: THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
+      },
+    ],
+  );
+});
 
 function message(overrides = {}) {
   return {
@@ -180,6 +217,6 @@ test("activities without relay correlation stay projected for legacy rounds", ()
 
   assert.deepEqual(
     timeline.map((fact) => fact.contentId),
-    ["message:legacy-guidance", "event:activity-legacy"],
+    ["event:activity-legacy", "message:legacy-guidance"],
   );
 });

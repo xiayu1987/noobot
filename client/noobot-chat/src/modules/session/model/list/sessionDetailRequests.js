@@ -94,6 +94,7 @@ export function createSessionDetailRequests({
     {
       requireExists = true,
       missingMessage = translate("chat.sessionNotFound"),
+      missingErrorCode = "",
       failedMessageFromPayload = true,
     } = {},
   ) {
@@ -108,7 +109,9 @@ export function createSessionDetailRequests({
       );
     }
     if (requireExists && !data.exists) {
-      throw new Error(data.error || missingMessage);
+      const error = new Error(data.error || missingMessage);
+      if (missingErrorCode) error.code = missingErrorCode;
+      throw error;
     }
     return data;
   }
@@ -189,16 +192,18 @@ export function createSessionDetailRequests({
     if (typeof getSessionThinkingDetailApi !== "function") {
       throw new Error("thinking detail api is unavailable");
     }
-    return requestSessionDetailData(() =>
-      getSessionThinkingDetailApi(
-        {
-          userId: userId.value,
-          sessionId: normalizedSessionId || sessionId,
-          dialogProcessId: normalizedDialogProcessId,
-          turnScopeId: normalizedTurnScopeId,
-        },
-        { fetcher: authFetch },
-      ),
+    return requestSessionDetailData(
+      () =>
+        getSessionThinkingDetailApi(
+          {
+            userId: userId.value,
+            sessionId: normalizedSessionId || sessionId,
+            dialogProcessId: normalizedDialogProcessId,
+            turnScopeId: normalizedTurnScopeId,
+          },
+          { fetcher: authFetch },
+        ),
+      { missingErrorCode: "thinking_detail_not_found" },
     );
   }
 

@@ -43,6 +43,7 @@ export async function handleSessionRunFailure({
   const userStopped = aborted && isUserStopAbort(error, abortSignal);
   if (aborted) {
     if (userStopped) {
+      await lifecycleRuntime?.consumeUserInterjections?.();
       await lifecycleRuntime?.persistCurrentTurnMessages?.();
       const stoppedSnapshotPersistence =
         await persistStoppedSnapshotFromRuntime("runner_user_stop_catch");

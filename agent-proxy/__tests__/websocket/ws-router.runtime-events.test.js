@@ -17,6 +17,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   AGENT_TRANSPORT_ERROR_CODE,
   createExecutionQueryCommand,
+  createTurnInterjectionCommand,
   createTurnRunCommand,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
@@ -46,6 +47,14 @@ function stopCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
     identity: { sessionId, dialogProcessId: "dialog-1", turnScopeId },
     concurrency: { expectedTurnRevision: 1 },
     stop: {},
+  });
+}
+
+function interjectionCommand({ sessionId = "session-1", turnScopeId = "turn-1" } = {}) {
+  return createTurnInterjectionCommand({
+    commandId: `interject:${turnScopeId}`,
+    identity: { sessionId, dialogProcessId: "dialog-1", turnScopeId },
+    interaction: { message: "apply this constraint" },
   });
 }
 
@@ -309,6 +318,23 @@ test("ws router stop forwards request without synthesizing user_stopped", () => 
   assert.equal(calls.push.length, 0);
   assert.equal(calls.mark.length, 0);
   assert.equal(calls.broadcast.length, 0);
+});
+
+test("ws router forwards user interjections to the active scoped channel", () => {
+  const channelManager = createForwardingChannelManager();
+  const socket = createMockSocket();
+  const payload = interjectionCommand();
+
+  new WsRouter(channelManager).handle(socket, "connection-api-key", "en");
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
+
+  assert.equal(channelManager.calls.errors.length, 0);
+  assert.equal(channelManager.calls.forward.length, 1);
+  assert.equal(channelManager.calls.forward[0].channel.key, "channel-1");
+  assert.deepEqual(channelManager.calls.forward[0].payload, payload);
+  assert.deepEqual(channelManager.calls.permission[0].slice?.(), undefined);
+  assert.equal(channelManager.calls.permission[0].apiKey, "api-key-1");
+  assert.equal(channelManager.calls.permission[0].userId, "user-1");
 });
 
 test("ws router stop reports transport failure without creating a Turn error", () => {

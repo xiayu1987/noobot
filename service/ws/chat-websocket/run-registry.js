@@ -7,19 +7,39 @@ const activeRunRegistry = new Map();
 let nextRunHandleId = 0;
 let nextTransportBindingId = 0;
 
+function initializeInterjectionQueue(handle) {
+  if (!Array.isArray(handle.userInterjectionQueue)) handle.userInterjectionQueue = [];
+  if (!(handle.userInterjectionCommandIds instanceof Set)) {
+    handle.userInterjectionCommandIds = new Set();
+  }
+  if (typeof handle.userInterjectionQueueOpen !== "boolean") {
+    handle.userInterjectionQueueOpen = true;
+  }
+  if (!handle.userInterjectionConsumptionTail) {
+    handle.userInterjectionConsumptionTail = Promise.resolve();
+  }
+}
+
 export function normalizeRunIdentityPart(value = "") {
   return String(value || "").trim();
 }
 
-export function buildRunRegistryKeys({ userId = "", sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
+export function buildRunRegistryKeys({
+  userId = "",
+  sessionId = "",
+  turnScopeId = "",
+  dialogProcessId = "",
+} = {}) {
   const normalizedUserId = normalizeRunIdentityPart(userId);
   const normalizedSessionId = normalizeRunIdentityPart(sessionId);
   const normalizedTurnScopeId = normalizeRunIdentityPart(turnScopeId);
   const normalizedDialogProcessId = normalizeRunIdentityPart(dialogProcessId);
   const keys = [];
   const owner = normalizedUserId ? `user:${normalizedUserId}:` : "";
-  if (normalizedSessionId && normalizedTurnScopeId) keys.push(`${owner}session:${normalizedSessionId}:turn:${normalizedTurnScopeId}`);
-  if (normalizedSessionId && normalizedDialogProcessId) keys.push(`${owner}session:${normalizedSessionId}:dialog:${normalizedDialogProcessId}`);
+  if (normalizedSessionId && normalizedTurnScopeId)
+    keys.push(`${owner}session:${normalizedSessionId}:turn:${normalizedTurnScopeId}`);
+  if (normalizedSessionId && normalizedDialogProcessId)
+    keys.push(`${owner}session:${normalizedSessionId}:dialog:${normalizedDialogProcessId}`);
   if (normalizedDialogProcessId) keys.push(`${owner}dialog:${normalizedDialogProcessId}`);
   return [...new Set(keys)];
 }
@@ -33,10 +53,74 @@ export function registerActiveRun(handle = {}) {
       writable: false,
     });
   }
+  initializeInterjectionQueue(handle);
   const keys = buildRunRegistryKeys(handle);
   handle.registryKeys = [...new Set([...(handle.registryKeys || []), ...keys])];
   for (const key of keys) activeRunRegistry.set(key, handle);
   return handle;
+}
+
+export function enqueueUserInterjection(handle = {}, interjection = {}) {
+  initializeInterjectionQueue(handle);
+  if (!handle.userInterjectionQueueOpen) {
+    const error = new Error("active turn is stopping");
+    error.code = "active_turn_stopping";
+    throw error;
+  }
+  const commandId = normalizeRunIdentityPart(interjection.commandId);
+  const message = String(interjection.message || "").trim();
+  if (!commandId || !message) throw new TypeError("invalid_user_interjection");
+  if (handle.userInterjectionCommandIds.has(commandId)) return null;
+  const existing = handle.userInterjectionQueue.find((item) => item.commandId === commandId);
+  if (existing) return existing;
+  const item = Object.freeze({
+    commandId,
+    messageUid: `user-interjection:${commandId}`,
+    message,
+    receivedAt: String(interjection.receivedAt || new Date().toISOString()),
+  });
+  handle.userInterjectionCommandIds.add(commandId);
+  handle.userInterjectionQueue.push(item);
+  return item;
+}
+
+export function closeUserInterjectionQueue(handle = {}) {
+  initializeInterjectionQueue(handle);
+  handle.userInterjectionQueueOpen = false;
+}
+
+export function sealUserInterjectionQueueIfEmpty(handle = {}) {
+  initializeInterjectionQueue(handle);
+  if (!handle.userInterjectionQueueOpen) return true;
+  if (handle.userInterjectionQueue.length) return false;
+  handle.userInterjectionQueueOpen = false;
+  return true;
+}
+
+export function consumeUserInterjections(handle = {}, consumer) {
+  initializeInterjectionQueue(handle);
+  if (typeof consumer !== "function") {
+    return Promise.reject(new TypeError("user interjection consumer is required"));
+  }
+  const consume = async () => {
+    const batch = handle.userInterjectionQueue.slice();
+    if (!batch.length) return [];
+    await consumer(batch);
+    const consumedIds = new Set(batch.map((item) => item.commandId));
+    while (
+      handle.userInterjectionQueue.length &&
+      consumedIds.has(handle.userInterjectionQueue[0].commandId)
+    ) {
+      handle.userInterjectionQueue.shift();
+    }
+    return batch;
+  };
+  const result = handle.userInterjectionConsumptionTail.then(consume, consume);
+  handle.userInterjectionConsumptionTail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
 export function attachRunTransport(handle = {}, send = null, { onDiagnostic = null } = {}) {
@@ -76,10 +160,11 @@ export async function publishRunEvent(handle = {}, eventName, data = {}) {
   if (!binding || typeof binding.send !== "function") return false;
   binding.onDiagnostic?.({ ...diagnostic, stage: "publish_started" });
   try {
-    const delivered = (await binding.send(eventName, data, {
-      runHandleId: diagnostic.runHandleId,
-      bindingId: diagnostic.bindingId,
-    })) === true;
+    const delivered =
+      (await binding.send(eventName, data, {
+        runHandleId: diagnostic.runHandleId,
+        bindingId: diagnostic.bindingId,
+      })) === true;
     binding.onDiagnostic?.({
       ...diagnostic,
       stage: delivered ? "publish_completed" : "publish_rejected",

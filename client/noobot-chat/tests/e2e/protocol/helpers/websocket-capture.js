@@ -5,7 +5,11 @@
  */
 
 function parseJson(value) {
-  try { return JSON.parse(String(value)); } catch { return null; }
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return null;
+  }
 }
 
 export function decodeWebSocketPayload(payload) {
@@ -17,7 +21,8 @@ export function decodeWebSocketPayload(payload) {
 }
 
 export function decodedFrames(records = []) {
-  return records.map((record) => ({ ...record, decoded: decodeWebSocketPayload(record.payload) }))
+  return records
+    .map((record) => ({ ...record, decoded: decodeWebSocketPayload(record.payload) }))
     .filter((record) => record.decoded !== null);
 }
 
@@ -25,8 +30,10 @@ export function findProtocolObjects(records = []) {
   const objects = [];
   for (const frame of decodedFrames(records)) {
     const value = frame.decoded;
-    if (Array.isArray(value) && value.length >= 2) objects.push({ event: value[0], data: value[1], frame });
-    else if (value && typeof value === "object") objects.push({ event: value.event || "", data: value.data || value, frame });
+    if (Array.isArray(value) && value.length >= 2)
+      objects.push({ event: value[0], data: value[1], frame });
+    else if (value && typeof value === "object")
+      objects.push({ event: value.event || "", data: value.data || value, frame });
   }
   return objects;
 }
@@ -46,7 +53,13 @@ export function findVersionedEnvelopes(records = []) {
 }
 
 export function findAgentCommands(records = []) {
-  const commands = findVersionedEnvelopes(records).filter((item) => typeof item.commandType === "string");
+  const commands = findVersionedEnvelopes(records).filter(
+    (item) =>
+      typeof item.commandType === "string" &&
+      item.identity &&
+      typeof item.identity === "object" &&
+      !Array.isArray(item.identity),
+  );
   const seen = new Set();
   return commands.filter((command) => {
     const commandId = String(command?.commandId || "").trim();
@@ -58,13 +71,18 @@ export function findAgentCommands(records = []) {
 }
 
 export function findLifecycleEnvelopes(records = []) {
-  return findVersionedEnvelopes(records).filter((item) =>
-    typeof item.eventType === "string" && typeof item.eventId === "string" && Number(item.sequence) > 0,
+  return findVersionedEnvelopes(records).filter(
+    (item) =>
+      typeof item.eventType === "string" &&
+      typeof item.eventId === "string" &&
+      Number(item.sequence) > 0,
   );
 }
 
 export function findLifecycleReceipts(records = []) {
-  return findVersionedEnvelopes(records).filter((item) => item.action === "turn.lifecycle.received");
+  return findVersionedEnvelopes(records).filter(
+    (item) => item.action === "turn.lifecycle.received",
+  );
 }
 
 export async function waitForCaptured(predicate, { timeoutMs = 30000, intervalMs = 100 } = {}) {

@@ -16,6 +16,7 @@ import { bindLifecycleToRuntime } from "../../../runtime/lifecycle/state-machine
 import { initializeAgentModelHost } from "../../../runtime/model-port-host.js";
 import { buildAgentTransportConsumption } from "./agent-transport-consumption.js";
 import { bindCurrentTurnPersistence } from "./current-turn-persistence.js";
+import { appendUserInterjectionMessage } from "../../../runtime/turn/turn-context-message-appender.js";
 
 function projectPresentationAttachments(attachments) {
   return Array.isArray(attachments)
@@ -78,6 +79,7 @@ export async function bindAgentDispatchRuntime({
   canonicalAttachments,
   currentUserMessage,
   resolvedRunConfig,
+  userInterjectionPort,
   turnCommand,
   committedTurnResult,
 }) {
@@ -102,6 +104,7 @@ export async function bindAgentDispatchRuntime({
   dispatchRuntime.currentUserMessageOrigin = String(currentUserMessage?.messageOrigin || "")
     .trim()
     .toLowerCase();
+  dispatchRuntime.userInterjectionPort = userInterjectionPort;
 
   const modelHost = initializeAgentModelHost({
     runtime: dispatchRuntime,
@@ -191,5 +194,18 @@ export async function bindAgentDispatchRuntime({
     eventListener,
     persistenceContext,
   });
+  dispatchRuntime.consumeUserInterjections = async () => {
+    if (!dispatchRuntime.userInterjectionPort) return [];
+    return dispatchRuntime.userInterjectionPort.consume(async (interjections) => {
+      await dispatchRuntime.withCurrentTurnPersistenceBatch(async () => {
+        for (const interjection of interjections) {
+          appendUserInterjectionMessage({ runtime: dispatchRuntime, interjection });
+        }
+        await dispatchRuntime.persistCurrentTurnMessages();
+      });
+    });
+  };
+  dispatchRuntime.sealUserInterjectionQueueIfEmpty = () =>
+    dispatchRuntime.userInterjectionPort?.sealIfEmpty?.() !== false;
   return dispatchRuntime;
 }

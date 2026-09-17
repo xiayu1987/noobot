@@ -303,7 +303,11 @@ export class WsRouter {
       this._forwardSnapshotCommand(socket, command);
       return;
     }
-    if (commandType === AGENT_COMMAND.STOP || commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
+    if (
+      commandType === AGENT_COMMAND.STOP ||
+      commandType === AGENT_COMMAND.INTERJECT ||
+      commandType === AGENT_COMMAND.INTERACTION_RESPONSE
+    ) {
       this._forwardScopedCommand(socket, command);
       return;
     }

@@ -79,7 +79,7 @@ a hard failure.
 
 ### Implementation status
 
-All registered scenarios in PBE-002-003, PBE-006-017, and PBE-021-048 are implemented. PBE-001,
+All registered scenarios in PBE-002-003, PBE-006-017, and PBE-021-050 are implemented. PBE-001,
 PBE-004, and PBE-018 are covered by strict supersets PBE-002, PBE-006, and PBE-016/017. Every spec
 must import `test` and `expect` from `fixtures/noobot.fixture.js`. Permanent `test.skip` entries and
 placeholder scenarios without business assertions are forbidden.

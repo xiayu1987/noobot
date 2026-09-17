@@ -98,6 +98,21 @@ export function createTurnOrchestrator({
     const isOverMaxTurns = overMaxTurnsCount > 0;
     const isBeyondLoopLimitBuffer = overMaxTurnsCount > loopLimitBufferTurns;
 
+    async function continueForAcceptedUserInterjections(nextTurn = turn + 1) {
+      if (typeof runtime?.sealUserInterjectionQueueIfEmpty !== "function") return null;
+      if (runtime.sealUserInterjectionQueueIfEmpty()) return null;
+      const consumed = await runtime.consumeUserInterjections?.();
+      if (!Array.isArray(consumed) || consumed.length === 0) {
+        if (runtime.sealUserInterjectionQueueIfEmpty()) return null;
+      }
+      emitEvent(eventListener, "user_interjections_continued_model_loop", {
+        turn,
+        nextTurn,
+        count: Array.isArray(consumed) ? consumed.length : 0,
+      });
+      return runFunctionCallLoop({ modelState, loopState, turn: nextTurn });
+    }
+
     async function invokeFinalNoToolsTurn({
       finalTurn = turn,
       instruction = null,
@@ -117,6 +132,8 @@ export function createTurnOrchestrator({
           turn: finalTurn,
           forceToolChoiceNone: true,
         });
+        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
+        if (continuedResult) return continuedResult;
         return buildLoopResultFn({
           output: noToolsResult.output,
           assistantMessageId: noToolsResult.assistantMessageId,
@@ -193,6 +210,8 @@ export function createTurnOrchestrator({
 
       if (!Array.isArray(tools) || tools.length === 0) {
         const noToolsResult = await invokeNoToolsTurnFn({ modelState, loopState, turn });
+        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
+        if (continuedResult) return continuedResult;
         return buildLoopResultFn({
           output: noToolsResult.output,
           assistantMessageId: noToolsResult.assistantMessageId,
@@ -222,6 +241,8 @@ export function createTurnOrchestrator({
         withToolsResult;
 
       if (!calls.length) {
+        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
+        if (continuedResult) return continuedResult;
         if (isOverMaxTurns) {
           return buildLoopResultFn({
             output: aiContentText,
@@ -292,6 +313,8 @@ export function createTurnOrchestrator({
           turn,
           forceToolChoiceNone: true,
         });
+        const continuedResult = await continueForAcceptedUserInterjections(turn + 1);
+        if (continuedResult) return continuedResult;
         return buildLoopResultFn({
           output: finalResult.output,
           assistantMessageId: finalResult.assistantMessageId,

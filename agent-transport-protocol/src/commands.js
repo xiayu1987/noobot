@@ -58,6 +58,7 @@ const INTERACTION_KEYS = new Set(["requestId", "response"]);
 const QUERY_KEYS = new Set(["executionId", "rootExecutionId"]);
 const SNAPSHOT_OPTION_KEYS = new Set(["knownSequence", "terminalLimit"]);
 const FINALIZE_OPTION_KEYS = new Set(["terminalLimit"]);
+const INTERJECTION_KEYS = new Set(["message"]);
 
 const clean = (value) => String(value ?? "").trim();
 const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -139,6 +140,15 @@ export function createTurnStopCommand(input = {}) {
   };
 }
 
+export function createTurnInterjectionCommand(input = {}) {
+  return {
+    ...createEnvelope(AGENT_COMMAND.INTERJECT, input),
+    interaction: {
+      message: String(input.interaction?.message ?? ""),
+    },
+  };
+}
+
 export function createInteractionResponseCommand(input = {}) {
   return {
     ...createEnvelope(AGENT_COMMAND.INTERACTION_RESPONSE, input),
@@ -208,14 +218,16 @@ function validateTopLevelFields(command, commandType, errors) {
       ]
     : commandType === AGENT_COMMAND.STOP
       ? [...BASE_COMMAND_KEYS, "concurrency", "stop"]
-      : commandType === AGENT_COMMAND.INTERACTION_RESPONSE
+      : commandType === AGENT_COMMAND.INTERJECT
         ? [...BASE_COMMAND_KEYS, "interaction"]
-        : EXECUTION_QUERY_SET.has(commandType)
-          ? [...BASE_COMMAND_KEYS, "query"]
-          : commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET ||
-              commandType === AGENT_COMMAND.FINALIZE
-            ? [...BASE_COMMAND_KEYS, "options"]
-            : [...BASE_COMMAND_KEYS];
+        : commandType === AGENT_COMMAND.INTERACTION_RESPONSE
+          ? [...BASE_COMMAND_KEYS, "interaction"]
+          : EXECUTION_QUERY_SET.has(commandType)
+            ? [...BASE_COMMAND_KEYS, "query"]
+            : commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET ||
+                commandType === AGENT_COMMAND.FINALIZE
+              ? [...BASE_COMMAND_KEYS, "options"]
+              : [...BASE_COMMAND_KEYS];
   const allowedKeys = new Set(commandKeys);
   for (const key of Object.keys(command)) {
     if (!TOP_LEVEL_KEYS.has(key)) errors.push(`unknown_top_level_field:${key}`);
@@ -322,6 +334,12 @@ export function validateAgentCommand(command) {
           );
       }
     }
+  } else if (commandType === AGENT_COMMAND.INTERJECT) {
+    if (!clean(command.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
+    if (!clean(command.identity?.dialogProcessId)) errors.push("missing_dialog_process_id");
+    if (!isObject(command.interaction)) errors.push("interaction_not_object");
+    else rejectUnknownFields(command.interaction, INTERJECTION_KEYS, "interaction", errors);
+    if (!clean(command.interaction?.message)) errors.push("missing_interjection_message");
   } else if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
     if (!isObject(command.interaction)) errors.push("interaction_not_object");
     else rejectUnknownFields(command.interaction, INTERACTION_KEYS, "interaction", errors);

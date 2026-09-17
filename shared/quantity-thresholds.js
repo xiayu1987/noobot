@@ -87,6 +87,8 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
 
     thinkingDetailVirtualOverscan: QUANTITY_TIERS.smallFiles,
 
+    thinkingDetailRetryLimit: QUANTITY_TIERS.smallFiles,
+
     processCompatLogLimit: QUANTITY_TIERS.smallDisplay,
   },
 

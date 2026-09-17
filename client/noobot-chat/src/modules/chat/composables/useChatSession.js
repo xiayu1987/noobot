@@ -581,12 +581,14 @@ export function useChatSession({
   const { sendWithComposerActionState, stopSendingWithComposerActionState } = createComposerActions(
     {
       composerActionState,
+      input,
       turnRuntimeRegistry,
       resolveActiveSessionIdentity,
       resolveActiveTurnScopeIdentity,
       submitTurnRuntimeEvent,
       waitForSessionConnectorState: connectorPanel.waitForSessionConnectorState,
       send: chatEngine.send,
+      requestJson: chatWebSocketClient.requestJson,
       stopSending: chatEngine.stopSending,
       notify,
       translate,

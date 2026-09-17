@@ -18,6 +18,7 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 
 const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 
@@ -307,11 +308,25 @@ test("markCurrentTurnArraySummarized preserves only latest injected message per 
       injectedBy: "agent-plugin",
       injectedMessageType: "guidance_summary_prompt",
     },
+    {
+      role: "user",
+      content: "old user interjection",
+      injectedMessage: true,
+      injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    },
+    {
+      role: "user",
+      content: "new user interjection",
+      injectedMessage: true,
+      injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    },
   ]);
 
   assert.equal(result[0].summarized, true);
   assert.equal(result[1].summarized, undefined);
   assert.equal(result[2].summarized, undefined);
+  assert.equal(result[3].summarized, true);
+  assert.equal(result[4].summarized, undefined);
 });
 
 test("markCurrentTurnModelMessagesSummarized includes restored old injections and preserves latest per type", () => {

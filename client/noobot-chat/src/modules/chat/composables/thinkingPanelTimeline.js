@@ -154,8 +154,9 @@ export function useThinkingTimeline(
   }
   function selectThinkingContentMessage(messageItem = props.messageItem) {
     const current = timelineMessage(messageItem);
-    if (selectThinkingDetailContentTimeline(current).length > 0) return current;
-    return timelineMessage(loadedThinkingDetail.value?.messageItem || current);
+    const loaded = timelineMessage(loadedThinkingDetail.value?.messageItem || {});
+    if (selectThinkingDetailContentTimeline(loaded).length > 0) return loaded;
+    return current;
   }
   const thinkingContentItems = computed(() =>
     selectThinkingDetailContentTimeline(selectThinkingContentMessage()).map((item = {}) => ({
@@ -433,7 +434,6 @@ export function useThinkingTimeline(
   const thinkingDetailLoadKey = computed(() => {
     const messageItem = props.messageItem || {};
     if (shouldLoadThinkingDetail() !== true) return "";
-    if (hasLocalThinkingDetails(messageItem)) return "";
     if (messageItem?.pending === true) return "";
     const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
     return identity.key || "";

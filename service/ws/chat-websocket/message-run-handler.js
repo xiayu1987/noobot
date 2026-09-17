@@ -5,7 +5,11 @@
  */
 import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
-import { findActiveRun } from "./run-registry.js";
+import {
+  consumeUserInterjections,
+  findActiveRun,
+  sealUserInterjectionQueueIfEmpty,
+} from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import {
   acceptRunCommand,
@@ -139,6 +143,10 @@ async function executeAcceptedRun(context, command, run, accepted, active) {
     eventListener: listener.eventListener,
     abortSignal: context.state.currentAbortSignal,
     userInteractionBridge: context.userInteractionBridge,
+    userInterjectionPort: Object.freeze({
+      consume: (consumer) => consumeUserInterjections(active.runHandle, consumer),
+      sealIfEmpty: () => sealUserInterjectionQueueIfEmpty(active.runHandle),
+    }),
     runConfig: run.normalizedRunConfig,
   });
   if (listener.lifecycle.processingStarted) await listener.lifecycle.processingStarted;

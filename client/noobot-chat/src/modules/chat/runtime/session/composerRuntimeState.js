@@ -25,6 +25,13 @@ export function createComposerRuntimeState({
 
     const stopRequesting = turn?.commandPending === true && turn?.pendingCommandType === "stop";
     const awaitingStopSummary = displayState === "stopping";
+    const canInterject = Boolean(
+      displayState === "sending" &&
+      sessionId &&
+      runtimeView.turnScopeId &&
+      runtimeView.dialogProcessId &&
+      !turn?.terminal,
+    );
     return {
       sendRequesting: displayState === "requesting" && turn?.action !== "stop",
       continueRequesting: false,
@@ -39,6 +46,7 @@ export function createComposerRuntimeState({
       primaryAction: userStopped ? "continue" : "send",
       canContinue: userStopped,
       canResend: userStopped,
+      canInterject,
       state: displayState,
       displayState,
       canStop: runtimeView.canStop,
