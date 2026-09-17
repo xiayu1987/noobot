@@ -7,6 +7,7 @@ import { defineComponent, h } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ConnectorManager from "../../../../src/modules/connectors/components/ConnectorManager.vue";
+import { createElementPlusMountOptions } from "../../fixtures/elementPlusStubs.js";
 
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn() }));
 
@@ -69,7 +70,7 @@ describe("ConnectorManager", () => {
       },
       global: {
         directives: { loading: () => {} },
-        stubs: {
+        ...createElementPlusMountOptions({
           ElButton: ButtonStub,
           "el-button": ButtonStub,
           ElIcon: true,
@@ -80,7 +81,7 @@ describe("ConnectorManager", () => {
           "el-empty": true,
           ElDrawer: true,
           "el-drawer": true,
-        },
+        }),
       },
     });
     await flushPromises();

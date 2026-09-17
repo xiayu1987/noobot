@@ -7,7 +7,6 @@
 import {
   resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
-  resolveModelLibraryProviderByModel,
 } from "@noobot/model-protocol";
 import { isPlainObject } from "../utils.js";
 
@@ -39,15 +38,11 @@ export function createConfigValueSource({ baseValues = {} } = {}) {
     },
 
     resolveProviderValues(alias = "") {
-      const fromLibrary = resolveModelLibraryProvider(alias);
-      if (isPlainObject(fromLibrary)) return fromLibrary;
-      const configuredModel = valueAt(base, ["providers", alias, "model"]);
-      const fromModel = resolveModelLibraryProviderByModel(configuredModel);
-      if (isPlainObject(fromModel)) return fromModel;
-
-      const fromExample = valueAt(base, ["providers", alias]);
-      if (isPlainObject(fromExample)) return fromExample;
-      return resolveDefaultModelLibraryProvider();
+      const libraryProvider = resolveModelLibraryProvider(alias);
+      return Object.freeze({
+        template: libraryProvider || resolveDefaultModelLibraryProvider(),
+        exactLibraryMatch: libraryProvider !== null,
+      });
     },
 
     listProviderAliases() {

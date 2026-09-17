@@ -8,10 +8,9 @@ export {
   createCommittedTurnLifecycleEnvelope,
 } from "./commit-turn-lifecycle.js";
 export { commitTurnReplacement } from "./commit-turn-replacement.js";
-export {
-  recoverOrphanedTurn,
-  recoverTurnFinalize,
-} from "./recovery-policy.js";
+export { commitTurnDeletion } from "./commit-turn-deletion.js";
+export { repairOrphanedTerminalTurns } from "./repair-orphaned-terminal-turns.js";
+export { recoverOrphanedTurn, recoverTurnFinalize } from "./recovery-policy.js";
 export {
   buildAuthoritativeExecutionReadModel,
   createAuthoritativeTurnSnapshot,

@@ -277,7 +277,7 @@ watch(() => [props.connected, props.userId], refresh);
         /></el-form-item>
         <div class="type-grid">
           <el-form-item :label="translate('connectors.type')" required
-            ><el-select v-model="form.type"
+            ><el-select v-model="form.type" popper-class="noobot-select-popper"
               ><el-option
                 v-for="type in types"
                 :key="type"
@@ -285,7 +285,7 @@ watch(() => [props.connected, props.userId], refresh);
                 :value="type" /></el-select
           ></el-form-item>
           <el-form-item :label="translate('connectors.subType')" required
-            ><el-select v-model="form.subType"
+            ><el-select v-model="form.subType" popper-class="noobot-select-popper"
               ><el-option
                 v-for="subType in subTypes"
                 :key="subType"

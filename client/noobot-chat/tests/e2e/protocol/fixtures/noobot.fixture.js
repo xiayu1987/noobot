@@ -26,7 +26,7 @@ import {
 import { registerSuiteSession } from "../suite-session-cleanup.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
-const E2E_MODEL_ALIAS = "GLM_5_3";
+const E2E_MODEL_ALIAS = String(process.env.NOOBOT_E2E_MODEL_ALIAS || "GLM_5_3").trim();
 
 export async function installE2eModelPreferences(pageOrContext) {
   const e2eUserId = readE2eCredentials().userId;

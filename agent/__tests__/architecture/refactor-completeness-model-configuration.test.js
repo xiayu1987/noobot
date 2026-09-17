@@ -80,13 +80,13 @@ describe("5. 配置优先级测试", () => {
       assert.equal(alias, "openai", "skill.provider 应优先");
     });
 
-    it("skill.model 应次高优先级（无 skill.provider 时）", () => {
+    it("skill.model 不得作为 provider 名称", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
       const userConfig = createBaseUserConfig({ defaultProvider: "anthropic" });
       const skillConfig = { model: "custom-provider" };
 
       const alias = pickAlias({ globalConfig, userConfig, skillConfig });
-      assert.equal(alias, "custom-provider", "skill.model 应优先于 user/global");
+      assert.equal(alias, "anthropic", "provider 选择只能读取 provider 字段和默认 provider");
     });
 
     it("user.defaultProvider 应优先于 global.defaultProvider", () => {
@@ -323,7 +323,7 @@ describe("6. 配置获取完整性测试", () => {
       assert.equal(spec.alias, "openai", "alias 应为 openai");
     });
 
-    it("应能通过 provider 的 model 字段匹配", () => {
+    it("不得通过 provider 的 model 字段反查 provider", () => {
       const globalConfig = createBaseGlobalConfig();
       const userConfig = createBaseUserConfig({});
 
@@ -332,8 +332,23 @@ describe("6. 配置获取完整性测试", () => {
         globalConfig,
         userConfig,
       });
-      assert.ok(spec !== null, "应能通过 model 名称匹配到 spec");
-      assert.equal(spec.alias, "openai", "应匹配到 openai provider");
+      assert.equal(spec, null, "模型名称不是 provider 选择事实");
+    });
+
+    it("alias 大小写不一致时不得回退到其它 provider", () => {
+      const globalConfig = createBaseGlobalConfig();
+      const userConfig = createBaseUserConfig({});
+
+      assert.equal(
+        resolveModelSpecByName({ modelName: "OPENAI", globalConfig, userConfig }),
+        null,
+        "alias 必须精确匹配，禁止大小写兼容旁路",
+      );
+      assert.equal(
+        resolveModelSpecByName({ modelName: "GPT-4", globalConfig, userConfig }),
+        null,
+        "模型名称即使只是大小写不同也不得参与 provider 选择",
+      );
     });
 
     it("不存在的 modelName 应返回 null", () => {
@@ -387,7 +402,7 @@ describe("6. 配置获取完整性测试", () => {
       assert.equal(spec.alias, "anthropic", "skill.provider 应覆盖默认");
     });
 
-    it("skill.model 应能覆盖默认模型", () => {
+    it("skill.model 不得覆盖默认 provider 或其模型", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
       const userConfig = createBaseUserConfig({});
       const skillConfig = { model: "anthropic" };
@@ -398,7 +413,8 @@ describe("6. 配置获取完整性测试", () => {
         userConfig,
       });
       assert.ok(spec !== null, "应能解析到 spec");
-      assert.equal(spec.alias, "anthropic", "skill.model 应覆盖默认");
+      assert.equal(spec.alias, "openai", "skill.model 不得用于选择 provider");
+      assert.equal(spec.model, "gpt-4", "skill.model 不得覆盖 provider 配置的模型");
     });
 
     it("skill 的温度/ tokens 等参数应能覆盖 spec", () => {

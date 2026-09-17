@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { pickAlias, byAliasWithUser, getEnabledProviders } from "../provider/resolver.js";
+import { pickAlias, byAliasWithUser } from "../provider/resolver.js";
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
@@ -18,25 +18,11 @@ export function resolveModelSpecByAlias({ alias, globalConfig, userConfig }) {
 export function resolveModelSpecByName({ name, modelName, globalConfig, userConfig }) {
   const targetName = String(modelName || name || "").trim();
   if (!targetName) return null;
-
-  const byAlias = resolveModelSpecByAlias({
+  return resolveModelSpecByAlias({
     alias: targetName,
     globalConfig,
     userConfig,
   });
-  if (byAlias) return byAlias;
-
-  const providers = getEnabledProviders(globalConfig, userConfig);
-  for (const [alias, provider] of Object.entries(providers)) {
-    const modelName = provider?.model || "";
-    if (
-      modelName.toLowerCase() === targetName.toLowerCase() ||
-      alias.toLowerCase() === targetName.toLowerCase()
-    ) {
-      return normalizeRuntimeModelSpec({ alias, ...provider });
-    }
-  }
-  return null;
 }
 
 export function resolveModelSpecOrConfiguredDefault({ name, modelName, globalConfig, userConfig }) {
@@ -59,7 +45,6 @@ export function resolveSkillModelSpec({ skillConfig, globalConfig, userConfig })
 
   return normalizeRuntimeModelSpec({
     ...spec,
-    ...(skillConfig.model ? { model: skillConfig.model } : {}),
     ...(skillConfig.temperature != null ? { temperature: skillConfig.temperature } : {}),
     ...(skillConfig.maxTokens != null ? { max_tokens: skillConfig.maxTokens } : {}),
     ...(skillConfig.topP != null ? { top_p: skillConfig.topP } : {}),

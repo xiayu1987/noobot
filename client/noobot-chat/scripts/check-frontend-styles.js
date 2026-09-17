@@ -15,11 +15,43 @@ const sourceRoots = [
   path.join(repoRoot, "plugin/noobot-plugin-harness/frontend"),
   path.join(repoRoot, "plugin/noobot-plugin-workflow/frontend"),
 ];
+const sharedPopperRoots = [
+  path.join(projectRoot, "src"),
+  path.join(repoRoot, "client/startup/src"),
+  path.join(repoRoot, "plugin/noobot-plugin-harness/frontend"),
+  path.join(repoRoot, "plugin/noobot-plugin-workflow/frontend"),
+];
 const inspectedExtensions = new Set([".css", ".js", ".jsx", ".ts", ".tsx", ".vue"]);
 const tokenLocations = [
   path.join(projectRoot, "src/shared/styles/tokens"),
   path.join(projectRoot, "src/shared/utils/markdown-copy.js"),
   path.join(repoRoot, "client/startup/src/style.css"),
+];
+const formContractFiles = [
+  {
+    filePath: path.join(projectRoot, "src/shared/styles/integrations/element-plus.css"),
+    selectors: [
+      ".el-input__wrapper",
+      ".el-textarea__inner",
+      ".el-select__wrapper",
+      ".el-input-number",
+      ".el-switch",
+      ".el-checkbox",
+      ".el-radio",
+      ".el-slider",
+      ".el-form-item__label",
+    ],
+  },
+  {
+    filePath: path.join(repoRoot, "client/startup/src/style.css"),
+    selectors: [
+      ".el-input__wrapper",
+      ".el-select__wrapper",
+      ".el-checkbox__inner",
+      ".el-form-item__label",
+      ".el-form-item__error",
+    ],
+  },
 ];
 const violations = [];
 const checks = [
@@ -43,7 +75,8 @@ function isTokenDeclaration(filePath, line) {
 }
 
 function inspectFile(filePath) {
-  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+  const source = fs.readFileSync(filePath, "utf8");
+  const lines = source.split(/\r?\n/);
   lines.forEach((line, index) => {
     for (const [message, pattern] of checks) {
       if (!pattern.test(line)) continue;
@@ -55,6 +88,31 @@ function inspectFile(filePath) {
       violations.push(`${path.relative(repoRoot, filePath)}:${index + 1}: ${message}`);
     }
   });
+
+  if (
+    path.extname(filePath).toLowerCase() !== ".vue" ||
+    !sharedPopperRoots.some((root) => isInside(root, filePath))
+  )
+    return;
+  const dropdownContracts = [
+    [
+      /<el-select(?=[\s>])(?:[^"'<>]|"[^"]*"|'[^']*')*>/g,
+      "noobot-select-popper",
+      "el-select must use the shared select popper",
+    ],
+    [
+      /<el-dropdown(?=[\s>])(?:[^"'<>]|"[^"]*"|'[^']*')*>/g,
+      "noobot-dropdown-popper",
+      "el-dropdown must use the shared dropdown popper",
+    ],
+  ];
+  for (const [pattern, requiredClass, message] of dropdownContracts) {
+    for (const match of source.matchAll(pattern)) {
+      if (match[0].includes(requiredClass)) continue;
+      const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+      violations.push(`${path.relative(repoRoot, filePath)}:${lineNumber}: ${message}`);
+    }
+  }
 }
 
 function inspectDirectory(directory) {
@@ -68,10 +126,21 @@ function inspectDirectory(directory) {
 }
 
 sourceRoots.forEach(inspectDirectory);
+for (const { filePath, selectors } of formContractFiles) {
+  const source = fs.readFileSync(filePath, "utf8");
+  for (const selector of selectors) {
+    if (source.includes(selector)) continue;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}: shared form contract is missing ${selector}`,
+    );
+  }
+}
 if (violations.length) {
   console.error(`[frontend-styles] ${violations.length} violation(s):`);
   violations.forEach((violation) => console.error(`- ${violation}`));
   process.exitCode = 1;
 } else {
-  console.log("[frontend-styles] ok: colors, radii and transitions use the shared style contract");
+  console.log(
+    "[frontend-styles] ok: tokens, transitions, dropdown poppers and form controls use the shared style contract",
+  );
 }

@@ -27,7 +27,7 @@ import {
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
-import { commitTurnReplacement } from "@noobot/authoritative-state/application";
+import { commitTurnDeletion, commitTurnReplacement } from "@noobot/authoritative-state/application";
 import {
   removeAuthorityOutboxTurnScopes,
   withAuthorityOutboxMutation,
@@ -134,10 +134,16 @@ export async function deleteFromMessage({
       const deletedMessages = messages.slice(anchorIndex);
       const deletedCount = deletedMessages.length;
       const deletedTurnScopeIds = uniqueValues(deletedMessages.map(resolveTurnScopeId));
+      const lifecycleDeletion = commitTurnDeletion({
+        lifecycle: session.turnLifecycle,
+        turnScopeIds: deletedTurnScopeIds,
+      });
+
       session.messages = messages.slice(0, anchorIndex);
       pruneSessionTurnTimings(session);
       session.updatedAt = this.now();
       session.aggregateVersion = concurrency.nextAggregateVersion;
+      session.turnLifecycle = lifecycleDeletion.lifecycle;
 
       const result = { deletedCount, anchorIndex, deletedTurnScopeIds };
       session.turnLifecycle.commandReceipts = appendCommandReceipt(
@@ -156,9 +162,26 @@ export async function deleteFromMessage({
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
+      const deletionSessionDir = await resolveOutboxSessionDir(
+        this,
+        userId,
+        sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
+      );
+      let removedAuthorityOutboxEvents = 0;
+      if (deletionSessionDir && lifecycleDeletion.removedTurnScopeIds?.length) {
+        removedAuthorityOutboxEvents = await withAuthorityOutboxMutation(deletionSessionDir, () =>
+          removeAuthorityOutboxTurnScopes(
+            deletionSessionDir,
+            lifecycleDeletion.removedTurnScopeIds,
+          ),
+        );
+      }
       return {
         session,
         ...result,
+        removedAuthorityOutboxEvents,
         aggregateVersion: session.aggregateVersion,
         commandId: normalizedCommandId,
         deduplicated: false,

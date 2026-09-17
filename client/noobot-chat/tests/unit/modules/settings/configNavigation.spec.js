@@ -37,10 +37,7 @@ describe("configNavigation", () => {
     const tree = buildConfigNavTree(documentFixture());
     const providers = tree.find((navNode) => navNode.key === "providers");
     expect(providers.exists).toBe(true);
-    expect(providers.children.map((child) => child.path)).toEqual([
-      "providers/p1",
-      "providers/p2",
-    ]);
+    expect(providers.children.map((child) => child.path)).toEqual(["providers/p1", "providers/p2"]);
     const absent = tree.find((navNode) => navNode.key === "mcp_servers");
     expect(absent.exists).toBe(false);
   });

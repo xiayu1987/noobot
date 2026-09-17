@@ -68,7 +68,9 @@ describe("configStructureContract", () => {
       itemType: CONFIG_ITEM_TYPE.EXPLICIT,
       access: CONFIG_NODE_ACCESS.USER,
     });
-    expect(providers.entry.children.find((child) => child.key === "reasoning_effort")).toMatchObject({
+    expect(
+      providers.entry.children.find((child) => child.key === "reasoning_effort"),
+    ).toMatchObject({
       kind: CONFIG_FORM_NODE_KIND.STRING,
       optionsField: "reasoning_effort_options",
     });

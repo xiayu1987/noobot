@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  MODEL_PROVIDER_CONFIG_CONTRACT,
-  resolveDefaultModelLibraryProvider,
-} from "@noobot/model-protocol";
+import { MODEL_PROVIDER_CONFIG_CONTRACT } from "@noobot/model-protocol";
 import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_NODE_POLICY,
@@ -44,8 +41,9 @@ function validatesScalarType(value, contract = {}) {
   return true;
 }
 
-function validatesScalar(value, contract = {}) {
+function validatesScalar(value, contract = {}, enforceValueConstraints = true) {
   if (!validatesScalarType(value, contract)) return false;
+  if (!enforceValueConstraints) return true;
   const type = contract.type;
   if (type === "string" && contract.nonEmpty && !value.trim()) return false;
   if (Array.isArray(contract.values) && !contract.values.includes(value)) return false;
@@ -56,28 +54,31 @@ function validatesScalar(value, contract = {}) {
   return true;
 }
 
-function validatesContract(value, contract = {}) {
+function validatesContract(value, contract = {}, enforceValueConstraints = true) {
   if (Array.isArray(contract.oneOf)) {
-    return contract.oneOf.some((variant) => validatesContract(value, variant));
+    return contract.oneOf.some((variant) =>
+      validatesContract(value, variant, enforceValueConstraints),
+    );
   }
-  if (!validatesScalar(value, contract)) return false;
+  if (!validatesScalar(value, contract, enforceValueConstraints)) return false;
   if (contract.type === "array" && contract.items) {
-    return value.every((item) => validatesContract(item, contract.items));
+    return value.every((item) => validatesContract(item, contract.items, enforceValueConstraints));
   }
   if (contract.type !== "object") return true;
   const properties = isPlainObject(contract.properties) ? contract.properties : {};
   for (const key of contract.required || []) {
     if (!Object.prototype.hasOwnProperty.call(value, key)) return false;
-    if (!validatesContract(value[key], properties[key])) return false;
+    if (!validatesContract(value[key], properties[key], enforceValueConstraints)) return false;
   }
   for (const [key, child] of Object.entries(value)) {
     if (properties[key]) {
-      if (!validatesContract(child, properties[key])) return false;
+      if (!validatesContract(child, properties[key], enforceValueConstraints)) return false;
       continue;
     }
     if (contract.additionalProperties === true) continue;
     if (!isPlainObject(contract.additionalProperties)) return false;
-    if (!validatesContract(child, contract.additionalProperties)) return false;
+    if (!validatesContract(child, contract.additionalProperties, enforceValueConstraints))
+      return false;
   }
   return true;
 }
@@ -96,6 +97,7 @@ function repairInvalidNode({ template, path, changes, reason }) {
 }
 
 function repairDeclaredContractProperties({
+  contract,
   properties,
   templateObject,
   valueObject,
@@ -103,6 +105,7 @@ function repairDeclaredContractProperties({
   path,
   changes,
   scope,
+  enforceValueConstraints,
 }) {
   const output = {};
   for (const [key, childContract] of Object.entries(properties)) {
@@ -114,6 +117,7 @@ function repairDeclaredContractProperties({
       path: [...path, key],
       changes,
       scope,
+      enforceValueConstraints,
     });
     if (child !== REMOVE_NODE) output[key] = child;
   }
@@ -130,6 +134,7 @@ function repairTemplateAdditionalProperties({
   path,
   changes,
   scope,
+  enforceValueConstraints,
 }) {
   for (const [key, child] of Object.entries(templateObject)) {
     if (properties[key]) continue;
@@ -156,6 +161,7 @@ function repairTemplateAdditionalProperties({
         path: [...path, key],
         changes,
         scope,
+        enforceValueConstraints,
       });
       if (repaired !== REMOVE_NODE) output[key] = repaired;
       continue;
@@ -174,6 +180,7 @@ function repairTargetAdditionalProperties({
   path,
   changes,
   scope,
+  enforceValueConstraints,
 }) {
   for (const [key, child] of Object.entries(target)) {
     if (properties[key] || Object.prototype.hasOwnProperty.call(output, key)) continue;
@@ -188,6 +195,7 @@ function repairTargetAdditionalProperties({
         path: [...path, key],
         changes,
         scope,
+        enforceValueConstraints,
       });
       if (repaired !== REMOVE_NODE) output[key] = repaired;
       continue;
@@ -211,21 +219,38 @@ function normalizeContractObject({
   path,
   changes,
   scope,
+  enforceValueConstraints,
 }) {
   const isModelProviderContract =
     contract === MODEL_PROVIDER_CONFIG_CONTRACT ||
     contract.agentConfigContract === "model_provider";
-  const shouldNormalize =
-    !isModelProviderContract ||
-    Object.keys({ ...templateObject, ...valueObject, ...output }).some((key) =>
-      key.startsWith("reasoning_effort"),
-    );
-  if (!shouldNormalize || typeof contract.normalize !== "function") return output;
+  if (isModelProviderContract) {
+    if (!enforceValueConstraints) return output;
+    for (const [key, childContract] of Object.entries(properties)) {
+      const optionsField = childContract.optionsField;
+      if (!optionsField || output[key] === undefined) continue;
+      const options = Array.isArray(valueObject[optionsField])
+        ? valueObject[optionsField]
+        : Array.isArray(templateObject[optionsField])
+          ? templateObject[optionsField]
+          : [];
+      if (!options.length || options.includes(output[key])) continue;
+      const fallback = options.includes(valueObject[key]) ? valueObject[key] : options[0];
+      output[key] = clone(fallback);
+      recordChange(
+        changes,
+        [...path, key],
+        CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT,
+        "invalid_option_value",
+      );
+    }
+    return output;
+  }
+  if (typeof contract.normalize !== "function") return output;
 
   const normalized = contract.normalize(
     { ...templateObject, ...output },
     {
-      ...(isModelProviderContract ? resolveDefaultModelLibraryProvider() : {}),
       ...normalizationFallback,
       ...valueObject,
     },
@@ -254,6 +279,7 @@ function repairContractNode({
   changes,
   normalizationFallback = {},
   scope = CONFIG_DOCUMENT_SCOPE.GLOBAL,
+  enforceValueConstraints = true,
 }) {
   if (!structureAllowsScope(contract, scope)) {
     if (target !== undefined) {
@@ -267,7 +293,9 @@ function repairContractNode({
     return clone(valueTemplate);
   }
   if (Array.isArray(contract.oneOf)) {
-    const variant = contract.oneOf.find((item) => validatesContract(target, item));
+    const variant = contract.oneOf.find((item) =>
+      validatesContract(target, item, enforceValueConstraints),
+    );
     if (!variant) {
       return repairInvalidNode({
         template: valueTemplate,
@@ -284,9 +312,10 @@ function repairContractNode({
       path,
       changes,
       scope,
+      enforceValueConstraints,
     });
   }
-  if (!validatesScalar(target, contract)) {
+  if (!validatesScalar(target, contract, enforceValueConstraints)) {
     return repairInvalidNode({
       template: valueTemplate,
       path,
@@ -295,7 +324,10 @@ function repairContractNode({
     });
   }
   if (contract.type === "array") {
-    if (!contract.items || target.every((item) => validatesContract(item, contract.items))) {
+    if (
+      !contract.items ||
+      target.every((item) => validatesContract(item, contract.items, enforceValueConstraints))
+    ) {
       return clone(target);
     }
     return repairInvalidNode({
@@ -319,6 +351,7 @@ function repairContractNode({
     path,
     changes,
     scope,
+    enforceValueConstraints,
   };
   const output = repairDeclaredContractProperties(repairContext);
   repairTemplateAdditionalProperties({ ...repairContext, output });
@@ -343,12 +376,13 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
     const providerValues = values.resolveProviderValues(path.at(-1));
     return repairContractNode({
       contract: node.delegatedContract,
-      template: providerValues,
-      valueTemplate: providerValues,
+      template: providerValues.template,
+      valueTemplate: providerValues.template,
       target,
       path,
       changes,
       scope,
+      enforceValueConstraints: providerValues.exactLibraryMatch,
     });
   }
 
@@ -492,7 +526,9 @@ function setValueAt(root, path, value) {
 }
 
 function providerReferenceExists(provider) {
-  return isPlainObject(provider) && validatesContract(provider, MODEL_PROVIDER_CONFIG_CONTRACT);
+  return (
+    isPlainObject(provider) && typeof provider.model === "string" && Boolean(provider.model.trim())
+  );
 }
 
 function collectReferenceRules(document) {

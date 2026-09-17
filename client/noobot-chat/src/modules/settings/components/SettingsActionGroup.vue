@@ -47,7 +47,12 @@ function handleCommand(command = "") {
         {{ action.label }}
       </el-button>
     </div>
-    <el-dropdown class="mobile-actions" trigger="click" @command="handleCommand">
+    <el-dropdown
+      class="mobile-actions"
+      trigger="click"
+      popper-class="noobot-dropdown-popper"
+      @command="handleCommand"
+    >
       <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
       <template #dropdown>
         <el-dropdown-menu>

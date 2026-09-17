@@ -179,13 +179,6 @@ function resolveModelSpecAllowDisabled({
   if (mergedProviders?.[input] && typeof mergedProviders[input] === "object") {
     return { alias: input, ...mergedProviders[input] };
   }
-  const hitByModel = Object.entries(mergedProviders).find(
-    ([, spec]) => String(spec?.model || "").trim() === input,
-  );
-  if (hitByModel) {
-    const [alias, spec] = hitByModel;
-    return { alias, ...spec };
-  }
   return null;
 }
 

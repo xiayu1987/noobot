@@ -242,7 +242,7 @@ test("createGlobalConfigBuilder: provider 无需 format 也通过唯一 ModelSpe
   assert.equal(built.resolvedConfig.providers[legacyAlias].adapterId, "openai-compatible");
 });
 
-test("createGlobalConfigBuilder: provider reasoning facts resolve from the model library by concrete model", async () => {
+test("createGlobalConfigBuilder: custom provider facts do not resolve from the library by model", async () => {
   const builder = createGlobalConfigBuilder({
     source: async () => ({
       providers: {
@@ -250,6 +250,11 @@ test("createGlobalConfigBuilder: provider reasoning facts resolve from the model
           model: "gpt-5.5",
           api_key: "key",
           base_url: "https://api.example.com/v1",
+          description: "custom provider",
+          reasoning_effort_options: ["low", "high"],
+          reasoning_effort: "high",
+          tool_reasoning_effort: "low",
+          reasoning_effort_parameter: "reasoning_effort",
         },
       },
     }),
@@ -257,10 +262,11 @@ test("createGlobalConfigBuilder: provider reasoning facts resolve from the model
 
   const built = await builder.build();
   const provider = built.rawConfig.providers.custom_gpt;
-  assert.deepEqual(provider.reasoning_effort_options, ["none", "low", "medium", "high", "xhigh"]);
-  assert.equal(provider.reasoning_effort, "medium");
-  assert.equal(provider.tool_reasoning_effort, "medium");
+  assert.deepEqual(provider.reasoning_effort_options, ["low", "high"]);
+  assert.equal(provider.reasoning_effort, "high");
+  assert.equal(provider.tool_reasoning_effort, "low");
   assert.equal(provider.reasoning_effort_parameter, "reasoning_effort");
+  assert.equal(provider.description, "custom provider");
 });
 
 test("createGlobalConfigBuilder: derives protocol identities and removes providerId overrides", async () => {

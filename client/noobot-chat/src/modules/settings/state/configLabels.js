@@ -47,4 +47,3 @@ export function resolveConfigConstraintText(node) {
   if (max !== null) return `≤ ${max}`;
   return "";
 }
-

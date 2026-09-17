@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveLocalizedBuiltinScenarios } from "#agent/config";
-import { getProviders, resolveDefaultModelSpec } from "#agent/model";
+import { getEnabledProviders, resolveDefaultModelSpec } from "#agent/model";
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import { withJsonError } from "./route-wrapper.js";
 import { normalizePluginMode } from "@noobot/agent-config-protocol";
@@ -50,23 +50,22 @@ function isConversationProvider(provider = {}) {
 
 function buildClientModelOption(alias = "", provider = {}) {
   const normalizedAlias = String(alias || provider?.alias || "").trim();
+  if (!normalizedAlias) return null;
   const model = String(provider?.model || "").trim();
-  const name = String(provider?.name || provider?.label || normalizedAlias || model).trim();
-  const value = normalizedAlias || model;
-  if (!value) return null;
+  const name = String(provider?.name || provider?.label || normalizedAlias).trim();
   return {
-    value,
-    alias: normalizedAlias || value,
-    key: normalizedAlias || value,
-    label: name || value,
-    name: name || value,
+    value: normalizedAlias,
+    alias: normalizedAlias,
+    key: normalizedAlias,
+    label: name || normalizedAlias,
+    name: name || normalizedAlias,
     model,
     description: String(provider?.description || "").trim(),
   };
 }
 
 function buildClientEnabledModels(globalConfig = {}, userConfig = {}) {
-  const providers = getProviders(globalConfig, userConfig);
+  const providers = getEnabledProviders(globalConfig, userConfig);
   return Object.entries(providers)
     .filter(([, provider]) => isConversationProvider(provider))
     .map(([alias, provider]) => buildClientModelOption(alias, provider))

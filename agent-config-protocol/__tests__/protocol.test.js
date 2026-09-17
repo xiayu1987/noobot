@@ -8,7 +8,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyPrimaryModelReferencesToConfigFile,
-  assertConfigParamsDocumentKeys,
   ensureModelProviderInConfigFile,
   createConfigSnapshot,
   localizeBuiltinScenarios,
@@ -19,14 +18,6 @@ import {
   resolveToolBindings,
   validateConfigSnapshot,
   normalizeKnownConfigKeys,
-  normalizeConfigParamsDocument,
-  synchronizeConfigParamsDocument,
-  mergeConfigParamLayers,
-  buildConfigParamCatalog,
-  createConfigValueLookup,
-  resolveConfigTemplates,
-  UNRESOLVED_TEMPLATE_POLICY,
-  CONFIG_ERROR_CODE,
   resolveMultimodalDefaultModelSelection,
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_ITEM_TYPE,
@@ -578,112 +569,53 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
   });
 });
 
-test("config params document is the only values, descriptions, and catalog authority", () => {
-  const document = normalizeConfigParamsDocument({
-    values: { api_key: " key ", empty: "  " },
-    descriptions: { api_key: " API credential ", region: " Region " },
+test("config repair uses generic provider structure without repairing custom constrained values", () => {
+  const customProvider = {
+    enabled: "invalid-type",
+    model: "gpt-5.5",
+    api_key: "custom-key",
+    base_url: "https://custom.example.com/v1",
+    description: "custom provider",
+    reasoning_effort: "invalid",
+    tool_reasoning_effort: "high",
+    reasoning_effort_options: ["low", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
+  };
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    baseValues: {
+      default_provider: "CustomGPT",
+      providers: { CustomGPT: customProvider },
+    },
+    target: {
+      default_provider: "CustomGPT",
+      providers: { CustomGPT: customProvider },
+    },
   });
-  assert.deepEqual(document, {
-    values: { API_KEY: "key", EMPTY: "" },
-    descriptions: { API_KEY: "API credential", REGION: "Region", EMPTY: "" },
+
+  assert.deepEqual(repaired.document.providers.CustomGPT, {
+    ...customProvider,
+    enabled: true,
+    used_for_conversation: true,
+    multimodal_parsing: { enabled: false, input_modalities: [] },
+    multimodal_generation: {
+      support_generation: { enabled: false, support_scope: [] },
+    },
   });
+  assert.equal(repaired.document.providers.CustomGPT.tool_reasoning_effort, "high");
+  assert.equal(repaired.document.providers.CustomGPT.description, "custom provider");
+  assert.equal(repaired.document.providers.CustomGPT.model, "gpt-5.5");
+  assert.equal(repaired.document.providers.customgpt, undefined);
+  assert.equal(repaired.document.providers.CustomGPT.reasoning_effort, "invalid");
   assert.deepEqual(
-    buildConfigParamCatalog({
-      values: document.values,
-      descriptions: document.descriptions,
-      extraKeys: ["tenant"],
-    }),
-    [
-      { key: "API_KEY", description: "API credential" },
-      { key: "EMPTY", description: "" },
-      { key: "REGION", description: "Region" },
-      { key: "TENANT", description: "" },
-    ],
+    repaired.report.changes.filter(({ reason }) => reason === "invalid_option_value"),
+    [],
   );
-  assert.deepEqual(
-    mergeConfigParamLayers({ API_KEY: "workspace", REGION: "cn" }, { api_key: "user" }),
-    { API_KEY: "user", REGION: "cn" },
-  );
-});
-
-test("config params document rejects ambiguous, invalid, and unknown facts", () => {
-  for (const document of [
-    { values: [] },
-    { descriptions: [] },
-    { values: { "API-KEY": "x" } },
-    { values: { api_key: "x", API_KEY: "y" } },
-    { values: {}, extra: true },
-  ]) {
-    assert.throws(
-      () => normalizeConfigParamsDocument(document),
-      (error) => error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
-    );
-  }
-});
-
-test("config params document preserves valid keys outside the current template", () => {
-  assert.deepEqual(
-    assertConfigParamsDocumentKeys(
-      {
-        values: { api_key: "secret" },
-        descriptions: { api_key: "Credential" },
-      },
-      ["API_KEY", "REGION"],
+  assert.ok(
+    repaired.report.changes.some(
+      ({ path, reason }) =>
+        path === "providers.CustomGPT.enabled" && reason === "invalid_node_value",
     ),
-    {
-      values: { API_KEY: "secret" },
-      descriptions: { API_KEY: "Credential" },
-    },
-  );
-  assert.deepEqual(
-    assertConfigParamsDocumentKeys({ values: { UNUSED_KEY: "value" } }, ["API_KEY"]),
-    { values: { UNUSED_KEY: "value" }, descriptions: { UNUSED_KEY: "" } },
-  );
-});
-
-test("config params synchronization preserves stored keys and adds template keys", () => {
-  assert.deepEqual(
-    synchronizeConfigParamsDocument({
-      document: {
-        values: { ACTIVE_KEY: "preserved", RETIRED_KEY: "removed" },
-        descriptions: { ACTIVE_KEY: "active", RETIRED_KEY: "retired" },
-      },
-      keys: ["NEW_KEY", "ACTIVE_KEY"],
-    }),
-    {
-      values: { ACTIVE_KEY: "preserved", NEW_KEY: "", RETIRED_KEY: "removed" },
-      descriptions: { ACTIVE_KEY: "active", NEW_KEY: "", RETIRED_KEY: "retired" },
-    },
-  );
-});
-
-test("template resolution has one explicit source order and unresolved policy", () => {
-  const lookup = createConfigValueLookup(
-    { API_KEY: "params", REGION: "cn" },
-    { API_KEY: "environment" },
-  );
-  assert.deepEqual(resolveConfigTemplates({ key: "${API_KEY}", region: "${REGION}" }, { lookup }), {
-    key: "params",
-    region: "cn",
-  });
-  assert.equal(
-    resolveConfigTemplates("${MISSING}", {
-      lookup,
-      unresolved: UNRESOLVED_TEMPLATE_POLICY.PRESERVE,
-    }),
-    "${MISSING}",
-  );
-  assert.throws(
-    () =>
-      resolveConfigTemplates("${MISSING}", {
-        lookup,
-        unresolved: UNRESOLVED_TEMPLATE_POLICY.ERROR,
-      }),
-    (error) => error?.code === CONFIG_ERROR_CODE.UNRESOLVED_TEMPLATE,
-  );
-  assert.throws(
-    () => resolveConfigTemplates("${MISSING}", { lookup, unresolved: "fallback" }),
-    /unsupported unresolved config template policy/,
   );
 });
 

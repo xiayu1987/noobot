@@ -14,6 +14,7 @@ import {
   persistSelectedModelPreference,
   persistMemoryModelPreference,
   normalizeAvailableBotScenarios,
+  normalizeModelOptionsFromEnabledModels,
   normalizePluginModelConfig,
   readPluginModelConfigPreference,
   readSelectedModelPreference,
@@ -86,26 +87,30 @@ describe("ui preferences storage", () => {
         },
       },
     });
-    expect(applyFrontendPluginModelConfigDefaults({
-      harness: {
-        capabilityProfile: {
-          planning: { enabled: true },
-          acceptance: { enabled: true },
+    expect(
+      applyFrontendPluginModelConfigDefaults({
+        harness: {
+          capabilityProfile: {
+            planning: { enabled: true },
+            acceptance: { enabled: true },
+          },
         },
-      },
-    }).harness.capabilityProfile).toEqual({
+      }).harness.capabilityProfile,
+    ).toEqual({
       planning: { enabled: true },
       acceptance: { enabled: true },
     });
   });
 
   it("preserves numeric plugin configuration values", () => {
-    expect(normalizePluginModelConfig({
-      harness: {
-        guidance: { summary: { turnsThreshold: 1 } },
-        thresholds: [1, 2],
-      },
-    })).toEqual({
+    expect(
+      normalizePluginModelConfig({
+        harness: {
+          guidance: { summary: { turnsThreshold: 1 } },
+          thresholds: [1, 2],
+        },
+      }),
+    ).toEqual({
       harness: {
         guidance: { summary: { turnsThreshold: 1 } },
         thresholds: [1, 2],
@@ -148,36 +153,68 @@ describe("ui preferences storage", () => {
     expect(normalizeAvailableBotScenarios(null)).toEqual([]);
   });
 
+  it("preserves case-sensitive custom provider names in model options", () => {
+    expect(
+      normalizeModelOptionsFromEnabledModels([
+        {
+          value: "GLM_5_3",
+          alias: "GLM_5_3",
+          key: "GLM_5_3",
+          label: "GLM 5.3",
+          model: "ZHIPU/GLM-5.3",
+        },
+      ]),
+    ).toEqual([
+      {
+        value: "GLM_5_3",
+        alias: "GLM_5_3",
+        key: "GLM_5_3",
+        label: "GLM 5.3",
+        name: "GLM 5.3",
+        model: "ZHIPU/GLM-5.3",
+        description: "",
+      },
+    ]);
+  });
+
   it("resolves bot scenario with saved, current, default, and empty-config branches", () => {
     const availableBotScenarios = [{ key: "workflow" }, { key: "harness" }];
 
-    expect(resolveBotScenarioWithConfig({
-      configuredDefaultScenario: "workflow",
-      currentScenario: "harness",
-      savedScenario: " workflow ",
-      availableBotScenarios,
-    })).toEqual({ value: "workflow", persist: false });
+    expect(
+      resolveBotScenarioWithConfig({
+        configuredDefaultScenario: "workflow",
+        currentScenario: "harness",
+        savedScenario: " workflow ",
+        availableBotScenarios,
+      }),
+    ).toEqual({ value: "workflow", persist: false });
 
-    expect(resolveBotScenarioWithConfig({
-      configuredDefaultScenario: "workflow",
-      currentScenario: "harness",
-      savedScenario: "missing",
-      availableBotScenarios,
-    })).toEqual({ value: "harness", persist: false });
+    expect(
+      resolveBotScenarioWithConfig({
+        configuredDefaultScenario: "workflow",
+        currentScenario: "harness",
+        savedScenario: "missing",
+        availableBotScenarios,
+      }),
+    ).toEqual({ value: "harness", persist: false });
 
-    expect(resolveBotScenarioWithConfig({
-      configuredDefaultScenario: "workflow",
-      currentScenario: "missing",
-      savedScenario: "",
-      availableBotScenarios,
-    })).toEqual({ value: "workflow", persist: true });
+    expect(
+      resolveBotScenarioWithConfig({
+        configuredDefaultScenario: "workflow",
+        currentScenario: "missing",
+        savedScenario: "",
+        availableBotScenarios,
+      }),
+    ).toEqual({ value: "workflow", persist: true });
 
-    expect(resolveBotScenarioWithConfig({
-      configuredDefaultScenario: "default-only",
-      currentScenario: "",
-      savedScenario: "saved-only",
-      availableBotScenarios: [],
-    })).toEqual({ value: "saved-only", persist: false });
+    expect(
+      resolveBotScenarioWithConfig({
+        configuredDefaultScenario: "default-only",
+        currentScenario: "",
+        savedScenario: "saved-only",
+        availableBotScenarios: [],
+      }),
+    ).toEqual({ value: "saved-only", persist: false });
   });
 
   it("syncs bot scenario refs and only persists fallback selections", () => {
@@ -217,19 +254,23 @@ describe("ui preferences storage", () => {
   it("updates bot scenario preference only when the scenario is available", () => {
     const preferenceRef = { value: "" };
 
-    expect(updateBotScenarioPreference({
-      preferenceRef,
-      value: " workflow ",
-      availableBotScenarios: [{ key: "workflow" }],
-    })).toBe("workflow");
+    expect(
+      updateBotScenarioPreference({
+        preferenceRef,
+        value: " workflow ",
+        availableBotScenarios: [{ key: "workflow" }],
+      }),
+    ).toBe("workflow");
     expect(preferenceRef.value).toBe("workflow");
     expect(localStorage.getItem(UI_PREFERENCE_STORAGE_KEYS.botScenario)).toBe("workflow");
 
-    expect(updateBotScenarioPreference({
-      preferenceRef,
-      value: "missing",
-      availableBotScenarios: [{ key: "workflow" }],
-    })).toBe("");
+    expect(
+      updateBotScenarioPreference({
+        preferenceRef,
+        value: "missing",
+        availableBotScenarios: [{ key: "workflow" }],
+      }),
+    ).toBe("");
     expect(preferenceRef.value).toBe("");
     expect(localStorage.getItem(UI_PREFERENCE_STORAGE_KEYS.botScenario)).toBe("");
   });
@@ -384,9 +425,7 @@ describe("ui preferences storage", () => {
       workflow: { semanticModel: "workflow-writing" },
     });
   });
-
 });
-
 
 it("stores memoryModel by scenario", () => {
   persistMemoryModelPreference("memory-programming", "programming");

@@ -162,7 +162,7 @@ test("multimodal_generate: model configuration is the only image API type author
   const result = JSON.parse(
     await tool.invoke({
       generation_content: "draw a bird",
-      model_name: "gpt-image-2",
+      model_name: "gpt_image_2",
       size: "1:1",
     }),
   );
@@ -394,7 +394,7 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
   const payload = JSON.parse(
     await tool.invoke({
       generation_content: "draw a bird",
-      model_name: "gpt-image-2",
+      model_name: "gpt_image_2",
       size: "1:1",
     }),
   );
@@ -495,7 +495,7 @@ test("multimodal_generate: images_async uses the configured provider base URL", 
   const payload = JSON.parse(
     await tool.invoke({
       generation_content: "一只可爱的猫咪在阳光下打盹",
-      model_name: "gpt-image-2",
+      model_name: "gpt_image_2",
       size: "1:1",
       resolution: "1K",
       n: 4,
@@ -577,7 +577,7 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
   await assert.rejects(
     tool.invoke({
       generation_content: "draw a bird",
-      model_name: "gpt-image-2",
+      model_name: "gpt_image_2",
       size: "1:1",
     }),
     (error) => {
@@ -717,7 +717,7 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
   await assert.rejects(
     tool.invoke({
       generation_content: "draw a bird",
-      model_name: "gpt-image-2",
+      model_name: "gpt_image_2",
       size: "auto",
     }),
     (error) => {

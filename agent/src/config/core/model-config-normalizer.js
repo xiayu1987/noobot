@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
-import {
-  resolveModelLibraryProvider,
-  resolveModelLibraryProviderByModel,
-} from "@noobot/model-protocol";
+import { resolveModelLibraryProvider } from "@noobot/model-protocol";
 import { isPlainObject } from "@noobot/agent-config-protocol";
 
 export function normalizeConfiguredModelProviders(config = {}) {
@@ -15,10 +12,7 @@ export function normalizeConfiguredModelProviders(config = {}) {
   const providers = Object.fromEntries(
     Object.entries(config.providers).map(([alias, provider]) => {
       const source = provider && typeof provider === "object" ? provider : {};
-      const fallback =
-        resolveModelLibraryProvider(alias) ||
-        resolveModelLibraryProviderByModel(source.model) ||
-        {};
+      const fallback = resolveModelLibraryProvider(alias) || {};
       return [alias, normalizeRuntimeModelSpec({ alias, ...source }, fallback)];
     }),
   );

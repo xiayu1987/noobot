@@ -8,9 +8,9 @@ import assert from "node:assert/strict";
 import { CONFIG_DOCUMENT_SCOPE } from "../src/index.js";
 import { repairConfigDocument } from "../src/pipeline/repair.js";
 
-test("config repair fills only invalid fields for an unknown provider", () => {
+test("config repair fills unknown provider structure from generic provider", () => {
   const repaired = repairConfigDocument({
-    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
     baseValues: { providers: {} },
     target: {
       providers: {
@@ -30,9 +30,11 @@ test("config repair fills only invalid fields for an unknown provider", () => {
   assert.equal("format" in provider, false);
   assert.equal(provider.api_key, "${DASHSCOPE_API_KEY}");
   assert.equal(provider.base_url, "${DASHSCOPE_API_ADDRESS}");
-  assert.equal(provider.reasoning_effort_options, undefined);
+  assert.deepEqual(provider.reasoning_effort_options, ["low", "medium", "high"]);
   assert.equal(provider.reasoning_effort, "medium");
   assert.equal(provider.tool_reasoning_effort, "medium");
+  assert.equal(provider.description, "Generic OpenAI-compatible fallback model");
+  assert.deepEqual(provider.multimodal_parsing, { enabled: false, input_modalities: [] });
 });
 
 test("config repair adds the character plugin to legacy configuration", () => {

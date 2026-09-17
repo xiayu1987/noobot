@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import AppShellLayout from "../../../src/app/shell/AppShellLayout.vue";
 import AppShellDrawers from "../../../src/app/shell/AppShellDrawers.vue";
 import { openChatMessageNavigator } from "../../../src/app/state/chatMessageNavigatorState.js";
+import { createElementPlusMountOptions } from "../fixtures/elementPlusStubs.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
@@ -124,7 +125,8 @@ describe("AppShell chat message navigator", () => {
     const wrapper = mount(Harness, {
       attachTo: document.body,
       global: {
-        stubs: {
+        directives: { loading: () => {} },
+        ...createElementPlusMountOptions({
           Teleport: false,
           "el-button": defineComponent({
             inheritAttrs: false,
@@ -158,7 +160,7 @@ describe("AppShell chat message navigator", () => {
           ConversationStateDebugPanel: passthroughStub,
           SessionSidebar: passthroughStub,
           UserInteractionForm: passthroughStub,
-        },
+        }),
       },
     });
 

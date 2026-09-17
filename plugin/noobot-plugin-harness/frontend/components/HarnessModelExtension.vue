@@ -202,7 +202,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
           size="small"
           clearable
           :filterable="false"
-          popper-class="noobot-composer-select-popper noobot-model-select-popper"
+          popper-class="noobot-select-popper noobot-model-select-popper"
           :disabled="isHarnessStepModelDisabled(stepItem.key)"
           :placeholder="
             stepItem.key === 'acceptance' && !isHarnessCapabilityEnabled(stepItem.key)
@@ -326,6 +326,18 @@ function isHarnessStepModelDisabled(stepKey = "") {
   padding-right: var(--noobot-space-xs);
   box-sizing: border-box;
   font-size: var(--noobot-font-size-xs);
+  border-color: var(--noobot-panel-border, var(--el-border-color));
+  background: var(--noobot-control-bg, var(--el-bg-color));
+  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+  box-shadow: none;
+}
+
+.plugin-capability-toggle
+  :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary);
+  color: var(--el-color-white);
+  box-shadow: none;
 }
 
 .plugin-fixed-text {
@@ -358,20 +370,10 @@ function isHarnessStepModelDisabled(stepKey = "") {
   width: 100%;
   height: 28px;
   min-height: 28px;
-  padding: 0 var(--noobot-space-xs);
+  padding: 0;
   box-sizing: border-box;
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--el-color-primary) 22%,
-      var(--noobot-panel-border, var(--el-border-color))
-    );
-  border-radius: var(--noobot-radius-xs);
-  background: color-mix(
-    in srgb,
-    var(--el-color-primary) 6%,
-    var(--noobot-control-bg, var(--el-bg-color))
-  );
+  border: 0;
+  background: transparent;
 }
 
 .plugin-guidance-analysis-title {
@@ -411,6 +413,10 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .plugin-guidance-analysis-control :deep(.el-slider__stop) {
   width: 3px;
   height: 3px;
+}
+
+.plugin-guidance-analysis-control :deep(.el-slider__button) {
+  box-shadow: none;
 }
 
 .composer-select :deep(.el-select__wrapper) {

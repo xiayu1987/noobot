@@ -52,13 +52,7 @@ export function createModelTool({ agentContext, sessionId }) {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         });
       }
-      let alias = input;
-      if (!allEnabledProviders[alias]) {
-        const byModelName = Object.entries(allEnabledProviders).find(
-          ([, v]) => String(v?.model || "") === input,
-        );
-        if (byModelName) alias = byModelName[0];
-      }
+      const alias = input;
       if (!allEnabledProviders[alias]) {
         throw recoverableToolError(tModel(runtime, "modelNotFound", { input }), {
           code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,

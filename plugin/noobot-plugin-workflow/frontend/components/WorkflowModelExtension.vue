@@ -49,7 +49,7 @@ function onWorkflowSemanticModelChange(value = "") {
         size="small"
         clearable
         :filterable="false"
-        popper-class="noobot-composer-select-popper noobot-model-select-popper"
+        popper-class="noobot-select-popper noobot-model-select-popper"
         :disabled="!hasModelOptions"
         :placeholder="translate('modelExtension.placeholder')"
         class="composer-select model-select noobot-model-select-control"

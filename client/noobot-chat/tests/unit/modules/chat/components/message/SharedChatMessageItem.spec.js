@@ -20,6 +20,7 @@ import {
   canonicalWorkflowSessionSnapshot,
 } from "../../helpers/workflowRuntimeEventFixture.js";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
+import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
@@ -204,7 +205,7 @@ function mountItem(props = {}) {
     },
     global: {
       plugins: [pinia],
-      stubs: {
+      ...createElementPlusMountOptions({
         "el-dialog": true,
         "el-button": defineComponent({
           name: "ElButton",
@@ -212,7 +213,7 @@ function mountItem(props = {}) {
             return () => h("button", slots.default?.());
           },
         }),
-      },
+      }),
     },
   });
 }

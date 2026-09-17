@@ -9,6 +9,7 @@ import { createPinia, getActivePinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ChatMessageListPanel from "../../../../../../src/modules/chat/components/navigation/ChatMessageListPanel.vue";
 import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
+import { createElementPlusMountOptions } from "../../../../fixtures/elementPlusStubs.js";
 
 const chatMessageItemMock = vi.hoisted(() => ({
   field: "content",
@@ -31,7 +32,18 @@ vi.mock("../../../../../../src/modules/chat/components/message/ChatMessageItem.v
         messageItem: { type: Object, required: true },
         allMessages: { type: Array, default: () => [] },
         currentTurn: { type: Boolean, default: false },
+        sessionDocs: { type: Array, default: () => [] },
+        userId: { type: String, default: "" },
+        renderMarkdown: { type: Function, default: null },
+        formatTime: { type: Function, default: null },
+        formatFileSize: { type: Function, default: null },
+        isImageMime: { type: Function, default: null },
+        sending: { type: Boolean, default: false },
+        deleteMonotonicMessage: { type: Function, default: null },
+        resendMonotonicMessage: { type: Function, default: null },
+        stopExecution: { type: Function, default: null },
       },
+      emits: ["openThinkingDetails"],
       setup(props) {
         onVueMounted(() => chatMessageItemMock.mounted?.());
         onVueUnmounted(() => chatMessageItemMock.unmounted?.());
@@ -68,7 +80,18 @@ function mountPanel(props = {}, options = {}) {
       messageItem: { type: Object, required: true },
       allMessages: { type: Array, default: () => [] },
       currentTurn: { type: Boolean, default: false },
+      sessionDocs: { type: Array, default: () => [] },
+      userId: { type: String, default: "" },
+      renderMarkdown: { type: Function, default: null },
+      formatTime: { type: Function, default: null },
+      formatFileSize: { type: Function, default: null },
+      isImageMime: { type: Function, default: null },
+      sending: { type: Boolean, default: false },
+      deleteMonotonicMessage: { type: Function, default: null },
+      resendMonotonicMessage: { type: Function, default: null },
+      stopExecution: { type: Function, default: null },
     },
+    emits: ["openThinkingDetails"],
     setup(itemProps) {
       return () => {
         chatMessageItemMock.render?.(itemProps);
@@ -92,7 +115,7 @@ function mountPanel(props = {}, options = {}) {
     },
     global: {
       plugins: [getActivePinia()],
-      stubs: {
+      ...createElementPlusMountOptions({
         ChatMessageItem: ChatMessageItemStub,
         "chat-message-item": ChatMessageItemStub,
         "el-scrollbar": defineComponent({
@@ -106,7 +129,7 @@ function mountPanel(props = {}, options = {}) {
           name: "ElSkeletonStub",
           template: "<div class='el-skeleton-stub'></div>",
         }),
-      },
+      }),
     },
   });
 }
@@ -207,13 +230,13 @@ describe("ChatMessageListPanel", () => {
         emptyLogoSrc: "",
       },
       global: {
-        stubs: {
+        ...createElementPlusMountOptions({
           "el-scrollbar": defineComponent({
             name: "ElScrollbarStub",
             template: "<div><slot /></div>",
           }),
           "el-skeleton": true,
-        },
+        }),
       },
     });
 
@@ -264,13 +287,13 @@ describe("ChatMessageListPanel", () => {
         emptyLogoSrc: "",
       },
       global: {
-        stubs: {
+        ...createElementPlusMountOptions({
           "el-scrollbar": defineComponent({
             name: "ElScrollbarStub",
             template: "<div><slot /></div>",
           }),
           "el-skeleton": true,
-        },
+        }),
       },
     });
 
@@ -331,13 +354,13 @@ describe("ChatMessageListPanel", () => {
         emptyLogoSrc: "",
       },
       global: {
-        stubs: {
+        ...createElementPlusMountOptions({
           "el-scrollbar": defineComponent({
             name: "ElScrollbarStub",
             template: "<div><slot /></div>",
           }),
           "el-skeleton": true,
-        },
+        }),
       },
     });
 

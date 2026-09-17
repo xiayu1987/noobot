@@ -49,6 +49,9 @@ const isReferenceSelect = computed(
     props.node.kind === KIND.STRING &&
     (hasConfigReferenceSource(props.node) || Boolean(props.node.optionsField)),
 );
+const isOpenOptionField = computed(
+  () => props.node.kind === KIND.STRING && Boolean(props.node.optionsField),
+);
 
 function writeValue(next) {
   props.container[props.node.key] = next;
@@ -127,12 +130,12 @@ function syncRawDraft(text) {
         <el-option v-for="option in selectOptions" :key="option" :label="option" :value="option" />
       </el-select>
       <el-select
-        v-else-if="isReferenceSelect"
+        v-else-if="isReferenceSelect && (!isOpenOptionField || selectOptions.length > 0)"
         :model-value="value ?? ''"
         clearable
         filterable
-        :allow-create="hasConfigReferenceSource(node)"
-        :default-first-option="hasConfigReferenceSource(node)"
+        :allow-create="hasConfigReferenceSource(node) && !isOpenOptionField"
+        :default-first-option="hasConfigReferenceSource(node) && !isOpenOptionField"
         popper-class="noobot-select-popper"
         class="field-input"
         :placeholder="translate('settings.configSelectPlaceholder')"
@@ -267,5 +270,4 @@ function syncRawDraft(text) {
   color: var(--noobot-status-error);
   font-size: var(--noobot-font-size-xs);
 }
-
 </style>
