@@ -136,9 +136,9 @@ function replay() {
 <style scoped>
 .character-animation-card {
   padding: var(--noobot-space-xs);
-  border: 1px solid #24344d;
-  border-radius: 8px;
-  background: #0a1120;
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-panel-bg);
   min-height: 300px;
   display: flex;
   flex-direction: column;
@@ -150,7 +150,7 @@ header {
   justify-content: space-between;
   gap: var(--noobot-space-xs);
   margin-bottom: var(--noobot-space-xs);
-  color: #dbeafe;
+  color: var(--noobot-text-strong);
   font-size: var(--noobot-font-size-xs);
 }
 .character-animation-card__title {
@@ -167,10 +167,10 @@ header {
   flex-wrap: wrap;
 }
 button {
-  border: 1px solid #385170;
-  border-radius: 4px;
-  background: #15243a;
-  color: #dbeafe;
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-xs);
+  background: var(--noobot-control-bg);
+  color: var(--noobot-text-strong);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -182,26 +182,26 @@ button:disabled {
 }
 .character-animation-card__error {
   margin: var(--noobot-space-2xs) 0;
-  color: #fca5a5;
+  color: var(--noobot-preview-danger-text);
   font-size: 11px;
 }
 .character-animation-card__diagnostics {
   display: grid;
   gap: var(--noobot-space-xs);
   margin: 0 0 var(--noobot-space-xs);
-  color: #93a4bb;
+  color: var(--noobot-text-secondary);
   font-size: 10px;
 }
 .character-animation-card__diagnostic-row {
   min-width: 0;
   padding: var(--noobot-space-2xs) var(--noobot-space-xs);
-  border: 1px solid #1f3047;
-  background: #0d1829;
+  border: 1px solid var(--noobot-panel-border);
+  background: var(--noobot-control-bg);
 }
 .character-animation-card__diagnostic-row > strong {
   display: block;
   margin-bottom: var(--noobot-space-2xs);
-  color: #dbeafe;
+  color: var(--noobot-text-strong);
 }
 .character-animation-card__diagnostic-row dl {
   display: grid;
@@ -216,11 +216,11 @@ button:disabled {
 }
 .character-animation-card__diagnostics dd {
   margin: var(--noobot-space-3xs) 0 0;
-  color: #dbeafe;
+  color: var(--noobot-text-strong);
   font-variant-numeric: tabular-nums;
 }
 .character-animation-card__diagnostics dd.is-warning {
-  color: #fca5a5;
+  color: var(--noobot-preview-danger-text);
 }
 @media (max-width: 560px) {
   .character-animation-card__diagnostic-row dl {
@@ -233,7 +233,7 @@ header strong {
 }
 header span,
 .character-animation-card__missing {
-  color: #93a4bb;
+  color: var(--noobot-text-secondary);
   white-space: nowrap;
 }
 </style>

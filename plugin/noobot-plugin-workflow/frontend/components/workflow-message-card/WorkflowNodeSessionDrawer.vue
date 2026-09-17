@@ -445,10 +445,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 <style>
 .workflow-node-session-drawer {
   --noobot-text-primary: var(--noobot-text-main);
-  --workflow-accent-rgb: 109, 74, 255;
-  --workflow-accent-strong-rgb: 122, 75, 244;
-  --workflow-success-rgb: 31, 143, 74;
-  --workflow-failed-rgb: 199, 59, 59;
 }
 
 .workflow-node-session-drawer__body {
@@ -541,8 +537,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   cursor: pointer;
 }
 .workflow-execution-directory__item.is-selected {
-  border-color: rgb(var(--workflow-accent-rgb));
-  color: rgb(var(--workflow-accent-rgb));
+  border-color: var(--noobot-accent);
+  color: var(--noobot-accent);
 }
 
 .workflow-node-session-item:last-child {
@@ -551,14 +547,14 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 
 .workflow-runtime-panel {
   border: 1px solid
-    color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, rgb(var(--workflow-accent-rgb)) 22%);
+    color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, var(--noobot-accent) 22%);
   border-radius: var(--noobot-radius-md);
   padding: 12px;
   margin-bottom: 14px;
   background: color-mix(
     in srgb,
     var(--noobot-msg-assistant-bg) 94%,
-    rgb(var(--workflow-accent-rgb)) 6%
+    var(--noobot-accent) 6%
   );
 }
 
@@ -636,16 +632,16 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 
 .workflow-runtime-step-box:hover:not(:disabled) {
-  border-color: rgba(var(--workflow-accent-rgb), 0.58);
+  border-color: color-mix(in srgb, var(--noobot-accent) 58%, transparent);
   background: color-mix(
     in srgb,
     var(--noobot-msg-assistant-bg) 90%,
-    rgb(var(--workflow-accent-rgb)) 10%
+    var(--noobot-accent) 10%
   );
 }
 
 .workflow-runtime-step-box.is-selected {
-  border-color: rgba(var(--workflow-accent-rgb), 0.9);
+  border-color: color-mix(in srgb, var(--noobot-accent) 90%, transparent);
 }
 
 .workflow-runtime-step-box.is-disabled {
@@ -677,17 +673,17 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 
 .workflow-runtime-step-box.failed .workflow-runtime-step-status {
-  color: color-mix(in srgb, rgb(var(--workflow-failed-rgb)) 82%, var(--noobot-text-primary) 18%);
-  background: rgba(var(--workflow-failed-rgb), 0.12);
+  color: color-mix(in srgb, var(--noobot-status-error) 82%, var(--noobot-text-primary) 18%);
+  background: color-mix(in srgb, var(--noobot-status-error) 12%, transparent);
 }
 
 .workflow-runtime-step-box.running .workflow-runtime-step-status {
   color: color-mix(
     in srgb,
-    rgb(var(--workflow-accent-strong-rgb)) 82%,
+    var(--noobot-status-running) 82%,
     var(--noobot-text-primary) 18%
   );
-  background: rgba(var(--workflow-accent-strong-rgb), 0.12);
+  background: color-mix(in srgb, var(--noobot-status-running) 12%, transparent);
 }
 
 .workflow-runtime-step-empty {

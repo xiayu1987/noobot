@@ -68,12 +68,10 @@ defineEmits([
 <style scoped>
 .workflow-card {
   --noobot-text-primary: var(--noobot-text-main);
-  --workflow-card-space-sm: 10px;
-  --workflow-card-space-md: 12px;
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-md);
-  padding: var(--workflow-card-space-md);
-  margin-bottom: var(--workflow-card-space-sm);
+  padding: var(--noobot-space-lg);
+  margin-bottom: var(--noobot-space-md);
   background: var(--noobot-msg-assistant-bg);
 }
 
@@ -81,8 +79,8 @@ defineEmits([
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--workflow-card-space-md);
-  margin-bottom: var(--workflow-card-space-sm);
+  gap: var(--noobot-space-lg);
+  margin-bottom: var(--noobot-space-md);
 }
 
 .workflow-card-title {
@@ -99,7 +97,7 @@ defineEmits([
 .workflow-preview-toggle {
   flex: 0 0 auto;
   height: 26px;
-  padding: 0 var(--workflow-card-space-sm);
+  padding: 0 var(--noobot-space-md);
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-sm);
   background: var(--noobot-accent-soft);
@@ -124,7 +122,7 @@ defineEmits([
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  padding: var(--workflow-card-space-sm) var(--workflow-card-space-md);
+  padding: var(--noobot-space-md) var(--noobot-space-lg);
   color: var(--noobot-text-primary);
   font-size: var(--noobot-font-size-xs);
   line-height: 1.55;
@@ -133,7 +131,7 @@ defineEmits([
 }
 
 .workflow-node-list {
-  margin-top: var(--workflow-card-space-sm);
+  margin-top: var(--noobot-space-md);
 }
 
 .workflow-node-title {

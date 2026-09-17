@@ -267,7 +267,7 @@ watch(
 <style scoped>
 .character-animation-assets {
   padding: var(--noobot-space-md);
-  color: #dbeafe;
+  color: var(--noobot-text-strong);
 }
 .is-right-panel {
   min-width: 0;
@@ -282,7 +282,7 @@ watch(
 button {
   border: 0;
   background: transparent;
-  color: #67e8f9;
+  color: var(--noobot-text-accent);
   cursor: pointer;
 }
 .character-animation-assets__sample {
@@ -297,7 +297,7 @@ button:disabled {
 .character-animation-assets__import {
   display: block;
   margin-bottom: var(--noobot-space-sm);
-  color: #93a4bb;
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
   cursor: pointer;
 }
@@ -323,7 +323,7 @@ input[type="file"] {
 }
 .character-animation-assets__remove {
   flex: 0 0 auto;
-  color: #fca5a5;
+  color: var(--noobot-preview-danger-text);
   font-size: 11px;
 }
 .character-animation-assets__inventory {
@@ -338,8 +338,8 @@ input[type="file"] {
   gap: var(--noobot-space-xs);
   min-width: 0;
   padding: 5px 0;
-  border-top: 1px solid color-mix(in srgb, #385170 55%, transparent);
-  color: #dbeafe;
+  border-top: 1px solid var(--noobot-panel-border);
+  color: var(--noobot-text-strong);
   font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__inventory-item > span {
@@ -349,11 +349,11 @@ input[type="file"] {
   white-space: nowrap;
 }
 .character-animation-assets__error {
-  color: #fca5a5;
+  color: var(--noobot-preview-danger-text);
   font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__empty {
-  color: #71839d;
+  color: var(--noobot-text-muted);
   font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__previews {
@@ -368,7 +368,7 @@ input[type="file"] {
 }
 .character-animation-assets__preview-title {
   margin: var(--noobot-space-2xs) 0;
-  color: #93a4bb;
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__preview-header {

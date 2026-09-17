@@ -43,10 +43,6 @@ const statusClass = computed(() => {
 
 <style scoped>
 .workflow-node-status {
-  --workflow-success-rgb: 31, 143, 74;
-  --workflow-failed-rgb: 199, 59, 59;
-  --workflow-running-rgb: 122, 75, 244;
-  --workflow-pending-rgb: 127, 127, 127;
   border-radius: var(--noobot-radius-pill);
   padding: 2px 6px;
   font-size: 10px;
@@ -57,26 +53,26 @@ const statusClass = computed(() => {
 }
 
 .workflow-node-status.success {
-  color: rgb(var(--workflow-success-rgb));
-  background: rgba(var(--workflow-success-rgb), 0.12);
-  border-color: rgba(var(--workflow-success-rgb), 0.28);
+  color: var(--noobot-status-success);
+  background: color-mix(in srgb, var(--noobot-status-success) 12%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-status-success) 28%, transparent);
 }
 
 .workflow-node-status.failed {
-  color: rgb(var(--workflow-failed-rgb));
-  background: rgba(var(--workflow-failed-rgb), 0.12);
-  border-color: rgba(var(--workflow-failed-rgb), 0.28);
+  color: var(--noobot-status-error);
+  background: color-mix(in srgb, var(--noobot-status-error) 12%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-status-error) 28%, transparent);
 }
 
 .workflow-node-status.running {
-  color: rgb(var(--workflow-running-rgb));
-  background: rgba(var(--workflow-running-rgb), 0.12);
-  border-color: rgba(var(--workflow-running-rgb), 0.28);
+  color: var(--noobot-status-running);
+  background: color-mix(in srgb, var(--noobot-status-running) 12%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-status-running) 28%, transparent);
 }
 
 .workflow-node-status.pending {
   color: var(--noobot-text-secondary);
-  background: rgba(var(--workflow-pending-rgb), 0.1);
-  border-color: rgba(var(--workflow-pending-rgb), 0.2);
+  background: color-mix(in srgb, var(--noobot-status-idle) 10%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-status-idle) 20%, transparent);
 }
 </style>

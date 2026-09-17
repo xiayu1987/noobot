@@ -170,15 +170,6 @@ function handleClick(nodeItem = {}, clickable = true) {
 
 <style scoped>
 .workflow-node {
-  --workflow-accent-rgb: 109, 74, 255;
-  --workflow-accent-strong-rgb: 122, 75, 244;
-  --workflow-success-rgb: 31, 143, 74;
-  --workflow-muted-rgb: 100, 116, 139;
-  --workflow-node-space-xs: 6px;
-  --workflow-node-space-sm: 7px;
-  --workflow-node-space-md: 10px;
-  --workflow-node-radius-sm: 10px;
-  --workflow-node-radius-md: 16px;
   position: absolute;
   z-index: 2;
   border: 1px solid var(--noobot-msg-assistant-border);
@@ -186,9 +177,9 @@ function handleClick(nodeItem = {}, clickable = true) {
   background: color-mix(
     in srgb,
     var(--noobot-msg-assistant-bg) 96%,
-    rgb(var(--workflow-accent-rgb)) 4%
+    var(--noobot-accent) 4%
   );
-  padding: var(--workflow-node-space-sm);
+  padding: var(--noobot-space-xs);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -197,8 +188,8 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node.is-state-node {
-  border-radius: var(--workflow-node-radius-md);
-  padding-inline: var(--workflow-node-space-md);
+  border-radius: var(--noobot-radius-lg);
+  padding-inline: var(--noobot-space-md);
   background: color-mix(
     in srgb,
     var(--noobot-msg-assistant-bg) 94%,
@@ -222,9 +213,9 @@ function handleClick(nodeItem = {}, clickable = true) {
   background: color-mix(
     in srgb,
     var(--noobot-msg-assistant-bg) 92%,
-    rgb(var(--workflow-accent-rgb)) 8%
+    var(--noobot-accent) 8%
   );
-  border-color: rgba(var(--workflow-accent-rgb), 0.45);
+  border-color: color-mix(in srgb, var(--noobot-accent) 45%, transparent);
 }
 
 .workflow-node.is-clickable {
@@ -234,7 +225,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node.is-clickable:hover {
   border-color: color-mix(
     in srgb,
-    rgb(var(--workflow-accent-rgb)) 54%,
+    var(--noobot-accent) 54%,
     var(--noobot-msg-assistant-border) 46%
   );
 }
@@ -242,7 +233,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node.is-selected,
 .workflow-node.is-expanded {
   z-index: 3;
-  border-color: rgba(var(--workflow-accent-rgb), 0.95);
+  border-color: color-mix(in srgb, var(--noobot-accent) 95%, transparent);
 }
 
 .workflow-node.is-running {
@@ -273,12 +264,12 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node.boundary-end {
   background: color-mix(
     in srgb,
-    rgb(var(--workflow-accent-rgb)) 12%,
+    var(--noobot-accent) 12%,
     var(--noobot-msg-assistant-bg) 88%
   );
   border-color: color-mix(
     in srgb,
-    rgb(var(--workflow-accent-rgb)) 40%,
+    var(--noobot-accent) 40%,
     var(--noobot-msg-assistant-border) 60%
   );
   border-radius: var(--noobot-radius-pill);
@@ -300,24 +291,24 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node-index {
-  background: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 74%, var(--noobot-base-white) 26%);
+  background: color-mix(in srgb, var(--noobot-accent) 74%, var(--noobot-base-white) 26%);
 }
 
 .workflow-node-state-icon {
   background: color-mix(
     in srgb,
-    rgb(var(--workflow-success-rgb)) 74%,
+    var(--noobot-status-success) 74%,
     var(--noobot-base-white) 26%
   );
 }
 
 .workflow-node-state-icon.state-icon-branch,
 .workflow-node-state-icon.state-icon-merge {
-  background: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 76%, var(--noobot-base-white) 24%);
+  background: color-mix(in srgb, var(--noobot-accent) 76%, var(--noobot-base-white) 24%);
 }
 
 .workflow-node-state-icon.state-icon-end {
-  background: color-mix(in srgb, rgb(var(--workflow-muted-rgb)) 70%, var(--noobot-base-white) 30%);
+  background: color-mix(in srgb, var(--noobot-status-idle) 70%, var(--noobot-base-white) 30%);
 }
 
 .workflow-node-main {
@@ -335,14 +326,14 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node-parallel {
   margin-top: 2px;
   font-size: 10px;
-  color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 82%, var(--noobot-text-secondary) 18%);
+  color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
   line-height: 1.2;
 }
 
 .workflow-node-runtime-hint {
   margin-top: 2px;
   font-size: 10px;
-  color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 82%, var(--noobot-text-secondary) 18%);
+  color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
   line-height: 1.2;
 }
 
@@ -351,7 +342,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   right: 6px;
   bottom: 2px;
   font-size: 10px;
-  color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 80%, var(--noobot-text-secondary) 20%);
+  color: color-mix(in srgb, var(--noobot-accent) 80%, var(--noobot-text-secondary) 20%);
 }
 
 .workflow-node-kind {
@@ -373,19 +364,19 @@ function handleClick(nodeItem = {}, clickable = true) {
 
 .workflow-node.state-branch .workflow-node-kind,
 .workflow-node.state-merge .workflow-node-kind {
-  color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 82%, var(--noobot-text-secondary) 18%);
+  color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
   background: color-mix(
     in srgb,
     var(--noobot-msg-assistant-bg) 82%,
-    rgb(var(--workflow-accent-rgb)) 18%
+    var(--noobot-accent) 18%
   );
 }
 
 @media (max-width: 480px) {
   .workflow-node {
-    padding: var(--workflow-node-space-xs);
+    padding: var(--noobot-space-xs);
     gap: 5px;
-    border-radius: var(--workflow-node-radius-sm);
+    border-radius: var(--noobot-radius-lg);
   }
 
   .workflow-node.is-state-node {

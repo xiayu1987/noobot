@@ -121,10 +121,10 @@ watch(
 
 <style scoped>
 .workflow-canvas {
-  --workflow-edge-color: rgba(var(--workflow-accent-rgb), 0.38);
-  --workflow-edge-highlighted-color: rgba(var(--workflow-accent-rgb), 0.9);
-  --workflow-arrow-color: rgba(var(--workflow-accent-rgb), 0.62);
-  --workflow-arrow-highlighted-color: rgba(var(--workflow-accent-rgb), 0.95);
+  --workflow-edge-color: color-mix(in srgb, var(--noobot-accent) 38%, transparent);
+  --workflow-edge-highlighted-color: color-mix(in srgb, var(--noobot-accent) 90%, transparent);
+  --workflow-arrow-color: color-mix(in srgb, var(--noobot-accent) 62%, transparent);
+  --workflow-arrow-highlighted-color: color-mix(in srgb, var(--noobot-accent) 95%, transparent);
   display: block;
 }
 </style>
