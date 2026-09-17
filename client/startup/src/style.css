@@ -13,8 +13,8 @@
   --noobot-radius-sm: 10px;
   --noobot-radius-md: 12px;
   --noobot-radius-lg: 16px;
-  --noobot-radius-xl: 22px;
-  --noobot-radius-shell: 30px;
+  --noobot-radius-xl: 18px;
+  --noobot-radius-shell: 22px;
   --noobot-radius-pill: 999px;
   --startup-bg-root: var(--startup-color-ink-950);
   --startup-bg-shell: var(--startup-color-slate-900);
@@ -36,10 +36,8 @@
   --startup-text-muted: var(--startup-color-slate-400);
   --startup-text-accent: var(--startup-color-sky-300);
   --startup-status-running: var(--startup-color-sky-400);
-  --startup-decoration: color-mix(in srgb, var(--startup-color-sky-400) 24%, transparent);
   --startup-accent-soft: color-mix(in srgb, var(--startup-color-sky-400) 12%, transparent);
   --startup-accent-border: color-mix(in srgb, var(--startup-color-sky-300) 18%, transparent);
-  --startup-accent-dot: color-mix(in srgb, var(--startup-color-sky-300) 50%, transparent);
   --startup-scrollbar: color-mix(in srgb, var(--startup-color-slate-400) 35%, transparent);
   color-scheme: dark;
   font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
@@ -65,28 +63,15 @@ input {
   background: var(--startup-bg-shell);
 }
 .startup-card {
-  position: relative;
   width: min(900px, 100%);
   overflow: hidden;
   border: 1px solid var(--startup-border-card);
   border-radius: var(--noobot-radius-shell);
   background: var(--startup-surface-card);
-  backdrop-filter: blur(20px);
 }
 .hero {
-  position: relative;
   padding: 36px 38px 22px;
   border-bottom: 1px solid var(--startup-border-soft);
-}
-.hero::after {
-  content: "";
-  position: absolute;
-  right: 36px;
-  top: 36px;
-  width: 58px;
-  height: 58px;
-  border-radius: var(--noobot-radius-xl);
-  background: var(--startup-decoration);
 }
 .brand-badge {
   border-color: var(--startup-accent-border);
@@ -110,7 +95,7 @@ p {
   gap: 12px;
   align-items: center;
   min-height: 28px;
-  max-width: calc(100% - 86px);
+  max-width: 100%;
 }
 .status-line p {
   min-width: 0;
@@ -129,7 +114,7 @@ p {
 }
 .setup-form {
   margin: 18px 0 0;
-  padding: 22px;
+  padding: 20px;
   border: 1px solid var(--startup-border-panel);
   border-radius: var(--noobot-radius-xl);
   background: var(--startup-surface-panel);
@@ -301,7 +286,7 @@ small {
   margin-bottom: 10px;
   color: var(--startup-text-strong);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 650;
 }
 .dependency-list {
   display: grid;
@@ -311,7 +296,7 @@ small {
 .dependency-card.el-checkbox {
   width: 100%;
   height: auto;
-  min-height: 120px;
+  min-height: 108px;
   margin: 0;
   padding: 14px;
   align-items: flex-start;
@@ -382,19 +367,8 @@ small {
   padding: 10px 14px;
   color: var(--startup-text-secondary);
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.log-dots {
-  display: inline-flex;
-  gap: 5px;
-}
-.log-dots i {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--noobot-radius-pill);
-  background: var(--startup-accent-dot);
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 pre {
   white-space: pre-wrap;

@@ -121,7 +121,6 @@ watch(
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--noobot-accent) 30%, transparent)
     color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
-  box-sizing: border-box;
 }
 
 .chat-message-navigator.is-empty {
@@ -156,7 +155,7 @@ watch(
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
-  margin: 3px 0;
+  margin: var(--noobot-space-3xs) 0;
   padding: var(--noobot-space-xs) var(--noobot-space-lg) var(--noobot-space-xs)
     var(--noobot-space-xl);
   border-radius: var(--noobot-radius-xs);
@@ -171,8 +170,7 @@ watch(
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
-    border-color var(--noobot-duration-normal) ease,
-    transform var(--noobot-duration-normal) ease;
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .chat-message-navigator__item {
@@ -222,25 +220,10 @@ watch(
   white-space: nowrap;
 }
 
-:deep(.el-anchor__link::before) {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 3px;
-  width: 3px;
-  height: 14px;
-  border-radius: var(--noobot-radius-pill);
-  background: var(--noobot-accent);
-  opacity: 0;
-  transform: translateY(-50%);
-  transition: opacity var(--noobot-duration-normal) ease;
-}
-
 :deep(.el-anchor__link:hover) {
   color: var(--noobot-text-main);
   background: var(--noobot-surface-soft-hover);
   border-color: color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
-  transform: translateX(2px);
 }
 
 :deep(.el-anchor__item.is-current .el-anchor__link),
@@ -249,11 +232,6 @@ watch(
   background: var(--noobot-surface-primary-soft);
   border-color: color-mix(in srgb, var(--noobot-accent) 42%, var(--noobot-panel-border));
   font-weight: 700;
-}
-
-:deep(.el-anchor__item.is-current .el-anchor__link::before),
-:deep(.el-anchor__link.is-current::before) {
-  opacity: 1;
 }
 
 @media (max-width: 720px) {
