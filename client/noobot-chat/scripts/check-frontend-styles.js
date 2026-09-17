@@ -55,6 +55,22 @@ const formContractFiles = [
     ],
   },
 ];
+const iconButtonContract = {
+  filePath: path.join(projectRoot, "src/shared/styles/components/buttons.css"),
+  rules: [
+    {
+      label: "shared icon button shape",
+      pattern:
+        /\.noobot-icon-button\s*,\s*\.el-button\.noobot-icon-button\s*\{(?=[^}]*border-radius\s*:\s*50%)(?=[^}]*aspect-ratio\s*:\s*1)(?=[^}]*padding\s*:\s*0)[^}]*\}/s,
+    },
+  ],
+};
+const iconButtonVariantClasses = [
+  "noobot-flat-icon-btn",
+  "noobot-flat-inline-icon-btn",
+  "noobot-copy-button",
+  "noobot-tail-btn",
+];
 const violations = [];
 const checks = [
   ["transition: all is forbidden", /\btransition(?:-property)?\s*:\s*all\b/i],
@@ -88,8 +104,37 @@ function inspectEmptyStyleRules(filePath, source) {
       const selector = String(match[1] || "").trim();
       if (!selector || selector.startsWith("@")) continue;
       const lineNumber = source.slice(0, region.offset + (match.index || 0)).split(/\r?\n/).length;
-      violations.push(`${path.relative(repoRoot, filePath)}:${lineNumber}: empty style rule is forbidden`);
+      violations.push(
+        `${path.relative(repoRoot, filePath)}:${lineNumber}: empty style rule is forbidden`,
+      );
     }
+  }
+}
+
+function inspectIconOnlyButtons(filePath, source) {
+  for (const match of source.matchAll(/<el-button\b((?:[^>"']|"[^"]*"|'[^']*')*)\/>/g)) {
+    const attributes = match[1] || "";
+    const usesIconProp = /(?:^|\s):?icon\s*=/.test(attributes);
+    if (!usesIconProp || attributes.includes("noobot-icon-button")) continue;
+    const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: icon-only button must use noobot-icon-button`,
+    );
+  }
+
+  for (const match of source.matchAll(/<(el-button|button)\b([^>]*)>([\s\S]*?)<\/\1>/g)) {
+    const [, , attributes, body] = match;
+    if (!/<(?:el-icon|svg)\b/.test(body)) continue;
+    const visibleText = body
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\{\{[\s\S]*?\}\}/g, " text ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (visibleText || attributes.includes("noobot-icon-button")) continue;
+    const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: icon-only button must use noobot-icon-button`,
+    );
   }
 }
 
@@ -109,6 +154,24 @@ function inspectFile(filePath) {
   });
   if (filePath.endsWith(".css") || filePath.endsWith(".vue")) {
     inspectEmptyStyleRules(filePath, source);
+  }
+
+  if (filePath.endsWith(".vue")) {
+    inspectIconOnlyButtons(filePath, source);
+    for (const match of source.matchAll(/<(?:el-button|button)\b[^>]*>/g)) {
+      const openingTag = match[0];
+      const usesVariant = iconButtonVariantClasses.some((className) =>
+        openingTag.includes(className),
+      );
+      const usesElementCircle = /(?:^|\s)circle(?:\s|=|>|\/)/.test(openingTag);
+      if ((!usesVariant && !usesElementCircle) || openingTag.includes("noobot-icon-button")) {
+        continue;
+      }
+      const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+      violations.push(
+        `${path.relative(repoRoot, filePath)}:${lineNumber}: icon-only button must use noobot-icon-button`,
+      );
+    }
   }
 
   if (
@@ -154,6 +217,15 @@ for (const { filePath, selectors } of formContractFiles) {
     if (source.includes(selector)) continue;
     violations.push(
       `${path.relative(repoRoot, filePath)}: shared form contract is missing ${selector}`,
+    );
+  }
+}
+{
+  const source = fs.readFileSync(iconButtonContract.filePath, "utf8");
+  for (const { label, pattern } of iconButtonContract.rules) {
+    if (pattern.test(source)) continue;
+    violations.push(
+      `${path.relative(repoRoot, iconButtonContract.filePath)}: icon button contract must keep ${label} circular`,
     );
   }
 }

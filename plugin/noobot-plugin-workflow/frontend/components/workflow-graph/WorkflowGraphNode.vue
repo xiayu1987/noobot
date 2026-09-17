@@ -174,11 +174,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   z-index: 2;
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-sm);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 96%,
-    var(--noobot-accent) 4%
-  );
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, var(--noobot-accent) 4%);
   padding: var(--noobot-space-xs);
   display: flex;
   align-items: center;
@@ -210,11 +206,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 
 .workflow-node.is-state-node.state-branch,
 .workflow-node.is-state-node.state-merge {
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 92%,
-    var(--noobot-accent) 8%
-  );
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 92%, var(--noobot-accent) 8%);
   border-color: color-mix(in srgb, var(--noobot-accent) 45%, transparent);
 }
 
@@ -259,11 +251,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node.boundary-end {
-  background: color-mix(
-    in srgb,
-    var(--noobot-accent) 12%,
-    var(--noobot-msg-assistant-bg) 88%
-  );
+  background: color-mix(in srgb, var(--noobot-accent) 12%, var(--noobot-msg-assistant-bg) 88%);
   border-color: color-mix(
     in srgb,
     var(--noobot-accent) 40%,
@@ -292,11 +280,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node-state-icon {
-  background: color-mix(
-    in srgb,
-    var(--noobot-status-success) 74%,
-    var(--noobot-base-white) 26%
-  );
+  background: color-mix(in srgb, var(--noobot-status-success) 74%, var(--noobot-base-white) 26%);
 }
 
 .workflow-node-state-icon.state-icon-branch,
@@ -362,11 +346,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node.state-branch .workflow-node-kind,
 .workflow-node.state-merge .workflow-node-kind {
   color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 82%,
-    var(--noobot-accent) 18%
-  );
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 82%, var(--noobot-accent) 18%);
 }
 
 @media (max-width: 480px) {

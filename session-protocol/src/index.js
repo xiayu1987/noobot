@@ -6,7 +6,27 @@
 export * from "./version.js";
 export * from "./identity.js";
 export * from "./policies.js";
-export * from "./turn-lifecycle.js";
+export {
+  TURN_LIFECYCLE_PROTOCOL_VERSION,
+  TURN_LIFECYCLE_RECEIPT_ACTION,
+  TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION,
+  TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  TURN_SNAPSHOT_WIRE_EVENT,
+  TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
+  TURN_TERMINAL_RESOLVED_EVENT,
+  createTurnLifecycleEnvelope,
+  createTurnLifecycleReceipt,
+  createTurnLifecycleSnapshot,
+  createTurnTerminalResolution,
+  isAuthoritativeTurnLifecycleEnvelope,
+  validateSessionEvent,
+  validateSessionProvisionIntent,
+  validateTurnLifecycleEnvelope,
+  validateTurnLifecycleReceipt,
+  validateTurnLifecycleSnapshot,
+  validateTurnTerminalResolution,
+} from "./turn-lifecycle.js";
 export * from "./execution-lifecycle.js";
 export * from "./errors.js";
 export * from "./turn-attachment-bind.js";
@@ -14,7 +34,13 @@ export * from "./turn-acceptance.js";
 export * from "./identity/session-identity.js";
 export * from "./identity/turn-identity.js";
 export * from "./identity/message-identity.js";
-export * from "./command/session-command.js";
+export {
+  SESSION_COMMAND,
+  assertSessionCommand,
+  createSessionCommand,
+  normalizeExpectedAggregateVersion,
+  validateSessionCommand,
+} from "./command/session-command.js";
 export * from "./command/command-fingerprint.js";
 export {
   appendCommandReceipt,
@@ -38,6 +64,5 @@ export * from "./lifecycle/execution-cancellation-scope.js";
 export * from "./aggregate/session-aggregate-core.js";
 export * from "./aggregate/session-invariants.js";
 export * from "./aggregate/message-turn-partition.js";
-export * from "./transport/lifecycle-envelope.js";
 export * from "./transport/snapshot.js";
 export * from "./transport/result.js";

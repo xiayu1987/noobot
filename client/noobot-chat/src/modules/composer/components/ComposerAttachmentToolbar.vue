@@ -75,7 +75,7 @@ defineExpose({
         <span class="attachment-name" :title="uploadFile.name">{{ uploadFile.name }}</span>
         <button
           type="button"
-          class="attachment-remove-btn noobot-flat-icon-btn"
+          class="attachment-remove-btn noobot-icon-button noobot-flat-icon-btn"
           :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
           :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
           @click.stop="onRemoveUpload(uploadFile.draftAttachmentId)"

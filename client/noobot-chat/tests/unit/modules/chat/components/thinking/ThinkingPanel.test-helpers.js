@@ -7,9 +7,6 @@ import { mount } from "@vue/test-utils";
 import { computed, defineComponent, h, inject, provide } from "vue";
 import { vi } from "vitest";
 import ThinkingPanel from "../../../../../../src/modules/chat/components/thinking/ThinkingPanel.vue";
-import { contributeExtension } from "../../../../../../src/extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
-import { activate as activateHarnessFrontend } from "../../../../../../../../plugin/noobot-plugin-harness/frontend/index.js";
 export { canonicalActivityFact } from "../../helpers/messageEventFixture.js";
 
 if (!globalThis.localStorage?.getItem) {
@@ -166,15 +163,6 @@ const ElTabPaneStub = defineComponent({
 });
 
 export function mountThinkingPanel(messageItem, props = {}) {
-  void activateHarnessFrontend({
-    contributeExtension: (point, contribution) =>
-      contributeExtension(point, {
-        ...contribution,
-        pluginId: "harness",
-      }),
-    extensionPoints: EXTENSION_POINTS,
-    services: {},
-  });
   return mount(ThinkingPanel, {
     props: { messageItem, allMessages: [], ...props },
     global: {

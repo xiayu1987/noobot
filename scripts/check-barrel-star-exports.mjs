@@ -119,23 +119,14 @@ async function loadStaticNamespace(absolute, state = {}) {
   }
 }
 
-async function loadNamespaceNames(absolute, state = {}) {
-  try {
-    const namespace = await import(pathToFileURL(absolute).href);
-    return new Set(Object.keys(namespace).filter((name) => name !== "default"));
-  } catch {
-    return loadStaticNamespace(absolute, state);
-  }
-}
-
 export async function inspectBarrel({ root, barrel }) {
   const absolute = path.join(root, barrel.relative);
   const state = { cache: new Map(), resolving: new Set() };
-  const exported = await loadNamespaceNames(absolute, state);
+  const exported = await loadStaticNamespace(absolute, state);
   const origins = new Map();
   for (const source of barrel.sources) {
     const sourceFile = resolveRelativeModule(absolute, source);
-    const namespace = await loadNamespaceNames(sourceFile, state);
+    const namespace = await loadStaticNamespace(sourceFile, state);
     for (const name of namespace) {
       if (!origins.has(name)) origins.set(name, []);
       origins.get(name).push(source);

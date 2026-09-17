@@ -80,7 +80,7 @@ watch(
       <el-tooltip :content="translate('message.copyFormat')" placement="top" :show-after="300">
         <el-button
           size="small"
-          class="noobot-flat-inline-icon-btn noobot-copy-button"
+          class="noobot-icon-button noobot-flat-inline-icon-btn noobot-copy-button"
           :aria-label="translate('message.copyFormat')"
           @click="emitCopyMarkdownRich"
         >
@@ -90,7 +90,7 @@ watch(
       <el-tooltip :content="translate('message.copyText')" placement="top" :show-after="300">
         <el-button
           size="small"
-          class="noobot-flat-inline-icon-btn noobot-copy-button"
+          class="noobot-icon-button noobot-flat-inline-icon-btn noobot-copy-button"
           :aria-label="translate('message.copyText')"
           @click="emit('copy-markdown-text')"
         >

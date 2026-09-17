@@ -162,7 +162,7 @@ defineExpose({ focusTextarea });
               </div>
 
               <button
-                class="monotonic-attachment-remove"
+                class="monotonic-attachment-remove noobot-icon-button"
                 :disabled="operating"
                 @click="emit('remove-attachment', index)"
                 title="移除附件"
@@ -497,7 +497,7 @@ defineExpose({ focusTextarea });
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: var(--noobot-radius-xs);
+  border-radius: 50%;
   border: none;
   background: var(--noobot-surface-soft);
   color: var(--noobot-text-secondary);

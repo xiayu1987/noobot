@@ -7,7 +7,6 @@
 export const ATTACHMENT_PROTOCOL_NAME = "noobot.attachment";
 export const ATTACHMENT_PROTOCOL_VERSION = 1;
 
-export { AttachmentProtocolError } from "./errors.js";
 import { AttachmentProtocolError } from "./errors.js";
 
 export function isPlainObject(value) {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { TASK_PROTOCOL_STATE, parseTaskProtocolReceipt } from "./protocol-receipt.js";
+import { TASK_PROTOCOL_STATE, parseTaskProtocolReceipt } from "./receipt-contract.js";
 
 export const TASK_CHECK_PROTOCOL_VERSION = 1;
 export const TASK_CHECK_STATE = TASK_PROTOCOL_STATE;

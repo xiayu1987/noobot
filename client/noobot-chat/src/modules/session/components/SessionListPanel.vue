@@ -222,7 +222,7 @@ watch(
                   <div class="session-actions">
                     <button
                       type="button"
-                      class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
+                      class="session-rename-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
                       :title="translate('common.renameSession')"
                       :aria-label="translate('common.renameSession')"
                       :disabled="sessionItem.isUnavailable === true"
@@ -232,7 +232,7 @@ watch(
                     </button>
                     <button
                       type="button"
-                      class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
+                      class="session-delete-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
                       :title="translate('common.deleteSession')"
                       :aria-label="translate('common.deleteSession')"
                       @click.stop="emit('delete-session', sessionItem.sessionId)"

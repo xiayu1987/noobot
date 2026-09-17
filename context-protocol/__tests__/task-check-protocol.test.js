@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   createTaskCheckReceipt,
@@ -36,4 +37,16 @@ test("task check protocol rejects free text and receipt extensions", () => {
   assert.throws(() => parseTaskCheckContent("任务正常"), /NOOBOT_TASK_CHECK\/1/);
   const receipt = createTaskCheckReceipt(validContent);
   assert.throws(() => parseTaskCheckReceipt({ ...receipt, details: "duplicate" }), /exactly/);
+});
+
+test("task check receipt parser and its contract remain browser-safe", async () => {
+  const sources = await Promise.all(
+    ["../src/task/check-receipt.js", "../src/task/receipt-contract.js"].map((specifier) =>
+      readFile(new URL(specifier, import.meta.url), "utf8"),
+    ),
+  );
+  assert.equal(
+    sources.some((source) => /(?:from\s+|import\s*\()["']node:/.test(source)),
+    false,
+  );
 });
