@@ -4,15 +4,52 @@
  * SPDX-License-Identifier: MIT
  */
 import { reactive } from "vue";
-import { normalizeTurnScopeIdKey, getMessageDialogProcessId, getMessageSessionId, getMessageTurnScopeId } from "./messageIdentity.js";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import {
+  normalizeTurnScopeIdKey,
+  getMessageDialogProcessId,
+  getMessageSessionId,
+  getMessageTurnScopeId,
+} from "./messageIdentity.js";
 import { thinkingDetailService as defaultThinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();
 
-function text(value) { return String(value || "").trim(); }
+function text(value) {
+  return String(value || "").trim();
+}
 
-export function thinkingDetailCacheKey({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
+function wait(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(delayMs) || 0)));
+}
+
+async function fetchWithMissingDetailRetry(runFetch, identity, { retryLimit, retryDelayMs }) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const detail = await runFetch(identity.sessionId, {
+        dialogProcessId: identity.dialogProcessId,
+        turnScopeId: identity.turnScopeId,
+      });
+      if (detail?.exists === false) {
+        const error = new Error(detail?.error || "thinking detail not found");
+        error.code = "thinking_detail_not_found";
+        throw error;
+      }
+      return detail;
+    } catch (error) {
+      if (error?.code !== "thinking_detail_not_found" || attempt >= retryLimit) throw error;
+      await wait(retryDelayMs);
+    }
+  }
+}
+
+export function thinkingDetailCacheKey({
+  sessionId = "",
+  turnScopeId = "",
+  dialogProcessId = "",
+} = {}) {
   const sid = text(sessionId);
   const turnKey = normalizeTurnScopeIdKey(turnScopeId);
   const route = turnKey || text(dialogProcessId);
@@ -46,9 +83,18 @@ export async function loadThinkingDetail({
   fetchThinkingDetail = null,
   thinkingDetailService = defaultThinkingDetailService,
   expectedRevision = "",
+  retryLimit = QUANTITY_THRESHOLDS.client.thinkingDetailRetryLimit,
+  retryDelayMs = TIME_THRESHOLDS.client.thinkingDetailRetryDelayMs,
 } = {}) {
   const detailService = thinkingDetailService || defaultThinkingDetailService;
-  const identity = resolveThinkingDetailIdentity({ ...messageItem, dialogProcessId: dialogProcessId || messageItem?.dialogProcessId, turnScopeId: turnScopeId || messageItem?.turnScopeId }, sessionId);
+  const identity = resolveThinkingDetailIdentity(
+    {
+      ...messageItem,
+      dialogProcessId: dialogProcessId || messageItem?.dialogProcessId,
+      turnScopeId: turnScopeId || messageItem?.turnScopeId,
+    },
+    sessionId,
+  );
   if (!identity.key) return null;
   const cached = cache.entries[identity.key];
   const revision = text(expectedRevision);
@@ -56,17 +102,19 @@ export async function loadThinkingDetail({
   const requestKey = `${identity.key}::${revision || "latest"}`;
   if (inflight.has(requestKey)) return inflight.get(requestKey);
   const request = (async () => {
-    const runFetch = typeof fetchThinkingDetail === "function"
-      ? fetchThinkingDetail
-      : async (sid, params) => detailService.getDetail({
-          userId,
-          sessionId: sid,
-          dialogProcessId: params.dialogProcessId,
-          turnScopeId: params.turnScopeId,
-        });
-    const data = await runFetch(identity.sessionId, {
-      dialogProcessId: identity.dialogProcessId,
-      turnScopeId: identity.turnScopeId,
+    const runFetch =
+      typeof fetchThinkingDetail === "function"
+        ? fetchThinkingDetail
+        : async (sid, params) =>
+            detailService.getDetail({
+              userId,
+              sessionId: sid,
+              dialogProcessId: params.dialogProcessId,
+              turnScopeId: params.turnScopeId,
+            });
+    const data = await fetchWithMissingDetailRetry(runFetch, identity, {
+      retryLimit: Math.max(0, Number(retryLimit) || 0),
+      retryDelayMs,
     });
     cache.entries[identity.key] = { data, updatedAt: Date.now(), identity };
     return data;

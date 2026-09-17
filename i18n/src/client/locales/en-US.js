@@ -341,11 +341,14 @@ export const enUSMessages = {
     unknownError: "Unknown error",
     occurredError: "Error: {error}",
     sendFailed: "Send failed",
+    interjectionFailed: "Failed to send interjection",
     expiredRefreshFailed: "Session expired. Please create a new conversation.",
     sessionStateOutOfSync: "Session state is out of sync. Refresh and try again.",
   },
   message: {
     taskCheck: "Task Check",
+    userInterjection: "User Interjection",
+    injectedMessage: "Injected Message",
     subtaskProcessing: "Subtask processing...",
     subtaskStopped: "Subtask stopped",
     subtaskFailed: "Subtask failed",
@@ -478,6 +481,7 @@ export const enUSMessages = {
   },
   composer: {
     stop: "Stop",
+    interject: "Interject",
     inputPlaceholder: "Shift+Enter for newline",
     allowInteraction: "Allow Interaction",
     disallowInteraction: "Disallow Interaction",

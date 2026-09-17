@@ -53,6 +53,10 @@ test("SessionExecutionEngine preserves persistence context and cross-layer scope
   const engine = new SessionExecutionEngine({});
   const persistenceContext = { kind: "trusted-context" };
   const persistenceScope = { scopeId: "agent:child" };
+  const userInterjectionPort = {
+    consume: async () => [],
+    sealIfEmpty: () => true,
+  };
   const turnAcceptance = Object.freeze({
     commandId: "command-1",
     sessionId: "s1",
@@ -77,11 +81,13 @@ test("SessionExecutionEngine preserves persistence context and cross-layer scope
     persistenceContext,
     persistenceScope,
     turnAcceptance,
+    userInterjectionPort,
   });
 
   assert.equal(captured.persistenceContext, persistenceContext);
   assert.equal(captured.persistenceScope, persistenceScope);
   assert.equal(captured.turnAcceptance, turnAcceptance);
+  assert.equal(captured.userInterjectionPort, userInterjectionPort);
 });
 
 test("SessionExecutionEngine exposes the complete authority event repository port", async () => {

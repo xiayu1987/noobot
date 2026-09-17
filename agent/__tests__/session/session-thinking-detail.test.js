@@ -119,8 +119,8 @@ test("thinking detail projects assistant tool-call content once and excludes con
   assert.deepEqual(
     payload.messageItem.thinkingContentTimeline.map((item) => [item.contentKind, item.text]),
     [
-      ["main_model_content", "先确认当前真实状态。"],
       ["thinking", "analysis"],
+      ["main_model_content", "先确认当前真实状态。"],
     ],
   );
   assert.equal(payload.counts.injectedMessageCount, 0);

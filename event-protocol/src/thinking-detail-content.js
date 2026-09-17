@@ -6,6 +6,7 @@
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { text } from "./normalize.js";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
   new Set([
@@ -26,6 +27,7 @@ const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
 
 export const THINKING_DETAIL_CONTENT_KIND = Object.freeze({
   INJECTED_MESSAGE: "injected_message",
+  USER_INTERJECTION: "user_interjection",
   MAIN_MODEL_CONTENT: "main_model_content",
   THINKING: "thinking",
 });
@@ -38,7 +40,22 @@ function messageContent(message = {}) {
   return typeof message?.content === "string" ? message.content.trim() : "";
 }
 
+function internalMessageType(message = {}) {
+  return text(
+    message?.noobotInternalMessageType ||
+      message?.additional_kwargs?.noobotInternalMessageType ||
+      message?.metadata?.noobotInternalMessageType ||
+      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      message?.lc_kwargs?.metadata?.noobotInternalMessageType,
+  );
+}
+
+export function isThinkingDetailUserInterjection(message = {}) {
+  return internalMessageType(message) === CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION;
+}
+
 export function isThinkingDetailControlMessage(message = {}) {
+  if (isThinkingDetailUserInterjection(message)) return false;
   return (
     text(message?.type) === "context_control" ||
     Boolean(text(message?.noobotInternalMessageType)) ||
@@ -51,6 +68,19 @@ export function isThinkingDetailControlMessage(message = {}) {
 
 export function isThinkingDetailInjectedMessage(message = {}) {
   return message?.injectedMessage === true && !isThinkingDetailControlMessage(message);
+}
+
+function compareContentFacts(left = {}, right = {}) {
+  const leftTime = Date.parse(text(left.timestamp));
+  const rightTime = Date.parse(text(right.timestamp));
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  if (Number.isFinite(leftTime) !== Number.isFinite(rightTime))
+    return Number.isFinite(leftTime) ? -1 : 1;
+  const sequenceDifference = Number(left.sequence || 0) - Number(right.sequence || 0);
+  if (sequenceDifference) return sequenceDifference;
+  return text(left.contentId).localeCompare(text(right.contentId));
 }
 
 function messageContentFact(message = {}, contentKind, index) {
@@ -123,6 +153,15 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
       .filter(Boolean),
   );
   for (const [index, message] of (Array.isArray(messages) ? messages : []).entries()) {
+    if (isThinkingDetailUserInterjection(message)) {
+      const fact = messageContentFact(
+        message,
+        THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
+        index,
+      );
+      if (fact) timeline.push(fact);
+      continue;
+    }
     if (isThinkingDetailInjectedMessage(message)) {
       const fact = messageContentFact(
         message,
@@ -158,7 +197,7 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
     const fact = activityContentFact(activity, index);
     if (fact) timeline.push(fact);
   }
-  return Object.freeze(timeline.map((fact) => Object.freeze(fact)));
+  return Object.freeze(timeline.sort(compareContentFacts).map((fact) => Object.freeze(fact)));
 }
 
 export function isThinkingDetailContentFact(value = {}) {

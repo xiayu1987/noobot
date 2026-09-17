@@ -11,7 +11,7 @@
 This Playwright plan validates real browser behavior for:
 
 - Session creation, persistence, refresh, and concurrent version control.
-- `turn.send`, `turn.resend`, `turn.continue`, and `turn.stop`.
+- `turn.send`, `turn.resend`, `turn.continue`, `turn.stop`, and `turn.interject`.
 - Authoritative Turn Lifecycle, receipts, reconnect, and realtime projection.
 - User stop, model-message snapshots, and continuation after stop.
 - Attachments retained, added, removed, and restored from snapshots.
@@ -92,7 +92,7 @@ be written to any artifact.
 ### 4.1 Outbound WebSocket Commands
 
 - Every business command uses Agent Transport Protocol v2.
-- Only `turn.send`, `turn.resend`, `turn.continue`, and `turn.stop` are allowed.
+- Only `turn.send`, `turn.resend`, `turn.continue`, `turn.stop`, and `turn.interject` are allowed.
 - Legacy `action: send/continue/stop`, unknown fields, and fields forbidden for a command fail.
 - `commandId` is non-empty and unique per operation.
 - `identity.sessionId` equals the current browser Session.
@@ -351,11 +351,11 @@ npm run test:e2e:protocol:core
 npm run test:e2e:protocol:full
 ```
 
-| Tier      | Scenarios                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------ |
-| Smoke     | PBE-002, PBE-006                                                                                 |
-| Core      | PBE-007-014, PBE-016, PBE-017, PBE-021, PBE-022, PBE-027, PBE-029, PBE-030, PBE-037, PBE-039-042 |
-| Full-only | PBE-015, PBE-023-026, PBE-028, PBE-031-036, PBE-038, PBE-043-048                                 |
+| Tier      | Scenarios                                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------- |
+| Smoke     | PBE-002, PBE-006                                                                                              |
+| Core      | PBE-007-014, PBE-016, PBE-017, PBE-021, PBE-022, PBE-027, PBE-029, PBE-030, PBE-037, PBE-039-042, PBE-049-050 |
+| Full-only | PBE-015, PBE-023-026, PBE-028, PBE-031-036, PBE-038, PBE-043-048                                              |
 
 ## 8. CI Failure Artifacts
 

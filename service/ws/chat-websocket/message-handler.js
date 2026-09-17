@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { unregisterActiveRun } from "./run-registry.js";
+import { enqueueUserInterjection, findActiveRun, unregisterActiveRun } from "./run-registry.js";
 import {
   recordServiceAgentTransportDebug,
   recordServiceWebSocketLifecycle,
@@ -122,6 +122,53 @@ export function createMessageHandler({
       }
       if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
         handleInteractionResponse(command);
+        return;
+      }
+      if (commandType === AGENT_COMMAND.INTERJECT) {
+        const activeRun = findActiveRun({
+          userId: canonicalRunOwnerId,
+          ...command.identity,
+        });
+        if (!activeRun) {
+          sendFailedCommandReceipt(sendEvent, command, {
+            code: "active_turn_not_found",
+            message: "active turn not found",
+          });
+          return;
+        }
+        const identityMatches = ["sessionId", "dialogProcessId", "turnScopeId"].every(
+          (field) =>
+            String(activeRun[field] || "").trim() === String(command.identity[field] || "").trim(),
+        );
+        if (!identityMatches) {
+          sendFailedCommandReceipt(sendEvent, command, {
+            code: "active_turn_identity_mismatch",
+            message: "active turn identity mismatch",
+          });
+          return;
+        }
+        try {
+          enqueueUserInterjection(activeRun, {
+            commandId: command.commandId,
+            message: command.interaction.message,
+          });
+        } catch (error) {
+          if (error?.code !== "active_turn_stopping") throw error;
+          sendFailedCommandReceipt(sendEvent, command, {
+            code: error.code,
+            message: error.message,
+          });
+          return;
+        }
+        sendEvent(
+          AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+          createAgentCommandReceipt({
+            commandId: command.commandId,
+            commandType: command.commandType,
+            outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+            identity: command.identity,
+          }),
+        );
         return;
       }
       if (commandType === AGENT_COMMAND.STOP) {

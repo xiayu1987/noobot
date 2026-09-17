@@ -5,6 +5,7 @@
  */
 
 export const CONTEXT_INJECTED_MESSAGE_TYPE = Object.freeze({
+  USER_INTERJECTION: "noobot.user_interjection",
   PHASE_SUMMARY_PROMPT: "noobot.phase_summary_prompt",
   TASK_CHECK_PROMPT: "noobot.task_check_prompt",
   HELP_TOOL_LOOP_PROMPT: "noobot.help_tool_loop_prompt",

@@ -42,6 +42,44 @@ function toolTimeline() {
   ];
 }
 
+function taskCheckTimeline(abstract = "verified current step") {
+  return [
+    {
+      key: "call:task-check-1",
+      toolCallId: "task-check-1",
+      tool: "task_check",
+      status: "completed",
+      args: { checkContent: "NOOBOT_TASK_CHECK/1" },
+      result: JSON.stringify({
+        toolName: "task_check",
+        ok: true,
+        protocolVersion: 1,
+        summary: {
+          state: "CONTINUE",
+          abstract,
+          nextAction: "continue verification",
+          contentHash: `sha256:${"a".repeat(64)}`,
+        },
+      }),
+      call: {
+        eventId: "task-check-call-event",
+        sequence: 1,
+        sequenceScopeId: "message-task-check",
+        sequenceDomain: "message-event",
+        authority: "authoritative",
+      },
+      resultEvent: {
+        eventId: "task-check-result-event",
+        sequence: 2,
+        sequenceScopeId: "message-task-check",
+        sequenceDomain: "message-event",
+        authority: "authoritative",
+        timestamp: "2026-08-01T10:00:01.000Z",
+      },
+    },
+  ];
+}
+
 function thinkingActivity(eventId, sequence, output) {
   return canonicalActivityFact({
     eventId,
@@ -361,6 +399,105 @@ describe("ThinkingPanel canonical details", () => {
     expect(wrapper.text()).toContain("scoped guidance analysis");
   });
 
+  it("shows only the latest user interjection after the task check block", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      sessionId: "session-interjection-panel",
+      turnScopeId: "turn-interjection-panel",
+      toolTimeline: taskCheckTimeline(),
+      thinkingContentTimeline: [
+        {
+          contentId: "message:interjection-1",
+          contentKind: "user_interjection",
+          sourceMessageUid: "interjection-1",
+          text: "first user interjection",
+          timestamp: "2026-08-01T10:00:02.000Z",
+          sequence: 1,
+        },
+        {
+          contentId: "message:interjection-2",
+          contentKind: "user_interjection",
+          sourceMessageUid: "interjection-2",
+          text: "latest user interjection",
+          timestamp: "2026-08-01T10:00:03.000Z",
+          sequence: 2,
+        },
+      ],
+    });
+
+    const taskCheck = wrapper.find('[data-thinking-block="task-check"]');
+    const interjection = wrapper.find('[data-thinking-block="user-interjection"]');
+    expect(taskCheck.exists()).toBe(true);
+    expect(interjection.exists()).toBe(true);
+    expect(interjection.text()).toContain("latest user interjection");
+    expect(interjection.text()).not.toContain("first user interjection");
+    expect(taskCheck.element.compareDocumentPosition(interjection.element)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("renders every user interjection in canonical timeline order in thinking details", async () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        sessionId: "session-interjection-details",
+        turnScopeId: "turn-interjection-details",
+        toolTimeline: toolTimeline(),
+        thinkingContentTimeline: [
+          {
+            contentId: "event:analysis-before",
+            contentKind: "thinking",
+            sourceEventId: "analysis-before",
+            text: "analysis before interjection",
+            timestamp: "2026-08-01T10:00:01.000Z",
+            sequence: 1,
+          },
+          {
+            contentId: "message:interjection-first",
+            contentKind: "user_interjection",
+            sourceMessageUid: "interjection-first",
+            text: "first ordered interjection",
+            timestamp: "2026-08-01T10:00:02.000Z",
+            sequence: 2,
+          },
+          {
+            contentId: "event:analysis-after",
+            contentKind: "main_model_content",
+            sourceEventId: "analysis-after",
+            text: "analysis after first interjection",
+            timestamp: "2026-08-01T10:00:03.000Z",
+            sequence: 3,
+          },
+          {
+            contentId: "message:interjection-second",
+            contentKind: "user_interjection",
+            sourceMessageUid: "interjection-second",
+            text: "second ordered interjection",
+            timestamp: "2026-08-01T10:00:04.000Z",
+            sequence: 4,
+          },
+        ],
+      },
+      { variant: "details" },
+    );
+    await wrapper.find('.tab-button[data-name="thinking"]').trigger("click");
+
+    const detailText = wrapper.find('.tab-pane[data-name="thinking"]').text();
+    const orderedContent = [
+      "analysis before interjection",
+      "first ordered interjection",
+      "analysis after first interjection",
+      "second ordered interjection",
+    ];
+    expect(orderedContent.every((content) => detailText.includes(content))).toBe(true);
+    expect(orderedContent.map((content) => detailText.indexOf(content))).toEqual(
+      [...orderedContent]
+        .map((content) => detailText.indexOf(content))
+        .sort((left, right) => left - right),
+    );
+    expect(detailText.match(/User Interjection/g)).toHaveLength(2);
+  });
+
   it("renders persisted assistant content once without deriving detail content from activities", () => {
     const content = "先确认当前真实状态。";
     const rootMessage = {
@@ -399,7 +536,7 @@ describe("ThinkingPanel canonical details", () => {
     expect(wrapper.findAll("article")).toHaveLength(1);
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
     expect(wrapper.text().match(new RegExp(content, "g"))).toHaveLength(1);
-    expect(wrapper.text()).toContain("1. main_model_content");
+    expect(wrapper.text()).toContain("1. Model Analysis");
   });
 
   it("renders new non-control injected messages while a detail turn is running", async () => {

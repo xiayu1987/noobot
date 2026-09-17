@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import test from "node:test";
+import { createModelContext } from "@noobot/context-protocol";
 import {
   assert,
   fs,
@@ -320,6 +321,101 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   const stoppedEvent = findStoppedLifecycleEvent(events);
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.status, "saved");
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.source, "runner_user_stop_catch");
+});
+
+test("runSession drains accepted user interjections before sealing the stopped snapshot", async () => {
+  const callOrder = [];
+  const events = [];
+  const workspaceRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-runner-stop-interjection-snapshot-"),
+  );
+  const modelContext = createModelContext({
+    activeTurnIdentity: {
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-stop-interjection",
+    },
+    messageBlocks: {
+      system: [{ type: "system", content: "system" }],
+      history: [],
+      incremental: [{ type: "human", content: "hello" }],
+    },
+  });
+  const runtime = {
+    attachmentMetas: [],
+    globalConfig: { workspaceRoot },
+    activeMessageContext: modelContext,
+    stoppedModelMessageSnapshotCandidate: {
+      userId: "u1",
+      sessionId: "session-used",
+      parentSessionId: "",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-stop-interjection",
+      messages: modelContext.messages,
+      messageBlocks: modelContext.messageBlocks,
+    },
+  };
+  const abortError = new Error("stopped with interjections");
+  abortError.name = "AbortError";
+  abortError.reason = { type: "user_stop" };
+  const queued = [
+    {
+      commandId: "interjection-command-1",
+      messageUid: "user-interjection:interjection-command-1",
+      message: "first interjection",
+      receivedAt: "2026-05-21T00:00:01.000Z",
+    },
+    {
+      commandId: "interjection-command-2",
+      messageUid: "user-interjection:interjection-command-2",
+      message: "second interjection",
+      receivedAt: "2026-05-21T00:00:02.000Z",
+    },
+  ];
+  const runner = createRunner({
+    callOrder,
+    eventListener: { onEvent: (event) => events.push(event) },
+    runtime,
+    runConfig: { turnScopeId: "turn-stop-interjection" },
+    agentRunner: async () => {
+      throw abortError;
+    },
+    finalizeRunSession: async () => ({ ok: true }),
+  });
+
+  await assert.rejects(
+    () =>
+      runner.runSession({
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        userInterjectionPort: {
+          async consume(consumer) {
+            callOrder.push("consumeUserInterjections");
+            await consumer(queued);
+            return queued;
+          },
+        },
+      }),
+    /stopped with interjections/,
+  );
+
+  const stoppedEvent = findStoppedLifecycleEvent(events);
+  const identity = stoppedEvent?.data?.stoppedSnapshotPersistence?.identity;
+  const loaded = await loadStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity,
+  });
+  const restoredInterjections = loaded.messageBlocks.incremental.filter(
+    (message) => message.injectedMessageType === "noobot.user_interjection",
+  );
+  assert.deepEqual(
+    restoredInterjections.map((message) => [message.content, message.messageUid, message.type]),
+    [
+      ["first interjection", "user-interjection:interjection-command-1", "human"],
+      ["second interjection", "user-interjection:interjection-command-2", "human"],
+    ],
+  );
+  assert.ok(callOrder.indexOf("appendSessionTurn") < callOrder.indexOf("consumeUserInterjections"));
 });
 
 test("runSession emits stopped snapshot diagnostic when abort candidate is incomplete", async () => {

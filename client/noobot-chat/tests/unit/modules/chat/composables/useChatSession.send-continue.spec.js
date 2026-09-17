@@ -3,12 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
+import { AGENT_TRANSPORT_PROTOCOL_VERSION } from "@noobot/agent-transport-protocol";
 import {
   createChatSession,
   createSessionFixture,
@@ -124,6 +125,86 @@ describe("useChatSession send/continue actions", () => {
     expect(session.composerActionState.value.sendRequesting).toBe(false);
     expect(await session.send()).toBe(false);
     expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a user interjection to the active turn and clears the accepted draft", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-interject", sessionId: "s-interject" })];
+    store.activeSessionId = "s-interject";
+    store.input = "  add this constraint  ";
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-interject",
+      turnScopeId: "turn-interject",
+      dialogProcessId: "dp-interject",
+    });
+    wsClientMock.requestJson.mockResolvedValue({ ok: true });
+    const session = createChatSession();
+
+    expect(session.composerActionState.value.canInterject).toBe(true);
+    await expect(session.send()).resolves.toBe(true);
+
+    expect(wsClientMock.requestJson).toHaveBeenCalledTimes(1);
+    expect(wsClientMock.requestJson.mock.calls[0][0]).toMatchObject({
+      protocolVersion: AGENT_TRANSPORT_PROTOCOL_VERSION,
+      commandType: "turn.interject",
+      identity: {
+        sessionId: "s-interject",
+        dialogProcessId: "dp-interject",
+        turnScopeId: "turn-interject",
+      },
+      interaction: { message: "add this constraint" },
+    });
+    expect(wsClientMock.requestJson.mock.calls[0][0].commandId).toMatch(/^command:/);
+    expect(store.input).toBe("");
+    expect(wsClientMock.stream).not.toHaveBeenCalled();
+  });
+
+  it("keeps a newer draft when an earlier user interjection is accepted", async () => {
+    const store = useChatStore();
+    store.sessions = [createSessionFixture({ id: "s-interject-new-draft" })];
+    store.activeSessionId = "s-interject-new-draft";
+    store.input = "first interjection";
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-interject-new-draft",
+      turnScopeId: "turn-interject-new-draft",
+      dialogProcessId: "dp-interject-new-draft",
+    });
+    let acceptInterjection;
+    wsClientMock.requestJson.mockReturnValue(
+      new Promise((resolve) => {
+        acceptInterjection = resolve;
+      }),
+    );
+    const session = createChatSession();
+
+    const sending = session.send();
+    await Promise.resolve();
+    store.input = "newer draft";
+    acceptInterjection({ ok: true });
+
+    await expect(sending).resolves.toBe(true);
+    expect(store.input).toBe("newer draft");
+  });
+
+  it("keeps the draft and reports a failed user interjection", async () => {
+    const store = useChatStore();
+    const notify = vi.fn();
+    store.sessions = [createSessionFixture({ id: "s-interject-failed" })];
+    store.activeSessionId = "s-interject-failed";
+    store.input = "retain this draft";
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-interject-failed",
+      turnScopeId: "turn-interject-failed",
+      dialogProcessId: "dp-interject-failed",
+    });
+    wsClientMock.requestJson.mockRejectedValue(new Error("queue closed"));
+    const session = createChatSession({ notify });
+
+    await expect(session.send()).resolves.toBe(false);
+
+    expect(store.input).toBe("retain this draft");
+    expect(notify).toHaveBeenCalledWith({ type: "error", message: "queue closed" });
+    expect(wsClientMock.stream).not.toHaveBeenCalled();
   });
 
   it("allows the first send through the composer lock without reporting a state mismatch", async () => {

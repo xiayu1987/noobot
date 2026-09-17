@@ -19,7 +19,11 @@ export const thinkingDetailService = Object.freeze({
     if (!response?.ok)
       throw new Error(`failed to load thinking detail: ${response?.status || 500}`);
     const data = await response.json();
-    if (!data?.ok || !data?.exists) throw new Error(data?.error || "thinking detail not found");
+    if (!data?.ok || !data?.exists) {
+      const error = new Error(data?.error || "thinking detail not found");
+      if (data?.ok && !data?.exists) error.code = "thinking_detail_not_found";
+      throw error;
+    }
     return data;
   },
 });

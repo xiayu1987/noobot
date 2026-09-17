@@ -341,11 +341,14 @@ export const zhCNMessages = {
     unknownError: "未知错误",
     occurredError: "发生错误：{error}",
     sendFailed: "发送失败",
+    interjectionFailed: "插话发送失败",
     expiredRefreshFailed: "会话已过期，请新建对话",
     sessionStateOutOfSync: "会话状态不同步，请刷新后重试",
   },
   message: {
     taskCheck: "任务检查",
+    userInterjection: "用户插话",
+    injectedMessage: "注入消息",
     subtaskProcessing: "子任务处理中...",
     subtaskStopped: "子任务已停止",
     subtaskFailed: "子任务处理失败",
@@ -477,6 +480,7 @@ export const zhCNMessages = {
   },
   composer: {
     stop: "停止",
+    interject: "插话",
     inputPlaceholder: "Shift + Enter 换行",
     allowInteraction: "允许交互",
     disallowInteraction: "禁止交互",

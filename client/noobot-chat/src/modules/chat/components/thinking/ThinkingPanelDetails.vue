@@ -185,8 +185,15 @@ function toggleDetail(detailKey = "") {
 }
 function formatThinkingContentTitle(item = {}, index = 0) {
   const source = String(item?.contentKind || "").trim();
+  const sourceKeyByKind = {
+    user_interjection: "message.userInterjection",
+    injected_message: "message.injectedMessage",
+    main_model_content: "message.modelAnalysis",
+    thinking: "message.analysisFlow",
+  };
+  const sourceLabel = sourceKeyByKind[source] ? props.translate(sourceKeyByKind[source]) : source;
   const timestamp = String(item?.timestamp || "").trim();
-  return `${index + 1}. ${source}${timestamp ? ` · ${timestamp}` : ""}`;
+  return `${index + 1}. ${sourceLabel}${timestamp ? ` · ${timestamp}` : ""}`;
 }
 watch(
   rendererProjectionSignature,

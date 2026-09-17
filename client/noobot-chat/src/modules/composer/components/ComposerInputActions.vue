@@ -16,6 +16,7 @@ defineProps({
   sendDisabled: { type: Boolean, default: false },
   sendButtonText: { type: String, default: "" },
   captureActionsDisabled: { type: Boolean, default: false },
+  moreActionsDisabled: { type: Boolean, default: false },
   micRecording: { type: Boolean, default: false },
   micSlideCancelReady: { type: Boolean, default: false },
   micStatusText: { type: String, default: "" },
@@ -63,6 +64,7 @@ function onInputKeydown(event) {
     <el-button
       class="composer-icon-btn noobot-icon-button"
       :title="translate('common.moreActions')"
+      :disabled="moreActionsDisabled"
       @click="emit('toggle-more-panel')"
     >
       <el-icon><MoreFilled /></el-icon>

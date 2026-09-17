@@ -52,6 +52,12 @@ const panelVisible = computed(() =>
   Boolean(panel.hasThinking.value || panel.loadedThinkingDetail.value),
 );
 const groupedToolLogs = computed(() => panel.groupExecutionLogs(props.messageItem));
+const latestUserInterjection = computed(
+  () =>
+    [...thinkingContentItems.value]
+      .reverse()
+      .find((item = {}) => item.contentKind === "user_interjection") || null,
+);
 watch(panelVisible, (visible) => emit("panel-visibility-change", visible), { immediate: true });
 watch(thinkingIdentity, () => {
   if (props.messageItem?.role !== "assistant") return;
@@ -100,6 +106,7 @@ defineExpose({
     :execution-logs="currentExecutionLogs"
     :execution-log-count="getExecutionLogCount(messageItem)"
     :task-check-receipt="latestTaskCheckReceipt"
+    :user-interjection="latestUserInterjection"
     :thinking-detail-label="getThinkingDetailLabel(messageItem)"
     :open-names="thinkingOpenNames"
     :get-detail-key="getThinkingDetailItemKey"

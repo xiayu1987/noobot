@@ -170,6 +170,50 @@ test("processToolResults commits result policy from its authoritative batch call
   assert.deepEqual(committed[0].call.contextPolicy, policy);
 });
 
+test("processToolResults consumes queued user interjections only after the tool batch persists", async () => {
+  const runtime = createRuntime();
+  const order = [];
+  runtime.withCurrentTurnPersistenceBatch = async (operation) => {
+    order.push("batch:start");
+    await operation();
+    order.push("batch:persisted");
+  };
+  runtime.consumeUserInterjections = async () => {
+    order.push("interjections:consumed");
+  };
+  await processToolResults({
+    modelState: {
+      runtime,
+      eventListener: () => {},
+      agentContext: createTestAgentExecutionScope(runtime),
+    },
+    loopState: { errorLogger: null, toolConsecutiveFailureCount: 0 },
+    turn: 1,
+    calls: [{ id: "call-1", name: "read_file", args: {} }],
+    toolMap: new Map([
+      [
+        "read_file",
+        {
+          async invoke() {
+            return { ok: true };
+          },
+        },
+      ],
+    ]),
+    stateCommitter: {
+      async pushToolResult() {
+        order.push("tool:committed");
+      },
+    },
+  });
+  assert.deepEqual(order, [
+    "batch:start",
+    "tool:committed",
+    "batch:persisted",
+    "interjections:consumed",
+  ]);
+});
+
 test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool", async () => {
   const abortController = new AbortController();
   abortController.abort({ type: "user_stop", reason: "user stop action" });

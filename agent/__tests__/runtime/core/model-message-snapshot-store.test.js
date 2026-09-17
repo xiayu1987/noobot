@@ -240,9 +240,9 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
   });
   const incrementalInjection = injected({
     MessageClass: HumanMessage,
-    content: "incremental injection",
-    injectedBy: "harness-plugin",
-    injectedMessageType: "planning",
+    content: "user interjection",
+    injectedBy: "user",
+    injectedMessageType: "noobot.user_interjection",
     dialogProcessId: "dialog-incremental",
     turnScopeId: "turn-incremental",
   });
@@ -271,7 +271,7 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
   );
   assert.deepEqual(
     loaded.messageBlocks.incremental.map((message) => message.content),
-    ["incremental injection", "after injection"],
+    ["user interjection", "after injection"],
   );
 
   const loadedInjections = [
@@ -307,11 +307,11 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
       },
       {
         injectedMessage: true,
-        injectedBy: "harness-plugin",
-        injectedMessageType: "planning",
+        injectedBy: "user",
+        injectedMessageType: "noobot.user_interjection",
         dialogProcessId: "dialog-incremental",
         turnScopeId: "turn-incremental",
-        additionalType: "planning",
+        additionalType: "noobot.user_interjection",
       },
     ],
   );
@@ -331,9 +331,9 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
     [
       ["history injection", "harness-plugin", "guidance", "dialog-history", "turn-history"],
       [
-        "incremental injection",
-        "harness-plugin",
-        "planning",
+        "user interjection",
+        "user",
+        "noobot.user_interjection",
         "dialog-incremental",
         "turn-incremental",
       ],

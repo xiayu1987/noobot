@@ -8,10 +8,33 @@ import test from "node:test";
 import {
   AGENT_COMMAND,
   createInteractionResponseCommand,
+  createTurnInterjectionCommand,
   createTurnRunCommand,
   createTurnStopCommand,
   parseAgentCommand,
 } from "../src/index.js";
+
+test("turn interjection binds text to the active Turn and dialog identity", () => {
+  const command = createTurnInterjectionCommand({
+    commandId: "interject:1",
+    identity: {
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+    },
+    interaction: { message: "check the new constraint" },
+  });
+
+  assert.equal(parseAgentCommand(command), command);
+  assert.equal(command.commandType, AGENT_COMMAND.INTERJECT);
+  assert.deepEqual(command.interaction, { message: "check the new constraint" });
+
+  delete command.identity.dialogProcessId;
+  assert.throws(() => parseAgentCommand(command), /missing_dialog_process_id/);
+  command.identity.dialogProcessId = "dialog-1";
+  command.interaction.message = "  ";
+  assert.throws(() => parseAgentCommand(command), /missing_interjection_message/);
+});
 
 test("turn send command has one canonical location for transport fields", () => {
   const command = createTurnRunCommand({

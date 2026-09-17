@@ -83,6 +83,7 @@ export class SessionExecutionRunner {
     dialogProcessId: requestedDialogProcessId = "",
     abortSignal = null,
     userInteractionBridge = null,
+    userInterjectionPort = null,
     runConfig = {},
     turnAcceptance = null,
     turnScopeId = "",
@@ -236,6 +237,7 @@ export class SessionExecutionRunner {
         canonicalAttachments,
         currentUserMessage,
         resolvedRunConfig,
+        userInterjectionPort,
         turnCommand: effectiveTurnCommand,
         committedTurnResult,
       });
@@ -345,6 +347,7 @@ export class SessionExecutionRunner {
         parentSessionId,
         caller,
         message,
+        userInterjectionPort,
       });
     } finally {
       pluginActivationScope?.dispose();

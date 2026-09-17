@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { findActiveRun } from "./run-registry.js";
+import { closeUserInterjectionQueue, findActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import {
   EXECUTION_ABORT_TYPE,
@@ -81,13 +81,16 @@ export function createMessageStopHandler({
     });
     const activeRun = findActiveRun(state.currentStopPayload);
     if (activeRun && activeRun.abortController && !activeRun.abortController.signal?.aborted) {
+      closeUserInterjectionQueue(activeRun);
       activeRun.stopRequested = true;
       activeRun.stopPayload = state.currentStopPayload;
-      activeRun.abortController.abort(createExecutionAbortReason({
-        type: EXECUTION_ABORT_TYPE.USER_STOP,
-        reason: "user stop action",
-        stopPayload: state.currentStopPayload,
-      }));
+      activeRun.abortController.abort(
+        createExecutionAbortReason({
+          type: EXECUTION_ABORT_TYPE.USER_STOP,
+          reason: "user stop action",
+          stopPayload: state.currentStopPayload,
+        }),
+      );
       return;
     }
     if (!state.isRunning || !state.currentAbortController) {
@@ -174,11 +177,13 @@ export function createMessageStopHandler({
       }
     }
     if (state.isRunning && state.currentAbortController) {
-      state.currentAbortController.abort(createExecutionAbortReason({
-        type: EXECUTION_ABORT_TYPE.USER_STOP,
-        reason: "user stop action",
-        stopPayload: state.currentStopPayload,
-      }));
+      state.currentAbortController.abort(
+        createExecutionAbortReason({
+          type: EXECUTION_ABORT_TYPE.USER_STOP,
+          reason: "user stop action",
+          stopPayload: state.currentStopPayload,
+        }),
+      );
     }
   };
 

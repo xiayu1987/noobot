@@ -36,6 +36,7 @@ const props = defineProps({
   executionLogs: { type: Array, default: () => [] },
   executionLogCount: { type: Number, default: 0 },
   taskCheckReceipt: { type: Object, default: null },
+  userInterjection: { type: Object, default: null },
   thinkingDetailLabel: { type: String, default: "" },
   openNames: { type: Array, default: () => [] },
   getDetailKey: { type: Function, required: true },
@@ -171,6 +172,16 @@ watch(
           class="thinking-analysis-title"
           :text="translate('message.taskCheck')"
         /><BaseNoteBlock :content="taskCheckReceipt.abstract" />
+      </div>
+      <div
+        v-if="userInterjection"
+        class="thinking-analysis-block thinking-user-interjection-block"
+        data-thinking-block="user-interjection"
+      >
+        <BaseMetaLabel
+          class="thinking-analysis-title"
+          :text="translate('message.userInterjection')"
+        /><BaseNoteBlock :content="userInterjection.content" />
       </div>
       <div class="thinking-realtime-log-stream">
         <div

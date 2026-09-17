@@ -7,21 +7,48 @@ import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
+import { createTurnInterjectionCommand } from "@noobot/agent-transport-protocol";
 
 export function createComposerActions({
   composerActionState,
+  input,
   turnRuntimeRegistry,
   resolveActiveSessionIdentity,
   resolveActiveTurnScopeIdentity,
   submitTurnRuntimeEvent,
   waitForSessionConnectorState,
   send,
+  requestJson,
   stopSending,
   notify,
   translate,
 }) {
   function createTurnScopeId() {
     return createSecureId("client-turn");
+  }
+
+  async function sendInterjection(currentTurn) {
+    const message = String(input.value || "").trim();
+    if (!message) return false;
+    const command = createTurnInterjectionCommand({
+      commandId: createSecureId("command"),
+      identity: {
+        sessionId: currentTurn.sessionId,
+        parentSessionId: currentTurn.parentSessionId,
+        dialogProcessId: currentTurn.dialogProcessId,
+        parentDialogProcessId: currentTurn.parentDialogProcessId,
+        turnScopeId: currentTurn.turnScopeId,
+      },
+      interaction: { message },
+    });
+    try {
+      await requestJson(command);
+      if (String(input.value || "").trim() === message) input.value = "";
+      return true;
+    } catch (error) {
+      notify?.({ type: "error", message: error?.message || translate("chat.interjectionFailed") });
+      return false;
+    }
   }
 
   async function sendWithComposerActionState(...args) {
@@ -33,6 +60,9 @@ export function createComposerActions({
       sessionRuntimeIdValue,
       resolveActiveTurnScopeIdentity(),
     );
+    if (composerActionState.value.canInterject === true) {
+      return sendInterjection(currentTurn);
+    }
     const stoppedTurn = currentTurn?.terminal === "user_stopped" ? currentTurn : null;
     const resumeDialogProcessId = String(stoppedTurn?.dialogProcessId || "").trim();
     const resumeTurnScopeId = String(stoppedTurn?.turnScopeId || "").trim();

@@ -106,6 +106,7 @@ export async function processToolResults({
   } else {
     await commitToolResults();
   }
+  await runtime?.consumeUserInterjections?.();
 
   const rejectedSettlement = toolCallSettlements.find(
     (settlement) => settlement.status === "rejected",

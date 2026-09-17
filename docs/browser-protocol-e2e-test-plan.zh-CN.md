@@ -139,7 +139,7 @@ test-results/protocol/<run-id>/
 每个业务命令必须通过 Agent Transport Protocol v2。统一断言：
 
 - `protocolVersion === 2`。
-- 业务命令只能使用 `turn.send`、`turn.resend`、`turn.continue`、`turn.stop`。
+- 业务命令只能使用 `turn.send`、`turn.resend`、`turn.continue`、`turn.stop`、`turn.interject`。
 - 不允许旧的 `action: send/continue/stop` 业务协议。
 - 不允许未知顶层字段或命令类型不允许的字段。
 - `commandId` 非空，并且在一次业务操作中唯一。
@@ -556,11 +556,11 @@ npm run test:e2e:protocol:full
 
 分组：
 
-| 级别      | 用例                                                           |
-| --------- | -------------------------------------------------------------- |
-| Smoke     | PBE-002、006                                                   |
-| Core      | PBE-007～014、016、017、021、022、027、029、030、037、039～042 |
-| Full-only | PBE-015、023～026、028、031～036、038、043～048                |
+| 级别      | 用例                                                                     |
+| --------- | ------------------------------------------------------------------------ |
+| Smoke     | PBE-002、006                                                             |
+| Core      | PBE-007～014、016、017、021、022、027、029、030、037、039～042、049、050 |
+| Full-only | PBE-015、023～026、028、031～036、038、043～048                          |
 
 ## 8. CI 失败产物要求
 

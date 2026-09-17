@@ -92,25 +92,34 @@ const {
 
 const sendDisabledState = computed(() => {
   const inputLength = String(props.modelValue || "").trim().length;
-  const noInput = !inputLength && !attachmentCount.value;
+  const interjectionMode = props.composerActionState?.canInterject === true;
+  const noInput = interjectionMode ? !inputLength : !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
   const sessionNotReady = !props.sessionReady;
-  const blockedByMessageState = ["requesting", "sending", "completing", "stopping"].includes(
+  const blockedByMessageState = ["requesting", "completing", "stopping"].includes(
     props.composerActionState?.displayState,
   );
-  const disabled = noInput || disconnected || sessionNotReady || blockedByMessageState;
+  const attachmentsNotAllowed = interjectionMode && attachmentCount.value > 0;
+  const disabled =
+    noInput || disconnected || sessionNotReady || blockedByMessageState || attachmentsNotAllowed;
   const disabledReason = noInput
     ? "empty"
     : disconnected
       ? "disconnected"
       : sessionNotReady
         ? "sessionNotReady"
-        : blockedByMessageState
-          ? "lastMessageInFlight"
-          : "";
+        : attachmentsNotAllowed
+          ? "interjectionTextOnly"
+          : blockedByMessageState
+            ? "lastMessageInFlight"
+            : "";
   return { disabled, disabledReason, inputLength, attachmentCount: attachmentCount.value };
 });
 const sendDisabled = computed(() => sendDisabledState.value.disabled);
+const interjectionMode = computed(() => props.composerActionState?.canInterject === true);
+const auxiliaryActionsDisabled = computed(
+  () => captureActionsDisabled.value || interjectionMode.value,
+);
 const sendDisabledSignature = computed(() => {
   const state = sendDisabledState.value;
   return [
@@ -141,7 +150,7 @@ watch(
 );
 
 function emitAppendUploads(files = []) {
-  if (captureActionsDisabled.value) return;
+  if (auxiliaryActionsDisabled.value) return;
   emit("append-uploads", Array.isArray(files) ? files : []);
 }
 
@@ -163,7 +172,7 @@ const {
   onMicPointerUpOrCancel,
 } = useComposerMediaCapture(props, emitAppendUploads, translate);
 
-const fileDragActive = computed(() => fileDragDepth.value > 0 && !captureActionsDisabled.value);
+const fileDragActive = computed(() => fileDragDepth.value > 0 && !auxiliaryActionsDisabled.value);
 
 function getDragFiles(event) {
   return Array.from(event?.dataTransfer?.files || []).filter(
@@ -184,13 +193,13 @@ function preventFileDragDefault(event) {
 }
 
 function onComposerDragEnter(event) {
-  if (captureActionsDisabled.value) return;
+  if (auxiliaryActionsDisabled.value) return;
   if (!preventFileDragDefault(event)) return;
   fileDragDepth.value += 1;
 }
 
 function onComposerDragOver(event) {
-  if (captureActionsDisabled.value) return;
+  if (auxiliaryActionsDisabled.value) return;
   preventFileDragDefault(event);
 }
 
@@ -205,11 +214,12 @@ function onComposerDrop(event) {
   if (!preventFileDragDefault(event)) return;
   const droppedFiles = getDragFiles(event);
   fileDragDepth.value = 0;
-  if (!captureActionsDisabled.value && droppedFiles.length) emitAppendUploads(droppedFiles);
+  if (!auxiliaryActionsDisabled.value && droppedFiles.length) emitAppendUploads(droppedFiles);
 }
 
 const sendButtonText = computed(() => {
   if (micRecording.value) return recordingTimeText.value;
+  if (interjectionMode.value) return translate("composer.interject");
   const textKeyByState = {
     requesting: "composer.requesting",
     sending: "composer.sending",
@@ -285,8 +295,13 @@ const moreActionsExtensionContext = computed(() => ({
 }));
 
 function toggleMorePanel() {
+  if (interjectionMode.value) return;
   effectiveMorePanelVisible.value = !effectiveMorePanelVisible.value;
 }
+
+watch(interjectionMode, (enabled) => {
+  if (enabled) effectiveMorePanelVisible.value = false;
+});
 
 defineExpose({
   clearUploadSelection,
@@ -390,7 +405,8 @@ defineExpose({
         :can-stop="canStop"
         :send-disabled="sendDisabled"
         :send-button-text="sendButtonText"
-        :capture-actions-disabled="captureActionsDisabled"
+        :capture-actions-disabled="auxiliaryActionsDisabled"
+        :more-actions-disabled="interjectionMode"
         :mic-recording="micRecording"
         :mic-slide-cancel-ready="micSlideCancelReady"
         :mic-status-text="micStatusText"
