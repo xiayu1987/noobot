@@ -260,7 +260,7 @@ defineExpose({
             <div class="chat-message-nav-header">
               <button
                 type="button"
-                class="chat-message-nav-icon chat-message-nav-icon-button"
+                class="chat-message-nav-icon chat-message-nav-icon-button noobot-icon-button"
                 data-testid="right-chat-navigator-panel-toggle"
                 :aria-label="
                   chatNavigatorVisible
@@ -306,7 +306,7 @@ defineExpose({
             <div class="connector-overview-header">
               <button
                 type="button"
-                class="chat-message-nav-icon chat-message-nav-icon-button"
+                class="chat-message-nav-icon chat-message-nav-icon-button noobot-icon-button"
                 data-testid="right-connector-panel-toggle"
                 :aria-label="translate('connectors.management')"
                 @click="emit('toggle-connectors-visible')"
@@ -345,7 +345,7 @@ defineExpose({
             <div class="connector-overview-header">
               <button
                 type="button"
-                class="chat-message-nav-icon chat-message-nav-icon-button"
+                class="chat-message-nav-icon chat-message-nav-icon-button noobot-icon-button"
                 data-testid="right-feature-panel-toggle"
                 :aria-label="featurePanelTitle"
                 :aria-expanded="featurePanelVisible"
@@ -378,7 +378,7 @@ defineExpose({
       <Teleport to="body">
         <el-button
           v-if="isMobile"
-          class="mobile-chat-message-nav-trigger noobot-floating-action-btn"
+          class="mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button"
           type="primary"
           circle
           size="large"
@@ -391,7 +391,7 @@ defineExpose({
       <Teleport to="body">
         <el-button
           v-if="isMobile"
-          class="mobile-connector-trigger noobot-floating-action-btn"
+          class="mobile-connector-trigger noobot-floating-action-btn noobot-icon-button"
           circle
           size="large"
           :aria-label="translate('connectors.management')"
@@ -403,7 +403,7 @@ defineExpose({
       <Teleport to="body">
         <el-button
           v-if="isMobile && hasFeaturePanel"
-          class="mobile-feature-trigger noobot-floating-action-btn"
+          class="mobile-feature-trigger noobot-floating-action-btn noobot-icon-button"
           circle
           size="large"
           data-testid="mobile-feature-panel-trigger"
@@ -677,7 +677,7 @@ defineExpose({
 .extension-feature-panel.is-collapsed .chat-message-nav-icon-button {
   width: 100%;
   height: 100%;
-  border-radius: var(--noobot-radius-md);
+  border-radius: 50%;
 }
 
 .connector-overview-header {
@@ -727,7 +727,7 @@ defineExpose({
   width: var(--noobot-control-icon-size-sm);
   height: var(--noobot-control-icon-size-sm);
   place-items: center;
-  border-radius: var(--noobot-radius-sm);
+  border-radius: 50%;
   color: var(--noobot-text-accent);
   background: var(--noobot-accent-soft);
   font-weight: 700;

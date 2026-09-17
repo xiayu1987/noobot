@@ -370,7 +370,7 @@ describe("AppShell chat message navigator", () => {
 
   it("hosts right-tool extensions in a dedicated mobile trigger and drawer", () => {
     expect(appShellLayoutSource).toContain(
-      'class="mobile-feature-trigger noobot-floating-action-btn"',
+      'class="mobile-feature-trigger noobot-floating-action-btn noobot-icon-button"',
     );
     expect(appShellLayoutSource).toContain('data-testid="mobile-feature-panel-trigger"');
     expect(appShellLayoutSource).toContain('data-testid="mobile-feature-panel"');
@@ -405,7 +405,7 @@ describe("AppShell chat message navigator", () => {
       "replacePseudoRoute(buildChatMessageNavigatorCloseRoute({",
     );
     expect(appShellLayoutSource).toContain(
-      'class="mobile-chat-message-nav-trigger noobot-floating-action-btn"',
+      'class="mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button"',
     );
     expect(appShellLayoutSource).toContain('class="connector-overview-panel noobot-panel-card"');
     expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !connectorVisible }\"");
@@ -424,7 +424,7 @@ describe("AppShell chat message navigator", () => {
       /class="connector-overview-header"[\s\S]*?translate\("connectors\.collapse"\)/,
     );
     expect(appShellLayoutSource).toContain(
-      'class="mobile-connector-trigger noobot-floating-action-btn"',
+      'class="mobile-connector-trigger noobot-floating-action-btn noobot-icon-button"',
     );
   });
 
@@ -440,12 +440,12 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain("pointer-events: auto;");
     expect(appShellLayoutSource.indexOf('class=\"chat-content-body\"')).toBeLessThan(
       appShellLayoutSource.indexOf(
-        'class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn\"',
+        'class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button\"',
       ),
     );
     expect(
       appShellLayoutSource.indexOf(
-        'class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn\"',
+        'class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button\"',
       ),
     ).toBeLessThan(appShellLayoutSource.indexOf('class=\"chat-composer-body\"'));
     expect(appShellLayoutSource).not.toContain("@pointercancel=");

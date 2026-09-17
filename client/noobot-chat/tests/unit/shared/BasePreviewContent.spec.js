@@ -64,8 +64,12 @@ describe("BasePreviewContent", () => {
       "message.copyText",
     ]);
     expect(buttons).toHaveLength(2);
+    expect(buttons[0].classes()).toContain("noobot-icon-button");
+    expect(buttons[1].classes()).toContain("noobot-icon-button");
     expect(buttons[0].classes()).toContain("noobot-flat-inline-icon-btn");
     expect(buttons[1].classes()).toContain("noobot-flat-inline-icon-btn");
+    expect(buttons[0].classes()).toContain("noobot-copy-button");
+    expect(buttons[1].classes()).toContain("noobot-copy-button");
     expect(buttons[0].attributes("aria-label")).toBe("message.copyFormat");
     expect(buttons[1].attributes("aria-label")).toBe("message.copyText");
     expect(wrapper.text()).not.toContain("message.copyFormat");

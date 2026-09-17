@@ -551,11 +551,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   border-radius: var(--noobot-radius-md);
   padding: var(--noobot-space-lg);
   margin-bottom: var(--noobot-space-xl);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 94%,
-    var(--noobot-accent) 6%
-  );
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, var(--noobot-accent) 6%);
 }
 
 .workflow-runtime-panel-header {
@@ -633,11 +629,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 
 .workflow-runtime-step-box:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--noobot-accent) 58%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--noobot-msg-assistant-bg) 90%,
-    var(--noobot-accent) 10%
-  );
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 90%, var(--noobot-accent) 10%);
 }
 
 .workflow-runtime-step-box.is-selected {
@@ -678,11 +670,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 
 .workflow-runtime-step-box.running .workflow-runtime-step-status {
-  color: color-mix(
-    in srgb,
-    var(--noobot-status-running) 82%,
-    var(--noobot-text-primary) 18%
-  );
+  color: color-mix(in srgb, var(--noobot-status-running) 82%, var(--noobot-text-primary) 18%);
   background: color-mix(in srgb, var(--noobot-status-running) 12%, transparent);
 }
 

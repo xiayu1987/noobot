@@ -53,7 +53,12 @@ function handleCommand(command = "") {
       popper-class="noobot-dropdown-popper"
       @command="handleCommand"
     >
-      <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
+      <el-button
+        class="tail-btn noobot-action-btn noobot-tail-btn noobot-icon-button"
+        :icon="MoreFilled"
+        :title="normalizedActions.map((action) => action.label).join(', ')"
+        :aria-label="normalizedActions.map((action) => action.label).join(', ')"
+      />
       <template #dropdown>
         <el-dropdown-menu>
           <el-dropdown-item

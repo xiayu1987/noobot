@@ -202,10 +202,16 @@ watch(() => [props.connected, props.userId], refresh);
         <el-tag size="small" type="success">{{ connectedConnectors.length }}</el-tag></span
       >
       <span class="manager-actions">
-        <el-button text circle :title="translate('common.refresh')" @click="refresh"
+        <el-button
+          class="noobot-icon-button"
+          text
+          circle
+          :title="translate('common.refresh')"
+          @click="refresh"
           ><el-icon><RefreshLeft /></el-icon
         ></el-button>
         <el-button
+          class="noobot-icon-button"
           type="primary"
           circle
           :title="translate('connectors.add')"
@@ -239,6 +245,7 @@ watch(() => [props.connected, props.userId], refresh);
         </span>
         <span class="connector-row-actions">
           <el-button
+            class="noobot-icon-button"
             text
             circle
             :title="
@@ -251,6 +258,7 @@ watch(() => [props.connected, props.userId], refresh);
               ><SwitchButton v-if="connector.status === 'connected'" /><Link v-else /></el-icon
           ></el-button>
           <el-button
+            class="noobot-icon-button"
             text
             circle
             type="danger"

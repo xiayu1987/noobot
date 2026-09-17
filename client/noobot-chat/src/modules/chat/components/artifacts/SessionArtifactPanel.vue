@@ -204,7 +204,7 @@ onBeforeUnmount(() => {
     <header class="session-artifact-panel__header">
       <button
         type="button"
-        class="session-artifact-panel__toggle"
+        class="session-artifact-panel__toggle noobot-icon-button"
         data-testid="session-artifact-panel-toggle"
         :aria-expanded="expanded"
         :aria-label="translate('common.sessionArtifacts')"
@@ -350,6 +350,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.session-artifact-panel__toggle {
+  border-radius: 50%;
+}
+
 .session-artifact-panel.is-collapsed .session-artifact-panel__header,
 .session-artifact-panel.is-collapsed .session-artifact-panel__toggle {
   width: 100%;
@@ -366,7 +370,7 @@ onBeforeUnmount(() => {
 @media (max-width: 960px) {
   .session-artifact-panel {
     --noobot-mobile-artifact-top: calc(
-        var(--noobot-space-xl) + var(--noobot-control-height-xl) + var(--noobot-space-xs) +
+      var(--noobot-space-xl) + var(--noobot-control-height-xl) + var(--noobot-space-xs) +
         var(--noobot-control-height-xl) + var(--noobot-space-xs) + var(--noobot-control-height-xl) +
         var(--noobot-space-md) + var(--noobot-space-xs)
     );

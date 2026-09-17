@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { parseTaskProtocolContent } from "./protocol-content-parser.js";
-import {
-  TASK_PROTOCOL_STATE,
-  createTaskProtocolReceipt,
-  parseTaskProtocolReceipt,
-} from "./protocol-receipt.js";
+import { TASK_PROTOCOL_STATE, parseTaskProtocolReceipt } from "./receipt-contract.js";
+import { createTaskProtocolReceipt } from "./protocol-receipt.js";
 
 export const TASK_SUMMARY_PROTOCOL_VERSION = 1;
 export const TASK_SUMMARY_PROTOCOL_HEADER = "NOOBOT_TASK_SUMMARY/1";

@@ -115,7 +115,7 @@ function entryLabel(key) {
           :declaration-container="declaration"
         />
         <el-button
-          class="icon-btn danger-text"
+          class="icon-btn danger-text noobot-icon-button noobot-flat-inline-icon-btn"
           size="small"
           text
           :icon="Delete"
@@ -135,7 +135,7 @@ function entryLabel(key) {
       >
         <span class="entry-name">{{ entryLabel(entry.key) }}</span>
         <el-button
-          class="icon-btn danger-text"
+          class="icon-btn danger-text noobot-icon-button noobot-flat-inline-icon-btn"
           size="small"
           text
           :icon="Delete"

@@ -52,7 +52,7 @@ const { translate } = useLocale();
         <span class="brand-text">Noobot Console</span>
       </div>
       <button
-        class="collapse-btn noobot-action-btn noobot-flat-soft-btn"
+        class="collapse-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
         type="button"
         @click="emit('toggle-sidebar')"
         :title="
@@ -108,7 +108,7 @@ const { translate } = useLocale();
         </el-button>
         <button
           type="button"
-          class="status-btn noobot-action-btn noobot-flat-soft-btn tail-btn"
+          class="status-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn tail-btn"
           :class="{ connected }"
           :title="connected ? translate('common.connected') : translate('common.disconnected')"
           :aria-label="connected ? translate('common.connected') : translate('common.disconnected')"
@@ -132,7 +132,7 @@ const { translate } = useLocale();
         </el-button>
 
         <el-button
-          class="refresh-btn noobot-action-btn tail-btn"
+          class="refresh-btn noobot-action-btn noobot-icon-button tail-btn"
           :icon="Refresh"
           :loading="loadingSessions"
           @click="emit('refresh-sessions')"
@@ -227,7 +227,7 @@ const { translate } = useLocale();
   flex: 0 0 var(--noobot-control-icon-size-lg);
   padding: 0;
   line-height: 1;
-  border-radius: var(--noobot-radius-xs);
+  border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -332,7 +332,7 @@ const { translate } = useLocale();
   flex: 0 0 var(--noobot-control-icon-size-lg);
   width: var(--noobot-control-icon-size-lg);
   height: var(--noobot-control-icon-size-lg);
-  border-radius: var(--noobot-radius-xs);
+  border-radius: 50%;
   background: transparent;
   border: 0;
   color: var(--noobot-btn-soft-text);

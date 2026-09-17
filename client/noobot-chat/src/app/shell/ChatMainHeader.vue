@@ -51,7 +51,7 @@ function handleHeaderAction(command = "") {
   <header class="chat-header">
     <div class="chat-header-main">
       <button
-        class="mobile-menu-btn noobot-action-btn noobot-flat-soft-btn"
+        class="mobile-menu-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
         type="button"
         @click="emit('toggle-sidebar')"
         :title="translate('common.openSidebar')"
@@ -91,7 +91,7 @@ function handleHeaderAction(command = "") {
           {{ translate("common.configParams") }}
         </el-button>
         <el-button
-          class="workspace-btn settings-btn noobot-action-btn noobot-flat-soft-btn"
+          class="workspace-btn settings-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
           native-type="button"
           :icon="Refresh"
           :title="translate('common.refresh')"
@@ -104,7 +104,7 @@ function handleHeaderAction(command = "") {
           @command="handleHeaderAction"
         >
           <el-button
-            class="workspace-btn settings-btn noobot-action-btn noobot-flat-soft-btn"
+            class="workspace-btn settings-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
             native-type="button"
             :icon="Setting"
             :title="translate('common.moreActions')"
@@ -155,7 +155,7 @@ function handleHeaderAction(command = "") {
         @command="handleHeaderAction"
       >
         <el-button
-          class="mobile-menu-btn noobot-action-btn noobot-flat-soft-btn"
+          class="mobile-menu-btn noobot-action-btn noobot-icon-button noobot-flat-soft-btn"
           native-type="button"
           :icon="MoreFilled"
           :title="translate('common.moreActions')"
@@ -229,6 +229,7 @@ function handleHeaderAction(command = "") {
   padding: 0;
   line-height: 1;
   aspect-ratio: 1 / 1;
+  border-radius: 50%;
 }
 
 .mobile-menu-btn :deep(.el-icon) {
@@ -257,8 +258,10 @@ function handleHeaderAction(command = "") {
 
 .settings-btn {
   width: var(--noobot-control-icon-size-lg);
+  height: var(--noobot-control-icon-size-lg);
   min-width: var(--noobot-control-icon-size-lg);
   padding: 0;
+  border-radius: 50%;
 }
 
 .locale-select {

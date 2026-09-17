@@ -26,7 +26,7 @@ function handleToolbarAction(command = "") {
   <div class="tree-actions">
     <div class="desktop-actions">
       <el-button
-        class="refresh-btn noobot-action-btn tail-btn noobot-tail-btn"
+        class="refresh-btn noobot-action-btn tail-btn noobot-tail-btn noobot-icon-button"
         size="small"
         :icon="Refresh"
         :loading="refreshLoading"
@@ -42,7 +42,12 @@ function handleToolbarAction(command = "") {
       popper-class="noobot-dropdown-popper"
       @command="handleToolbarAction"
     >
-      <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
+      <el-button
+        class="tail-btn noobot-action-btn noobot-tail-btn noobot-icon-button"
+        :icon="MoreFilled"
+        :title="translate('common.moreActions')"
+        :aria-label="translate('common.moreActions')"
+      />
       <template #dropdown>
         <el-dropdown-menu>
           <el-dropdown-item command="refresh">{{

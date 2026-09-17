@@ -123,7 +123,7 @@ function emitPreview() {
       <button
         v-if="previewEnabled"
         type="button"
-        class="attachment-preview-btn file-icon-button"
+        class="attachment-preview-btn file-icon-button noobot-icon-button"
         :title="translate('message.previewFile', { name: resolvedName || '' })"
         @click.stop="emitPreview"
       >
@@ -187,7 +187,7 @@ function emitPreview() {
     <button
       v-if="showDownload"
       type="button"
-      class="attachment-download-btn noobot-flat-icon-btn"
+      class="attachment-download-btn noobot-icon-button noobot-flat-icon-btn"
       :title="translate('message.downloadFile', { name: resolvedName || '' })"
       @click.stop="emit('download', attachmentItem)"
     >

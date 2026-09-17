@@ -65,6 +65,21 @@ describe("AssistantCopyActions", () => {
     const wrapper = mountActions({ onToggleContent, onCopyRich, onCopyText });
     const buttons = wrapper.findAllComponents({ name: "ElButton" });
 
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0].classes()).toEqual(
+      expect.arrayContaining([
+        "noobot-icon-button",
+        "noobot-flat-inline-icon-btn",
+        "noobot-copy-button",
+      ]),
+    );
+    expect(buttons[1].classes()).toEqual(
+      expect.arrayContaining([
+        "noobot-icon-button",
+        "noobot-flat-inline-icon-btn",
+        "noobot-copy-button",
+      ]),
+    );
     expect(buttons[0].attributes("aria-label")).toBe("message.copyFormat");
     expect(buttons[1].attributes("aria-label")).toBe("message.copyText");
 

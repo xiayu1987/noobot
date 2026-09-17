@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearExtensionRegistry,
   contributeExtension,
@@ -20,13 +20,20 @@ const TEST_POINT = EXTENSION_POINTS.MESSAGE_CARD_PRE;
 
 describe("extension registry contract", () => {
   beforeEach(() => clearExtensionRegistry());
+  afterEach(() => vi.restoreAllMocks());
 
   it("registers, orders and rejects duplicate contribution ids", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(contributeExtension(TEST_POINT, { id: "second", priority: 20 })).toBe(true);
     expect(contributeExtension(TEST_POINT, { id: "first", priority: 10 })).toBe(true);
     expect(contributeExtension(TEST_POINT, { id: "first", priority: 1 })).toBe(false);
+    expect(warning).toHaveBeenCalledWith(
+      '[extension-registry] contribution "first" duplicated at "message.card.pre", skipped',
+    );
     expect(resolveExtensionPoint(TEST_POINT).map(({ id }) => id)).toEqual(["first", "second"]);
-    expect(() => contributeExtension("unknown.point", { id: "unknown" })).toThrow("unknown extension point");
+    expect(() => contributeExtension("unknown.point", { id: "unknown" })).toThrow(
+      "unknown extension point",
+    );
   });
 
   it("removes every contribution owned by a plugin", () => {
@@ -34,7 +41,9 @@ describe("extension registry contract", () => {
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, { id: "b", pluginId: "owned" });
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "other", pluginId: "other" });
     removePluginExtensions("owned");
-    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["other"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual([
+      "other",
+    ]);
     expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST)).toEqual([]);
   });
 
@@ -48,44 +57,79 @@ describe("extension registry contract", () => {
       { point: EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, contribution: { id: "new-runtime" } },
     ]);
 
-    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["other"]);
-    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual(["new-post"]);
-    expect(resolveExtensionPoint(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE).map(({ id }) => id)).toEqual(["new-runtime"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual([
+      "other",
+    ]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual([
+      "new-post",
+    ]);
+    expect(
+      resolveExtensionPoint(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE).map(({ id }) => id),
+    ).toEqual(["new-runtime"]);
   });
 
   it("keeps the previous plugin registration when staged replacement is invalid", () => {
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "old-pre", pluginId: "owned" });
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, { id: "old-post", pluginId: "owned" });
 
-    expect(() => replacePluginExtensions("owned", [
-      { point: EXTENSION_POINTS.MESSAGE_CARD_PRE, contribution: { id: "new-pre" } },
-      { point: "unknown.point", contribution: { id: "invalid" } },
-    ])).toThrow('unknown extension point "unknown.point"');
+    expect(() =>
+      replacePluginExtensions("owned", [
+        { point: EXTENSION_POINTS.MESSAGE_CARD_PRE, contribution: { id: "new-pre" } },
+        { point: "unknown.point", contribution: { id: "invalid" } },
+      ]),
+    ).toThrow('unknown extension point "unknown.point"');
 
-    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["old-pre"]);
-    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual(["old-post"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual([
+      "old-pre",
+    ]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual([
+      "old-post",
+    ]);
   });
 
   it("does not alter contributions owned by other plugins during replacement", () => {
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "owned-old", pluginId: "owned" });
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "other-pre", pluginId: "other" });
-    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, { id: "other-post", pluginId: "other" });
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, {
+      id: "other-post",
+      pluginId: "other",
+    });
 
     replacePluginExtensions("owned", [
       { point: EXTENSION_POINTS.MESSAGE_CARD_POST, contribution: { id: "owned-new" } },
     ]);
 
-    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["other-pre"]);
-    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual(["other-post", "owned-new"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual([
+      "other-pre",
+    ]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual([
+      "other-post",
+      "owned-new",
+    ]);
   });
 
   it("keeps different message actions while arbitrating duplicate capabilities", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const point = EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS;
-    contributeExtension(point, { id: "translate", priority: 5, exclusiveGroup: "message.action.translate" });
-    contributeExtension(point, { id: "copy-fallback", priority: 100, exclusiveGroup: "message.action.copy" });
-    contributeExtension(point, { id: "copy-preferred", priority: 10, exclusiveGroup: "message.action.copy" });
-    expect(resolveExtensionPoint(point).map(({ id }) => id)).toEqual(["translate", "copy-preferred"]);
+    contributeExtension(point, {
+      id: "translate",
+      priority: 5,
+      exclusiveGroup: "message.action.translate",
+    });
+    contributeExtension(point, {
+      id: "copy-fallback",
+      priority: 100,
+      exclusiveGroup: "message.action.copy",
+    });
+    contributeExtension(point, {
+      id: "copy-preferred",
+      priority: 10,
+      exclusiveGroup: "message.action.copy",
+    });
+    expect(resolveExtensionPoint(point).map(({ id }) => id)).toEqual([
+      "translate",
+      "copy-preferred",
+    ]);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("exclusive:message.action.copy"));
     warn.mockRestore();
   });
@@ -103,21 +147,48 @@ describe("extension registry contract", () => {
   it("excludes disabled contributions before arbitration", () => {
     const point = EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS;
     contributeExtension(point, { id: "disabled", priority: 1, enabled: false });
-    contributeExtension(point, { id: "context-disabled", priority: 2, enabled: (context) => context.enabled });
+    contributeExtension(point, {
+      id: "context-disabled",
+      priority: 2,
+      enabled: (context) => context.enabled,
+    });
     contributeExtension(point, { id: "active", priority: 3 });
-    expect(resolveExtensionPoint(point, { enabled: false }).map(({ id }) => id)).toEqual(["active"]);
+    expect(resolveExtensionPoint(point, { enabled: false }).map(({ id }) => id)).toEqual([
+      "active",
+    ]);
   });
 
   it("isolates predicates, props, listeners and data providers", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     contributeExtension(TEST_POINT, {
       id: "broken",
-      when: () => { throw new Error("predicate"); },
+      when: () => {
+        throw new Error("predicate");
+      },
     });
     expect(resolveExtensionPoint(TEST_POINT)).toEqual([]);
-    expect(resolveExtensionProps({ id: "props", resolveProps: () => { throw new Error("props"); } })).toEqual({});
-    expect(resolveExtensionListeners({ id: "listeners", resolveListeners: () => { throw new Error("listeners"); } })).toEqual({});
-    contributeExtension(EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS, { id: "provider", provide: () => { throw new Error("provider"); } });
+    expect(
+      resolveExtensionProps({
+        id: "props",
+        resolveProps: () => {
+          throw new Error("props");
+        },
+      }),
+    ).toEqual({});
+    expect(
+      resolveExtensionListeners({
+        id: "listeners",
+        resolveListeners: () => {
+          throw new Error("listeners");
+        },
+      }),
+    ).toEqual({});
+    contributeExtension(EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS, {
+      id: "provider",
+      provide: () => {
+        throw new Error("provider");
+      },
+    });
     expect(provideExtensionValues(EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS)).toEqual([]);
     expect(warn).toHaveBeenCalledTimes(4);
     warn.mockRestore();

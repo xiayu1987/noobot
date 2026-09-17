@@ -129,7 +129,7 @@ async function openCompactPreview(mutation) {
         </span>
         <button
           type="button"
-          class="attachment-download-btn noobot-flat-icon-btn"
+          class="attachment-download-btn noobot-icon-button noobot-flat-icon-btn"
           :title="translate('message.downloadFile', { name: mutation.path || '' })"
           @click.stop="emit('download', mutation)"
         >

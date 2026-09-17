@@ -33,8 +33,6 @@ const emit = defineEmits([
 ]);
 
 const { translate } = useLocale();
-const iconButtonClassName = "composer-icon-btn";
-
 function isImeComposing(event) {
   return Boolean(event?.isComposing || event?.keyCode === 229 || event?.which === 229);
 }
@@ -52,7 +50,7 @@ function onInputKeydown(event) {
   <el-button
     v-if="canStop"
     type="danger"
-    class="stop-float-btn"
+    class="stop-float-btn noobot-icon-button"
     :title="translate('composer.stop')"
     :loading="stopRequesting"
     :disabled="stopRequesting"
@@ -63,7 +61,7 @@ function onInputKeydown(event) {
 
   <div class="composer-row">
     <el-button
-      :class="iconButtonClassName"
+      class="composer-icon-btn noobot-icon-button"
       :title="translate('common.moreActions')"
       @click="emit('toggle-more-panel')"
     >
@@ -80,7 +78,7 @@ function onInputKeydown(event) {
       @keydown="onInputKeydown"
     />
     <el-button
-      :class="iconButtonClassName"
+      class="composer-icon-btn noobot-icon-button"
       :title="translate('composer.capturePhoto')"
       :disabled="captureActionsDisabled"
       @click="emit('open-camera-capture')"
@@ -88,7 +86,8 @@ function onInputKeydown(event) {
       <el-icon><Camera /></el-icon>
     </el-button>
     <el-button
-      :class="[iconButtonClassName, { 'is-recording': micRecording }]"
+      class="composer-icon-btn noobot-icon-button"
+      :class="{ 'is-recording': micRecording }"
       :title="translate('composer.recordAudioHold')"
       :disabled="captureActionsDisabled"
       @pointerdown="emit('mic-pointer-down', $event)"
@@ -177,7 +176,7 @@ function onInputKeydown(event) {
   min-width: var(--composer-icon-size);
   min-height: var(--composer-icon-size);
   padding: 0;
-  border-radius: var(--composer-icon-radius);
+  border-radius: 50%;
   border: 1px solid transparent;
   background: transparent;
   color: var(--noobot-text-secondary);

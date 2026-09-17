@@ -67,7 +67,7 @@
   color: var(--noobot-text-strong);
   background: transparent;
   border: 0;
-  border-radius: var(--noobot-radius-xs);
+  border-radius: 50%;
 }
 
 .file-icon-button:hover {
@@ -103,6 +103,6 @@
 }
 
 .attachment-download-btn {
-  border-radius: var(--noobot-radius-xs);
+  border-radius: 50%;
   color: var(--noobot-msg-file-name);
 }

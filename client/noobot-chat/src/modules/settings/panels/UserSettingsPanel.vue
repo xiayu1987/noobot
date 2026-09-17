@@ -391,7 +391,7 @@ watch(
               <div class="row-header">
                 <span class="user-idx">User {{ idx + 1 }}</span>
                 <el-button
-                  class="icon-btn danger-text"
+                  class="icon-btn danger-text noobot-icon-button noobot-flat-inline-icon-btn"
                   size="small"
                   text
                   @click="removeUserRow(idx)"
@@ -408,7 +408,7 @@ watch(
                   class="row-input"
                 />
                 <el-button
-                  class="dark-btn action-btn noobot-action-btn noobot-flat-soft-btn"
+                  class="dark-btn action-btn noobot-action-btn noobot-icon-button noobot-flat-icon-btn"
                   @click="regenerateSingleUserConnectCode(idx)"
                   :title="translate('settings.regenerateConnectCode')"
                   >↻</el-button
@@ -521,7 +521,7 @@ watch(
 }
 
 .action-btn {
-  padding: var(--noobot-space-xs) var(--noobot-space-md);
+  padding: 0;
 }
 
 .allow-ide-row {

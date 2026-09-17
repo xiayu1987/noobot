@@ -540,15 +540,21 @@ button,
   color: var(--noobot-text-accent);
 }
 
-.noobot-flat-icon-btn,
-.noobot-flat-inline-icon-btn {
-  border-radius: var(--noobot-radius-sm);
-  border: 0;
-  background: transparent;
-  color: var(--noobot-text-main);
+.noobot-icon-button,
+.el-button.noobot-icon-button {
+  border-radius: 50%;
+  aspect-ratio: 1;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.noobot-flat-icon-btn,
+.noobot-flat-inline-icon-btn {
+  border: 0;
+  background: transparent;
+  color: var(--noobot-text-main);
   cursor: pointer;
   backdrop-filter: none;
   transition:
@@ -574,7 +580,6 @@ button,
   height: var(--noobot-control-icon-size-sm);
   min-width: var(--noobot-control-icon-size-sm);
   min-height: var(--noobot-control-icon-size-sm);
-  padding: 0;
   border: 0;
   background: transparent;
 }
@@ -582,11 +587,17 @@ button,
 .noobot-flat-icon-btn {
   width: var(--noobot-msg-icon-btn-size);
   height: var(--noobot-msg-icon-btn-size);
+  min-width: var(--noobot-msg-icon-btn-size);
+  min-height: var(--noobot-msg-icon-btn-size);
+  padding: 0;
 }
 
 .noobot-flat-inline-icon-btn {
   width: var(--noobot-msg-inline-icon-btn-size);
   height: var(--noobot-msg-inline-icon-btn-size);
+  min-width: var(--noobot-msg-inline-icon-btn-size);
+  min-height: var(--noobot-msg-inline-icon-btn-size);
+  padding: 0;
 }
 
 .noobot-flat-icon-btn:hover,
@@ -667,11 +678,7 @@ button,
   height: var(--noobot-control-icon-size);
   background: transparent;
   border: 0;
-  padding: 0;
   color: var(--noobot-btn-soft-text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   backdrop-filter: none;
   font-size: var(--noobot-font-size-xl);
 }

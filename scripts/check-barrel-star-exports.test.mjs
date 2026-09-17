@@ -80,6 +80,18 @@ test("fails when a star-export source cannot be analyzed", async () => {
   await assert.rejects(checkRepository({ root }), /unable to analyze/);
 });
 
+test("analyzes exports without executing repository modules", async () => {
+  const root = fixture({
+    "src/index.js": ['export * from "./left.js";', 'export * from "./right.js";'].join("\n"),
+    "src/left.js":
+      'import fs from "node:fs";\nfs.writeFileSync(new URL("../executed", import.meta.url), "yes");\nexport const left = 1;\n',
+    "src/right.js": "export const right = 2;\n",
+  });
+  const { violations } = await checkRepository({ root });
+  assert.deepEqual(violations, []);
+  assert.equal(fs.existsSync(path.join(root, "executed")), false);
+});
+
 test("collects only files with at least two star re-exports and skips ignored directories", () => {
   const root = fixture({
     "src/index.js": ['export * from "./a.js";', 'export * from "./b.js";'].join("\n"),

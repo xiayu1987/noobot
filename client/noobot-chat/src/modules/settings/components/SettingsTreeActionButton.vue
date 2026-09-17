@@ -26,7 +26,7 @@ const emit = defineEmits(["click"]);
       :aria-label="ariaLabel || title"
       :loading="loading"
       :disabled="disabled"
-      :class="className"
+      :class="['noobot-icon-button', 'noobot-flat-inline-icon-btn', className]"
       @click="emit('click')"
     >
       <el-icon v-if="icon"><component :is="icon" /></el-icon>
