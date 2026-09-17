@@ -13,7 +13,7 @@
         <el-select
           :model-value="form.language"
           class="startup-system-select"
-          popper-class="startup-system-select-popper"
+          popper-class="noobot-select-popper"
           @update:model-value="updateField('language', $event)"
         >
           <el-option label="简体中文" value="zh-CN" />
@@ -25,7 +25,7 @@
         <el-select
           :model-value="form.model"
           class="startup-system-select"
-          popper-class="startup-system-select-popper"
+          popper-class="noobot-select-popper"
           filterable
           @update:model-value="updateField('model', $event)"
         >

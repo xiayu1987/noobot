@@ -6,6 +6,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import HarnessModelExtension from "../components/HarnessModelExtension.vue";
+import { createElementPlusMountOptions } from "../../../../client/noobot-chat/tests/unit/fixtures/elementPlusStubs.js";
 
 function mountHarnessModelExtension(props = {}) {
   const { pluginConfig = {}, patch = vi.fn(), ...componentProps } = props;
@@ -24,6 +25,7 @@ function mountHarnessModelExtension(props = {}) {
       },
       ...componentProps,
     },
+    global: createElementPlusMountOptions(),
   });
 }
 
@@ -49,8 +51,8 @@ describe("HarnessModelExtension", () => {
   it("uses a guidance analysis intensity slider instead of a fixed guidance toggle", async () => {
     const wrapper = mountHarnessModelExtension({
       pluginConfig: {
-          stepModels: { planning: "planning-model" },
-          guidance: { analysis: { turnsThreshold: 3 } },
+        stepModels: { planning: "planning-model" },
+        guidance: { analysis: { turnsThreshold: 3 } },
       },
     });
 
@@ -66,7 +68,7 @@ describe("HarnessModelExtension", () => {
   it("normalizes guidance analysis intensity to an integer from one to ten", async () => {
     const wrapper = mountHarnessModelExtension({
       pluginConfig: {
-          guidance: { analysis: { turnsThreshold: 11 } },
+        guidance: { analysis: { turnsThreshold: 11 } },
       },
     });
 

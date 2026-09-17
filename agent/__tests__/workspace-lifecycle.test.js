@@ -311,10 +311,31 @@ test("explicit workspace sync adds every nested config node through the config p
     assert.deepEqual(config, {
       providers: {
         primary: {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "${OPENAI_API_KEY}",
+          base_url: "${OPENAI_API_ADDRESS}",
+          model: "default-model",
+          description: "Generic OpenAI-compatible fallback model",
           reasoning_effort: "high",
           tool_reasoning_effort: "medium",
         },
-        added: { enabled: true },
+        added: {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "${OPENAI_API_KEY}",
+          base_url: "${OPENAI_API_ADDRESS}",
+          model: "default-model",
+          description: "Generic OpenAI-compatible fallback model",
+          reasoning_effort: "medium",
+          tool_reasoning_effort: "medium",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
+          multimodal_parsing: { enabled: false, input_modalities: [] },
+          multimodal_generation: {
+            support_generation: { enabled: false, support_scope: [] },
+          },
+        },
       },
       tools: {
         execute_script: { enabled: true },

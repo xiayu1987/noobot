@@ -29,6 +29,7 @@
   --startup-border-soft: rgba(148, 163, 184, 0.16);
   --startup-border-control: rgba(148, 163, 184, 0.38);
   --startup-border-checked: rgba(56, 189, 248, 0.72);
+  --startup-status-error: #f87171;
   --startup-text-strong: var(--startup-color-slate-50);
   --startup-text-main: var(--startup-color-slate-200);
   --startup-text-secondary: var(--startup-color-slate-300);
@@ -157,12 +158,45 @@ p {
 }
 .el-form-item__label {
   color: var(--startup-text-strong);
-  font-weight: 800;
+  font-weight: 600;
+  line-height: 1.45;
 }
 .el-input__wrapper,
 .el-select__wrapper {
-  border-radius: var(--noobot-radius-lg);
+  box-sizing: border-box;
+  min-height: 34px;
+  border: 1px solid var(--startup-border-control);
+  border-radius: var(--noobot-radius-compact);
   background: var(--startup-surface-control);
+  box-shadow: none;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+.el-input__wrapper:hover,
+.el-select__wrapper:hover {
+  border-color: color-mix(in srgb, var(--startup-color-sky-300) 56%, var(--startup-border-control));
+}
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  border-color: var(--startup-color-sky-300);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--startup-color-sky-300) 48%, transparent);
+}
+.el-input.is-disabled .el-input__wrapper,
+.el-select.is-disabled .el-select__wrapper {
+  border-color: var(--startup-border-panel);
+  background: var(--startup-surface-dependency);
+  color: var(--startup-text-muted);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.el-form-item__error {
+  padding-top: 4px;
+  color: var(--startup-status-error);
+  font-size: 12px;
+}
+.el-form-item.is-error .el-input__wrapper,
+.el-form-item.is-error .el-select__wrapper {
+  border-color: var(--startup-status-error);
+  box-shadow: none;
 }
 
 .startup-system-select {
@@ -170,23 +204,7 @@ p {
 }
 
 .startup-system-select .el-select__wrapper {
-  box-sizing: border-box;
-  min-height: 34px;
   height: 34px;
-  border: 1px solid var(--startup-border-control);
-  border-radius: var(--noobot-radius-compact);
-  background: var(--startup-surface-control);
-  box-shadow: none;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
-}
-
-.startup-system-select .el-select__wrapper:hover {
-  border-color: color-mix(in srgb, var(--startup-color-sky-300) 56%, var(--startup-border-control));
-}
-
-.startup-system-select .el-select__wrapper.is-focused {
-  border-color: var(--startup-color-sky-300);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--startup-color-sky-300) 48%, transparent);
 }
 
 .startup-system-select .el-select__selected-item,
@@ -195,28 +213,71 @@ p {
   color: var(--startup-text-main);
 }
 
-.startup-system-select-popper.el-select-dropdown {
+.noobot-select-popper {
+  width: auto;
+  max-width: calc(100vw - 32px);
   overflow: hidden;
   border: 1px solid var(--startup-border-control);
-  border-radius: var(--noobot-radius-xs);
+  border-radius: var(--noobot-radius-md);
   background: var(--startup-surface-control);
   box-shadow: 0 12px 28px color-mix(in srgb, var(--startup-color-ink-950) 42%, transparent);
 }
 
-.startup-system-select-popper .el-select-dropdown__item {
-  color: var(--startup-text-main);
+.noobot-select-popper .el-select-dropdown,
+.noobot-select-popper .el-popper__content,
+.noobot-select-popper .el-scrollbar,
+.noobot-select-popper .el-scrollbar__view,
+.noobot-select-popper .el-select-dropdown__list,
+.noobot-select-popper .el-select-dropdown__wrap {
+  background: var(--startup-surface-control);
 }
 
-.startup-system-select-popper .el-select-dropdown__item.hover,
-.startup-system-select-popper .el-select-dropdown__item:hover {
+.noobot-select-popper .el-select-dropdown__wrap {
+  max-height: min(40vh, 300px);
+}
+
+.noobot-select-popper .el-select-dropdown__list {
+  box-sizing: border-box;
+  padding: 4px;
+}
+
+.noobot-select-popper .el-select-dropdown__item {
+  height: auto;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--noobot-radius-xs);
+  background: transparent;
+  color: var(--startup-text-main);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.noobot-select-popper .el-select-dropdown__item.hover,
+.noobot-select-popper .el-select-dropdown__item:hover {
   background: var(--startup-accent-soft);
   color: var(--startup-text-strong);
 }
 
-.startup-system-select-popper .el-select-dropdown__item.is-selected {
+.noobot-select-popper .el-select-dropdown__item.is-selected {
   background: color-mix(in srgb, var(--startup-color-sky-400) 14%, transparent);
   color: var(--startup-text-accent);
   font-weight: 600;
+}
+
+.noobot-select-popper .el-select-dropdown__item.is-selected.hover,
+.noobot-select-popper .el-select-dropdown__item.is-selected:hover {
+  background: color-mix(in srgb, var(--startup-color-sky-400) 18%, transparent);
+}
+
+.noobot-select-popper .el-select-dropdown__empty {
+  background: var(--startup-surface-control);
+  color: var(--startup-text-muted);
+}
+
+.noobot-select-popper .el-popper__arrow::before {
+  border-color: var(--startup-border-control);
+  background: var(--startup-surface-control);
 }
 .el-input__inner,
 .el-select__placeholder,
@@ -258,6 +319,25 @@ small {
   border-radius: var(--noobot-radius-lg);
   background: var(--startup-surface-dependency);
   white-space: normal;
+}
+.dependency-card .el-checkbox__inner {
+  border-color: var(--startup-border-control);
+  background: var(--startup-surface-control);
+}
+.dependency-card .el-checkbox__input:hover .el-checkbox__inner,
+.dependency-card .el-checkbox__input.is-focus .el-checkbox__inner {
+  border-color: var(--startup-color-sky-300);
+}
+.dependency-card .el-checkbox__input.is-focus .el-checkbox__inner {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--startup-color-sky-300) 48%, transparent);
+}
+.dependency-card .el-checkbox__input.is-checked .el-checkbox__inner {
+  border-color: var(--startup-color-sky-400);
+  background: var(--startup-color-sky-400);
+}
+.dependency-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 .dependency-card.is-checked {
   border-color: var(--startup-border-checked);

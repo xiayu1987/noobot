@@ -217,10 +217,15 @@ test("reasoning effort defaults and invalid values follow model options", async 
   assert.equal(glm.reasoning_effort, "low");
   assert.equal(glm.tool_reasoning_effort, "low");
 
-  assert.throws(
-    () => normalizeRuntimeModelSpec({ model: "custom" }),
-    /reasoning_effort_options is required/,
-  );
+  const custom = normalizeRuntimeModelSpec({
+    model: "custom",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: [],
+    reasoning_effort: "Custom-Level",
+    tool_reasoning_effort: "Tool-Level",
+  });
+  assert.equal(custom.reasoning_effort, "Custom-Level");
+  assert.equal(custom.tool_reasoning_effort, "Tool-Level");
 });
 
 test("normalized ordinary requests compile their configured reasoning effort", async () => {

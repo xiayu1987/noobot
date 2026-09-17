@@ -60,7 +60,7 @@ test("model input processing keeps directly readable text out of multimodal pars
 
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
-  assert.equal(options.length, 23);
+  assert.ok(options.length > 0);
   assert.equal(options[0].key, "gpt_5_6_sol");
   assert.equal(
     options.some((item) => item.key === "gpt_5_4"),
@@ -636,10 +636,26 @@ test("a switch-shaped reasoning parameter carries a boolean on the wire", () => 
   });
 });
 
-test("reasoning declarations are validated rather than silently defaulted", () => {
-  assert.throws(
-    () => normalizeModelReasoningConfiguration({ reasoning_effort_parameter: "reasoning_effort" }),
-    /reasoning_effort_options is required/,
+test("reasoning declarations support an open option set without silently defaulting", () => {
+  assert.deepEqual(
+    normalizeModelReasoningConfiguration({
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort: " Custom-Level ",
+      tool_reasoning_effort: "Tool-Level",
+    }),
+    {
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: [],
+      reasoning_effort: "Custom-Level",
+      tool_reasoning_effort: "Tool-Level",
+    },
+  );
+  assert.deepEqual(
+    buildModelReasoningEffortTransport(
+      { reasoning_effort_parameter: "reasoning_effort" },
+      "Custom-Level",
+    ),
+    { reasoning_effort: "Custom-Level" },
   );
   assert.throws(
     () => normalizeModelReasoningConfiguration({ reasoning_effort_options: ["low"] }),

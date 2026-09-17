@@ -3,9 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { effectScope, ref } from "vue";
+import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { useReconnect } from "../../../../../../src/modules/chat/composables/connectivity/useReconnect.js";
+import { mountComposable } from "../../../../fixtures/mountComposable.js";
 
 describe("useReconnect", () => {
   it("deduplicates reconnect calls while promise is pending", async () => {
@@ -19,15 +20,14 @@ describe("useReconnect", () => {
         }),
     );
 
-    let reconnectActiveSession;
-    const scope = effectScope();
-    scope.run(() => {
-      ({ reconnectActiveSession } = useReconnect({
+    const { result, unmount } = mountComposable(() =>
+      useReconnect({
         connected,
         hasActiveSession,
         handleReconnect,
-      }));
-    });
+      }),
+    );
+    const { reconnectActiveSession } = result;
 
     const p1 = reconnectActiveSession();
     const p2 = reconnectActiveSession();
@@ -40,7 +40,7 @@ describe("useReconnect", () => {
     expect(secondCallSettled).toBe(false);
     resolveReconnect();
     await Promise.all([p1, p2]);
-    scope.stop();
+    unmount();
   });
 
   it("force=true bypasses cooldown and reconnects again", async () => {
@@ -48,21 +48,20 @@ describe("useReconnect", () => {
     const hasActiveSession = vi.fn(() => true);
     const handleReconnect = vi.fn(async () => {});
 
-    let reconnectActiveSession;
-    const scope = effectScope();
-    scope.run(() => {
-      ({ reconnectActiveSession } = useReconnect({
+    const { result, unmount } = mountComposable(() =>
+      useReconnect({
         connected,
         hasActiveSession,
         handleReconnect,
-      }));
-    });
+      }),
+    );
+    const { reconnectActiveSession } = result;
 
     await reconnectActiveSession();
     await reconnectActiveSession();
     await reconnectActiveSession({ force: true });
 
     expect(handleReconnect).toHaveBeenCalledTimes(2);
-    scope.stop();
+    unmount();
   });
 });

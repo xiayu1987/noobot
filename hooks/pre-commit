@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 xiayu
+# Contact: 126240622+xiayu1987@users.noreply.github.com
+# SPDX-License-Identifier: MIT
+#
+# Blocks a commit that introduces console.log into staged source files.
+# Only newly added lines are inspected, so console.log that already exists in
+# HEAD does not block unrelated commits.
+#
+# Escape hatches:
+#   ALLOW_CONSOLE_LOG=1 git commit ...   # keep the hook, allow this one commit
+#   git commit --no-verify ...           # skip every pre-commit hook
+set -euo pipefail
+
+if [[ "${ALLOW_CONSOLE_LOG:-}" == "1" ]]; then
+  echo "pre-commit: ALLOW_CONSOLE_LOG=1 set, skipping console.log check"
+  exit 0
+fi
+
+# Diff against HEAD, or against the empty tree when HEAD does not exist yet.
+if git rev-parse --verify --quiet HEAD >/dev/null; then
+  base_ref=HEAD
+else
+  base_ref="$(git hash-object -t tree /dev/null)"
+fi
+
+# -U0 keeps only changed lines in the diff, so hunk headers give exact line numbers.
+findings="$(
+  git diff --cached --no-color --no-ext-diff -U0 "$base_ref" -- \
+    '*.js' '*.mjs' '*.cjs' '*.ts' '*.mts' '*.cts' '*.jsx' '*.tsx' '*.vue' |
+    awk '
+      /^\+\+\+ b\// { file = substr($0, 7); next }
+      /^@@ / {
+        match($0, /\+[0-9]+/)
+        line = substr($0, RSTART + 1, RLENGTH - 1) + 0
+        next
+      }
+      /^\+/ {
+        if ($0 ~ /console\.log/) printf "%s:%d:%s\n", file, line, substr($0, 2)
+        line++
+        next
+      }
+    '
+)"
+
+if [[ -z "$findings" ]]; then
+  exit 0
+fi
+
+echo "pre-commit: refusing to commit newly added console.log" >&2
+echo >&2
+while IFS= read -r finding; do
+  echo "  $finding" >&2
+done <<<"$findings"
+echo >&2
+echo "Remove the console.log calls above, or bypass with:" >&2
+echo "  ALLOW_CONSOLE_LOG=1 git commit ..." >&2
+echo "  git commit --no-verify ..." >&2
+exit 1

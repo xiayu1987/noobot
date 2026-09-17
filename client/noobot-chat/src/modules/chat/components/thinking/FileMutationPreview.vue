@@ -143,6 +143,7 @@ async function openCompactPreview(mutation) {
         v-model="selectedIndex"
         class="mutation-select"
         size="small"
+        popper-class="noobot-select-popper"
       >
         <el-option
           v-for="(mutation, index) in mutations"

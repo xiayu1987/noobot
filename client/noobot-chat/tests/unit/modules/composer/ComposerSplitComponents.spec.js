@@ -10,6 +10,7 @@ import ComposerInputActions from "../../../../src/modules/composer/components/Co
 import ComposerMoreOptions from "../../../../src/modules/composer/components/ComposerMoreOptions.vue";
 import ComposerCameraDialog from "../../../../src/modules/composer/components/ComposerCameraDialog.vue";
 import ComposerSelectedTags from "../../../../src/modules/composer/components/ComposerSelectedTags.vue";
+import { createComposerMountOptions } from "./composerElementPlusStubs.js";
 
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
@@ -41,51 +42,6 @@ vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   }),
 }));
 
-const ElButtonStub = defineComponent({
-  name: "ElButton",
-  props: {
-    disabled: { type: Boolean, default: false },
-    loading: { type: Boolean, default: false },
-    title: { type: String, default: "" },
-    type: { type: String, default: "" },
-  },
-  template:
-    '<button type="button" :disabled="disabled" :title="title" :data-loading="loading ? \'true\' : \'false\'" :data-type="type" v-bind="$attrs"><slot /></button>',
-});
-
-const ElInputStub = defineComponent({
-  name: "ElInput",
-  props: {
-    modelValue: { type: String, default: "" },
-    placeholder: { type: String, default: "" },
-  },
-  emits: ["update:modelValue"],
-  template:
-    '<textarea class="el-textarea__inner" :value="modelValue" :placeholder="placeholder" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)"></textarea>',
-});
-
-const ElSwitchStub = defineComponent({
-  name: "ElSwitch",
-  props: {
-    modelValue: { type: Boolean, default: false },
-  },
-  emits: ["update:modelValue"],
-  template:
-    '<button type="button" class="el-switch-stub" :data-value="modelValue ? \'true\' : \'false\'" @click="$emit(\'update:modelValue\', !modelValue)"><slot /></button>',
-});
-
-const ElSliderStub = defineComponent({
-  name: "ElSlider",
-  props: {
-    modelValue: { type: Number, default: 0 },
-    min: { type: Number, default: 0 },
-    max: { type: Number, default: 100 },
-    step: { type: Number, default: 1 },
-  },
-  emits: ["update:modelValue", "change"],
-  template: '<input class="el-slider-stub" type="range" :value="modelValue" :min="min" :max="max" :step="step" />',
-});
-
 const ElDialogStub = defineComponent({
   name: "ElDialog",
   props: {
@@ -97,56 +53,10 @@ const ElDialogStub = defineComponent({
     '<section v-if="modelValue" class="el-dialog-stub" :data-title="title"><slot /><footer><slot name="footer" /></footer><button class="dialog-close" type="button" @click="$emit(\'update:modelValue\', false); $emit(\'closed\')">x</button></section>',
 });
 
-const ElTagStub = defineComponent({
-  name: "ElTag",
-  template: '<span class="el-tag-stub" v-bind="$attrs"><slot /></span>',
-});
-
-const ElSelectStub = defineComponent({
-  name: "ElSelect",
-  props: {
-    modelValue: { type: [String, Number, Boolean], default: "" },
-    disabled: { type: Boolean, default: false },
-  },
-  emits: ["update:modelValue"],
-  template:
-    '<select class="el-select-stub" :value="modelValue" :disabled="disabled" v-bind="$attrs" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
-});
-
-const ElOptionStub = defineComponent({
-  name: "ElOption",
-  props: {
-    label: { type: String, default: "" },
-    value: { type: [String, Number, Boolean], default: "" },
-  },
-  template: '<option class="el-option-stub" :value="value"><slot>{{ label }}</slot></option>',
-});
-
-const globalStubs = {
-  ElButton: ElButtonStub,
-  "el-button": ElButtonStub,
-  ElInput: ElInputStub,
-  "el-input": ElInputStub,
-  ElSwitch: ElSwitchStub,
-  "el-switch": ElSwitchStub,
-  ElSlider: ElSliderStub,
-  "el-slider": ElSliderStub,
+const globalMountOptions = createComposerMountOptions({
   ElDialog: ElDialogStub,
   "el-dialog": ElDialogStub,
-  ElTag: ElTagStub,
-  "el-tag": ElTagStub,
-  ElSelect: ElSelectStub,
-  "el-select": ElSelectStub,
-  ElOption: ElOptionStub,
-  "el-option": ElOptionStub,
-  ElIcon: defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
-  "el-icon": defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
-};
-
-const globalMountOptions = {
-  components: globalStubs,
-  stubs: globalStubs,
-};
+});
 
 async function dispatchKeydown(elementWrapper, options = {}) {
   const event = new KeyboardEvent("keydown", {
@@ -296,7 +206,11 @@ describe("ComposerInputActions", () => {
 describe("ComposerMoreOptions", () => {
   it("shows a four-step safety slider and emits the selected level", async () => {
     const wrapper = mount(ComposerMoreOptions, {
-      props: { safeConfirm: true, safeConfirmLevel: "medium", resolveScenarioLabel: (item) => item.key },
+      props: {
+        safeConfirm: true,
+        safeConfirmLevel: "medium",
+        resolveScenarioLabel: (item) => item.key,
+      },
       global: globalMountOptions,
     });
     const slider = wrapper.find(".el-slider-stub");
@@ -376,10 +290,7 @@ describe("ComposerSelectedTags", () => {
         selectedConnectorNames: ["prod-db"],
         selectedScenarioLabel: "编程",
         selectedPluginLabels: ["工作流"],
-        uploadFiles: [
-          { name: "brief.pdf" },
-          { name: "very-long-screenshot-name.png" },
-        ],
+        uploadFiles: [{ name: "brief.pdf" }, { name: "very-long-screenshot-name.png" }],
       },
       global: globalMountOptions,
     });
@@ -389,10 +300,9 @@ describe("ComposerSelectedTags", () => {
     expect(rowText).toContain("prod-db");
     expect(rowText).toContain("工作流");
     expect(rowText).toContain("brief.pdf");
-    expect(wrapper.findAll(".selected-attachment-name").map((item) => item.attributes("title"))).toEqual([
-      "brief.pdf",
-      "very-long-screenshot-name.png",
-    ]);
+    expect(
+      wrapper.findAll(".selected-attachment-name").map((item) => item.attributes("title")),
+    ).toEqual(["brief.pdf", "very-long-screenshot-name.png"]);
   });
 
   it("stays hidden when there are no selected tags or attachments", () => {

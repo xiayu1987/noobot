@@ -10,6 +10,7 @@ import ChatComposer from "../../../../src/modules/composer/components/ChatCompos
 import ComposerInputActions from "../../../../src/modules/composer/components/ComposerInputActions.vue";
 import ComposerAttachmentToolbar from "../../../../src/modules/composer/components/ComposerAttachmentToolbar.vue";
 import { useComposerMediaCapture } from "../../../../src/modules/composer/composables/useComposerMediaCapture.js";
+import { createComposerMountOptions } from "./composerElementPlusStubs.js";
 
 const messageMock = vi.hoisted(() => ({
   error: vi.fn(),
@@ -55,31 +56,6 @@ async function flushPromises() {
   await nextTick();
 }
 
-const ElButtonStub = defineComponent({
-  name: "ElButton",
-  inheritAttrs: false,
-  props: {
-    disabled: { type: Boolean, default: false },
-    loading: { type: Boolean, default: false },
-    title: { type: String, default: "" },
-    type: { type: String, default: "" },
-  },
-  emits: ["click", "pointerdown", "pointermove", "pointerup", "pointerleave", "pointercancel"],
-  template:
-    '<button type="button" :class="$attrs.class" :disabled="disabled" :title="title" :data-loading="loading ? \'true\' : \'false\'" :data-type="type" @click="$emit(\'click\', $event)" @pointerdown="$emit(\'pointerdown\', $event)" @pointermove="$emit(\'pointermove\', $event)" @pointerup="$emit(\'pointerup\', $event)" @pointerleave="$emit(\'pointerleave\', $event)" @pointercancel="$emit(\'pointercancel\', $event)"><slot /></button>',
-});
-
-const ElInputStub = defineComponent({
-  name: "ElInput",
-  props: {
-    modelValue: { type: String, default: "" },
-    placeholder: { type: String, default: "" },
-  },
-  emits: ["update:modelValue"],
-  template:
-    '<textarea class="el-textarea__inner" :value="modelValue" :placeholder="placeholder" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)"></textarea>',
-});
-
 const ElUploadStub = defineComponent({
   name: "ElUpload",
   props: {
@@ -107,17 +83,11 @@ const ElDialogStub = defineComponent({
     '<section v-if="modelValue" class="el-dialog-stub" :data-title="title"><slot /><footer><slot name="footer" /></footer></section>',
 });
 
-const globalStubs = {
-  ElButton: ElButtonStub,
-  "el-button": ElButtonStub,
-  ElInput: ElInputStub,
-  "el-input": ElInputStub,
+const globalMountOptions = createComposerMountOptions({
   ElUpload: ElUploadStub,
   "el-upload": ElUploadStub,
   ElDialog: ElDialogStub,
   "el-dialog": ElDialogStub,
-  ElIcon: defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
-  "el-icon": defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
   ElCollapseTransition: defineComponent({
     name: "ElCollapseTransition",
     template: "<div><slot /></div>",
@@ -126,24 +96,11 @@ const globalStubs = {
     name: "ElCollapseTransition",
     template: "<div><slot /></div>",
   }),
-  ElSwitch: defineComponent({
-    name: "ElSwitch",
-    template: "<button type='button'><slot /></button>",
-  }),
-  "el-switch": defineComponent({
-    name: "ElSwitch",
-    template: "<button type='button'><slot /></button>",
-  }),
   ConnectorSelectorPanel: defineComponent({
     name: "ConnectorSelectorPanel",
     template: "<div class='connector-selector-stub'></div>",
   }),
-};
-
-const globalMountOptions = {
-  components: globalStubs,
-  stubs: globalStubs,
-};
+});
 
 function mountComposer(props = {}) {
   return mount(ChatComposer, {

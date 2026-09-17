@@ -3,8 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMessagePreview } from "../../../../../../src/modules/chat/composables/message/useMessagePreview.js";
+import { mountComposable } from "../../../../fixtures/mountComposable.js";
+
+const mountedComposables = [];
+
+function createMessagePreview(options) {
+  const mounted = mountComposable(() => useMessagePreview(options));
+  mountedComposables.push(mounted);
+  return mounted.result;
+}
 
 function createBlobResponse() {
   return {
@@ -34,9 +43,13 @@ describe("useMessagePreview attachment downloads", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   });
 
+  afterEach(() => {
+    mountedComposables.splice(0).forEach(({ unmount }) => unmount());
+  });
+
   it("downloads an attachment using its canonical identity", async () => {
     const attachmentService = createAttachmentService(createBlobResponse);
-    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", attachmentService });
+    const { onDownloadAttachment } = createMessagePreview({ userId: "admin", attachmentService });
 
     await onDownloadAttachment({
       attachmentId: "file-123",
@@ -53,7 +66,7 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("rejects a non-canonical attachment instead of constructing an access URL", async () => {
     const attachmentService = createAttachmentService(createBlobResponse);
-    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", attachmentService });
+    const { onDownloadAttachment } = createMessagePreview({ userId: "admin", attachmentService });
 
     await expect(
       onDownloadAttachment({
@@ -69,7 +82,7 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("keeps multimodal generated attachment download parameters", async () => {
     const attachmentService = createAttachmentService(createBlobResponse);
-    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", attachmentService });
+    const { onDownloadAttachment } = createMessagePreview({ userId: "admin", attachmentService });
 
     await onDownloadAttachment({
       attachmentId: "ae2d2a3b-8d28-4cc5-b4d8-a819bfd26563",
@@ -86,7 +99,7 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("previews image attachments by extension when mime type is missing", async () => {
     const attachmentService = createAttachmentService(createBlobResponse);
-    const preview = useMessagePreview({ userId: "admin", attachmentService });
+    const preview = createMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
       attachmentId: "generated-image",
       sessionId: "session-1",
@@ -109,7 +122,7 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("previews text attachments by extension when mime type is octet-stream", async () => {
     const attachmentService = createAttachmentService(() => createTextResponse("hello\nworld"));
-    const preview = useMessagePreview({ userId: "admin", attachmentService });
+    const preview = createMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
       attachmentId: "report-log",
       sessionId: "session-1",
@@ -132,7 +145,7 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("previews a parsed result from its canonical attachment relation", async () => {
     const attachmentService = createAttachmentService(() => createTextResponse("# parsed"));
-    const preview = useMessagePreview({ userId: "admin", attachmentService });
+    const preview = createMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
       attachmentId: "source-1",
       sessionId: "session-1",
@@ -179,7 +192,7 @@ describe("useMessagePreview attachment downloads", () => {
     const attachmentService = createAttachmentService(() =>
       createTextResponse("# parsed from office"),
     );
-    const preview = useMessagePreview({ userId: "admin", attachmentService });
+    const preview = createMessagePreview({ userId: "admin", attachmentService });
 
     await preview.openAttachmentPreview({
       attachmentId: "source-1",
@@ -216,7 +229,7 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("downloads a parsed result from its canonical attachment relation", async () => {
     const attachmentService = createAttachmentService(createBlobResponse);
-    const { onDownloadParsedResult } = useMessagePreview({ userId: "admin", attachmentService });
+    const { onDownloadParsedResult } = createMessagePreview({ userId: "admin", attachmentService });
 
     await onDownloadParsedResult({
       attachmentId: "source-1",
@@ -249,7 +262,7 @@ describe("useMessagePreview attachment downloads", () => {
 
   it("previews an already-resolved attachment payload through the resolved preview entrypoint", async () => {
     const attachmentService = createAttachmentService(() => createTextResponse("# parsed payload"));
-    const preview = useMessagePreview({ userId: "admin", attachmentService });
+    const preview = createMessagePreview({ userId: "admin", attachmentService });
 
     await preview.openResolvedAttachmentPreview({
       attachmentId: "parsed-1",

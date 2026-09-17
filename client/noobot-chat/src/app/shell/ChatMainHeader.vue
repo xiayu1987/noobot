@@ -100,7 +100,7 @@ function handleHeaderAction(command = "") {
         <el-dropdown
           class="settings-dropdown"
           trigger="click"
-          popper-class="noobot-settings-dropdown"
+          popper-class="noobot-dropdown-popper noobot-settings-dropdown"
           @command="handleHeaderAction"
         >
           <el-button
@@ -151,7 +151,7 @@ function handleHeaderAction(command = "") {
       <el-dropdown
         class="mobile-header-actions"
         trigger="click"
-        popper-class="noobot-settings-dropdown"
+        popper-class="noobot-dropdown-popper noobot-settings-dropdown"
         @command="handleHeaderAction"
       >
         <el-button

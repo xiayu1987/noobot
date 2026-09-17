@@ -25,6 +25,7 @@ Required environment:
 export NOOBOT_E2E_USER_ID='...'
 export NOOBOT_E2E_CONNECT_CODE='...'
 export NOOBOT_E2E_BASE_URL='http://127.0.0.1:10060'
+export NOOBOT_E2E_MODEL_ALIAS='GLM_5_3'
 export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
 export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
@@ -103,6 +104,7 @@ placeholder scenarios without business assertions are forbidden.
 export NOOBOT_E2E_USER_ID='...'
 export NOOBOT_E2E_CONNECT_CODE='...'
 export NOOBOT_E2E_BASE_URL='http://127.0.0.1:10060'
+export NOOBOT_E2E_MODEL_ALIAS='GLM_5_3'
 export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
 export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"

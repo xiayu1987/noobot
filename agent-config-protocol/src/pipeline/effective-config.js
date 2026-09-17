@@ -4,10 +4,48 @@
  * SPDX-License-Identifier: MIT
  */
 import { deepMerge, isPlainObject } from "../utils.js";
+import {
+  resolveDefaultModelLibraryProvider,
+  resolveModelLibraryProvider,
+} from "@noobot/model-protocol";
 import { normalizeKnownConfigKeys } from "../normalization/keys.js";
 import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
 import { sanitizeUserConfig } from "../policy/user-override.js";
-import { USER_CONFIG_MERGE_MODE } from "../contract/repair.js";
+import { CONFIG_NODE_ACCESS, USER_CONFIG_MERGE_MODE } from "../contract/repair.js";
+import { MODEL_PROVIDER_AGENT_CONFIG_CONTRACT } from "../contract/config-structure.js";
+
+function projectProviderFields(provider, access) {
+  if (!isPlainObject(provider)) return {};
+  return Object.fromEntries(
+    Object.entries(provider).filter(
+      ([field]) => MODEL_PROVIDER_AGENT_CONFIG_CONTRACT.properties[field]?.access === access,
+    ),
+  );
+}
+
+function resolveProviderAuthority(providerId, globalProvider) {
+  if (isPlainObject(globalProvider)) return globalProvider;
+  const libraryProvider = resolveModelLibraryProvider(providerId);
+  if (libraryProvider) return libraryProvider;
+  return {
+    ...resolveDefaultModelLibraryProvider(),
+    reasoning_effort_options: [],
+  };
+}
+
+function mergeProviders(globalProviders = {}, userProviders = {}) {
+  const globalSource = isPlainObject(globalProviders) ? globalProviders : {};
+  const userSource = isPlainObject(userProviders) ? userProviders : {};
+  const output = { ...globalSource };
+  for (const [providerId, userProvider] of Object.entries(userSource)) {
+    if (!isPlainObject(userProvider)) continue;
+    const globalProvider = globalSource[providerId];
+    const authority = resolveProviderAuthority(providerId, globalProvider);
+    const editableUserProvider = projectProviderFields(userProvider, CONFIG_NODE_ACCESS.USER);
+    output[providerId] = deepMerge(authority, editableUserProvider);
+  }
+  return output;
+}
 
 export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const globalBase = normalizeKnownConfigKeys(
@@ -17,6 +55,11 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const out = { ...globalBase };
   for (const [key, userValue] of Object.entries(safeUser)) {
     if (key === "scenarios") continue;
+
+    if (key === "providers") {
+      out.providers = mergeProviders(globalBase.providers, userValue);
+      continue;
+    }
 
     if (USER_CONFIG_MERGE_MODE[key] === "replace") {
       out[key] = userValue;

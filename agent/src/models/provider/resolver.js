@@ -31,11 +31,7 @@ export function getEnabledProviders(globalConfig = {}, userConfig = {}) {
 
 export function pickAlias({ globalConfig, userConfig, skillConfig }) {
   return (
-    skillConfig?.provider ||
-    skillConfig?.model ||
-    userConfig?.defaultProvider ||
-    globalConfig?.defaultProvider ||
-    ""
+    skillConfig?.provider || userConfig?.defaultProvider || globalConfig?.defaultProvider || ""
   );
 }
 

@@ -254,6 +254,17 @@ export async function editLatestUserMessage(
   await card.locator(".monotonic-footer-btn.el-button--primary").click();
 }
 
+export async function deleteLatestUserMessage(page) {
+  const deleteButton = page.locator(".monotonic-chip-btn.is-danger").last();
+  await expect(deleteButton).toBeVisible();
+  await deleteButton.click();
+  const dialog = page.locator(".el-message-box");
+  await expect(dialog).toBeVisible();
+  await dialog.locator(".el-message-box__btns .el-button--primary").click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator(".monotonic-chip-btn.is-danger")).toHaveCount(0);
+}
+
 export function fixedAttachment(name = "protocol-e2e.txt") {
   const body = `noobot-protocol-e2e:${name}:v1\n`;
   return { name, mimeType: "text/plain", buffer: Buffer.from(body, "utf8"), body };

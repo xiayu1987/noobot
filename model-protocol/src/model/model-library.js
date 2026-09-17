@@ -80,20 +80,6 @@ export function resolveModelLibraryProvider(alias = "") {
   return isPlainObject(provider) ? clone(provider) : null;
 }
 
-export function resolveModelLibraryProviderByModel(model = "") {
-  const identity = String(model || "")
-    .trim()
-    .toLowerCase();
-  if (!identity) return null;
-  const entry = Object.values(MODEL_LIBRARY_PROVIDERS).find(
-    (provider) =>
-      String(provider.model || "")
-        .trim()
-        .toLowerCase() === identity,
-  );
-  return entry ? clone(entry) : null;
-}
-
 export function resolveDefaultModelLibraryProvider() {
   return clone(GENERIC_PROVIDER_TEMPLATE);
 }

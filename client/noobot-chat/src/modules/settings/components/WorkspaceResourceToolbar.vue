@@ -36,11 +36,18 @@ function handleToolbarAction(command = "") {
         @click="$emit('refresh')"
       />
     </div>
-    <el-dropdown class="mobile-actions" trigger="click" @command="handleToolbarAction">
+    <el-dropdown
+      class="mobile-actions"
+      trigger="click"
+      popper-class="noobot-dropdown-popper"
+      @command="handleToolbarAction"
+    >
       <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item command="refresh">{{ translate("settings.refreshDirsAndParams") }}</el-dropdown-item>
+          <el-dropdown-item command="refresh">{{
+            translate("settings.refreshDirsAndParams")
+          }}</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>

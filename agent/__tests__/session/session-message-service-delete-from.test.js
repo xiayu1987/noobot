@@ -135,6 +135,20 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
             sequence: 2,
           },
         },
+        commandReceipts: [
+          {
+            commandId: "keep-completed",
+            type: "turn.completed",
+            turnScopeId: "scope-keep",
+            requestHash: "keep",
+          },
+          {
+            commandId: "delete-stopped",
+            type: "turn.stop_completed",
+            turnScopeId: "scope-delete",
+            requestHash: "delete",
+          },
+        ],
       },
     },
   });
@@ -166,7 +180,62 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
     lifecycle.snapshot.recentTerminalTurns.map((turn) => turn.turnScopeId),
     ["scope-keep"],
   );
-  assert.equal(persisted.turnLifecycle.turns["scope-delete"].state, "stop_completed");
+  assert.deepEqual(Object.keys(persisted.turnLifecycle.turns), ["scope-keep"]);
+  assert.deepEqual(
+    persisted.turnLifecycle.commandReceipts.map((receipt) => [receipt.type, receipt.turnScopeId]),
+    [
+      ["turn.completed", "scope-keep"],
+      ["session.message.delete_from", undefined],
+    ],
+  );
+});
+
+test("SessionMessageService.deleteFromMessage clears a survivor's reference to the deleted source", async () => {
+  const initialSession = {
+    sessionId: "s1",
+    aggregateVersion: 2,
+    messages: [
+      { turnScopeId: "continuation", role: "assistant", content: "continuation" },
+      { turnScopeId: "source", role: "user", content: "source" },
+    ],
+    turnLifecycle: {
+      sequence: 2,
+      turns: {
+        source: {
+          turnScopeId: "source",
+          dialogProcessId: "source-dialog",
+          state: "stop_completed",
+          sequence: 1,
+        },
+        continuation: {
+          turnScopeId: "continuation",
+          dialogProcessId: "continuation-dialog",
+          state: "completed",
+          sequence: 2,
+          continuationSource: {
+            turnScopeId: "source",
+            dialogProcessId: "source-dialog",
+          },
+        },
+      },
+      commandReceipts: [],
+    },
+  };
+  const { service, saved, getSession } = createService({ initialSession });
+
+  const result = await service.deleteFromMessage({
+    userId: "u1",
+    sessionId: "s1",
+    anchor: { turnScopeId: "source" },
+    expectedAggregateVersion: 2,
+    commandId: "delete-continuation-source",
+  });
+
+  assert.deepEqual(result.deletedTurnScopeIds, ["source"]);
+  assert.equal(saved.length, 1);
+  const after = getSession();
+  assert.deepEqual(Object.keys(after.turnLifecycle.turns), ["continuation"]);
+  assert.equal(after.turnLifecycle.turns.continuation.continuationSource, null);
 });
 
 test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing", async () => {

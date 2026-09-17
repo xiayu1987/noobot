@@ -53,7 +53,7 @@ test("switch_model: 应能通过 alias 切换模型", async () => {
   });
 });
 
-test("switch_model: 应能通过 modelName 映射到 alias 并切换", async () => {
+test("switch_model: 不得通过模型名称反查 provider", async () => {
   const runtime = {
     allEnabledProviders: {
       openai: { model: "gpt-4o" },
@@ -63,11 +63,29 @@ test("switch_model: 应能通过 modelName 映射到 alias 并切换", async () 
   };
   const switchModelTool = getSwitchModelTool({ runtime, sessionId: "s-2" });
 
-  const result = parseToolJson(await switchModelTool.invoke({ modelName: "gemini-2.5-pro" }));
+  await assert.rejects(
+    switchModelTool.invoke({ modelName: "gemini-2.5-pro" }),
+    (error) => error?.code === "RECOVERABLE_MODEL_NOT_FOUND",
+  );
+  assert.equal(runtime.runtimeModel, "");
+});
 
-  assert.equal(result.ok, true);
-  assert.equal(result.modelAlias, "gemini");
-  assert.equal(runtime.runtimeModel, "gemini");
+test("switch_model: provider 名称大小写必须精确匹配", async () => {
+  const runtime = {
+    allEnabledProviders: {
+      Gemini: { model: "gemini-2.5-pro" },
+    },
+    runtimeModel: "",
+  };
+  const switchModelTool = getSwitchModelTool({ runtime, sessionId: "s-case" });
+
+  await assert.rejects(
+    switchModelTool.invoke({ modelName: "gemini" }),
+    (error) => error?.code === "RECOVERABLE_MODEL_NOT_FOUND",
+  );
+  const result = parseToolJson(await switchModelTool.invoke({ modelName: "Gemini" }));
+  assert.equal(result.modelAlias, "Gemini");
+  assert.equal(runtime.runtimeModel, "Gemini");
 });
 
 test("switch_model: persistence failure does not publish a new runtime model", async () => {

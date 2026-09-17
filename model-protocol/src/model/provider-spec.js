@@ -132,6 +132,10 @@ function identityText(value) {
     .toLowerCase();
 }
 
+function literalText(value) {
+  return String(value ?? "").trim();
+}
+
 export function normalizeModelReasoningConfiguration(provider = {}, fallback = {}) {
   const source = provider && typeof provider === "object" ? provider : {};
   const defaults = fallback && typeof fallback === "object" ? fallback : {};
@@ -147,9 +151,6 @@ export function normalizeModelReasoningConfiguration(provider = {}, fallback = {
         .filter(Boolean),
     ),
   ];
-  if (!options.length) {
-    throw new TypeError("model provider reasoning_effort_options is required");
-  }
   const parameter =
     identityText(source.reasoning_effort_parameter) ||
     identityText(defaults.reasoning_effort_parameter);
@@ -159,6 +160,7 @@ export function normalizeModelReasoningConfiguration(provider = {}, fallback = {
     );
   }
   const normalize = (value, fallbackValue) => {
+    if (!options.length) return literalText(value) || literalText(fallbackValue);
     const requested = identityText(value) || identityText(fallbackValue);
     return options.includes(requested) ? requested : options[0];
   };
@@ -178,8 +180,8 @@ export function resolveModelReasoningEffortTransportValue(provider = {}, effort 
       `unsupported model provider reasoning_effort_parameter: ${parameter || "missing"}`,
     );
   }
-  const value = identityText(effort);
-  return shape === "switch" ? value !== MODEL_REASONING_EFFORT_DISABLED : value;
+  const value = literalText(effort);
+  return shape === "switch" ? identityText(value) !== MODEL_REASONING_EFFORT_DISABLED : value;
 }
 
 export function buildModelReasoningEffortTransport(provider = {}, effort = "") {
@@ -195,10 +197,7 @@ export function resolveModelMinimumReasoningEffort(provider = {}) {
   const options = Array.isArray(provider.reasoning_effort_options)
     ? provider.reasoning_effort_options.map(identityText).filter(Boolean)
     : [];
-  if (!options.length) {
-    throw new TypeError("model provider reasoning_effort_options is required");
-  }
-  return options[0];
+  return options[0] || MODEL_REASONING_EFFORT_DISABLED;
 }
 
 export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({

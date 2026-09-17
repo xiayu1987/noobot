@@ -4,8 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export {
-  getProviders,
-  isProviderEnabled,
-  resolveDefaultModelSpec,
-} from "noobot-agent/model";
+export { getEnabledProviders, resolveDefaultModelSpec } from "noobot-agent/model";

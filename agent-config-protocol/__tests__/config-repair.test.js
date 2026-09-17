@@ -19,6 +19,10 @@ import {
   sanitizeUserConfig,
   WEB_SEARCH_MODE,
 } from "../src/index.js";
+import {
+  resolveDefaultModelLibraryProvider,
+  resolveModelLibraryProvider,
+} from "@noobot/model-protocol";
 
 function readJsonFixture(relativePath) {
   return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
@@ -130,6 +134,87 @@ test("provider system declarations cannot be overridden by user config", () => {
   });
 });
 
+test("provider runtime authority rejects user-owned system declarations", () => {
+  const customProvider = {
+    enabled: true,
+    used_for_conversation: true,
+    model: "ZHIPU/GLM-5.3",
+    reasoning_effort: "low",
+    tool_reasoning_effort: "medium",
+    reasoning_effort_options: ["low", "medium", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
+    use_responses_api: true,
+    capabilities: { reasoning: true, tools: true },
+  };
+  const userConfig = {
+    providers: {
+      GLM_5_3: customProvider,
+      primary: {
+        model: "user-model",
+        reasoning_effort_options: ["forged"],
+        reasoning_effort_parameter: "enable_thinking",
+      },
+    },
+  };
+  const globalConfig = {
+    providers: {
+      primary: {
+        model: "global-model",
+        reasoning_effort_options: ["none", "high"],
+        reasoning_effort_parameter: "reasoning_effort",
+      },
+    },
+  };
+
+  assert.deepEqual(sanitizeUserConfig(userConfig).providers.GLM_5_3, {
+    enabled: true,
+    used_for_conversation: true,
+    model: "ZHIPU/GLM-5.3",
+    reasoning_effort: "low",
+    tool_reasoning_effort: "medium",
+  });
+  const merged = mergeConfig(globalConfig, userConfig);
+  const genericProvider = resolveDefaultModelLibraryProvider();
+  assert.deepEqual(merged.providers.GLM_5_3, {
+    ...genericProvider,
+    reasoning_effort_options: [],
+    enabled: true,
+    used_for_conversation: true,
+    model: "ZHIPU/GLM-5.3",
+    reasoning_effort: "low",
+    tool_reasoning_effort: "medium",
+  });
+  assert.equal(merged.providers.GLM_5_3.reasoning_effort, "low");
+  assert.equal(merged.providers.GLM_5_3.tool_reasoning_effort, "medium");
+  assert.deepEqual(merged.providers.primary, {
+    model: "user-model",
+    reasoning_effort_options: ["none", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
+  });
+});
+
+test("user-only providers use an exact model-library authority before generic fallback", () => {
+  const libraryProvider = resolveModelLibraryProvider("gpt_5_6_sol");
+  assert.ok(libraryProvider);
+  const merged = mergeConfig(
+    { providers: {} },
+    {
+      providers: {
+        gpt_5_6_sol: {
+          model: "user-model",
+          reasoning_effort_options: ["forged"],
+          reasoning_effort_parameter: "enable_thinking",
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(merged.providers.gpt_5_6_sol, {
+    ...libraryProvider,
+    model: "user-model",
+  });
+});
+
 test("global config delegates path-policy content without creating a second schema", () => {
   const pathPolicy = {
     roles: {
@@ -176,14 +261,24 @@ test("config repair recursively adds template nodes through one protocol", () =>
     },
   }).document;
   assert.equal(synchronized.workspace_root, "/configured");
-  assert.deepEqual(synchronized.providers.primary, {
-    reasoning_effort: "high",
-    tool_reasoning_effort: "medium",
-    capabilities: { web_search: true },
-    reasoning_effort_parameter: "reasoning_effort",
-    reasoning_effort_options: ["low", "medium", "high"],
-  });
-  assert.deepEqual(synchronized.providers.added, { enabled: true });
+  assert.equal(synchronized.providers.primary.reasoning_effort, "high");
+  assert.equal(synchronized.providers.primary.model, "default-model");
+  assert.equal(
+    synchronized.providers.primary.description,
+    "Generic OpenAI-compatible fallback model",
+  );
+  assert.equal(synchronized.providers.primary.tool_reasoning_effort, "medium");
+  assert.equal(synchronized.providers.added.enabled, true);
+  assert.equal(synchronized.providers.added.model, "default-model");
+  assert.equal(
+    synchronized.providers.added.description,
+    "Generic OpenAI-compatible fallback model",
+  );
+  assert.deepEqual(synchronized.providers.added.reasoning_effort_options, [
+    "low",
+    "medium",
+    "high",
+  ]);
   assert.equal(synchronized.providers.custom.model, "custom-model");
   assert.equal("format" in synchronized.providers.custom, false);
   assert.deepEqual(synchronized.tools, {
