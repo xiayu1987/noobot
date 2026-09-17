@@ -173,8 +173,8 @@ button {
   color: var(--noobot-text-strong);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
-  padding: var(--noobot-space-2xs) 7px;
+  font-size: var(--noobot-font-size-xs);
+  padding: var(--noobot-space-2xs) var(--noobot-space-xs);
 }
 button:disabled {
   cursor: wait;
@@ -183,14 +183,14 @@ button:disabled {
 .character-animation-card__error {
   margin: var(--noobot-space-2xs) 0;
   color: var(--noobot-preview-danger-text);
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-card__diagnostics {
   display: grid;
   gap: var(--noobot-space-xs);
   margin: 0 0 var(--noobot-space-xs);
   color: var(--noobot-text-secondary);
-  font-size: 10px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-card__diagnostic-row {
   min-width: 0;

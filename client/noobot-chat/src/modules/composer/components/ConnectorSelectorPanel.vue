@@ -82,11 +82,11 @@ const selectedConnectorIds = computed(() =>
 .connector-kind {
   margin-left: var(--noobot-space-xs);
   color: var(--noobot-text-secondary);
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .connector-empty {
   padding: var(--noobot-space-lg) var(--noobot-space-2xs) var(--noobot-space-2xs);
   color: var(--noobot-text-secondary);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
 }
 </style>

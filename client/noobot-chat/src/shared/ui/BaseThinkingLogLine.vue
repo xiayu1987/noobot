@@ -196,7 +196,7 @@ function handleToggle() {
   width: 22px;
   height: 22px;
   color: var(--noobot-thinking-muted);
-  font-size: 15px;
+  font-size: var(--noobot-font-size-md);
 }
 .base-thinking-log-line__event.is-tool-call {
   color: var(--noobot-status-running);
@@ -233,7 +233,7 @@ function handleToggle() {
 .base-thinking-log-line__risk {
   display: inline-block;
   margin-left: var(--noobot-space-xs);
-  padding: 1px 5px;
+  padding: var(--noobot-space-3xs) var(--noobot-space-2xs);
   border-radius: var(--noobot-thinking-log-event-radius);
   background: var(--noobot-thinking-detail-background);
   color: var(--noobot-thinking-muted);

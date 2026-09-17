@@ -215,7 +215,11 @@ watch(() => [props.connected, props.userId], refresh);
       </span>
     </header>
     <div class="connector-list">
-      <div v-for="connector in connectors" :key="connector.connectorId" class="connector-row">
+      <div
+        v-for="connector in connectors"
+        :key="connector.connectorId"
+        class="connector-row noobot-subtle-row"
+      >
         <span class="connector-identity">
           <strong>{{ connector.name }}</strong>
           <small class="connector-meta">
@@ -344,8 +348,7 @@ watch(() => [props.connected, props.userId], refresh);
   gap: var(--noobot-space-xs);
 }
 .connector-row {
-  flex-direction: column;
-  align-items: stretch;
+  min-width: 0;
 }
 .manager-title {
   gap: var(--noobot-space-2xs);
@@ -374,17 +377,7 @@ watch(() => [props.connected, props.userId], refresh);
   margin-top: var(--noobot-space-xs);
 }
 .connector-row {
-  padding: var(--noobot-space-sm);
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-xs);
-  background: var(--noobot-panel-bg);
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease;
-}
-.connector-row:hover {
-  border-color: var(--noobot-border-primary);
-  background: var(--noobot-surface-soft-hover);
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
 }
 .connector-identity {
   display: grid;
@@ -413,11 +406,11 @@ watch(() => [props.connected, props.userId], refresh);
 .connector-meta {
   display: flex !important;
   align-items: center;
-  gap: 5px;
+  gap: var(--noobot-space-2xs);
 }
 .connector-status-icon {
   flex: none;
-  font-size: 12px;
+  font-size: var(--noobot-font-size-xs);
 }
 .connector-status-icon.is-connected {
   color: var(--noobot-status-success);
@@ -432,12 +425,8 @@ watch(() => [props.connected, props.userId], refresh);
   color: var(--noobot-text-muted);
 }
 .connector-row-actions {
-  width: 100%;
-  padding-top: var(--noobot-space-xs);
-  border-top: 1px solid var(--noobot-border-weak);
   gap: var(--noobot-space-3xs);
   flex: none;
-  justify-content: flex-end;
 }
 .type-grid {
   display: grid;
@@ -448,12 +437,12 @@ watch(() => [props.connected, props.userId], refresh);
 .connector-add-form {
   width: min(100%, 720px);
   margin: 0 auto;
-  padding: var(--noobot-space-md) 20px var(--noobot-space-2xl);
+  padding: var(--noobot-space-md) var(--noobot-space-2xl) var(--noobot-space-2xl);
   box-sizing: border-box;
 }
 
 .connector-add-form :deep(.el-form-item) {
-  margin-bottom: 18px;
+  margin-bottom: var(--noobot-space-2xl);
 }
 
 .connector-add-form :deep(.el-form-item:last-child) {
@@ -474,7 +463,7 @@ watch(() => [props.connected, props.userId], refresh);
 
   .connector-add-form {
     width: 100%;
-    padding: var(--noobot-space-xs) var(--noobot-space-xl) 20px;
+    padding: var(--noobot-space-xs) var(--noobot-space-xl) var(--noobot-space-2xl);
   }
 }
 </style>

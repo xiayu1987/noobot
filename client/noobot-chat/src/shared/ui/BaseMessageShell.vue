@@ -122,7 +122,7 @@ const { translate } = useLocale();
   color: var(--noobot-msg-tag-text);
   background: var(--noobot-msg-tag-bg);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
-  padding: 1px 7px;
+  padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   line-height: 1.4;
 }
 

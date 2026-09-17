@@ -76,6 +76,23 @@ function isTokenDeclaration(filePath, line) {
   return /^\s*--[\w-]+\s*:/.test(line) || filePath.endsWith("markdown-copy.js");
 }
 
+function inspectEmptyStyleRules(filePath, source) {
+  const styleRegions = filePath.endsWith(".vue")
+    ? Array.from(source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi), (match) => ({
+        source: match[1],
+        offset: (match.index || 0) + match[0].indexOf(match[1]),
+      }))
+    : [{ source, offset: 0 }];
+  for (const region of styleRegions) {
+    for (const match of region.source.matchAll(/(?:^|})\s*([^{}]+)\{\s*\}/g)) {
+      const selector = String(match[1] || "").trim();
+      if (!selector || selector.startsWith("@")) continue;
+      const lineNumber = source.slice(0, region.offset + (match.index || 0)).split(/\r?\n/).length;
+      violations.push(`${path.relative(repoRoot, filePath)}:${lineNumber}: empty style rule is forbidden`);
+    }
+  }
+}
+
 function inspectFile(filePath) {
   const source = fs.readFileSync(filePath, "utf8");
   const lines = source.split(/\r?\n/);
@@ -90,6 +107,9 @@ function inspectFile(filePath) {
       violations.push(`${path.relative(repoRoot, filePath)}:${index + 1}: ${message}`);
     }
   });
+  if (filePath.endsWith(".css") || filePath.endsWith(".vue")) {
+    inspectEmptyStyleRules(filePath, source);
+  }
 
   if (
     path.extname(filePath).toLowerCase() !== ".vue" ||

@@ -50,12 +50,6 @@ defineExpose({ getHtml });
   margin-bottom: 0;
 }
 
-.base-markdown-content :deep(a) {
-}
-
-.base-markdown-content :deep(a:hover) {
-}
-
 .base-markdown-content :deep(code) {
   padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
@@ -82,12 +76,6 @@ defineExpose({ getHtml });
   line-height: var(--noobot-line-height-body);
 }
 
-.base-markdown-content :deep(ul li::marker) {
-}
-
-.base-markdown-content :deep(ol li::marker) {
-}
-
 .base-markdown-content :deep(table) {
   margin: var(--noobot-space-md) 0;
   font-size: var(--noobot-msg-caption-font-size);
@@ -98,12 +86,6 @@ defineExpose({ getHtml });
 .base-markdown-content :deep(th),
 .base-markdown-content :deep(td) {
   padding: var(--noobot-msg-table-cell-padding-y) var(--noobot-msg-table-cell-padding-x);
-}
-
-.base-markdown-content :deep(th) {
-}
-
-.base-markdown-content :deep(tr:nth-child(even) td) {
 }
 
 .base-markdown-content :deep(.mermaid) {
