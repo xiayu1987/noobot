@@ -182,7 +182,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   padding: var(--noobot-space-xs);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--noobot-space-xs);
   cursor: default;
   transition: border-color var(--noobot-duration-normal) ease;
 }
@@ -236,9 +236,6 @@ function handleClick(nodeItem = {}, clickable = true) {
   border-color: color-mix(in srgb, var(--noobot-accent) 95%, transparent);
 }
 
-.workflow-node.is-running {
-}
-
 .workflow-node.is-boundary {
   justify-content: center;
   font-weight: 700;
@@ -285,7 +282,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: 700;
   flex: 0 0 auto;
 }
@@ -324,24 +321,24 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node-parallel {
-  margin-top: 2px;
-  font-size: 10px;
+  margin-top: var(--noobot-space-3xs);
+  font-size: var(--noobot-font-size-xs);
   color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
   line-height: 1.2;
 }
 
 .workflow-node-runtime-hint {
-  margin-top: 2px;
-  font-size: 10px;
+  margin-top: var(--noobot-space-3xs);
+  font-size: var(--noobot-font-size-xs);
   color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
   line-height: 1.2;
 }
 
 .workflow-node-expand-icon {
   position: absolute;
-  right: 6px;
-  bottom: 2px;
-  font-size: 10px;
+  right: var(--noobot-space-xs);
+  bottom: var(--noobot-space-3xs);
+  font-size: var(--noobot-font-size-xs);
   color: color-mix(in srgb, var(--noobot-accent) 80%, var(--noobot-text-secondary) 20%);
 }
 
@@ -349,10 +346,10 @@ function handleClick(nodeItem = {}, clickable = true) {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
-  margin-top: 3px;
-  padding: 1px 6px;
+  margin-top: var(--noobot-space-3xs);
+  padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   border-radius: var(--noobot-radius-pill);
-  font-size: 10px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.3;
   color: color-mix(in srgb, var(--noobot-status-success) 74%, var(--noobot-text-secondary) 26%);
   background: color-mix(
@@ -375,23 +372,23 @@ function handleClick(nodeItem = {}, clickable = true) {
 @media (max-width: 480px) {
   .workflow-node {
     padding: var(--noobot-space-xs);
-    gap: 5px;
+    gap: var(--noobot-space-xs);
     border-radius: var(--noobot-radius-lg);
   }
 
   .workflow-node.is-state-node {
-    padding-inline: 8px;
+    padding-inline: var(--noobot-space-sm);
   }
 
   .workflow-node-index,
   .workflow-node-state-icon {
     width: 18px;
     height: 18px;
-    font-size: 9px;
+    font-size: var(--noobot-font-size-xs);
   }
 
   .workflow-node-name {
-    font-size: 11px;
+    font-size: var(--noobot-font-size-xs);
     line-height: 1.25;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -406,8 +403,8 @@ function handleClick(nodeItem = {}, clickable = true) {
   }
 
   :deep(.workflow-node-status) {
-    padding: 1px 5px;
-    font-size: 9px;
+    padding: var(--noobot-space-3xs) var(--noobot-space-2xs);
+    font-size: var(--noobot-font-size-xs);
   }
 }
 </style>

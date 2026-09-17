@@ -471,7 +471,7 @@ button,
   min-height: 28px;
   box-sizing: border-box;
   margin: 0;
-  padding: var(--noobot-space-2xs) 9px;
+  padding: var(--noobot-space-2xs) var(--noobot-space-md);
   border-radius: var(--noobot-radius-pill);
   font-size: var(--noobot-font-size-sm);
   font-weight: 600;

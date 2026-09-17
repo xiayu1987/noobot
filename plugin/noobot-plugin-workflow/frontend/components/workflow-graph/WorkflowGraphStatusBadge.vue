@@ -44,8 +44,8 @@ const statusClass = computed(() => {
 <style scoped>
 .workflow-node-status {
   border-radius: var(--noobot-radius-pill);
-  padding: 2px 6px;
-  font-size: 10px;
+  padding: var(--noobot-space-3xs) var(--noobot-space-xs);
+  font-size: var(--noobot-font-size-xs);
   border: 1px solid transparent;
   flex-shrink: 0;
   white-space: nowrap;

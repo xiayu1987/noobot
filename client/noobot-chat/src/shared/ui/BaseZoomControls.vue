@@ -95,7 +95,7 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
 
   .base-zoom-reset {
     height: 28px;
-    padding: 0 7px;
+    padding: 0 var(--noobot-space-xs);
   }
 
   .base-zoom-text {

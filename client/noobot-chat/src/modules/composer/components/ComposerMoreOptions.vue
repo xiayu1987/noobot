@@ -401,7 +401,7 @@ const composerExtensionBaseProps = computed(() => ({
   display: grid;
   grid-template-columns: auto minmax(220px, 1fr);
   align-items: center;
-  column-gap: 18px;
+  column-gap: var(--noobot-space-2xl);
   flex: 1 0 100%;
   width: 100%;
   box-sizing: border-box;
@@ -411,9 +411,9 @@ const composerExtensionBaseProps = computed(() => ({
 
 .safe-confirm-level-label {
   color: var(--noobot-text-secondary);
-  font-size: var(--noobot-font-size-xs, 12px);
+  font-size: var(--noobot-font-size-xs);
   font-weight: 600;
-  line-height: 18px;
+  line-height: var(--noobot-space-2xl);
   white-space: nowrap;
 }
 
@@ -424,7 +424,7 @@ const composerExtensionBaseProps = computed(() => ({
 
 .safe-confirm-level-slider :deep(.el-slider__runway) {
   height: 4px;
-  margin: var(--noobot-space-lg) 0 18px;
+  margin: var(--noobot-space-lg) 0 var(--noobot-space-2xl);
 }
 
 .safe-confirm-level-slider :deep(.el-slider__bar) {
@@ -444,9 +444,9 @@ const composerExtensionBaseProps = computed(() => ({
 .safe-confirm-level-slider :deep(.el-slider__marks-text) {
   margin-top: var(--noobot-space-xs);
   color: var(--noobot-text-muted);
-  font-size: 10px;
+  font-size: var(--noobot-font-size-xs);
   font-weight: 500;
-  line-height: 14px;
+  line-height: var(--noobot-space-xl);
   white-space: nowrap;
 }
 
@@ -454,11 +454,11 @@ const composerExtensionBaseProps = computed(() => ({
   .safe-confirm-level {
     grid-template-columns: 1fr;
     row-gap: var(--noobot-space-3xs);
-    padding-inline: 4px;
+    padding-inline: var(--noobot-space-2xs);
   }
 
   .safe-confirm-level-slider {
-    padding-inline: 12px;
+    padding-inline: var(--noobot-space-lg);
   }
 }
 
@@ -466,7 +466,7 @@ const composerExtensionBaseProps = computed(() => ({
   display: inline-flex;
   align-items: center;
   gap: var(--noobot-space-xs);
-  min-height: 30px;
+  min-height: var(--noobot-control-height-sm);
   min-width: 0;
   padding: var(--noobot-space-sm) var(--noobot-space-md);
 }
@@ -474,7 +474,7 @@ const composerExtensionBaseProps = computed(() => ({
 .scenario-selector-label {
   flex: 0 0 auto;
   font-size: var(--noobot-font-size-sm);
-  line-height: 18px;
+  line-height: var(--noobot-space-2xl);
   color: var(--noobot-text-secondary);
   font-weight: 650;
 }
@@ -487,17 +487,14 @@ const composerExtensionBaseProps = computed(() => ({
   min-width: 0;
 }
 
-.composer-option-button {
-}
-
 .composer-select {
   width: 100%;
   min-width: 0;
 }
 
 .composer-select :deep(.el-select__wrapper) {
-  min-height: 38px;
-  height: 38px;
+  min-height: var(--noobot-control-height-lg);
+  height: var(--noobot-control-height-lg);
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
   background: color-mix(in srgb, var(--noobot-control-bg) 94%, var(--noobot-accent));
@@ -670,7 +667,7 @@ const composerExtensionBaseProps = computed(() => ({
 
   .model-status-tag {
     max-width: 100%;
-    min-height: 24px;
+    min-height: var(--noobot-control-icon-size-sm);
   }
 
   .model-field-copy {
@@ -685,8 +682,8 @@ const composerExtensionBaseProps = computed(() => ({
   }
 
   .model-select :deep(.el-select__wrapper) {
-    min-height: 38px;
-    height: 38px;
+    min-height: var(--noobot-control-height-lg);
+    height: var(--noobot-control-height-lg);
   }
 
   .option-selector {
@@ -709,8 +706,8 @@ const composerExtensionBaseProps = computed(() => ({
 
   .composer-option-button {
     width: 100%;
-    min-height: 32px;
-    padding: 5px var(--noobot-space-xs);
+    min-height: var(--noobot-control-icon-size);
+    padding: var(--noobot-space-2xs) var(--noobot-space-xs);
     justify-content: center;
   }
 

@@ -37,7 +37,7 @@ function onWorkflowSemanticModelChange(value = "") {
 </script>
 
 <template>
-  <div class="plugin-model-card">
+  <div class="plugin-model-card noobot-panel-card">
     <div class="plugin-model-heading">
       <div class="plugin-model-title">{{ translate("modelExtension.title") }}</div>
       <p class="plugin-model-description">{{ translate("modelExtension.description") }}</p>
@@ -83,20 +83,8 @@ function onWorkflowSemanticModelChange(value = "") {
 .plugin-model-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--el-color-primary) 18%,
-      var(--noobot-panel-border, var(--el-border-color))
-    );
-  border-radius: var(--noobot-radius-lg);
-  background: color-mix(
-    in srgb,
-    var(--noobot-surface-sidebar, var(--el-bg-color)) 94%,
-    var(--el-color-primary)
-  );
+  gap: var(--noobot-space-lg);
+  padding: var(--noobot-space-xl);
 }
 
 .plugin-model-title {
@@ -106,7 +94,7 @@ function onWorkflowSemanticModelChange(value = "") {
 }
 
 .plugin-model-description {
-  margin: 3px 0 0;
+  margin: var(--noobot-space-3xs) 0 0;
   font-size: var(--noobot-font-size-xs);
   line-height: 1.45;
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
@@ -116,9 +104,9 @@ function onWorkflowSemanticModelChange(value = "") {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 7px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
-  padding: 10px;
+  padding: var(--noobot-space-md);
   border: 1px solid
     color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
   border-radius: var(--noobot-radius-md);
@@ -182,8 +170,8 @@ function onWorkflowSemanticModelChange(value = "") {
 .model-option-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px 0;
+  gap: var(--noobot-space-3xs);
+  padding: var(--noobot-space-2xs) 0;
 }
 
 .model-option-label {
@@ -206,7 +194,7 @@ function onWorkflowSemanticModelChange(value = "") {
 
 @media (max-width: 768px) {
   .plugin-model-card {
-    padding: 12px;
+    padding: var(--noobot-space-lg);
   }
 }
 </style>

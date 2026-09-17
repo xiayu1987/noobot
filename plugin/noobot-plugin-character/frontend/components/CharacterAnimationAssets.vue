@@ -309,7 +309,7 @@ input[type="file"] {
 .character-animation-assets__item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
   padding: var(--noobot-space-xs) 0;
   font-size: var(--noobot-font-size-xs);
@@ -324,7 +324,7 @@ input[type="file"] {
 .character-animation-assets__remove {
   flex: 0 0 auto;
   color: var(--noobot-preview-danger-text);
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
 }
 .character-animation-assets__inventory {
   display: grid;
@@ -337,7 +337,7 @@ input[type="file"] {
   justify-content: space-between;
   gap: var(--noobot-space-xs);
   min-width: 0;
-  padding: 5px 0;
+  padding: var(--noobot-space-2xs) 0;
   border-top: 1px solid var(--noobot-panel-border);
   color: var(--noobot-text-strong);
   font-size: var(--noobot-font-size-xs);

@@ -214,7 +214,7 @@ function emitPreview() {
   width: fit-content;
   max-width: 100%;
   margin-top: var(--noobot-space-xs);
-  padding: 3px 5px 3px var(--noobot-space-xs);
+  padding: var(--noobot-space-2xs) var(--noobot-space-xs);
 }
 .parsed-result-label {
   flex: 0 0 auto;

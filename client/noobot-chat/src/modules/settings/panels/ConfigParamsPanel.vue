@@ -392,18 +392,6 @@ watch(
 </template>
 
 <style scoped>
-.dark-btn {
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-panel-border);
-  color: var(--noobot-text-main);
-}
-
-.dark-btn:hover:not(:disabled) {
-  background: var(--noobot-panel-muted);
-  border-color: color-mix(in srgb, var(--noobot-accent) 35%, var(--noobot-panel-border));
-  color: var(--noobot-text-strong);
-}
-
 .param-row {
   gap: var(--noobot-space-sm);
 }
@@ -421,16 +409,6 @@ watch(
 
 .param-value-input :deep(.el-input__inner) {
   font-family: var(--noobot-font-mono);
-}
-
-.file-info {
-  min-width: 0;
-}
-
-.active-file {
-  border: none;
-  background: color-mix(in srgb, var(--noobot-panel-muted) 58%, transparent);
-  border-radius: var(--noobot-radius-pill);
 }
 
 .list-empty-tip {

@@ -616,9 +616,6 @@ function handleNodeClick(nodeItem = {}) {
 </template>
 
 <style scoped>
-.workflow-canvas-root {
-}
-
 .workflow-canvas-graph {
   position: relative;
   min-height: 1px;
@@ -653,13 +650,13 @@ function handleNodeClick(nodeItem = {}) {
 .workflow-minimap-inner {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
 }
 
 .workflow-minimap-row {
   display: flex;
   justify-content: center;
-  gap: 3px;
+  gap: var(--noobot-space-3xs);
 }
 
 .workflow-minimap-node {

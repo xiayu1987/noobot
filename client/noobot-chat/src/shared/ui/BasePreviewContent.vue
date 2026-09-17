@@ -213,10 +213,6 @@ watch(
   margin-top: 0;
   margin-bottom: var(--noobot-space-xl);
 }
-.preview-markdown :deep(a) {
-}
-.preview-markdown :deep(a:hover) {
-}
 .preview-markdown :deep(hr) {
   margin: var(--noobot-space-2xl) 0;
 }
@@ -266,11 +262,6 @@ watch(
 .preview-markdown :deep(li > p) {
   margin-top: var(--noobot-space-xl);
 }
-.preview-markdown :deep(ul li::marker) {
-}
-.preview-markdown :deep(ol li::marker) {
-}
-
 .preview-markdown :deep(code) {
   padding: 0.2em 0.4em;
   font-size: var(--noobot-font-size-sm);
@@ -295,14 +286,12 @@ watch(
 .preview-markdown :deep(th) {
   color: var(--noobot-preview-text);
 }
-.preview-markdown :deep(tr:nth-child(even)) {
-}
 .preview-markdown :deep(tr:hover) {
   background-color: var(--noobot-accent-soft);
 }
 
 .preview-markdown :deep(.mermaid) {
-  margin: 20px 0;
+  margin: var(--noobot-space-2xl) 0;
   padding: var(--noobot-space-md);
   overflow-x: auto;
   display: flex;
