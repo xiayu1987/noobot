@@ -643,10 +643,10 @@ async function mount() {
   }
   if (revision !== mountRevision || loaded.length !== props.assets.length) return;
   scene = new THREE.Scene();
-  scene.background = new THREE.Color("#0a1120");
+  scene.background = new THREE.Color(0x0a1120);
   configurePlayers(loaded);
   await physics.setup(props.protocol, revision);
-  scene.add(new THREE.HemisphereLight("#fff", "#445", 2));
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 2));
   const center = setupCamera(loaded);
   try {
     renderer = new THREE.WebGLRenderer({
@@ -771,7 +771,7 @@ defineExpose({ exportImage, exportVideo, restartPlayback, isRecording });
   position: absolute;
   inset: 50% 12px auto;
   margin: 0;
-  color: #fca5a5;
+  color: var(--noobot-preview-danger-text);
   text-align: center;
   transform: translateY(-50%);
 }

@@ -14,12 +14,14 @@ const sourceRoots = [
   path.join(repoRoot, "client/startup/src"),
   path.join(repoRoot, "plugin/noobot-plugin-harness/frontend"),
   path.join(repoRoot, "plugin/noobot-plugin-workflow/frontend"),
+  path.join(repoRoot, "plugin/noobot-plugin-character/frontend"),
 ];
 const sharedPopperRoots = [
   path.join(projectRoot, "src"),
   path.join(repoRoot, "client/startup/src"),
   path.join(repoRoot, "plugin/noobot-plugin-harness/frontend"),
   path.join(repoRoot, "plugin/noobot-plugin-workflow/frontend"),
+  path.join(repoRoot, "plugin/noobot-plugin-character/frontend"),
 ];
 const inspectedExtensions = new Set([".css", ".js", ".jsx", ".ts", ".tsx", ".vue"]);
 const tokenLocations = [

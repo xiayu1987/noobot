@@ -617,17 +617,6 @@ function handleNodeClick(nodeItem = {}) {
 
 <style scoped>
 .workflow-canvas-root {
-  --workflow-accent-rgb: 109, 74, 255;
-  --workflow-accent-strong-rgb: 122, 75, 244;
-  --workflow-success-rgb: 31, 143, 74;
-  --workflow-failed-rgb: 199, 59, 59;
-  --workflow-space-xs: 6px;
-  --workflow-space-sm: 8px;
-  --workflow-space-md: 10px;
-  --workflow-radius-sm: 6px;
-  --workflow-radius-md: 8px;
-  --workflow-radius-lg: 10px;
-  --workflow-radius-xl: 12px;
 }
 
 .workflow-canvas-graph {
@@ -654,8 +643,8 @@ function handleNodeClick(nodeItem = {}) {
   right: 10px;
   bottom: 10px;
   border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: var(--workflow-radius-md);
-  padding: var(--workflow-space-xs);
+  border-radius: var(--noobot-radius-md);
+  padding: var(--noobot-space-xs);
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, var(--noobot-base-black) 6%);
   opacity: 0.72;
   z-index: 4;
@@ -676,20 +665,20 @@ function handleNodeClick(nodeItem = {}) {
 .workflow-minimap-node {
   width: 10px;
   height: 6px;
-  border-radius: var(--workflow-radius-xs);
+  border-radius: var(--noobot-radius-xs);
   background: color-mix(in srgb, var(--noobot-text-muted) 35%, transparent);
 }
 
 .workflow-minimap-node.success {
-  background: rgba(var(--workflow-success-rgb), 0.65);
+  background: color-mix(in srgb, var(--noobot-status-success) 65%, transparent);
 }
 
 .workflow-minimap-node.failed {
-  background: rgba(var(--workflow-failed-rgb), 0.72);
+  background: color-mix(in srgb, var(--noobot-status-error) 72%, transparent);
 }
 
 .workflow-minimap-node.running {
-  background: rgba(var(--workflow-accent-strong-rgb), 0.72);
+  background: color-mix(in srgb, var(--noobot-status-running) 72%, transparent);
 }
 
 @media (max-width: 480px) {
