@@ -343,7 +343,7 @@ describe("useChatSession reconnect replay", () => {
             turnScopeId: "turn-new",
             content: "",
             pending: true,
-            statusLabel: "",
+            terminalOutcome: "",
           },
         ],
         rawMessages: [],

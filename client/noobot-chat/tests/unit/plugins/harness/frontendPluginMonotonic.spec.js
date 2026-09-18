@@ -41,7 +41,7 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(action.match({ channelState: "user_stopped" })).toBe(true);
     expect(action.match({ channelState: { state: "user_stopped" } })).toBe(true);
     expect(action.match({ channelState: { status: "user_stopped" } })).toBe(true);
-    expect(action.match({ statusLabel: "已生成" })).toBe(true);
+    expect(action.match({ terminalOutcome: "generated" })).toBe(true);
     expect(action.match({ status: "running" })).toBe(false);
   });
 

@@ -278,7 +278,7 @@ describe("useChatEngine.send-stream", () => {
         role: RoleEnum.ASSISTANT,
         content: "stopped",
         pending: false,
-        statusLabel: "chat.stopped",
+        terminalOutcome: "stopped",
         turnScopeId: "turn-old",
         channelState: { state: "user_stopped", turnScopeId: "turn-old" },
       },
@@ -462,7 +462,7 @@ describe("useChatEngine.send-stream", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).not.toBe("chat.generated");
+    expect(assistant?.terminalOutcome).not.toBe("generated");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
 

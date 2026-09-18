@@ -46,7 +46,7 @@ export function clearReplacementUserRuntimeState(message = {}) {
     "dialog_id",
     "dialog_process_id",
     "status",
-    "statusLabel",
+    "terminalOutcome",
     "state",
     "thinkingFinishedAt",
     "thinkingStartedAt",

@@ -155,6 +155,18 @@ export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
 
 export const USER_STOP_LOCK_STATES = Object.freeze([FrontendRunState.USER_STOPPING]);
 
+export const MESSAGE_TERMINAL_OUTCOME = Object.freeze({
+  GENERATED: "generated",
+  FAILED: "failed",
+  STOPPED: "stopped",
+});
+
+export const MESSAGE_TERMINAL_OUTCOME_PRECEDENCE = Object.freeze({
+  [MESSAGE_TERMINAL_OUTCOME.GENERATED]: 1,
+  [MESSAGE_TERMINAL_OUTCOME.FAILED]: 2,
+  [MESSAGE_TERMINAL_OUTCOME.STOPPED]: 3,
+});
+
 export const USER_STOP_LOCK_REOPEN_STATES = Object.freeze([
   FrontendRunState.ACTION_REQUESTING,
   BackendChannelState.SENDING,

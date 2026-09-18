@@ -24,7 +24,7 @@ describe("useChatEngine.send-stream terminal detail", () => {
               role: RoleEnum.ASSISTANT,
               content: "old partial",
               turnScopeId: staleStoppedTurnScopeId,
-              statusLabel: "chat.stopped",
+              terminalOutcome: "stopped",
               stopState: "user_stopped",
               channelState: { state: "user_stopped", turnScopeId: staleStoppedTurnScopeId },
             },

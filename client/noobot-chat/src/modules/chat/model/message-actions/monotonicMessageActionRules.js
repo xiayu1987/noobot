@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getMessageRuntimeChannelState } from "../../runtime/sessionRunStateMachine.js";
+import {
+  getMessageRuntimeChannelState,
+  isTerminalOutcome,
+} from "../../runtime/sessionRunStateMachine.js";
 import { areTurnScopeIdsEquivalent } from "../messageIdentity.js";
 function normalizeText(value = "") {
   return String(value || "")
@@ -125,8 +128,6 @@ function findMessageIdentityIndex(targetMessage = {}, allMessages = []) {
 export function isUserMessage(messageItem = {}) {
   return normalizeMessageRole(messageItem) === "user";
 }
-const GENERATED_STATUS_LABEL = "已生成";
-const STOPPED_STATUS_LABEL = "已停止";
 export function isMonotonicMessage(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem.isMonotonic === true || messageItem.monotonic === true) return true;
@@ -135,10 +136,7 @@ export function isMonotonicMessage(messageItem = {}) {
   const channelState = getMessageRuntimeChannelState(messageItem);
   const state = normalizeText(channelState?.state || messageItem.state || messageItem.status);
   if (["completed", "done", "user_stopped"].includes(state)) return true;
-  const label = normalizeText(messageItem.statusLabel);
-  return ["generated", GENERATED_STATUS_LABEL, "user_stopped", STOPPED_STATUS_LABEL].includes(
-    label,
-  );
+  return isTerminalOutcome(messageItem.terminalOutcome);
 }
 function isPlainUserMessage(messageItem = {}) {
   if (!isUserMessage(messageItem)) return false;

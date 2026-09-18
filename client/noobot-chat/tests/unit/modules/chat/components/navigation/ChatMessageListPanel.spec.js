@@ -319,7 +319,7 @@ describe("ChatMessageListPanel", () => {
 
   it("remounts assistant item when resend replaces it with a new turnScopeId", async () => {
     const counters = reactive({ mounted: 0, unmounted: 0 });
-    chatMessageItemMock.field = "statusLabel";
+    chatMessageItemMock.field = "terminalOutcome";
     chatMessageItemMock.mounted = () => {
       counters.mounted += 1;
     };
@@ -335,7 +335,7 @@ describe("ChatMessageListPanel", () => {
           content: "",
           turnScopeId: "client-turn:old",
           pending: false,
-          statusLabel: "chat.stopped",
+          terminalOutcome: "stopped",
           channelState: { state: "user_stopped", turnScopeId: "client-turn:old" },
         },
       ],
@@ -366,7 +366,7 @@ describe("ChatMessageListPanel", () => {
 
     expect(counters.mounted).toBe(2);
     expect(counters.unmounted).toBe(0);
-    expect(wrapper.findAll(".chat-message-item-stub")[1].text()).toBe("chat.stopped");
+    expect(wrapper.findAll(".chat-message-item-stub")[1].text()).toBe("stopped");
 
     await wrapper.setProps({
       activeSession: {
@@ -377,7 +377,7 @@ describe("ChatMessageListPanel", () => {
             content: "",
             turnScopeId: "client-turn:new",
             pending: true,
-            statusLabel: "",
+            terminalOutcome: "",
             channelState: { state: "sending", turnScopeId: "client-turn:new" },
           },
         ],

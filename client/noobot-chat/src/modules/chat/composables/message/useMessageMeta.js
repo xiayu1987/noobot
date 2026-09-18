@@ -5,8 +5,6 @@
  */
 import { computed, watch } from "vue";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
-import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
-import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { storeToRefs } from "pinia";
@@ -16,7 +14,17 @@ import {
   turnRuntimeDisplayState,
 } from "../../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
+import {
+  MESSAGE_TERMINAL_OUTCOME,
+  normalizeTerminalOutcome,
+} from "../../runtime/sessionRunStateMachine.js";
 import { resolveStatusStepPresentation } from "../../model/messagePresentation.js";
+
+const SUB_TASK_STATUS_TEXT_KEY = Object.freeze({
+  [MESSAGE_TERMINAL_OUTCOME.STOPPED]: "message.subtaskStopped",
+  [MESSAGE_TERMINAL_OUTCOME.FAILED]: "message.subtaskFailed",
+  [MESSAGE_TERMINAL_OUTCOME.GENERATED]: "message.subtaskDone",
+});
 
 export function useMessageMeta({
   getMessageItem = () => ({}),
@@ -48,24 +56,9 @@ export function useMessageMeta({
 
   const subTaskStatusText = computed(() => {
     const messageItem = getMessageItem() || {};
-    const statusLabel = String(messageItem.statusLabel || "").trim();
-    const stoppedLabels = new Set([
-      String(zhCNMessages?.chat?.stopped || "").trim(),
-      String(enUSMessages?.chat?.stopped || "").trim(),
-      String(translate("chat.stopped") || "").trim(),
-    ]);
-    const failedLabels = new Set([
-      String(zhCNMessages?.chat?.failed || "").trim(),
-      String(enUSMessages?.chat?.failed || "").trim(),
-      String(translate("chat.failed") || "").trim(),
-    ]);
-    return messageItem.pending
-      ? translate("message.subtaskProcessing")
-      : stoppedLabels.has(statusLabel)
-        ? translate("message.subtaskStopped")
-        : failedLabels.has(statusLabel)
-          ? translate("message.subtaskFailed")
-          : translate("message.subtaskDone");
+    if (messageItem.pending) return translate("message.subtaskProcessing");
+    const terminalOutcome = normalizeTerminalOutcome(messageItem.terminalOutcome);
+    return translate(SUB_TASK_STATUS_TEXT_KEY[terminalOutcome] || "message.subtaskDone");
   });
 
   const subTaskStatusSignature = computed(() => {
@@ -73,7 +66,7 @@ export function useMessageMeta({
     return [
       messageItem.id || messageItem.messageId || "",
       messageItem.pending === true ? "pending" : "settled",
-      String(messageItem.statusLabel || "").trim(),
+      normalizeTerminalOutcome(messageItem.terminalOutcome),
       subTaskStatusText.value,
     ].join("|");
   });
@@ -82,10 +75,9 @@ export function useMessageMeta({
     subTaskStatusSignature,
     () => logResendDebug("ui.messageMeta", () => {
       const messageItem = getMessageItem() || {};
-      const statusLabel = String(messageItem.statusLabel || "").trim();
       return {
         message: summarizeDebugMessage(messageItem),
-        statusLabel,
+        terminalOutcome: normalizeTerminalOutcome(messageItem.terminalOutcome),
         subTaskStatusText: subTaskStatusText.value,
       };
     }),

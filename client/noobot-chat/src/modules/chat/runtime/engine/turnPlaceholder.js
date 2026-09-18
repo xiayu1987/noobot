@@ -33,7 +33,7 @@ export function initializeTurnPlaceholder(message, {
     placeholder: true,
     synthetic: synthetic === true,
     pending: pending === true,
-    statusLabel: "",
+    terminalOutcome: "",
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
     toolTimeline: Array.isArray(message.toolTimeline) ? message.toolTimeline : [],
     activityTimeline: Array.isArray(message.activityTimeline) ? message.activityTimeline : [],

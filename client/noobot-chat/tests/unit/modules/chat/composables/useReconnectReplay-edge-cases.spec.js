@@ -49,7 +49,7 @@ describe("useReconnectReplay", () => {
         role: RoleEnum.ASSISTANT,
         content: "",
         pending: true,
-        statusLabel: "",
+        terminalOutcome: "",
         turnScopeId: "turn-missing",
       },
     ];
@@ -63,7 +63,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.notify).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1200);
-    expect(assistant?.statusLabel).toBe("");
+    expect(assistant?.terminalOutcome).toBe("");
     expect(assistant?.error).toBeUndefined();
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
     expect(mocks.notify).not.toHaveBeenCalled();
@@ -79,7 +79,7 @@ describe("useReconnectReplay", () => {
         role: RoleEnum.ASSISTANT,
         content: "",
         pending: true,
-        statusLabel: "",
+        terminalOutcome: "",
         turnScopeId: "turn-missing",
       },
     ];

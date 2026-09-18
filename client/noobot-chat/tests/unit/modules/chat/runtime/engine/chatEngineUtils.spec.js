@@ -48,7 +48,7 @@ describe("chatEngine utils", () => {
   it("strips workflow assistant content copied into the active bot message", () => {
     const targetMessage = {
       pending: true,
-      statusLabel: "执行中",
+      terminalOutcome: "",
       realtimeLogs: [],
       executionLogTotal: 0,
       content: "",
@@ -66,7 +66,7 @@ describe("chatEngine utils", () => {
   it("patches workflow assistant through the shared folded message shape", () => {
     const targetMessage = {
       pending: false,
-      statusLabel: "",
+      terminalOutcome: "",
       realtimeLogs: [],
       executionLogTotal: 0,
       content: "",

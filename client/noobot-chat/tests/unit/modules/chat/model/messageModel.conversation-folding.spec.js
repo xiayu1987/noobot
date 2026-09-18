@@ -42,7 +42,7 @@ describe("messageModel conversation folding", () => {
           completedToolLogs: [],
           tool_calls: [],
           executionLogTotal: 0,
-          statusLabel: "",
+          terminalOutcome: "",
         },
       ],
       buildViewMessage,
@@ -54,7 +54,7 @@ describe("messageModel conversation folding", () => {
     expect(messages[1].toolTimeline).toEqual([]);
     expect(messages[1].activityTimeline).toEqual([]);
     expect(messages[1].tool_calls).toEqual([]);
-    expect(messages[1].statusLabel).toBe("");
+    expect(messages[1].terminalOutcome).toBe("");
   });
 
   it("fills the new assistant turn only after non-pending stream events arrive", () => {

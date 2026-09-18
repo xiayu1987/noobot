@@ -32,7 +32,7 @@ export function summarizeDebugMessage(message = {}) {
       message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
     parentDialogProcessId: message.parentDialogProcessId || message.parent_dialog_process_id || "",
     pending: message.pending === true,
-    statusLabel: message.statusLabel || "",
+    terminalOutcome: message.terminalOutcome || "",
     status: message.status || "",
     state: message.state || "",
     channelState: channelState?.state || "",
