@@ -10,9 +10,7 @@ import {
 } from "../../model/messageIdentity.js";
 import {
   BackendChannelState,
-  BackendTerminalStates,
   FrontendRunState,
-  FrontendTerminalStates,
   MESSAGE_IN_FLIGHT_CHANNEL_STATES,
   MESSAGE_TERMINAL_OUTCOME,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
@@ -21,6 +19,7 @@ import {
 } from "./constants.js";
 import { createInitialSessionRunState, isInFlightSessionRunState } from "./core.js";
 import { normalizeState, trim } from "./normalize.js";
+import { isTerminalRunState, resolveStateTerminalOutcome } from "./terminalOutcome.js";
 const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
@@ -35,16 +34,11 @@ const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([
   BackendChannelState.SENDING,
 ]);
 
-function isTerminalMessageRuntimeState(state = "") {
-  const normalizedState = normalizeState(state);
-  return BackendTerminalStates.includes(normalizedState) || FrontendTerminalStates.includes(normalizedState);
-}
-
 function isFinalizedAssistantMessage(messageItem = {}) {
   if (getMessageRole(messageItem) !== "assistant") return false;
   const channelState = getMessageChannelState(messageItem);
   const state = normalizeState(channelState?.state);
-  return messageItem?.pending === false && isTerminalMessageRuntimeState(state);
+  return messageItem?.pending === false && isTerminalRunState(state);
 }
 
 function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activeSession = {}) {
@@ -58,11 +52,8 @@ function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activ
 export function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
   const stateSessionId = trim(stateSnapshot?.sessionId);
   if (!stateSessionId) return true;
-  const activeIds = [
-    activeSession?.sessionId,
-    activeSession?.sessionId,
-  ].map((item) => trim(item)).filter(Boolean);
-  return !activeIds.length || activeIds.includes(stateSessionId);
+  const activeSessionId = trim(activeSession?.sessionId);
+  return !activeSessionId || activeSessionId === stateSessionId;
 }
 
 export function getLatestAssistantMessage(activeSession = {}) {
@@ -134,11 +125,11 @@ export function resolveTurnRuntimeView({
   );
   const persistedStatus = normalizeState(turnStatus?.status || turnStatus?.state);
   const messageStatus = normalizeState(messageItem?.status || messageItem?.state);
-  const state = isTerminalMessageRuntimeState(persistedStatus)
+  const state = isTerminalRunState(persistedStatus)
     ? persistedStatus
     : realtimeStatus || persistedStatus || messageStatus;
   const pending = messageItem?.pending === true;
-  const terminal = isTerminalMessageRuntimeState(state);
+  const terminal = isTerminalRunState(state);
   const running = !terminal && (pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state));
   const inFlightAssistant =
     getMessageRole(messageItem) === "assistant" &&
@@ -155,7 +146,7 @@ export function resolveTurnRuntimeView({
     startedAt: turnTiming?.thinkingStartedAt || "",
     finishedAt: turnTiming?.thinkingFinishedAt || "",
     modelLoopRound: Number(turnTiming?.modelLoopRound || 0),
-    source: isTerminalMessageRuntimeState(persistedStatus)
+    source: isTerminalRunState(persistedStatus)
       ? "persisted"
       : realtimeStatus
         ? "realtime"
@@ -309,16 +300,7 @@ export function resolveSessionRunMessageRuntimePatch({
   }
   if (
     stateBelongsToActiveSession && terminalOwnsMessage &&
-    [
-      BackendChannelState.ERROR,
-      BackendChannelState.EXPIRED,
-      BackendChannelState.NO_CONVERSATION,
-      FrontendRunState.ACTION_REQUEST_ERROR,
-      FrontendRunState.PROCESSING_ERROR,
-      FrontendRunState.COMPLETION_ERROR,
-      FrontendRunState.STOP_ERROR,
-      FrontendRunState.CANCELLED,
-    ].includes(normalizeState(stateSnapshot?.state))
+    resolveStateTerminalOutcome(stateSnapshot?.state) === MESSAGE_TERMINAL_OUTCOME.FAILED
   ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,

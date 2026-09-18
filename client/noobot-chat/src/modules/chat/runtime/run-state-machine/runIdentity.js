@@ -6,6 +6,7 @@
 import {
   BackendChannelState,
   BackendTerminalStates,
+  EXCLUSIVE_TERMINAL_STATES,
   FrontendTerminalStates,
   FrontendRunState,
   SESSION_RUN_EVENT,
@@ -150,7 +151,7 @@ export function isNotLeavingTerminal({ current = {}, event = {}, startsNewTurn =
   const nextState = normalizeState(event.state);
   if (isNewerBackendTerminalFactForSameRun({ current, event })) return true;
   if (!FrontendTerminalStates.includes(nextState)) return false;
-  if ([BackendChannelState.ERROR, FrontendRunState.USER_STOP_COMPLETED, FrontendRunState.CANCELLED].includes(currentState)) {
+  if (EXCLUSIVE_TERMINAL_STATES.includes(currentState)) {
     return nextState === currentState;
   }
   return true;

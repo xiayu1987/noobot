@@ -89,19 +89,6 @@ export const FrontendRunState = Object.freeze({
   STOP_ERROR: "frontend_stop_error",
 });
 
-export const FrontendTerminalStates = Object.freeze([
-  FrontendRunState.FRONTEND_COMPLETED,
-  FrontendRunState.USER_STOP_COMPLETED,
-  FrontendRunState.CANCELLED,
-  BackendChannelState.ERROR,
-  BackendChannelState.EXPIRED,
-  BackendChannelState.NO_CONVERSATION,
-  FrontendRunState.ACTION_REQUEST_ERROR,
-  FrontendRunState.PROCESSING_ERROR,
-  FrontendRunState.COMPLETION_ERROR,
-  FrontendRunState.STOP_ERROR,
-]);
-
 export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_SEND_STARTED: "local_send_started",
   LOCAL_SEND_REQUEST_STARTED: "local_send_request_started",
@@ -127,20 +114,6 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_FAILURE: "local_failure",
   LOCAL_RESET: "local_reset",
 });
-
-export const IN_FLIGHT_STATES = Object.freeze([
-  FrontendRunState.ACTION_REQUESTING,
-  FrontendRunState.PROCESSING,
-  BackendChannelState.SENDING,
-  BackendChannelState.RECONNECTING,
-  BackendChannelState.INTERACTION_PENDING,
-  FrontendRunState.CONTINUE_REQUESTING,
-  FrontendRunState.RESEND_REPLACING_TURN,
-  FrontendRunState.RESEND_STREAMING,
-  BackendChannelState.COMPLETED,
-  FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-  FrontendRunState.USER_STOPPING,
-]);
 
 export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
   FrontendRunState.ACTION_REQUESTING,
@@ -290,4 +263,31 @@ export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
     100,
     SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
   ),
+});
+
+export const FrontendTerminalStates = Object.freeze(
+  Object.entries(SESSION_RUN_TRANSITION_TABLE)
+    .filter(([, config]) => config.rule === SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED)
+    .map(([state]) => state),
+);
+
+export const EXCLUSIVE_TERMINAL_STATES = Object.freeze([
+  BackendChannelState.ERROR,
+  FrontendRunState.USER_STOP_COMPLETED,
+  FrontendRunState.CANCELLED,
+]);
+
+export const MESSAGE_TERMINAL_STATE_OUTCOME = Object.freeze({
+  [BackendChannelState.COMPLETED]: MESSAGE_TERMINAL_OUTCOME.GENERATED,
+  [FrontendRunState.FRONTEND_COMPLETED]: MESSAGE_TERMINAL_OUTCOME.GENERATED,
+  [BackendChannelState.USER_STOPPED]: MESSAGE_TERMINAL_OUTCOME.STOPPED,
+  [FrontendRunState.USER_STOP_COMPLETED]: MESSAGE_TERMINAL_OUTCOME.STOPPED,
+  [BackendChannelState.ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [BackendChannelState.EXPIRED]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [BackendChannelState.NO_CONVERSATION]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [FrontendRunState.CANCELLED]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [FrontendRunState.ACTION_REQUEST_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [FrontendRunState.PROCESSING_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [FrontendRunState.COMPLETION_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
+  [FrontendRunState.STOP_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
 });

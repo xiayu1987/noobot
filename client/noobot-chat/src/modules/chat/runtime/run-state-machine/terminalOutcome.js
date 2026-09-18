@@ -6,7 +6,9 @@
 import {
   MESSAGE_TERMINAL_OUTCOME,
   MESSAGE_TERMINAL_OUTCOME_PRECEDENCE,
+  MESSAGE_TERMINAL_STATE_OUTCOME,
 } from "./constants.js";
+import { normalizeState } from "./normalize.js";
 
 export function normalizeTerminalOutcome(outcome = "") {
   const normalizedOutcome = String(outcome || "").trim().toLowerCase();
@@ -26,6 +28,14 @@ export function resolveTerminalOutcome(currentOutcome = "", nextOutcome = "") {
     MESSAGE_TERMINAL_OUTCOME_PRECEDENCE[normalizedCurrent]
     ? normalizedNext
     : normalizedCurrent;
+}
+
+export function resolveStateTerminalOutcome(state = "") {
+  return MESSAGE_TERMINAL_STATE_OUTCOME[normalizeState(state)] || "";
+}
+
+export function isTerminalRunState(state = "") {
+  return Boolean(resolveStateTerminalOutcome(state));
 }
 
 export { MESSAGE_TERMINAL_OUTCOME };
