@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  PENDING_COMMAND_STATUS_STEP,
   STATUS_STEP_LABEL_KEY,
   STATUS_STEP_STAGE,
+  STATUS_STEP_STAGE_BLOCKING_SEND,
   STATUS_STEP_STAGE_ORDINAL,
   STATUS_STEP_STAGE_SEQUENCE,
   STATUS_STEP_TERMINAL,
@@ -14,6 +16,7 @@ import {
 
 const STAGE_STATES = new Set(Object.values(STATUS_STEP_STAGE));
 const TERMINAL_STATES = new Set(Object.values(STATUS_STEP_TERMINAL));
+const SEND_BLOCKING_STATES = new Set(STATUS_STEP_STAGE_BLOCKING_SEND);
 
 function normalize(value = "") {
   return String(value || "")
@@ -32,6 +35,14 @@ export function isTerminalStatusStepState(value = "") {
 
 export function isStageStatusStepState(value = "") {
   return STAGE_STATES.has(normalize(value));
+}
+
+export function isSendBlockingStatusStepState(value = "") {
+  return SEND_BLOCKING_STATES.has(normalize(value));
+}
+
+export function resolvePendingCommandStatusStep(pendingCommandType = "") {
+  return PENDING_COMMAND_STATUS_STEP[normalize(pendingCommandType)] || "";
 }
 
 export function resolveTurnTerminalStatusStep(turnTerminal = "") {

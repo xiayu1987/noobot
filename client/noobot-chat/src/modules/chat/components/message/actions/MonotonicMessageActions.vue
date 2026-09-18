@@ -6,7 +6,6 @@
 <script setup>
 import { nextTick, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { createLocalTranslator } from "../../../model/message-actions/localTranslations.js";
 import { useMonotonicEditAttachments } from "../../../model/message-actions/useMonotonicEditAttachments.js";
 import MonotonicActionBar from "./MonotonicActionBar.vue";
 import MonotonicEditCard from "./MonotonicEditCard.vue";
@@ -25,7 +24,7 @@ const editing = ref(false);
 const draftContent = ref("");
 const editCardRef = ref(null);
 
-const t = createLocalTranslator((key, fallback) => props.translate(key, fallback));
+const t = (key = "") => props.translate(key);
 
 const {
   editAttachments,

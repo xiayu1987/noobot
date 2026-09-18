@@ -12,6 +12,7 @@ export {
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
+  TURN_PENDING_COMMAND_TYPE,
 } from "./run-state-machine/constants.js";
 export {
   isInFlightChannelState,
@@ -19,14 +20,18 @@ export {
 } from "./run-state-machine/channelState.js";
 export {
   isTerminalOutcome,
+  isTerminalRunState,
   MESSAGE_TERMINAL_OUTCOME,
   normalizeTerminalOutcome,
+  resolveStateTerminalOutcome,
   resolveTerminalOutcome,
 } from "./run-state-machine/terminalOutcome.js";
 export {
+  isSendBlockingStatusStepState,
   isStageStatusStepState,
   isTerminalStatusStepState,
   normalizeStatusStepState,
+  resolvePendingCommandStatusStep,
   resolveStatusStepLabelKey,
   resolveStatusStepStageOrdinal,
   resolveTurnTerminalStatusStep,
@@ -34,6 +39,11 @@ export {
   STATUS_STEP_STAGE_SEQUENCE,
   STATUS_STEP_TERMINAL,
 } from "./run-state-machine/statusStep.js";
+export {
+  COMPOSER_PRIMARY_ACTION,
+  resolveComposerPrimaryAction,
+  resolveComposerPrimaryActionLabelKey,
+} from "./run-state-machine/composerAction.js";
 export {
   isTurnRuntimeTerminal,
   isTurnTerminalNotice,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { BackendChannelState, FrontendRunState, STATUS_STEP_STAGE } from "./constants.js";
-import { isStageStatusStepState } from "./statusStep.js";
+import { isStageStatusStepState, resolvePendingCommandStatusStep } from "./statusStep.js";
 import {
   canonicalSessionId,
   canonicalTurnScopeId,
@@ -14,20 +14,16 @@ import {
 } from "./turnRuntimeRegistryIdentity.js";
 
 export function turnRuntimeDisplayState(turn = null) {
-  if (!turn) return "send";
-  if (turn.terminal === "user_stopped") return "continue";
-  if (turn.terminal) return "send";
-  if (turn.commandPending === true) {
-    if (runtimeText(turn.pendingCommandType) === "stop") return "stopping";
-    if (runtimeText(turn.pendingCommandType) === "completion") return "completing";
-    return "requesting";
-  }
+  if (!turn || turn.terminal) return "";
+  if (turn.commandPending === true)
+    return resolvePendingCommandStatusStep(turn.pendingCommandType) || STATUS_STEP_STAGE.REQUESTING;
   const state = runtimeText(turn.state).toLowerCase();
   if ([FrontendRunState.ACTION_REQUESTING, FrontendRunState.CONTINUE_REQUESTING].includes(state)) {
-    return "requesting";
+    return STATUS_STEP_STAGE.REQUESTING;
   }
-  if (state === FrontendRunState.FRONTEND_COMPLETION_REQUESTING) return "completing";
-  if (state === FrontendRunState.USER_STOPPING) return "stopping";
+  if (state === FrontendRunState.FRONTEND_COMPLETION_REQUESTING)
+    return STATUS_STEP_STAGE.COMPLETING;
+  if (state === FrontendRunState.USER_STOPPING) return STATUS_STEP_STAGE.STOPPING;
   if (
     [
       FrontendRunState.PROCESSING,
@@ -36,9 +32,9 @@ export function turnRuntimeDisplayState(turn = null) {
       BackendChannelState.INTERACTION_PENDING,
     ].includes(state)
   ) {
-    return "sending";
+    return STATUS_STEP_STAGE.SENDING;
   }
-  return "send";
+  return "";
 }
 
 export function resolveSessionTurnRuntime(registry, sessionId, turnScopeId = "") {

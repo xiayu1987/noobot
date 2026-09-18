@@ -230,8 +230,10 @@ describe("ChatComposer interactions", () => {
       canStop: true,
       composerActionState: {
         displayState: "requesting",
+        actionLabelKey: "composer.requesting",
         sendRequesting: true,
         stopRequesting: true,
+        sendBlocked: true,
       },
     });
 

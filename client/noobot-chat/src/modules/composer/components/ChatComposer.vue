@@ -96,9 +96,7 @@ const sendDisabledState = computed(() => {
   const noInput = interjectionMode ? !inputLength : !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
   const sessionNotReady = !props.sessionReady;
-  const blockedByMessageState = ["requesting", "completing", "stopping"].includes(
-    props.composerActionState?.displayState,
-  );
+  const blockedByMessageState = props.composerActionState?.sendBlocked === true;
   const attachmentsNotAllowed = interjectionMode && attachmentCount.value > 0;
   const disabled =
     noInput || disconnected || sessionNotReady || blockedByMessageState || attachmentsNotAllowed;
@@ -220,15 +218,7 @@ function onComposerDrop(event) {
 const sendButtonText = computed(() => {
   if (micRecording.value) return recordingTimeText.value;
   if (interjectionMode.value) return translate("composer.interject");
-  const textKeyByState = {
-    requesting: "composer.requesting",
-    sending: "composer.sending",
-    completing: "composer.completing",
-    stopping: "composer.stopping",
-    continue: "composer.continue",
-    send: "composer.send",
-  };
-  return translate(textKeyByState[props.composerActionState?.displayState] || "composer.send");
+  return translate(props.composerActionState?.actionLabelKey || "composer.send");
 });
 
 const sendRequesting = computed(() => Boolean(props.composerActionState?.sendRequesting));

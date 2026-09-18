@@ -6,9 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
-import {
-  selectTurnMessageRuntime,
-} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 import { canonicalWorkflowRuntimeEvent } from "../helpers/workflowRuntimeEventFixture.js";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
@@ -64,7 +62,9 @@ function nodeEvent(overrides = {}) {
 }
 
 function storedNode(store, workflowRunId = "workflow-run-a", nodeExecutionId = "node-exec-a") {
-  return store.workflowNodeStateRegistry.workflows?.[workflowRunId]?.nodes?.[nodeExecutionId] || null;
+  return (
+    store.workflowNodeStateRegistry.workflows?.[workflowRunId]?.nodes?.[nodeExecutionId] || null
+  );
 }
 
 describe("useChatStore workflow node state registry", () => {
@@ -94,8 +94,13 @@ describe("useChatStore workflow node state registry", () => {
   it("applies newer revisions and rejects revision rollback", () => {
     const store = useChatStore();
 
-    expect(applyNodeEvent(store, nodeEvent({ revision: 2, sequence: 2, eventId: "evt-2" })).applied).toBe(true);
-    const stale = applyNodeEvent(store, nodeEvent({ revision: 1, sequence: 9, eventId: "evt-stale", status: "failed" }));
+    expect(
+      applyNodeEvent(store, nodeEvent({ revision: 2, sequence: 2, eventId: "evt-2" })).applied,
+    ).toBe(true);
+    const stale = applyNodeEvent(
+      store,
+      nodeEvent({ revision: 1, sequence: 9, eventId: "evt-stale", status: "failed" }),
+    );
 
     expect(stale.applied).toBe(false);
     expect(stale.reason).toBe("stale");
@@ -106,22 +111,32 @@ describe("useChatStore workflow node state registry", () => {
   it("keeps workflow node facts isolated from the authoritative Turn Runtime Registry", () => {
     const store = useChatStore();
 
-    applyNodeEvent(store, nodeEvent({ status: "running", revision: 2, sequence: 2, eventId: "evt-running" }));
-    expect(selectTurnMessageRuntime(store.turnRuntimeRegistry, {
-      sessionId: "child-session-a",
-      turnScopeId: "workflow-node:node-exec-a",
-    })).toMatchObject({
+    applyNodeEvent(
+      store,
+      nodeEvent({ status: "running", revision: 2, sequence: 2, eventId: "evt-running" }),
+    );
+    expect(
+      selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+        sessionId: "child-session-a",
+        turnScopeId: "workflow-node:node-exec-a",
+      }),
+    ).toMatchObject({
       state: "",
       running: false,
       terminal: null,
       seq: 0,
     });
 
-    applyNodeEvent(store, nodeEvent({ status: "succeeded", revision: 3, sequence: 3, eventId: "evt-completed" }));
-    expect(selectTurnMessageRuntime(store.turnRuntimeRegistry, {
-      sessionId: "child-session-a",
-      turnScopeId: "workflow-node:node-exec-a",
-    })).toMatchObject({
+    applyNodeEvent(
+      store,
+      nodeEvent({ status: "succeeded", revision: 3, sequence: 3, eventId: "evt-completed" }),
+    );
+    expect(
+      selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+        sessionId: "child-session-a",
+        turnScopeId: "workflow-node:node-exec-a",
+      }),
+    ).toMatchObject({
       state: "",
       running: false,
       terminal: null,
@@ -131,53 +146,62 @@ describe("useChatStore workflow node state registry", () => {
 
   it("projects a child Turn only from a valid Authority lifecycle envelope", () => {
     const store = useChatStore();
-    applyNodeEvent(store, nodeEvent({ status: "running", revision: 2, sequence: 2, eventId: "evt-running" }));
+    applyNodeEvent(
+      store,
+      nodeEvent({ status: "running", revision: 2, sequence: 2, eventId: "evt-running" }),
+    );
 
-    const accepted = store.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
-      eventType: "turn.action_accepted",
-      eventId: "authority-child-accepted",
-      commandId: "authority-child-command",
-      userId: "user-a",
-      sessionId: "child-session-a",
-      turnScopeId: "workflow-node:node-exec-a",
-      messageId: "event-message-child-a",
-      presentationMessageId: "message-child-a",
-      dialogProcessId: "real-child-dialog",
-      revision: 1,
-      sequence: 1,
-      occurredAt: "2026-07-19T00:00:01.000Z",
-      phase: "action",
-      state: "action_requesting",
-      action: "send",
-      executionState: "accepted",
-      capabilities: { actionLocked: true, canStop: false },
-    }));
-    const processing = store.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
-      eventType: "turn.processing_started",
-      eventId: "authority-child-processing",
-      commandId: "authority-child-command",
-      userId: "user-a",
-      sessionId: "child-session-a",
-      turnScopeId: "workflow-node:node-exec-a",
-      messageId: "event-message-child-a",
-      presentationMessageId: "message-child-a",
-      dialogProcessId: "real-child-dialog",
-      revision: 2,
-      sequence: 2,
-      occurredAt: "2026-07-19T00:00:02.000Z",
-      phase: "processing",
-      state: "processing",
-      action: "send",
-      executionState: "processing",
-      capabilities: { actionLocked: true, canStop: true },
-    }));
+    const accepted = store.applyTurnLifecycleEnvelope(
+      createTurnLifecycleEnvelope({
+        eventType: "turn.action_accepted",
+        eventId: "authority-child-accepted",
+        commandId: "authority-child-command",
+        userId: "user-a",
+        sessionId: "child-session-a",
+        turnScopeId: "workflow-node:node-exec-a",
+        messageId: "event-message-child-a",
+        presentationMessageId: "message-child-a",
+        dialogProcessId: "real-child-dialog",
+        revision: 1,
+        sequence: 1,
+        occurredAt: "2026-07-19T00:00:01.000Z",
+        phase: "action",
+        state: "action_requesting",
+        action: "send",
+        executionState: "accepted",
+        capabilities: { actionLocked: true, canStop: false },
+      }),
+    );
+    const processing = store.applyTurnLifecycleEnvelope(
+      createTurnLifecycleEnvelope({
+        eventType: "turn.processing_started",
+        eventId: "authority-child-processing",
+        commandId: "authority-child-command",
+        userId: "user-a",
+        sessionId: "child-session-a",
+        turnScopeId: "workflow-node:node-exec-a",
+        messageId: "event-message-child-a",
+        presentationMessageId: "message-child-a",
+        dialogProcessId: "real-child-dialog",
+        revision: 2,
+        sequence: 2,
+        occurredAt: "2026-07-19T00:00:02.000Z",
+        phase: "processing",
+        state: "processing",
+        action: "send",
+        executionState: "processing",
+        capabilities: { actionLocked: true, canStop: true },
+      }),
+    );
 
     expect(accepted.applied).toBe(true);
     expect(processing.applied).toBe(true);
-    expect(selectTurnMessageRuntime(store.turnRuntimeRegistry, {
-      sessionId: "child-session-a",
-      turnScopeId: "workflow-node:node-exec-a",
-    })).toMatchObject({
+    expect(
+      selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+        sessionId: "child-session-a",
+        turnScopeId: "workflow-node:node-exec-a",
+      }),
+    ).toMatchObject({
       running: true,
       state: "frontend_processing",
       dialogProcessId: "real-child-dialog",
@@ -188,7 +212,10 @@ describe("useChatStore workflow node state registry", () => {
     const store = useChatStore();
 
     applyNodeEvent(store, nodeEvent({ revision: 2, sequence: 3, eventId: "evt-3" }));
-    const stale = applyNodeEvent(store, nodeEvent({ revision: 2, sequence: 2, eventId: "evt-2", status: "failed" }));
+    const stale = applyNodeEvent(
+      store,
+      nodeEvent({ revision: 2, sequence: 2, eventId: "evt-2", status: "failed" }),
+    );
 
     expect(stale.applied).toBe(false);
     expect(storedNode(store).eventId).toBe("evt-3");
@@ -197,9 +224,18 @@ describe("useChatStore workflow node state registry", () => {
   it("keeps duplicate eventId idempotent and rejects same sequence conflicts", () => {
     const store = useChatStore();
 
-    const first = applyNodeEvent(store, nodeEvent({ eventId: "evt-same", revision: 4, sequence: 4, status: "running" }));
-    const duplicate = applyNodeEvent(store, nodeEvent({ eventId: "evt-same", revision: 4, sequence: 4, status: "running" }));
-    const conflict = applyNodeEvent(store, nodeEvent({ eventId: "evt-other", revision: 4, sequence: 4, status: "succeeded" }));
+    const first = applyNodeEvent(
+      store,
+      nodeEvent({ eventId: "evt-same", revision: 4, sequence: 4, status: "running" }),
+    );
+    const duplicate = applyNodeEvent(
+      store,
+      nodeEvent({ eventId: "evt-same", revision: 4, sequence: 4, status: "running" }),
+    );
+    const conflict = applyNodeEvent(
+      store,
+      nodeEvent({ eventId: "evt-other", revision: 4, sequence: 4, status: "succeeded" }),
+    );
 
     expect(first.applied).toBe(true);
     expect(duplicate.applied).toBe(true);
@@ -212,9 +248,33 @@ describe("useChatStore workflow node state registry", () => {
   it("isolates different workflow runs and node executions", () => {
     const store = useChatStore();
 
-    applyNodeEvent(store, nodeEvent({ workflowRunId: "workflow-run-a", nodeExecutionId: "node-a", eventId: "evt-a", sessionId: "child-a" }));
-    applyNodeEvent(store, nodeEvent({ workflowRunId: "workflow-run-a", nodeExecutionId: "node-b", eventId: "evt-b", sessionId: "child-b" }));
-    applyNodeEvent(store, nodeEvent({ workflowRunId: "workflow-run-b", nodeExecutionId: "node-a", eventId: "evt-c", sessionId: "child-c" }));
+    applyNodeEvent(
+      store,
+      nodeEvent({
+        workflowRunId: "workflow-run-a",
+        nodeExecutionId: "node-a",
+        eventId: "evt-a",
+        sessionId: "child-a",
+      }),
+    );
+    applyNodeEvent(
+      store,
+      nodeEvent({
+        workflowRunId: "workflow-run-a",
+        nodeExecutionId: "node-b",
+        eventId: "evt-b",
+        sessionId: "child-b",
+      }),
+    );
+    applyNodeEvent(
+      store,
+      nodeEvent({
+        workflowRunId: "workflow-run-b",
+        nodeExecutionId: "node-a",
+        eventId: "evt-c",
+        sessionId: "child-c",
+      }),
+    );
 
     expect(storedNode(store, "workflow-run-a", "node-a").nodeSessionId).toBe("child-a");
     expect(storedNode(store, "workflow-run-a", "node-b").nodeSessionId).toBe("child-b");
@@ -223,12 +283,20 @@ describe("useChatStore workflow node state registry", () => {
 
   it("deduplicates realtime and reconnect delivery of the same committed fact", () => {
     const store = useChatStore();
-    const committed = nodeEvent({ eventId: "evt-replayed", revision: 7, sequence: 7, status: "succeeded", sessionId: "child-final" });
+    const committed = nodeEvent({
+      eventId: "evt-replayed",
+      revision: 7,
+      sequence: 7,
+      status: "succeeded",
+      sessionId: "child-final",
+    });
 
     expect(applyNodeEvent(store, committed).applied).toBe(true);
     expect(applyNodeEvent(store, { ...committed }).applied).toBe(true);
 
-    expect(Object.keys(store.workflowNodeStateRegistry.workflows["workflow-run-a"].nodes)).toEqual(["node-exec-a"]);
+    expect(Object.keys(store.workflowNodeStateRegistry.workflows["workflow-run-a"].nodes)).toEqual([
+      "node-exec-a",
+    ]);
     expect(storedNode(store).status).toBe("succeeded");
     expect(storedNode(store).nodeSessionId).toBe("child-final");
   });
@@ -253,8 +321,22 @@ describe("useChatStore workflow node state registry", () => {
       turnScopeId: "planning-turn",
       createdAt: "2026-07-19T00:00:00.000Z",
       nodeSessions: [
-        nodeEvent({ nodeExecutionId: "node-a", status: "ready", stepStatus: "ready", eventId: "", revision: undefined, sequence: undefined }),
-        nodeEvent({ nodeExecutionId: "node-b", status: "pending", stepStatus: "pending", eventId: "", revision: undefined, sequence: undefined }),
+        nodeEvent({
+          nodeExecutionId: "node-a",
+          status: "ready",
+          stepStatus: "ready",
+          eventId: "",
+          revision: undefined,
+          sequence: undefined,
+        }),
+        nodeEvent({
+          nodeExecutionId: "node-b",
+          status: "pending",
+          stepStatus: "pending",
+          eventId: "",
+          revision: undefined,
+          sequence: undefined,
+        }),
       ],
     });
 
@@ -283,7 +365,12 @@ describe("useChatStore workflow node state registry", () => {
       workflowRunId: "workflow-run-a",
       nodeSessions: [nodeEvent({ nodeExecutionId: "node-exec-a", status: "ready", sessionId: "" })],
     });
-    expect(applyNodeEvent(store, nodeEvent({ revision: 2, sequence: 3, status: "running", sessionId: "child-live" })).applied).toBe(true);
+    expect(
+      applyNodeEvent(
+        store,
+        nodeEvent({ revision: 2, sequence: 3, status: "running", sessionId: "child-live" }),
+      ).applied,
+    ).toBe(true);
     const stalePlan = applyPlanningEvent(store, {
       workflowRunId: "workflow-run-a",
       nodeSessions: [nodeEvent({ nodeExecutionId: "node-exec-a", status: "ready", sessionId: "" })],
@@ -301,34 +388,46 @@ describe("useChatStore workflow node state registry", () => {
 
     applyPlanningEvent(store, {
       workflowRunId: "workflow-run-a",
-      nodeSessions: [nodeEvent({
-        status: "ready",
-        stepStatus: "ready",
-        revision: 1,
-        sequence: 1,
-        eventId: "plan-ready",
-      })],
+      nodeSessions: [
+        nodeEvent({
+          status: "ready",
+          stepStatus: "ready",
+          revision: 1,
+          sequence: 1,
+          eventId: "plan-ready",
+        }),
+      ],
     });
     expect(storedNode(store)).toMatchObject({ status: "ready" });
     expect(storedNode(store)).not.toHaveProperty("stepStatus");
 
-    expect(applyNodeEvent(store, nodeEvent({
-      status: "running",
-      stepStatus: undefined,
-      revision: 2,
-      sequence: 2,
-      eventId: "node-running",
-    })).applied).toBe(true);
+    expect(
+      applyNodeEvent(
+        store,
+        nodeEvent({
+          status: "running",
+          stepStatus: undefined,
+          revision: 2,
+          sequence: 2,
+          eventId: "node-running",
+        }),
+      ).applied,
+    ).toBe(true);
     expect(storedNode(store)).toMatchObject({ status: "running" });
     expect(storedNode(store)).not.toHaveProperty("stepStatus");
 
-    expect(applyNodeEvent(store, nodeEvent({
-      status: "succeeded",
-      stepStatus: undefined,
-      revision: 3,
-      sequence: 3,
-      eventId: "node-succeeded",
-    })).applied).toBe(true);
+    expect(
+      applyNodeEvent(
+        store,
+        nodeEvent({
+          status: "succeeded",
+          stepStatus: undefined,
+          revision: 3,
+          sequence: 3,
+          eventId: "node-succeeded",
+        }),
+      ).applied,
+    ).toBe(true);
     expect(storedNode(store)).toMatchObject({ status: "succeeded" });
     expect(storedNode(store)).not.toHaveProperty("stepStatus");
   });
@@ -340,46 +439,61 @@ describe("useChatStore workflow node state registry", () => {
       workflowRunId: "workflow-run-a",
       nodeSessions: [nodeEvent({ status: "ready", stepStatus: "ready", revision: 1, sequence: 1 })],
     });
-    applyNodeEvent(store, nodeEvent({
-      status: "succeeded",
-      stepStatus: undefined,
-      revision: 3,
-      sequence: 3,
-      eventId: "node-succeeded",
-    }));
-    const stale = applyNodeEvent(store, nodeEvent({
-      status: "running",
-      stepStatus: "ready",
-      revision: 2,
-      sequence: 2,
-      eventId: "delayed-running",
-    }));
+    applyNodeEvent(
+      store,
+      nodeEvent({
+        status: "succeeded",
+        stepStatus: undefined,
+        revision: 3,
+        sequence: 3,
+        eventId: "node-succeeded",
+      }),
+    );
+    const stale = applyNodeEvent(
+      store,
+      nodeEvent({
+        status: "running",
+        stepStatus: "ready",
+        revision: 2,
+        sequence: 2,
+        eventId: "delayed-running",
+      }),
+    );
 
     expect(stale).toMatchObject({ applied: false, reason: "terminal_state_immutable" });
     expect(storedNode(store)).toMatchObject({ status: "succeeded" });
     expect(storedNode(store)).not.toHaveProperty("stepStatus");
   });
 
-  it.each(["succeeded", "failed", "cancelled", "stopped"])(
+  it.each(["succeeded", "failed", "stopped", "skipped"])(
     "does not reopen the %s terminal state even with a newer running event",
     (terminalStatus) => {
       const store = useChatStore();
-      applyNodeEvent(store, nodeEvent({
-        status: terminalStatus,
-        revision: 3,
-        sequence: 3,
-        eventId: `node-${terminalStatus}`,
-      }));
+      applyNodeEvent(
+        store,
+        nodeEvent({
+          status: terminalStatus,
+          revision: 3,
+          sequence: 3,
+          eventId: `node-${terminalStatus}`,
+        }),
+      );
 
-      const reopened = applyNodeEvent(store, nodeEvent({
-        status: "running",
-        revision: 4,
-        sequence: 4,
-        eventId: `late-running-after-${terminalStatus}`,
-      }));
+      const reopened = applyNodeEvent(
+        store,
+        nodeEvent({
+          status: "running",
+          revision: 4,
+          sequence: 4,
+          eventId: `late-running-after-${terminalStatus}`,
+        }),
+      );
 
       expect(reopened).toMatchObject({ applied: false, reason: "terminal_state_immutable" });
-      expect(storedNode(store)).toMatchObject({ status: terminalStatus, eventId: `node-${terminalStatus}` });
+      expect(storedNode(store)).toMatchObject({
+        status: terminalStatus,
+        eventId: `node-${terminalStatus}`,
+      });
     },
   );
 
@@ -399,7 +513,9 @@ describe("useChatStore workflow node state registry", () => {
       applied: false,
       reason: "missing_workflow_run",
     });
-    expect(applyPlanningEvent(store, { workflowRunId: "workflow-run-a", nodeSessions: [] })).toMatchObject({
+    expect(
+      applyPlanningEvent(store, { workflowRunId: "workflow-run-a", nodeSessions: [] }),
+    ).toMatchObject({
       applied: false,
       reason: "missing_planning_nodes",
     });

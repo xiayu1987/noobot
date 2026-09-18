@@ -99,7 +99,7 @@ describe("useChatSession summary and reconnect state", () => {
       selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-snapshot", "t-snapshot"),
     ).toMatchObject({
       sending: false,
-      displayState: "send",
+      displayState: "",
     });
     expect(store.turnRuntimeRegistry.sessions["s-snapshot"].turns["t-snapshot"].terminal).toBe(
       "completed",
@@ -291,7 +291,7 @@ describe("useChatSession summary and reconnect state", () => {
       selectSessionTurnRuntime(store.turnRuntimeRegistry, sessionId, turnScopeId),
     ).toMatchObject({
       sending: false,
-      displayState: "send",
+      displayState: "",
     });
   });
 
@@ -358,7 +358,7 @@ describe("useChatSession summary and reconnect state", () => {
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-async-refresh")).toMatchObject({
       sending: false,
       canStop: false,
-      displayState: "send",
+      displayState: "",
     });
   });
 

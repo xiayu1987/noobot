@@ -27,10 +27,7 @@ const SUB_TASK_STATUS_TEXT_KEY = Object.freeze({
   [MESSAGE_TERMINAL_OUTCOME.GENERATED]: "message.subtaskDone",
 });
 
-export function useMessageMeta({
-  getMessageItem = () => ({}),
-  getRuntimeView = null,
-} = {}) {
+export function useMessageMeta({ getMessageItem = () => ({}), getRuntimeView = null } = {}) {
   const { translate } = useLocale();
   const { turnRuntimeRegistry } = storeToRefs(useChatStore());
   const messageModelLabel = computed(() => {
@@ -47,12 +44,8 @@ export function useMessageMeta({
 
   const showSubTaskActivity = computed(() => {
     const messageItem = getMessageItem() || {};
-    const completedToolResultLogs = selectCompletedToolArtifacts(
-      messageItem,
-    ).logs;
-    return (
-      completedToolResultLogs.some((logItem) => Number(logItem?.depth || 0) > 1)
-    );
+    const completedToolResultLogs = selectCompletedToolArtifacts(messageItem).logs;
+    return completedToolResultLogs.some((logItem) => Number(logItem?.depth || 0) > 1);
   });
 
   const subTaskStatusText = computed(() => {
@@ -74,30 +67,36 @@ export function useMessageMeta({
 
   watch(
     subTaskStatusSignature,
-    () => logResendDebug("ui.messageMeta", () => {
-      const messageItem = getMessageItem() || {};
-      return {
-        message: summarizeDebugMessage(messageItem),
-        terminalOutcome: normalizeTerminalOutcome(messageItem.terminalOutcome),
-        subTaskStatusText: subTaskStatusText.value,
-      };
-    }),
+    () =>
+      logResendDebug("ui.messageMeta", () => {
+        const messageItem = getMessageItem() || {};
+        return {
+          message: summarizeDebugMessage(messageItem),
+          terminalOutcome: normalizeTerminalOutcome(messageItem.terminalOutcome),
+          subTaskStatusText: subTaskStatusText.value,
+        };
+      }),
     { immediate: true, flush: "post" },
   );
 
   const statusStepState = computed(() => {
     const messageItem = getMessageItem() || {};
-    const turnScopeId = String(messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem)).trim();
+    const turnScopeId = String(
+      messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem),
+    ).trim();
     const turnRuntime = resolveTurnRuntimeByScope(turnRuntimeRegistry.value, turnScopeId, {
       sessionId: String(messageItem?.sessionId || messageItem?.session_id || "").trim(),
     });
-    const projectedRuntime = typeof getRuntimeView === "function" ? getRuntimeView(messageItem) : null;
+    const projectedRuntime =
+      typeof getRuntimeView === "function" ? getRuntimeView(messageItem) : null;
     if (projectedRuntime && projectedRuntime.running === true && !projectedRuntime.terminal) {
-      return resolveStatusStepPresentation({
-        turnRuntime: projectedRuntime,
-        runtimeDisplayState: projectedRuntime.state || STATUS_STEP_STAGE.SENDING,
-        projectedState: messageItem?.projectedStatusStepState,
-      }).displayState || STATUS_STEP_STAGE.SENDING;
+      return (
+        resolveStatusStepPresentation({
+          turnRuntime: projectedRuntime,
+          runtimeDisplayState: projectedRuntime.state || STATUS_STEP_STAGE.SENDING,
+          projectedState: messageItem?.projectedStatusStepState,
+        }).displayState || STATUS_STEP_STAGE.SENDING
+      );
     }
     return resolveStatusStepPresentation({
       turnRuntime,

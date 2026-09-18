@@ -5,7 +5,9 @@
  */
 import {
   getMessageRuntimeChannelState,
+  isLegacyTerminalDiscoveryState,
   isTerminalOutcome,
+  isTurnTerminalNotice,
 } from "../../runtime/sessionRunStateMachine.js";
 import { areTurnScopeIdsEquivalent } from "../messageIdentity.js";
 function normalizeText(value = "") {
@@ -135,8 +137,7 @@ export function isMonotonicMessage(messageItem = {}) {
   if (normalizeText(messageItem.stopState) === "user_stopped") return true;
   const channelState = getMessageRuntimeChannelState(messageItem);
   const state = normalizeText(channelState?.state || messageItem.state || messageItem.status);
-  if (["completed", "done", "user_stopped"].includes(state)) return true;
-  return isTerminalOutcome(messageItem.terminalOutcome);
+  return isLegacyTerminalDiscoveryState(state) || isTerminalOutcome(messageItem.terminalOutcome);
 }
 function isPlainUserMessage(messageItem = {}) {
   if (!isUserMessage(messageItem)) return false;
@@ -181,25 +182,18 @@ export function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
 
 function isTerminalTurnStatusPlaceholder(messageItem = {}) {
   const status = normalizeText(messageItem?.turnStatus?.status || messageItem?.status);
-  return (
-    messageItem?.turnStatusPlaceholder === true &&
-    ["user_stopped", "error", "timeout"].includes(status)
-  );
+  return messageItem?.turnStatusPlaceholder === true && isTurnTerminalNotice(status);
 }
 
 function isMonotonicSource(messageItem = {}) {
   return isTerminalTurnStatusPlaceholder(messageItem) || isMonotonicMessage(messageItem);
 }
 
-function isTerminalRuntimeState(value = "") {
-  return ["completed", "done", "user_stopped", "error", "timeout", "expired", "cancelled"].includes(
-    normalizeText(value),
-  );
-}
-
 function hasAuthoritativeTerminalFact(messageItem = {}, context = {}) {
   const runtimeState = context?.messageRuntime?.state || context?.messageRuntime?.backendState;
-  return Boolean(getMessageTurnScopeId(messageItem)) && isTerminalRuntimeState(runtimeState);
+  return (
+    Boolean(getMessageTurnScopeId(messageItem)) && isLegacyTerminalDiscoveryState(runtimeState)
+  );
 }
 
 function attachTerminalSource(sourceMap, userMessage, sourceMessage) {

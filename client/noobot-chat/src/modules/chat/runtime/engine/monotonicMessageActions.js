@@ -15,7 +15,13 @@ import {
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
 import { nowIso, nowMs } from "../../model/timeFields.js";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import {
+  isStageStatusStepState,
+  SESSION_RUN_EVENT,
+  STATUS_STEP_STAGE,
+  TURN_PENDING_COMMAND_TYPE,
+  TURN_RUNTIME_TERMINAL,
+} from "../sessionRunStateMachine.js";
 import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import {
   confirmTurnRuntimeDeletion,
@@ -121,9 +127,7 @@ export function createMonotonicMessageActions({
   }
 
   function isActiveTurnInFlight() {
-    return ["requesting", "sending", "completing", "stopping"].includes(
-      turnRuntimeDisplayState(activeTurnRuntime()),
-    );
+    return isStageStatusStepState(turnRuntimeDisplayState(activeTurnRuntime()));
   }
 
   async function waitForSendingSettled({
@@ -152,8 +156,9 @@ export function createMonotonicMessageActions({
     const runtime = activeTurnRuntime();
     const runtimeDisplayState = turnRuntimeDisplayState(runtime);
     if (
-      runtimeDisplayState === "stopping" ||
-      (runtimeDisplayState === "requesting" && runtime?.action === "stop")
+      runtimeDisplayState === STATUS_STEP_STAGE.STOPPING ||
+      (runtimeDisplayState === STATUS_STEP_STAGE.REQUESTING &&
+        runtime?.action === TURN_PENDING_COMMAND_TYPE.STOP)
     )
       return false;
     if (!isActiveTurnInFlight()) return true;
@@ -162,7 +167,7 @@ export function createMonotonicMessageActions({
     if (!settled) {
       rejectStopPrecondition();
     }
-    if (activeTurnRuntime()?.terminal === "error") return false;
+    if (activeTurnRuntime()?.terminal === TURN_RUNTIME_TERMINAL.ERROR) return false;
     return true;
   }
 

@@ -12,6 +12,7 @@ import {
   sessionRuntimeId,
   turnRuntimeDisplayState,
 } from "../run-state-machine/turnRuntimeRegistry.js";
+import { isStageStatusStepState } from "../run-state-machine/statusStep.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
 
@@ -82,9 +83,7 @@ export function hasDialogProcessConflictForTurn({
 export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {
   const sessionId = sessionRuntimeId(activeSession?.value);
   const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
-  return ["requesting", "sending", "completing", "stopping"].includes(
-    turnRuntimeDisplayState(turn),
-  );
+  return isStageStatusStepState(turnRuntimeDisplayState(turn));
 }
 
 export function shouldProjectSubSessionEvent(event = "", data = {}) {
