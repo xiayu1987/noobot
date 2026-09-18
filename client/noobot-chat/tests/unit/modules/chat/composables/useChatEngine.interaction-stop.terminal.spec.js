@@ -381,7 +381,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.statusLabel).toBe("");
+    expect(assistant?.terminalOutcome).toBe("");
     expect(assistant?.pending).toBe(false);
     expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-flight").sending).toBe(true);
   });
@@ -426,7 +426,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.statusLabel).not.toBe("chat.generated");
+    expect(assistant?.terminalOutcome).not.toBe("generated");
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
@@ -466,7 +466,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(false);
     expect(assistant?.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
-    expect(assistant?.statusLabelKey || assistant?.statusLabel).not.toBe("chat.generated");
+    expect(assistant?.terminalOutcome || assistant?.terminalOutcome).not.toBe("generated");
   });
 
   it("terminal channel_state without an Authority event does not converge the Turn", async () => {

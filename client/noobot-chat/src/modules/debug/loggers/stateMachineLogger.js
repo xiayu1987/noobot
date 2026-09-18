@@ -35,9 +35,8 @@ export function summarizeStateMachineMessage(message = {}) {
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",
     pending: message.pending === true,
     channelState: channelState?.state || "",
-    statusLabelKey: message.statusLabelKey || "",
-    statusLabel: message.statusLabel || "",
-    hasRuntimeMark: Boolean(message[SESSION_RUN_MESSAGE_RUNTIME_MARK] || message.runtimeMark),
+    terminalOutcome: message.terminalOutcome || "",
+    hasRuntimeMark: Boolean(message[SESSION_RUN_MESSAGE_RUNTIME_MARK]),
     contentLength: String(message.content || message.text || message.message || "").length,
   };
 }

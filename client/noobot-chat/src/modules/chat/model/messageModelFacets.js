@@ -66,7 +66,7 @@ function buildMessageStatusFacet(canonicalMessage = {}) {
     state: canonicalMessage.state || "",
     status: canonicalMessage.status || "",
     channelState: canonicalMessage.channelState || "",
-    statusLabel: canonicalMessage.statusLabel || "",
+    terminalOutcome: canonicalMessage.terminalOutcome || "",
     statusTurnScopeId: String(canonicalMessage.statusTurnScopeId || "").trim(),
     projectedStatusStepState: normalizeStatusStepDisplayState(
       canonicalMessage.projectedStatusStepState,

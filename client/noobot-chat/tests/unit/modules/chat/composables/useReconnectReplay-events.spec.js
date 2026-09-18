@@ -288,7 +288,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stop",
     );
     expect(refs.sending.value).toBe(false);
-    expect(assistant?.statusLabelKey).toBeUndefined();
+    expect(assistant?.terminalOutcome).toBeUndefined();
     expect(assistant?.channelState).toBeUndefined();
     expect(assistant?.pending).toBe(true);
   });

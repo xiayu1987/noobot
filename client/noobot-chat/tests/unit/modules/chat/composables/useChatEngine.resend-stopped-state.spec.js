@@ -97,7 +97,7 @@ describe("useChatEngine.resend stopped state", () => {
       role: RoleEnum.ASSISTANT,
       content: "partial",
       pending: false,
-      statusLabel: "chat.stopped",
+      terminalOutcome: "stopped",
       channelState: {
         state: "user_stopped",
         turnScopeId: stoppedTurnScopeId,
@@ -151,7 +151,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:stopped-old",
       role: RoleEnum.ASSISTANT,
       content: "partial stopped",
-      statusLabel: "chat.stopped",
+      terminalOutcome: "stopped",
       stopState: "user_stopped",
     };
     const replaceSessionTurnApi = vi.fn(async () => ({
@@ -222,7 +222,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:repeat-old",
       role: RoleEnum.ASSISTANT,
       content: "partial",
-      statusLabel: "chat.stopped",
+      terminalOutcome: "stopped",
       stopState: "user_stopped",
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
@@ -249,7 +249,7 @@ describe("useChatEngine.resend stopped state", () => {
         turnScopeId: replacementUser.turnScopeId,
       }),
     );
-    expect(placeholder.statusLabel).toBe("");
+    expect(placeholder.terminalOutcome).toBe("");
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
@@ -324,7 +324,7 @@ describe("useChatEngine.resend stopped state", () => {
         role: RoleEnum.ASSISTANT,
         content: "partial",
         pending: false,
-        statusLabel: "chat.stopped",
+        terminalOutcome: "stopped",
         turnScopeId: stopped.turnScopeId,
         dialogProcessId: stopped.dialogProcessId,
         channelState: {
@@ -493,7 +493,7 @@ describe("useChatEngine.resend stopped state", () => {
         role: RoleEnum.ASSISTANT,
         content: "partial",
         pending: false,
-        statusLabel: "chat.stopped",
+        terminalOutcome: "stopped",
         stopState: "user_stopped",
         channelState: { state: "user_stopped", turnScopeId: "client-turn:old" },
       },
@@ -510,7 +510,7 @@ describe("useChatEngine.resend stopped state", () => {
     firstReplacementUser.stopState = "stopped";
     firstReplacementUser.monotonicState = "monotonic";
     firstReplacementAssistant.pending = false;
-    firstReplacementAssistant.statusLabel = "chat.stopped";
+    firstReplacementAssistant.terminalOutcome = "stopped";
     firstReplacementAssistant.stopState = "stopped";
     firstReplacementAssistant.channelState = {
       state: "user_stopped",
@@ -534,7 +534,7 @@ describe("useChatEngine.resend stopped state", () => {
         role: RoleEnum.ASSISTANT,
         content: "",
         pending: false,
-        statusLabel: "",
+        terminalOutcome: "",
         turnScopeId: secondReplacementUser.turnScopeId,
       }),
     );
@@ -591,7 +591,7 @@ describe("useChatEngine.resend stopped state", () => {
             role: RoleEnum.ASSISTANT,
             content: "historical partial",
             pending: false,
-            statusLabel: "chat.stopped",
+            terminalOutcome: "stopped",
             dialogProcessId: "dp-old-stopped",
             channelState: {
               state: "user_stopped",
@@ -633,7 +633,7 @@ describe("useChatEngine.resend stopped state", () => {
         role: RoleEnum.ASSISTANT,
         content: "partial",
         pending: false,
-        statusLabel: "chat.stopped",
+        terminalOutcome: "stopped",
         channelState: { state: "user_stopped", turnScopeId: "client-turn:first" },
       },
     ];
@@ -647,7 +647,7 @@ describe("useChatEngine.resend stopped state", () => {
         message.role === RoleEnum.ASSISTANT && message.turnScopeId !== "client-turn:history",
     );
     firstAssistant.pending = false;
-    firstAssistant.statusLabel = "chat.stopped";
+    firstAssistant.terminalOutcome = "stopped";
     firstAssistant.channelState = {
       state: "user_stopped",
       turnScopeId: firstAssistant.turnScopeId,
@@ -723,7 +723,7 @@ describe("useChatEngine.resend stopped state", () => {
       role: RoleEnum.ASSISTANT,
       content: "partial",
       pending: false,
-      statusLabel: "chat.stopped",
+      terminalOutcome: "stopped",
       channelState: { state: "user_stopped", turnScopeId: "client-turn:old-stopped" },
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
@@ -745,7 +745,7 @@ describe("useChatEngine.resend stopped state", () => {
       turnScopeId: "client-turn:old-stopped",
       role: RoleEnum.ASSISTANT,
       content: "old stopped partial",
-      statusLabel: "chat.stopped",
+      terminalOutcome: "stopped",
       stopState: "user_stopped",
     };
     const replaceSessionTurnApi = vi.fn(
@@ -798,7 +798,7 @@ describe("useChatEngine.resend stopped state", () => {
         content: "",
         pending: false,
         turnScopeId: replacementUser.turnScopeId,
-        statusLabel: "",
+        terminalOutcome: "",
       }),
     );
     expect(stream).toHaveBeenCalledTimes(1);

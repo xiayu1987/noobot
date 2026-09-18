@@ -44,7 +44,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-e",
     );
     expect(assistant?.pending).toBe(true);
-    expect(assistant?.statusLabel).toBeUndefined();
+    expect(assistant?.terminalOutcome).toBeUndefined();
     expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe("useReconnectReplay", () => {
         message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done-only",
     );
     expect(assistant?.pending).toBe(true);
-    expect(assistant?.statusLabel).toBeUndefined();
+    expect(assistant?.terminalOutcome).toBeUndefined();
     expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
@@ -112,7 +112,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done",
     );
     expect(assistant?.pending).toBe(true);
-    expect(assistant?.statusLabel).toBeUndefined();
+    expect(assistant?.terminalOutcome).toBeUndefined();
     expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
@@ -193,7 +193,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stopped",
     );
     expect(assistant?.pending).toBe(true);
-    expect(assistant?.statusLabel).toBeUndefined();
+    expect(assistant?.terminalOutcome).toBeUndefined();
     expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();

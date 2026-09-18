@@ -140,7 +140,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
     expect(assistant?.pending).toBe(false);
-    expect(assistant?.statusLabel).toBe("");
+    expect(assistant?.terminalOutcome).toBe("");
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith({
       type: "error",
@@ -171,7 +171,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
 
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
-    expect(assistant?.statusLabel).not.toBe("chat.generated");
+    expect(assistant?.terminalOutcome).not.toBe("generated");
     expect(assistant?.error).not.toBe("chat.expiredRefreshFailed");
     expect(notify).not.toHaveBeenCalled();
   });

@@ -7,11 +7,6 @@ import { nowIso } from "../../model/timeFields.js";
 import { messages } from "noobot-i18n/client/messages";
 import { foldConversationMessages } from "../../model/messageModel.js";
 import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
-import {
-  BackendChannelState,
-  BackendTerminalStates,
-  FrontendRunState,
-} from "../sessionRunStateMachine.js";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -274,7 +269,7 @@ export function buildWorkflowMessageSignature(messageItem = {}) {
 export function patchAssistantFromWorkflowMessage(targetMessage = null, workflowMessageItem = {}) {
   if (!targetMessage || !workflowMessageItem) return false;
   const previousPending = Boolean(targetMessage.pending);
-  const previousStatusLabel = String(targetMessage.statusLabel || "");
+  const previousTerminalOutcome = String(targetMessage.terminalOutcome || "");
   const previousToolTimeline = targetMessage.toolTimeline;
   const previousActivityTimeline = targetMessage.activityTimeline;
   const previousHasFirstStreamEvent = targetMessage.hasFirstStreamEvent === true;
@@ -285,7 +280,7 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
   Object.assign(targetMessage, normalizedWorkflowMessage || workflowMessageItem);
   targetMessage.content = stripInternalEventPlaceholderLines(targetMessage.content);
   targetMessage.pending = previousPending;
-  targetMessage.statusLabel = previousStatusLabel;
+  targetMessage.terminalOutcome = previousTerminalOutcome;
   if (previousToolTimeline !== undefined) targetMessage.toolTimeline = previousToolTimeline;
   if (previousActivityTimeline !== undefined)
     targetMessage.activityTimeline = previousActivityTimeline;
@@ -320,19 +315,4 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
     ts: normalizeTrimmedString(data?.ts || logItem?.ts) || nowIso(),
     text,
   };
-}
-
-export function isInFlightConversationState(state = "") {
-  return [
-    BackendChannelState.SENDING,
-    BackendChannelState.INTERACTION_PENDING,
-    BackendChannelState.STOPPING,
-    BackendChannelState.RECONNECTING,
-  ].includes(normalizeTrimmedString(state));
-}
-
-export function isTerminalConversationState(state = "") {
-  return [...BackendTerminalStates, FrontendRunState.CANCELLED].includes(
-    normalizeTrimmedString(state),
-  );
 }

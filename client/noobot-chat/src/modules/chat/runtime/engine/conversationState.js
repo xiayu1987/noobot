@@ -8,16 +8,13 @@ import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
 } from "../interactionPayload.js";
-import {
-  isBlankCompatibleSameId,
-  isInFlightConversationState,
-  isTerminalConversationState,
-  normalizeTrimmedString,
-} from "./utils.js";
+import { isBlankCompatibleSameId, normalizeTrimmedString } from "./utils.js";
 import {
   BackendChannelState,
   clearRememberedStopRequests,
   getMessageRuntimeChannelState,
+  isInFlightChannelState,
+  isTerminalChannelState,
 } from "../sessionRunStateMachine.js";
 import {
   getMessageDialogProcessId,
@@ -200,7 +197,7 @@ export function createChatEngineConversationState({
     const runtimeState = normalizeTrimmedString(
       getMessageRuntimeChannelState(messageItem)?.state || messageItem?.channelState,
     );
-    return messageItem.pending === false && isTerminalConversationState(runtimeState);
+    return messageItem.pending === false && isTerminalChannelState(runtimeState);
   }
 
   function applyConversationState(
@@ -274,7 +271,7 @@ export function createChatEngineConversationState({
       }
       markUserMessageDialogProcessId({ targetAssistantMessage, dialogProcessId });
     }
-    if (isInFlightConversationState(state)) {
+    if (isInFlightChannelState(state)) {
       if (isTerminalAssistantMessage(targetAssistantMessage)) {
         logResendDebug("conversationState.inFlight.skipFinalized", () => ({
           state,
@@ -304,7 +301,7 @@ export function createChatEngineConversationState({
       }
       return;
     }
-    if (!isTerminalConversationState(state)) return;
+    if (!isTerminalChannelState(state)) return;
     clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
     clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
     if (!pendingInteractionRequest.value) {

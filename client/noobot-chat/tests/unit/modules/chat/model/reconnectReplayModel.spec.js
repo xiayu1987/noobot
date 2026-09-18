@@ -235,7 +235,7 @@ describe("reconnectReplayModel", () => {
       transferEnvelopes: [envelope],
       thinkingOpenNames: ["thinking-panel"],
       expandedToolDetailKeys: ["k1"],
-      statusLabel: "pending",
+      terminalOutcome: "pending",
     };
 
     patchMessageObjectPreservingUiState(target, {
@@ -244,7 +244,7 @@ describe("reconnectReplayModel", () => {
       modelRuns: [],
       completedToolLogs: [],
       realtimeLogs: [],
-      statusLabel: "generated",
+      terminalOutcome: "generated",
     });
 
     expect(target.content).toBe("existing content");
@@ -253,7 +253,7 @@ describe("reconnectReplayModel", () => {
     expect(target.completedToolLogs).toEqual([{ id: 1 }]);
     expect(target.realtimeLogs).toEqual([{ id: 1 }]);
     expect(target.transferEnvelopes).toEqual([envelope]);
-    expect(target.statusLabel).toBe("pending");
+    expect(target.terminalOutcome).toBe("pending");
   });
 
   it("patchMessageObjectPreservingUiState merges distinct V2 transfer envelopes", () => {

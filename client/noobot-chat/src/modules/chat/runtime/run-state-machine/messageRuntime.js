@@ -14,6 +14,7 @@ import {
   FrontendRunState,
   FrontendTerminalStates,
   MESSAGE_IN_FLIGHT_CHANNEL_STATES,
+  MESSAGE_TERMINAL_OUTCOME,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
@@ -187,7 +188,6 @@ export function buildInFlightMessageRuntimePatch(stateItem = {}) {
   };
   return {
     [SESSION_RUN_MESSAGE_RUNTIME_MARK]: buildSessionRunMessageRuntimeKey(stateItem),
-    runtimeMark: buildSessionRunMessageRuntimeKey(stateItem),
     pending: true,
     channelState,
   };
@@ -203,8 +203,7 @@ export function buildClearMessageRuntimePatch({
     channelState: {
       state: FrontendRunState.FRONTEND_COMPLETED,
     },
-    statusLabelKey: "chat.generated",
-    statusLabelPolicy: "if_empty",
+    terminalOutcome: MESSAGE_TERMINAL_OUTCOME.GENERATED,
   };
 }
 
@@ -218,7 +217,7 @@ export function buildFailedMessageRuntimePatch({
     channelState: {
       state: normalizeState(stateSnapshot?.state) || BackendChannelState.ERROR,
     },
-    statusLabelKey: "chat.failed",
+    terminalOutcome: MESSAGE_TERMINAL_OUTCOME.FAILED,
   };
 }
 
@@ -238,7 +237,7 @@ export function buildStoppedMessageRuntimePatch({
       sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
       seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
     },
-    statusLabelKey: "chat.stopped",
+    terminalOutcome: MESSAGE_TERMINAL_OUTCOME.STOPPED,
   };
 }
 
@@ -347,5 +346,3 @@ export function resolveSessionRunMessageRuntimePatch({
   }
   return { action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.NONE };
 }
-
-export const resolveSessionRunMessageRuntimeEffect = resolveSessionRunMessageRuntimePatch;

@@ -134,7 +134,7 @@ export const makeMessage = (role, content = "", attachments = []) => ({
   content,
   attachments,
   pending: false,
-  statusLabel: "",
+  terminalOutcome: "",
   realtimeLogs: [],
   executionLogTotal: 0,
   tool_calls: [],

@@ -56,7 +56,7 @@ describe("useChatEngine.resend replacement turn state", () => {
       role: RoleEnum.ASSISTANT,
       content: "partial",
       pending: false,
-      statusLabel: "chat.stopped",
+      terminalOutcome: "stopped",
       stopState: "user_stopped",
       channelState: { state: "user_stopped", turnScopeId: "client-turn:first-old" },
     };
@@ -81,7 +81,7 @@ describe("useChatEngine.resend replacement turn state", () => {
         role: RoleEnum.ASSISTANT,
         content: "",
         pending: false,
-        statusLabel: "",
+        terminalOutcome: "",
         turnScopeId: replacementUser.turnScopeId,
       }),
     );

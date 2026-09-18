@@ -73,7 +73,7 @@ export function createCanonicalAssistant({
     turnScopeId: normalizeIdentityPart(turnScopeId, `turn-${normalizedDialogProcessId}`),
     content,
     pending: true,
-    statusLabel: "",
+    terminalOutcome: "",
     realtimeLogs: [],
     ...extra,
   };
@@ -328,7 +328,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
   };
 
   const appendMessage = vi.fn((role, content = "") => {
-    const msg = { role, content, pending: false, statusLabel: "", realtimeLogs: [] };
+    const msg = { role, content, pending: false, terminalOutcome: "", realtimeLogs: [] };
     activeSession.value.messages.push(msg);
     activeSession.value.rawMessages.push(msg);
     return msg;

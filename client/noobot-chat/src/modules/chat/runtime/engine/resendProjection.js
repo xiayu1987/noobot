@@ -129,7 +129,7 @@ export async function projectResendReplacement(context) {
     replacementUserMessage.attachments || [],
     pendingDisplayAttachments,
   );
-  delete replacementUserMessage.statusLabel;
+  delete replacementUserMessage.terminalOutcome;
   if (operation) messageOperationStore?.updateOperation(operation.opId, { status: "sending" });
   applyRunStateEvent?.({
     type: SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,

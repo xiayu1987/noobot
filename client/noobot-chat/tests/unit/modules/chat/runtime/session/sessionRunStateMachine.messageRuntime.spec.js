@@ -219,7 +219,7 @@ describe("sessionRunStateMachine message runtime", () => {
         dialogProcessId: "d1",
         turnScopeId: "turn-1",
       },
-      statusLabel: "已停止",
+      terminalOutcome: "stopped",
     };
     const activeSession = {
       id: "s1",
