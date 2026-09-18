@@ -170,6 +170,76 @@ test("processToolResults commits result policy from its authoritative batch call
   assert.deepEqual(committed[0].call.contextPolicy, policy);
 });
 
+test("processToolResults accepts only a successful task_summary result", async () => {
+  const runtime = createRuntime();
+  const committed = [];
+  const loopState = { errorLogger: null, toolConsecutiveFailureCount: 0 };
+  const modelState = {
+    runtime,
+    abortSignal: null,
+    eventListener: () => {},
+    agentContext: createTestAgentExecutionScope(runtime),
+  };
+  const stateCommitter = {
+    async pushToolResult(result) {
+      committed.push(result);
+    },
+  };
+
+  const rejected = await processToolResults({
+    modelState,
+    loopState,
+    turn: 1,
+    calls: [
+      {
+        id: "summary-rejected",
+        name: "task_summary",
+        args: { summaryContent: "invalid summary" },
+      },
+    ],
+    toolMap: new Map([
+      [
+        "task_summary",
+        {
+          async invoke() {
+            return { ok: false, code: "RECOVERABLE_INVALID_TOOL_INPUT" };
+          },
+        },
+      ],
+    ]),
+    stateCommitter,
+  });
+  assert.deepEqual(rejected.taskSummaryOutcome, { attempted: true, accepted: false });
+  assert.equal(loopState.taskSummaryTriggered, undefined);
+
+  const accepted = await processToolResults({
+    modelState,
+    loopState,
+    turn: 2,
+    calls: [
+      {
+        id: "summary-accepted",
+        name: "task_summary",
+        args: { summaryContent: "valid summary" },
+      },
+    ],
+    toolMap: new Map([
+      [
+        "task_summary",
+        {
+          async invoke() {
+            return { ok: true };
+          },
+        },
+      ],
+    ]),
+    stateCommitter,
+  });
+  assert.deepEqual(accepted.taskSummaryOutcome, { attempted: true, accepted: true });
+  assert.equal(loopState.taskSummaryTriggered, true);
+  assert.equal(committed.length, 2);
+});
+
 test("processToolResults consumes queued user interjections only after the tool batch persists", async () => {
   const runtime = createRuntime();
   const order = [];

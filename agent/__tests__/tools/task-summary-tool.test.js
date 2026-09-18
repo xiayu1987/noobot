@@ -84,3 +84,15 @@ test("task_summary rejects non-protocol text without mutating summary state", as
   assert.equal(systemRuntime.phaseSummaryLoopCount, 3);
   assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
 });
+
+test("task_summary rejects calls that were not requested by the runtime", async () => {
+  const { tool, systemRuntime } = createTool();
+  systemRuntime.needsPhaseSummary = false;
+  await assert.rejects(
+    tool.invoke({ summaryContent: summaryContent() }),
+    (error) => error?.code === "RECOVERABLE_CONTROL_TOOL_NOT_REQUESTED",
+  );
+  assert.equal(systemRuntime.needsPhaseSummary, false);
+  assert.equal(systemRuntime.phaseSummaryLoopCount, 3);
+  assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
+});

@@ -327,7 +327,7 @@ export function createTurnOrchestrator({
         });
       }
 
-      const { toolCallResults, hasTaskSummaryCall, hasHelpCall } = await processToolResultsFn({
+      const { toolCallResults, taskSummaryOutcome, hasHelpCall } = await processToolResultsFn({
         modelState,
         loopState,
         turn,
@@ -348,7 +348,7 @@ export function createTurnOrchestrator({
         hasHelpCall,
       });
 
-      if (hasTaskSummaryCall) {
+      if (taskSummaryOutcome?.accepted === true) {
         const incrementalMessages = Array.isArray(
           loopState?.modelContext?.messageBlocks?.incremental,
         )

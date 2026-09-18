@@ -18,6 +18,11 @@ import {
   createTurnCommitFingerprint,
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
+import {
+  completedSemanticTransferMigrationNames,
+  createSemanticTransferMigration,
+  migrateSemanticTransfers,
+} from "./semantic-transfer-migrations.js";
 
 export const SESSION_REPAIR_PROTOCOL_VERSION = 1;
 
@@ -323,7 +328,7 @@ function validateTransferCollections(value) {
   return false;
 }
 
-function migrateMessage(message = {}, sessionId = "", index = 0) {
+function migrateMessage(message = {}, sessionId = "", index = 0, transferMigration = null) {
   const hadSessionId = Object.hasOwn(message, "sessionId");
   const next = { ...message, sessionId: text(message.sessionId || sessionId) };
   let changed = false;
@@ -376,6 +381,9 @@ function migrateMessage(message = {}, sessionId = "", index = 0) {
     };
     delete next.turnCommit.idempotencyKey;
     changed = true;
+  }
+  if (transferMigration) {
+    changed ||= migrateSemanticTransfers(next, transferMigration);
   }
   validateTransferCollections(next);
   if (!hadSessionId) delete next.sessionId;
@@ -492,6 +500,7 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
   }
   const next = structuredClone(document);
   const sessionId = text(next.sessionId || suppliedSessionId);
+  const transferMigration = createSemanticTransferMigration(next);
   let changed = false;
   const migrations = [];
   const lifecycle =
@@ -663,7 +672,7 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
   }
   if (Array.isArray(next.messages)) {
     next.messages = next.messages.map((message, index) => {
-      const result = migrateMessage(message, sessionId, index);
+      const result = migrateMessage(message, sessionId, index, transferMigration);
       changed ||= result.changed;
       return result.message;
     });
@@ -675,10 +684,11 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
     migrations.push("completed-turn-summary-marks");
   }
   if (next.message && typeof next.message === "object" && !Array.isArray(next.message)) {
-    const result = migrateMessage(next.message, sessionId, 0);
+    const result = migrateMessage(next.message, sessionId, 0, transferMigration);
     next.message = result.message;
     changed ||= result.changed;
   }
+  migrations.push(...completedSemanticTransferMigrationNames(transferMigration));
   const replacementDialogProcessId = (replacement = {}) => {
     const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
     const replacementUserMessageId = text(replacement.replacementUserMessageId);

@@ -43,6 +43,11 @@ export function createTaskSummaryTool(ctx = {}) {
       contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY),
     },
     func: async ({ summaryContent }) => {
+      if (systemRuntime.needsPhaseSummary !== true) {
+        throw recoverableToolError(tTool(runtime, "tools.task_summary.notRequested"), {
+          code: ERROR_CODE.RECOVERABLE_CONTROL_TOOL_NOT_REQUESTED,
+        });
+      }
       const summaryText = String(summaryContent || "").trim();
       if (!summaryText) {
         throw recoverableToolError(tTool(runtime, "tools.task_summary.summaryContentRequired"), {

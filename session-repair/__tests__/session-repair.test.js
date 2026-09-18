@@ -74,6 +74,107 @@ function aggregateConflictContinuationSession({ withCommittedMessage = false } =
   };
 }
 
+function historicalMultimodalParseEnvelope(overrides = {}) {
+  return {
+    protocol: "noobot.semantic-transfer",
+    version: 2,
+    transferId: "transfer:multimodal-parse-1",
+    messageId: "message-1",
+    identity: {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      runId: "run-1",
+      producer: { type: "tool", id: "call-1" },
+    },
+    direction: "output",
+    payload: {
+      mode: "attachment",
+      attachments: [
+        {
+          identity: {
+            attachmentId: "attachment-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
+          role: "primary",
+          name: "result.multimodal-parse.multimodal_model.md",
+          mimeType: "text/markdown",
+          size: 10,
+        },
+      ],
+    },
+    intent: {
+      source: "tool",
+      reason: "multimodal_parse_tool",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
+    meta: { persisted: true, attributes: { mode: "multimodal_model" } },
+    ...overrides,
+  };
+}
+
+function multimodalParseMigrationSession(envelope = historicalMultimodalParseEnvelope()) {
+  return {
+    sessionId: "session-1",
+    turnLifecycle: { turns: {}, commandReceipts: [] },
+    messages: [
+      {
+        messageUid: "assistant-1",
+        role: "assistant",
+        transferEnvelopes: [structuredClone(envelope)],
+      },
+      {
+        messageUid: "tool-1",
+        role: "tool",
+        toolName: "multimodal_parse",
+        tool_call_id: "call-1",
+        transferEnvelopes: [structuredClone(envelope)],
+      },
+    ],
+  };
+}
+
+test("migrates the historical multimodal parse reason from verified tool transfers", () => {
+  const result = migrateSessionDocument(multimodalParseMigrationSession());
+
+  assert.equal(result.changed, true);
+  assert.ok(result.migrations.includes("semantic-transfer-multimodal-parse-reason-v1"));
+  assert.deepEqual(
+    result.document.messages.map((message) => message.transferEnvelopes[0].intent.reason),
+    ["multimodal_parse_artifact", "multimodal_parse_artifact"],
+  );
+
+  const repeated = migrateSessionDocument(result.document);
+  assert.equal(repeated.changed, false);
+  assert.deepEqual(repeated.migrations, []);
+  assert.deepEqual(repeated.document, result.document);
+});
+
+test("keeps unrelated unknown transfer reasons fail-closed during Session repair", () => {
+  const envelope = historicalMultimodalParseEnvelope({
+    intent: {
+      source: "tool",
+      reason: "unregistered_tool_reason",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
+  });
+  assert.throws(
+    () => migrateSessionDocument(multimodalParseMigrationSession(envelope)),
+    /unknown_transfer_reason:unregistered_tool_reason/,
+  );
+});
+
+test("rejects the historical reason without matching multimodal tool-call evidence", () => {
+  const session = multimodalParseMigrationSession();
+  session.messages[1].tool_call_id = "different-call";
+  assert.throws(
+    () => migrateSessionDocument(session),
+    /unknown_transfer_reason:multimodal_parse_tool/,
+  );
+});
+
 test("reconciles execution index metadata through one repair function", () => {
   const result = reconcileExecutionSegmentIndex(
     { segments: [{ file: "segment-1.jsonl", bytes: 1, records: 1 }] },

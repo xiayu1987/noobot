@@ -327,15 +327,26 @@ function sanitizeText(text = "", options = {}) {
     options.personalInformation === false ? String(text || "") : sanitizePersonalInformation(text);
   return options.secrets === false ? value : sanitizeSecrets(value);
 }
+function sanitizeStructuredStrings(value, options = {}) {
+  if (typeof value === "string") {
+    return /^sha256:[a-f0-9]{64}$/.test(value) ? value : sanitizeText(value, options);
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeStructuredStrings(item, options));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [key, sanitizeStructuredStrings(child, options)]),
+  );
+}
 function sanitizeToolResultText(toolResultText = "", options = {}) {
   const text = String(toolResultText || "");
-  let fieldSanitized = text;
+  let parsed;
   try {
-    fieldSanitized = JSON.stringify(sanitizeSensitiveFields(JSON.parse(text)));
+    parsed = JSON.parse(text);
   } catch {
-    fieldSanitized = text;
+    return sanitizeText(text, options);
   }
-  return sanitizeText(fieldSanitized, options);
+  const fieldSanitized = sanitizeSensitiveFields(parsed);
+  return JSON.stringify(sanitizeStructuredStrings(fieldSanitized, options));
 }
 function sanitizeHeaders(headers = {}, options = {}) {
   return sanitizeSensitiveFields(headers, 0, { replacement: options.replacement || "[REDACTED]" });

@@ -14,6 +14,7 @@ import {
   getSessionIdsFromAgentContext,
   getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
+import { resolveControlToolOutcome } from "../control-tool-outcome.js";
 
 function updateToolFailureState({ modelState, loopState, toolCallResult }) {
   const runtime = modelState?.runtime || {};
@@ -75,14 +76,12 @@ export async function processToolResults({
   );
   const toolCallResults = toolCallSettlements.map((settlement) => settlement.result);
 
-  const hasTaskSummaryCall = toolCallResults.some(
-    (result) => String(result?.call?.name || "").trim() === TOOL_NAME.TASK_SUMMARY,
-  );
+  const taskSummaryOutcome = resolveControlToolOutcome(toolCallResults, TOOL_NAME.TASK_SUMMARY);
   const hasHelpCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === HELP_TOOL_NAME,
   );
 
-  if (hasTaskSummaryCall) {
+  if (taskSummaryOutcome.accepted) {
     loopState.taskSummaryTriggered = true;
   }
 
@@ -127,7 +126,7 @@ export async function processToolResults({
       toolCallCount: calls.length,
       calls,
       toolCallResults,
-      hasTaskSummaryCall,
+      taskSummaryOutcome,
       hasHelpCall,
       agentContext: modelState?.agentContext || null,
     }),
@@ -135,7 +134,7 @@ export async function processToolResults({
 
   return {
     toolCallResults,
-    hasTaskSummaryCall,
+    taskSummaryOutcome,
     hasHelpCall,
   };
 }

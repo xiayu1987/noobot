@@ -113,6 +113,20 @@ test("does not interpret digit runs inside protocol hashes as bank cards", async
   assert.equal(JSON.parse(output).contentHash, contentHash);
 });
 
+test("preserves nested protocol hashes while sanitizing adjacent structured values", async () => {
+  const contentHash = "sha256:d5c15623271639f818df4053c0d8818311e18e238821e4f7f03ac410c614d5e8";
+  const output = await sanitizeToolResultText(
+    JSON.stringify({
+      summary: { contentHash, abstract: "mail jane@example.com" },
+      messages: ["phone +86 13812345678"],
+    }),
+  );
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.summary.contentHash, contentHash);
+  assert.equal(parsed.summary.abstract, "mail xxxx@xxxxxxx.xxx");
+  assert.equal(parsed.messages[0], "phone +xx xxxxxxxxxxx");
+});
+
 test("masks short bearer tokens without changing content shape", () => {
   const input = "authorization=Bearer test.jwt.token";
   const output = sanitizeSecrets(input);

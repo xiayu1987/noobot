@@ -17,6 +17,7 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       },
     },
     texts: {
+      "tools.task_summary.notRequested": "系统未请求阶段小结，请继续当前任务。",
       "tools.task_summary.summaryContentRequired": "summaryContent 必填",
       "tools.task_summary.summaryProtocolInvalid":
         "summaryContent 不符合 NOOBOT_TASK_SUMMARY/1 协议",
