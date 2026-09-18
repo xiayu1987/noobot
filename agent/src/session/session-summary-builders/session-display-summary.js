@@ -56,13 +56,19 @@ function hasMatchingSessionId(payload, sessionId) {
   return !normalizedSessionId || String(payload?.sessionId || "").trim() === normalizedSessionId;
 }
 
+function assertValidTransferEnvelopes(payload) {
+  if (hasValidTransferEnvelopes(payload)) return;
+  const error = new Error("Session display summary contains an invalid transfer envelope");
+  error.code = "SESSION_DISPLAY_SUMMARY_TRANSFER_INVALID";
+  throw error;
+}
+
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
   return (
     hasExpectedSummaryVersions(payload) &&
     hasValidSourceRevision(payload) &&
-    hasMatchingSessionId(payload, sessionId) &&
-    hasValidTransferEnvelopes(payload)
+    hasMatchingSessionId(payload, sessionId)
   );
 }
 
@@ -122,7 +128,7 @@ export function buildSessionDisplaySummary(session = {}) {
   const { messages, turnTimings, sessionId, lifecycle } = context;
   const displayMessages = buildSessionDisplayMessages({ messages, lifecycle, sessionId });
   const toolArtifactStats = attachSessionToolArtifacts(session, displayMessages, sessionId);
-  return {
+  const summary = {
     schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
     source: {
       sessionSchemaVersion: SESSION_SOURCE_SCHEMA_VERSION,
@@ -144,4 +150,6 @@ export function buildSessionDisplaySummary(session = {}) {
     messages: displayMessages,
     stats: buildSessionDisplayStats({ messages, displayMessages, ...toolArtifactStats }),
   };
+  assertValidTransferEnvelopes(summary);
+  return summary;
 }
