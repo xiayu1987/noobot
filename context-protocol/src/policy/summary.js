@@ -17,25 +17,35 @@ import {
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message.js";
 import { markContextMessageSummarized, resolveContextMessageSummarized } from "../message/codec.js";
-import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../message/injected-types.js";
+import {
+  SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES,
+  SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES,
+} from "../message/injected-types.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
 
 const summaryCheckpointControlTypes = new Set(SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES);
+const summaryAlwaysRetainedInjectedTypes = new Set(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES);
 
 export function isSummaryCheckpointControlMessage(message = {}) {
   return summaryCheckpointControlTypes.has(readMessageField(message, "noobotInternalMessageType"));
 }
 
-function collectLatestInjectedMessageIndexes(messages = []) {
+function collectRetainedInjectedMessageIndexes(messages = []) {
   const latest = new Map();
+  const retained = new Set();
   (Array.isArray(messages) ? messages : []).forEach((message, index) => {
     if (!isInjectedMessage(message)) return;
     const type = resolveInjectedMessageType(message);
     if (!type) return;
+    if (summaryAlwaysRetainedInjectedTypes.has(type)) {
+      retained.add(index);
+      return;
+    }
     const owner = readMessageField(message, "injectedBy") || "injected";
     latest.set(`${owner}:${type}`, index);
   });
-  return new Set(latest.values());
+  for (const index of latest.values()) retained.add(index);
+  return retained;
 }
 
 function resolveToolCallName(call = {}) {
@@ -146,7 +156,7 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
   {
     messages = [],
     index = -1,
-    latestInjectedIndexes = null,
+    retainedInjectedIndexes = null,
     latestCheckpointBoundaryIndexes = null,
     latestCheckpointEvidenceIndexes = null,
     policyOptions = {},
@@ -155,11 +165,11 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
   const source = Array.isArray(messages) ? messages : [];
   if (isSummaryCheckpointControlMessage(message)) return true;
   const injected = isInjectedMessage(message, policyOptions);
-  const latestInjected =
-    latestInjectedIndexes instanceof Set
-      ? latestInjectedIndexes
-      : collectLatestInjectedMessageIndexes(source, policyOptions);
-  if (injected && latestInjected.has(index)) return false;
+  const retainedInjected =
+    retainedInjectedIndexes instanceof Set
+      ? retainedInjectedIndexes
+      : collectRetainedInjectedMessageIndexes(source, policyOptions);
+  if (injected && retainedInjected.has(index)) return false;
   if (injected) return true;
   const latestBoundary =
     latestCheckpointBoundaryIndexes instanceof Set
@@ -184,7 +194,7 @@ function summaryScope(messages, { policyOptions }) {
   const toolBatchIndex = createToolCallBatchIndex(source);
   return {
     source,
-    latestInjectedIndexes: collectLatestInjectedMessageIndexes(source, policyOptions),
+    retainedInjectedIndexes: collectRetainedInjectedMessageIndexes(source, policyOptions),
     latestCheckpointBoundaryIndexes: collectLatestFlowControlMessageIndexesByToolIdentity(
       source,
       FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
@@ -400,7 +410,7 @@ export function collectScopedMessagesToSummarize(
   const retentionDimensions = summaryScope(retentionSource, { policyOptions });
   const preservedInjected = collectPreservedMessages(
     retentionSource,
-    retentionDimensions.latestInjectedIndexes,
+    retentionDimensions.retainedInjectedIndexes,
   );
   const preservedCheckpointBoundaries = collectPreservedMessages(
     retentionSource,

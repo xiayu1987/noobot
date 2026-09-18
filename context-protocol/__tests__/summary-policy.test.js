@@ -10,6 +10,7 @@ import {
   collectDialogScopedMessagesToSummarize,
   collectLatestCheckpointEvidenceMessageIndexes,
   collectScopedMessagesToSummarize,
+  isSummaryCheckpointControlMessage,
   resolveSummaryScope,
   markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
@@ -340,4 +341,30 @@ test("summary policy marks restored guidance when a newer guidance exists", () =
 
   assert.equal(result[0].summarized, true);
   assert.equal(result[1].summarized, undefined);
+});
+
+test("user interjection is a retained injection category, not a checkpoint control", () => {
+  const messages = [
+    {
+      role: "user",
+      content: "先记住这条",
+      injectedMessage: true,
+      injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    },
+    {
+      role: "user",
+      content: "再记住这条",
+      injectedMessage: true,
+      injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    },
+  ];
+
+  assert.equal(isSummaryCheckpointControlMessage(messages[0]), false);
+  assert.deepEqual(
+    markCurrentTurnArraySummarized(messages).map((message) => message.summarized),
+    [undefined, undefined],
+  );
+  assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, []);
 });

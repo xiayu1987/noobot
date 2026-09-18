@@ -24,6 +24,7 @@ import {
   waitForCommand,
   waitForLifecycle,
 } from "../helpers/scenario-assertions.js";
+import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
 import { assertSerializedModelMessageSnapshot } from "../helpers/snapshot-assertions.js";
 import { toolEventsForTurn } from "../helpers/thinking-tool-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
@@ -249,6 +250,20 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
       event.payload.contentFact.timestamp,
     ]),
   );
+  const secondPersistedInterjection = persistedInterjections.find(
+    (message) => message.content === secondText,
+  );
+  const earlierPersistedInterjection = persistedInterjections.find(
+    (message) => message.content === firstText,
+  );
+  expect(earlierPersistedInterjection).toMatchObject({
+    injectedMessageType: INTERJECTION_TYPE,
+    summarized: false,
+  });
+  expect(secondPersistedInterjection).toMatchObject({
+    injectedMessageType: INTERJECTION_TYPE,
+    summarized: false,
+  });
 
   const executionRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   const continuedTraces = modelInvocationTraces(executionRecords)
@@ -295,4 +310,47 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
   await expect(shell.locator('[data-thinking-block="user-interjection"]')).toContainText(
     secondText,
   );
+
+  const secondTurnOffset = commandsForSession(protocolCapture, noobot.sessionId).length;
+  await sendMessage(noobot.page, uniquePrompt(testInfo, "第二轮只回复已完成，不调用工具。"));
+  const secondSend = await waitForCommand(
+    protocolCapture,
+    noobot.sessionId,
+    "turn.send",
+    secondTurnOffset,
+  );
+  await waitForNaturalCompletion({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    turnScopeId: secondSend.identity.turnScopeId,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
+  });
+  const secondTurnRecords = await waitForSessionExecutionEventTree(
+    noobot.userId,
+    noobot.sessionId,
+    (records) =>
+      modelInvocationTraces(records).some(
+        (record) =>
+          record.turnScopeId === secondSend.identity.turnScopeId &&
+          isMainAgentModelInvocation(record),
+      ),
+  );
+  const secondTurnInvocations = modelInvocationTraces(secondTurnRecords).filter(
+    (record) =>
+      record.turnScopeId === secondSend.identity.turnScopeId && isMainAgentModelInvocation(record),
+  );
+  expect(secondTurnInvocations.length).toBeGreaterThan(0);
+  expect(
+    secondTurnInvocations.some((invocation) =>
+      persistedInterjections.every((interjection) =>
+        invocation.data.messages.preview.some(
+          (message) =>
+            message.messageId === interjection.messageUid &&
+            message.injectedMessageType === INTERJECTION_TYPE &&
+            message.contentPreview === interjection.content,
+        ),
+      ),
+    ),
+  ).toBe(true);
 });

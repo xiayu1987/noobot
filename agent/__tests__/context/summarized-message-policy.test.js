@@ -14,6 +14,7 @@ import {
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "@noobot/context-protocol/policy/summary";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
+import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -285,7 +286,7 @@ test("system is summarized while user and assistant-without-tool-calls are not",
   );
 });
 
-test("markCurrentTurnArraySummarized preserves only latest injected message per type", () => {
+test("markCurrentTurnArraySummarized preserves every user interjection and latest ordinary injection", () => {
   const result = markCurrentTurnArraySummarized([
     {
       role: "user",
@@ -325,8 +326,80 @@ test("markCurrentTurnArraySummarized preserves only latest injected message per 
   assert.equal(result[0].summarized, true);
   assert.equal(result[1].summarized, undefined);
   assert.equal(result[2].summarized, undefined);
-  assert.equal(result[3].summarized, true);
+  assert.equal(result[3].summarized, undefined);
   assert.equal(result[4].summarized, undefined);
+});
+
+test("user interjections remain fully retained through completion and history", () => {
+  const latestGuidance = {
+    messageUid: "guidance-latest",
+    role: "user",
+    type: "message",
+    content: "latest guidance",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "separate_model_relay:guidance",
+    summarized: false,
+  };
+  const userInterjection = {
+    messageUid: "user-interjection:command:test",
+    role: "user",
+    type: "message",
+    content: "不要动呼吸效果",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    injectedMessage: true,
+    injectedMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    summarized: false,
+  };
+  const earlierUserInterjection = {
+    ...userInterjection,
+    messageUid: "user-interjection:command:earlier",
+    content: "先记住这条",
+  };
+  const oldGuidance = {
+    messageUid: "guidance-old",
+    role: "user",
+    type: "message",
+    content: "old guidance",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "separate_model_relay:guidance",
+    summarized: false,
+  };
+  const store = createCurrentTurnMessagesStore([
+    oldGuidance,
+    latestGuidance,
+    earlierUserInterjection,
+    userInterjection,
+  ]);
+
+  markCurrentTurnStoreSummarized(store);
+
+  const retained = store.toArray();
+  assert.equal(retained.find((message) => message.messageUid === "guidance-old").summarized, true);
+  assert.equal(
+    retained.find((message) => message.messageUid === "guidance-latest").summarized,
+    false,
+  );
+  assert.equal(
+    retained.find((message) => message.messageUid === earlierUserInterjection.messageUid)
+      .summarized,
+    false,
+  );
+  assert.equal(
+    retained.find((message) => message.messageUid === userInterjection.messageUid).summarized,
+    false,
+  );
+  assert.deepEqual(
+    resolveModelHistoryMessages({ sourceMessages: retained }).map((message) => message.messageUid),
+    [latestGuidance.messageUid, earlierUserInterjection.messageUid, userInterjection.messageUid],
+  );
 });
 
 test("markCurrentTurnModelMessagesSummarized includes restored old injections and preserves latest per type", () => {
