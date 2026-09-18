@@ -7,7 +7,10 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { createSessionServices } from "../../src/session/index.js";
+import {
+  createSessionServices,
+  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
+} from "../../src/session/index.js";
 import {
   canonicalMessages,
   withTempWorkspace,
@@ -75,6 +78,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
     const scope = await repository.resolveSessionScope(userId, sessionId, "");
     const summaryFile = path.join(scope.sessionDir, "session-summary.json");
     const staleSummary = JSON.parse(await readFile(summaryFile, "utf8"));
+    staleSummary.schemaVersion = SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION - 1;
     staleSummary.messages[0].transferEnvelopes[0].intent.reason = "multimodal_parse_tool";
     await writeFile(summaryFile, JSON.stringify(staleSummary), "utf8");
 
