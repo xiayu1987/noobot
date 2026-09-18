@@ -6,6 +6,7 @@
 import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
 import { TURN_EVENT } from "./turn-event.js";
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./turn-state.js";
+import { TURN_EXECUTION_STATE, normalizeTurnExecutionState } from "./turn-execution-state.js";
 
 const EVENT_STATE = Object.freeze({
   [TURN_EVENT.ACTION_ACCEPTED]: TURN_STATE.ACTION_REQUESTING,
@@ -49,12 +50,10 @@ export function deriveTurnEventType(state = "", { action = "" } = {}) {
 }
 
 export function deriveTurnExecutionState(eventType = "", current = "") {
-  if (eventType === TURN_EVENT.COMPLETED) return "completed";
-  if (eventType === TURN_EVENT.STOP_COMPLETED) return "user_stopped";
-  if (eventType === TURN_EVENT.FAILED) return "error";
-  return String(current || "")
-    .trim()
-    .toLowerCase();
+  if (eventType === TURN_EVENT.COMPLETED) return TURN_EXECUTION_STATE.COMPLETED;
+  if (eventType === TURN_EVENT.STOP_COMPLETED) return TURN_EXECUTION_STATE.USER_STOPPED;
+  if (eventType === TURN_EVENT.FAILED) return TURN_EXECUTION_STATE.ERROR;
+  return normalizeTurnExecutionState(current);
 }
 
 export function decideTurnTransition({ current = null, eventType = "", phase = "" } = {}) {

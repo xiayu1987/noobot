@@ -5,6 +5,7 @@
  */
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { TURN_STATE } from "./turn-state.js";
+import { TURN_EXECUTION_STATE, normalizeTurnExecutionState } from "./turn-execution-state.js";
 import { text as clean } from "../normalize.js";
 
 export function normalizeTurnContinuationSource(source = null) {
@@ -28,7 +29,7 @@ export function decideTurnContinuation({ lifecycle = {}, turnScopeId = "", sourc
     !sourceTurn ||
     clean(sourceTurn.dialogProcessId) !== identity.dialogProcessId ||
     sourceTurn.state !== TURN_STATE.STOP_COMPLETED ||
-    sourceTurn.executionState !== "user_stopped"
+    normalizeTurnExecutionState(sourceTurn.executionState) !== TURN_EXECUTION_STATE.USER_STOPPED
   ) {
     return Object.freeze({ allowed: false, reason: "continue_source_not_stopped" });
   }

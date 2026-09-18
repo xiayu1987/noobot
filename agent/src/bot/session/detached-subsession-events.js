@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { projectExecutionTransportPayload } from "../../events/transport-payload.js";
+import { TURN_STATE, TURN_TERMINAL_STATUS } from "@noobot/session-protocol";
 
 export function createDetachedTerminalReceipt({
   lifecycle = null,
@@ -27,9 +28,11 @@ export function createDetachedTerminalReceipt({
 }
 
 function resolveDetachedReceiptState(sourceState, failed) {
-  if (sourceState === "completed") return "completed";
-  if (sourceState === "user_stopped") return "stop_completed";
-  if (failed || ["failed", "interrupted"].includes(sourceState)) return "processing_failed";
+  if (sourceState === TURN_TERMINAL_STATUS.COMPLETED) return TURN_STATE.COMPLETED;
+  if (sourceState === TURN_TERMINAL_STATUS.USER_STOPPED) return TURN_STATE.STOP_COMPLETED;
+  if (failed || ["failed", "interrupted"].includes(sourceState)) {
+    return TURN_STATE.PROCESSING_FAILED;
+  }
   return sourceState;
 }
 
