@@ -459,14 +459,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
       JSON.stringify({ schemaVersion: 4, sessionId: "B", depth: 2, messages: [] }),
       "utf8",
     );
-    await assert.rejects(
-      runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "B" }),
-      (error) => error?.code === "SESSION_DISPLAY_SUMMARY_MAINTENANCE_REQUIRED",
-    );
+    const displayBeforeMaintenance = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "B",
+    });
+    assert.equal(displayBeforeMaintenance.sessions[0].messages.length, 6);
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
       userId,
     });
-    assert.deepEqual(maintenance.rebuiltSessionIds, ["B"]);
+    assert.deepEqual(maintenance.rebuiltSessionIds, []);
     const displayData = await runtime.sessionCrudService.getSessionDisplayData({
       userId,
       sessionId: "B",

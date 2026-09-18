@@ -7,7 +7,6 @@ import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import {
   buildSessionDisplaySummary,
   SESSION_DETAIL_MESSAGE_PROJECTION,
-  isSessionDisplaySummaryPayload,
 } from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
@@ -336,26 +335,6 @@ export class SessionCrudService {
               currentParentSessionId,
             )
           : null;
-      const canonicalMessageCount =
-        typeof this.sessionRepo?.getTurnMessageCount === "function"
-          ? await this.sessionRepo.getTurnMessageCount(
-              userId,
-              currentSessionId,
-              currentParentSessionId,
-            )
-          : 0;
-      const summaryCurrent =
-        isSessionDisplaySummaryPayload(summary, currentSessionId) &&
-        canonicalMessageCount <=
-          Number(summary?.stats?.messageCount || summary?.messages?.length || 0);
-      if (!summaryCurrent) {
-        const error = new Error(
-          `session display summary requires maintenance: ${currentSessionId}`,
-        );
-        error.code = "SESSION_DISPLAY_SUMMARY_MAINTENANCE_REQUIRED";
-        error.statusCode = 503;
-        throw error;
-      }
       if (!summary) continue;
       sessions.push(
         await projectSessionAttachmentState({
@@ -395,29 +374,13 @@ export class SessionCrudService {
     for (const sessionId of sessionIds) {
       const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
       try {
-        const artifactMaintenance = await this.sessionRepo.maintainCanonicalSessionArtifacts(
+        const result = await this.sessionRepo.ensureSessionDisplaySummary(
           userId,
           sessionId,
           parentSessionId,
         );
-        if (artifactMaintenance?.migrated === true) migratedSessionIds.push(sessionId);
-        const summary = await this.sessionRepo.readSessionDisplaySummary(
-          userId,
-          sessionId,
-          parentSessionId,
-        );
-        const canonicalMessageCount = await this.sessionRepo.getTurnMessageCount(
-          userId,
-          sessionId,
-          parentSessionId,
-        );
-        const current =
-          isSessionDisplaySummaryPayload(summary, sessionId) &&
-          canonicalMessageCount <=
-            Number(summary?.stats?.messageCount || summary?.messages?.length || 0);
-        if (current) continue;
-        await this.sessionRepo.rebuildSessionDisplaySummary(userId, sessionId, parentSessionId, {});
-        rebuiltSessionIds.push(sessionId);
+        if (result.migrated) migratedSessionIds.push(sessionId);
+        if (result.rebuilt) rebuiltSessionIds.push(sessionId);
       } catch (error) {
         failures.push({
           sessionId,

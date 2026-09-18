@@ -6,7 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { isSessionDisplaySummaryPayload } from "./session-summary-builders.js";
+import { buildSessionDisplaySummary } from "./session-summary-builders.js";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import {
   buildSessionArtifactFileMap,
@@ -18,11 +18,12 @@ import {
   readJsonlArtifactFile,
 } from "./session-artifact-execution-logs.js";
 import {
-  readSessionArtifact,
+  readSessionArtifactForRepair,
   writeExecutionArtifact,
   writeSessionArtifact,
   writeTaskArtifact,
 } from "./session-artifact-session.js";
+import { normalizeSessionDocumentForCurrentProtocol } from "./session-document-normalization.js";
 
 function createSessionDeletedSnapshotError(sessionId = "") {
   const error = new Error(`session has been deleted: ${String(sessionId || "").trim()}`);
@@ -182,9 +183,8 @@ export async function readSessionArtifactSnapshot({
     throw error;
   }
   const files = buildSessionArtifactFileMap(outputDir);
-  const [session, sessionSummaryRaw, task, execution, executionLogs, meta] = await Promise.all([
-    readSessionArtifact({ sessionDir: outputDir, fallback: null }),
-    readJsonArtifactFile(files.sessionSummary, null),
+  const [sessionRaw, task, execution, executionLogs, meta] = await Promise.all([
+    readSessionArtifactForRepair({ sessionDir: outputDir, fallback: null }),
     readJsonArtifactFile(files.task, null),
     readJsonArtifactFile(files.execution, null),
     includeExecutionLogs
@@ -192,12 +192,12 @@ export async function readSessionArtifactSnapshot({
       : Promise.resolve([]),
     readJsonArtifactFile(files.meta, null),
   ]);
-  const sessionSummary = isSessionDisplaySummaryPayload(
-    sessionSummaryRaw,
-    String(session?.sessionId || "").trim(),
-  )
-    ? sessionSummaryRaw
+  const session = sessionRaw
+    ? normalizeSessionDocumentForCurrentProtocol(sessionRaw, {
+        sessionId: String(sessionRaw?.sessionId || "").trim(),
+      }).document
     : null;
+  const sessionSummary = session ? buildSessionDisplaySummary(session) : null;
   if (
     snapshotManifest &&
     String(snapshotManifest.sessionId || "") !== String(session?.sessionId || "")

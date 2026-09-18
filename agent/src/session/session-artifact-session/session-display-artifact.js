@@ -26,7 +26,8 @@ export async function readSessionDisplaySummaryArtifact({
     fallback: null,
   });
   if (!isSessionDisplaySummaryPayload(payload, sessionId)) return null;
-  return hydrateSessionSummaryDetails({ storageService, sessionDir, payload });
+  const hydrated = await hydrateSessionSummaryDetails({ storageService, sessionDir, payload });
+  return isSessionDisplaySummaryPayload(hydrated, sessionId) ? hydrated : null;
 }
 
 export async function rebuildSessionDisplaySummaryArtifact({
