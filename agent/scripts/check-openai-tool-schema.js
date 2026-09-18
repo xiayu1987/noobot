@@ -28,7 +28,10 @@ function parseArgs(argv = []) {
   const out = {
     userId: "admin",
     live: false,
+    bindName: "",
     model: "",
+    prompt: "",
+    toolNames: [],
     globalConfigPath: "",
     workspaceRoot: "",
   };
@@ -40,7 +43,10 @@ function parseArgs(argv = []) {
     }
     const hasValueFlag = [
       "--userId",
+      "--bind-name",
       "--model",
+      "--prompt",
+      "--tool",
       "--config",
       "--global-config",
       "--globalConfigPath",
@@ -50,8 +56,17 @@ function parseArgs(argv = []) {
     if (!hasValueFlag) continue;
     const value = String(argv[argIndex + 1] || "").trim();
     if (arg === "--userId") out.userId = value || out.userId;
+    else if (arg === "--bind-name") out.bindName = value;
     else if (arg === "--model") out.model = value;
-    else if (arg === "--config" || arg === "--global-config" || arg === "--globalConfigPath") {
+    else if (arg === "--prompt") out.prompt = value;
+    else if (arg === "--tool") {
+      out.toolNames.push(
+        ...value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      );
+    } else if (arg === "--config" || arg === "--global-config" || arg === "--globalConfigPath") {
       out.globalConfigPath = value;
     } else if (arg === "--workspace-root" || arg === "--workspaceRoot") {
       out.workspaceRoot = value;
@@ -59,6 +74,36 @@ function parseArgs(argv = []) {
     argIndex += 1;
   }
   return out;
+}
+
+function filterToolsByNames(tools = [], toolNames = []) {
+  const requested = new Set(
+    (Array.isArray(toolNames) ? toolNames : [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean),
+  );
+  if (!requested.size) return tools;
+  return tools.filter((tool) => requested.has(String(tool?.name || "").trim()));
+}
+
+function formatSchemaIssues(error) {
+  const issues = Array.isArray(error?.issues) ? error.issues : [];
+  if (!issues.length) return String(error?.message || error || "unknown schema error");
+  return issues
+    .map((issue) => {
+      const fieldPath = Array.isArray(issue?.path) ? issue.path.join(".") : "";
+      return `${fieldPath || "(root)"}: ${String(issue?.message || "invalid value")}`;
+    })
+    .join("; ");
+}
+
+async function assertToolCallMatchesSchema(tool, call) {
+  if (!tool?.schema || typeof tool.schema.safeParseAsync !== "function") {
+    throw new TypeError(`tool ${String(tool?.name || "(unknown)")} has no parseable schema`);
+  }
+  const parsed = await tool.schema.safeParseAsync(call?.args);
+  if (parsed.success) return parsed.data;
+  throw new Error(`model returned invalid tool arguments: ${formatSchemaIssues(parsed.error)}`);
 }
 
 function resolveScriptPaths({ globalConfigPath = "", workspaceRoot = "" } = {}) {
@@ -254,10 +299,18 @@ async function main() {
   });
   const tools = await buildTools({ agentContext });
   const mergedTools = dedupeToolsByName(tools);
-  const targetTools = await selectToolsInteractive(mergedTools);
+  const requestedTools = filterToolsByNames(mergedTools, args.toolNames);
+  const targetTools = args.toolNames.length
+    ? requestedTools
+    : await selectToolsInteractive(requestedTools);
 
   if (!targetTools.length) {
     console.log("[tool-schema-check] no tools matched");
+    return;
+  }
+  if (args.bindName && targetTools.length !== 1) {
+    console.error("[tool-schema-check] --bind-name requires exactly one selected tool");
+    process.exitCode = 1;
     return;
   }
 
@@ -336,19 +389,26 @@ async function main() {
   for (const item of targetTools) {
     try {
       const toolName = String(item?.name || "").trim();
+      const boundTool = args.bindName
+        ? Object.assign(Object.create(Object.getPrototypeOf(item)), item, { name: args.bindName })
+        : item;
+      const boundToolName = String(boundTool?.name || "").trim();
+      const displayName = boundToolName === toolName ? toolName : `${toolName} as ${boundToolName}`;
       const result = await modelPort.invoke({
         model: modelSpec,
         messages: [
           {
             role: "user",
-            content: [
-              "请调用工具完成测试。",
-              `工具名：${toolName}`,
-              "要求：必须发起一次 tool call；参数可使用最小可行占位值。",
-            ].join("\n"),
+            content:
+              args.prompt ||
+              [
+                "请调用工具完成测试。",
+                `工具名：${boundToolName}`,
+                "要求：必须发起一次 tool call；参数可使用最小可行占位值。",
+              ].join("\n"),
           },
         ],
-        tools: [item],
+        tools: [boundTool],
         options: {
           streaming: false,
           toolBinding: { tool_choice: "auto" },
@@ -367,16 +427,22 @@ async function main() {
       });
       const toolCalls = result.output.toolCalls;
       const hasExpectedToolCall = toolCalls.some(
-        (call) => String(call?.name || "").trim() === toolName,
+        (call) => String(call?.name || "").trim() === boundToolName,
       );
       if (!hasExpectedToolCall) {
         throw new Error("model did not choose expected tool");
       }
-      console.log(`[tool-schema-check] live pass: ${toolName}`);
+      const expectedCall = toolCalls.find(
+        (call) => String(call?.name || "").trim() === boundToolName,
+      );
+      await assertToolCallMatchesSchema(item, expectedCall);
+      console.log(`[tool-schema-check] live pass: ${displayName}`);
     } catch (error) {
       const message = String(error?.message || error || "");
       liveErrors.push({ name: String(item?.name || ""), error: message });
-      console.error(`[tool-schema-check] live fail: ${String(item?.name || "")} -> ${message}`);
+      const configuredName = String(item?.name || "");
+      const displayName = args.bindName ? `${configuredName} as ${args.bindName}` : configuredName;
+      console.error(`[tool-schema-check] live fail: ${displayName} -> ${message}`);
     }
   }
 

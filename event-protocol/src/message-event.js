@@ -8,6 +8,10 @@ import {
   validateSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
 import { text } from "./normalize.js";
+import {
+  THINKING_DETAIL_CONTENT_KIND,
+  isThinkingDetailContentFact,
+} from "./thinking-detail-content-fact.js";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
@@ -20,6 +24,7 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
   THINKING: "thinking",
   TOOL_CALL_START: "tool_call_start",
   TOOL_CALL_END: "tool_call_end",
+  USER_INTERJECTION: "user_interjection",
 });
 
 export const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
@@ -151,6 +156,25 @@ export function validateMessageEventPayload(value) {
   ) {
     errors.push("missing_text");
   }
+  if (eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
+    if (!isThinkingDetailContentFact(value?.contentFact)) {
+      errors.push("invalid_user_interjection_content_fact");
+    } else if (value.contentFact.contentKind !== THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION) {
+      errors.push("invalid_user_interjection_content_kind");
+    } else {
+      for (const [field, error] of [
+        ["timestamp", "missing_user_interjection_fact_timestamp"],
+        ["sessionId", "missing_user_interjection_fact_session_id"],
+        ["dialogProcessId", "missing_user_interjection_fact_dialog_process_id"],
+        ["turnScopeId", "missing_user_interjection_fact_turn_scope_id"],
+        ["messageId", "missing_user_interjection_fact_message_id"],
+        ["presentationMessageId", "missing_user_interjection_fact_presentation_message_id"],
+      ]) {
+        if (!text(value.contentFact[field])) errors.push(error);
+      }
+    }
+    if (!text(value?.dialogProcessId)) errors.push("missing_user_interjection_dialog_process_id");
+  }
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START) {
     if (!text(value?.tool)) errors.push("missing_tool");
     if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
@@ -219,6 +243,16 @@ export function projectMessageEventMetadata(event = {}) {
   if (modelAlias) metadata.modelAlias = modelAlias;
   if (modelName) metadata.modelName = modelName;
   return Object.freeze(metadata);
+}
+
+export function projectUserInterjectionContentFact(event = {}) {
+  if (
+    text(event?.eventType) !== MESSAGE_EVENT_TYPE.USER_INTERJECTION ||
+    !isThinkingDetailContentFact(event?.contentFact)
+  ) {
+    return null;
+  }
+  return event.contentFact;
 }
 
 export function projectAuthoritativeFinalMessage(event = {}) {

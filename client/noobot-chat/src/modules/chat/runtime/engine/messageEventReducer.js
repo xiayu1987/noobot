@@ -10,8 +10,10 @@ import {
   projectAuthoritativeFinalMessage,
   projectMessageEventContent,
   projectMessageEventMetadata,
+  projectUserInterjectionContentFact,
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
+import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import {
   initializeMessageEventState,
@@ -108,6 +110,19 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
       result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
       applied: true,
     };
+  }
+
+  if (event.payload.eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
+    const contentFact = projectUserInterjectionContentFact(event.payload);
+    if (!contentFact) {
+      return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID };
+    }
+    targetMessage.thinkingContentTimeline = reduceThinkingDetailContentTimelines(
+      targetMessage.thinkingContentTimeline,
+      [contentFact],
+    );
+    targetMessage.hasThinkingDetails = true;
+    return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap });
   }
 
   const contentProjection = projectMessageEventContent(event.payload);

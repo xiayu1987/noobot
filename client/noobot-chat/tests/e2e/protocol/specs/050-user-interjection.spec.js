@@ -38,6 +38,15 @@ function commandReceipts(capture) {
     .map(({ data }) => data);
 }
 
+function userInterjectionEvents(capture) {
+  return findProtocolObjects(capture.websocketReceived)
+    .filter(
+      ({ event, data }) =>
+        event === "message_event" && data?.payload?.eventType === "user_interjection",
+    )
+    .map(({ data }) => data);
+}
+
 async function waitForCompletedReceipt(capture, commandId) {
   return waitForCaptured(() =>
     commandReceipts(capture).find(
@@ -120,7 +129,7 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
   assertSerializedModelMessageSnapshot(stoppedSnapshots[0]);
 
   const continuationOffset = commandsForSession(protocolCapture, noobot.sessionId).length;
-  const shortCommand = `node -e "setTimeout(()=>console.log('PBE050-CONTINUE'),4000)"`;
+  const shortCommand = `node -e "setTimeout(()=>console.log('PBE050-CONTINUE'),8000)"`;
   await sendMessage(
     noobot.page,
     `继续，并调用一次 execute_script 执行这个精确命令，等待工具返回后再回答：${shortCommand}`,
@@ -157,6 +166,9 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
     firstInterjectionOffset,
   );
   await waitForCompletedReceipt(protocolCapture, firstInterjection.commandId);
+  let shell = await openLatestThinkingPanel(noobot.page);
+  let latestInterjection = shell.locator('[data-thinking-block="user-interjection"]');
+  await expect(latestInterjection).toContainText(firstText);
 
   const secondText = "PBE050-INTERJECTION-SECOND";
   const secondInterjectionOffset = commandsForSession(protocolCapture, noobot.sessionId).length;
@@ -168,6 +180,10 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
     secondInterjectionOffset,
   );
   await waitForCompletedReceipt(protocolCapture, secondInterjection.commandId);
+  shell = await openLatestThinkingPanel(noobot.page);
+  latestInterjection = shell.locator('[data-thinking-block="user-interjection"]');
+  await expect(latestInterjection).toContainText(secondText);
+  await expect(latestInterjection).not.toContainText(firstText);
 
   for (const command of [firstInterjection, secondInterjection]) {
     expect(command.identity).toMatchObject({
@@ -177,6 +193,32 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
     expect(command.identity.dialogProcessId).toBeTruthy();
   }
   expect(firstInterjection.identity).toEqual(secondInterjection.identity);
+  const authorityInterjections = userInterjectionEvents(protocolCapture).filter((event) =>
+    [firstInterjection.commandId, secondInterjection.commandId].includes(
+      event.causality?.commandId,
+    ),
+  );
+  expect(
+    authorityInterjections.map((event) => [
+      event.causality.commandId,
+      event.payload.contentFact.contentId,
+      event.payload.contentFact.sequence,
+      event.payload.contentFact.text,
+    ]),
+  ).toEqual([
+    [
+      firstInterjection.commandId,
+      `message:user-interjection:${firstInterjection.commandId}`,
+      1,
+      firstText,
+    ],
+    [
+      secondInterjection.commandId,
+      `message:user-interjection:${secondInterjection.commandId}`,
+      2,
+      secondText,
+    ],
+  ]);
 
   await waitForNaturalCompletion({
     page: noobot.page,
@@ -192,10 +234,21 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
       message.injectedMessageType === INTERJECTION_TYPE &&
       message.turnScopeId === continued.identity.turnScopeId,
   );
-  expect(persistedInterjections.map((message) => [message.content, message.messageUid])).toEqual([
-    [firstText, `user-interjection:${firstInterjection.commandId}`],
-    [secondText, `user-interjection:${secondInterjection.commandId}`],
-  ]);
+  expect(
+    persistedInterjections.map((message) => [
+      message.content,
+      message.messageUid,
+      message.interjectionSequence,
+      message.ts,
+    ]),
+  ).toEqual(
+    authorityInterjections.map((event) => [
+      event.payload.contentFact.text,
+      event.payload.contentFact.sourceMessageUid,
+      event.payload.contentFact.sequence,
+      event.payload.contentFact.timestamp,
+    ]),
+  );
 
   const executionRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   const continuedTraces = modelInvocationTraces(executionRecords)
@@ -222,8 +275,8 @@ test("@core PBE-050 首轮可停止且用户插话按 FIFO 注入、持久化并
     secondText,
   ]);
 
-  let shell = await openLatestThinkingPanel(noobot.page);
-  const latestInterjection = shell.locator('[data-thinking-block="user-interjection"]');
+  shell = await openLatestThinkingPanel(noobot.page);
+  latestInterjection = shell.locator('[data-thinking-block="user-interjection"]');
   await expect(latestInterjection).toContainText(secondText);
   await expect(latestInterjection).not.toContainText(firstText);
   await shell.locator(".thinking-detail-action-button").click();

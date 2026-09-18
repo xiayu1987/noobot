@@ -11,6 +11,7 @@ import {
 import { projectCanonicalActivityTimelineEvent } from "@noobot/event-protocol/activity-timeline";
 
 const IDENTITY_FIELDS = new Set(["eventId", "sessionId", "turnScopeId", "messageId"]);
+const CAUSALITY_FIELDS = new Set(["commandId", "causationId", "correlationId"]);
 const ORDERING_FIELDS = new Set([
   "sequence",
   "sequenceDomain",
@@ -41,7 +42,13 @@ export function canonicalMessageEvent(overrides = {}) {
   };
   const payload = {};
   for (const [key, value] of Object.entries(values)) {
-    if (IDENTITY_FIELDS.has(key) || ORDERING_FIELDS.has(key) || key === "occurredAt") continue;
+    if (
+      IDENTITY_FIELDS.has(key) ||
+      CAUSALITY_FIELDS.has(key) ||
+      ORDERING_FIELDS.has(key) ||
+      key === "occurredAt"
+    )
+      continue;
     payload[key] = value;
   }
   return {
@@ -58,7 +65,11 @@ export function canonicalMessageEvent(overrides = {}) {
       turnScopeId: values.turnScopeId,
       messageId: values.messageId,
     },
-    causality: {},
+    causality: Object.fromEntries(
+      [...CAUSALITY_FIELDS]
+        .filter((field) => values[field] !== undefined)
+        .map((field) => [field, values[field]]),
+    ),
     ordering: {
       domain: values.sequenceDomain || MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: values.sequenceScopeId || values.messageId,

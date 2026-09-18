@@ -135,6 +135,38 @@ test("appendTurns persists the canonical internal control message type", async (
   assert.equal(session.messages[0].chatPresentation, false);
 });
 
+test("appendTurns preserves canonical user interjection time and sequence", async () => {
+  const session = { currentTaskId: "", messages: [] };
+  const service = {
+    now: () => "2026-09-18T01:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: { findById: async () => session, save: async () => {} },
+  };
+
+  await appendTurns.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    turns: [
+      {
+        messageUid: "user-interjection:command-1",
+        role: "user",
+        type: "message",
+        content: "accepted constraint",
+        dialogProcessId: "dp",
+        turnScopeId: "t",
+        injectedMessage: true,
+        injectedMessageType: "noobot.user_interjection",
+        interjectionSequence: 1,
+        ts: "2026-09-18T01:00:00.000Z",
+      },
+    ],
+  });
+
+  assert.equal(session.messages[0].interjectionSequence, 1);
+  assert.equal(session.messages[0].ts, "2026-09-18T01:00:00.000Z");
+});
+
 test("appendTurns leaves natural user presentation unspecified and visible", async () => {
   const session = { currentTaskId: "", messages: [] };
   const service = {

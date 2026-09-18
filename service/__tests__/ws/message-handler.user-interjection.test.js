@@ -12,25 +12,65 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { createMessageHandler } from "../../ws/chat-websocket/message-handler.js";
 import {
+  attachRunTransport,
   closeUserInterjectionQueue,
   registerActiveRun,
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
+import { createUserInterjectionAuthorityBridge } from "../../ws/chat-websocket/user-interjection-authority-bridge.js";
+import { createEventEnvelope } from "@noobot/event-protocol";
 
 function createFixture() {
   const sent = [];
   const closed = [];
+  const outbox = [];
+  let authoritySequence = 0;
   const handle = registerActiveRun({
     userId: "interjection-owner",
     sessionId: "interjection-session",
     dialogProcessId: "interjection-dialog",
     turnScopeId: "interjection-turn",
+    messageId: "interjection-message-stream",
+    presentationMessageId: "interjection-assistant",
+  });
+  const sendEvent = (event, data) => {
+    sent.push({ event, data });
+    return true;
+  };
+  attachRunTransport(handle, sendEvent);
+  const bot = {
+    async commitAuthorityEvent(input = {}) {
+      authoritySequence += 1;
+      const envelope = createEventEnvelope({
+        ...input,
+        identity: {
+          ...input.identity,
+          eventId: `interjection-event-${authoritySequence}`,
+          sessionId: input.sessionId,
+        },
+        ordering: { ...input.ordering, sequence: authoritySequence },
+        occurredAt: `2026-09-18T01:00:0${authoritySequence}.000Z`,
+      });
+      outbox.push(envelope);
+      return { committed: true, envelope };
+    },
+  };
+  const commitUserInterjection = createUserInterjectionAuthorityBridge({
+    resolveBot: () => bot,
   });
   const handler = createMessageHandler({
     state: {},
     authInfo: { userId: handle.userId },
     webSocket: { close: (...args) => closed.push(args) },
-    sendEvent: (event, data) => sent.push({ event, data }),
+    sendEvent,
+    commitUserInterjection,
+    dispatchAuthorityEvents: async (_identity, publish) => {
+      const pending = outbox.splice(0);
+      for (const envelope of pending) {
+        await publish(envelope.identity.eventType, envelope);
+      }
+      return { dispatched: true, delivered: pending.length };
+    },
     pendingInteractionRequests: new Map(),
   });
   const command = (commandId, message) =>
@@ -59,15 +99,55 @@ test("message handler enqueues user interjections and acknowledges the command",
       ["first", "second"],
     );
     assert.deepEqual(
-      fixture.sent.map(({ event, data }) => ({ event, outcome: data.outcome })),
+      fixture.sent.map(({ event, data }) => ({
+        event,
+        outcome: data.outcome,
+        contentFact: data.payload?.contentFact,
+      })),
       [
         {
-          event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-          outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+          event: "message_event",
+          outcome: undefined,
+          contentFact: {
+            contentId: "message:user-interjection:interjection-1",
+            contentKind: "user_interjection",
+            sourceMessageUid: "user-interjection:interjection-1",
+            text: "first",
+            timestamp: fixture.handle.userInterjectionQueue[0].receivedAt,
+            sequence: 1,
+            sessionId: "interjection-session",
+            dialogProcessId: "interjection-dialog",
+            turnScopeId: "interjection-turn",
+            messageId: "interjection-message-stream",
+            presentationMessageId: "interjection-assistant",
+          },
         },
         {
           event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
           outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+          contentFact: undefined,
+        },
+        {
+          event: "message_event",
+          outcome: undefined,
+          contentFact: {
+            contentId: "message:user-interjection:interjection-2",
+            contentKind: "user_interjection",
+            sourceMessageUid: "user-interjection:interjection-2",
+            text: "second",
+            timestamp: fixture.handle.userInterjectionQueue[1].receivedAt,
+            sequence: 2,
+            sessionId: "interjection-session",
+            dialogProcessId: "interjection-dialog",
+            turnScopeId: "interjection-turn",
+            messageId: "interjection-message-stream",
+            presentationMessageId: "interjection-assistant",
+          },
+        },
+        {
+          event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+          outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+          contentFact: undefined,
         },
       ],
     );

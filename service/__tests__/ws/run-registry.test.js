@@ -27,10 +27,23 @@ test("user interjection queue consumes FIFO and retains the batch when persisten
     turnScopeId: "turn-interjection",
   });
   try {
-    enqueueUserInterjection(handle, { commandId: "command-1", message: "first" });
-    enqueueUserInterjection(handle, { commandId: "command-2", message: "second" });
+    const commitAuthority = async () => {};
+    await enqueueUserInterjection(
+      handle,
+      { commandId: "command-1", message: "first" },
+      commitAuthority,
+    );
+    await enqueueUserInterjection(
+      handle,
+      { commandId: "command-2", message: "second" },
+      commitAuthority,
+    );
     assert.equal(
-      enqueueUserInterjection(handle, { commandId: "command-1", message: "duplicate" }),
+      await enqueueUserInterjection(
+        handle,
+        { commandId: "command-1", message: "duplicate" },
+        commitAuthority,
+      ),
       null,
     );
     await assert.rejects(
@@ -65,11 +78,20 @@ test("closing user interjections rejects new messages and preserves the accepted
     turnScopeId: "turn-interjection-stop",
   });
   try {
-    enqueueUserInterjection(handle, { commandId: "command-before-stop", message: "accepted" });
+    await enqueueUserInterjection(
+      handle,
+      { commandId: "command-before-stop", message: "accepted" },
+      async () => {},
+    );
     closeUserInterjectionQueue(handle);
 
-    assert.throws(
-      () => enqueueUserInterjection(handle, { commandId: "command-after-stop", message: "late" }),
+    await assert.rejects(
+      async () =>
+        enqueueUserInterjection(
+          handle,
+          { commandId: "command-after-stop", message: "late" },
+          async () => {},
+        ),
       (error) => error?.code === "active_turn_stopping",
     );
     const consumed = await consumeUserInterjections(handle, async () => {});
@@ -82,6 +104,62 @@ test("closing user interjections rejects new messages and preserves the accepted
   }
 });
 
+test("authority acceptance serializes FIFO and advances sequence only after commit", async () => {
+  const handle = registerActiveRun({
+    userId: "owner-interjection-authority",
+    sessionId: "session-interjection-authority",
+    turnScopeId: "turn-interjection-authority",
+  });
+  try {
+    await assert.rejects(
+      enqueueUserInterjection(
+        handle,
+        { commandId: "command-rejected", message: "rejected" },
+        async (item) => {
+          assert.equal(item.interjectionSequence, 1);
+          throw new Error("authority commit failed");
+        },
+      ),
+      /authority commit failed/,
+    );
+
+    const accepted = await enqueueUserInterjection(
+      handle,
+      { commandId: "command-accepted", message: "accepted" },
+      async (item) => assert.equal(item.interjectionSequence, 1),
+    );
+    assert.equal(accepted.interjectionSequence, 1);
+    assert.equal(handle.userInterjectionSequence, 1);
+  } finally {
+    unregisterActiveRun(handle);
+  }
+});
+
+test("pending authority acceptance keeps the interjection queue open", async () => {
+  const handle = registerActiveRun({
+    userId: "owner-interjection-pending",
+    sessionId: "session-interjection-pending",
+    turnScopeId: "turn-interjection-pending",
+  });
+  let releaseCommit;
+  const commitBlocked = new Promise((resolve) => {
+    releaseCommit = resolve;
+  });
+  try {
+    const acceptance = enqueueUserInterjection(
+      handle,
+      { commandId: "command-pending", message: "pending" },
+      async () => commitBlocked,
+    );
+    assert.equal(sealUserInterjectionQueueIfEmpty(handle), false);
+    releaseCommit();
+    await acceptance;
+    assert.equal(sealUserInterjectionQueueIfEmpty(handle), false);
+  } finally {
+    unregisterActiveRun(handle);
+  }
+});
+
 test("sealing succeeds only for an empty queue and rejects interjections after completion", async () => {
   const handle = registerActiveRun({
     userId: "owner-interjection-seal",
@@ -89,12 +167,21 @@ test("sealing succeeds only for an empty queue and rejects interjections after c
     turnScopeId: "turn-interjection-seal",
   });
   try {
-    enqueueUserInterjection(handle, { commandId: "command-before-seal", message: "accepted" });
+    await enqueueUserInterjection(
+      handle,
+      { commandId: "command-before-seal", message: "accepted" },
+      async () => {},
+    );
     assert.equal(sealUserInterjectionQueueIfEmpty(handle), false);
     await consumeUserInterjections(handle, async () => {});
     assert.equal(sealUserInterjectionQueueIfEmpty(handle), true);
-    assert.throws(
-      () => enqueueUserInterjection(handle, { commandId: "command-after-seal", message: "late" }),
+    await assert.rejects(
+      async () =>
+        enqueueUserInterjection(
+          handle,
+          { commandId: "command-after-seal", message: "late" },
+          async () => {},
+        ),
       (error) => error?.code === "active_turn_stopping",
     );
   } finally {

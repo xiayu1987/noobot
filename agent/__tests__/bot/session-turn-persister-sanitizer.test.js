@@ -483,3 +483,37 @@ test("appendAgentMessages keeps relayCorrelationId on persisted injected turns",
   assert.equal(appendedTurns[0].relayCorrelationId, "rc_fixture_1");
   assert.equal(appendedTurns[1].relayCorrelationId, "");
 });
+
+test("appendAgentMessages keeps canonical user interjection time and sequence", async () => {
+  const appendedTurns = [];
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async () => {},
+      appendTurns: async (payload = {}) => {
+        appendedTurns.push(...(Array.isArray(payload.turns) ? payload.turns : []));
+      },
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        messageUid: "user-interjection:command-1",
+        role: "user",
+        type: "message",
+        content: "accepted constraint",
+        injectedMessage: true,
+        injectedMessageType: "noobot.user_interjection",
+        interjectionSequence: 1,
+        ts: "2026-09-18T01:00:00.000Z",
+      },
+    ],
+    dialogProcessId: "dp1",
+    turnScopeId: "turn-1",
+  });
+
+  assert.equal(appendedTurns[0].interjectionSequence, 1);
+  assert.equal(appendedTurns[0].ts, "2026-09-18T01:00:00.000Z");
+});

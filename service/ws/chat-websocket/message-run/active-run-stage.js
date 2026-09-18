@@ -74,6 +74,8 @@ function createRunMeta(context, command, run) {
     parentDialogProcessId: text(run.parentDialogProcessId),
     dialogProcessId: text(run.dialogProcessId),
     turnScopeId: text(run.normalizedRunConfig.turnScopeId || context.state.currentTurnScopeId),
+    messageId: text(run.normalizedRunConfig.messageId),
+    presentationMessageId: text(run.normalizedRunConfig.presentationMessageId),
   };
 }
 
@@ -106,10 +108,8 @@ export async function activateRun(context, command, run, accepted, onRunBound) {
   const runMeta = createRunMeta(context, command, run);
   context.state.currentRunMeta = runMeta;
   const runHandle = registerActiveRun({
+    ...runMeta,
     userId: runMeta.runOwnerId,
-    sessionId: runMeta.sessionId,
-    dialogProcessId: runMeta.dialogProcessId,
-    turnScopeId: runMeta.turnScopeId,
     abortController: context.state.currentAbortController,
     stopRequested: false,
     stopPayload: null,

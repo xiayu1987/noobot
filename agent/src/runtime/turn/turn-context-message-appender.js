@@ -85,6 +85,7 @@ export function appendUserInterjectionMessage({
   const turnScopeId = String(modelContext?.activeTurnIdentity?.turnScopeId || "").trim();
   const messageUid = String(interjection?.messageUid || "").trim();
   const content = String(interjection?.message || "").trim();
+  const interjectionSequence = Number(interjection?.interjectionSequence || 0);
   requireTurnContextStores({
     turnMessageStore,
     modelContext,
@@ -115,6 +116,7 @@ export function appendUserInterjectionMessage({
     noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
     content,
     ts: String(interjection?.receivedAt || new Date().toISOString()),
+    interjectionSequence,
     dialogProcessId,
     turnScopeId,
     additional_kwargs: additionalKwargs,
@@ -126,6 +128,7 @@ export function appendUserInterjectionMessage({
   modelMessage.injectedMessage = true;
   modelMessage.injectedMessageType = CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION;
   modelMessage.noobotInternalMessageType = CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION;
+  modelMessage.interjectionSequence = interjectionSequence;
   appendContextMessage(modelContext, modelMessage, { block: "incremental" });
   return persistedMessage;
 }

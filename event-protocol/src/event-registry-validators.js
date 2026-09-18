@@ -64,5 +64,30 @@ export const validateMessageEnvelope = (envelope) => {
       }
     }
   }
+  if (envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
+    const fact = envelope.payload.contentFact || {};
+    const commandId = text(envelope?.causality?.commandId);
+    const causationId = text(envelope?.causality?.causationId);
+    const sourceMessageUid = text(fact.sourceMessageUid);
+    if (!commandId) errors.push("missing_interjection_command_id");
+    if (causationId !== commandId) errors.push("interjection_causation_identity_mismatch");
+    if (sourceMessageUid !== `user-interjection:${commandId}`) {
+      errors.push("interjection_source_identity_mismatch");
+    }
+    if (text(fact.contentId) !== `message:${sourceMessageUid}`) {
+      errors.push("interjection_content_identity_mismatch");
+    }
+    for (const [factField, envelopeValue] of [
+      ["sessionId", envelope?.identity?.sessionId],
+      ["turnScopeId", envelope?.identity?.turnScopeId],
+      ["messageId", envelope?.identity?.messageId],
+      ["presentationMessageId", envelope?.payload?.presentationMessageId],
+      ["dialogProcessId", envelope?.payload?.dialogProcessId],
+    ]) {
+      if (text(fact[factField]) !== text(envelopeValue)) {
+        errors.push(`interjection_${factField}_mismatch`);
+      }
+    }
+  }
   return { valid: errors.length === 0, errors };
 };
