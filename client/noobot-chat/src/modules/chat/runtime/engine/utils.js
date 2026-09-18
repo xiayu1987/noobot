@@ -4,34 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../model/timeFields.js";
-import { messages } from "noobot-i18n/client/messages";
+import { translateStoredLocaleMessageKey } from "../../../../shared/i18n/messageCatalog.js";
 import { foldConversationMessages } from "../../model/messageModel.js";
 import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
-}
-
-const LOCALE_STORAGE_KEY = "noobot_locale";
-const FALLBACK_LOCALE = "zh-CN";
-
-function translateClientMessage(key = "", params = {}) {
-  const locale = String(
-    globalThis?.localStorage?.getItem?.(LOCALE_STORAGE_KEY) || FALLBACK_LOCALE,
-  ).trim();
-  const table = messages[locale] || messages[FALLBACK_LOCALE] || {};
-  const fallbackTable = messages[FALLBACK_LOCALE] || {};
-  const raw = String(key || "")
-    .split(".")
-    .filter(Boolean)
-    .reduce((acc, part) => (acc && typeof acc === "object" ? acc[part] : undefined), table);
-  const fallbackRaw = String(key || "")
-    .split(".")
-    .filter(Boolean)
-    .reduce((acc, part) => (acc && typeof acc === "object" ? acc[part] : undefined), fallbackTable);
-  return String(raw ?? fallbackRaw ?? key).replaceAll(/\{(\w+)\}/g, (_, paramKey) =>
-    String(params?.[paramKey] ?? ""),
-  );
 }
 
 const INTERNAL_EVENT_PLACEHOLDER_LINE_RE =
@@ -125,7 +103,9 @@ function stripExecutionCommandPrefix(value) {
 }
 
 function buildExecutionCommandLabel(statusKey = "", commandText = "") {
-  return translateClientMessage(statusKey, { command: stripExecutionCommandPrefix(commandText) });
+  return translateStoredLocaleMessageKey(statusKey, {
+    command: stripExecutionCommandPrefix(commandText),
+  });
 }
 
 function toolResultStatusKey(logItem = {}) {
@@ -153,9 +133,9 @@ function buildToolResultDisplayText(logItem = {}, commandText = "", text = "") {
   }
   const compactToolName = text.match(/^([\w.-]+)\s+completed(?:\s|$)/i)?.[1] || "";
   const command = pickExecutionToolName(logItem) || commandText || compactToolName;
-  return translateClientMessage("message.executionCommandCompletedWithStatus", {
+  return translateStoredLocaleMessageKey("message.executionCommandCompletedWithStatus", {
     command: stripExecutionCommandPrefix(command),
-    status: translateClientMessage(toolResultStatusKey(logItem)),
+    status: translateStoredLocaleMessageKey(toolResultStatusKey(logItem)),
   });
 }
 

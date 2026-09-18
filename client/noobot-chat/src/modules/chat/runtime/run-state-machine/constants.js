@@ -291,3 +291,64 @@ export const MESSAGE_TERMINAL_STATE_OUTCOME = Object.freeze({
   [FrontendRunState.COMPLETION_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
   [FrontendRunState.STOP_ERROR]: MESSAGE_TERMINAL_OUTCOME.FAILED,
 });
+
+export const TURN_RUNTIME_TERMINAL = Object.freeze({
+  COMPLETED: "completed",
+  USER_STOPPED: "user_stopped",
+  ERROR: "error",
+});
+
+export const FRONTEND_STATE_TURN_TERMINAL = Object.freeze({
+  [FrontendRunState.FRONTEND_COMPLETED]: TURN_RUNTIME_TERMINAL.COMPLETED,
+  [FrontendRunState.USER_STOP_COMPLETED]: TURN_RUNTIME_TERMINAL.USER_STOPPED,
+  [FrontendRunState.ACTION_REQUEST_ERROR]: TURN_RUNTIME_TERMINAL.ERROR,
+  [FrontendRunState.PROCESSING_ERROR]: TURN_RUNTIME_TERMINAL.ERROR,
+  [FrontendRunState.COMPLETION_ERROR]: TURN_RUNTIME_TERMINAL.ERROR,
+  [FrontendRunState.STOP_ERROR]: TURN_RUNTIME_TERMINAL.ERROR,
+});
+
+export const TURN_TERMINAL_NOTICE_LABEL_KEY = Object.freeze({
+  [TURN_RUNTIME_TERMINAL.USER_STOPPED]: "message.turnTerminalUserStopped",
+  [TURN_RUNTIME_TERMINAL.ERROR]: "message.turnTerminalError",
+});
+
+export const STATUS_STEP_STAGE = Object.freeze({
+  REQUESTING: "requesting",
+  SENDING: "sending",
+  COMPLETING: "completing",
+  STOPPING: "stopping",
+});
+
+export const STATUS_STEP_TERMINAL = Object.freeze({
+  COMPLETED: "completed",
+  STOPPED: "stopped",
+  ERROR: "error",
+});
+
+export const STATUS_STEP_STAGE_SEQUENCE = Object.freeze([
+  STATUS_STEP_STAGE.REQUESTING,
+  STATUS_STEP_STAGE.SENDING,
+  STATUS_STEP_STAGE.COMPLETING,
+]);
+
+export const STATUS_STEP_STAGE_ORDINAL = Object.freeze({
+  [STATUS_STEP_STAGE.REQUESTING]: 0,
+  [STATUS_STEP_STAGE.SENDING]: 1,
+  [STATUS_STEP_STAGE.COMPLETING]: 2,
+  [STATUS_STEP_STAGE.STOPPING]: 2,
+});
+
+export const TURN_TERMINAL_STATUS_STEP = Object.freeze({
+  [TURN_RUNTIME_TERMINAL.COMPLETED]: STATUS_STEP_TERMINAL.COMPLETED,
+  [TURN_RUNTIME_TERMINAL.USER_STOPPED]: STATUS_STEP_TERMINAL.STOPPED,
+  [TURN_RUNTIME_TERMINAL.ERROR]: STATUS_STEP_TERMINAL.ERROR,
+});
+
+export const STATUS_STEP_LABEL_KEY = Object.freeze({
+  [STATUS_STEP_STAGE.REQUESTING]: "composer.requesting",
+  [STATUS_STEP_STAGE.SENDING]: "composer.sending",
+  [STATUS_STEP_STAGE.COMPLETING]: "composer.completing",
+  [STATUS_STEP_TERMINAL.COMPLETED]: "composer.turnCompleted",
+  [STATUS_STEP_TERMINAL.STOPPED]: "composer.turnStopped",
+  [STATUS_STEP_TERMINAL.ERROR]: "composer.turnFailed",
+});

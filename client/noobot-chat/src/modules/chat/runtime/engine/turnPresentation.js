@@ -10,6 +10,11 @@ import {
   normalizeTurnScopeIdKey,
 } from "../../model/messageIdentity.js";
 import { isTurnRuntimeDeleted } from "../run-state-machine/turnRuntimeRegistry.js";
+import {
+  isTurnTerminalNotice,
+  resolveTurnTerminalNoticeLabelKey,
+} from "../sessionRunStateMachine.js";
+import { translateStoredLocaleMessageKey } from "../../../../shared/i18n/messageCatalog.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import {
   getMessageTransferEnvelopes,
@@ -77,11 +82,9 @@ function isTurnStatusPresentation(message = {}) {
   return getMessageRole(message) === "assistant" && message?.turnStatusPlaceholder === true;
 }
 
-const TERMINAL_PRESENTATION_STATES = new Set(["user_stopped", "error", "timeout"]);
-
 function normalizeTerminalStatus(status = {}) {
   const state = text(status?.status).toLowerCase();
-  return TERMINAL_PRESENTATION_STATES.has(state) ? { ...status, status: state } : null;
+  return isTurnTerminalNotice(state) ? { ...status, status: state } : null;
 }
 
 function terminalStatusKey(status = {}, fallbackSessionId = "") {
@@ -92,14 +95,12 @@ function terminalStatusesFromRuntime(turnRuntimeRegistry = {}, sessionId = "") {
   const bucket = turnRuntimeRegistry?.sessions?.[sessionId];
   const turns = bucket?.turns && typeof bucket.turns === "object" ? bucket.turns : {};
   return Object.values(turns)
-    .filter((turn = {}) =>
-      TERMINAL_PRESENTATION_STATES.has(text(turn?.terminal || turn?.state).toLowerCase()),
-    )
+    .filter((turn = {}) => isTurnTerminalNotice(turn?.terminal))
     .map((turn = {}) => ({
       sessionId,
       turnScopeId: text(turn?.turnScopeId),
       dialogProcessId: text(turn?.dialogProcessId),
-      status: text(turn?.terminal || turn?.state).toLowerCase(),
+      status: text(turn?.terminal).toLowerCase(),
       reason: text(turn?.reason || turn?.terminalReason),
       description: text(turn?.description),
       updatedAt: text(turn?.finishedAt || turn?.updatedAt),
@@ -125,16 +126,16 @@ function terminalErrorText(status = {}) {
 
 function formatTerminalStatusContent(status = {}) {
   const state = text(status?.status).toLowerCase();
-  const title =
-    state === "user_stopped"
-      ? "本轮已由用户停止"
-      : state === "timeout"
-        ? "本轮已超时停止"
-        : "本轮异常停止";
+  const title = translateStoredLocaleMessageKey(resolveTurnTerminalNoticeLabelKey(state));
   const description = text(status?.description);
   const reason = text(status?.reason);
   const error = terminalErrorText(status);
-  return [title, description, reason && `原因：${reason}`, error && `异常：${error}`]
+  return [
+    title,
+    description,
+    reason && translateStoredLocaleMessageKey("message.turnTerminalReason", { reason }),
+    error && translateStoredLocaleMessageKey("message.turnTerminalErrorDetail", { error }),
+  ]
     .filter(Boolean)
     .join("\n");
 }

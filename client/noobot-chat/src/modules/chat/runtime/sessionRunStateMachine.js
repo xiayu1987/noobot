@@ -23,6 +23,24 @@ export {
   normalizeTerminalOutcome,
   resolveTerminalOutcome,
 } from "./run-state-machine/terminalOutcome.js";
+export {
+  isStageStatusStepState,
+  isTerminalStatusStepState,
+  normalizeStatusStepState,
+  resolveStatusStepLabelKey,
+  resolveStatusStepStageOrdinal,
+  resolveTurnTerminalStatusStep,
+  STATUS_STEP_STAGE,
+  STATUS_STEP_STAGE_SEQUENCE,
+  STATUS_STEP_TERMINAL,
+} from "./run-state-machine/statusStep.js";
+export {
+  isTurnRuntimeTerminal,
+  isTurnTerminalNotice,
+  resolveTurnRuntimeTerminal,
+  resolveTurnTerminalNoticeLabelKey,
+  TURN_RUNTIME_TERMINAL,
+} from "./run-state-machine/turnTerminal.js";
 export { resolveEventScope } from "./run-state-machine/runIdentity.js";
 export {
   createInitialSessionRunState,

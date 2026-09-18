@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BackendChannelState, FrontendRunState } from "./constants.js";
+import { BackendChannelState, FrontendRunState, STATUS_STEP_STAGE } from "./constants.js";
+import { isStageStatusStepState } from "./statusStep.js";
 import {
   canonicalSessionId,
   canonicalTurnScopeId,
@@ -91,8 +92,8 @@ export function selectSessionTurnRuntime(registry, sessionId, turnScopeId = "") 
     reconnecting: turn?.reconnecting === true,
     lastTransportError: runtimeText(turn?.lastTransportError),
     displayState,
-    sending: ["requesting", "sending", "completing", "stopping"].includes(displayState),
-    canStop: displayState === "sending" && turn?.canStop === true,
+    sending: isStageStatusStepState(displayState),
+    canStop: displayState === STATUS_STEP_STAGE.SENDING && turn?.canStop === true,
     terminal: turn?.terminal || null,
   };
 }

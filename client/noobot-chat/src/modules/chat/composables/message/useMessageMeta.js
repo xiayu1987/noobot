@@ -17,6 +17,7 @@ import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.
 import {
   MESSAGE_TERMINAL_OUTCOME,
   normalizeTerminalOutcome,
+  STATUS_STEP_STAGE,
 } from "../../runtime/sessionRunStateMachine.js";
 import { resolveStatusStepPresentation } from "../../model/messagePresentation.js";
 
@@ -94,16 +95,14 @@ export function useMessageMeta({
     if (projectedRuntime && projectedRuntime.running === true && !projectedRuntime.terminal) {
       return resolveStatusStepPresentation({
         turnRuntime: projectedRuntime,
-        runtimeDisplayState: projectedRuntime.state || "sending",
+        runtimeDisplayState: projectedRuntime.state || STATUS_STEP_STAGE.SENDING,
         projectedState: messageItem?.projectedStatusStepState,
-        persistedState: messageItem?.persistedStatusStepState,
-      }).displayState || "sending";
+      }).displayState || STATUS_STEP_STAGE.SENDING;
     }
     return resolveStatusStepPresentation({
       turnRuntime,
       runtimeDisplayState: turnRuntime ? turnRuntimeDisplayState(turnRuntime) : "",
       projectedState: messageItem?.projectedStatusStepState,
-      persistedState: messageItem?.persistedStatusStepState,
     }).displayState;
   });
 
