@@ -29,6 +29,14 @@ export const TURN_TERMINAL_REASON = Object.freeze({
   RUN_TIMEOUT: "run_timeout",
 });
 
+export const TURN_UNSUCCESSFUL_TERMINAL_STATUS = Object.freeze(
+  Object.values(TURN_TERMINAL_STATUS).filter((status) => status !== TURN_TERMINAL_STATUS.COMPLETED),
+);
+
+export function isUnsuccessfulTurnTerminalStatus(value = "") {
+  return TURN_UNSUCCESSFUL_TERMINAL_STATUS.includes(clean(value).toLowerCase());
+}
+
 const commandContract = Object.freeze({
   [TURN_TERMINAL_COMMAND.COMPLETED]: [
     TURN_TERMINAL_STATUS.COMPLETED,

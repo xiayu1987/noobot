@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
-
-const TERMINAL_PRESENTATION_STATES = new Set(["user_stopped", "error", "timeout"]);
+import { isUnsuccessfulTurnTerminalStatus } from "@noobot/session-protocol";
 
 const text = (value) => String(value || "").trim();
 
@@ -26,7 +25,7 @@ export function selectPresentedSessionLifecycleTurns(lifecycle = null) {
     .filter((turn) => {
       const terminal = text(turn?.terminalStatus?.status || turn?.executionState).toLowerCase();
       return (
-        text(turn?.turnScopeId) === activeTurnScopeId || TERMINAL_PRESENTATION_STATES.has(terminal)
+        text(turn?.turnScopeId) === activeTurnScopeId || isUnsuccessfulTurnTerminalStatus(terminal)
       );
     })
     .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
