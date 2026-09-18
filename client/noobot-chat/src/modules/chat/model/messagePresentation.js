@@ -3,56 +3,33 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-const STATUS_STEP_DISPLAY_STATES = new Set([
-  "completed",
-  "stopped",
-  "error",
-  "requesting",
-  "sending",
-  "completing",
-  "stopping",
-]);
-
-const TERMINAL_STATUS_STEP_DISPLAY_STATES = new Set([
-  "completed",
-  "stopped",
-  "error",
-]);
+import {
+  isTerminalStatusStepState,
+  normalizeStatusStepState,
+  resolveTurnTerminalStatusStep,
+} from "../runtime/sessionRunStateMachine.js";
 
 function text(value = "") {
   return String(value || "").trim();
 }
 
 export function normalizeStatusStepDisplayState(value = "") {
-  const normalized = text(value).toLowerCase();
-  return STATUS_STEP_DISPLAY_STATES.has(normalized) ? normalized : "";
+  return normalizeStatusStepState(value);
 }
-
-
-
-
-
 
 export function resolveStatusStepPresentation({
   turnRuntime = null,
   runtimeDisplayState = "",
   projectedState = "",
-  persistedState: _persistedState = "",
 } = {}) {
   const projectedDisplayState = normalizeStatusStepDisplayState(projectedState);
   if (turnRuntime) {
-    if (turnRuntime.terminal === "completed") {
-      return { displayState: "completed", source: "turn-runtime-terminal" };
-    }
-    if (turnRuntime.terminal === "user_stopped") {
-      return { displayState: "stopped", source: "turn-runtime-terminal" };
-    }
-    if (turnRuntime.terminal) {
-      return { displayState: "error", source: "turn-runtime-terminal" };
+    const terminalDisplayState = resolveTurnTerminalStatusStep(turnRuntime.terminal);
+    if (terminalDisplayState) {
+      return { displayState: terminalDisplayState, source: "turn-runtime-terminal" };
     }
     const runtimeState = normalizeStatusStepDisplayState(runtimeDisplayState);
-    if (runtimeState && !TERMINAL_STATUS_STEP_DISPLAY_STATES.has(runtimeState)) {
+    if (runtimeState && !isTerminalStatusStepState(runtimeState)) {
       return { displayState: runtimeState, source: "turn-runtime-active" };
     }
     return projectedDisplayState
@@ -70,8 +47,7 @@ function mergeProjectedStatusStepState(previousState = "", currentState = "") {
   const current = normalizeStatusStepDisplayState(currentState);
   if (!current) return previous;
   if (!previous) return current;
-  if (TERMINAL_STATUS_STEP_DISPLAY_STATES.has(previous) &&
-      !TERMINAL_STATUS_STEP_DISPLAY_STATES.has(current)) {
+  if (isTerminalStatusStepState(previous) && !isTerminalStatusStepState(current)) {
     return previous;
   }
   return current;

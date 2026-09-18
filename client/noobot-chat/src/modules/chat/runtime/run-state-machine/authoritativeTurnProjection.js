@@ -3,8 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isFailedTurnState, TURN_STATE } from "@noobot/session-protocol";
+import { TURN_STATE } from "@noobot/session-protocol";
 import { FrontendRunState } from "./constants.js";
+import { resolveTurnRuntimeTerminal } from "./turnTerminal.js";
 
 const AUTHORITY_TERMINAL_TO_FRONTEND_STATE = Object.freeze({
   [TURN_STATE.COMPLETED]: FrontendRunState.FRONTEND_COMPLETED,
@@ -38,9 +39,5 @@ export function projectAuthoritativeTerminalTurnState(state = "") {
 }
 
 export function projectAuthoritativeTurnTerminal(state = "") {
-  const normalized = normalizeAuthoritativeTurnState(state);
-  if (normalized === TURN_STATE.COMPLETED) return "completed";
-  if (normalized === TURN_STATE.STOP_COMPLETED) return "user_stopped";
-  if (isFailedTurnState(normalized)) return "error";
-  return null;
+  return resolveTurnRuntimeTerminal(projectAuthoritativeTerminalTurnState(state)) || null;
 }

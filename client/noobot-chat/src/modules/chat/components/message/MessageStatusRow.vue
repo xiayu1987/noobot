@@ -6,42 +6,38 @@
 <script setup>
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { computed } from "vue";
+import {
+  isTerminalStatusStepState,
+  resolveStatusStepLabelKey,
+  resolveStatusStepStageOrdinal,
+  STATUS_STEP_STAGE_SEQUENCE,
+  STATUS_STEP_TERMINAL,
+} from "../../runtime/sessionRunStateMachine.js";
+
+const ANTICIPATED_TERMINAL_STEP = STATUS_STEP_TERMINAL.COMPLETED;
+const TERMINAL_FINISH_STATUS = Object.freeze({
+  [STATUS_STEP_TERMINAL.COMPLETED]: "success",
+  [STATUS_STEP_TERMINAL.STOPPED]: "warning",
+  [STATUS_STEP_TERMINAL.ERROR]: "error",
+});
 
 const props = defineProps({
   statusStepState: { type: String, default: "" },
 });
 const { translate } = useLocale();
+const isRunning = computed(() => !isTerminalStatusStepState(props.statusStepState));
 const stepView = computed(() => {
-  const terminal = ["completed", "stopped", "error"].includes(props.statusStepState)
+  const terminal = isTerminalStatusStepState(props.statusStepState)
     ? props.statusStepState
-    : "completed";
-  const steps = [
-    { key: "requesting", title: translate("composer.requesting") },
-    { key: "sending", title: translate("composer.sending") },
-    { key: "completing", title: translate("composer.completing") },
-    {
-      key: terminal,
-      title:
-        terminal === "stopped"
-          ? translate("composer.turnStopped")
-          : terminal === "error"
-            ? translate("composer.turnFailed")
-            : translate("composer.turnCompleted"),
-    },
-  ];
-  const activeByState = {
-    requesting: 0,
-    sending: 1,
-    completing: 2,
-    stopping: 2,
-    completed: 4,
-    stopped: 4,
-    error: 4,
-  };
+    : ANTICIPATED_TERMINAL_STEP;
+  const steps = [...STATUS_STEP_STAGE_SEQUENCE, terminal].map((stepState) => ({
+    key: stepState,
+    title: translate(resolveStatusStepLabelKey(stepState)),
+  }));
   return {
     steps,
-    active: activeByState[props.statusStepState] ?? 0,
-    finishStatus: terminal === "error" ? "error" : terminal === "stopped" ? "warning" : "success",
+    active: resolveStatusStepStageOrdinal(props.statusStepState),
+    finishStatus: TERMINAL_FINISH_STATUS[terminal],
   };
 });
 </script>
@@ -52,7 +48,7 @@ const stepView = computed(() => {
     class="message-status-steps"
     :class="[
       `is-${stepView.finishStatus}`,
-      { 'is-running': !['completed', 'stopped', 'error'].includes(statusStepState) },
+      { 'is-running': isRunning },
     ]"
     role="status"
     aria-live="polite"

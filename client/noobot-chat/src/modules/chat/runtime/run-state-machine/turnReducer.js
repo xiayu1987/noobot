@@ -10,6 +10,7 @@ import {
   projectAuthoritativeTerminalTurnState,
   projectAuthoritativeTurnState,
 } from "./authoritativeTurnProjection.js";
+import { resolveTurnRuntimeTerminal, TURN_RUNTIME_TERMINAL } from "./turnTerminal.js";
 
 export const TURN_TRANSITION_REASON = Object.freeze({
   APPLIED: "applied",
@@ -327,10 +328,10 @@ function resolveProjectionFacts(current, event, eventRevision) {
 }
 
 function resolveTerminal(state, event, capabilities) {
-  if (state === FrontendRunState.FRONTEND_COMPLETED) return "completed";
-  if (state === FrontendRunState.USER_STOP_COMPLETED) return "user_stopped";
-  if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) return "error";
-  return capabilities.terminal ? "error" : null;
+  const mappedTerminal = resolveTurnRuntimeTerminal(state);
+  if (mappedTerminal) return mappedTerminal;
+  if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) return TURN_RUNTIME_TERMINAL.ERROR;
+  return capabilities.terminal ? TURN_RUNTIME_TERMINAL.ERROR : null;
 }
 
 function projectAuthorityFields(currentValue, event) {

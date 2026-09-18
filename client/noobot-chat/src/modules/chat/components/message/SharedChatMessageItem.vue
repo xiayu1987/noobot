@@ -24,6 +24,7 @@ import {
 } from "../../model/messageIdentity.js";
 import { selectTurnMessageRuntime } from "../../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { resolveTurnRuntimeView } from "../../runtime/run-state-machine/messageRuntime.js";
+import { isTerminalStatusStepState } from "../../runtime/sessionRunStateMachine.js";
 import {
   getTurnUiState,
   setTurnAssistantContentExpanded,
@@ -285,9 +286,7 @@ const hasThinkingPanelContribution = computed(() =>
 );
 const thinkingPanelVisible = ref(false);
 const statusStepRunning = computed(() =>
-  Boolean(
-    statusStepState.value && !["completed", "stopped", "error"].includes(statusStepState.value),
-  ),
+  Boolean(statusStepState.value && !isTerminalStatusStepState(statusStepState.value)),
 );
 const unifiedRuntimePanelsRunning = computed(
   () => statusStepRunning.value && thinkingPanelVisible.value,
