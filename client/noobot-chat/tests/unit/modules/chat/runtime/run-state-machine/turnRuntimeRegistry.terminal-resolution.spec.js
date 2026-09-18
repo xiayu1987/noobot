@@ -16,7 +16,9 @@ import {
 import {
   SESSION_RUN_EVENT,
   BackendChannelState,
+  COMPOSER_PRIMARY_ACTION,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { resolveComposerPrimaryAction } from "../../../../../../src/modules/chat/runtime/run-state-machine/composerAction.js";
 import {
   backendState,
   lifecycle,
@@ -225,7 +227,10 @@ it("keeps stopping after real-time user_stopped until the authoritative summary 
     terminal: "user_stopped",
     canStop: false,
   });
-  expect(turnRuntimeDisplayState(summarized.turn)).toBe("continue");
+  expect(turnRuntimeDisplayState(summarized.turn)).toBe("");
+  expect(resolveComposerPrimaryAction(summarized.turn.terminal)).toBe(
+    COMPOSER_PRIMARY_ACTION.CONTINUE,
+  );
 });
 it("rejects stale or conflicting real-time user_stopped events", () => {
   const registry = createTurnRuntimeRegistryState();

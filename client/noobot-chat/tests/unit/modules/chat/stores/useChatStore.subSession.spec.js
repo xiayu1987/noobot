@@ -505,7 +505,7 @@ describe("sub-session realtime message projection", () => {
     const session = store.selectSubSessionMessages(sessionId);
     expect(session.turnRuntime).toMatchObject({
       terminal: "completed",
-      displayState: "send",
+      displayState: "",
     });
     expect(
       selectTurnMessageRuntime(store.turnRuntimeRegistry, {

@@ -26,7 +26,10 @@ describe("noobot-chat monotonic message action rules", () => {
     });
     expect(userProps.visible).toBe(true);
     expect(userProps.messageItem).toBe(userMessage);
-    expect(action.resolveProps({ messageItem: sourceMessage, allMessages, deleteMonotonicMessage }).visible).toBe(false);
+    expect(
+      action.resolveProps({ messageItem: sourceMessage, allMessages, deleteMonotonicMessage })
+        .visible,
+    ).toBe(false);
   }
 
   it("matches frontend stopped markers and backend completed session messages", () => {
@@ -37,7 +40,6 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(action.match({ monotonicState: "monotonic" })).toBe(true);
     expect(action.match({ stopState: "user_stopped" })).toBe(true);
     expect(action.match({ status: "completed" })).toBe(true);
-    expect(action.match({ state: "done" })).toBe(true);
     expect(action.match({ channelState: "user_stopped" })).toBe(true);
     expect(action.match({ channelState: { state: "user_stopped" } })).toBe(true);
     expect(action.match({ channelState: { status: "user_stopped" } })).toBe(true);
@@ -76,7 +78,10 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(props.messageItem).toBe(userMessage);
     expect(props.onDelete).toBe(deleteMonotonicMessage);
     expect(props.onResend).toBe(resendMonotonicMessage);
-    expect(action.resolveProps({ messageItem: stoppedAssistant, allMessages, deleteMonotonicMessage }).visible).toBe(false);
+    expect(
+      action.resolveProps({ messageItem: stoppedAssistant, allMessages, deleteMonotonicMessage })
+        .visible,
+    ).toBe(false);
   });
 
   it("restores stopped actions in old sessions when round ids are only in assistant channelState", () => {
@@ -129,17 +134,21 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(action.match(stoppedAssistant)).toBe(true);
     expect(props.visible).toBe(true);
     expect(props.messageItem).toBe(targetUser);
-    expect(action.resolveProps({
-      messageItem: firstUser,
-      allMessages,
-      deleteMonotonicMessage,
-    }).visible).toBe(false);
-    expect(action.resolveProps({
-      messageItem: stoppedAssistant,
-      allMessages,
-      deleteMonotonicMessage,
-      resendMonotonicMessage,
-    }).visible).toBe(false);
+    expect(
+      action.resolveProps({
+        messageItem: firstUser,
+        allMessages,
+        deleteMonotonicMessage,
+      }).visible,
+    ).toBe(false);
+    expect(
+      action.resolveProps({
+        messageItem: stoppedAssistant,
+        allMessages,
+        deleteMonotonicMessage,
+        resendMonotonicMessage,
+      }).visible,
+    ).toBe(false);
   });
 
   it("mounts monotonic actions only on the resolved user message", () => {
@@ -160,12 +169,25 @@ describe("noobot-chat monotonic message action rules", () => {
     };
     const allMessages = [userMessage, messageItem];
 
-    expect(action.resolveProps({ messageItem, allMessages, deleteMonotonicMessage }).visible).toBe(false);
-    expect(action.resolveProps({ messageItem, allMessages, resendMonotonicMessage }).visible).toBe(false);
-    expect(action.resolveProps({ messageItem: userMessage, allMessages, deleteMonotonicMessage }).visible).toBe(true);
-    expect(action.resolveProps({ messageItem: userMessage, allMessages, resendMonotonicMessage }).visible).toBe(true);
+    expect(action.resolveProps({ messageItem, allMessages, deleteMonotonicMessage }).visible).toBe(
+      false,
+    );
+    expect(action.resolveProps({ messageItem, allMessages, resendMonotonicMessage }).visible).toBe(
+      false,
+    );
+    expect(
+      action.resolveProps({ messageItem: userMessage, allMessages, deleteMonotonicMessage })
+        .visible,
+    ).toBe(true);
+    expect(
+      action.resolveProps({ messageItem: userMessage, allMessages, resendMonotonicMessage })
+        .visible,
+    ).toBe(true);
     expect(action.resolveProps({ messageItem }).visible).toBe(false);
-    expect(action.resolveProps({ messageItem: { id: "m2", status: "running" }, deleteMonotonicMessage }).visible).toBe(false);
+    expect(
+      action.resolveProps({ messageItem: { id: "m2", status: "running" }, deleteMonotonicMessage })
+        .visible,
+    ).toBe(false);
 
     const props = action.resolveProps({
       messageItem: userMessage,
@@ -208,11 +230,13 @@ describe("noobot-chat monotonic message action rules", () => {
       content: "你好",
     };
 
-    expect(action.resolveProps({
-      messageItem: userMessage,
-      allMessages: [userMessage],
-      deleteMonotonicMessage,
-    }).visible).toBe(true);
+    expect(
+      action.resolveProps({
+        messageItem: userMessage,
+        allMessages: [userMessage],
+        deleteMonotonicMessage,
+      }).visible,
+    ).toBe(true);
   });
 
   it("does not show orphan fallback actions on non-tail user messages", () => {
@@ -229,11 +253,13 @@ describe("noobot-chat monotonic message action rules", () => {
       content: "later reply",
     };
 
-    expect(action.resolveProps({
-      messageItem: userMessage,
-      allMessages: [userMessage, assistantMessage],
-      deleteMonotonicMessage,
-    }).visible).toBe(false);
+    expect(
+      action.resolveProps({
+        messageItem: userMessage,
+        allMessages: [userMessage, assistantMessage],
+        deleteMonotonicMessage,
+      }).visible,
+    ).toBe(false);
   });
 
   it("keeps actions only on the latest same-round user in multi-turn sessions", () => {
@@ -265,10 +291,20 @@ describe("noobot-chat monotonic message action rules", () => {
     const allMessages = [firstUser, firstAssistant, targetUser, targetAssistant];
     const deleteMonotonicMessage = vi.fn();
 
-    expect(action.resolveProps({ messageItem: firstUser, allMessages, deleteMonotonicMessage }).visible).toBe(false);
-    expect(action.resolveProps({ messageItem: targetUser, allMessages, deleteMonotonicMessage }).visible).toBe(true);
-    expect(action.resolveProps({ messageItem: firstAssistant, allMessages, deleteMonotonicMessage }).visible).toBe(false);
-    expect(action.resolveProps({ messageItem: targetAssistant, allMessages, deleteMonotonicMessage }).visible).toBe(false);
+    expect(
+      action.resolveProps({ messageItem: firstUser, allMessages, deleteMonotonicMessage }).visible,
+    ).toBe(false);
+    expect(
+      action.resolveProps({ messageItem: targetUser, allMessages, deleteMonotonicMessage }).visible,
+    ).toBe(true);
+    expect(
+      action.resolveProps({ messageItem: firstAssistant, allMessages, deleteMonotonicMessage })
+        .visible,
+    ).toBe(false);
+    expect(
+      action.resolveProps({ messageItem: targetAssistant, allMessages, deleteMonotonicMessage })
+        .visible,
+    ).toBe(false);
   });
 
   it("matches persisted sources by turnScopeId when reloaded objects are not identical", () => {
@@ -371,16 +407,18 @@ describe("noobot-chat monotonic message action rules", () => {
       ts: 1710000001000,
       role: "assistant",
       dialogProcessId: "dp-ts",
-      status: "done",
+      status: "completed",
     };
     const allMessages = [userMessage, assistantMessage];
     const deleteMonotonicMessage = vi.fn();
 
-    expect(action.resolveProps({
-      messageItem: sameUserRenderItem,
-      allMessages,
-      deleteMonotonicMessage,
-    }).visible).toBe(true);
+    expect(
+      action.resolveProps({
+        messageItem: sameUserRenderItem,
+        allMessages,
+        deleteMonotonicMessage,
+      }).visible,
+    ).toBe(true);
   });
 
   it("falls back to adjacent previous user when persisted round ids are missing", () => {
@@ -412,7 +450,11 @@ describe("noobot-chat monotonic message action rules", () => {
     const allMessages = [userMessage];
     const deleteMonotonicMessage = vi.fn();
 
-    const props = action.resolveProps({ messageItem: userMessage, allMessages, deleteMonotonicMessage });
+    const props = action.resolveProps({
+      messageItem: userMessage,
+      allMessages,
+      deleteMonotonicMessage,
+    });
     expect(props.visible).toBe(true);
     expect(props.messageItem).toBe(userMessage);
   });

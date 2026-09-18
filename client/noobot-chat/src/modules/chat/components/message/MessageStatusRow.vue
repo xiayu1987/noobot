@@ -46,10 +46,7 @@ const stepView = computed(() => {
   <div
     v-if="statusStepState"
     class="message-status-steps"
-    :class="[
-      `is-${stepView.finishStatus}`,
-      { 'is-running': isRunning },
-    ]"
+    :class="[`is-${stepView.finishStatus}`, { 'is-running': isRunning }]"
     role="status"
     aria-live="polite"
   >

@@ -51,8 +51,8 @@ defineExpose({ focusTextarea });
   <div class="monotonic-edit-card noobot-surface-card">
     <div class="monotonic-edit-heading">
       <div class="monotonic-edit-heading-copy">
-        <div class="monotonic-edit-title">编辑并重发</div>
-        <div class="monotonic-edit-subtitle">调整内容和附件后，将替换本轮消息并重新生成回复</div>
+        <div class="monotonic-edit-title">{{ t("message.monotonicEditTitle") }}</div>
+        <div class="monotonic-edit-subtitle">{{ t("message.monotonicEditSubtitle") }}</div>
       </div>
       <el-tag type="primary" effect="light" round class="monotonic-mode-tag">
         <svg
@@ -69,7 +69,7 @@ defineExpose({ focusTextarea });
           <polyline points="1 4 1 10 7 10"></polyline>
           <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
         </svg>
-        重发模式
+        {{ t("message.monotonicEditModeTag") }}
       </el-tag>
     </div>
 
@@ -90,12 +90,14 @@ defineExpose({ focusTextarea });
       <div class="monotonic-edit-attachments">
         <div class="monotonic-attachment-header">
           <div class="monotonic-attachment-copy">
-            <span class="monotonic-attachment-title">附件列表</span>
+            <span class="monotonic-attachment-title">{{
+              t("message.monotonicAttachmentTitle")
+            }}</span>
           </div>
           <div class="monotonic-attachment-stats">
-            <el-tag size="small" effect="plain" round class="stat-tag noobot-soft-badge"
-              >{{ attachmentStats.total }} 个</el-tag
-            >
+            <el-tag size="small" effect="plain" round class="stat-tag noobot-soft-badge">{{
+              t("message.monotonicAttachmentTotal", { count: attachmentStats.total })
+            }}</el-tag>
             <el-tag
               v-if="attachmentStats.history"
               size="small"
@@ -103,7 +105,9 @@ defineExpose({ focusTextarea });
               effect="light"
               round
               class="stat-tag noobot-soft-badge"
-              >原 {{ attachmentStats.history }}</el-tag
+              >{{
+                t("message.monotonicAttachmentHistory", { count: attachmentStats.history })
+              }}</el-tag
             >
             <el-tag
               v-if="attachmentStats.added"
@@ -112,7 +116,7 @@ defineExpose({ focusTextarea });
               effect="light"
               round
               class="stat-tag noobot-soft-badge is-success"
-              >新 {{ attachmentStats.added }}</el-tag
+              >{{ t("message.monotonicAttachmentAdded", { count: attachmentStats.added }) }}</el-tag
             >
           </div>
         </div>
@@ -121,7 +125,7 @@ defineExpose({ focusTextarea });
           v-if="!editAttachments.length"
           class="monotonic-attachment-empty noobot-subtle-row"
           :image-size="48"
-          description="暂无附件，可点击下方按钮添加"
+          :description="t('message.monotonicAttachmentEmpty')"
         />
 
         <el-scrollbar v-else max-height="200px" class="monotonic-attachment-scroll">
@@ -152,7 +156,11 @@ defineExpose({ focusTextarea });
                     effect="light"
                     class="kind-tag"
                   >
-                    {{ attachment.kind === "new" ? "新增" : "原附件" }}
+                    {{
+                      attachment.kind === "new"
+                        ? t("message.monotonicAttachmentKindNew")
+                        : t("message.monotonicAttachmentKindHistory")
+                    }}
                   </el-tag>
                   <span class="dot" aria-hidden="true">·</span>
                   <span class="desc-text">{{ attachmentTypeLabel(attachment) }}</span>
@@ -165,7 +173,7 @@ defineExpose({ focusTextarea });
                 class="monotonic-attachment-remove noobot-icon-button"
                 :disabled="operating"
                 @click="emit('remove-attachment', index)"
-                title="移除附件"
+                :title="t('message.monotonicAttachmentRemove')"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -211,7 +219,7 @@ defineExpose({ focusTextarea });
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          添加附件
+          {{ t("message.monotonicAttachmentAdd") }}
         </button>
       </div>
     </div>

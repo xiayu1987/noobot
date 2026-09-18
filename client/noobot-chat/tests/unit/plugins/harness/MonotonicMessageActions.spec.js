@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import MonotonicMessageActions from "../../../../src/modules/chat/components/message/actions/MonotonicMessageActions.vue";
 import { createElementPlusMountOptions } from "../../fixtures/elementPlusStubs.js";
+import { translateMessageKey } from "../../../../src/shared/i18n/messageCatalog.js";
 
 vi.mock("element-plus", () => ({
   ElMessage: { error: vi.fn() },
@@ -24,7 +25,7 @@ function mountActions(overrides = {}) {
       visible: true,
       disabled: false,
       messageItem: { id: "m1", content: "old content" },
-      translate: (_key, fallback) => fallback,
+      translate: (key, params) => translateMessageKey("zh-CN", key, params),
       onDelete: vi.fn(async () => true),
       onResend: vi.fn(async () => true),
       ...overrides,
@@ -39,7 +40,9 @@ describe("MonotonicMessageActions", () => {
   });
 
   it("renders only when visible", () => {
-    expect(mountActions({ visible: true }).text()).toContain("编辑");
+    expect(mountActions({ visible: true }).text()).toContain(
+      translateMessageKey("zh-CN", "message.monotonicEdit"),
+    );
     expect(mountActions({ visible: false }).find(".monotonic-message-actions").exists()).toBe(
       false,
     );

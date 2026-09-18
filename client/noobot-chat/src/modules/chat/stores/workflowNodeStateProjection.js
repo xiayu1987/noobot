@@ -5,6 +5,7 @@
  */
 import {
   compareWorkflowRuntimeFacts,
+  isWorkflowNodeTerminalStatus,
   WORKFLOW_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol/workflow-runtime-event";
 
@@ -16,23 +17,6 @@ const preferText = (primary, fallback, key) => text(primary?.[key] || fallback?.
 const preferNumber = (primary, fallback, key) => Number(primary?.[key] ?? fallback?.[key] ?? 0);
 const resolveNodeStatus = (primary, fallback) =>
   text(primary?.status || primary?.stepStatus || fallback?.status || fallback?.stepStatus);
-
-const WORKFLOW_NODE_TERMINAL_STATUSES = new Set([
-  "succeeded",
-  "completed",
-  "failed",
-  "cancelled",
-  "canceled",
-  "stopped",
-  "aborted",
-  "error",
-  "expired",
-  "timeout",
-]);
-
-export function isWorkflowNodeTerminalStatus(value) {
-  return WORKFLOW_NODE_TERMINAL_STATUSES.has(text(value).toLowerCase());
-}
 
 export function shouldApplyWorkflowNodeStateEvent(current, incoming) {
   if (!current) return true;
@@ -47,9 +31,9 @@ export function shouldApplyWorkflowNodeStateEvent(current, incoming) {
 function terminalStateImmutable(current, currentStatus, incomingStatus) {
   return Boolean(
     current &&
-      isWorkflowNodeTerminalStatus(currentStatus) &&
-      incomingStatus &&
-      incomingStatus !== currentStatus,
+    isWorkflowNodeTerminalStatus(currentStatus) &&
+    incomingStatus &&
+    incomingStatus !== currentStatus,
   );
 }
 
@@ -66,7 +50,11 @@ export function evaluateWorkflowNodeStateGate({ eventData = {}, current = null, 
     };
   }
   if (!shouldApplyWorkflowNodeStateEvent(current, eventData)) {
-    return { admitted: false, result: { applied: false, reason: "stale", current }, logStale: true };
+    return {
+      admitted: false,
+      result: { applied: false, reason: "stale", current },
+      logStale: true,
+    };
   }
   return { admitted: true };
 }
@@ -98,7 +86,12 @@ export function buildNextWorkflowNodeFact({
   };
 }
 
-export function buildWorkflowPlanningHeader({ currentWorkflow = {}, eventData = {}, workflowRunId, workflowPayload }) {
+export function buildWorkflowPlanningHeader({
+  currentWorkflow = {},
+  eventData = {},
+  workflowRunId,
+  workflowPayload,
+}) {
   return {
     ...currentWorkflow,
     workflowRunId,
@@ -114,7 +107,12 @@ export function buildWorkflowPlanningHeader({ currentWorkflow = {}, eventData = 
   };
 }
 
-export function buildPlannedNodeStateEvent({ nodeSession = {}, eventData = {}, workflowRunId, index }) {
+export function buildPlannedNodeStateEvent({
+  nodeSession = {},
+  eventData = {},
+  workflowRunId,
+  index,
+}) {
   const nodeExecutionId = field(nodeSession, "nodeExecutionId");
   return {
     ...(nodeSession || {}),

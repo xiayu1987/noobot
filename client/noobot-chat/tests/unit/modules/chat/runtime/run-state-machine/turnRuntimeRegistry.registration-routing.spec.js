@@ -21,7 +21,9 @@ import {
 import {
   SESSION_RUN_EVENT,
   BackendChannelState,
+  COMPOSER_PRIMARY_ACTION,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { resolveComposerPrimaryAction } from "../../../../../../src/modules/chat/runtime/run-state-machine/composerAction.js";
 import {
   backendState,
   lifecycle,
@@ -462,8 +464,9 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s2",
       sending: false,
       canStop: false,
-      displayState: "send",
+      displayState: "",
     });
+    expect(resolveComposerPrimaryAction(null)).toBe(COMPOSER_PRIMARY_ACTION.SEND);
 
     backendState(registry, {
       sessionId: "s1",
@@ -542,9 +545,9 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       revision: 5,
       sequence: 5,
     });
-    expect(turnRuntimeDisplayState(resolveLatestContinuableStoppedTurn(registry, "s1"))).toBe(
-      "continue",
-    );
+    expect(
+      resolveComposerPrimaryAction(resolveLatestContinuableStoppedTurn(registry, "s1")?.terminal),
+    ).toBe(COMPOSER_PRIMARY_ACTION.CONTINUE);
     expect(resolveLatestStoppedTurn(registry, "s1")?.turnScopeId).toBe("t1");
   });
   it("hydrates an authoritative action request that arrives before any local Turn", () => {

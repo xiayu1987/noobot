@@ -53,7 +53,6 @@ function mergeProjectedStatusStepState(previousState = "", currentState = "") {
   return current;
 }
 
-
 export function mergeMessagePresentationFacets(previousMessage = {}, currentMessage = {}) {
   const previousScopeId = text(previousMessage?.statusTurnScopeId);
   const currentScopeId = text(currentMessage?.statusTurnScopeId);

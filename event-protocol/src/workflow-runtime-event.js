@@ -22,6 +22,34 @@ export const WORKFLOW_SEQUENCE_DOMAIN = Object.freeze({
   SESSION_SNAPSHOT: "workflow-session-snapshot",
 });
 
+export const WORKFLOW_NODE_STATUS = Object.freeze({
+  PENDING: "pending",
+  READY: "ready",
+  RUNNING: "running",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+  STOPPED: "stopped",
+  SKIPPED: "skipped",
+});
+
+const WORKFLOW_NODE_TERMINAL_STATUSES = Object.freeze(
+  new Set([
+    WORKFLOW_NODE_STATUS.SUCCEEDED,
+    WORKFLOW_NODE_STATUS.FAILED,
+    WORKFLOW_NODE_STATUS.STOPPED,
+    WORKFLOW_NODE_STATUS.SKIPPED,
+  ]),
+);
+
+export function normalizeWorkflowNodeStatus(value = "") {
+  const status = text(value).toLowerCase();
+  return Object.values(WORKFLOW_NODE_STATUS).includes(status) ? status : "";
+}
+
+export function isWorkflowNodeTerminalStatus(value = "") {
+  return WORKFLOW_NODE_TERMINAL_STATUSES.has(normalizeWorkflowNodeStatus(value));
+}
+
 export function workflowSequenceDomainForEvent(eventType = "") {
   if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) return WORKFLOW_SEQUENCE_DOMAIN.PLANNING;
   if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) return WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;

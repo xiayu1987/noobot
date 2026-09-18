@@ -8,6 +8,16 @@ import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../run-state-machine/turnRuntimeRegistry.js";
+import {
+  COMPOSER_PRIMARY_ACTION,
+  isSendBlockingStatusStepState,
+  resolveComposerPrimaryAction,
+  resolveComposerPrimaryActionLabelKey,
+  resolveStatusStepLabelKey,
+  STATUS_STEP_STAGE,
+  TURN_PENDING_COMMAND_TYPE,
+  TURN_RUNTIME_TERMINAL,
+} from "../sessionRunStateMachine.js";
 
 export function createComposerRuntimeState({
   turnRuntimeRegistry,
@@ -20,20 +30,24 @@ export function createComposerRuntimeState({
     const turn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
     const runtimeView = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId);
     const displayState = runtimeView.displayState;
-    const userStopped = turn?.terminal === "user_stopped";
+    const primaryAction = resolveComposerPrimaryAction(turn?.terminal);
+    const userStopped = turn?.terminal === TURN_RUNTIME_TERMINAL.USER_STOPPED;
     const actionLocked = runtimeView.sending === true;
 
-    const stopRequesting = turn?.commandPending === true && turn?.pendingCommandType === "stop";
-    const awaitingStopSummary = displayState === "stopping";
+    const stopRequesting =
+      turn?.commandPending === true && turn?.pendingCommandType === TURN_PENDING_COMMAND_TYPE.STOP;
+    const awaitingStopSummary = displayState === STATUS_STEP_STAGE.STOPPING;
     const canInterject = Boolean(
-      displayState === "sending" &&
+      displayState === STATUS_STEP_STAGE.SENDING &&
       sessionId &&
       runtimeView.turnScopeId &&
       runtimeView.dialogProcessId &&
       !turn?.terminal,
     );
     return {
-      sendRequesting: displayState === "requesting" && turn?.action !== "stop",
+      sendRequesting:
+        displayState === STATUS_STEP_STAGE.REQUESTING &&
+        turn?.action !== TURN_PENDING_COMMAND_TYPE.STOP,
       continueRequesting: false,
       stopRequesting,
       stopPendingUntilBackendReady: false,
@@ -43,12 +57,16 @@ export function createComposerRuntimeState({
       stopInFlight: stopRequesting || awaitingStopSummary,
       awaitingBackendStop: awaitingStopSummary,
       userStopped,
-      primaryAction: userStopped ? "continue" : "send",
-      canContinue: userStopped,
-      canResend: userStopped,
+      primaryAction,
+      canContinue: primaryAction === COMPOSER_PRIMARY_ACTION.CONTINUE,
+      canResend: primaryAction === COMPOSER_PRIMARY_ACTION.CONTINUE,
       canInterject,
       state: displayState,
       displayState,
+      actionLabelKey: displayState
+        ? resolveStatusStepLabelKey(displayState)
+        : resolveComposerPrimaryActionLabelKey(primaryAction),
+      sendBlocked: isSendBlockingStatusStepState(displayState),
       canStop: runtimeView.canStop,
     };
   });
