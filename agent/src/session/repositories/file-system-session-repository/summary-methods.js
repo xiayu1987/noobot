@@ -86,6 +86,40 @@ class SessionSummaryMethods {
     });
   }
 
+  async markSessionSummaryUnavailable(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    error = null,
+  ) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return null;
+    const metadata = await this._readSessionSummaryMetadata(
+      userId,
+      normalizedSessionId,
+      parentSessionId,
+    );
+    return this._withSessionSummaryMutation(userId, async () => {
+      const current = await this.readSessionsSummary(userId);
+      const existing = current.sessions.find((item) => item.sessionId === normalizedSessionId);
+      const unavailable = buildUnavailableSessionSummary({
+        sessionId: normalizedSessionId,
+        parentSessionId,
+        title: metadata.title || existing?.title,
+        caller: metadata.caller || existing?.caller,
+        createdAt: metadata.createdAt || existing?.createdAt,
+        updatedAt: metadata.updatedAt || existing?.updatedAt,
+        depth: existing?.depth,
+        errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
+        reason: error?.message || "Session uses an unsupported protocol",
+      });
+      const next = current.sessions.filter((item) => item.sessionId !== normalizedSessionId);
+      next.push(unavailable);
+      await this.writeSessionsSummary(userId, next);
+      return unavailable;
+    });
+  }
+
   async removeSessionSummaries(userId = "", sessionIds = []) {
     const ids = new Set(
       (Array.isArray(sessionIds) ? sessionIds : [sessionIds])

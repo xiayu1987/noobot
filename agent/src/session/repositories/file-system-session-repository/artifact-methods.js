@@ -6,17 +6,19 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
+import { isSessionDisplaySummaryCurrent } from "../../session-summary-builders.js";
+import { normalizeSessionDocumentForCurrentProtocol } from "../../session-document-normalization.js";
+import { createSessionDisplaySourceRevision } from "../../session-display-source-revision.js";
 import {
   authorityOutboxRecordsFromOutbox,
   replaceAuthorityOutboxRecords,
 } from "../../authority-outbox-store/outbox-journal.js";
 import {
   buildSessionArtifactFileMap,
-  readSessionDisplaySummaryArtifact,
   readSessionArtifact,
   readSessionArtifactForRepair,
+  readSessionDisplaySummaryArtifact as readDisplaySummaryArtifact,
   readSessionMessageCount,
-  readRecentSessionTurns,
   readSessionTurn,
   rebuildSessionDisplaySummaryArtifact,
   writeSessionArtifact,
@@ -24,7 +26,6 @@ import {
 } from "../../session-artifact-store.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
-  migrateSessionDocument,
   reconcileCompletedTurnSummaryMarks,
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
@@ -52,6 +53,138 @@ class SessionArtifactMethods {
     parentSessionId = "",
     persistenceContext = null,
   ) {
+    const result = await this.ensureSessionDisplaySummary(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    return result.summary;
+  }
+
+  async ensureSessionDisplaySummary(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return { summary: null, migrated: false, rebuilt: false };
+    const scope = await this.resolveSessionScope(
+      userId,
+      normalizedSessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    try {
+      const [manifest, summary] = await Promise.all([
+        this.storageService.readJson(scope.sessionFile, null).catch(() => null),
+        readDisplaySummaryArtifact({
+          storageService: this.storageService,
+          sessionDir: scope.sessionDir,
+          sessionId: normalizedSessionId,
+        }).catch(() => null),
+      ]);
+      if (isSessionDisplaySummaryCurrent(summary, manifest)) {
+        return { summary, migrated: false, rebuilt: false };
+      }
+      const migrated =
+        Number(manifest?.schemaVersion || 0) !== TURN_THRESHOLDS.session.turnJournalSchemaVersion;
+
+      const session = await this.findById(
+        userId,
+        normalizedSessionId,
+        parentSessionId,
+        persistenceContext,
+      );
+      if (!session) return { summary: null, migrated, rebuilt: false };
+      let rebuilt = await readDisplaySummaryArtifact({
+        storageService: this.storageService,
+        sessionDir: scope.sessionDir,
+        sessionId: normalizedSessionId,
+      });
+      let currentManifest = await this.storageService.readJson(scope.sessionFile, null);
+      if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
+        await this.upsertSessionSummary(userId, session);
+        return { summary: rebuilt, migrated, rebuilt: !migrated };
+      } else {
+        await this._refreshSessionDisplaySummary(
+          userId,
+          normalizedSessionId,
+          parentSessionId,
+          session,
+          persistenceContext,
+        );
+        rebuilt = await readDisplaySummaryArtifact({
+          storageService: this.storageService,
+          sessionDir: scope.sessionDir,
+          sessionId: normalizedSessionId,
+        });
+        currentManifest = await this.storageService.readJson(scope.sessionFile, null);
+      }
+      if (isSessionDisplaySummaryCurrent(rebuilt, currentManifest)) {
+        return { summary: rebuilt, migrated, rebuilt: !migrated };
+      }
+      const error = new Error("rebuilt Session display summary is not current");
+      error.code = "SESSION_DISPLAY_SUMMARY_REBUILD_INVALID";
+      throw error;
+    } catch (error) {
+      try {
+        await this.markSessionSummaryUnavailable(
+          userId,
+          normalizedSessionId,
+          parentSessionId,
+          error,
+        );
+      } catch (projectionError) {
+        error.unavailableProjectionCause = projectionError;
+      }
+      throw error;
+    }
+  }
+
+  async _refreshSessionDisplaySummary(
+    userId,
+    sessionId,
+    parentSessionId,
+    candidateSession,
+    persistenceContext = null,
+  ) {
+    return this.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      async () => {
+        const scope = await this.resolveSessionScope(
+          userId,
+          sessionId,
+          parentSessionId,
+          persistenceContext,
+        );
+        const manifest = await this.storageService.readJson(scope.sessionFile, null);
+        const session =
+          createSessionDisplaySourceRevision(candidateSession) ===
+          createSessionDisplaySourceRevision(manifest)
+            ? candidateSession
+            : await this._readNormalizedSession(scope, sessionId, parentSessionId);
+        await rebuildSessionDisplaySummaryArtifact({
+          storageService: this.storageService,
+          sessionDir: scope.sessionDir,
+          sessionPayload: session,
+        });
+        await this.upsertSessionSummary(userId, session);
+        return session;
+      },
+      persistenceContext,
+    );
+  }
+
+  async readSessionDisplaySummaryArtifact(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return null;
     const { sessionDir } = await this.resolveSessionScope(
@@ -60,7 +193,7 @@ class SessionArtifactMethods {
       parentSessionId,
       persistenceContext,
     );
-    return readSessionDisplaySummaryArtifact({
+    return readDisplaySummaryArtifact({
       storageService: this.storageService,
       sessionDir,
       sessionId: normalizedSessionId,
@@ -91,28 +224,7 @@ class SessionArtifactMethods {
   ) {
     const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
     if (!session) return null;
-    const turns = await readRecentSessionTurns({
-      sessionDir: (
-        await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext)
-      ).sessionDir,
-      limit: Number.MAX_SAFE_INTEGER,
-      fallback: null,
-    });
-    const messages = turns.flatMap((turn = {}) =>
-      Array.isArray(turn.messages) ? turn.messages : [],
-    );
-    if (Array.isArray(session.turnOrder) && session.turnOrder.length > 0 && messages.length === 0) {
-      const error = new Error("canonical session turn artifacts contain no messages");
-      error.code = "SESSION_TURN_ARTIFACT_EMPTY";
-      throw error;
-    }
-    return this.writeSessionDisplaySummary(
-      userId,
-      Array.isArray(session.turnOrder) && session.turnOrder.length > 0
-        ? { ...session, messages }
-        : session,
-      { persistenceContext },
-    );
+    return this.writeSessionDisplaySummary(userId, session, { persistenceContext });
   }
 
   async readSessionTurn(
@@ -152,7 +264,12 @@ class SessionArtifactMethods {
     );
     if (!(await this.storageService.exists(scope.sessionFile))) return { migrated: false };
     try {
-      await this._readNormalizedSession(scope, normalizedSessionId, parentSessionId);
+      const manifest = await this.storageService.readJson(scope.sessionFile, null);
+      if (Number(manifest?.schemaVersion) !== TURN_THRESHOLDS.session.turnJournalSchemaVersion) {
+        throw Object.assign(new Error("Session artifact protocol version requires repair"), {
+          code: "SESSION_PROTOCOL_VERSION_REPAIR_REQUIRED",
+        });
+      }
       return { migrated: false, migrations: [], repaired: [] };
     } catch {
       return this._repairSessionToCurrentProtocol(
@@ -210,15 +327,14 @@ class SessionArtifactMethods {
                 error.code = "SESSION_ARTIFACT_MISSING";
                 throw error;
               }
-              const migration = migrateSessionDocument(source);
-              const normalized = normalizeSessionEntity(migration.document, {
+              const migration = normalizeSessionDocumentForCurrentProtocol(source, {
                 now: this.now,
                 sessionId,
                 parentSessionId,
               });
               await writeSessionArtifact({
                 sessionDir: stagingDir,
-                sessionPayload: normalized,
+                sessionPayload: migration.document,
                 now: this.now,
               });
               if (migration.legacyAuthorityEventOutbox?.length) {
