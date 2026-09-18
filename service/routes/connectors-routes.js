@@ -44,6 +44,62 @@ async function removeConnectorFromSessionSelections({ bot, userId, connectorId }
   return updatedSessionCount;
 }
 
+function registerConnectorSelectionRoutes(app, { bot, connectorRuntime, jsonOptions }) {
+  app.get(
+    "/internal/connectors/:userId/sessions/:sessionId",
+    withJsonError(async (req, res) => {
+      const userId = assertOwner(req, req.params.userId);
+      const selectedConnectorIds = await bot.session.getRootSessionSelectedConnectorIds({
+        userId,
+        sessionId: req.params.sessionId,
+      });
+      const connectors = await connectorRuntime.listUserConnectors(userId);
+      res.json({
+        ok: true,
+        userId,
+        sessionId: req.params.sessionId,
+        connectors,
+        selectedConnectorIds,
+      });
+    }, jsonOptions),
+  );
+
+  app.put(
+    "/internal/connectors/:userId/sessions/:sessionId/selection",
+    withJsonError(async (req, res) => {
+      const userId = assertOwner(req, req.params.userId);
+      const connectors = await connectorRuntime.listUserConnectors(userId);
+      const selectedConnectorIds = assertSelectedConnectorsOwned(
+        normalizeSelectedConnectorIds(req.body?.selectedConnectorIds),
+        connectors,
+      );
+      const connectedIds = new Set(
+        connectors.filter((item) => item.status === "connected").map((item) => item.connectorId),
+      );
+      const disconnectedSelection = selectedConnectorIds.filter((item) => !connectedIds.has(item));
+      if (disconnectedSelection.length) {
+        const error = new Error(
+          `selected connector is not connected: ${disconnectedSelection.join(", ")}`,
+        );
+        error.status = 409;
+        error.errorCode = "connector_not_connected";
+        throw error;
+      }
+      const savedSelectedConnectorIds = await bot.session.setRootSessionSelectedConnectorIds({
+        userId,
+        sessionId: req.params.sessionId,
+        selectedConnectorIds,
+      });
+      res.json({
+        ok: true,
+        userId,
+        sessionId: req.params.sessionId,
+        selectedConnectorIds: savedSelectedConnectorIds,
+      });
+    }, jsonOptions),
+  );
+}
+
 export function registerConnectorRoutes(app, { bot, connectorRuntime, translateText } = {}) {
   const jsonOptions = { fallbackErrorKey: "common.getConnectorsFailed", translateText };
 
@@ -150,57 +206,5 @@ export function registerConnectorRoutes(app, { bot, connectorRuntime, translateT
     }, jsonOptions),
   );
 
-  app.get(
-    "/internal/connectors/:userId/sessions/:sessionId",
-    withJsonError(async (req, res) => {
-      const userId = assertOwner(req, req.params.userId);
-      const selectedConnectorIds = await bot.session.getRootSessionSelectedConnectorIds({
-        userId,
-        sessionId: req.params.sessionId,
-      });
-      const connectors = await connectorRuntime.listUserConnectors(userId);
-      res.json({
-        ok: true,
-        userId,
-        sessionId: req.params.sessionId,
-        connectors,
-        selectedConnectorIds,
-      });
-    }, jsonOptions),
-  );
-
-  app.put(
-    "/internal/connectors/:userId/sessions/:sessionId/selection",
-    withJsonError(async (req, res) => {
-      const userId = assertOwner(req, req.params.userId);
-      const connectors = await connectorRuntime.listUserConnectors(userId);
-      const selectedConnectorIds = assertSelectedConnectorsOwned(
-        normalizeSelectedConnectorIds(req.body?.selectedConnectorIds),
-        connectors,
-      );
-      const connectedIds = new Set(
-        connectors.filter((item) => item.status === "connected").map((item) => item.connectorId),
-      );
-      const disconnectedSelection = selectedConnectorIds.filter((item) => !connectedIds.has(item));
-      if (disconnectedSelection.length) {
-        const error = new Error(
-          `selected connector is not connected: ${disconnectedSelection.join(", ")}`,
-        );
-        error.status = 409;
-        error.errorCode = "connector_not_connected";
-        throw error;
-      }
-      const savedSelectedConnectorIds = await bot.session.setRootSessionSelectedConnectorIds({
-        userId,
-        sessionId: req.params.sessionId,
-        selectedConnectorIds,
-      });
-      res.json({
-        ok: true,
-        userId,
-        sessionId: req.params.sessionId,
-        selectedConnectorIds: savedSelectedConnectorIds,
-      });
-    }, jsonOptions),
-  );
+  registerConnectorSelectionRoutes(app, { bot, connectorRuntime, jsonOptions });
 }

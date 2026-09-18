@@ -10,7 +10,10 @@ import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,
 } from "../src/policy/injected-message.js";
-import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../src/message/injected-types.js";
+import {
+  SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES,
+  SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES,
+} from "../src/message/injected-types.js";
 
 test("internal message type uses the context protocol field codec", () => {
   assert.equal(
@@ -30,9 +33,20 @@ test("internal message type reads the canonical Session entity field", () => {
   );
 });
 
-test("every runtime control message participates in summary checkpoint policy", () => {
+test("only checkpoint control messages participate in summary checkpoint policy", () => {
   assert.deepEqual(
     [...SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES].sort(),
-    Object.values(CONTEXT_INJECTED_MESSAGE_TYPE).sort(),
+    Object.values(CONTEXT_INJECTED_MESSAGE_TYPE)
+      .filter((type) => type !== CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION)
+      .sort(),
   );
+  assert.equal(
+    SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES.includes(
+      CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+    ),
+    false,
+  );
+  assert.deepEqual(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES, [
+    CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
+  ]);
 });
