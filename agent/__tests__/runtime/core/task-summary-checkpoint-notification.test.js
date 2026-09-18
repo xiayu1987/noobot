@@ -75,7 +75,7 @@ test("task_summary sends one checkpoint command without mutating messages before
     },
     processToolResultsFn: async () => ({
       toolCallResults: [],
-      hasTaskSummaryCall: true,
+      taskSummaryOutcome: { attempted: true, accepted: true },
     }),
     buildLoopResultFn: ({ output }) => ({ output }),
     maybeRequestPhaseSummaryFn: () => {},
@@ -106,4 +106,67 @@ test("task_summary sends one checkpoint command without mutating messages before
     new Set(checkpointCalls[0].summaryCompletion.summarizedMessageIds),
     new Set(["sm_1", "sm_2", "sm_3", "sm_4", "sm_5"]),
   );
+});
+
+test("rejected task_summary does not request a checkpoint", async () => {
+  const currentTurnMessages = createCurrentTurnMessagesStore([]);
+  const checkpointCalls = [];
+  const runtime = {
+    systemRuntime: { sessionId: "s1", turnScopeId: "scope-1", dialogProcessId: "dialog-1" },
+    currentTurnMessages,
+    async commitSummaryCheckpoint(payload) {
+      checkpointCalls.push(payload);
+      return { committed: true };
+    },
+  };
+  let invocation = 0;
+  const run = createTurnOrchestrator({
+    resolveLlmForTurnFn: () => {},
+    assertNotAbortedFn: () => {},
+    invokeWithToolsTurnFn: async () => {
+      invocation += 1;
+      return invocation === 1
+        ? {
+            aiContentText: "",
+            calls: [{ id: "summary", name: "task_summary", args: {} }],
+            turnMessageStore: currentTurnMessages,
+            turnTaskStore: { toArray: () => [] },
+            stateCommitter: {},
+          }
+        : {
+            aiContentText: "done",
+            calls: [],
+            turnMessageStore: currentTurnMessages,
+            turnTaskStore: { toArray: () => [] },
+          };
+    },
+    processToolResultsFn: async () => ({
+      toolCallResults: [{ call: { name: "task_summary" }, success: false }],
+      taskSummaryOutcome: { attempted: true, accepted: false },
+    }),
+    buildLoopResultFn: ({ output }) => ({ output }),
+    maybeRequestPhaseSummaryFn: () => {},
+    maybeRequestTaskCheckFn: () => {},
+    maybePromptHelpToolByLoopFn: () => {},
+    maybePromptHelpToolByFailureFn: () => {},
+  });
+
+  const result = await run({
+    modelState: { runtime, eventListener: null, abortSignal: null },
+    loopState: {
+      tools: [{}],
+      traces: [],
+      maxTurns: 10,
+      modelContext: createModelContext({
+        messageBlocks: { system: [], history: [], incremental: [] },
+        activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
+      }),
+      turnMessages: [],
+      turnTasks: [],
+    },
+    turn: 1,
+  });
+
+  assert.equal(result.output, "done");
+  assert.deepEqual(checkpointCalls, []);
 });

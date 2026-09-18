@@ -17,6 +17,8 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       },
     },
     texts: {
+      "tools.task_summary.notRequested":
+        "The system did not request a phase summary. Continue the current task.",
       "tools.task_summary.summaryContentRequired": "summaryContent is required",
       "tools.task_summary.summaryProtocolInvalid":
         "summaryContent does not conform to NOOBOT_TASK_SUMMARY/1",

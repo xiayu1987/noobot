@@ -16,6 +16,7 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { HELP_TOOL_NAME } from "../tools/collaboration/help-tool.js";
 import { TOOL_NAME } from "../tools/constants/index.js";
+import { resolveControlToolOutcome } from "./control-tool-outcome.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
 import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
 
@@ -109,10 +110,8 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
 
-  const hasTaskSummaryCall = (Array.isArray(toolCallResults) ? toolCallResults : []).some(
-    (r) => String(r?.call?.name || "").trim() === TOOL_NAME.TASK_SUMMARY,
-  );
-  if (hasTaskSummaryCall) return false;
+  const taskSummaryOutcome = resolveControlToolOutcome(toolCallResults, TOOL_NAME.TASK_SUMMARY);
+  if (taskSummaryOutcome.attempted) return false;
 
   const currentCount = Number(systemRuntime.phaseSummaryLoopCount || 0);
   const nextCount = Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
@@ -176,11 +175,9 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
   if (!systemRuntime) return false;
   if (!hasTool(loopState?.tools || [], TOOL_NAME.TASK_CHECK)) return false;
 
-  const hasTaskCheckCall = (Array.isArray(toolCallResults) ? toolCallResults : []).some(
-    (result) => String(result?.call?.name || "").trim() === TOOL_NAME.TASK_CHECK,
-  );
-  if (hasTaskCheckCall) {
-    systemRuntime.taskCheckLoopCount = 0;
+  const taskCheckOutcome = resolveControlToolOutcome(toolCallResults, TOOL_NAME.TASK_CHECK);
+  if (taskCheckOutcome.attempted) {
+    if (taskCheckOutcome.accepted) systemRuntime.taskCheckLoopCount = 0;
     return false;
   }
 

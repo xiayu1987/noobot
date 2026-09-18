@@ -148,7 +148,7 @@ export default {
   "ws.unknownError": "unknown error",
   "ws.userInteractionTimeout": "user interaction timeout",
   "agent.phaseSummaryPrompt":
-    "The context has reached the phase-summary threshold. This turn must call only task_summary. summaryContent must strictly use the single text protocol: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort factual summary of the completed phase\n[DETAILS]\nAuthoritative phase state integrated with prior summaries, clearly distinguishing completed work, key results, remaining work, and blockers; in programming mode include file paths, function names, and line numbers\n[NEXT_ACTION]\nThe single specific unfinished action to execute next. Every section must be non-empty; do not add, repeat, or reorder sections. Use CONTINUE while executable work remains; subsequent work must resume only from NEXT_ACTION without repeating completed work. Use COMPLETE when the task is finished and BLOCKED only when progress is impossible.",
+    "The phase-summary threshold is reached. This turn must only call task_summary and submit the authoritative phase state exactly as its tool schema requires.",
   "agent.taskCheckPrompt":
     "The periodic task-check threshold has been reached. For this model call, you may call task_check to leave a task-check slice, but the call is optional; this prompt appears only for this call. If called, checkContent must strictly use the single text protocol: NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort task-check abstract\n[DETAILS]\nCurrent goal, progress, drift risks, and omissions\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections.",
 };

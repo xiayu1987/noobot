@@ -88,7 +88,7 @@ test("a task_check call starts the next periodic slice without adding a prompt",
     maybeRequestTaskCheck({
       modelState,
       loopState,
-      toolCallResults: [{ call: { name: "task_check" } }],
+      toolCallResults: [{ call: { name: "task_check" }, success: true }],
     }),
     false,
   );
@@ -224,6 +224,33 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
     events.some((item) => item?.event === "phase_summary_required"),
     true,
   );
+});
+
+test("failed task_summary attempt preserves the pending summary state", () => {
+  const modelState = {
+    runtime: {
+      systemRuntime: {
+        needsPhaseSummary: true,
+        phaseSummaryLoopCount: 0,
+      },
+    },
+  };
+  const loopState = {
+    tools: [{ name: "task_summary" }],
+    phaseSummaryLoopTurns: 1,
+    modelContext: createModelContext({
+      messageBlocks: { system: [], history: [], incremental: [] },
+    }),
+  };
+
+  const triggered = maybeRequestPhaseSummary({
+    modelState,
+    loopState,
+    toolCallResults: [{ call: { name: "task_summary" }, success: false }],
+  });
+  assert.equal(triggered, false);
+  assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
+  assert.equal(modelState.runtime.systemRuntime.phaseSummaryLoopCount, 0);
 });
 
 test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars exceed threshold", () => {
