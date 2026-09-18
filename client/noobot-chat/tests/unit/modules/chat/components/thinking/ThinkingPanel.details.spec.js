@@ -436,6 +436,46 @@ describe("ThinkingPanel canonical details", () => {
     );
   });
 
+  it("keeps an authoritative user interjection event in the projected round timeline", () => {
+    const assistant = {
+      role: "assistant",
+      sessionId: "session-live-interjection",
+      turnScopeId: "turn-live-interjection",
+      pending: true,
+      thinkingContentTimeline: [
+        {
+          contentId: "message:user-interjection:command-live",
+          contentKind: "user_interjection",
+          sourceMessageUid: "user-interjection:command-live",
+          text: "display this accepted interjection immediately",
+          timestamp: "2026-09-18T01:00:00.000Z",
+          sequence: 1,
+          sessionId: "session-live-interjection",
+          dialogProcessId: "dialog-live-interjection",
+          turnScopeId: "turn-live-interjection",
+          messageId: "assistant-live-interjection",
+          presentationMessageId: "assistant-live-interjection",
+        },
+      ],
+    };
+    const wrapper = mountThinkingPanel(assistant, {
+      allMessages: [
+        {
+          role: "user",
+          sessionId: "session-live-interjection",
+          turnScopeId: "turn-live-interjection",
+          content: "original question",
+        },
+        assistant,
+      ],
+      runtime: { running: true, terminal: false },
+    });
+
+    const interjection = wrapper.find('[data-thinking-block="user-interjection"]');
+    expect(interjection.exists()).toBe(true);
+    expect(interjection.text()).toContain("display this accepted interjection immediately");
+  });
+
   it("renders every user interjection in canonical timeline order in thinking details", async () => {
     const wrapper = mountThinkingPanel(
       {

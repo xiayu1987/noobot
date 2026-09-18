@@ -39,6 +39,41 @@ function message(overrides = {}) {
 const reduce = (targetMessage, envelope) => reduceMessageEvent({ targetMessage, event: envelope });
 
 describe("reduceMessageEvent", () => {
+  it("reduces an authoritative user interjection event into the thinking timeline", () => {
+    const target = message({
+      sessionId: "session-1",
+      presentationMessageId: "message-1",
+      thinkingContentTimeline: [],
+    });
+    const commandId = "command-live-1";
+    const contentFact = {
+      contentId: `message:user-interjection:${commandId}`,
+      contentKind: "user_interjection",
+      sourceMessageUid: `user-interjection:${commandId}`,
+      text: "display this authority event",
+      timestamp: "2026-09-18T01:00:00.000Z",
+      sequence: 1,
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      messageId: "message-1",
+      presentationMessageId: "message-1",
+    };
+    const interjectionEvent = event({
+      eventType: "user_interjection",
+      commandId,
+      causationId: commandId,
+      dialogProcessId: "dialog-1",
+      contentFact,
+    });
+
+    expect(reduce(target, interjectionEvent).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
+    expect(target.thinkingContentTimeline).toEqual([contentFact]);
+    expect(target.hasThinkingDetails).toBe(true);
+    expect(reduce(target, interjectionEvent).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE);
+    expect(target.thinkingContentTimeline).toHaveLength(1);
+  });
+
   it("applies text and no-text tool lifecycle events", () => {
     const target = message();
     expect(reduce(target, event()).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);

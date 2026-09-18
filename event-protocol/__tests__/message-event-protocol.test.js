@@ -46,7 +46,7 @@ function envelope(payloadOverrides = {}, envelopeOverrides = {}) {
       messageId: "message-1",
       ...(envelopeOverrides.identity || {}),
     },
-    causality: {},
+    causality: { ...(envelopeOverrides.causality || {}) },
     ordering: {
       domain: "message-event",
       scopeId: "message-1",
@@ -94,6 +94,68 @@ test("message payload validation is total for non-object input", () => {
       errors: ["payload_not_object"],
     });
   }
+});
+
+test("user interjection events carry one canonical thinking content fact", () => {
+  const commandId = "command-1";
+  const contentFact = {
+    contentId: `message:user-interjection:${commandId}`,
+    contentKind: "user_interjection",
+    sourceMessageUid: `user-interjection:${commandId}`,
+    text: "apply the accepted constraint",
+    timestamp: "2026-09-18T01:00:00.000Z",
+    sequence: 1,
+    sessionId: "child-1",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    messageId: "message-1",
+    presentationMessageId: "presentation-1",
+  };
+  const interjection = envelope(
+    {
+      eventType: MESSAGE_EVENT_TYPE.USER_INTERJECTION,
+      dialogProcessId: "dialog-1",
+      contentFact,
+      tool: undefined,
+      toolCallId: undefined,
+    },
+    { causality: { commandId, causationId: commandId } },
+  );
+
+  assert.equal(validateProtocolEvent(interjection).valid, true);
+  assert.deepEqual(
+    validateProtocolEvent({
+      ...interjection,
+      payload: {
+        ...interjection.payload,
+        contentFact: { ...contentFact, sourceMessageUid: "user-interjection:other" },
+      },
+    }).errors,
+    ["interjection_source_identity_mismatch", "interjection_content_identity_mismatch"],
+  );
+  assert.deepEqual(
+    validateProtocolEvent({
+      ...interjection,
+      causality: { ...interjection.causality, causationId: "command-other" },
+    }).errors,
+    ["interjection_causation_identity_mismatch"],
+  );
+  assert.deepEqual(
+    validateMessageEventPayload({
+      ...interjection.payload,
+      dialogProcessId: "",
+      contentFact: {
+        ...contentFact,
+        timestamp: "",
+        dialogProcessId: "",
+      },
+    }).errors,
+    [
+      "missing_user_interjection_fact_timestamp",
+      "missing_user_interjection_fact_dialog_process_id",
+      "missing_user_interjection_dialog_process_id",
+    ],
+  );
 });
 
 test("message payload owns presentation identity and content semantics", () => {

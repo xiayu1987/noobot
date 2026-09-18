@@ -80,6 +80,7 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       injectedBy: normalizedString(input.injectedBy),
       injectedMessageType: normalizedString(input.injectedMessageType),
       relayCorrelationId: normalizedString(input.relayCorrelationId),
+      interjectionSequence: Number(input.interjectionSequence || 0),
       messageOrigin: String(input.messageOrigin || "")
         .trim()
         .toLowerCase(),
@@ -89,7 +90,7 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       transferEnvelopes: Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : [],
       ...optionalStringField("thinkingStartedAt", input.thinkingStartedAt),
       ...optionalStringField("thinkingFinishedAt", input.thinkingFinishedAt),
-      ts: service.now(),
+      ts: normalizedString(input.ts) || service.now(),
     },
     service.now,
   );

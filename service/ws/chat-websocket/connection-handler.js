@@ -11,6 +11,7 @@ import { createConnectionState } from "./connection-state.js";
 import { createOutboundEventSender } from "./outbound-event-sender.js";
 import { createAuthorityEventDispatcher } from "./authority-event-dispatcher.js";
 import { createInteractionAuthorityBridge } from "./interaction-authority-bridge.js";
+import { createUserInterjectionAuthorityBridge } from "./user-interjection-authority-bridge.js";
 import { createTurnLifecycleBridge } from "./turn-lifecycle-bridge.js";
 import { recoverSnapshotOrphan, recoverTurnFinalize } from "./finalize-recovery.js";
 import { createTurnFinalizer, snapshotRunState } from "./terminal-outcomes.js";
@@ -170,6 +171,9 @@ function createConnectionMessageRuntime(context) {
     resolveBot: context.resolveBot,
     dispatchAuthorityEvents,
   });
+  const commitUserInterjection = createUserInterjectionAuthorityBridge({
+    resolveBot: context.resolveBot,
+  });
   const finalizers = createTurnFinalizer({
     sendEvent: context.sendEvent,
     commitInteractionRequest,
@@ -191,6 +195,7 @@ function createConnectionMessageRuntime(context) {
   });
   return {
     commitTurnLifecycle,
+    commitUserInterjection,
     dispatchAuthorityEvents,
     ...finalizers,
     ...interaction,
@@ -224,6 +229,7 @@ function createConnectionMessageHandler(context, runtime) {
     finalizeAborted: runtime.finalizeAborted,
     finalizeGenericError: runtime.finalizeGenericError,
     commitTurnLifecycle: runtime.commitTurnLifecycle,
+    commitUserInterjection: runtime.commitUserInterjection,
     dispatchAuthorityEvents: runtime.dispatchAuthorityEvents,
     recoverTurnFinalize: runtime.recoverPersistedTurnFinalize,
     recoverSnapshotOrphan: runtime.recoverPersistedSnapshotOrphan,

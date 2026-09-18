@@ -186,6 +186,11 @@ function optionalListField(name, value) {
   return Array.isArray(value) && value.length ? { [name]: value } : {};
 }
 
+function positiveIntegerValue(value) {
+  const normalized = Number(value || 0);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : 0;
+}
+
 function assistantPresentationField(input) {
   return input.role === MESSAGE_ROLE.ASSISTANT ? { chatPresentation: input.chatPresentation } : {};
 }
@@ -238,6 +243,7 @@ function normalizeSessionTurnInput(input = {}) {
     injectedBy: valueOrDefault(input.injectedBy, ""),
     injectedMessageType: valueOrDefault(input.injectedMessageType, ""),
     relayCorrelationId: valueOrDefault(input.relayCorrelationId, ""),
+    interjectionSequence: positiveIntegerValue(input.interjectionSequence),
     messageOrigin: String(input.messageOrigin || "")
       .trim()
       .toLowerCase(),
@@ -247,6 +253,7 @@ function normalizeSessionTurnInput(input = {}) {
     transferEnvelopes: filterSessionTransferEnvelopes(valueOrDefault(input.transferEnvelopes, [])),
     thinkingStartedAt: normalizeIsoTime(thinkingStartedAt),
     thinkingFinishedAt: normalizeIsoTime(thinkingFinishedAt),
+    ts: normalizeIsoTime(valueOrDefault(input.ts, "")),
     turnTimingThinkingStartedAt: normalizeIsoTime(
       valueOrDefault(input.turnTimingThinkingStartedAt, thinkingStartedAt),
     ),
@@ -290,6 +297,7 @@ function buildFullTurnPayload(input) {
     injectedBy: stringValue(input.injectedBy).trim(),
     injectedMessageType: stringValue(input.injectedMessageType).trim(),
     relayCorrelationId: stringValue(input.relayCorrelationId).trim(),
+    ...optionalValueField("interjectionSequence", input.interjectionSequence),
     messageOrigin: input.messageOrigin,
     userMetaMaterialized: input.userMetaMaterialized,
     pluginMessage: input.pluginMessage,
@@ -297,6 +305,7 @@ function buildFullTurnPayload(input) {
     ...optionalListField("transferEnvelopes", input.transferEnvelopes),
     ...optionalValueField("thinkingStartedAt", input.thinkingStartedAt),
     ...optionalValueField("thinkingFinishedAt", input.thinkingFinishedAt),
+    ...optionalValueField("ts", input.ts),
     modelResponseMetadata: normalizedOptionalObject(input.modelResponseMetadata),
     ...optionalListField("activityTimeline", input.activityTimeline),
     ...optionalListField("toolTimeline", input.toolTimeline),
@@ -396,6 +405,7 @@ function buildTurnPayload(input) {
     injectedBy: input.injectedBy,
     injectedMessageType: input.injectedMessageType,
     relayCorrelationId: input.relayCorrelationId,
+    interjectionSequence: input.interjectionSequence,
     messageOrigin: input.messageOrigin,
     userMetaMaterialized: input.userMetaMaterialized,
     pluginMessage: input.pluginMessage,
@@ -403,6 +413,7 @@ function buildTurnPayload(input) {
     ...(input.transferEnvelopes.length ? { transferEnvelopes: input.transferEnvelopes } : {}),
     thinkingStartedAt: input.thinkingStartedAt,
     thinkingFinishedAt: input.thinkingFinishedAt,
+    ts: input.ts,
     turnTimingThinkingStartedAt: input.turnTimingThinkingStartedAt,
     turnTimingThinkingFinishedAt: input.turnTimingThinkingFinishedAt,
     persistenceContext: input.persistenceContext,
@@ -465,6 +476,7 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     injectedBy: readContextMessageField(messageItem, "injectedBy"),
     injectedMessageType: readContextMessageField(messageItem, "injectedMessageType"),
     relayCorrelationId: readContextMessageField(messageItem, "relayCorrelationId"),
+    interjectionSequence: positiveIntegerValue(messageItem.interjectionSequence),
     messageOrigin: readContextMessageField(messageItem, "messageOrigin").toLowerCase(),
     userMetaMaterialized: resolveContextUserMetaMaterialized(messageItem),
     pluginMessage: resolveMessageBooleanField(messageItem, "pluginMessage"),
@@ -476,6 +488,7 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     turnScopeId: stringValue(firstTruthyValue([messageItem.turnScopeId, input.turnScopeId])).trim(),
     thinkingStartedAt: "",
     thinkingFinishedAt: "",
+    ts: stringValue(messageItem.ts).trim(),
     turnTimingThinkingStartedAt: includeTurnTiming ? input.thinkingStartedAt : "",
     turnTimingThinkingFinishedAt: includeTurnTiming ? input.thinkingFinishedAt : "",
     eventListener: input.eventListener,

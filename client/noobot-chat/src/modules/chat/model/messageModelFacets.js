@@ -47,6 +47,7 @@ function buildMessageTimelineFacet(canonicalMessage = {}) {
   return {
     toolTimeline: normalizeArray(canonicalMessage.toolTimeline),
     activityTimeline: normalizeArray(canonicalMessage.activityTimeline),
+    thinkingContentTimeline: normalizeArray(canonicalMessage.thinkingContentTimeline),
     messageEventState: canonicalMessage.messageEventState,
     hasThinkingDetails: canonicalMessage.hasThinkingDetails === true,
     thinkingDetailCount: Number(

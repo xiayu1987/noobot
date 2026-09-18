@@ -13,11 +13,7 @@ import {
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import {
-  copyPresentFields,
-  firstTextField,
-  normalizeTextField,
-} from "./entity-primitives.js";
+import { copyPresentFields, firstTextField, normalizeTextField } from "./entity-primitives.js";
 import {
   dedupeAttachmentsByIdentity,
   parseAttachmentRelations,
@@ -133,6 +129,10 @@ function applyMessageInjection(target, message) {
   if (injectedMessageType) target.injectedMessageType = injectedMessageType;
   const relayCorrelationId = String(message?.relayCorrelationId || "").trim();
   if (relayCorrelationId) target.relayCorrelationId = relayCorrelationId;
+  const interjectionSequence = Number(message?.interjectionSequence || 0);
+  if (Number.isInteger(interjectionSequence) && interjectionSequence > 0) {
+    target.interjectionSequence = interjectionSequence;
+  }
 }
 
 function applyMessageOrigin(target, message) {
@@ -254,7 +254,6 @@ function applyMessageToolFields(target, message) {
   if (Array.isArray(message?.tool_calls)) target.tool_calls = message.tool_calls;
   if (target.type === "tool_call" && !Array.isArray(target.tool_calls)) target.tool_calls = [];
 }
-
 
 export function normalizeMessageEntity(message = {}, now = () => new Date().toISOString()) {
   const normalizedAttachments = Array.isArray(message?.attachments)

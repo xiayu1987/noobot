@@ -11,8 +11,36 @@ import {
   isThinkingDetailInjectedMessage,
   isThinkingDetailUserInterjection,
   projectThinkingDetailContentTimeline,
+  reduceThinkingDetailContentTimelines,
   selectThinkingDetailContentTimeline,
 } from "../src/thinking-detail-content.js";
+
+test("reduces canonical content facts by their protocol content identity", () => {
+  const original = {
+    contentId: "message:user-interjection:command-1",
+    contentKind: THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
+    sourceMessageUid: "user-interjection:command-1",
+    text: "use the accepted constraint",
+    timestamp: "2026-09-05T03:39:01.000Z",
+    sequence: 1,
+    sessionId: "session-1",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    messageId: "assistant-1",
+    presentationMessageId: "assistant-1",
+  };
+  const updated = {
+    ...original,
+    timestamp: "2026-09-05T03:39:01.100Z",
+  };
+
+  const timeline = reduceThinkingDetailContentTimelines([original], [updated]);
+
+  assert.equal(timeline.length, 1);
+  assert.deepEqual(timeline[0], updated);
+  assert.equal(Object.isFrozen(timeline), true);
+  assert.equal(Object.isFrozen(timeline[0]), true);
+});
 
 test("projects user interjections as their own kind in deterministic chronological order", () => {
   const timeline = projectThinkingDetailContentTimeline(
@@ -23,6 +51,7 @@ test("projects user interjections as their own kind in deterministic chronologic
         type: "message",
         injectedMessage: true,
         noobotInternalMessageType: "noobot.user_interjection",
+        interjectionSequence: 1,
         ts: "2026-09-05T03:39:02.000Z",
         content: "use the second constraint",
       }),
@@ -129,6 +158,12 @@ test("requires persisted message identity and ignores malformed persisted detail
   const timeline = projectThinkingDetailContentTimeline([
     message({ messageUid: "", role: "assistant", type: "tool_call" }),
     message({ messageUid: "final", role: "assistant", type: "message" }),
+    message({
+      messageUid: "interjection-without-sequence",
+      role: "user",
+      injectedMessage: true,
+      noobotInternalMessageType: "noobot.user_interjection",
+    }),
   ]);
 
   assert.deepEqual(timeline, []);

@@ -60,6 +60,7 @@ export function useThinkingTimeline(
     const activityTimeline = Array.isArray(message?.activityTimeline)
       ? message.activityTimeline
       : [];
+    const thinkingContentTimeline = selectThinkingDetailContentTimeline(message);
     const lastTool = toolTimeline.at(-1) || {};
     const lastActivity = activityTimeline.at(-1) || {};
     const toolFactVersion = toolTimeline
@@ -82,6 +83,8 @@ export function useThinkingTimeline(
       toolFactVersion,
       activityTimeline.length,
       String(lastActivity?.eventId || ""),
+      thinkingContentTimeline.length,
+      String(thinkingContentTimeline.at(-1)?.contentId || ""),
     ].join(":");
   }
 

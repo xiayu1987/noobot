@@ -18,6 +18,18 @@ function initializeInterjectionQueue(handle) {
   if (!handle.userInterjectionConsumptionTail) {
     handle.userInterjectionConsumptionTail = Promise.resolve();
   }
+  if (!handle.userInterjectionAcceptanceTail) {
+    handle.userInterjectionAcceptanceTail = Promise.resolve();
+  }
+  if (!(handle.userInterjectionAcceptanceByCommandId instanceof Map)) {
+    handle.userInterjectionAcceptanceByCommandId = new Map();
+  }
+  if (!Number.isInteger(handle.userInterjectionPendingAcceptanceCount)) {
+    handle.userInterjectionPendingAcceptanceCount = 0;
+  }
+  if (!Number.isInteger(handle.userInterjectionSequence)) {
+    handle.userInterjectionSequence = 0;
+  }
 }
 
 export function normalizeRunIdentityPart(value = "") {
@@ -60,7 +72,7 @@ export function registerActiveRun(handle = {}) {
   return handle;
 }
 
-export function enqueueUserInterjection(handle = {}, interjection = {}) {
+export function enqueueUserInterjection(handle = {}, interjection = {}, commitAuthority) {
   initializeInterjectionQueue(handle);
   if (!handle.userInterjectionQueueOpen) {
     const error = new Error("active turn is stopping");
@@ -70,18 +82,43 @@ export function enqueueUserInterjection(handle = {}, interjection = {}) {
   const commandId = normalizeRunIdentityPart(interjection.commandId);
   const message = String(interjection.message || "").trim();
   if (!commandId || !message) throw new TypeError("invalid_user_interjection");
-  if (handle.userInterjectionCommandIds.has(commandId)) return null;
-  const existing = handle.userInterjectionQueue.find((item) => item.commandId === commandId);
-  if (existing) return existing;
-  const item = Object.freeze({
-    commandId,
-    messageUid: `user-interjection:${commandId}`,
-    message,
-    receivedAt: String(interjection.receivedAt || new Date().toISOString()),
-  });
+  if (typeof commitAuthority !== "function") {
+    throw new TypeError("user interjection authority commit is required");
+  }
+  const pendingAcceptance = handle.userInterjectionAcceptanceByCommandId.get(commandId);
+  if (pendingAcceptance) return pendingAcceptance.then(() => null);
+  if (handle.userInterjectionCommandIds.has(commandId)) return Promise.resolve(null);
+  const receivedAt = String(interjection.receivedAt || new Date().toISOString());
   handle.userInterjectionCommandIds.add(commandId);
-  handle.userInterjectionQueue.push(item);
-  return item;
+  handle.userInterjectionPendingAcceptanceCount += 1;
+  const acceptance = handle.userInterjectionAcceptanceTail.then(async () => {
+    try {
+      const interjectionSequence = handle.userInterjectionSequence + 1;
+      const item = Object.freeze({
+        commandId,
+        messageUid: `user-interjection:${commandId}`,
+        message,
+        receivedAt,
+        interjectionSequence,
+      });
+      await commitAuthority(item);
+      handle.userInterjectionSequence = interjectionSequence;
+      handle.userInterjectionQueue.push(item);
+      return item;
+    } catch (error) {
+      handle.userInterjectionCommandIds.delete(commandId);
+      throw error;
+    } finally {
+      handle.userInterjectionPendingAcceptanceCount -= 1;
+      handle.userInterjectionAcceptanceByCommandId.delete(commandId);
+    }
+  });
+  handle.userInterjectionAcceptanceByCommandId.set(commandId, acceptance);
+  handle.userInterjectionAcceptanceTail = acceptance.then(
+    () => undefined,
+    () => undefined,
+  );
+  return acceptance;
 }
 
 export function closeUserInterjectionQueue(handle = {}) {
@@ -92,7 +129,9 @@ export function closeUserInterjectionQueue(handle = {}) {
 export function sealUserInterjectionQueueIfEmpty(handle = {}) {
   initializeInterjectionQueue(handle);
   if (!handle.userInterjectionQueueOpen) return true;
-  if (handle.userInterjectionQueue.length) return false;
+  if (handle.userInterjectionQueue.length || handle.userInterjectionPendingAcceptanceCount > 0) {
+    return false;
+  }
   handle.userInterjectionQueueOpen = false;
   return true;
 }
@@ -103,6 +142,7 @@ export function consumeUserInterjections(handle = {}, consumer) {
     return Promise.reject(new TypeError("user interjection consumer is required"));
   }
   const consume = async () => {
+    await handle.userInterjectionAcceptanceTail;
     const batch = handle.userInterjectionQueue.slice();
     if (!batch.length) return [];
     await consumer(batch);

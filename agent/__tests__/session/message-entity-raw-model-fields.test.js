@@ -21,6 +21,21 @@ test("normalizeMessageEntity preserves the canonical internal control message ty
   assert.equal("additional_kwargs" in normalized, false);
 });
 
+test("normalizeMessageEntity preserves canonical user interjection ordering", () => {
+  const normalized = normalizeMessageEntity({
+    role: "user",
+    type: "message",
+    content: "accepted constraint",
+    injectedMessage: true,
+    injectedMessageType: "noobot.user_interjection",
+    interjectionSequence: 2,
+    ts: "2026-09-18T01:00:00.000Z",
+  });
+
+  assert.equal(normalized.interjectionSequence, 2);
+  assert.equal(normalized.ts, "2026-09-18T01:00:00.000Z");
+});
+
 test("normalizeMessageEntity persists assistant protocol blocks but not diagnostics", () => {
   const normalized = normalizeMessageEntity({
     role: "assistant",

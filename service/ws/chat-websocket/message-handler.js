@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { enqueueUserInterjection, findActiveRun, unregisterActiveRun } from "./run-registry.js";
+import {
+  enqueueUserInterjection,
+  findActiveRun,
+  publishRunEvent,
+  unregisterActiveRun,
+} from "./run-registry.js";
 import {
   recordServiceAgentTransportDebug,
   recordServiceWebSocketLifecycle,
@@ -47,6 +52,7 @@ export function createMessageHandler({
   finalizeAborted,
   finalizeGenericError,
   commitTurnLifecycle,
+  commitUserInterjection,
   dispatchAuthorityEvents,
   recoverTurnFinalize,
   recoverSnapshotOrphan,
@@ -148,10 +154,14 @@ export function createMessageHandler({
           return;
         }
         try {
-          enqueueUserInterjection(activeRun, {
-            commandId: command.commandId,
-            message: command.interaction.message,
-          });
+          await enqueueUserInterjection(
+            activeRun,
+            {
+              commandId: command.commandId,
+              message: command.interaction.message,
+            },
+            (interjection) => commitUserInterjection({ activeRun, interjection }),
+          );
         } catch (error) {
           if (error?.code !== "active_turn_stopping") throw error;
           sendFailedCommandReceipt(sendEvent, command, {
@@ -159,6 +169,30 @@ export function createMessageHandler({
             message: error.message,
           });
           return;
+        }
+        let dispatch;
+        try {
+          dispatch = await dispatchAuthorityEvents?.(
+            {
+              userId: activeRun.userId,
+              sessionId: activeRun.sessionId,
+              parentSessionId: activeRun.parentSessionId,
+            },
+            (...args) => publishRunEvent(activeRun, ...args),
+          );
+        } catch (error) {
+          dispatch = { dispatched: false, reason: error?.message || "authority_dispatch_failed" };
+        }
+        if (dispatch?.dispatched !== true) {
+          void recordServiceWebSocketLifecycle({
+            sessionLogConfig,
+            event: "service.userInterjection.authorityDispatchDeferred",
+            userId: activeRun.userId,
+            sessionId: activeRun.sessionId,
+            dialogProcessId: activeRun.dialogProcessId,
+            turnScopeId: activeRun.turnScopeId,
+            data: { reason: dispatch?.reason || "authority_dispatch_unavailable" },
+          });
         }
         sendEvent(
           AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,

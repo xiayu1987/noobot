@@ -129,7 +129,23 @@ describe("useChatSession send/continue actions", () => {
 
   it("sends a user interjection to the active turn and clears the accepted draft", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "s-interject", sessionId: "s-interject" })];
+    const assistant = {
+      id: "msg-turn-interject",
+      messageId: "msg-turn-interject",
+      presentationMessageId: "msg-turn-interject",
+      role: "assistant",
+      sessionId: "s-interject",
+      dialogProcessId: "dp-interject",
+      turnScopeId: "turn-interject",
+      thinkingContentTimeline: [],
+    };
+    store.sessions = [
+      createSessionFixture({
+        id: "s-interject",
+        sessionId: "s-interject",
+        messages: [assistant],
+      }),
+    ];
     store.activeSessionId = "s-interject";
     store.input = "  add this constraint  ";
     lifecycle(store.turnRuntimeRegistry, {
@@ -155,6 +171,7 @@ describe("useChatSession send/continue actions", () => {
       interaction: { message: "add this constraint" },
     });
     expect(wsClientMock.requestJson.mock.calls[0][0].commandId).toMatch(/^command:/);
+    expect(assistant.thinkingContentTimeline).toEqual([]);
     expect(store.input).toBe("");
     expect(wsClientMock.stream).not.toHaveBeenCalled();
   });
@@ -189,7 +206,23 @@ describe("useChatSession send/continue actions", () => {
   it("keeps the draft and reports a failed user interjection", async () => {
     const store = useChatStore();
     const notify = vi.fn();
-    store.sessions = [createSessionFixture({ id: "s-interject-failed" })];
+    const assistant = {
+      id: "msg-turn-interject-failed",
+      messageId: "msg-turn-interject-failed",
+      presentationMessageId: "msg-turn-interject-failed",
+      role: "assistant",
+      sessionId: "s-interject-failed",
+      dialogProcessId: "dp-interject-failed",
+      turnScopeId: "turn-interject-failed",
+      thinkingContentTimeline: [],
+    };
+    store.sessions = [
+      createSessionFixture({
+        id: "s-interject-failed",
+        sessionId: "s-interject-failed",
+        messages: [assistant],
+      }),
+    ];
     store.activeSessionId = "s-interject-failed";
     store.input = "retain this draft";
     lifecycle(store.turnRuntimeRegistry, {
@@ -203,6 +236,7 @@ describe("useChatSession send/continue actions", () => {
     await expect(session.send()).resolves.toBe(false);
 
     expect(store.input).toBe("retain this draft");
+    expect(assistant.thinkingContentTimeline).toEqual([]);
     expect(notify).toHaveBeenCalledWith({ type: "error", message: "queue closed" });
     expect(wsClientMock.stream).not.toHaveBeenCalled();
   });

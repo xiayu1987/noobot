@@ -11,6 +11,7 @@ import { mergeActivityTimelines } from "../runtime/engine/activityTimeline.js";
 import { mergeMessagePresentationFacets } from "./messagePresentation.js";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { resolveMessageTurnScopeMergeKey } from "./conversationFoldingIdentity.js";
+import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
 
 function mergeFoldedContent(previousMessage, currentMessage) {
   const previousContent = String(previousMessage?.content || "").trim();
@@ -40,6 +41,10 @@ function mergeFoldedTimelines(previousMessage, currentMessage) {
   previousMessage.activityTimeline = mergeActivityTimelines(
     previousMessage.activityTimeline,
     currentMessage.activityTimeline,
+  );
+  previousMessage.thinkingContentTimeline = reduceThinkingDetailContentTimelines(
+    previousMessage.thinkingContentTimeline,
+    currentMessage.thinkingContentTimeline,
   );
   previousMessage.hasThinkingDetails =
     previousMessage.hasThinkingDetails === true || currentMessage.hasThinkingDetails === true;

@@ -207,6 +207,47 @@ describe("reconnect authoritative message event replay", () => {
     expect(targetMessage.messageEventState).toMatchObject({ lastSequence: 2 });
   });
 
+  it("replays an authoritative user interjection through the canonical message reducer", () => {
+    const targetMessage = {
+      messageId: "message-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      content: "",
+    };
+    const commandId = "interjection-command-1";
+    const interjection = authoritative("user_interjection", 1, {
+      commandId,
+      causationId: commandId,
+      contentFact: {
+        contentId: `message:user-interjection:${commandId}`,
+        contentKind: "user_interjection",
+        sourceMessageUid: `user-interjection:${commandId}`,
+        text: "replay this accepted interjection",
+        timestamp: "2026-07-22T05:00:01.000Z",
+        sequence: 1,
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        messageId: "message-1",
+        presentationMessageId: "message-1",
+      },
+    });
+    const findCanonicalMessageById = canonicalFindFor(targetMessage);
+
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: interjection,
+      findCanonicalMessageById,
+    });
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: interjection,
+      findCanonicalMessageById,
+    });
+
+    expect(targetMessage.thinkingContentTimeline).toEqual([interjection.payload.contentFact]);
+    expect(targetMessage.hasThinkingDetails).toBe(true);
+    expect(targetMessage.messageEventState).toMatchObject({ lastSequence: 1 });
+  });
+
   it("continues guidance analysis on the refreshed canonical message", () => {
     const targetMessage = {
       messageId: "message-1",

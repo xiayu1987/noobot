@@ -7,30 +7,17 @@ import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { text } from "./normalize.js";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
+import {
+  THINKING_DETAIL_CONTENT_KIND,
+  isThinkingDetailContentFact,
+} from "./thinking-detail-content-fact.js";
 
-const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
-  new Set([
-    "contentId",
-    "contentKind",
-    "sourceMessageUid",
-    "sourceEventId",
-    "text",
-    "timestamp",
-    "sequence",
-    "sessionId",
-    "dialogProcessId",
-    "turnScopeId",
-    "messageId",
-    "presentationMessageId",
-  ]),
-);
-
-export const THINKING_DETAIL_CONTENT_KIND = Object.freeze({
-  INJECTED_MESSAGE: "injected_message",
-  USER_INTERJECTION: "user_interjection",
-  MAIN_MODEL_CONTENT: "main_model_content",
-  THINKING: "thinking",
-});
+export {
+  THINKING_DETAIL_CONTENT_FIELDS,
+  THINKING_DETAIL_CONTENT_KIND,
+  createUserInterjectionContentFact,
+  isThinkingDetailContentFact,
+} from "./thinking-detail-content-fact.js";
 
 function messageIdentity(message = {}) {
   return text(message?.messageUid);
@@ -83,17 +70,32 @@ function compareContentFacts(left = {}, right = {}) {
   return text(left.contentId).localeCompare(text(right.contentId));
 }
 
+export function reduceThinkingDetailContentTimelines(...timelines) {
+  const factsByContentId = new Map();
+  for (const timeline of timelines) {
+    for (const fact of Array.isArray(timeline) ? timeline : []) {
+      if (!isThinkingDetailContentFact(fact)) continue;
+      factsByContentId.set(text(fact.contentId), Object.freeze({ ...fact }));
+    }
+  }
+  return Object.freeze([...factsByContentId.values()].sort(compareContentFacts));
+}
+
 function messageContentFact(message = {}, contentKind, index) {
   const identity = messageIdentity(message);
   const value = messageContent(message);
   if (!identity || !value) return null;
+  const sequence =
+    contentKind === THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION
+      ? Number(message?.interjectionSequence || 0)
+      : index + 1;
   return {
     contentId: `message:${identity}`,
     contentKind,
     sourceMessageUid: identity,
     text: value,
     timestamp: text(message?.ts),
-    sequence: Number(index) + 1,
+    sequence,
     sessionId: text(message?.sessionId),
     dialogProcessId: text(message?.dialogProcessId),
     turnScopeId: text(message?.turnScopeId),
@@ -125,7 +127,9 @@ function activityContentFact(activity = {}, index) {
 }
 
 export function projectThinkingDetailContentTimeline(messages = [], activityTimeline = []) {
-  const timeline = [];
+  const timeline = (Array.isArray(messages) ? messages : []).flatMap((message = {}) =>
+    Array.isArray(message?.thinkingContentTimeline) ? message.thinkingContentTimeline : [],
+  );
   const activities = mergeCanonicalActivityTimelines(activityTimeline);
   const supersededRelayCorrelationIds = new Set(
     (Array.isArray(messages) ? messages : [])
@@ -197,23 +201,7 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
     const fact = activityContentFact(activity, index);
     if (fact) timeline.push(fact);
   }
-  return Object.freeze(timeline.sort(compareContentFacts).map((fact) => Object.freeze(fact)));
-}
-
-export function isThinkingDetailContentFact(value = {}) {
-  return Boolean(
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    text(value.contentId) &&
-    Object.values(THINKING_DETAIL_CONTENT_KIND).includes(text(value.contentKind)) &&
-    (text(value.sourceMessageUid) || text(value.sourceEventId)) &&
-    typeof value.text === "string" &&
-    text(value.text) &&
-    Number.isInteger(Number(value.sequence)) &&
-    Number(value.sequence) > 0 &&
-    Object.keys(value).every((field) => THINKING_DETAIL_CONTENT_FIELDS.has(field)),
-  );
+  return reduceThinkingDetailContentTimelines(timeline);
 }
 
 export function selectThinkingDetailContentTimeline(message = {}) {
