@@ -181,13 +181,13 @@ export function createAgentLifecycleMachine({
     interrupt({
       reason = "",
       error = "",
-      stopType = "interrupted",
+      stopType = AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
       stoppedSnapshotPersistence = null,
       ...extra
     } = {}) {
       return emit(AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED, {
         ...extra,
-        stopType: normalizeText(stopType) || "interrupted",
+        stopType: normalizeText(stopType) || AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
         canResume: false,
         error: resolveErrorMessage(reason || error),
         stoppedSnapshotPersistence: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence),

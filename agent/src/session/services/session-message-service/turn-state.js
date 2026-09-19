@@ -17,6 +17,7 @@ import {
   decideAggregateConcurrency,
   materializeTurnTerminalMessages,
   normalizeDialogProcessId,
+  resolveTurnCommitAction,
   validateSessionProvisionIntent,
 } from "@noobot/session-protocol";
 import { createSessionMessageUid } from "../../../context/session/message-uid.js";
@@ -164,9 +165,8 @@ function materializeAcceptedUserMessage({
       userMetaMaterialized: input.userMetaMaterialized === true,
       attachments: [],
       turnCommit: {
-        action: String(event.action || "send").trim(),
+        action: resolveTurnCommitAction(event.action),
         commandId: String(event.causationId || event.commandId || "").trim(),
-        runState: "pending_start",
         ...(event.continuationSource
           ? {
               resumeDialogProcessId: String(event.continuationSource.dialogProcessId || "").trim(),

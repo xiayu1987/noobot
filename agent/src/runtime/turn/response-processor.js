@@ -8,7 +8,7 @@ import { HELP_TOOL_NAME } from "../../tools/collaboration/help-tool.js";
 import { settleToolCallInTurn } from "../tool-execution/tool-runner.js";
 import { TOOL_NAME } from "../../tools/constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import {
   getSessionIdsFromAgentContext,
@@ -46,7 +46,7 @@ export async function processToolResults({
     point: HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
     context: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALLS, runtime, {
       phase: "tool_calls",
-      status: "start",
+      status: HOOK_PHASE_STATUS.RUNNING,
       turn,
       toolCallCount: calls.length,
       calls,
@@ -121,7 +121,7 @@ export async function processToolResults({
     point: HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
     context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALLS, runtime, {
       phase: "tool_calls",
-      status: "success",
+      status: HOOK_PHASE_STATUS.SUCCESS,
       turn,
       toolCallCount: calls.length,
       calls,

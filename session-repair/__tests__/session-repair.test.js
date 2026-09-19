@@ -215,7 +215,7 @@ test("migrates duplicate terminal and command facts into the canonical lifecycle
         turnScopeId: "turn-1",
         dialogProcessId: "dialog-1",
         ts: "2026-01-01T00:00:00.000Z",
-        turnCommit: { action: "send", commandId: "send-1", runState: "pending_start" },
+        turnCommit: { action: "send", commandId: "send-1" },
       },
     ],
     turnStatuses: [terminalStatus],

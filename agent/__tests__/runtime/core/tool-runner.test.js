@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
+import { createHookManager, HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { confirmToolOperation } from "../../../src/tools/execution/tool-risk.js";
 import { SECURITY_EVIDENCE_SOURCE } from "@noobot/security-assessment-protocol";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
@@ -540,14 +540,14 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
   assert.equal(starts.length, 1);
   assert.equal(ends.length, 1);
   assert.equal(starts[0].phase, "tool_call");
-  assert.equal(starts[0].status, "start");
+  assert.equal(starts[0].status, HOOK_PHASE_STATUS.RUNNING);
   assert.equal(starts[0].userId, "runtime_user");
   assert.equal(starts[0].sessionId, "session_1");
   assert.equal(starts[0].parentSessionId, "parent_1");
   assert.equal(starts[0].dialogProcessId, "dp_1");
   assert.equal(starts[0].caller, "user");
   assert.equal(typeof starts[0].startedAt, "string");
-  assert.equal(ends[0].status, "success");
+  assert.equal(ends[0].status, HOOK_PHASE_STATUS.SUCCESS);
   assert.equal(Number.isFinite(ends[0].durationMs), true);
 });
 

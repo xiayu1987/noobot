@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { initRuntimeSharedBrowser } from "../../shared/utils/web/browser-simulate.js";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
 import {
   cleanAndDedupTextLines,
@@ -160,15 +159,6 @@ function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools 
   bridge.__sessionCryptoWrapped = true;
 }
 
-async function initializeBrowserRuntime(runtimeContext = {}, sharedTools = {}) {
-  try {
-    await initRuntimeSharedBrowser(runtimeContext);
-  } catch (error) {
-    sharedTools.browser = null;
-    sharedTools.browserInitError = error?.message || String(error);
-  }
-}
-
 export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   if (!isPlainObject(runtimeContext)) return;
   const sharedTools = ensureSharedTools(runtimeContext);
@@ -179,5 +169,4 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   initializeSessionCrypto(sharedTools, { sessionId });
   initializeSemanticTransfer(runtimeContext, sharedTools);
   initializeUserInteractionBridgeCrypto(runtimeContext, sharedTools);
-  await initializeBrowserRuntime(runtimeContext, sharedTools);
 }

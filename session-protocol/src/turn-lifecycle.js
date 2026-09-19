@@ -14,6 +14,11 @@ import {
 } from "./lifecycle/turn-field-assertions.js";
 import { normalizeTurnContinuationSource } from "./lifecycle/turn-continuation.js";
 import {
+  isTurnCommitContinuation,
+  TURN_COMMIT_ACTION,
+  normalizeTurnCommitAction,
+} from "./lifecycle/turn-commit-action.js";
+import {
   isTerminalTurnEvent,
   TURN_COMMAND,
   TURN_EVENT,
@@ -99,7 +104,7 @@ export function validateSessionProvisionIntent(input = {}) {
   const valid =
     input.createSessionIfAbsent === true &&
     clean(input.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
-    clean(input.action) === "send" &&
+    normalizeTurnCommitAction(input.action) === TURN_COMMIT_ACTION.SEND &&
     Number(input.expectedRevision ?? 0) === 0;
   return {
     valid,
@@ -334,7 +339,7 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (envelope.persistenceScope !== undefined) errors.push("unsupported_persistence_scope");
   if (
     clean(envelope.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
-    clean(envelope.action) === "continue"
+    isTurnCommitContinuation(envelope.action)
   ) {
     if (!normalizeTurnContinuationSource(envelope.continuationSource))
       errors.push("missing_continuation_source");

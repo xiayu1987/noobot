@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { createCommandRequestHash } from "./command-fingerprint.js";
+import { TURN_COMMIT_ACTION, normalizeTurnCommitAction } from "../lifecycle/turn-commit-action.js";
 import { text as clean } from "../normalize.js";
 
 export function createTurnCommitFingerprint({
-  action = "send",
+  action = TURN_COMMIT_ACTION.SEND,
   content = "",
   turnScopeId = "",
   resumeDialogProcessId = "",
@@ -15,7 +16,7 @@ export function createTurnCommitFingerprint({
 } = {}) {
   return createCommandRequestHash({
     type: "session.turn.commit",
-    action: clean(action).toLowerCase(),
+    action: normalizeTurnCommitAction(action),
     content: clean(content),
     turnScopeId: clean(turnScopeId),
     resumeDialogProcessId: clean(resumeDialogProcessId),

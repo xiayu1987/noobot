@@ -129,15 +129,12 @@ test("initializeRuntimeEnvironment wires shared tools without connector implemen
   assert.equal(runtime.sharedTools.connectorHistoryStore, undefined);
   assert.equal(runtime.connectorChannels, undefined);
 
-  const hasBrowserOrInitError =
-    runtime.sharedTools.browser ||
-    (typeof runtime.sharedTools.browserInitError === "string" &&
-      runtime.sharedTools.browserInitError.length > 0);
-  assert.equal(Boolean(hasBrowserOrInitError), true);
-
-  if (runtime.sharedTools.browser && typeof runtime.sharedTools.browser.close === "function") {
-    await runtime.sharedTools.browser.close().catch(() => {});
-  }
+  assert.equal(
+    runtime.sharedTools.browser,
+    undefined,
+    "runtime environment initialization must not eagerly launch a browser",
+  );
+  assert.equal(runtime.sharedTools.browserInitError, undefined);
 });
 
 test("initializeRuntimeEnvironment provides fetch independently of the Node global", async () => {
