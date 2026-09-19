@@ -8,6 +8,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { CONFIG_FILE_ERROR_CODE } from "@noobot/shared/config-file";
 import { DEFAULT_CONFIG, loadConfig } from "../src/config.js";
 
 test("model proxy config uses defaults only for a missing optional file", async () => {
@@ -24,7 +25,7 @@ test("model proxy config fails closed when the configured JSON is malformed", as
   try {
     const configPath = path.join(root, "config.json");
     await writeFile(configPath, "{broken", "utf8");
-    assert.throws(() => loadConfig(configPath), { code: "CONFIG_FILE_CORRUPTED" });
+    assert.throws(() => loadConfig(configPath), { code: CONFIG_FILE_ERROR_CODE.CORRUPTED });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

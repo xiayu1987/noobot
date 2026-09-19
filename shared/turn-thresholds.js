@@ -4,14 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function deepFreeze(value) {
-  if (!value || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const nested of Object.values(value)) {
-    deepFreeze(nested);
-  }
-  return value;
-}
+import { deepFreeze } from "./deep-freeze.js";
 
 export const TURN_THRESHOLDS = deepFreeze({
   agent: {
@@ -26,10 +19,6 @@ export const TURN_THRESHOLDS = deepFreeze({
     helpPromptLoopTurns: 50,
 
     toolFailureHelpCount: 3,
-
-    transientLlmMaxAttempts: 3,
-
-    streamingToolCallMismatchThreshold: 2,
   },
 
   session: {
@@ -53,10 +42,6 @@ export const TURN_THRESHOLDS = deepFreeze({
   tools: {
     nativeTaskCleanupMaxRetries: 10,
     browserDevtoolsPortReadAttempts: 60,
-  },
-
-  web: {
-    browserRetryCount: 2,
   },
 
   harness: {

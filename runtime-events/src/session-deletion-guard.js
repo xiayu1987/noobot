@@ -6,7 +6,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export const DELETED_SESSIONS_MARKER_FILE = '.deleted-sessions.json';
+const DELETED_SESSIONS_MARKER_FILE = '.deleted-sessions.json';
 
 export function resolveWorkspaceSessionPaths({ workspaceRoot, userId, sessionId } = {}) {
   const normalizedWorkspaceRoot = String(workspaceRoot || '').trim();

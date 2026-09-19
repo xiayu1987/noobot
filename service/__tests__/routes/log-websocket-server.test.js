@@ -64,7 +64,7 @@ function sendLogWs({
 
 test("log-websocket-server: writes session logs by category", async () => {
   const logRoot = await withTempLogDir();
-  const logConfig = { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
+  const logConfig = { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
   const { server, registered } = await startLogServer({ logConfig });
   try {
     const { port } = server.address();
@@ -89,7 +89,7 @@ test("log-websocket-server: announces the effective client policy before ACK", a
   const logRoot = await withTempLogDir();
   const { server, registered } = await startLogServer({
     logConfig: {
-      logRoot,
+      root: logRoot,
       retentionMs: 60000,
       cleanupIntervalMs: 60000,
       sessionLogControls: { debug: { workflowDiagnostics: true } },
@@ -121,7 +121,7 @@ test("log-websocket-server: mixed batches ACK after reliable writes without wait
   const registered = registerLogWebSocketServer(server, {
     resolveAuthByApiKey: () => ({ userId: "u1" }),
     logConfig: {
-      logRoot,
+      root: logRoot,
       retentionMs: 60000,
       cleanupIntervalMs: 60000,
       sessionLogControls: { debug: { frontendToolLogWindow: true } },
@@ -158,7 +158,7 @@ test("log-websocket-server: reliable write failures return error and never ACK",
   const server = createServer((_req, res) => res.end("not-found"));
   const registered = registerLogWebSocketServer(server, {
     resolveAuthByApiKey: () => ({ userId: "u1" }),
-    logConfig: { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
+    logConfig: { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
     writeLogEvent: async () => ({ ok: false, error: new Error("simulated reliable failure") }),
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -179,7 +179,7 @@ test("log-websocket-server: reliable write failures return error and never ACK",
 test("log-websocket-server: writes tool log window debug to its dedicated file", async () => {
   const logRoot = await withTempLogDir();
   const logConfig = {
-    logRoot,
+    root: logRoot,
     retentionMs: 60000,
     cleanupIntervalMs: 60000,
     sessionLogControls: { debug: { frontendToolLogWindow: true } },
@@ -246,14 +246,14 @@ test("log-websocket-server: resolves configurable workspace roots without hardco
   assert.equal(relativeConfig.workspaceRoot, path.resolve(relativeWorkspaceRoot));
 
   const explicitLogRoot = path.join(os.tmpdir(), "noobot-explicit-log-root");
-  const explicitConfig = resolveSessionLogConfig({ workspaceRoot: macWorkspaceRoot, logRoot: explicitLogRoot });
-  assert.equal(explicitConfig.logRoot, path.resolve(explicitLogRoot));
+  const explicitConfig = resolveSessionLogConfig({ workspaceRoot: macWorkspaceRoot, root: explicitLogRoot });
+  assert.equal(explicitConfig.root, path.resolve(explicitLogRoot));
   assert.equal(explicitConfig.workspaceRoot, macWorkspaceRoot);
 });
 
 test("log-websocket-server: works when chat websocket server is registered first", async () => {
   const logRoot = await withTempLogDir();
-  const logConfig = { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
+  const logConfig = { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
   const server = createServer((_req, res) => {
     res.statusCode = 404;
     res.end("not-found");
@@ -291,7 +291,7 @@ test("log-websocket-server: works when chat websocket server is registered first
 
 test("log-websocket-server: skips debug logs by default", async () => {
   const logRoot = await withTempLogDir();
-  const result = await writeSessionLogEvent({ source: "client", userId: "u1", category: "debug", sessionId: "s-debug", event: "debug.off" }, { logRoot });
+  const result = await writeSessionLogEvent({ source: "client", userId: "u1", category: "debug", sessionId: "s-debug", event: "debug.off" }, { root: logRoot });
   assert.equal(result.skipped, true);
   await assert.rejects(() => fs.stat(path.join(logRoot, "s-debug", "debug.jsonl")));
   await fs.rm(logRoot, { recursive: true, force: true });
@@ -300,7 +300,7 @@ test("log-websocket-server: skips debug logs by default", async () => {
 test("log-websocket-server: rejects unauthorized upgrade", async () => {
   const logRoot = await withTempLogDir();
   const { server, registered } = await startLogServer({
-    logConfig: { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
+    logConfig: { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
     resolveAuthByApiKey: () => null,
   });
   try {
@@ -315,7 +315,7 @@ test("log-websocket-server: rejects unauthorized upgrade", async () => {
 test("log-websocket-server: rejects too large payload and batch", async () => {
   const logRoot = await withTempLogDir();
   const { server, registered } = await startLogServer({
-    logConfig: { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
+    logConfig: { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
   });
   try {
     const { port } = server.address();
@@ -335,13 +335,13 @@ test("log-websocket-server: cleanup removes expired session directories", async 
   await fs.mkdir(oldDir, { recursive: true });
   const oldTime = new Date(Date.now() - 10000);
   await fs.utimes(oldDir, oldTime, oldTime);
-  const result = await cleanupSessionLogs({ logRoot, retentionMs: 1, cleanupIntervalMs: 60000 }, Date.now());
+  const result = await cleanupSessionLogs({ root: logRoot, retentionMs: 1, cleanupIntervalMs: 60000 }, Date.now());
   assert.equal(result.removed, 1);
   await assert.rejects(() => fs.stat(oldDir));
   await fs.rm(logRoot, { recursive: true, force: true });
 });
 
-test("log-websocket-server: cleanup skips user runtime tree when logRoot is not explicit", async () => {
+test("log-websocket-server: cleanup skips user runtime tree when root is not explicit", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-"));
   const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s1");
   await fs.mkdir(sessionDir, { recursive: true });

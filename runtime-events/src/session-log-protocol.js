@@ -29,11 +29,10 @@ export const SESSION_LOG_CATEGORIES = Object.freeze([
   "backend-lifecycle",
 ]);
 
-export const SESSION_LOG_CATEGORY_SET = new Set(SESSION_LOG_CATEGORIES);
+const SESSION_LOG_CATEGORY_SET = new Set(SESSION_LOG_CATEGORIES);
 export const SESSION_LOG_DEBUG_CATEGORY = "debug";
 export const SESSION_LOG_DEFAULT_CATEGORY = "system";
 export const SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY = "agent-proxy";
-export const SESSION_LOG_ALL_TYPES = "*";
 
 export const SESSION_LOG_CONTROL_KEYS = RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS;
 
@@ -41,22 +40,6 @@ export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(Object.fromEntries(
   Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
     .map(([debugType, descriptor]) => [debugType, descriptor.controlKey]),
 ));
-
-export const SESSION_LOG_RECORD_FIELDS = Object.freeze([
-  "ts",
-  "source",
-  "category",
-  "level",
-  "event",
-  "sessionId",
-  "parentSessionId",
-  "rootSessionId",
-  "storageSessionId",
-  "dialogProcessId",
-  "turnScopeId",
-  "message",
-  "data",
-]);
 
 export function normalizeSessionLogText(value = "", { fallback = "", maxLength = 4000 } = {}) {
   const text = String(value || fallback || "").trim();
@@ -104,7 +87,7 @@ export function isSessionLogDebugEvent(event = {}) {
     || Boolean(String(event.debugType || event.data?.debugType || "").trim());
 }
 
-export function getSessionLogDebugType(event = {}) {
+function getSessionLogDebugType(event = {}) {
   return String(event.debugType || event.data?.debugType || event.event || event.name || event.category || SESSION_LOG_DEBUG_CATEGORY).trim().toLowerCase() || SESSION_LOG_DEBUG_CATEGORY;
 }
 

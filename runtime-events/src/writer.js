@@ -105,7 +105,3 @@ export function writeRoutedRuntimeEvent(event = {}, options = {}) {
     defaults: withoutSessionContext(defaults),
   });
 }
-
-export const writeStartupEvent = (event = {}, options = {}) => writeRoutedRuntimeEvent({ ...event, scope: RUNTIME_EVENT_SCOPES.STARTUP }, options);
-export const writeSessionRuntimeEvent = (event = {}, options = {}) => writeRuntimeEvent({ ...event, scope: RUNTIME_EVENT_SCOPES.SESSION }, options);
-export const writeSystemRuntimeEvent = (event = {}, options = {}) => writeRoutedRuntimeEvent({ ...event, scope: RUNTIME_EVENT_SCOPES.SYSTEM }, options);

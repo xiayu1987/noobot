@@ -24,9 +24,9 @@ export async function appendParseErrorLog({
     const block = [
       `[${new Date().toISOString()}] stage=${String(stage || "").trim() || "unknown"}`,
       `error=${String(error || "").trim() || "unknown_parse_error"}`,
-      `candidate=${String(candidate || "").slice(0, LENGTH_THRESHOLDS.display.memoryParserCandidatePreviewChars)}`,
+      `candidate=${String(candidate || "").slice(0, LENGTH_THRESHOLDS.memory.parserCandidatePreviewChars)}`,
       "raw:",
-      String(rawText || "").slice(0, LENGTH_THRESHOLDS.preview.memoryParserRawPreviewChars),
+      String(rawText || "").slice(0, LENGTH_THRESHOLDS.memory.parserRawPreviewChars),
       "---",
       "",
     ].join("\n");

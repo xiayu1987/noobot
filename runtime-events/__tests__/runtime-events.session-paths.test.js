@@ -8,7 +8,6 @@ import path from "node:path";
 import test from "node:test";
 
 import { writeRuntimeEvent } from "../src/index.js";
-import { writeSessionChannelEvent } from "../src/session-channel.js";
 
 import {
   markSessionDeleted,
@@ -44,31 +43,6 @@ test("workspace runtime events store child session logs under the parent session
   );
 });
 
-test("workspace session-channel stores child logs under the parent session", async () => {
-  const workspaceRoot = await tempRoot();
-  const result = await writeSessionChannelEvent(
-    {
-      source: "agent-proxy",
-      category: "transport",
-      event: "child.transport",
-      userId: "admin",
-      sessionId: "child-session",
-      parentSessionId: "parent-session",
-    },
-    { workspaceRoot, dirName: "logs" },
-  );
-
-  assert.equal(result.ok, true);
-  assert.match(result.file, /parent-session\/logs\/transport\.jsonl$/);
-  assert.equal(
-    await pathExists(path.join(workspaceRoot, "admin", "runtime", "session", "child-session")),
-    false,
-  );
-  const [record] = await readJsonl(result.file);
-  assert.equal(record.sessionId, "child-session");
-  assert.equal(record.parentSessionId, "parent-session");
-});
-
 test("workspace runtime events ignore placeholder parent session ids", async () => {
   const workspaceRoot = await tempRoot();
   await persistSession(workspaceRoot, "admin", "real-session");
@@ -97,45 +71,20 @@ test("workspace runtime events ignore placeholder parent session ids", async () 
   );
 });
 
-test("workspace session-channel ignores placeholder parent session ids", async () => {
-  const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "real-session");
-  const result = await writeSessionChannelEvent(
-    {
-      source: "agent-proxy",
-      category: "transport",
-      event: "root.transport",
-      userId: "admin",
-      sessionId: "real-session",
-      parentSessionId: "undefined",
-      data: { parentSessionId: "null" },
-    },
-    { workspaceRoot, dirName: "logs" },
-  );
-
-  assert.equal(result.ok, true);
-  assert.match(result.file, /real-session\/logs\/transport\.jsonl$/);
-  const [record] = await readJsonl(result.file);
-  assert.equal(record.parentSessionId, undefined);
-  assert.equal(record.data.parentSessionId, undefined);
-  assert.equal(
-    await pathExists(path.join(workspaceRoot, "admin", "runtime", "session", "undefined")),
-    false,
-  );
-});
-
 test("placeholder parent session id cannot create an unpersisted session directory", async () => {
   const workspaceRoot = await tempRoot();
-  const result = await writeSessionChannelEvent(
+  const result = await writeRuntimeEvent(
     {
       source: "agent-proxy",
+      scope: "session",
       category: "transport",
       event: "draft.transport",
       userId: "admin",
       sessionId: "draft-session",
       parentSessionId: "undefined",
+      workspaceRoot,
     },
-    { workspaceRoot, dirName: "logs" },
+    { includeProcess: false },
   );
 
   assert.equal(result.ok, true);
@@ -172,47 +121,6 @@ test("workspace runtime events do not create an unpersisted session directory", 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, true);
   assert.equal(result.missingSession, true);
-  assert.equal(await pathExists(sessionDir), false);
-});
-
-test("workspace session-channel does not create an unpersisted session directory", async () => {
-  const workspaceRoot = await tempRoot();
-  const sessionDir = path.join(workspaceRoot, "admin", "runtime", "session", "draft-session");
-  const result = await writeSessionChannelEvent(
-    {
-      source: "frontend",
-      category: "message",
-      event: "draft.message",
-      userId: "admin",
-      sessionId: "draft-session",
-    },
-    { workspaceRoot, dirName: "logs" },
-  );
-
-  assert.equal(result.ok, true);
-  assert.equal(result.skipped, true);
-  assert.equal(result.missingSession, true);
-  assert.equal(await pathExists(sessionDir), false);
-});
-
-test("session-channel does not recreate a deleted session directory", async () => {
-  const workspaceRoot = await tempRoot();
-  const userId = "admin";
-  const sessionId = "deleted-channel-session";
-  const { sessionDir } = await markSessionDeleted(workspaceRoot, userId, sessionId);
-  const result = await writeSessionChannelEvent(
-    {
-      source: "agent",
-      category: "system",
-      event: "late.log",
-      userId,
-      sessionId,
-    },
-    { workspaceRoot, dirName: "logs" },
-  );
-  assert.equal(result.ok, true);
-  assert.equal(result.skipped, true);
-  assert.equal(result.deleted, true);
   assert.equal(await pathExists(sessionDir), false);
 });
 

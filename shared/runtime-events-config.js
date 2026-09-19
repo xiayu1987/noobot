@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function deepFreeze(value) {
-  if (!value || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const nested of Object.values(value)) deepFreeze(nested);
-  return value;
-}
+import { deepFreeze } from "./deep-freeze.js";
 
 export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
   runtimeEvents: {

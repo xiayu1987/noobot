@@ -19,7 +19,7 @@ export { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-
 const WRAPPED_PAYLOAD_MAX_DEPTH = QUANTITY_THRESHOLDS.harness.wrappedPayloadMaxDepth;
 const WRAPPED_PAYLOAD_MAX_NODES = 100;
 const WRAPPED_PAYLOAD_MAX_STRING_LENGTH =
-  LENGTH_THRESHOLDS.preview.harnessWrappedPayloadStringChars;
+  LENGTH_THRESHOLDS.harness.wrappedPayloadStringChars;
 const CHECKLIST_HINT_RE = /taskchecklist|refinementchecklist|checklist|\"task\"|\"index\"|\u6b65\u9aa4|\u4efb\u52a1/i;
 const STRIP_FENCED_BLOCK_RE = /```[\s\S]*?```/g;
 

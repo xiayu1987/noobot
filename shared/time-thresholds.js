@@ -4,14 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function deepFreeze(value) {
-  if (!value || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const nested of Object.values(value)) {
-    deepFreeze(nested);
-  }
-  return value;
-}
+import { deepFreeze } from "./deep-freeze.js";
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -36,7 +29,6 @@ const TIME_TIERS = deepFreeze({
   threeHoursMs: 3 * HOUR_MS,
   fiveHoursMs: 5 * HOUR_MS,
   oneDayMs: DAY_MS,
-  twoDaysMs: 2 * DAY_MS,
   thirtyDays: 30,
   micDurationSeconds: 60,
 });
@@ -47,8 +39,6 @@ export const TIME_THRESHOLDS = deepFreeze({
     minRunTimeoutMs: 10000,
     maxRunTimeoutMs: 12 * HOUR_MS,
     hookTimeoutMs: TIME_TIERS.hookMs,
-    pendingStopTtlMs: TIME_TIERS.standardCommandMs,
-    transientLlmRetryBaseDelayMs: TIME_TIERS.fastProbeMs,
     authorityOutboxDeliveredRetentionMs: TIME_TIERS.fiveMinutesMs,
     authorityOutboxCompactIntervalMs: TIME_TIERS.standardCommandMs,
   },
@@ -71,13 +61,6 @@ export const TIME_THRESHOLDS = deepFreeze({
     browserDevtoolsPortPollIntervalMs: 250,
     imagesAsyncPollIntervalMs: TIME_TIERS.fiveSecondsMs,
     imagesAsyncTimeoutMs: TIME_TIERS.threeMinutesMs,
-    docToDataLibreOfficeBaseTimeoutMs: TIME_TIERS.threeMinutesMs,
-    docToDataLibreOfficePerMiBTimeoutMs: TIME_TIERS.startupMs,
-    docToDataLibreOfficeMaxTimeoutMs: TIME_TIERS.oneHourMs,
-    docToDataLibreOfficeProgressCheckIntervalMs: TIME_TIERS.fiveSecondsMs,
-    mediaToDataProbeTimeoutMs: TIME_TIERS.standardCommandMs,
-    mediaToDataTranscodeTimeoutMs: TIME_TIERS.fiveMinutesMs,
-    mediaToDataKillGraceMs: TIME_TIERS.hookMs,
     processForceKillGraceMs: TIME_TIERS.flushMs,
     nativeTaskCleanupRetryDelayMs: 100,
     dockerLockWaitTimeoutMs: TIME_TIERS.oneHourMs,
@@ -103,15 +86,6 @@ export const TIME_THRESHOLDS = deepFreeze({
     touchPersistIntervalMs: TIME_TIERS.standardCommandMs,
     portProbeTimeoutMs: TIME_TIERS.fastProbeMs,
     waitProbeTimeoutMs: 350,
-  },
-
-  connectors: {
-    defaultCommandTimeoutMs: TIME_TIERS.standardCommandMs,
-    channelCommandTimeoutMs: TIME_TIERS.standardCommandMs,
-    quickInspectTimeoutMs: TIME_TIERS.quickInspectMs,
-    serviceInspectTimeoutMs: TIME_TIERS.quickInspectMs,
-    toolkitCommandTimeoutMs: 8000,
-    postgresIdleTimeoutMs: TIME_TIERS.startupMs,
   },
 
   web: {
@@ -159,21 +133,15 @@ export const TIME_THRESHOLDS = deepFreeze({
 
   client: {
     chatMessageNavigatorScrollLockMs: 1400,
-    wsStopCloseDelayMs: TIME_TIERS.shortDelayMs,
-    wsTerminalChannelStateGraceMs: 250,
     wsReconnectTimeoutMs: 15000,
-    wsOpenPollIntervalMs: 100,
     sessionLogReconnectBaseDelayMs: TIME_TIERS.oneSecondMs,
     sessionLogReconnectMaxDelayMs: TIME_TIERS.startupMs,
     sessionLogDebugTtlMs: TIME_TIERS.fiveSecondsMs,
-    thinkingTimingTtlMs: TIME_TIERS.twoDaysMs,
     monotonicActionStopTimeoutMs: TIME_TIERS.hookMs,
     monotonicActionStopPollIntervalMs: 50,
     stopRequestTtlMs: TIME_TIERS.fiveMinutesMs,
-    deferredLifecycleEventTtlMs: TIME_TIERS.fiveMinutesMs,
     panelResizeThrottleMs: TIME_TIERS.uiThrottleMs,
     thinkingDetailRetryDelayMs: TIME_TIERS.shortDelayMs,
-    missingInteractionPayloadTimeoutMs: 1200,
     micMaxDurationSeconds: TIME_TIERS.micDurationSeconds,
     terminalTurnRetentionMs: TIME_TIERS.oneDayMs,
   },
