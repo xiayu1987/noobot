@@ -47,7 +47,16 @@ test("user interaction timeout resolves from env with a threshold fallback", () 
   const fallback = TIME_THRESHOLDS.service.userInteractionTimeoutMs;
   assert.equal(typeof fallback, "number");
   assert.equal(resolveUserInteractionTimeoutMs({}), fallback);
-  assert.equal(resolveUserInteractionTimeoutMs({ NOOBOT_USER_INTERACTION_TIMEOUT_MS: "not-a-number" }), fallback);
-  assert.equal(resolveUserInteractionTimeoutMs({ NOOBOT_USER_INTERACTION_TIMEOUT_MS: "999" }), fallback);
-  assert.equal(resolveUserInteractionTimeoutMs({ NOOBOT_USER_INTERACTION_TIMEOUT_MS: "1500.7" }), 1500);
+  assert.equal(
+    resolveUserInteractionTimeoutMs({ NOOBOT_USER_INTERACTION_TIMEOUT_MS: "not-a-number" }),
+    fallback,
+  );
+  assert.equal(
+    resolveUserInteractionTimeoutMs({ NOOBOT_USER_INTERACTION_TIMEOUT_MS: "999" }),
+    fallback,
+  );
+  assert.equal(
+    resolveUserInteractionTimeoutMs({ NOOBOT_USER_INTERACTION_TIMEOUT_MS: "1500.7" }),
+    1500,
+  );
 });
