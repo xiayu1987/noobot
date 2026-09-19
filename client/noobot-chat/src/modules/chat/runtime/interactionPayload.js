@@ -38,7 +38,7 @@ function normalizeInteractionNotification(input = {}) {
   };
 }
 
-export function normalizeInteractionRequestPayload(payload = {}) {
+export function normalizeInteractionRequestPayload(payload = {}, { channelSessionId = "" } = {}) {
   const interactionData = normalizeInteractionData(payload?.interactionData);
   const lifecycle = normalizeInteractionLifecycle(payload?.lifecycle);
   const ackMode = normalizeInteractionAckMode(payload?.ackMode);
@@ -51,6 +51,8 @@ export function normalizeInteractionRequestPayload(payload = {}) {
     dialogProcessId: String(payload?.dialogProcessId || ""),
     requireEncryption: payload?.requireEncryption === true,
     sessionId: String(payload?.sessionId || ""),
+    turnScopeId: String(payload?.turnScopeId || ""),
+    channelSessionId: String(channelSessionId || "").trim(),
     toolName: String(payload?.toolName || ""),
     needConnectionInfo: payload?.needConnectionInfo === true,
     connectorName: String(payload?.connectorName || ""),

@@ -22,6 +22,7 @@ import { handleSessionRunFailure } from "./runner/run-failure.js";
 import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
+import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 
 export class SessionExecutionRunner {
   constructor({
@@ -91,6 +92,15 @@ export class SessionExecutionRunner {
     persistenceContext = null,
     persistenceScope = null,
   }) {
+    const persistenceScopeValidation = validateSessionPersistenceScope(persistenceScope);
+    if (!persistenceScopeValidation.valid) {
+      throw new TypeError(
+        `invalid Session persistence scope: ${persistenceScopeValidation.errors.join(",")}`,
+      );
+    }
+    if (Boolean(persistenceContext) !== Boolean(persistenceScopeValidation.scope)) {
+      throw new TypeError("scoped Session execution requires persistence context and scope");
+    }
     this.assertPersistenceContextIdentity?.(persistenceContext, {
       userId,
       sessionId,
@@ -187,6 +197,7 @@ export class SessionExecutionRunner {
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
         persistenceContext,
+        persistenceScope: persistenceScopeValidation.scope,
         contextMode,
         userId,
         sessionId: usedSessionId,
@@ -230,7 +241,6 @@ export class SessionExecutionRunner {
         turnScopeId: resolvedTurnScopeId,
         eventListener: runtimeEventListener,
         persistenceContext,
-        persistenceScope,
         sessionDir,
         normalizedMessage,
         requestedAttachments: attachments,

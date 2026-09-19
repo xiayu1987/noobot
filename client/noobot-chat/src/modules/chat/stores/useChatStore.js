@@ -49,7 +49,7 @@ export const useChatStore = defineStore("chat", () => {
     const activeId = String(activeSessionId.value || "").trim();
     pendingInteractionRequest.value =
       pendingInteractionRequests.value.find(
-        (request = {}) => String(request?.sessionId || "").trim() === activeId,
+        (request = {}) => String(request?.channelSessionId || "").trim() === activeId,
       ) || null;
     if (!pendingInteractionRequest.value) interactionSubmitting.value = false;
     return before - pendingInteractionRequests.value.length;

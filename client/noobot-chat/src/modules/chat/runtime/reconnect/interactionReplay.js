@@ -23,13 +23,15 @@ export function hasPendingInteractionForDialog(pendingInteractionRequest, dialog
 
 export function applyReconnectInteractionRequest({
   eventData,
+  channelSessionId,
   normalizeInteractionRequestPayload,
   tryAutoResolveInteraction,
   isInteractionRequestHandled,
   setPendingInteractionRequest,
   clearPendingInteraction,
 } = {}) {
-  const interactionRequest = normalizeInteractionRequestPayload?.(eventData) || eventData || {};
+  const interactionRequest =
+    normalizeInteractionRequestPayload?.(eventData, { channelSessionId }) || eventData || {};
   if (tryAutoResolveInteraction?.(interactionRequest)) return interactionRequest;
   if (isTerminalInteraction(interactionRequest)) {
     clearPendingInteraction?.(interactionRequest);

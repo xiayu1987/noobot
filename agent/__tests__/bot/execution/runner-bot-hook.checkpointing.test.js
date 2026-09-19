@@ -15,6 +15,12 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
   const checkpointPayloads = [];
   const events = [];
   const persistenceContext = { kind: "noobot.session_persistence_scope", scope: "running-turn" };
+  const persistenceScope = {
+    scopeId: "agent:turn-checkpoint",
+    parentSessionId: "root-1",
+    relativeDir: "runtime/agent/session/s1",
+    allowedRoot: "runtime/agent/session",
+  };
   const runtime = {
     attachmentMetas: [],
     currentTurnMessages: {
@@ -60,6 +66,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     message: "task",
     turnScopeId: "turn-checkpoint",
     persistenceContext,
+    persistenceScope,
     eventListener: { onEvent: (event) => events.push(event) },
   });
 
@@ -267,6 +274,12 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
 test("SessionExecutionRunner validates scoped persistence identity before execution", async () => {
   const calls = [];
   const persistenceContext = { kind: "noobot.session_persistence_scope" };
+  const persistenceScope = {
+    scopeId: "agent:child-1",
+    parentSessionId: "root-1",
+    relativeDir: "runtime/agent/session/child-1",
+    allowedRoot: "runtime/agent/session",
+  };
   const runner = createRunner({
     assertPersistenceContextIdentity: (context, identity) => calls.push({ context, identity }),
   });
@@ -278,6 +291,7 @@ test("SessionExecutionRunner validates scoped persistence identity before execut
     message: "task",
     runConfig: { executionId: "agent:child-1" },
     persistenceContext,
+    persistenceScope,
   });
 
   assert.deepEqual(calls, [

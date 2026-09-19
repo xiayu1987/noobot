@@ -26,10 +26,16 @@ describe("turnTransportEnvelope", () => {
       source: "reconnect",
       data: {
         ...canonicalMessageEvent({
-          eventId: "event-1", eventType: "main_model_content", messageId: "message-1",
-          presentationMessageId: "message-1", sessionId: "session-1",
-          dialogProcessId: "dialog-1", turnScopeId: "turn-1", sequence: 7,
-          occurredAt: "2026-07-26T00:00:00.000Z", text: "result",
+          eventId: "event-1",
+          eventType: "main_model_content",
+          messageId: "message-1",
+          presentationMessageId: "message-1",
+          sessionId: "session-1",
+          dialogProcessId: "dialog-1",
+          turnScopeId: "turn-1",
+          sequence: 7,
+          occurredAt: "2026-07-26T00:00:00.000Z",
+          text: "result",
         }),
         seq: 85,
       },
@@ -57,10 +63,15 @@ describe("turnTransportEnvelope", () => {
     const normalized = normalizeTurnTransportEnvelope({
       event: "message_event",
       data: canonicalMessageEvent({
-          eventId: "event-2", eventType: "thinking", messageId: "message-2",
-          presentationMessageId: "message-2", sessionId: "session-2", sequence: 99,
-          occurredAt: "2026-07-26T00:00:00.000Z", text: "thinking",
-        }),
+        eventId: "event-2",
+        eventType: "thinking",
+        messageId: "message-2",
+        presentationMessageId: "message-2",
+        sessionId: "session-2",
+        sequence: 99,
+        occurredAt: "2026-07-26T00:00:00.000Z",
+        text: "thinking",
+      }),
     });
 
     expect(normalized.transportCursor.sequence).toBe(0);
@@ -145,6 +156,7 @@ describe("turnTransportEnvelope", () => {
     const normalized = normalizeTurnTransportEnvelope({
       event: "interaction_request",
       data: protocolEnvelope,
+      channelSessionId: "root-session",
     });
 
     expect(normalized.data).toMatchObject({
@@ -153,5 +165,6 @@ describe("turnTransportEnvelope", () => {
       turnScopeId: "turn-1",
     });
     expect(normalized.protocolEnvelope).toBe(protocolEnvelope);
+    expect(normalized.channelSessionId).toBe("root-session");
   });
 });

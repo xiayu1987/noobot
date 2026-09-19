@@ -5,6 +5,7 @@
  */
 export * from "./version.js";
 export * from "./identity.js";
+export * from "./persistence-scope.js";
 export * from "./policies.js";
 export {
   TURN_LIFECYCLE_PROTOCOL_VERSION,

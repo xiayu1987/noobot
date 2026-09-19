@@ -195,10 +195,13 @@ export async function applyReconnectDataReplay({
   }
 
   for (const sessionEntry of reconnectSessions) {
+    const channelSessionId = _trimStr(sessionEntry?.sessionId);
     for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
       if (isPendingInteractionReplay(interaction)) {
         const reducerInput = readProtocolEventReducerInput(interaction);
-        if (reducerInput.valid) await applyPendingInteraction?.(reducerInput.input);
+        if (reducerInput.valid) {
+          await applyPendingInteraction?.(reducerInput.input, { channelSessionId });
+        }
       }
     }
   }
