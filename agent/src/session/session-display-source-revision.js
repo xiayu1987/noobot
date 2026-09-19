@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash } from "node:crypto";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 
-export const SESSION_SOURCE_SCHEMA_VERSION = TURN_THRESHOLDS.session.turnJournalSchemaVersion;
+export const SESSION_SOURCE_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
 function text(value) {
   return String(value || "").trim();

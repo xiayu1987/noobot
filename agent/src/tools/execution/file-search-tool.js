@@ -73,6 +73,7 @@ function buildSearchSchema(agentContext) {
 }
 
 async function searchTextSource({
+  agentContext,
   runtime,
   query,
   text,
@@ -83,6 +84,7 @@ async function searchTextSource({
   riskLevel,
 }) {
   await confirmToolOperation({
+    agentContext,
     runtime,
     declaredRiskLevel: riskLevel,
     serverEvidence: {
@@ -223,6 +225,7 @@ async function searchFilesSource({
   const searchResourcePath = searchResolution.resourcePath;
   const searchPathRef = searchResolution.pathRef;
   await confirmToolOperation({
+    agentContext,
     runtime,
     declaredRiskLevel: riskLevel,
     serverEvidence: {
@@ -320,6 +323,7 @@ async function runSearch({ agentContext, runtime, workspaceIo, args }) {
       });
     }
     return searchTextSource({
+      agentContext,
       runtime,
       query: normalizedQuery,
       text,

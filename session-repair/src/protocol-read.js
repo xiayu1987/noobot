@@ -5,6 +5,11 @@
  */
 import { createHash } from "node:crypto";
 import path from "node:path";
+import {
+  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+  resolveSessionArtifactSchemaVersion,
+} from "@noobot/session-protocol";
 import { resolveRepairArtifactPath, text } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
 
@@ -51,10 +56,44 @@ async function readLegacyCheckpointMessages(sessionDir, records) {
   return payload.messages;
 }
 
+async function readPreviousCheckpointRecords(sessionDir, records) {
+  const indexes = records.filter((record) => record?.op === "summary_snapshot");
+  const checkpointRecords = [];
+  let previousCheckpointHash = "";
+  for (const index of indexes) {
+    const file = resolveRepairArtifactPath(sessionDir, index.file, "turn-snapshots", [".json"]);
+    const payload = await readRepairJson(file);
+    const contentHash = `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+    if (
+      Number(payload?.schemaVersion) !== 2 ||
+      !Array.isArray(payload?.records) ||
+      Object.hasOwn(payload, "messages") ||
+      payload.checkpointId !== index.checkpointId ||
+      Number(payload.checkpointRevision) !== Number(index.checkpointRevision) ||
+      payload.previousCheckpointHash !== previousCheckpointHash ||
+      contentHash !== index.contentHash
+    ) {
+      throw Object.assign(
+        new Error(`previous Session checkpoint does not match its index: ${index.file}`),
+        { code: "SESSION_REPAIR_CHECKPOINT_MISMATCH" },
+      );
+    }
+    checkpointRecords.push(...payload.records);
+    previousCheckpointHash = index.contentHash;
+  }
+  return checkpointRecords;
+}
+
 export async function readSessionForProtocolRepair({ sessionDir = "", session = null } = {}) {
   if (!session || typeof session !== "object" || Array.isArray(session)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), {
       code: "SESSION_REPAIR_SOURCE_INVALID",
+    });
+  }
+  const schemaVersion = resolveSessionArtifactSchemaVersion(session.schemaVersion);
+  if (schemaVersion > SESSION_ARTIFACT_SCHEMA_VERSION) {
+    throw Object.assign(new TypeError("Session artifact schema is newer than this runtime"), {
+      code: "SESSION_ARTIFACT_SCHEMA_UNSUPPORTED",
     });
   }
   if (Array.isArray(session.messages)) return session;
@@ -70,8 +109,16 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
     let turnMessages;
     if (path.extname(artifact) === ".jsonl") {
       const records = await readRepairJournal(artifact, item?.committedBytes);
-      const baseMessages = await readLegacyCheckpointMessages(sessionDir, records);
-      turnMessages = materializeRepairRecords(records, item?.messageOrder, baseMessages);
+      if (schemaVersion === SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION) {
+        const checkpointRecords = await readPreviousCheckpointRecords(sessionDir, records);
+        turnMessages = materializeRepairRecords(
+          [...checkpointRecords, ...records.filter((record) => record?.op !== "summary_snapshot")],
+          item?.messageOrder,
+        );
+      } else {
+        const baseMessages = await readLegacyCheckpointMessages(sessionDir, records);
+        turnMessages = materializeRepairRecords(records, item?.messageOrder, baseMessages);
+      }
     } else {
       const turn = await readRepairJson(artifact);
       if (!Array.isArray(turn?.messages)) {

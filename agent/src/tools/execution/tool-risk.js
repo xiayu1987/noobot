@@ -14,10 +14,10 @@ import {
   shouldRequireSecurityConfirmation,
 } from "@noobot/security-assessment-protocol";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
-import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "../core/tool-i18n.js";
+import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
 
 const toolRiskAssessmentStorage = new AsyncLocalStorage();
 
@@ -93,6 +93,7 @@ function confirmationContent(
 }
 
 export async function confirmToolOperation({
+  agentContext,
   runtime,
   declaredRiskLevel,
   serverEvidence,
@@ -119,8 +120,8 @@ export async function confirmToolOperation({
       code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING,
     });
   }
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const result = await bridge.requestUserInteraction({
+    authority: resolveUserInteractionAuthority(agentContext),
     content: confirmationContent(runtime, {
       toolName,
       operation,
@@ -129,9 +130,7 @@ export async function confirmToolOperation({
       riskLevel: effectiveRiskLevel,
     }),
     fields: [],
-    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     requireEncryption: false,
-    sessionId: String(systemRuntime?.sessionId || "").trim(),
     toolName,
     lifecycle: "pending",
     ackMode: "manual",

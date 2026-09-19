@@ -131,6 +131,7 @@ export function createScriptTool({ agentContext }) {
       }
 
       await confirmToolOperation({
+        agentContext,
         runtime,
         declaredRiskLevel: riskLevel,
         serverEvidence: {

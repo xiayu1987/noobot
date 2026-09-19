@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 
 import {
   appendRollingJsonlArtifactLog,
@@ -287,7 +288,7 @@ test("session artifacts group interleaved messages by logical dialog without cha
 
     const files = buildSessionArtifactFileMap(root);
     const manifest = JSON.parse(await readFile(files.session, "utf8"));
-    assert.equal(manifest.schemaVersion, 6);
+    assert.equal(manifest.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
     assert.equal(manifest.messageIdentityVersion, 1);
     assert.deepEqual(
       manifest.turnOrder.map((turn) => turn.artifactOrdinal),
@@ -343,7 +344,7 @@ test("session artifact publication rejects duplicate persistent message UIDs", a
     );
   }));
 
-test("v6 turn journals append only changed messages and hide uncommitted tails", async () =>
+test("canonical turn journals append only changed messages and hide uncommitted tails", async () =>
   withTemp(async (root) => {
     const first = { role: "assistant", content: "one", turnScopeId: "active", messageUid: "m1" };
     const second = { role: "assistant", content: "two", turnScopeId: "active", messageUid: "m2" };

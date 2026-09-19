@@ -34,8 +34,6 @@ export const TURN_THRESHOLDS = deepFreeze({
 
   session: {
     mainModelHistoryRoundLimit: 5,
-
-    turnJournalSchemaVersion: 6,
   },
 
   subTasks: {

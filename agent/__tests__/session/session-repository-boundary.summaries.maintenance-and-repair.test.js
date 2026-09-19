@@ -7,10 +7,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
+import {
+  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+} from "@noobot/session-protocol";
 import {
   canonicalMessages,
   withTempWorkspace,
@@ -241,8 +246,87 @@ test("display maintenance migrates repairable artifacts through the Session repa
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
 
     const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    assert.equal(manifest.schemaVersion, 6);
+    assert.equal(manifest.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
     assert.equal("messages" in manifest, false);
+  });
+});
+
+test("display summary repair migrates the previous canonical artifact before revision validation", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-previous-artifact";
+    const sessionId = "previous-artifact";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+
+    const repository = runtime.repositories.sessionRepository;
+    const session = await repository.findById(userId, sessionId, "");
+    session.messages = canonicalMessages(
+      [
+        {
+          role: "user",
+          content: "previous protocol message",
+          turnCommit: {
+            action: "send",
+            commandId: "command-previous",
+            requestHash: "hash-previous",
+          },
+        },
+      ],
+      "previous",
+    );
+    await repository.save(userId, session, "");
+
+    const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
+    const manifestFile = path.join(sessionDir, "session.json");
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+    const turn = manifest.turnOrder[0];
+    const journalFile = path.join(sessionDir, turn.file);
+    const records = (await readFile(journalFile, "utf8")).trim().split("\n").map(JSON.parse);
+    const messageRecord = records.find((record) => record?.op === "upsert");
+    messageRecord.message.turnCommit.runState = "pending_start";
+    messageRecord.hash = `sha256:${createHash("sha256")
+      .update(JSON.stringify(messageRecord.message))
+      .digest("hex")}`;
+    const journal = records.map((record) => `${JSON.stringify(record)}\n`).join("");
+    await writeFile(journalFile, journal, "utf8");
+    turn.committedBytes = Buffer.byteLength(journal);
+    turn.messageHashes[messageRecord.messageUid] = messageRecord.hash;
+    manifest.schemaVersion = SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION;
+    manifest.turnLifecycle.commandReceipts = [
+      {
+        commandId: "command-previous",
+        type: "session.turn.commit",
+        requestHash: "hash-previous",
+        aggregateVersion: 1,
+        committedAt: "2026-09-18T00:00:00.000Z",
+        result: { messageUid: messageRecord.messageUid, runState: "pending_start" },
+      },
+    ];
+    await writeFile(manifestFile, JSON.stringify(manifest), "utf8");
+
+    const repaired = await repository.ensureSessionDisplaySummary(userId, sessionId, "");
+    const repairedManifest = JSON.parse(await readFile(manifestFile, "utf8"));
+    const repairedSession = await repository.findById(userId, sessionId, "");
+    const displaySummary = await repository.readSessionDisplaySummaryArtifact(
+      userId,
+      sessionId,
+      "",
+    );
+
+    assert.equal(repaired.migrated, true);
+    assert.equal(repairedManifest.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
+    assert.equal(repairedSession.messages.length, 1);
+    assert.deepEqual(repairedSession.messages[0].turnCommit, {
+      action: "send",
+      commandId: "command-previous",
+      requestHash: "hash-previous",
+    });
+    assert.deepEqual(repairedSession.turnLifecycle.commandReceipts[0].result, {
+      messageUid: messageRecord.messageUid,
+    });
+    assert.equal(displaySummary.source.sessionSchemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
   });
 });
 

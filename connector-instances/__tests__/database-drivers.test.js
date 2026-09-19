@@ -9,10 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createRequire } from "node:module";
-import {
-  executeSqliteCommand,
-  releaseSqliteConnection,
-} from "../src/database/index.js";
+import { executeSqliteCommand, releaseSqliteConnection } from "../src/database/index.js";
 
 const require = createRequire(import.meta.url);
 

@@ -24,7 +24,7 @@ import {
   writeSessionArtifact,
   repairSessionArtifacts,
 } from "../../session-artifact-store.js";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import {
   reconcileCompletedTurnSummaryMarks,
   resegmentMigratedCheckpointBaselines,
@@ -88,8 +88,7 @@ class SessionArtifactMethods {
       if (isSessionDisplaySummaryCurrent(summary, manifest)) {
         return { summary, migrated: false, rebuilt: false };
       }
-      const migrated =
-        Number(manifest?.schemaVersion || 0) !== TURN_THRESHOLDS.session.turnJournalSchemaVersion;
+      const migrated = Number(manifest?.schemaVersion || 0) !== SESSION_ARTIFACT_SCHEMA_VERSION;
 
       const session = await this.findById(
         userId,
@@ -265,7 +264,7 @@ class SessionArtifactMethods {
     if (!(await this.storageService.exists(scope.sessionFile))) return { migrated: false };
     try {
       const manifest = await this.storageService.readJson(scope.sessionFile, null);
-      if (Number(manifest?.schemaVersion) !== TURN_THRESHOLDS.session.turnJournalSchemaVersion) {
+      if (Number(manifest?.schemaVersion) !== SESSION_ARTIFACT_SCHEMA_VERSION) {
         throw Object.assign(new Error("Session artifact protocol version requires repair"), {
           code: "SESSION_PROTOCOL_VERSION_REPAIR_REQUIRED",
         });
@@ -352,8 +351,7 @@ class SessionArtifactMethods {
               return {
                 migrated:
                   migration.changed ||
-                  Number(source.schemaVersion) !==
-                    Number(TURN_THRESHOLDS.session.turnJournalSchemaVersion),
+                  Number(source.schemaVersion) !== Number(SESSION_ARTIFACT_SCHEMA_VERSION),
                 migrations: migration.migrations,
                 repaired: artifactRepair.repaired,
               };

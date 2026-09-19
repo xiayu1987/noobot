@@ -57,6 +57,7 @@ import {
   isNativeScriptIpcMessage,
 } from "./native-script-ipc.js";
 import { acquireBrowserSession, closeBrowserSession } from "./browser-session-registry.js";
+import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
 
 const FORBIDDEN_IDENTIFIERS = new Set([
   "require",
@@ -275,6 +276,7 @@ function createNativeScriptIpcHandlers({
   interactionId,
 }) {
   const userId = resolveNativeScriptOwner(runtime, agentContext);
+  const interactionAuthority = resolveUserInteractionAuthority(agentContext);
   return {
     [NATIVE_SCRIPT_IPC_CHANNEL.BROWSER_SESSION_REQUEST]: async ({ headed, profile } = {}) => {
       if (!userId) throw new Error("native script browser profile owner is unavailable");
@@ -299,12 +301,11 @@ function createNativeScriptIpcHandlers({
         throw new Error("native script user interaction fields must be a normalized field array");
       }
       const result = await bridge.requestUserInteraction({
+        authority: interactionAuthority,
         interactionId,
         content: String(content || "").trim(),
         fields: fields || [],
-        dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
         requireEncryption: false,
-        sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
         toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
         lifecycle: "pending",
         ackMode: "manual",
@@ -364,6 +365,7 @@ export function createNativeScriptTool({ agentContext }) {
         throw new Error("native_script_identity_required");
       const body = validateScriptBody(script_body);
       await confirmToolOperation({
+        agentContext,
         runtime,
         declaredRiskLevel: riskLevel,
         serverEvidence: {

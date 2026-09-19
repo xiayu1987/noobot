@@ -148,7 +148,7 @@ function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools 
 
     const encryptedPayload = result?.payload;
     const encryptedFlag = result?.encrypted === true;
-    const fallbackSessionId = String(payload?.sessionId || "").trim();
+    const fallbackSessionId = String(payload?.authority?.session?.sessionId || "").trim();
     const responseSessionId = String(result?.sessionId || "").trim();
     const targetSessionId = responseSessionId || fallbackSessionId;
     if (!encryptedFlag || !String(encryptedPayload || "").trim() || !targetSessionId) {

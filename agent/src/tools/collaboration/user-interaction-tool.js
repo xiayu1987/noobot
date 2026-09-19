@@ -6,10 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import {
-  getRuntimeFromAgentContext,
-  getSystemRuntimeFromRuntime,
-} from "../../context/agent-context-accessor.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -19,6 +16,7 @@ import {
   canonicalSensitiveFieldText,
 } from "../core/sensitive-field-patterns.js";
 import { TOOL_NAME } from "../constants/index.js";
+import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
 
 function tUserInteraction(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.user_interaction.${String(key || "").trim()}`, params);
@@ -176,9 +174,7 @@ function parseJsonStringPayload(text = "") {
 export function createUserInteractionTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const bridge = runtime.userInteractionBridge || null;
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const dialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
-  const sessionId = String(systemRuntime.sessionId || "").trim();
+  const interactionAuthority = resolveUserInteractionAuthority(agentContext);
   const fieldSchema = z.object({
     name: z.string().min(1).describe(tTool(runtime, "tools.user_interaction.fieldName")),
     displayName: z
@@ -251,6 +247,7 @@ export function createUserInteractionTool({ agentContext }) {
       }
 
       const result = await bridge.requestUserInteraction({
+        authority: interactionAuthority,
         interactionId: String(
           config?.configurable?.noobotHookContext?.call?.id ||
             config?.configurable?.noobotHookContext?.call?.tool_call_id ||
@@ -259,9 +256,7 @@ export function createUserInteractionTool({ agentContext }) {
         ).trim(),
         content: interactionContent,
         fields: normalizedFieldsPayload.fields || [],
-        dialogProcessId,
         requireEncryption: false,
-        sessionId,
         toolName: TOOL_NAME.USER_INTERACTION,
         timeoutMs: Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined,
         lifecycle: "pending",

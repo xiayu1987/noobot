@@ -15,9 +15,14 @@ import {
   TURN_PHASE,
   TURN_STATE,
   TURN_TERMINAL_STATUS,
+  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_SCHEMA_VERSION,
   createTurnCommitFingerprint,
   createTurnLifecycleCommandId,
   isTurnCommitContinuation,
+  normalizeTurnCommitMetadata,
+  normalizeCommandReceipt,
+  resolveSessionArtifactSchemaVersion,
   resolveTurnCommitAction,
 } from "@noobot/session-protocol";
 import {
@@ -43,7 +48,34 @@ function validateTransferCollections(value) {
   return false;
 }
 
-function migrateMessage(message = {}, sessionId = "", index = 0, transferMigration = null) {
+function migrateArtifactSchema(document, migrations, sourceSchemaVersion) {
+  if (sourceSchemaVersion === SESSION_ARTIFACT_SCHEMA_VERSION) return false;
+  if (sourceSchemaVersion > SESSION_ARTIFACT_SCHEMA_VERSION) {
+    throw Object.assign(new TypeError("Session artifact schema is newer than this runtime"), {
+      code: "SESSION_ARTIFACT_SCHEMA_UNSUPPORTED",
+    });
+  }
+  document.schemaVersion = SESSION_ARTIFACT_SCHEMA_VERSION;
+  migrations.push(`session-artifact-schema-v${SESSION_ARTIFACT_SCHEMA_VERSION}`);
+  return true;
+}
+
+function migrateTurnCommitMetadata(message) {
+  if (message.turnCommit === undefined) return false;
+  const canonical = normalizeTurnCommitMetadata(message.turnCommit);
+  if (JSON.stringify(message.turnCommit) === JSON.stringify(canonical)) return false;
+  if (canonical) message.turnCommit = canonical;
+  else delete message.turnCommit;
+  return true;
+}
+
+function migrateMessage(
+  message = {},
+  sessionId = "",
+  index = 0,
+  transferMigration = null,
+  migrateArtifactProtocol = false,
+) {
   const hadSessionId = Object.hasOwn(message, "sessionId");
   const next = { ...message, sessionId: text(message.sessionId || sessionId) };
   let changed = false;
@@ -56,6 +88,21 @@ function migrateMessage(message = {}, sessionId = "", index = 0, transferMigrati
     delete next.messageUid;
     changed = true;
   }
+  if (
+    migrateArtifactProtocol &&
+    next.turnCommit &&
+    typeof next.turnCommit === "object" &&
+    !Array.isArray(next.turnCommit) &&
+    next.turnCommit.idempotencyKey !== undefined
+  ) {
+    next.turnCommit = {
+      ...next.turnCommit,
+      commandId: next.turnCommit.commandId || next.turnCommit.idempotencyKey,
+    };
+    delete next.turnCommit.idempotencyKey;
+    changed = true;
+  }
+  if (migrateArtifactProtocol) changed ||= migrateTurnCommitMetadata(next);
   if (!text(next.messageUid) && next.chatPresentation !== true) {
     const identitySeed = [
       sessionId,
@@ -82,19 +129,6 @@ function migrateMessage(message = {}, sessionId = "", index = 0, transferMigrati
   if (next.injectedMessageType === undefined && next.injected_message_type !== undefined) {
     next.injectedMessageType = next.injected_message_type;
     delete next.injected_message_type;
-    changed = true;
-  }
-  if (
-    next.turnCommit &&
-    typeof next.turnCommit === "object" &&
-    !Array.isArray(next.turnCommit) &&
-    next.turnCommit.idempotencyKey !== undefined
-  ) {
-    next.turnCommit = {
-      ...next.turnCommit,
-      commandId: next.turnCommit.commandId || next.turnCommit.idempotencyKey,
-    };
-    delete next.turnCommit.idempotencyKey;
     changed = true;
   }
   if (transferMigration) {
@@ -217,10 +251,12 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
     });
   }
   const next = structuredClone(document);
+  const sourceSchemaVersion = resolveSessionArtifactSchemaVersion(next.schemaVersion);
+  const migrateArtifactProtocol = sourceSchemaVersion <= SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION;
   const sessionId = text(next.sessionId || suppliedSessionId);
   const transferMigration = createSemanticTransferMigration(next);
-  let changed = false;
   const migrations = [];
+  let changed = migrateArtifactSchema(next, migrations, sourceSchemaVersion);
   const lifecycle =
     next.turnLifecycle &&
     typeof next.turnLifecycle === "object" &&
@@ -233,9 +269,16 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
       : (lifecycle.turns = {});
   const commandReceipts = Array.isArray(lifecycle.commandReceipts) ? lifecycle.commandReceipts : [];
   const lifecycleCommandIdMap = new Map();
+  let normalizedCommandReceipts = false;
   lifecycle.commandReceipts = commandReceipts.map((receipt) => {
     if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return receipt;
     const eventType = text(receipt.eventType);
+    if (!eventType && migrateArtifactProtocol) {
+      const normalized = normalizeCommandReceipt(receipt);
+      if (!normalized) return receipt;
+      if (JSON.stringify(normalized) !== JSON.stringify(receipt)) normalizedCommandReceipts = true;
+      return normalized;
+    }
     if (!eventType) return receipt;
     if (text(receipt.type) && text(receipt.type) !== eventType) {
       throw Object.assign(new TypeError("Session lifecycle receipt type is ambiguous"), {
@@ -262,6 +305,10 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
     changed = true;
     return migrated;
   });
+  if (normalizedCommandReceipts) {
+    changed = true;
+    migrations.push("session-command-receipt-canonical-v1");
+  }
   if (lifecycleCommandIdMap.size) {
     for (const turn of Object.values(turns)) {
       if (!turn || typeof turn !== "object" || Array.isArray(turn)) continue;
@@ -389,7 +436,13 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
   }
   if (Array.isArray(next.messages)) {
     next.messages = next.messages.map((message, index) => {
-      const result = migrateMessage(message, sessionId, index, transferMigration);
+      const result = migrateMessage(
+        message,
+        sessionId,
+        index,
+        transferMigration,
+        migrateArtifactProtocol,
+      );
       changed ||= result.changed;
       return result.message;
     });
@@ -401,7 +454,13 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
     migrations.push("completed-turn-summary-marks");
   }
   if (next.message && typeof next.message === "object" && !Array.isArray(next.message)) {
-    const result = migrateMessage(next.message, sessionId, 0, transferMigration);
+    const result = migrateMessage(
+      next.message,
+      sessionId,
+      0,
+      transferMigration,
+      migrateArtifactProtocol,
+    );
     next.message = result.message;
     changed ||= result.changed;
   }

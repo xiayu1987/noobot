@@ -9,8 +9,10 @@ import {
   EVENT_AUTHORITY,
   EVENT_FAMILY,
   EVENT_REDUCER_TARGET,
+  createInteractionAuthority,
   getEventFamily,
   getEventFamilyByWireEvent,
+  validateInteractionAuthority,
   validateInteractionRequestPayload,
   isPendingInteractionReplay,
   INTERACTION_LIFECYCLE,
@@ -26,6 +28,62 @@ import {
   TURN_PHASE,
   TURN_STATE,
 } from "@noobot/session-protocol";
+
+test("interaction authority is one strict Session and Turn routing protocol", () => {
+  const source = {
+    session: {
+      userId: "user-1",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+    },
+    turn: { dialogProcessId: "child-dialog", turnScopeId: "child-turn" },
+    persistenceScope: {
+      scopeId: "agent:child-execution",
+      parentSessionId: "root-session",
+      relativeDir: "runtime/agent/session/child-session",
+      allowedRoot: "runtime/agent/session",
+    },
+  };
+
+  const validation = validateInteractionAuthority(source);
+  assert.equal(validation.valid, true);
+  assert.deepEqual(validation.authority, createInteractionAuthority(source));
+  assert.equal(Object.isFrozen(validation.authority), true);
+  assert.equal(Object.isFrozen(validation.authority.persistenceScope), true);
+});
+
+test("interaction authority rejects alternate shapes and conflicting persistence routing", () => {
+  const source = {
+    session: {
+      userId: "user-1",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+    },
+    turn: { dialogProcessId: "child-dialog", turnScopeId: "child-turn" },
+    persistenceScope: {
+      scopeId: "agent:child-execution",
+      parentSessionId: "different-root",
+      relativeDir: "runtime/agent/session/child-session",
+      allowedRoot: "runtime/agent/session",
+      legacyPath: "runtime/legacy",
+    },
+    sessionId: "legacy-flat-session",
+  };
+
+  assert.deepEqual(validateInteractionAuthority(source).errors, [
+    "unknown_interaction_authority_field",
+    "unknown_persistence_scope_field",
+    "persistence_scope_parent_mismatch",
+  ]);
+  assert.deepEqual(
+    validateInteractionAuthority({
+      session: source.session,
+      turn: source.turn,
+      persistenceScope: { scopeId: "agent:child-execution" },
+    }).errors,
+    ["incomplete_persistence_scope", "persistence_scope_parent_mismatch"],
+  );
+});
 
 test("event family registry delegates authoritative domain events only", () => {
   assert.equal(getEventFamilyByWireEvent("turn.completed"), null);
