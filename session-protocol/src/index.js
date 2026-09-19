@@ -54,6 +54,7 @@ export * from "./command/message-delete-command.js";
 export * from "./lifecycle/turn-state.js";
 export * from "./lifecycle/turn-event.js";
 export * from "./lifecycle/turn-execution-state.js";
+export * from "./lifecycle/turn-commit-action.js";
 export * from "./lifecycle/turn-transition-policy.js";
 export * from "./lifecycle/turn-terminal.js";
 export * from "./lifecycle/turn-capability.js";

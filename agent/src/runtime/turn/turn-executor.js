@@ -18,7 +18,7 @@ import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
 import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
@@ -132,7 +132,7 @@ export async function invokeNoToolsTurn({
     phase: "llm_call",
     turn,
     mode: "no_tools",
-    status: "start",
+    status: HOOK_PHASE_STATUS.RUNNING,
     startedAt: llmStartedAt,
     forceToolChoiceNone,
     modelContext,
@@ -192,7 +192,7 @@ export async function invokeNoToolsTurn({
         phase: "llm_call",
         turn,
         mode: "no_tools",
-        status: "error",
+        status: HOOK_PHASE_STATUS.ERROR,
         startedAt: llmStartedAt,
         endedAt: new Date(Date.now()).toISOString(),
         durationMs: Date.now() - llmStartedAtMs,
@@ -212,7 +212,7 @@ export async function invokeNoToolsTurn({
       phase: "llm_call",
       turn,
       mode: "no_tools",
-      status: "success",
+      status: HOOK_PHASE_STATUS.SUCCESS,
       startedAt: llmStartedAt,
       endedAt: new Date(llmEndedAtMs).toISOString(),
       durationMs: llmEndedAtMs - llmStartedAtMs,
@@ -310,7 +310,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     phase: "llm_call",
     turn,
     mode: "with_tools",
-    status: "start",
+    status: HOOK_PHASE_STATUS.RUNNING,
     startedAt: llmStartedAt,
     toolChoice: configuredToolChoice || "",
     toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
@@ -385,7 +385,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
           turn,
           modelLoopRound,
           mode: "with_tools",
-          status: "error",
+          status: HOOK_PHASE_STATUS.ERROR,
           startedAt: llmStartedAt,
           endedAt: new Date(Date.now()).toISOString(),
           durationMs: Date.now() - llmStartedAtMs,
@@ -409,7 +409,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
           turn,
           modelLoopRound,
           mode: "with_tools_required_retry",
-          status: "error",
+          status: HOOK_PHASE_STATUS.ERROR,
           startedAt: llmStartedAt,
           endedAt: new Date(Date.now()).toISOString(),
           durationMs: Date.now() - llmStartedAtMs,
@@ -441,7 +441,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       turn,
       modelLoopRound,
       mode: "with_tools",
-      status: "success",
+      status: HOOK_PHASE_STATUS.SUCCESS,
       startedAt: llmStartedAt,
       endedAt: new Date(Date.now()).toISOString(),
       durationMs: Date.now() - llmStartedAtMs,

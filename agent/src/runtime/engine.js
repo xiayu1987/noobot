@@ -8,7 +8,7 @@ import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
 import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
 import { runAgentRuntimeHook } from "../extensions/hooks/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent } from "../events/index.js";
@@ -223,7 +223,7 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
     point: HOOK_POINT.AGENT.BEFORE_TURN,
     context: buildHookContext(HOOK_POINT.AGENT.BEFORE_TURN, runtime, {
       phase: "agent_turn",
-      status: "start",
+      status: HOOK_PHASE_STATUS.RUNNING,
       startedAt,
       agentContext,
       userMessage,
@@ -243,7 +243,7 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
       point: HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
       context: buildHookContext(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, runtime, {
         phase: "agent_turn",
-        status: "success",
+        status: HOOK_PHASE_STATUS.SUCCESS,
         startedAt,
         endedAt: new Date(beforeFinalAtMs).toISOString(),
         durationMs: beforeFinalAtMs - startedAtMs,
@@ -259,7 +259,7 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
       point: HOOK_POINT.AGENT.AFTER_TURN,
       context: buildHookContext(HOOK_POINT.AGENT.AFTER_TURN, runtime, {
         phase: "agent_turn",
-        status: "success",
+        status: HOOK_PHASE_STATUS.SUCCESS,
         startedAt,
         endedAt: new Date(endedAtMs).toISOString(),
         durationMs: endedAtMs - startedAtMs,
@@ -279,7 +279,7 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
       point: failurePoint,
       context: buildHookContext(failurePoint, runtime, {
         phase: "agent_turn",
-        status: aborted ? "abort" : "error",
+        status: aborted ? HOOK_PHASE_STATUS.ABORT : HOOK_PHASE_STATUS.ERROR,
         startedAt,
         endedAt: new Date(failedAtMs).toISOString(),
         durationMs: failedAtMs - startedAtMs,

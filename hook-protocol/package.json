@@ -8,6 +8,7 @@
     ".": "./src/index.js",
     "./points": "./src/points.js",
     "./runtime": "./src/runtime.js",
+    "./phase-status": "./src/phase-status.js",
     "./package.json": "./package.json"
   },
   "scripts": {

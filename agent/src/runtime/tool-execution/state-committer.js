@@ -5,7 +5,7 @@
  */
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { appendToolResultModelMessage } from "../message-context/message-store.js";
@@ -135,7 +135,7 @@ export function createStateCommitter({
         context: buildHookContext(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "assistant_message",
-          status: "start",
+          status: HOOK_PHASE_STATUS.RUNNING,
           payload: assistantMessage,
           agentContext,
         }),
@@ -149,7 +149,7 @@ export function createStateCommitter({
         context: buildHookContext(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "assistant_message",
-          status: "success",
+          status: HOOK_PHASE_STATUS.SUCCESS,
           payload: assistantMessage,
           agentContext,
         }),
@@ -185,7 +185,7 @@ export function createStateCommitter({
         context: buildHookContext(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "tool_result",
-          status: "start",
+          status: HOOK_PHASE_STATUS.RUNNING,
           payload: toolResultPayload,
           call,
           agentContext,
@@ -216,7 +216,7 @@ export function createStateCommitter({
         context: buildHookContext(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "tool_result",
-          status: "success",
+          status: HOOK_PHASE_STATUS.SUCCESS,
           payload: toolResultPayload,
           call,
           agentContext,

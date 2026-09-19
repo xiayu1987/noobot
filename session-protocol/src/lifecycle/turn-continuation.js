@@ -6,6 +6,7 @@
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { TURN_STATE } from "./turn-state.js";
 import { TURN_EXECUTION_STATE, normalizeTurnExecutionState } from "./turn-execution-state.js";
+import { isTurnCommitContinuation } from "./turn-commit-action.js";
 import { text as clean } from "../normalize.js";
 
 export function normalizeTurnContinuationSource(source = null) {
@@ -55,7 +56,7 @@ export function decideMaterializedTurnContinuation({
   }
   const targetTurn = lifecycle?.turns?.[targetTurnScopeId];
   if (
-    targetTurn?.action !== "continue" ||
+    !isTurnCommitContinuation(targetTurn?.action) ||
     clean(targetTurn?.continuationSource?.turnScopeId) !== decision.source.turnScopeId ||
     clean(targetTurn?.continuationSource?.dialogProcessId) !== decision.source.dialogProcessId
   ) {

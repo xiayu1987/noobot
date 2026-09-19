@@ -24,7 +24,7 @@ import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { resolveExecutionAbortMessage } from "@noobot/session-protocol/execution-abort";
@@ -317,7 +317,7 @@ async function completeMissingTool(state) {
     error: `tool not found: ${state.call?.name}`,
   });
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
-    status: "error",
+    status: HOOK_PHASE_STATUS.ERROR,
     ...completedToolTiming(state),
     success: false,
     failureReason: "tool_not_found",
@@ -349,7 +349,7 @@ async function completeToolInputOverflow(state, meta) {
     }),
   );
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
-    status: "success",
+    status: HOOK_PHASE_STATUS.SUCCESS,
     ...completedToolTiming(state),
     args: state.call?.args || {},
     success: true,
@@ -401,7 +401,7 @@ function toolInvocationConfig(state) {
         strategy: String(state.call?.name || "tool_output").trim() || "tool_output",
       }),
       noobotHookContext: toolHookContext(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
-        status: "running",
+        status: HOOK_PHASE_STATUS.RUNNING,
         args: state.call?.args || {},
       }),
       noobotHookMeta: resolveToolHookMeta(state.runtime),
@@ -509,7 +509,7 @@ async function handleToolInvocationError(state, error) {
   reportToolInvocationError(state, error);
   if (isAbort || isFatal) throw error;
   await runToolHook(state, HOOK_POINT.AGENT.TOOL_CALL_ERROR, {
-    status: "error",
+    status: HOOK_PHASE_STATUS.ERROR,
     ...completedToolTiming(state),
     args: state.call?.args || {},
     error,
@@ -597,7 +597,7 @@ async function finalizeToolExecution(state) {
   );
   state.toolResultText = projectToolResultForModel(state.toolResultText);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
-    status: failureState.success ? "success" : "error",
+    status: failureState.success ? HOOK_PHASE_STATUS.SUCCESS : HOOK_PHASE_STATUS.ERROR,
     ...completedToolTiming(state),
     args: state.call?.args || {},
     success: failureState.success,
@@ -617,7 +617,7 @@ export async function executeToolCall(options = {}) {
   const state = createToolCallExecutionState(options);
   if (!state.tool) return completeMissingTool(state);
   await runToolHook(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
-    status: "start",
+    status: HOOK_PHASE_STATUS.RUNNING,
     args: state.call?.args || {},
   });
   const terminalInputResult = await prepareToolInputTransfer(state);

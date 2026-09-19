@@ -13,6 +13,7 @@ import {
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { resolveTurnCommitAction } from "@noobot/session-protocol";
 import { copyPresentFields, firstTextField, normalizeTextField } from "./entity-primitives.js";
 import {
   dedupeAttachmentsByIdentity,
@@ -93,16 +94,9 @@ function normalizeTurnCommit(turnCommit = null) {
   if (!turnCommit || typeof turnCommit !== "object" || Array.isArray(turnCommit)) return null;
   const commandId = String(turnCommit.commandId || "").trim();
   if (!commandId) return null;
-  const action = String(turnCommit.action || "")
-    .trim()
-    .toLowerCase();
-  const runState = String(turnCommit.runState || "")
-    .trim()
-    .toLowerCase();
   const normalized = {
-    action: action === "continue" ? "continue" : "send",
+    action: resolveTurnCommitAction(turnCommit.action),
     commandId,
-    runState: runState || "pending_start",
   };
   const requestHash = String(turnCommit.requestHash || "").trim();
   if (requestHash) normalized.requestHash = requestHash;

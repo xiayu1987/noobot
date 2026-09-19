@@ -17,6 +17,9 @@ import {
   normalizeExpectedAggregateVersion,
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
+  TURN_COMMIT_ACTION,
+  isTurnCommitContinuation,
+  resolveTurnCommitAction,
 } from "@noobot/session-protocol";
 
 export async function commitTurn(payload = {}) {
@@ -31,7 +34,7 @@ export async function commitTurn(payload = {}) {
     sessionId,
     parentSessionId = "",
     content = "",
-    action = "send",
+    action = TURN_COMMIT_ACTION.SEND,
     turnScopeId = "",
     dialogProcessId = "",
     parentDialogProcessId = "",
@@ -51,12 +54,7 @@ export async function commitTurn(payload = {}) {
   }
   const normalizedContent = String(content || "").trim();
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
-  const normalizedAction =
-    String(action || "send")
-      .trim()
-      .toLowerCase() === "continue"
-      ? "continue"
-      : "send";
+  const normalizedAction = resolveTurnCommitAction(action);
   const normalizedCommandId = String(commandId || normalizedTurnScopeId).trim();
   const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
   const requestHash = createTurnCommitFingerprint({
@@ -121,7 +119,6 @@ export async function commitTurn(payload = {}) {
           deduplicated: true,
           turnScopeId: normalizedTurnScopeId,
           dialogProcessId: resolveContextMessageDialogProcessId(existing),
-          runState: String(idempotency.receipt?.result?.runState || "pending_start"),
         };
       }
       const currentVersion = resolveAggregateVersion(session);
@@ -138,7 +135,7 @@ export async function commitTurn(payload = {}) {
       }
       const resumeDialog = String(resumeDialogProcessId || "").trim();
       const resumeScope = String(resumeTurnScopeId || "").trim();
-      if (normalizedAction === "continue") {
+      if (isTurnCommitContinuation(normalizedAction)) {
         const continuation = decideMaterializedTurnContinuation({
           lifecycle,
           turnScopeId: normalizedTurnScopeId,
@@ -175,8 +172,7 @@ export async function commitTurn(payload = {}) {
             action: normalizedAction,
             commandId: normalizedCommandId,
             requestHash,
-            runState: "pending_start",
-            ...(normalizedAction === "continue"
+            ...(isTurnCommitContinuation(normalizedAction)
               ? {
                   resumeDialogProcessId: String(resumeDialogProcessId).trim(),
                   resumeTurnScopeId: String(resumeTurnScopeId).trim(),
@@ -198,7 +194,7 @@ export async function commitTurn(payload = {}) {
           turnScopeId: normalizedTurnScopeId,
           requestHash,
           aggregateVersion: session.aggregateVersion,
-          result: { messageUid: userMessage.messageUid, runState: "pending_start" },
+          result: { messageUid: userMessage.messageUid },
           committedAt: nowValue,
         },
       );
@@ -228,7 +224,6 @@ export async function commitTurn(payload = {}) {
         deduplicated: false,
         turnScopeId: normalizedTurnScopeId,
         dialogProcessId: resolveContextMessageDialogProcessId(savedMessage),
-        runState: savedMessage?.turnCommit?.runState || "pending_start",
       };
     },
     parentSessionId,
