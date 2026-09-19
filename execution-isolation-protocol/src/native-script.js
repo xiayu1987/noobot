@@ -12,6 +12,47 @@ export const NATIVE_SCRIPT_CAPABILITY_BINDINGS = Object.freeze({
   media: Object.freeze(["ffmpeg", "ffprobe"]),
 });
 
+export const NATIVE_SCRIPT_BROWSER_PAGE_METHODS = Object.freeze([
+  "goto",
+  "reload",
+  "goBack",
+  "goForward",
+  "title",
+  "url",
+  "content",
+  "setContent",
+  "textContent",
+  "click",
+  "fill",
+  "press",
+  "waitForSelector",
+  "waitForLoadState",
+  "waitForTimeout",
+  "locator",
+  "screenshot",
+  "close",
+]);
+
+export const NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS = Object.freeze([
+  "click",
+  "dblclick",
+  "fill",
+  "press",
+  "check",
+  "uncheck",
+  "selectOption",
+  "hover",
+  "focus",
+  "count",
+  "isVisible",
+  "textContent",
+  "innerText",
+  "getAttribute",
+  "waitFor",
+  "setInputFiles",
+  "screenshot",
+]);
+
 export const NATIVE_SCRIPT_FORBIDDEN_SYNTAX = Object.freeze([
   "ImportDeclaration",
   "ImportExpression",

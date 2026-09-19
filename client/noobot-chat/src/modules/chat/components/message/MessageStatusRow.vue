@@ -163,7 +163,7 @@ const stepView = computed(() => {
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .message-status-steps {
     padding: var(--noobot-space-sm) var(--noobot-space-md) var(--noobot-space-xs);
   }

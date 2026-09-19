@@ -393,8 +393,8 @@ const { translate } = useLocale();
   top: 0;
   left: 0;
   bottom: 0;
-  width: min(86vw, 320px);
-  min-width: min(86vw, 320px);
+  width: 100vw;
+  min-width: 100vw;
   transform: translateX(-100%);
   z-index: 100;
 }

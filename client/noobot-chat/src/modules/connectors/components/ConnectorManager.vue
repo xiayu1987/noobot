@@ -27,6 +27,7 @@ import {
   listUserConnectors,
 } from "../../../infrastructure/api/connectors/connectorApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { DESKTOP_DRAWER_SIZE } from "../../../shared/composables/useMobileViewport.js";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -34,7 +35,7 @@ const props = defineProps({
   fetcher: { type: Function, required: true },
   compact: { type: Boolean, default: false },
   showHeader: { type: Boolean, default: true },
-  drawerSize: { type: [String, Number], default: "72%" },
+  drawerSize: { type: [String, Number], default: DESKTOP_DRAWER_SIZE },
 });
 const emit = defineEmits(["changed"]);
 const { translate } = useLocale();
@@ -463,7 +464,7 @@ watch(() => [props.connected, props.userId], refresh);
   width: 100%;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .type-grid {
     grid-template-columns: 1fr;
     gap: 0;

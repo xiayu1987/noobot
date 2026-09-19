@@ -305,14 +305,6 @@ function handleHeaderAction(command = "") {
     width: 84px;
   }
 
-  .desktop-header-actions {
-    display: none;
-  }
-
-  .mobile-header-actions {
-    display: inline-flex;
-  }
-
   .chat-header {
     min-height: var(--noobot-header-height-mobile);
     padding: 0 max(var(--noobot-space-md), env(safe-area-inset-left)) 0

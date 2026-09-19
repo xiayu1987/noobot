@@ -22,3 +22,10 @@ export { default as BaseTabPanelBody } from "../ui/BaseTabPanelBody.vue";
 export { default as BaseThinkingLogLine } from "../ui/BaseThinkingLogLine.vue";
 export { default as BaseThinkingPanelShell } from "../ui/BaseThinkingPanelShell.vue";
 export { default as BaseZoomControls } from "../ui/BaseZoomControls.vue";
+export {
+  DESKTOP_DRAWER_SIZE,
+  MOBILE_DRAWER_SIZE,
+  MOBILE_MEDIA_QUERY,
+  resolveDrawerSize,
+  useMobileViewport,
+} from "../composables/useMobileViewport.js";

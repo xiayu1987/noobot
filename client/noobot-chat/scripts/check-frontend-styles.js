@@ -6,7 +6,9 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { RESPONSIVE_BREAKPOINTS } from "../src/shared/composables/useMobileViewport.js";
 
+const allowedBreakpoints = new Set(RESPONSIVE_BREAKPOINTS);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(projectRoot, "../..");
 const sourceRoots = [
@@ -138,6 +140,25 @@ function inspectIconOnlyButtons(filePath, source) {
   }
 }
 
+function inspectResponsiveBreakpoints(filePath, source) {
+  for (const match of source.matchAll(/@media[^{]*?\(\s*max-width\s*:\s*(\d+)px\s*\)/g)) {
+    const breakpoint = Number(match[1]);
+    if (allowedBreakpoints.has(breakpoint)) continue;
+    const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: responsive breakpoint ${breakpoint}px must use the shared ladder (${RESPONSIVE_BREAKPOINTS.join(", ")})`,
+    );
+  }
+  for (const match of source.matchAll(/@media[^{]*?\(\s*min-width\s*:\s*(\d+)px\s*\)/g)) {
+    const breakpoint = Number(match[1]);
+    if (allowedBreakpoints.has(breakpoint - 1)) continue;
+    const lineNumber = source.slice(0, match.index).split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: min-width ${breakpoint}px must complement the shared ladder (${RESPONSIVE_BREAKPOINTS.map((value) => value + 1).join(", ")})`,
+    );
+  }
+}
+
 function inspectFile(filePath) {
   const source = fs.readFileSync(filePath, "utf8");
   const lines = source.split(/\r?\n/);
@@ -154,6 +175,7 @@ function inspectFile(filePath) {
   });
   if (filePath.endsWith(".css") || filePath.endsWith(".vue")) {
     inspectEmptyStyleRules(filePath, source);
+    inspectResponsiveBreakpoints(filePath, source);
   }
 
   if (filePath.endsWith(".vue")) {

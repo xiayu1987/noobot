@@ -21,6 +21,7 @@ import {
 import ExtensionOutlet from "../../extensions/components/ExtensionOutlet.vue";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { resolveExtensionPoint } from "../../extensions/extension-registry.js";
+import { resolveDrawerSize } from "../../shared/composables/useMobileViewport.js";
 
 const props = defineProps({
   ...sharedSidebarProps,
@@ -330,7 +331,7 @@ defineExpose({
               :user-id="userId"
               :connected="connected"
               :fetcher="authFetch"
-              :drawer-size="isMobile ? '100%' : '72%'"
+              :drawer-size="resolveDrawerSize(isMobile)"
               :show-header="true"
               compact
               @changed="emit('connector-registry-changed')"
@@ -419,7 +420,7 @@ defineExpose({
         :model-value="connectorVisible"
         :title="translate('connectors.management')"
         direction="rtl"
-        size="82%"
+        :size="resolveDrawerSize(isMobile)"
         class="connector-overview-drawer noobot-side-drawer"
         @update:model-value="connectorVisible && emit('toggle-connectors-visible')"
       >
@@ -427,7 +428,7 @@ defineExpose({
           :user-id="userId"
           :connected="connected"
           :fetcher="authFetch"
-          :drawer-size="isMobile ? '100%' : '72%'"
+          :drawer-size="resolveDrawerSize(isMobile)"
           @changed="emit('connector-registry-changed')"
         />
       </el-drawer>
@@ -436,7 +437,7 @@ defineExpose({
         :model-value="featurePanelVisible"
         :title="featurePanelTitle"
         direction="rtl"
-        size="100%"
+        :size="resolveDrawerSize(isMobile)"
         class="mobile-feature-drawer noobot-side-drawer"
         data-testid="mobile-feature-panel"
         @update:model-value="handleMobileFeaturePanelUpdate"
@@ -816,7 +817,7 @@ defineExpose({
   display: none;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .mobile-mask {
     display: block;
     position: fixed;

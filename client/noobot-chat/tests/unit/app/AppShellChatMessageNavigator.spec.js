@@ -411,7 +411,8 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !connectorVisible }\"");
     expect(appShellLayoutSource).toContain("<ConnectorManager");
     expect(appShellLayoutSource).toContain(':fetcher="authFetch"');
-    expect(appShellLayoutSource).toContain(":drawer-size=\"isMobile ? '100%' : '72%'\"");
+    expect(appShellLayoutSource).toContain(':drawer-size="resolveDrawerSize(isMobile)"');
+    expect(appShellLayoutSource).not.toContain("isMobile ? '100%' : '72%'");
     expect(connectorManagerSource).toContain(':size="drawerSize"');
     expect(connectorManagerSource).toContain(
       'class="connector-add-drawer workspace-drawer noobot-side-drawer"',

@@ -110,6 +110,24 @@ log("ANSWER:" + answer.done);`,
   );
 });
 
+test("ui.waitForUser treats omitted fields as a confirmation interaction", async () => {
+  const requests = [];
+  const result = await runInteractionScript({
+    scriptBody: 'return await ui.waitForUser({ content: "continue?" });',
+    bridge: {
+      async requestUserInteraction(request) {
+        requests.push(request);
+        return { confirmed: true, response: "confirmed" };
+      },
+    },
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.script_result, { confirmed: true, response: "confirmed" });
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].fields, []);
+});
+
 test("ui.waitForUser surfaces a cancelled interaction as a script failure", async () => {
   const result = await runInteractionScript({
     scriptBody: 'await ui.waitForUser({ content: "sign in" });',

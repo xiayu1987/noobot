@@ -527,6 +527,14 @@
   background: transparent;
   border-color: var(--noobot-divider);
   color: var(--noobot-text-main);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.el-collapse-item__header:active,
+.el-collapse-item__header:focus,
+.el-collapse-item__header.focusing,
+.el-collapse-item__header.focusing:focus:not(:hover) {
+  background: transparent;
 }
 
 .el-empty__description p,

@@ -42,16 +42,18 @@
   background: var(--noobot-mask-bg);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .noobot-side-drawer,
   .workspace-drawer {
-    width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .noobot-side-drawer.el-drawer,
   .workspace-drawer.el-drawer {
     height: 100svh;
-    width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
     display: flex;
     flex-direction: column;
   }

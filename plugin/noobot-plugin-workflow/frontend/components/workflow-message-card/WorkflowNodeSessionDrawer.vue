@@ -4,8 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { BaseEmptyHint, BaseMessageErrorAlert } from "noobot-chat/plugin-api/ui";
+import { computed, nextTick, ref, watch } from "vue";
+import { BaseEmptyHint, BaseMessageErrorAlert, useMobileViewport } from "noobot-chat/plugin-api/ui";
 import { AgentExecutionView } from "noobot-chat/plugin-api/chat-ui";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
 
@@ -46,13 +46,12 @@ const props = defineProps({
 
 const viewerVisible = defineModel("viewerVisible", { type: Boolean, default: false });
 
-const drawerSize = ref("72%");
+const { drawerSize } = useMobileViewport();
 const messageScrollRef = ref(null);
 const followRealtime = ref(true);
 const expandedExecutionIds = ref(new Set());
 const stopPendingExecutionId = ref("");
 const stopError = ref("");
-let mobileMediaQuery;
 
 const executionTreeRows = computed(() => {
   const items = Array.isArray(props.executionDirectory) ? props.executionDirectory : [];
@@ -237,20 +236,6 @@ watch(
   },
   { immediate: true, flush: "post" },
 );
-
-function updateDrawerSize(event) {
-  drawerSize.value = event.matches ? "100%" : "72%";
-}
-
-onMounted(() => {
-  mobileMediaQuery = window.matchMedia("(max-width: 720px)");
-  updateDrawerSize(mobileMediaQuery);
-  mobileMediaQuery.addEventListener("change", updateDrawerSize);
-});
-
-onBeforeUnmount(() => {
-  mobileMediaQuery?.removeEventListener("change", updateDrawerSize);
-});
 
 defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"]);
 </script>
