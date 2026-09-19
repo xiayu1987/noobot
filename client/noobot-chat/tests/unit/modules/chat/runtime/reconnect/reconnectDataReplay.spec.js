@@ -233,11 +233,14 @@ describe("applyReconnectDataReplay", () => {
       },
       ...f,
     });
-    expect(f.applyPendingInteraction).toHaveBeenCalledWith({
-      ...interaction.payload,
-      sessionId: interaction.identity.sessionId,
-      turnScopeId: interaction.identity.turnScopeId,
-    });
+    expect(f.applyPendingInteraction).toHaveBeenCalledWith(
+      {
+        ...interaction.payload,
+        sessionId: interaction.identity.sessionId,
+        turnScopeId: interaction.identity.turnScopeId,
+      },
+      { channelSessionId: "s-1" },
+    );
   });
 
   it("materializes pending interactions after session activation and hydration", async () => {

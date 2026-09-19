@@ -426,6 +426,8 @@ export class SessionExecutionEngine {
     runConfig = {},
     abortSignal = null,
     parentAsyncResultContainer = null,
+    persistenceContext = null,
+    persistenceScope = null,
   }) {
     return this.agentContextFactory.buildContextBuilder({
       userId,
@@ -442,6 +444,8 @@ export class SessionExecutionEngine {
       runConfig,
       abortSignal,
       parentAsyncResultContainer,
+      persistenceContext,
+      persistenceScope,
     });
   }
 

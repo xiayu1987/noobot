@@ -195,9 +195,10 @@ export function useReconnectReplay({
       hydrateActiveSessionBeforeReplay,
       applyTurnLifecycleEnvelope,
       applyTurnLifecycleSnapshot,
-      applyPendingInteraction: (interaction) =>
+      applyPendingInteraction: (interaction, { channelSessionId } = {}) =>
         applyReconnectInteractionRequest({
           eventData: interaction,
+          channelSessionId,
           normalizeInteractionRequestPayload,
           tryAutoResolveInteraction,
           isInteractionRequestHandled,

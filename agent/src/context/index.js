@@ -17,7 +17,10 @@ import { resolveLongMemory } from "./providers/memory-resolver.js";
 import { buildAgentExecutionContext } from "./application/build-agent-execution-context.js";
 import { buildSystemContext, buildSystemRuntime } from "./application/build-system-context.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
+import {
+  normalizeParentSessionId,
+  validateSessionPersistenceScope,
+} from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/assembly/diagnostics";
 
@@ -61,6 +64,8 @@ export class ContextBuilder {
       systemMessages = [],
       abortSignal = null,
       parentAsyncResultContainer = null,
+      persistenceContext = null,
+      persistenceScope = null,
     } = normalized;
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
@@ -83,6 +88,17 @@ export class ContextBuilder {
     this.additionalSystemMessages = normalizeAdditionalSystemMessages(systemMessages);
     this.abortSignal = abortSignal;
     this.parentAsyncResultContainer = parentAsyncResultContainer;
+    const persistenceScopeValidation = validateSessionPersistenceScope(persistenceScope);
+    if (!persistenceScopeValidation.valid) {
+      throw new TypeError(
+        `invalid Session persistence scope: ${persistenceScopeValidation.errors.join(",")}`,
+      );
+    }
+    if (Boolean(persistenceContext) !== Boolean(persistenceScopeValidation.scope)) {
+      throw new TypeError("scoped Agent Context requires persistence context and scope");
+    }
+    this.persistenceContext = persistenceContext;
+    this.persistenceScope = persistenceScopeValidation.scope;
     this._effectiveConfigCache = null;
     this._runtimeBasePathCache = "";
     this._workspaceDirectoriesPromise = null;
@@ -177,19 +193,23 @@ export class ContextBuilder {
     const effectiveConfig = this._getEffectiveConfig();
     const runtimeModel = String(this.runConfig?.runtimeModel || "").trim();
     const allEnabledProviders = resolveAllEnabledProviders(effectiveConfig);
-    const systemRuntime = buildSystemRuntime({
-      userId: this.userId,
-      sessionId: this.sessionId,
-      parentSessionId: this.parentSessionId,
-      caller: this.caller,
-      dialogProcessId,
-      rootSessionId: resolvedRootSessionId,
-      runConfig: this.runConfig,
-      globalConfig: this.globalConfig,
-      botManager: this.botManager,
-      staticInfo: runtimeStaticInfo,
-      now: this._now(),
-    });
+    const systemRuntime = {
+      ...buildSystemRuntime({
+        userId: this.userId,
+        sessionId: this.sessionId,
+        parentSessionId: this.parentSessionId,
+        caller: this.caller,
+        dialogProcessId,
+        rootSessionId: resolvedRootSessionId,
+        runConfig: this.runConfig,
+        globalConfig: this.globalConfig,
+        botManager: this.botManager,
+        staticInfo: runtimeStaticInfo,
+        now: this._now(),
+      }),
+      persistenceContext: this.persistenceContext,
+      persistenceScope: this.persistenceScope,
+    };
     return buildAgentExecutionContext({
       identity: {
         userId: this.userId,

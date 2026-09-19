@@ -72,7 +72,6 @@ export async function bindAgentDispatchRuntime({
   turnScopeId,
   eventListener,
   persistenceContext,
-  persistenceScope,
   sessionDir,
   normalizedMessage,
   requestedAttachments,
@@ -97,8 +96,6 @@ export async function bindAgentDispatchRuntime({
   systemRuntime.config =
     systemRuntime.config && typeof systemRuntime.config === "object" ? systemRuntime.config : {};
   systemRuntime.config.turnScopeId = turnScopeId;
-  systemRuntime.persistenceContext = persistenceContext || null;
-  systemRuntime.persistenceScope = persistenceScope || null;
   systemRuntime.sessionDir = String(sessionDir || "").trim();
   dispatchRuntime.currentUserMessageUid = String(currentUserMessage?.messageUid || "").trim();
   dispatchRuntime.currentUserMessageOrigin = String(currentUserMessage?.messageOrigin || "")

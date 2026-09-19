@@ -4,33 +4,46 @@
 
 ---
 
-## 1. 事件载荷（v1）
+## 1. 事件与传输身份
 
 ```json
 {
-  "requestId": "string",
-  "sessionId": "string",
-  "dialogProcessId": "string",
-  "interactionType": "string",
-  "content": "string",
-  "fields": [],
-  "requireEncryption": false,
-  "toolName": "string",
-  "connectorName": "string",
-  "connectorType": "string",
-  "interactionData": {},
-  "lifecycle": "pending | resolved | failed",
-  "ackMode": "manual | auto",
-  "resolvedBy": "user | system | auto",
-  "notification": {
-    "enabled": false,
-    "level": "info | success | warning | error",
-    "title": "string",
-    "content": "string",
-    "data": {}
+  "event": "interaction_request",
+  "channelSessionId": "root session receiving the event",
+  "data": {
+    "identity": {
+      "sessionId": "session owning the interaction authority",
+      "turnScopeId": "turn owning the interaction authority"
+    },
+    "payload": {
+      "requestId": "string",
+      "dialogProcessId": "string",
+      "interactionType": "string",
+      "content": "string",
+      "fields": [],
+      "requireEncryption": false,
+      "toolName": "string",
+      "connectorName": "string",
+      "connectorType": "string",
+      "interactionData": {},
+      "lifecycle": "pending | resolved | failed",
+      "ackMode": "manual | auto",
+      "resolvedBy": "user | system | auto",
+      "notification": {
+        "enabled": false,
+        "level": "info | success | warning | error",
+        "title": "string",
+        "content": "string",
+        "data": {}
+      }
+    }
   }
 }
 ```
+
+- `data.identity` 是交互 authority 的唯一事实源。客户端提交响应时必须原样使用其中的 `sessionId`、`turnScopeId`，以及 payload 的 `dialogProcessId`。
+- `channelSessionId` 是 `@noobot/agent-transport-protocol` 定义的传输路由身份，只决定请求投影到哪个已打开 Session 页面，不得覆盖或补全交互 authority。
+- MCP 等 detached child Session 的交互允许 `data.identity.sessionId` 与 `channelSessionId` 不同。这表示 child 持有交互 authority，而 root Session 持有客户端通道，不是兼容模式。
 
 ---
 
@@ -52,6 +65,7 @@
 - 自动收敛仅由 **`lifecycle=resolved && ackMode=auto`** 触发
 - 不再基于 `interactionType` 做兼容推断
 - `interaction_request` 事件是交互内容的唯一事实源；事件必须包含完整身份与 payload
+- 前端按 `channelSessionId` 选择展示 Session，按事件 `identity` 提交响应；两个身份不得相互推导
 - `interaction_pending` 仅表达传输状态，不得携带或重建 `pendingInteraction`、`pendingInteractions`、`pendingRequestIds`
 - reconnect 只通过 `replayBatch.pendingInteractions[]` 重放仍处于 pending 的完整 `interaction_request` envelope
 - 前端按 `requestId` 入队并按当前 Session 选择展示项；不得根据状态名推导请求内容

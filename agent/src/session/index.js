@@ -27,6 +27,7 @@ import {
 } from "./session-location-resolver.js";
 import { randomUUID } from "node:crypto";
 import { AttachmentService } from "../artifacts/index.js";
+import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
@@ -226,10 +227,11 @@ export function createSessionFacade(runtime = {}) {
   const connectorInstanceRepository = runtime?.repositories?.connectorInstanceRepository || null;
 
   const bindPersistenceScope = (payload = {}) => {
-    const persistenceScope =
-      payload?.persistenceScope && typeof payload.persistenceScope === "object"
-        ? payload.persistenceScope
-        : null;
+    const validation = validateSessionPersistenceScope(payload?.persistenceScope);
+    if (!validation.valid) {
+      throw new TypeError(`invalid Session persistence scope: ${validation.errors.join(",")}`);
+    }
+    const persistenceScope = validation.scope;
     if (!persistenceScope) return payload;
     const allowedRoot = String(persistenceScope.allowedRoot || "")
       .trim()

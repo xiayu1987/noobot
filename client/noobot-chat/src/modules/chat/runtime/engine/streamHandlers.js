@@ -105,16 +105,20 @@ export function handleAttachmentLifecycleStreamEvent({
 
 export function handleInteractionRequestStreamEvent({
   data,
+  channelSessionId,
   clearMissingInteractionPayloadTimer,
   navigateOnFirstResponseOnce,
   tryAutoResolveInteraction,
   setPendingInteractionRequest,
   clearPendingInteraction,
 }) {
-  const normalizedInteractionRequest = normalizeInteractionRequestPayload({
-    ...(data || {}),
-    interactionType: normalizeTrimmedString(data?.interactionType),
-  });
+  const normalizedInteractionRequest = normalizeInteractionRequestPayload(
+    {
+      ...(data || {}),
+      interactionType: normalizeTrimmedString(data?.interactionType),
+    },
+    { channelSessionId },
+  );
   clearMissingInteractionPayloadTimer({
     sessionId: normalizeTrimmedString(normalizedInteractionRequest?.sessionId),
     dialogProcessId: normalizeTrimmedString(normalizedInteractionRequest?.dialogProcessId),

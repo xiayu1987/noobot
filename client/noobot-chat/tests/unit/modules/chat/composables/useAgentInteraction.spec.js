@@ -26,7 +26,7 @@ describe("useAgentInteraction", () => {
       encryptPayloadBySessionId: (payload) => payload,
       sendJson,
     });
-    const request = { requestId: "req-1", sessionId: "s-1" };
+    const request = { requestId: "req-1", sessionId: "s-1", channelSessionId: "s-1" };
 
     interaction.setPendingInteractionRequest(request);
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-1");
@@ -47,6 +47,7 @@ describe("useAgentInteraction", () => {
     });
     const requestNoId = {
       sessionId: "s-1",
+      channelSessionId: "s-1",
       dialogProcessId: "dp-1",
       interactionType: "confirm",
       toolName: "toolA",
@@ -70,6 +71,7 @@ describe("useAgentInteraction", () => {
     });
     const sharedInteractionFields = {
       sessionId: "s-1",
+      channelSessionId: "s-1",
       dialogProcessId: "dp-1",
       interactionType: "user_interaction",
       toolName: "user_interaction",
@@ -97,9 +99,9 @@ describe("useAgentInteraction", () => {
       interaction: { requestId: "req-first", response: { value: "first" } },
     });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-second");
-    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
-      "req-second",
-    ]);
+    expect(
+      interaction.pendingInteractionRequests.value.map((request) => request.requestId),
+    ).toEqual(["req-second"]);
   });
 
   it("queues concurrent interactions and advances after submitting current request", () => {
@@ -112,6 +114,7 @@ describe("useAgentInteraction", () => {
     interaction.setPendingInteractionRequest({
       requestId: "req-a",
       sessionId: "s-1",
+      channelSessionId: "s-1",
       dialogProcessId: "dp-1",
       interactionType: "confirm",
       content: "first?",
@@ -119,15 +122,15 @@ describe("useAgentInteraction", () => {
     interaction.setPendingInteractionRequest({
       requestId: "req-b",
       sessionId: "s-1",
+      channelSessionId: "s-1",
       dialogProcessId: "dp-1",
       interactionType: "confirm",
       content: "second?",
     });
 
-    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
-      "req-a",
-      "req-b",
-    ]);
+    expect(
+      interaction.pendingInteractionRequests.value.map((request) => request.requestId),
+    ).toEqual(["req-a", "req-b"]);
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-a");
 
     interaction.submitInteractionResponse({ approved: true });
@@ -140,9 +143,9 @@ describe("useAgentInteraction", () => {
       interaction: { requestId: "req-a", response: { approved: true } },
     });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-b");
-    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
-      "req-b",
-    ]);
+    expect(
+      interaction.pendingInteractionRequests.value.map((request) => request.requestId),
+    ).toEqual(["req-b"]);
   });
 
   it("projects only the active session interaction without dropping other session requests", async () => {
@@ -152,13 +155,20 @@ describe("useAgentInteraction", () => {
       sendJson: vi.fn(),
     });
 
-    interaction.setPendingInteractionRequest({ requestId: "req-old", sessionId: "old-session" });
-    interaction.setPendingInteractionRequest({ requestId: "req-current", sessionId: "s-1" });
+    interaction.setPendingInteractionRequest({
+      requestId: "req-old",
+      sessionId: "old-session",
+      channelSessionId: "old-session",
+    });
+    interaction.setPendingInteractionRequest({
+      requestId: "req-current",
+      sessionId: "s-1",
+      channelSessionId: "s-1",
+    });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-current");
-    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
-      "req-old",
-      "req-current",
-    ]);
+    expect(
+      interaction.pendingInteractionRequests.value.map((request) => request.requestId),
+    ).toEqual(["req-old", "req-current"]);
 
     store.activeSessionId = "old-session";
     await Promise.resolve();
@@ -181,6 +191,7 @@ describe("useAgentInteraction", () => {
     interaction.setPendingInteractionRequest({
       requestId: "req-2",
       sessionId: "session-2",
+      channelSessionId: "session-2",
       requireEncryption: true,
     });
     interaction.submitInteractionResponse({ approved: true });
@@ -208,11 +219,14 @@ describe("useAgentInteraction", () => {
     const sendError = new Error("socket closed");
     const interaction = useAgentInteraction({
       encryptPayloadBySessionId: (payload) => payload,
-      sendJson: vi.fn(() => { throw sendError; }),
+      sendJson: vi.fn(() => {
+        throw sendError;
+      }),
     });
     const request = {
       requestId: "req-retry",
       sessionId: "session-retry",
+      channelSessionId: "session-retry",
       dialogProcessId: "dialog-retry",
       turnScopeId: "turn-retry",
     };
@@ -223,5 +237,39 @@ describe("useAgentInteraction", () => {
     expect(interaction.pendingInteractionRequests.value).toEqual([request]);
     expect(interaction.isInteractionRequestHandled(request)).toBe(false);
     expect(interaction.interactionSubmitting.value).toBe(false);
+  });
+
+  it("projects a child authority interaction on its explicit root channel", () => {
+    const sendJson = vi.fn();
+    const interaction = useAgentInteraction({
+      encryptPayloadBySessionId: (payload) => payload,
+      sendJson,
+    });
+    const request = {
+      requestId: "req-child",
+      sessionId: "child-session",
+      channelSessionId: "s-1",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "child-turn",
+    };
+
+    interaction.setPendingInteractionRequest(request);
+    expect(interaction.pendingInteractionRequest.value).toEqual(request);
+
+    interaction.submitInteractionResponse({ verificationCode: "verified" });
+    expect(sendJson).toHaveBeenCalledWith({
+      protocolVersion: 2,
+      commandType: "interaction.response",
+      commandId: "interaction:req-child",
+      identity: {
+        sessionId: "child-session",
+        dialogProcessId: "child-dialog",
+        turnScopeId: "child-turn",
+      },
+      interaction: {
+        requestId: "req-child",
+        response: { verificationCode: "verified" },
+      },
+    });
   });
 });

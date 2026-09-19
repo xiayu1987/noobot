@@ -16,19 +16,22 @@ const text = (value) => String(value || "").trim();
 export function normalizeTurnTransportEnvelope({
   event = "",
   data = {},
+  channelSessionId = "",
   source = "unknown",
 } = {}) {
   const payload = data && typeof data === "object" && !Array.isArray(data) ? data : {};
   const validation = validateProtocolEvent(payload);
   const protocolEnvelope = validation.valid ? payload : null;
   const reducerInput = validation.valid ? readProtocolEventReducerInput(payload).input : null;
-  const messageEvent = validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
-    ? payload
-    : null;
+  const messageEvent =
+    validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
+      ? payload
+      : null;
   return {
     event: text(event),
     data: reducerInput || payload,
     protocolEnvelope,
+    channelSessionId: text(channelSessionId),
     source: text(source) || "unknown",
     identity: {
       sessionId: text(messageEvent?.identity?.sessionId),

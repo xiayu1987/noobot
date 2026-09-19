@@ -10,6 +10,7 @@ import { CALLER_ROLE } from "../config/constants.js";
 import {
   TURN_EVENT,
   TURN_PHASE,
+  createSessionPersistenceScope,
   createTurnAcceptanceReceipt,
   isExecutionAbortError,
 } from "@noobot/session-protocol";
@@ -418,7 +419,7 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
     effectiveRunConfig: prepared.effectiveRunConfig,
     disabledPlugins: request.strategy?.disabledPlugins,
   });
-  const persistenceScope = Object.freeze({
+  const persistenceScope = createSessionPersistenceScope({
     scopeId: identity.executionId,
     parentSessionId: identity.parentSessionId,
     relativeDir: identity.relativeDir,

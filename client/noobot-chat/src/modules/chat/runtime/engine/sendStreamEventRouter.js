@@ -21,6 +21,7 @@ import {
 import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
 import { buildStreamEventLogEntry } from "./streamEventLogEntry.js";
 import { logPluginRuntimeDiagnostics } from "../../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
+import { EVENT_FAMILY } from "@noobot/event-protocol";
 
 function routePostProjectionEvent(event, data, context) {
   const {
@@ -38,10 +39,17 @@ function routePostProjectionEvent(event, data, context) {
     logSessionEvent,
     terminalRouteContext,
     ignoredSubSessionEvent,
+    channelSessionId,
+    protocolEnvelope,
+    sessionId,
   } = context;
   if (ignoredSubSessionEvent) return true;
+  const isInteractionForCurrentChannel =
+    protocolEnvelope?.protocol?.family === EVENT_FAMILY.INTERACTION_REQUEST &&
+    normalizeTrimmedString(channelSessionId) === normalizeTrimmedString(sessionId);
   if (
     event !== StreamEventEnum.ATTACHMENT_LIFECYCLE &&
+    !isInteractionForCurrentChannel &&
     !isEventForCurrentTurn(data || {}, botMessage)
   )
     return true;
@@ -71,6 +79,7 @@ function routePostProjectionEvent(event, data, context) {
   if (event === StreamEventEnum.INTERACTION_REQUEST) {
     handleInteractionRequestStreamEvent({
       data,
+      channelSessionId,
       clearMissingInteractionPayloadTimer,
       navigateOnFirstResponseOnce,
       tryAutoResolveInteraction,
@@ -176,7 +185,7 @@ export function createSendStreamEventHandler(context) {
   } = context;
 
   return (incomingEnvelope) => {
-    const { event, data, protocolEnvelope } = normalizeTurnTransportEnvelope({
+    const { event, data, protocolEnvelope, channelSessionId } = normalizeTurnTransportEnvelope({
       ...(incomingEnvelope || {}),
       source: "realtime",
     });
@@ -241,6 +250,7 @@ export function createSendStreamEventHandler(context) {
     if (
       routeMessageProjectionEvent(event, data, {
         botMessage: botMsg,
+        channelSessionId,
         findCanonicalMessageById,
         findCanonicalMessagesById,
         materializeTurnPresentation,
@@ -290,6 +300,9 @@ export function createSendStreamEventHandler(context) {
       logSessionEvent,
       terminalRouteContext: terminalContext,
       ignoredSubSessionEvent,
+      channelSessionId,
+      protocolEnvelope,
+      sessionId,
     });
   };
 }

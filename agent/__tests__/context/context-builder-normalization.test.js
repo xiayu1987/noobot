@@ -28,6 +28,10 @@ function createBuilderForAttachmentRuntimeTest({
   eventListener = null,
   botManager = null,
   selectedConnectorIds = [],
+  userInteractionBridge = null,
+  persistenceContext = null,
+  persistenceScope = null,
+  parentSessionId = "",
 } = {}) {
   return new ContextBuilder({
     config: {
@@ -47,13 +51,13 @@ function createBuilderForAttachmentRuntimeTest({
       skillService: null,
       eventListener,
       botManager,
-      userInteractionBridge: null,
+      userInteractionBridge,
     },
     sessionContext: {
       userId: "u1",
       sessionId: "s1",
       caller: "user",
-      parentSessionId: "",
+      parentSessionId,
       ...(Array.isArray(userMessageAttachments) ? { userMessageAttachments } : {}),
       attachments,
       runConfig: executionRunConfig("turn-1", {
@@ -65,9 +69,53 @@ function createBuilderForAttachmentRuntimeTest({
       }),
       abortSignal: null,
       parentAsyncResultContainer: null,
+      persistenceContext,
+      persistenceScope,
     },
   });
 }
+
+test("ContextBuilder binds Session persistence authority before constructing tools", async () => {
+  const requests = [];
+  const persistenceContext = { kind: "trusted-context" };
+  const persistenceScope = {
+    scopeId: " agent:turn-child ",
+    parentSessionId: "root-session",
+    relativeDir: "runtime/agent/session/s1",
+    allowedRoot: "runtime/agent/session",
+  };
+  const builder = createBuilderForAttachmentRuntimeTest({
+    persistenceContext,
+    persistenceScope,
+    parentSessionId: "root-session",
+    userInteractionBridge: {
+      async requestUserInteraction(payload) {
+        requests.push(payload);
+        return { confirmed: true, verificationCode: "ok" };
+      },
+    },
+  });
+
+  const executionScope = await builder.buildNewSessionContext({ dialogProcessId: "dp-child" });
+  const tool = executionScope.bindings.tools.find((item) => item.name === "user_interaction");
+  assert.ok(tool);
+  await tool.invoke({
+    content: "child interaction",
+    fields: { fields: [] },
+  });
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].authority.persistenceScope, {
+    scopeId: "agent:turn-child",
+    parentSessionId: "root-session",
+    relativeDir: "runtime/agent/session/s1",
+    allowedRoot: "runtime/agent/session",
+  });
+  assert.equal(
+    executionScope.bindings.runtime.systemRuntime.persistenceContext,
+    persistenceContext,
+  );
+});
 
 test("buildNewSessionContext always projects explicitly selected connectors", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({

@@ -10,6 +10,11 @@ import {
   emitChannelState,
 } from "../helpers/useChatEngineHarness.js";
 import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import {
+  createEventEnvelope,
+  EVENT_FAMILY,
+  INTERACTION_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol";
 
 describe("useChatEngine.interaction-stop: interaction", () => {
   it("expired channel_state does not start a session-refresh recovery branch", async () => {
@@ -73,6 +78,57 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     expect(setPendingInteractionRequest).toHaveBeenCalledTimes(1);
     expect(setPendingInteractionRequest.mock.calls[0][0]).toMatchObject(pendingInteraction);
     expect(interactionSubmitting.value).toBe(false);
+  });
+
+  it("routes a child interaction by explicit channel identity while preserving child authority", async () => {
+    const setPendingInteractionRequest = vi.fn();
+    const stream = vi.fn(async (_payload, onEvent) => {
+      const interaction = createEventEnvelope({
+        family: EVENT_FAMILY.INTERACTION_REQUEST,
+        identity: {
+          eventId: "child-interaction-event",
+          eventType: StreamEventEnum.INTERACTION_REQUEST,
+          sessionId: "child-session",
+          turnScopeId: "child-turn",
+        },
+        causality: {},
+        ordering: {
+          domain: INTERACTION_SEQUENCE_DOMAIN,
+          scopeId: "child-request",
+          sequence: 1,
+        },
+        producer: { type: "test", id: "child-interaction" },
+        occurredAt: "2026-09-19T00:00:00.000Z",
+        payload: {
+          requestId: "child-request",
+          dialogProcessId: "child-dialog",
+          content: "CASE051-MCP-CHILD-INTERACTION",
+          fields: [{ name: "verificationCode", required: true }],
+          lifecycle: "pending",
+        },
+      });
+      onEvent({
+        event: StreamEventEnum.INTERACTION_REQUEST,
+        data: interaction,
+        channelSessionId: "root-session",
+      });
+    });
+    const { engine } = createHarness({
+      sessionId: "root-session",
+      stream,
+      deps: { setPendingInteractionRequest },
+    });
+
+    await engine.send();
+
+    expect(setPendingInteractionRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "child-request",
+        sessionId: "child-session",
+        channelSessionId: "root-session",
+        turnScopeId: "child-turn",
+      }),
+    );
   });
 
   it("channel_state sending does not clear interaction unless sourceEvent is interaction_response", async () => {

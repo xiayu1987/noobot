@@ -44,6 +44,8 @@ export class AgentContextFactory {
     runConfig = {},
     abortSignal = null,
     parentAsyncResultContainer = null,
+    persistenceContext = null,
+    persistenceScope = null,
   }) {
     return new ContextBuilder({
       config: {
@@ -70,6 +72,8 @@ export class AgentContextFactory {
         runConfig,
         abortSignal,
         parentAsyncResultContainer,
+        persistenceContext,
+        persistenceScope,
       },
     });
   }
@@ -90,6 +94,8 @@ export class AgentContextFactory {
     runConfig = {},
     abortSignal = null,
     parentAsyncResultContainer = null,
+    persistenceContext = null,
+    persistenceScope = null,
   }) {
     const contextBuilder = this.buildContextBuilder({
       userId,
@@ -105,6 +111,8 @@ export class AgentContextFactory {
       runConfig,
       abortSignal,
       parentAsyncResultContainer,
+      persistenceContext,
+      persistenceScope,
     });
     return this.buildAgentContextFromBuilder({
       mode,

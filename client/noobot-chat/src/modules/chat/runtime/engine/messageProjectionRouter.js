@@ -30,6 +30,12 @@ function logRouteEvaluation(event, messageEvent, shouldProjectMain, context) {
   });
 }
 
+function isMessageAuthorityOwnedByChannel(messageEvent, channelSessionId = "") {
+  const authoritySessionId = String(messageEvent?.identity?.sessionId || "").trim();
+  const routeSessionId = String(channelSessionId || "").trim();
+  return !routeSessionId || authoritySessionId === routeSessionId;
+}
+
 function materializeCommittedPresentation(messageEvent, context) {
   const { identity = {}, payload = {} } = messageEvent;
   if (payload.eventType !== MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) return true;
@@ -198,9 +204,13 @@ export function routeMessageProjectionEvent(event, data, context) {
     return true;
   }
   const messageEvent = data ?? {};
-  const shouldProjectMain = shouldProjectMainSessionEvent(event, messageEvent);
+  const isMainSessionMessage = shouldProjectMainSessionEvent(event, messageEvent);
+  const shouldProjectMain =
+    isMainSessionMessage &&
+    isMessageAuthorityOwnedByChannel(messageEvent, context.channelSessionId);
   logRouteEvaluation(event, messageEvent, shouldProjectMain, context);
-  return shouldProjectMain ? projectMainSessionEvent(messageEvent, context) : false;
+  if (shouldProjectMain) return projectMainSessionEvent(messageEvent, context);
+  return isMainSessionMessage;
 }
 
 export function isIgnoredSubSessionEvent(event, data) {

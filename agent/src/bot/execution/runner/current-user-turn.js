@@ -105,6 +105,7 @@ export async function prepareCurrentUserTurn({
   abortSignal,
   parentAsyncResultContainer,
   persistenceContext,
+  persistenceScope,
   contextMode,
   userId,
   sessionId,
@@ -135,6 +136,7 @@ export async function prepareCurrentUserTurn({
     abortSignal,
     parentAsyncResultContainer,
     persistenceContext,
+    persistenceScope,
   };
   emitPreparedTurnDebug({
     eventListener,

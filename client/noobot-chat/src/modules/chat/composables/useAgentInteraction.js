@@ -85,7 +85,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
 
     pendingInteractionRequest.value = currentSessionId
       ? queue.find(
-          (requestItem) => String(requestItem?.sessionId || "").trim() === currentSessionId,
+          (requestItem) => String(requestItem?.channelSessionId || "").trim() === currentSessionId,
         ) || null
       : queue[0] || null;
     if (!pendingInteractionRequest.value) {
@@ -204,6 +204,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     if (isInteractionRequestHandled(request)) return;
     logThinkingReplayDebug("frontend.interaction.requestMaterialization", {
       sessionId: String(request?.sessionId || "").trim(),
+      channelSessionId: String(request?.channelSessionId || "").trim(),
       dialogProcessId: String(request?.dialogProcessId || "").trim(),
       turnScopeId: String(request?.turnScopeId || "").trim(),
       requestId: normalizeRequestId(request?.requestId),
