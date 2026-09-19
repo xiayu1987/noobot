@@ -13,7 +13,12 @@ import {
 const clean = (value) => String(value || "").trim();
 
 export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents } = {}) {
-  return async function commitInteractionRequest({ userId, parentSessionId = "", payload = {}, persistenceScope = null } = {}) {
+  return async function commitInteractionRequest({
+    userId,
+    parentSessionId = "",
+    payload = {},
+    persistenceScope = null,
+  } = {}) {
     const validation = validateInteractionRequestPayload(payload);
     if (!validation.valid) throw new TypeError(`invalid interaction request: ${validation.reason}`);
     const bot = resolveBot?.();
@@ -46,10 +51,12 @@ export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthority
       ordering: { domain: INTERACTION_SEQUENCE_DOMAIN, scopeId: requestId },
       producer: { type: "service", id: "websocket.user-interaction" },
       payload: domainPayload,
-      persistenceContext: persistenceScope,
+      persistenceScope,
     });
     if (!committed?.committed || !committed?.envelope) {
-      throw new Error(`interaction authority event commit failed: ${committed?.reason || "unknown"}`);
+      throw new Error(
+        `interaction authority event commit failed: ${committed?.reason || "unknown"}`,
+      );
     }
     const dispatch = await dispatchAuthorityEvents?.({
       userId: clean(userId),

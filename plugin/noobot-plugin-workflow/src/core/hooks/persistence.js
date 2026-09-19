@@ -506,7 +506,7 @@ function resolveWorkflowCommitScope({ ctx, runtime, payload }) {
 }
 
 function resolveWorkflowPersistenceScope(runtime) {
-  return runtime?.runConfig?.persistenceContext || null;
+  return runtime?.systemRuntime?.persistenceScope || null;
 }
 
 function projectWorkflowEventIdentity({
@@ -606,7 +606,7 @@ export async function commitWorkflowRuntimeEvent({
     }),
     producer: { type: "plugin", id: "workflow" },
     payload,
-    persistenceContext: persistenceScope,
+    persistenceScope,
   });
   const envelope = requireCommittedWorkflowEnvelope(committed);
   await dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope });
