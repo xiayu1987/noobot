@@ -69,7 +69,7 @@ export async function commitPluginArtifact({
       baseRevision,
       revision: operation === "created" ? 1 : baseRevision + 1,
     },
-    persistenceContext: runtime.persistenceContext || null,
+    persistenceScope: system.persistenceScope || null,
   });
   if (!committed?.committed || !committed.envelope) {
     return Object.freeze({
@@ -81,7 +81,10 @@ export async function commitPluginArtifact({
   }
   await runtime?.eventListener?.onEvent?.({
     event: AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED,
-    data: { envelope: committed.envelope },
+    data: {
+      envelope: committed.envelope,
+      persistenceScope: system.persistenceScope || null,
+    },
     ts: new Date().toISOString(),
   });
   return Object.freeze({
@@ -101,7 +104,7 @@ export async function getPluginArtifact({ pluginId = "", artifact = {}, toolCont
     userId: text(runtime?.userId || system.userId),
     sessionId: text(system.sessionId),
     parentSessionId: text(system.parentSessionId),
-    persistenceContext: runtime.persistenceContext || null,
+    persistenceScope: system.persistenceScope || null,
     pluginId,
     artifactType: text(artifact?.artifactType),
     artifactId: text(artifact?.artifactId),

@@ -130,7 +130,7 @@ export async function backwriteParsedAttachment({
     },
     producer: { type: "tool", id: TOOL_NAME.MULTIMODAL_PARSE },
     payload: event,
-    persistenceContext: runtime?.runConfig?.persistenceContext || null,
+    persistenceScope: runtime?.systemRuntime?.persistenceScope || null,
   });
   if (!committed?.committed || !committed?.envelope) {
     throw new Error(`attachment authority event commit failed: ${committed?.reason || "unknown"}`);

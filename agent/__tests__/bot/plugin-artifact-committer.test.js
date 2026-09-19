@@ -12,6 +12,12 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 test("plugin artifact port owns persistence and publication behind one generic contract", async () => {
   const commits = [];
   const publications = [];
+  const persistenceScope = Object.freeze({
+    scopeId: "agent:turn-1",
+    parentSessionId: "",
+    relativeDir: "runtime/agent/session/session-1",
+    allowedRoot: "runtime/agent/session",
+  });
   const envelope = createPluginArtifactEnvelope({
     pluginId: "example",
     artifactType: "example.document",
@@ -26,6 +32,7 @@ test("plugin artifact port owns persistence and publication behind one generic c
       sessionId: "session-1",
       parentSessionId: "",
       turnScopeId: "turn-1",
+      persistenceScope,
     },
     sessionManager: {
       async commitAuthorityEvent(input) {
@@ -67,4 +74,7 @@ test("plugin artifact port owns persistence and publication behind one generic c
   );
   assert.equal(publications[0].event, "authority_event_committed");
   assert.equal(publications[0].data.envelope, envelope);
+  assert.equal(commits[0].persistenceScope, persistenceScope);
+  assert.equal("persistenceContext" in commits[0], false);
+  assert.equal(publications[0].data.persistenceScope, persistenceScope);
 });
