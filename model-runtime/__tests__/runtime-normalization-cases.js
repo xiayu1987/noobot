@@ -57,7 +57,6 @@ test("cache parameters use the shared strategy while retaining provider-specific
   });
   assert.deepEqual(anthropic, {
     prompt_cache_key: "noobot-main-claude-opus",
-    prompt_cache_retention: "24h",
     cache_control: { type: "ephemeral" },
   });
 

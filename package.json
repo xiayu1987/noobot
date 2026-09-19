@@ -2,8 +2,17 @@
   "name": "noobot",
   "version": "4.3.3",
   "private": true,
+  "packageManager": "npm@12.0.2",
   "engines": {
-    "node": ">=22.22.2"
+    "node": "^24.21.0 || ^26.9.0",
+    "npm": ">=12.0.2 <13"
+  },
+  "allowScripts": {
+    "better-sqlite3": false,
+    "cpu-features": false,
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.28.2": true,
+    "ssh2": false
   },
   "workspaces": [
     "platform-compatibility",
@@ -49,17 +58,17 @@
     "client/mac"
   ],
   "devDependencies": {
-    "@vue/compiler-sfc": "3.5.41",
-    "es-module-lexer": "^2.3.1",
-    "eslint": "^10.8.1",
+    "@vue/compiler-sfc": "3.5.43",
+    "es-module-lexer": "^3.0.2",
+    "eslint": "^10.11.0",
     "eslint-plugin-security": "^4.0.1",
     "eslint-plugin-unused-imports": "^4.4.1",
-    "eslint-plugin-vue": "^10.10.0",
+    "eslint-plugin-vue": "^10.11.0",
     "espree": "^11.2.0",
-    "globals": "^17.11.0",
-    "jsdom": "^29.0.0",
-    "prettier": "^3.9.6",
-    "vue": "3.5.41",
+    "globals": "^17.12.0",
+    "jsdom": "^30.1.0",
+    "prettier": "^3.9.8",
+    "vue": "3.5.43",
     "vue-eslint-parser": "^10.4.1"
   },
   "scripts": {
@@ -129,5 +138,12 @@
     "test:esm-import-extensions-guard": "node --test ./scripts/check-esm-relative-import-extensions.test.mjs",
     "check:barrel-star-exports": "node ./scripts/check-barrel-star-exports.mjs",
     "test:barrel-star-exports-guard": "node --test ./scripts/check-barrel-star-exports.test.mjs"
+  },
+  "allowScripts": {
+    "better-sqlite3": false,
+    "cpu-features": false,
+    "ssh2": false,
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
   }
 }

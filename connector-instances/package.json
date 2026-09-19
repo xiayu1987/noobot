@@ -13,12 +13,12 @@
   "dependencies": {
     "@noobot/connector-protocol": "file:../connector-protocol",
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
-    "better-sqlite3": "^12.11.1",
-    "imapflow": "^1.7.0",
-    "mailparser": "^3.9.15",
-    "mysql2": "^3.23.1",
-    "nodemailer": "^9.0.5",
-    "pg": "^8.22.0",
+    "better-sqlite3": "^13.0.3",
+    "imapflow": "^2.0.5",
+    "mailparser": "^3.9.28",
+    "mysql2": "^3.24.4",
+    "nodemailer": "^10.0.10",
+    "pg": "^8.23.0",
     "ssh2": "^1.17.0"
   }
 }

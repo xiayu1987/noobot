@@ -96,21 +96,24 @@ function lineAt(source, index) {
 }
 
 function literalRange(moduleImport, region) {
-  if (moduleImport.d < 0) {
-    return { start: region.offset + moduleImport.s, end: region.offset + moduleImport.e };
+  if (moduleImport.type !== "dynamic") {
+    return { start: region.offset + moduleImport.start, end: region.offset + moduleImport.end };
   }
-  return { start: region.offset + moduleImport.s + 1, end: region.offset + moduleImport.e - 1 };
+  return {
+    start: region.offset + moduleImport.start + 1,
+    end: region.offset + moduleImport.end - 1,
+  };
 }
 
 function inspectComputedRelativeImport(moduleImport, region, file, fullSource) {
-  if (moduleImport.d < 0 || moduleImport.n !== undefined) return null;
-  const raw = region.source.slice(moduleImport.s, moduleImport.e);
+  if (moduleImport.type !== "dynamic" || !moduleImport.glob) return null;
+  const raw = region.source.slice(moduleImport.start, moduleImport.end);
   const body = /^["'`]/.test(raw) ? raw.slice(1, -1) : raw;
   if (!body.startsWith("./") && !body.startsWith("../")) return null;
   if (hasExplicitExtension(body.replaceAll(/\$\{[^}]*\}/g, "placeholder"))) return null;
   return {
     file,
-    line: lineAt(fullSource, region.offset + moduleImport.s),
+    line: lineAt(fullSource, region.offset + moduleImport.start),
     specifier: body,
     reason: "computed relative import has no explicit extension",
     replacement: null,
@@ -160,7 +163,7 @@ export async function inspectSourceFile(file, source = fs.readFileSync(file, "ut
         violations.push(computedViolation);
         continue;
       }
-      const specifier = moduleImport.n;
+      const specifier = moduleImport.specifier;
       if (typeof specifier !== "string") continue;
       if (!specifier.startsWith("./") && !specifier.startsWith("../")) continue;
       if (hasExplicitExtension(specifier)) continue;

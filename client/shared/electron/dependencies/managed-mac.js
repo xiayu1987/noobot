@@ -614,7 +614,7 @@ export function createMacDependencyInstallerTools({
   function getMacNodeUrlCandidates(spec) {
     const configuredUrl = String(spec.darwinManaged?.url || "").trim();
     const configuredVersion = String(spec.darwinManaged?.version || "").trim();
-    const versions = [configuredVersion, "v22.21.1", "v20.19.5", "v24.11.1"].filter(Boolean);
+    const versions = [configuredVersion, "v24.21.0", "v26.9.0"].filter(Boolean);
     return Array.from(
       new Set([configuredUrl, ...versions.map(getMacNodeTarUrlForVersion)].filter(Boolean)),
     );

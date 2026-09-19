@@ -28,6 +28,29 @@ const DEFAULT_I18N_KEYS = {
 };
 
 const JSON_DOCUMENT_NAMES = new Set(["config.json", "config.example.json", "config-params.json"]);
+const UNSAFE_TEXT_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
+
+function validateWorkspaceText(content) {
+  if (typeof content !== "string") {
+    const error = new TypeError("workspace file content must be a string");
+    error.status = 400;
+    error.errorCode = "INVALID_WORKSPACE_FILE_CONTENT";
+    throw error;
+  }
+  if (Buffer.byteLength(content, "utf8") > LENGTH_THRESHOLDS.serviceHttp.workspaceFileBytes) {
+    const error = new Error("workspace file content exceeds the configured size limit");
+    error.status = 413;
+    error.errorCode = "WORKSPACE_FILE_CONTENT_TOO_LARGE";
+    throw error;
+  }
+  if (UNSAFE_TEXT_CONTROL_CHARACTERS.test(content)) {
+    const error = new TypeError("workspace file content contains unsafe control characters");
+    error.status = 400;
+    error.errorCode = "INVALID_WORKSPACE_FILE_CONTENT";
+    throw error;
+  }
+  return content;
+}
 
 function validateJsonDocumentWrite(relativePath, content) {
   if (!JSON_DOCUMENT_NAMES.has(path.basename(relativePath))) return;
@@ -203,18 +226,8 @@ export function registerFileCrudRoutes(
     jsonRoute(
       async (req, res) => {
         const relativePath = String(req.body?.path || "");
-        const content = req.body?.content;
         if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-        if (typeof content !== "string") {
-          const error = new TypeError("workspace file content must be a string");
-          error.status = 400;
-          throw error;
-        }
-        if (Buffer.byteLength(content, "utf8") > LENGTH_THRESHOLDS.serviceHttp.workspaceFileBytes) {
-          const error = new Error("workspace file content exceeds the configured size limit");
-          error.status = 413;
-          throw error;
-        }
+        const content = validateWorkspaceText(req.body?.content);
         validateJsonDocumentWrite(relativePath, content);
         const root = await resolveRootPath(req);
         const absolutePath = resolveRequestFilePath(req, root, relativePath);

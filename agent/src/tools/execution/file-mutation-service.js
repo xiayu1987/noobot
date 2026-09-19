@@ -89,7 +89,7 @@ async function applyFileMutationInternal({
   expectedSha256 = null,
   rollbackState = null,
   sessionScope = null,
-  writeText = async (target, value) => writeFile(target, value, "utf8"),
+  writeText,
   removeFile = async (target) => unlink(target),
 } = {}) {
   const normalizedOperation = String(operation || "replace");
@@ -100,6 +100,9 @@ async function applyFileMutationInternal({
   if (!normalizedLogicalPath) throw new TypeError("file mutation logical path is required");
   const root = String(mutationRoot || "").trim();
   if (!root) throw new Error("file mutation repository root is required");
+  if (typeof writeText !== "function") {
+    throw new TypeError("file mutation write capability is required");
+  }
   const before = await readExisting(filePath);
   const beforeSha256 = before.exists ? digest(before.buffer) : null;
   if (expectedSha256 !== null && beforeSha256 !== expectedSha256) {

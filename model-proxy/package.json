@@ -23,6 +23,6 @@
   "dependencies": {
     "@noobot/shared": "file:../shared",
     "@noobot/sanitize": "file:../sanitize",
-    "http-proxy-3": "^1.23.3"
+    "http-proxy-3": "^2.0.1"
   }
 }

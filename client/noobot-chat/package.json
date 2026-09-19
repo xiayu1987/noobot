@@ -50,27 +50,27 @@
     "@noobot/session-protocol": "file:../../session-protocol",
     "@noobot/shared": "file:../../shared",
     "@noobot/timeline-runtime": "file:../../timeline-runtime",
-    "@tanstack/vue-virtual": "^3.13.36",
-    "@vue/devtools-api": "^8.1.5",
-    "element-plus": "^2.14.4",
-    "markdown-it": "^15.0.0",
-    "mermaid": "^11.16.1",
+    "@tanstack/vue-virtual": "^3.13.39",
+    "@vue/devtools-api": "^8.2.1",
+    "element-plus": "^2.14.6",
+    "markdown-it": "^15.0.2",
+    "mermaid": "^12.0.0",
     "noobot-i18n": "file:../../i18n",
     "pinia": "^4.0.3",
-    "vue": "^3.5.41"
+    "vue": "^3.5.43"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
-    "@vitejs/plugin-vue": "^6.0.8",
-    "@vue/test-utils": "^2.4.11",
-    "es-module-lexer": "^2.3.1",
-    "jsdom": "^29.0.0",
+    "@playwright/test": "^1.63.0",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "@vue/test-utils": "^2.5.1",
+    "es-module-lexer": "^3.0.2",
+    "jsdom": "^30.1.0",
     "noobot-agent": "file:../../agent",
-    "vite": "^8.2.1",
-    "vitest": "^4.1.10"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   },
   "overrides": {
     "glob": "^13.0.6",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.2"
   }
 }

@@ -11,7 +11,7 @@ Say goodbye to the 1-dollar hello-world era.
 [![Stars](https://img.shields.io/github/stars/xiayu1987/noobot?style=flat)](https://github.com/xiayu1987/noobot/stargazers)
 [![Quality Checks](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml/badge.svg)](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-![Node](https://img.shields.io/badge/node-%3E%3D22.22.2-blue)
+![Node](https://img.shields.io/badge/node-24.21.0_LTS-blue)
 
 [Windows installer](https://github.com/xiayu1987/noobot/releases/latest) (choose `Noobot.Setup.<version>.exe`) · [macOS package](https://github.com/xiayu1987/noobot/releases/latest) (choose `Noobot-<version>-mac.zip`) · [Configuration](./CONFIGURATION.md) · [Discussions](https://github.com/xiayu1987/noobot/discussions)
 
@@ -117,8 +117,8 @@ chmod +x stop-services.sh
 
 ## Requirements
 
-- Node.js 22.22.2+
-- npm 9+
+- Node.js 24.21.0 (recommended; Node.js 26.9.x is also supported)
+- npm 12.0.2 (npm 12.x)
 - Linux/macOS
 
 ## Workspace Dependency Management

@@ -117,7 +117,7 @@ async function inspectDependencies(directory) {
         continue;
       }
       for (const moduleImport of imports) {
-        const specifier = moduleImport.n;
+        const specifier = moduleImport.specifier;
         if (!specifier?.startsWith(".")) continue;
         const target = path.resolve(path.dirname(filePath), specifier.replace(/[?#].*$/, ""));
         const reason = dependencyViolation(filePath, target);

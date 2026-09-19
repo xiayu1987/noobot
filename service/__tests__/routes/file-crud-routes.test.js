@@ -194,6 +194,39 @@ test("file-crud-routes: 拒绝写入非法 JSON 配置且保留原文件", async
   }
 });
 
+test("file-crud-routes: 拒绝非文本控制字符且保留原文件", async () => {
+  const app = express();
+  app.use(express.json());
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-text-guard-"));
+  const targetPath = path.join(tempRoot, "guarded.txt");
+  await writeFile(targetPath, "before\n", "utf8");
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/workspace/:userId",
+    resolveRootPath: () => tempRoot,
+    buildWorkspaceTree: async () => ({ name: "root", children: [] }),
+    translateText: (key) => key,
+  });
+
+  try {
+    await withTestServer(app, async (baseUrl) => {
+      for (const content of ["after\u0000binary", "after\u0007control"]) {
+        const response = await fetch(`${baseUrl}/internal/workspace/admin/file`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path: "guarded.txt", content }),
+        });
+        const payload = await response.json();
+        assert.equal(response.status, 400);
+        assert.equal(payload.ok, false);
+        assert.equal(payload.errorCode, "INVALID_WORKSPACE_FILE_CONTENT");
+      }
+      assert.equal(await readFile(targetPath, "utf8"), "before\n");
+    });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("file-crud-routes: mutation file endpoint returns the persisted after snapshot", async () => {
   const app = express();
   app.use(express.json());

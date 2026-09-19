@@ -39,7 +39,12 @@ export const dependencySpecs = {
     packages: {
       win32: { winget: "TheDocumentFoundation.LibreOffice", choco: "libreoffice-fresh" },
       darwin: { brew: "libreoffice" },
-      linux: { apt: "libreoffice", dnf: "libreoffice", yum: "libreoffice", pacman: "libreoffice-fresh" },
+      linux: {
+        apt: "libreoffice",
+        dnf: "libreoffice",
+        yum: "libreoffice",
+        pacman: "libreoffice-fresh",
+      },
     },
     darwinAppBundle: "LibreOffice.app",
     darwinDmg: {

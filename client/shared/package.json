@@ -19,6 +19,6 @@
     "@noobot/shared": "file:../../shared"
   },
   "peerDependencies": {
-    "electron": "43.4.0"
+    "electron": "44.4.3"
   }
 }

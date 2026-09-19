@@ -11,7 +11,7 @@
 [![Stars](https://img.shields.io/github/stars/xiayu1987/noobot?style=flat)](https://github.com/xiayu1987/noobot/stargazers)
 [![Quality Checks](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml/badge.svg)](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-![Node](https://img.shields.io/badge/node-%3E%3D22.22.2-blue)
+![Node](https://img.shields.io/badge/node-24.21.0_LTS-blue)
 
 [Windows 安装程序](https://github.com/xiayu1987/noobot/releases/latest)（选择 `Noobot.Setup.<版本>.exe`）· [macOS 客户端](https://github.com/xiayu1987/noobot/releases/latest)（选择 `Noobot-<版本>-mac.zip`）· [配置文档](./CONFIGURATION.zh-CN.md) · [参与讨论](https://github.com/xiayu1987/noobot/discussions)
 
@@ -113,8 +113,8 @@ chmod +x stop-services.sh
 
 ## 环境要求
 
-- Node.js 22.22.2+
-- npm 9+
+- Node.js 24.21.0（推荐，同时兼容 Node.js 26.9.x）
+- npm 12.0.2（npm 12.x）
 - Linux/macOS
 
 ## Workspace 依赖管理

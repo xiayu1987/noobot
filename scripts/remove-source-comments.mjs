@@ -78,25 +78,44 @@ function replacement(source, comment) {
   return "";
 }
 
+function replaceOpenFile(descriptor, value) {
+  const buffer = Buffer.from(value, "utf8");
+  fs.ftruncateSync(descriptor, 0);
+  let offset = 0;
+  while (offset < buffer.length) {
+    offset += fs.writeSync(descriptor, buffer, offset, buffer.length - offset, offset);
+  }
+}
+
 let changedFiles = 0;
 let removedComments = 0;
 for (const relativeFile of filesToProcess()) {
   const file = path.join(root, relativeFile);
-  if (!fs.existsSync(file)) continue;
-  const source = fs.readFileSync(file, "utf8");
-  const comments = parseComments(source, relativeFile).filter(
-    (comment) =>
-      comment.type !== "Shebang" &&
-      comment.type !== "Hashbang" &&
-      !isLicenseHeader(source, comment),
-  );
-  if (!comments.length) continue;
-  let output = source;
-  for (const comment of comments.sort((left, right) => right.range[0] - left.range[0])) {
-    output = `${output.slice(0, comment.range[0])}${replacement(output, comment)}${output.slice(comment.range[1])}`;
+  let descriptor;
+  try {
+    descriptor = fs.openSync(file, "r+");
+  } catch (error) {
+    if (error?.code === "ENOENT") continue;
+    throw error;
   }
-  fs.writeFileSync(file, output, "utf8");
-  changedFiles += 1;
-  removedComments += comments.length;
+  try {
+    const source = fs.readFileSync(descriptor, "utf8");
+    const comments = parseComments(source, relativeFile).filter(
+      (comment) =>
+        comment.type !== "Shebang" &&
+        comment.type !== "Hashbang" &&
+        !isLicenseHeader(source, comment),
+    );
+    if (!comments.length) continue;
+    let output = source;
+    for (const comment of comments.sort((left, right) => right.range[0] - left.range[0])) {
+      output = `${output.slice(0, comment.range[0])}${replacement(output, comment)}${output.slice(comment.range[1])}`;
+    }
+    replaceOpenFile(descriptor, output);
+    changedFiles += 1;
+    removedComments += comments.length;
+  } finally {
+    fs.closeSync(descriptor);
+  }
 }
 console.log(`Removed ${removedComments} comments from ${changedFiles} source files.`);
