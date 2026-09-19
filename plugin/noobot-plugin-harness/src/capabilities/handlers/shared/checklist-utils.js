@@ -18,16 +18,17 @@ export { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-
 
 const WRAPPED_PAYLOAD_MAX_DEPTH = QUANTITY_THRESHOLDS.harness.wrappedPayloadMaxDepth;
 const WRAPPED_PAYLOAD_MAX_NODES = 100;
-const WRAPPED_PAYLOAD_MAX_STRING_LENGTH =
-  LENGTH_THRESHOLDS.harness.wrappedPayloadStringChars;
-const CHECKLIST_HINT_RE = /taskchecklist|refinementchecklist|checklist|\"task\"|\"index\"|\u6b65\u9aa4|\u4efb\u52a1/i;
+const WRAPPED_PAYLOAD_MAX_STRING_LENGTH = LENGTH_THRESHOLDS.harness.wrappedPayloadStringChars;
+const CHECKLIST_HINT_RE =
+  /taskchecklist|refinementchecklist|checklist|\"task\"|\"index\"|\u6b65\u9aa4|\u4efb\u52a1/i;
 const STRIP_FENCED_BLOCK_RE = /```[\s\S]*?```/g;
 
 function normalizeFilePlan(files = null) {
   const source = files && typeof files === "object" && !Array.isArray(files) ? files : {};
   const readArray = (...keys) => {
     for (const key of keys) {
-      if (Array.isArray(source[key])) return source[key].map((item) => String(item || "").trim()).filter(Boolean);
+      if (Array.isArray(source[key]))
+        return source[key].map((item) => String(item || "").trim()).filter(Boolean);
     }
     return [];
   };
@@ -47,10 +48,16 @@ export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_
   const hasMainStepCandidate = Number.isFinite(mainStepCandidate);
   const resolvedMainStepIndex = hasMainStepCandidate ? mainStepCandidate : normalizedIndex;
   const isMainStep =
-    source.isMainStep === true || !hasMainStepCandidate || resolvedMainStepIndex === normalizedIndex;
-  const fallbackTaskName = translateI18nText(locale, HARNESS_I18N_KEYSET.CHECKLIST.TASK_DEFAULT_NAME_TEMPLATE, {
-    index: index + 1,
-  });
+    source.isMainStep === true ||
+    !hasMainStepCandidate ||
+    resolvedMainStepIndex === normalizedIndex;
+  const fallbackTaskName = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.CHECKLIST.TASK_DEFAULT_NAME_TEMPLATE,
+    {
+      index: index + 1,
+    },
+  );
   return {
     index: normalizedIndex,
     mainStepIndex: Number(resolvedMainStepIndex),
@@ -60,7 +67,9 @@ export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_
       String(source.owner ?? source.assignee ?? getDefaultTaskOwner(locale)).trim() ||
       getDefaultTaskOwner(locale),
     subOwners: Array.isArray(source.subOwners ?? source.subTaskOwners)
-      ? (source.subOwners ?? source.subTaskOwners).map((name) => String(name || "").trim()).filter(Boolean)
+      ? (source.subOwners ?? source.subTaskOwners)
+          .map((name) => String(name || "").trim())
+          .filter(Boolean)
       : [],
     input: String(source.input ?? source.inputs ?? source.requiredInput ?? "").trim(),
     output: String(source.output ?? source.outputs ?? source.expectedOutput ?? "").trim(),
@@ -233,7 +242,8 @@ export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
   return {
     totalGoal: String(source.totalGoal || "").trim(),
     planText: String(source.planText || "").trim(),
-    taskOwner: String(source.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
+    taskOwner:
+      String(source.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
     nextPhase: source.nextPhase && typeof source.nextPhase === "object" ? source.nextPhase : null,
     checklistSource: String(source.taskChecklistSource || "").trim(),
     revisionCount: Array.isArray(source.planRevisions) ? source.planRevisions.length : 0,
@@ -249,8 +259,24 @@ export function defaultTaskChecklist(locale = LOCALE.ZH_CN) {
   const template = getTaskTemplate(locale);
   const emptyFiles = () => ({ create: [], modify: [], delete: [] });
   return [
-    { index: 1, task: template.PARSE_ATTACHMENT, owner, subOwners: [], input: "user attachments/context", output: "parsed attachment/context data", files: emptyFiles() },
-    { index: 2, task: template.EXECUTE_CORE, owner, subOwners: [], input: "task requirements and parsed data", output: "core task result", files: emptyFiles() },
+    {
+      index: 1,
+      task: template.PARSE_ATTACHMENT,
+      owner,
+      subOwners: [],
+      input: "user attachments/context",
+      output: "parsed attachment/context data",
+      files: emptyFiles(),
+    },
+    {
+      index: 2,
+      task: template.EXECUTE_CORE,
+      owner,
+      subOwners: [],
+      input: "task requirements and parsed data",
+      output: "core task result",
+      files: emptyFiles(),
+    },
     {
       index: 3,
       task: template.START_SUBTASK,
@@ -260,6 +286,14 @@ export function defaultTaskChecklist(locale = LOCALE.ZH_CN) {
       output: "started subtask records",
       files: emptyFiles(),
     },
-    { index: 4, task: template.WAIT_SUBTASK_RESULT, owner, subOwners: [], input: "started subtask records", output: "merged subtask results", files: emptyFiles() },
+    {
+      index: 4,
+      task: template.WAIT_SUBTASK_RESULT,
+      owner,
+      subOwners: [],
+      input: "started subtask records",
+      output: "merged subtask results",
+      files: emptyFiles(),
+    },
   ];
 }

@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_WORKSPACE_ROOT, RUNTIME_EVENTS_DIR } from './constants.js';
+import { DEFAULT_WORKSPACE_ROOT, RUNTIME_EVENTS_DIR } from "./constants.js";
 import {
   resolveRuntimeEventsMaxArchives,
   resolveRuntimeEventsMaxFileBytes,
   resolveRuntimeEventsRetentionDays,
-} from '@noobot/shared/runtime-events-config';
+} from "@noobot/shared/runtime-events-config";
 
-const RUNTIME_EVENTS_ROOT_ENV = 'NOOBOT_RUNTIME_EVENTS_ROOT';
-const RUNTIME_EVENTS_WORKSPACE_ROOT_ENV = 'NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT';
+const RUNTIME_EVENTS_ROOT_ENV = "NOOBOT_RUNTIME_EVENTS_ROOT";
+const RUNTIME_EVENTS_WORKSPACE_ROOT_ENV = "NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT";
 
 export function resolveDefaultRuntimeEventsConfig(env = process.env) {
   return {

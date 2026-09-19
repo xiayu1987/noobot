@@ -7,11 +7,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  RUNTIME_EVENT_SCOPES,
-  writeRoutedRuntimeEvent,
-  writeRuntimeEvent,
-} from "../src/index.js";
+import { RUNTIME_EVENT_SCOPES, writeRoutedRuntimeEvent, writeRuntimeEvent } from "../src/index.js";
 
 import { pathExists, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
 
