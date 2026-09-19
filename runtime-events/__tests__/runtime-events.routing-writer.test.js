@@ -8,17 +8,16 @@ import test from "node:test";
 
 import {
   createRuntimeEventWriter,
+  RUNTIME_EVENT_SCOPES,
   writeRoutedRuntimeEvent,
   writeRuntimeEvent,
-  writeSessionRuntimeEvent,
-  writeStartupEvent,
-  writeSystemRuntimeEvent,
 } from "../src/index.js";
 
 import { persistSession, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
 
 test("session runtime event requires userId and sessionId", async () => {
-  const result = await writeSessionRuntimeEvent({
+  const result = await writeRuntimeEvent({
+    scope: RUNTIME_EVENT_SCOPES.SESSION,
     source: "agent",
     category: "system",
     level: "error",
@@ -31,7 +30,8 @@ test("session runtime event requires userId and sessionId", async () => {
 
 test("startup and system events write JSONL without session context", async () => {
   const workspaceRoot = await tempRoot();
-  const startup = await writeStartupEvent({
+  const startup = await writeRoutedRuntimeEvent({
+    scope: RUNTIME_EVENT_SCOPES.STARTUP,
     source: "service",
     category: "state",
     level: "info",
@@ -39,7 +39,8 @@ test("startup and system events write JSONL without session context", async () =
     workspaceRoot,
     data: { port: 3000 },
   });
-  const system = await writeSystemRuntimeEvent({
+  const system = await writeRoutedRuntimeEvent({
+    scope: RUNTIME_EVENT_SCOPES.SYSTEM,
     source: "agent",
     category: "transport",
     level: "warn",

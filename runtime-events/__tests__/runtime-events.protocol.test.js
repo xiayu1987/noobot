@@ -21,14 +21,13 @@ import {
   SESSION_LOG_CATEGORIES,
   SESSION_LOG_DEBUG_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
-  SESSION_LOG_RECORD_FIELDS,
 } from "../src/session-log-protocol.js";
 import { pathExists, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
 
 test("session log protocol exports stable categories and helpers from runtime-events", () => {
   assert.ok(SESSION_LOG_CATEGORIES.includes("system"));
   assert.ok(SESSION_LOG_CATEGORIES.includes(SESSION_LOG_DEBUG_CATEGORY));
-  assert.ok(SESSION_LOG_RECORD_FIELDS.includes("sessionId"));
+  assert.ok(Object.keys(buildSessionLogRecord({ sessionId: "s1" })).includes("sessionId"));
   for (const category of [
     "frontend-lifecycle",
     "agent-proxy-http",

@@ -16,7 +16,7 @@ const scopes = new Set(Object.values(RUNTIME_EVENT_SCOPES));
 const levels = new Set(Object.values(RUNTIME_EVENT_LEVELS));
 const categories = new Set(Object.values(RUNTIME_EVENT_CATEGORIES));
 
-export function buildProcessInfo(includeProcess = true) {
+function buildProcessInfo(includeProcess = true) {
   if (!includeProcess) return undefined;
   return {
     pid: process.pid,

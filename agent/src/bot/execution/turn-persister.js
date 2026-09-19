@@ -20,9 +20,9 @@ import { EXECUTION_LOG_EVENT, MESSAGE_ROLE, MESSAGE_TYPE } from "../config/const
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
 const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS =
-  LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
+  LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
 const SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS =
-  LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
+  LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
 
 function normalizeIsoTime(value = "") {
   const text = String(value || "").trim();

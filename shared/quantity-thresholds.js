@@ -4,14 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function deepFreeze(value) {
-  if (!value || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const nested of Object.values(value)) {
-    deepFreeze(nested);
-  }
-  return value;
-}
+import { deepFreeze } from "./deep-freeze.js";
 
 const QUANTITY_TIERS = deepFreeze({
   localContext: 2,
@@ -49,10 +42,6 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
   },
 
   web: {
-    defaultConcurrency: QUANTITY_TIERS.smallFiles,
-
-    maxConcurrency: 60,
-
     readableExtractMaxLines: QUANTITY_TIERS.readableExtractLines,
 
     textMaxLines: QUANTITY_TIERS.webTextLines,
@@ -88,8 +77,6 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     thinkingDetailVirtualOverscan: QUANTITY_TIERS.smallFiles,
 
     thinkingDetailRetryLimit: QUANTITY_TIERS.smallFiles,
-
-    processCompatLogLimit: QUANTITY_TIERS.smallDisplay,
   },
 
   sessionLog: {

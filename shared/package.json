@@ -9,6 +9,7 @@
   "exports": {
     "./best-effort": "./best-effort.js",
     "./config-file": "./config-file.js",
+    "./deep-freeze": "./deep-freeze.js",
     "./debug-projection": "./debug-projection.js",
     "./length-thresholds": "./length-thresholds.js",
     "./message-diagnostics": "./message-diagnostics.js",

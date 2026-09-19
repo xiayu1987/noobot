@@ -8,9 +8,9 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  RUNTIME_EVENT_SCOPES,
   writeRoutedRuntimeEvent,
   writeRuntimeEvent,
-  writeSystemRuntimeEvent,
 } from "../src/index.js";
 
 import { pathExists, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
@@ -272,8 +272,9 @@ test("routed debug logs without session context still honor their debug control"
 
 test("non-debug system runtime events are not governed by session log controls", async () => {
   const root = await tempRoot();
-  const result = await writeSystemRuntimeEvent(
+  const result = await writeRoutedRuntimeEvent(
     {
+      scope: RUNTIME_EVENT_SCOPES.SYSTEM,
       source: "service",
       category: "system",
       level: "info",

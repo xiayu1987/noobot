@@ -6,12 +6,6 @@
   "description": "Noobot runtime event center for startup, session runtime, and system runtime events.",
   "exports": {
     ".": "./src/index.js",
-    "./events": "./src/writer.js",
-    "./schema": "./src/schema.js",
-    "./paths": "./src/paths.js",
-    "./channels/session": "./src/channels/session.js",
-    "./channels/startup": "./src/channels/startup.js",
-    "./channels/system": "./src/channels/system.js",
     "./session-channel": "./src/session-channel.js",
     "./session-id": "./src/session-id.js",
     "./package.json": "./package.json",

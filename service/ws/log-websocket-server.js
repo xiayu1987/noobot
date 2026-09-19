@@ -50,14 +50,13 @@ export function resolveSessionLogConfig(options = {}) {
 }
 
 export async function writeSessionLogEvent(event = {}, config = resolveSessionLogConfig()) {
-  const runtimeEventConfig = config.logRoot ? { ...config, root: config.logRoot } : config;
   const result = await writeRoutedRuntimeEvent(
     {
       scope: "session",
       ...event,
       channel: event.channel || RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
     },
-    runtimeEventConfig,
+    config,
   );
   if (!result.skipped)
     logDiagnostic("written", {
@@ -99,9 +98,9 @@ export function registerLogWebSocketServer(
   const wss = new WebSocketServer({ noServer: true });
   logDiagnostic("registered", {
     path: "/logs/ws",
-    logRoot: logConfig.logRoot,
+    root: logConfig.root,
     workspaceRoot: logConfig.workspaceRoot,
-    logDirName: logConfig.logDirName,
+    dirName: logConfig.dirName,
     retentionMs: logConfig.retentionMs,
     cleanupIntervalMs: logConfig.cleanupIntervalMs,
   });

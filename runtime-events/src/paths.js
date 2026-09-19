@@ -35,7 +35,7 @@ export function resolveRuntimeEventStorageSessionId(record = {}) {
   ));
 }
 
-export function resolveRuntimeEventDir(record, config = resolveRuntimeEventsConfig()) {
+function resolveRuntimeEventDir(record, config = resolveRuntimeEventsConfig()) {
   if (config.root) {
     if (record.scope === RUNTIME_EVENT_SCOPES.SESSION) return path.join(config.root, safeSegment(record.sessionId));
     return path.join(config.root, safeSegment(record.scope), safeSegment(record.source));
@@ -51,7 +51,7 @@ export function resolveRuntimeEventFile(record, config = resolveRuntimeEventsCon
   return path.join(resolveRuntimeEventDir(record, config), `${resolveRuntimeEventFileCategory(record)}.jsonl`);
 }
 
-export function resolveRuntimeEventFileCategory(record = {}) {
+function resolveRuntimeEventFileCategory(record = {}) {
   const category = safeSegment(record.category);
   if (record.scope !== RUNTIME_EVENT_SCOPES.SESSION || category !== DEBUG_CATEGORY) return category;
 

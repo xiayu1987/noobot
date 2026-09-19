@@ -4,17 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-
-function deepFreeze(value) {
-  if (!value || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const nested of Object.values(value)) {
-    deepFreeze(nested);
-  }
-  return value;
-}
 
 export const WORKFLOW_PARAMS = deepFreeze({
   workflow: {

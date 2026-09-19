@@ -8,6 +8,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { CONFIG_FILE_ERROR_CODE } from "@noobot/shared/config-file";
 import { loadFileConfig } from "../../src/shared/config.js";
 
 test("agent proxy config fails closed when the configured JSON is malformed", async () => {
@@ -15,7 +16,9 @@ test("agent proxy config fails closed when the configured JSON is malformed", as
   try {
     const configPath = path.join(root, "config.json");
     await writeFile(configPath, "{broken", "utf8");
-    assert.throws(() => loadFileConfig(configPath), { code: "CONFIG_FILE_CORRUPTED" });
+    assert.throws(() => loadFileConfig(configPath), {
+      code: CONFIG_FILE_ERROR_CODE.CORRUPTED,
+    });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

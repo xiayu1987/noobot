@@ -4,14 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function deepFreeze(value) {
-  if (!value || typeof value !== "object") return value;
-  Object.freeze(value);
-  for (const nested of Object.values(value)) {
-    deepFreeze(nested);
-  }
-  return value;
-}
+import { deepFreeze } from "./deep-freeze.js";
 
 const KiB = 1024;
 const MiB = 1024 * KiB;
@@ -19,8 +12,6 @@ const MB = 1000 * 1000;
 
 const LENGTH_TIERS = deepFreeze({
   chars: {
-    compact: 500,
-    compactPayload: 800,
     persistedChunk: 40000,
     cleanedText: 120000,
     wrappedPayload: 200000,
@@ -32,7 +23,6 @@ const LENGTH_TIERS = deepFreeze({
     extensionName: 20,
     modelContextContent: 120,
     executionLogBrief: 160,
-    sessionSummaryFileName: 200,
     hookProgressText: 240,
     planningRawPreview: 300,
     shortTrace: 1000,
@@ -62,19 +52,16 @@ const LENGTH_TIERS = deepFreeze({
     connectorCommandFile: 256 * KiB,
     nativeScriptResult: 256 * KiB,
     nativeScriptSource: 100 * KiB,
-    batchPayload: Math.floor(0.8 * MiB),
     clientNonImagePreview: 1 * MiB,
     jsonlBuffer: 5 * MiB,
     directText: 8 * MiB,
     attachmentFile: 10 * MiB,
     desktopLogFile: 10 * MiB,
-    searchBuffer: 16 * MiB,
     attachmentTotal: 30 * MiB,
     responsesFileInput: 50 * MB,
     nativeScriptArtifact: 200 * MiB,
     workspaceAssetFile: 200 * MiB,
     openVscodeArchive: 500 * MiB,
-    libreOfficeTempBaseline: 512 * MiB,
   },
 });
 
@@ -105,6 +92,10 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     longPromptPayloadChars: LENGTH_TIERS.chars.mainContext,
 
     fileSplitChars: LENGTH_TIERS.chars.persistedChunk,
+
+    parserCandidatePreviewChars: LENGTH_TIERS.displayChars.memoryParserCandidatePreview,
+
+    parserRawPreviewChars: LENGTH_TIERS.extractionChars.htmlProbe,
   },
 
   attachments: {
@@ -132,10 +123,6 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   },
 
   toolIO: {
-    fileContentBytesPrecheckMultiplier: 2,
-
-    searchBufferBytes: LENGTH_TIERS.bytes.searchBuffer,
-
     connectorCommandFileBytes: LENGTH_TIERS.bytes.connectorCommandFile,
 
     connectorOutputChars: LENGTH_TIERS.chars.persistedChunk,
@@ -158,27 +145,18 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   },
 
   dataProcessing: {
-    batchBytes: LENGTH_TIERS.bytes.batchPayload,
-
     responsesFileInputBytes: LENGTH_TIERS.bytes.responsesFileInput,
-
-    directTextBytes: LENGTH_TIERS.bytes.directText,
-
-    webTextChars: LENGTH_TIERS.chars.persistedChunk,
-
-    webLeadingTextSampleChars: LENGTH_TIERS.chars.persistedChunk,
-    webHtmlProbeChars: LENGTH_TIERS.extractionChars.htmlProbe,
 
     web2ImgUsefulTextChars: LENGTH_TIERS.artifactTextChars.web2ImgUsefulText,
     web2ImgFullTextChars: LENGTH_TIERS.artifactTextChars.web2ImgFullText,
-
-    libreOfficeTempMaxBytes: LENGTH_TIERS.bytes.libreOfficeTempBaseline,
   },
 
   harness: {
     jsonlMaxBufferBytes: LENGTH_TIERS.bytes.jsonlBuffer,
 
     relayInjectionMaxChars: LENGTH_TIERS.chars.mainContext,
+
+    wrappedPayloadStringChars: LENGTH_TIERS.chars.wrappedPayload,
   },
 
   sessionLog: {
@@ -202,57 +180,27 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     hookProgressTextChars: LENGTH_TIERS.displayChars.hookProgressText,
 
     attachmentExtensionChars: LENGTH_TIERS.displayChars.extensionName,
-    sessionSummaryFileNameChars: LENGTH_TIERS.displayChars.sessionSummaryFileName,
 
     planningRawOutputPreviewChars: LENGTH_TIERS.displayChars.planningRawPreview,
 
     toolResultTraceChars: LENGTH_TIERS.displayChars.shortTrace,
-    sessionSummaryObjectFieldChars: LENGTH_TIERS.displayChars.shortTrace,
     mcpTaskResultPreviewChars: LENGTH_TIERS.displayChars.shortTrace,
     harnessPreviewChars: LENGTH_TIERS.displayChars.harnessPreview,
-  },
 
-  contextPreview: {
-    semanticTransferPreviewChars: LENGTH_TIERS.contextPreviewChars.semanticTransferFileBacked,
-
-    planningCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
-    planningContextGoalChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
-    workflowCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
-    workflowPayloadPreviewChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
-    workflowResultTextChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
-    workflowSemanticTextPreviewChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
-    harnessDynamicPolicyPromptChars: LENGTH_TIERS.contextPreviewChars.dynamicPolicyPrompt,
-  },
-
-  preview: {
-    harnessPreviewChars: LENGTH_TIERS.displayChars.harnessPreview,
-
-    harnessDynamicPolicyPromptChars: LENGTH_TIERS.contextPreviewChars.dynamicPolicyPrompt,
-
-    harnessWrappedPayloadStringChars: LENGTH_TIERS.chars.wrappedPayload,
-
-    planningCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
-    planningRawOutputPreviewChars: LENGTH_TIERS.displayChars.planningRawPreview,
-    planningContextGoalChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
-
-    workflowCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
-    workflowResultTextChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
-    workflowSemanticTextPreviewChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
-    workflowPayloadPreviewChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
-
-    executionLogBriefChars: LENGTH_TIERS.displayChars.executionLogBrief,
-    toolResultTraceChars: LENGTH_TIERS.displayChars.shortTrace,
-    modelContextContentChars: LENGTH_TIERS.displayChars.modelContextContent,
-    hookProgressTextChars: LENGTH_TIERS.displayChars.hookProgressText,
-    attachmentExtensionChars: LENGTH_TIERS.displayChars.extensionName,
+    sessionSummaryTextChars: LENGTH_TIERS.displayChars.sessionSummaryText,
     sessionSummaryObjectFieldChars: LENGTH_TIERS.displayChars.shortTrace,
     sessionSummaryArrayItemChars: LENGTH_TIERS.displayChars.sessionSummaryArrayItem,
     sessionSummaryDefaultJsonStringChars: LENGTH_TIERS.displayChars.sessionSummaryDefaultJsonString,
     sessionSummarySmallJsonStringChars: LENGTH_TIERS.displayChars.sessionSummarySmallJsonString,
-    sessionSummaryFileNameChars: LENGTH_TIERS.displayChars.sessionSummaryFileName,
-    mcpTaskResultPreviewChars: LENGTH_TIERS.displayChars.shortTrace,
-    memoryParserCandidatePreviewChars: LENGTH_TIERS.displayChars.memoryParserCandidatePreview,
-    memoryParserRawPreviewChars: LENGTH_TIERS.extractionChars.htmlProbe,
-    sessionSummaryTextChars: LENGTH_TIERS.displayChars.sessionSummaryText,
+  },
+
+  contextPreview: {
+    planningCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
+    planningContextGoalChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
+    workflowCompactTextChars: LENGTH_TIERS.contextPreviewChars.compactPlanning,
+    workflowPayloadPreviewChars: LENGTH_TIERS.contextPreviewChars.compactPayload,
+    workflowResultTextChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
+    workflowSemanticTextPreviewChars: LENGTH_TIERS.contextPreviewChars.structuredWorkflow,
+    harnessDynamicPolicyPromptChars: LENGTH_TIERS.contextPreviewChars.dynamicPolicyPrompt,
   },
 });

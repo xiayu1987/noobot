@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { TOOL_SCHEMA_FLAT_GENERATED, TOOL_SCHEMA_BY_TOOL } from "./zh-CN/tool-schema.js";
-
-export { TOOL_SCHEMA_BY_TOOL };
-
 export default {
-  ...TOOL_SCHEMA_FLAT_GENERATED,
   "agent.fetchGeneratedMediaFailed": (params = {}) =>
     `拉取生成媒体失败: HTTP ${Number(params.status || 500)}`,
   "agent.fetchRemoteMediaArtifactFailed": (params = {}) =>

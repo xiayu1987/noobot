@@ -10,4 +10,4 @@ export { DEFAULT_MIME_TYPE, MIME_TO_EXTENSION };
 
 export const VALID_ATTACHMENT_SOURCES = new Set(Object.values(ATTACHMENT_SOURCE));
 
-export const MAX_EXTENSION_LENGTH = LENGTH_THRESHOLDS.preview.attachmentExtensionChars;
+export const MAX_EXTENSION_LENGTH = LENGTH_THRESHOLDS.display.attachmentExtensionChars;

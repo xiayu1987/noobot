@@ -9,7 +9,6 @@ import test from "node:test";
 
 import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
 import { writeRoutedRuntimeEvent, writeRuntimeEvent } from "../src/index.js";
-import { writeSessionChannelEvent, SESSION_CHANNELS } from "../src/session-channel.js";
 
 import {
   pathExists,
@@ -326,22 +325,4 @@ test("runtime event archive cleanup ignores active and unrelated jsonl files", a
   assert.equal(await pathExists(result.file), true);
   assert.equal(await pathExists(unrelated), true);
   assert.equal((await readJsonl(result.file)).length, 2);
-});
-
-test("existing session-channel API remains available", async () => {
-  const root = await tempRoot();
-  const result = await writeSessionChannelEvent(
-    {
-      source: "agent",
-      channel: SESSION_CHANNELS.DIRECT,
-      category: "system",
-      event: "agent.compat.sessionChannel",
-      userId: "admin",
-      sessionId: "session-1",
-    },
-    { root, dirName: "events" },
-  );
-
-  assert.equal(result.ok, true);
-  assert.match(result.file, /session-1\/system\.jsonl$/);
 });
