@@ -35,7 +35,8 @@ for (const modulePath of modules) {
   const [imports] = parse(source);
   const dependencies = [];
   for (const imported of imports) {
-    const specifier = source.slice(imported.s, imported.e);
+    const specifier = imported.specifier;
+    if (typeof specifier !== "string") continue;
     const dependency = resolveLocalImport(modulePath, specifier, modules);
     if (dependency) dependencies.push(dependency);
   }

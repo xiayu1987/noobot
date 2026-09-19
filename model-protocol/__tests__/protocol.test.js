@@ -524,6 +524,7 @@ test("provider config contract owns field configurability and declaration visibi
   );
   assert.equal(fields.model.configAccess, MODEL_PROVIDER_CONFIG_ACCESS.USER);
   assert.equal(fields.cache_control.configAccess, MODEL_PROVIDER_CONFIG_ACCESS.SYSTEM);
+  assert.equal("prompt_cache_retention" in fields, false);
   assert.equal(
     fields.reasoning_effort_options.declarationVisibility,
     MODEL_PROVIDER_DECLARATION_VISIBILITY.USER,

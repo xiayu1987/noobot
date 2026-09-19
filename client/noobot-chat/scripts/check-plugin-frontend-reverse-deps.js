@@ -71,7 +71,7 @@ export async function inspectFrontendSource(filePath, content) {
       continue;
     }
     for (const moduleImport of imports) {
-      const specifier = moduleImport.n;
+      const specifier = moduleImport.specifier;
       const reason = classifyFrontendImport(filePath, specifier);
       if (reason) violations.push({ specifier, reason });
     }

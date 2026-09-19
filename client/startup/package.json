@@ -12,11 +12,11 @@
     "@noobot/shared": "file:../../shared",
     "@noobot/client-shared": "file:../shared",
     "@element-plus/icons-vue": "^2.3.2",
-    "element-plus": "^2.14.4",
-    "vue": "^3.5.41"
+    "element-plus": "^2.14.6",
+    "vue": "^3.5.43"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.8",
-    "vite": "^8.2.1"
+    "@vitejs/plugin-vue": "^6.0.9",
+    "vite": "^8.3.0"
   }
 }

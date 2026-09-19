@@ -19,7 +19,7 @@
     "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
-    "@noble/hashes": "^2.2.0",
+    "@noble/hashes": "^2.4.0",
     "@noobot/shared": "file:../shared"
   }
 }

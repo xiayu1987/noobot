@@ -126,6 +126,12 @@ function gptVersion(name = "") {
   return match ? { major: Number(match[1]), minor: Number(match[2] || 0) } : null;
 }
 
+function supportsPromptCacheOptions(spec = {}) {
+  if (modelFamily(spec) !== MODEL_FAMILY_ID.GPT) return false;
+  const version = gptVersion(spec.model);
+  return Boolean(version && (version.major > 5 || (version.major === 5 && version.minor >= 6)));
+}
+
 export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   const vendor = operatorId(spec);
   const out = { ...(spec.extra_body || {}) };
@@ -141,11 +147,8 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   if (usesPromptCacheKeyProtocol(spec)) {
     const key = String(spec.prompt_cache_key ?? "").trim() || buildCacheIdentity(spec, flow);
     if (key) out.prompt_cache_key = key;
-    const version = gptVersion(spec.model);
-    if (version?.major === 5 && version.minor >= 6) {
+    if (supportsPromptCacheOptions(spec)) {
       out.prompt_cache_options = spec.prompt_cache_options || { ttl: "30m" };
-    } else {
-      out.prompt_cache_retention = String(spec.prompt_cache_retention || "24h");
     }
   }
 

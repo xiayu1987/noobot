@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ChatOpenAI } from "@langchain/openai";
+import { MODEL_PROVIDER_ID } from "@noobot/model-protocol";
 import {
   applyPromptCacheMessages,
   compileProviderModelKwargs,
@@ -73,7 +74,11 @@ export function createOpenAiCompatibleClient({
   const spec = normalizeRuntimeModelSpec(modelSpec);
   const modelKwargs = compileProviderModelKwargs(spec, flow);
   const promptCacheKey = modelKwargs.prompt_cache_key;
-  const promptCacheRetention = modelKwargs.prompt_cache_retention;
+  const useResponsesApi = resolveUseResponsesApi(spec);
+  const maxTokens = spec.max_tokens !== undefined ? Number(spec.max_tokens) : undefined;
+  if (spec.operatorId === MODEL_PROVIDER_ID.OPENAI && !useResponsesApi && maxTokens !== undefined) {
+    modelKwargs.max_completion_tokens = maxTokens;
+  }
   const defaultHeaders = { ...headers, ...resolvePromptCacheHeaders(spec, flow) };
   const configuration = { defaultHeaders, ...(spec.base_url ? { baseURL: spec.base_url } : {}) };
   const sampling = {};
@@ -83,12 +88,12 @@ export function createOpenAiCompatibleClient({
     model: spec.model,
     ...sampling,
     streaming: streaming === true,
-    maxTokens: spec.max_tokens !== undefined ? Number(spec.max_tokens) : undefined,
+    maxTokens:
+      spec.operatorId === MODEL_PROVIDER_ID.OPENAI && !useResponsesApi ? undefined : maxTokens,
     apiKey: credential,
     configuration,
-    useResponsesApi: resolveUseResponsesApi(spec),
+    useResponsesApi,
     ...(promptCacheKey ? { promptCacheKey } : {}),
-    ...(promptCacheRetention ? { promptCacheRetention } : {}),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
   return applyOpenAiResponsesRequestOrder(client);

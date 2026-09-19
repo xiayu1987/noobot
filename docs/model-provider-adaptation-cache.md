@@ -49,13 +49,13 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ### 统一缓存策略
 
-缓存身份在运行时按供应商协议转换，不会把 GPT 专用字段发送给不支持它的模型。GPT 生成 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。非 GPT/Claude 系列不生成 `prompt_cache_key`、`prompt_cache_retention` 或 `prompt_cache_options`，除非其官方协议在适配层明确声明了对应字段。显式配置优先。
+缓存身份在运行时按供应商协议转换，不会把 GPT 专用字段发送给不支持它的模型。GPT 生成 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。非 GPT/Claude 系列不生成 `prompt_cache_key` 或 `prompt_cache_options`，除非其官方协议在适配层明确声明了对应字段。显式配置优先。
 
 ### OpenAI GPT
 
 - GPT 生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
 - GPT 5.6 及以上默认使用 `prompt_cache_options: { "ttl": "30m" }`。
-- GPT 4.1 和其他 GPT 5 系列默认使用 `prompt_cache_retention: "24h"`。
+- 较早的 GPT 型号仅发送缓存键，不再发送 OpenAI SDK 已弃用的缓存保留字段。
 - GPT-5 不发送 `top_p`。
 - 显式配置的缓存字段优先于运行时默认值。
 

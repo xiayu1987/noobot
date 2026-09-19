@@ -60,18 +60,18 @@ function resolveRelativeModule(fromFile, specifier) {
 function exportedNames(records = []) {
   return new Set(
     records
-      .map((record) => String(record?.n || "").trim())
+      .map((record) => String(record?.name || "").trim())
       .filter((name) => name && name !== "default"),
   );
 }
 
-function starSpecifiers(source, imports = []) {
+function starSpecifiers(imports = []) {
   return imports
-    .filter((record) => {
-      if (!record?.n || !String(record.n).startsWith(".")) return false;
-      return /^\s*export\s*\*/.test(source.slice(record.ss, record.se));
-    })
-    .map((record) => record.n);
+    .filter(
+      (record) =>
+        record?.type === "reexport-star" && String(record.specifier || "").startsWith("."),
+    )
+    .map((record) => record.specifier);
 }
 
 async function loadStaticNamespace(absolute, state = {}) {
@@ -100,7 +100,7 @@ async function loadStaticNamespace(absolute, state = {}) {
     }
     const explicit = exportedNames(exports);
     const origins = new Map();
-    for (const specifier of starSpecifiers(source, imports)) {
+    for (const specifier of starSpecifiers(imports)) {
       const target = resolveRelativeModule(absolute, specifier);
       const namespace = await loadStaticNamespace(target, state);
       for (const name of namespace) {

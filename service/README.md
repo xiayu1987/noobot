@@ -6,8 +6,8 @@
 
 ## Requirements
 
-- Node.js 22.22.2+
-- npm 9+
+- Node.js 24.21.0 (recommended; Node.js 26.9.x is also supported)
+- npm 12.0.2 (npm 12.x)
 - Optional: LibreOffice, FFmpeg, Docker, and OpenVSCode Server dependencies used by enabled capabilities
 
 ## Run And Test

@@ -15,6 +15,20 @@ import {
   rollbackFileMutation,
 } from "../../src/tools/execution/file-mutation-service.js";
 
+const writeText = (filePath, content) => writeFile(filePath, content, "utf8");
+
+test("file mutation requires an explicit write capability", async () => {
+  await assert.rejects(
+    applyFileMutation({
+      filePath: "unused.txt",
+      logicalPath: "unused.txt",
+      content: "unused",
+      mutationRoot: "unused-mutations",
+    }),
+    { name: "TypeError", message: "file mutation write capability is required" },
+  );
+});
+
 test("file mutation persists before snapshot and diff, then reads the same record", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-mutation-test-"));
   try {
@@ -25,6 +39,7 @@ test("file mutation persists before snapshot and diff, then reads the same recor
       logicalPath: "file.txt",
       content: "after\n",
       mutationRoot: resolveFileMutationRoot(root),
+      writeText,
     });
     assert.equal(await readFile(target, "utf8"), "after\n");
     await stat(path.join(root, "file-mutations", `${result.mutations[0].id}.json`));
@@ -74,6 +89,7 @@ test("delete mutation persists the before snapshot and a removal diff", async ()
       logicalPath: "file.txt",
       operation: "delete",
       mutationRoot: resolveFileMutationRoot(root),
+      writeText,
     });
     await assert.rejects(stat(target), { code: "ENOENT" });
     const record = await readFileMutation({
@@ -102,6 +118,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
       operation: "update",
       scopeId: "turn-1",
       mutationRoot,
+      writeText,
     });
     const second = await applyFileMutation({
       filePath: target,
@@ -110,6 +127,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
       operation: "update",
       scopeId: "turn-1",
       mutationRoot,
+      writeText,
     });
     assert.equal(first.mutations[0].id, second.mutations[0].id);
     assert.equal(first.mutations[0].aggregate.revision, 1);
@@ -137,6 +155,7 @@ test("update mutations keep one initial snapshot and append incremental diffs pe
       operation: "update",
       scopeId: "turn-2",
       mutationRoot,
+      writeText,
     });
     assert.notEqual(isolated.mutations[0].id, second.mutations[0].id);
     const isolatedRecord = await readFileMutation({
@@ -201,11 +220,13 @@ test("rollback removes a file created by a mutation", async () => {
       logicalPath: "created.txt",
       content: "created\n",
       mutationRoot,
+      writeText,
     });
     await rollbackFileMutation({
       mutationRoot,
       mutationId: result.mutations[0].id,
       filePath: target,
+      writeText,
     });
     await assert.rejects(stat(target), { code: "ENOENT" });
   } finally {

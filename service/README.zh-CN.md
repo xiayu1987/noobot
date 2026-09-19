@@ -6,8 +6,8 @@
 
 ## 运行依赖
 
-- Node.js 22.22.2+
-- npm 9+
+- Node.js 24.21.0（推荐，同时兼容 Node.js 26.9.x）
+- npm 12.0.2（npm 12.x）
 - 可选：启用相关能力时使用的 LibreOffice、FFmpeg、Docker 和 OpenVSCode Server 依赖
 
 ## 运行与测试

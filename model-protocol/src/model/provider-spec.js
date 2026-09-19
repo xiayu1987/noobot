@@ -275,7 +275,6 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
       { group: MODEL_PROVIDER_FIELD_GROUP.TRANSPORT },
     ),
     prompt_cache_key: cacheField(stringField, [MODEL_FAMILY_ID.GPT, MODEL_FAMILY_ID.CLAUDE]),
-    prompt_cache_retention: cacheField(stringField, [MODEL_FAMILY_ID.GPT, MODEL_FAMILY_ID.CLAUDE]),
     prompt_cache_options: cacheField(
       {
         type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,

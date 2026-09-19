@@ -75,7 +75,7 @@ for (const pluginName of ["noobot-plugin-harness", "noobot-plugin-workflow"]) {
     const entryFile = path.join(pluginRoot, entry);
     const source = await fs.readFile(entryFile, "utf8");
     const [, exports] = parse(source);
-    const exportedNames = exports.map((item) => item.n).sort();
+    const exportedNames = exports.map((item) => item.name).sort();
     if (exportedNames.length !== 1 || exportedNames[0] !== "activate") {
       violations.push(
         `${path.relative(root, entryFile)}: ${surface} entry must export only activate`,

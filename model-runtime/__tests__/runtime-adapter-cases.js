@@ -182,6 +182,31 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
 
   assert.equal(params.prompt_cache_key, "noobot-main-gpt-5-6-sol");
   assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
+  assert.deepEqual(
+    compileProviderModelKwargs({
+      model: "gpt-6-astra",
+      modelFamily: "gpt",
+      operatorId: "openai",
+    }).prompt_cache_options,
+    { ttl: "30m" },
+  );
+});
+
+test("official OpenAI chat requests use the current completion token limit field", () => {
+  const client = createOpenAiCompatibleClient({
+    credential: "test-key",
+    modelSpec: {
+      model: "gpt-4.1",
+      base_url: "https://api.openai.com/v1",
+      max_tokens: 2048,
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
+    },
+  });
+  const params = client.invocationParams({});
+
+  assert.equal(params.max_completion_tokens, 2048);
+  assert.equal(params.max_tokens, undefined);
 });
 
 test("xAI Grok cache protocol uses only the x-grok-conv-id header", () => {
@@ -272,7 +297,6 @@ test("Claude uses top-level automatic caching and Qwen uses message-level cachin
     }),
     {
       prompt_cache_key: "noobot-main-claude-sonnet-5",
-      prompt_cache_retention: "24h",
       cache_control: { type: "ephemeral" },
     },
   );
