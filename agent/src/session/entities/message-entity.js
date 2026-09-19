@@ -13,7 +13,7 @@ import {
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
-import { resolveTurnCommitAction } from "@noobot/session-protocol";
+import { normalizeTurnCommitMetadata } from "@noobot/session-protocol";
 import { copyPresentFields, firstTextField, normalizeTextField } from "./entity-primitives.js";
 import {
   dedupeAttachmentsByIdentity,
@@ -88,23 +88,6 @@ function createBaseMessageEntity(message, now) {
     summarized: message?.summarized === true,
     ts: normalizeTextField(message?.ts) || now(),
   };
-}
-
-function normalizeTurnCommit(turnCommit = null) {
-  if (!turnCommit || typeof turnCommit !== "object" || Array.isArray(turnCommit)) return null;
-  const commandId = String(turnCommit.commandId || "").trim();
-  if (!commandId) return null;
-  const normalized = {
-    action: resolveTurnCommitAction(turnCommit.action),
-    commandId,
-  };
-  const requestHash = String(turnCommit.requestHash || "").trim();
-  if (requestHash) normalized.requestHash = requestHash;
-  for (const key of ["resumeDialogProcessId", "resumeTurnScopeId"]) {
-    const value = String(turnCommit[key] || "").trim();
-    if (value) normalized[key] = value;
-  }
-  return normalized;
 }
 
 function applyMessageArtifacts(target, message, attachments) {
@@ -264,7 +247,7 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
     normalizedMessage.id = runtimeMessageId;
     normalizedMessage.messageId = runtimeMessageId;
   }
-  const turnCommit = normalizeTurnCommit(message?.turnCommit);
+  const turnCommit = normalizeTurnCommitMetadata(message?.turnCommit);
   if (turnCommit) normalizedMessage.turnCommit = turnCommit;
   applyMessageArtifacts(normalizedMessage, message, normalizedAttachments);
   applyMessageInjection(normalizedMessage, message);

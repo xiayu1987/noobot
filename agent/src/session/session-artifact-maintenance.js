@@ -16,7 +16,7 @@ import {
 import { writeArtifactIndex } from "./session-artifact-execution-logs.js";
 import { resolveTurnArtifactPath, readRecentSessionTurns } from "./session-artifact-session.js";
 import { reconcileExecutionSegmentIndex } from "@noobot/session-repair";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 
 function diagnostic(code, message, extra = {}) {
   return { code, message, ...extra };
@@ -45,7 +45,7 @@ export async function inspectSessionArtifacts({ sessionDir = "" } = {}) {
     try {
       const resolved = resolveTurnArtifactPath(sessionDir, file);
       referenced.add(path.basename(resolved));
-      if (Number(manifest.schemaVersion) === TURN_THRESHOLDS.session.turnJournalSchemaVersion) {
+      if (Number(manifest.schemaVersion) === SESSION_ARTIFACT_SCHEMA_VERSION) {
         const raw = await readFile(resolved);
         if (raw.length < Number(item?.committedBytes || 0))
           throw Object.assign(

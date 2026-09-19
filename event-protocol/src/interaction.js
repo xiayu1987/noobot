@@ -4,6 +4,81 @@
  * SPDX-License-Identifier: MIT
  */
 import { text } from "./normalize.js";
+import {
+  createSessionScope,
+  createTurnIdentity,
+  validateSessionScope,
+  validateTurnIdentity,
+} from "@noobot/session-protocol";
+
+const INTERACTION_AUTHORITY_FIELDS = Object.freeze(["session", "turn", "persistenceScope"]);
+const TURN_IDENTITY_FIELDS = Object.freeze(["dialogProcessId", "turnScopeId"]);
+const PERSISTENCE_SCOPE_FIELDS = Object.freeze([
+  "scopeId",
+  "parentSessionId",
+  "relativeDir",
+  "allowedRoot",
+]);
+
+function normalizePersistenceScope(value) {
+  if (value == null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return Object.freeze({});
+  return Object.freeze(
+    Object.fromEntries(PERSISTENCE_SCOPE_FIELDS.map((field) => [field, text(value[field])])),
+  );
+}
+
+export function createInteractionAuthority(source = {}) {
+  const input = source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  return Object.freeze({
+    session: createSessionScope(input.session),
+    turn: createTurnIdentity(input.turn),
+    persistenceScope: normalizePersistenceScope(input.persistenceScope),
+  });
+}
+
+export function validateInteractionAuthority(source = {}) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return { valid: false, errors: ["invalid_interaction_authority"] };
+  }
+  const authority = createInteractionAuthority(source);
+  const errors = [
+    ...validateSessionScope(source.session).errors,
+    ...validateTurnIdentity(source.turn).errors,
+  ];
+  if (Object.keys(source).some((key) => !INTERACTION_AUTHORITY_FIELDS.includes(key))) {
+    errors.push("unknown_interaction_authority_field");
+  }
+  if (
+    source.turn &&
+    typeof source.turn === "object" &&
+    !Array.isArray(source.turn) &&
+    Object.keys(source.turn).some((key) => !TURN_IDENTITY_FIELDS.includes(key))
+  ) {
+    errors.push("unknown_turn_identity_field");
+  }
+  if (source.persistenceScope != null) {
+    const persistenceScope = source.persistenceScope;
+    if (
+      !persistenceScope ||
+      typeof persistenceScope !== "object" ||
+      Array.isArray(persistenceScope)
+    ) {
+      errors.push("invalid_persistence_scope");
+    } else {
+      if (Object.keys(persistenceScope).some((key) => !PERSISTENCE_SCOPE_FIELDS.includes(key))) {
+        errors.push("unknown_persistence_scope_field");
+      }
+      if (PERSISTENCE_SCOPE_FIELDS.some((field) => !authority.persistenceScope[field])) {
+        errors.push("incomplete_persistence_scope");
+      }
+      if (authority.persistenceScope.parentSessionId !== authority.session.parentSessionId) {
+        errors.push("persistence_scope_parent_mismatch");
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors, authority };
+}
 
 export const INTERACTION_LIFECYCLE = Object.freeze({
   PENDING: "pending",

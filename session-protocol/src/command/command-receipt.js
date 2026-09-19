@@ -4,6 +4,36 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as clean } from "../normalize.js";
+import { SESSION_COMMAND } from "./session-command.js";
+
+function normalizeCommandResult(type, result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  if (type === SESSION_COMMAND.TURN_COMMIT || type === SESSION_COMMAND.TURN_ATTACHMENTS_BIND) {
+    const messageUid = clean(result.messageUid);
+    return messageUid ? { messageUid } : {};
+  }
+  return structuredClone(result);
+}
+
+export function validateCommandReceiptResult(type, result) {
+  if (type !== SESSION_COMMAND.TURN_COMMIT && type !== SESSION_COMMAND.TURN_ATTACHMENTS_BIND) {
+    return Object.freeze({ valid: true, errors: Object.freeze([]) });
+  }
+  const errors = [];
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    errors.push("invalid_command_result");
+  } else {
+    if (!clean(result.messageUid)) errors.push("missing_result_message_uid");
+    if (Object.keys(result).some((key) => key !== "messageUid")) {
+      errors.push("unknown_command_result_field");
+    }
+    if (result.messageUid !== clean(result.messageUid)) {
+      errors.push("non_canonical_result_message_uid");
+    }
+  }
+  return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
+}
+
 export function normalizeCommandReceipt(receipt = {}) {
   if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
   const commandId = clean(receipt.commandId);
@@ -20,6 +50,7 @@ export function normalizeCommandReceipt(receipt = {}) {
       return null;
     }
   }
+  const result = normalizeCommandResult(type, receipt.result);
   return {
     commandId,
     type,
@@ -27,9 +58,7 @@ export function normalizeCommandReceipt(receipt = {}) {
     aggregateVersion,
     committedAt: clean(receipt.committedAt),
     ...(clean(receipt.turnScopeId) ? { turnScopeId: clean(receipt.turnScopeId) } : {}),
-    ...(receipt.result && typeof receipt.result === "object" && !Array.isArray(receipt.result)
-      ? { result: structuredClone(receipt.result) }
-      : {}),
+    ...(result ? { result } : {}),
     ...(Number.isInteger(Number(receipt.revision)) ? { revision: Number(receipt.revision) } : {}),
     ...(Number.isInteger(Number(receipt.sequence)) ? { sequence: Number(receipt.sequence) } : {}),
     ...(clean(receipt.eventId) ? { eventId: clean(receipt.eventId) } : {}),
@@ -57,6 +86,9 @@ export function decideCommandIdempotency({ commandId, type, requestHash, receipt
   return Object.freeze({ allowed: true, deduplicated: true, receipt });
 }
 export function appendCommandReceipt(receipts = [], receipt = {}) {
+  if (!validateCommandReceiptResult(clean(receipt?.type), receipt?.result).valid) {
+    throw new TypeError("invalid command receipt result");
+  }
   const normalized = normalizeCommandReceipt(receipt);
   if (!normalized) throw new TypeError("invalid command receipt");
   const decision = decideCommandIdempotency({ ...normalized, receipts });

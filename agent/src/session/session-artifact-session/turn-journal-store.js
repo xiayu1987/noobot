@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, resolveScopedArtifactPath } from "@noobot/path-resolver";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
 
-export const TURN_JOURNAL_SCHEMA_VERSION = TURN_THRESHOLDS.session.turnJournalSchemaVersion;
+export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
 export function journalPath(sessionDir, turnId) {
   return path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir, `${turnId}.jsonl`);

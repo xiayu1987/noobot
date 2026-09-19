@@ -309,6 +309,7 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
     }),
   );
   await confirmToolOperation({
+    agentContext,
     runtime,
     declaredRiskLevel: riskLevel,
     serverEvidence: {

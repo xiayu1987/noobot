@@ -276,7 +276,7 @@ test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encr
 
   const response = await runtime.userInteractionBridge.requestUserInteraction({
     requireEncryption: true,
-    sessionId: "s1",
+    authority: { session: { sessionId: "s1" } },
   });
   assert.deepEqual(response, { ok: true });
 });
@@ -305,7 +305,7 @@ test("initializeRuntimeEnvironment encrypted response invalid should throw", asy
     () =>
       runtime.userInteractionBridge.requestUserInteraction({
         requireEncryption: true,
-        sessionId: "s1",
+        authority: { session: { sessionId: "s1" } },
       }),
     (error) =>
       error &&

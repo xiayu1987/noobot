@@ -12,28 +12,44 @@ function parseToolJson(raw = "") {
   return JSON.parse(String(raw || "{}"));
 }
 
+function toolAgentContext(runtime, identity = {}) {
+  return {
+    context: {
+      identity: {
+        userId: "user-1",
+        sessionId: "session-1",
+        parentSessionId: "parent-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        ...identity,
+      },
+    },
+    bindings: { runtime },
+  };
+}
+
 test("user_interaction: should forward lifecycle/ackMode defaults to bridge", async () => {
   const calls = [];
   const tools = createUserInteractionTool({
-    agentContext: {
-      bindings: {
-        runtime: {
-          userInteractionBridge: {
-            async requestUserInteraction(payload = {}) {
-              calls.push(payload);
-              return {
-                confirmTest: "yes",
-                response: "ok",
-              };
-            },
-          },
-          systemRuntime: {
-            dialogProcessId: "dp-1",
-            sessionId: "s-1",
-          },
+    agentContext: toolAgentContext({
+      userInteractionBridge: {
+        async requestUserInteraction(payload = {}) {
+          calls.push(payload);
+          return {
+            confirmTest: "yes",
+            response: "ok",
+          };
         },
       },
-    },
+      systemRuntime: {
+        persistenceScope: {
+          scopeId: "agent:child",
+          parentSessionId: "parent-1",
+          relativeDir: "runtime/agent/session/session-1",
+          allowedRoot: "runtime/agent/session",
+        },
+      },
+    }),
   });
 
   const tool = tools.find((item) => item?.name === "user_interaction");
@@ -68,27 +84,30 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
   assert.equal(String(calls[0]?.ackMode || ""), "manual");
   assert.equal(String(calls[0]?.resolvedBy || ""), "");
   assert.equal(String(calls[0]?.interactionId || ""), "call-stable-1");
+  assert.deepEqual(calls[0]?.authority, {
+    session: { userId: "user-1", sessionId: "session-1", parentSessionId: "parent-1" },
+    turn: { dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    persistenceScope: {
+      scopeId: "agent:child",
+      parentSessionId: "parent-1",
+      relativeDir: "runtime/agent/session/session-1",
+      allowedRoot: "runtime/agent/session",
+    },
+  });
 });
 
 test("user_interaction: should forward explicit timeoutMs to bridge", async () => {
   const calls = [];
   const tools = createUserInteractionTool({
-    agentContext: {
-      bindings: {
-        runtime: {
-          userInteractionBridge: {
-            async requestUserInteraction(payload = {}) {
-              calls.push(payload);
-              return { response: "ok" };
-            },
-          },
-          systemRuntime: {
-            dialogProcessId: "dp-timeout",
-            sessionId: "s-timeout",
-          },
+    agentContext: toolAgentContext({
+      userInteractionBridge: {
+        async requestUserInteraction(payload = {}) {
+          calls.push(payload);
+          return { response: "ok" };
         },
       },
-    },
+      systemRuntime: {},
+    }),
   });
 
   const tool = tools.find((item) => item?.name === "user_interaction");
@@ -104,25 +123,18 @@ test("user_interaction: should forward explicit timeoutMs to bridge", async () =
 test("user_interaction: should tolerate unescaped quotes inside fields string descriptions", async () => {
   const calls = [];
   const tools = createUserInteractionTool({
-    agentContext: {
-      bindings: {
-        runtime: {
-          userInteractionBridge: {
-            async requestUserInteraction(payload = {}) {
-              calls.push(payload);
-              return {
-                contentPath: "/workspace/primary-user/input.pdf",
-                response: "ok",
-              };
-            },
-          },
-          systemRuntime: {
-            dialogProcessId: "dp-quote",
-            sessionId: "s-quote",
-          },
+    agentContext: toolAgentContext({
+      userInteractionBridge: {
+        async requestUserInteraction(payload = {}) {
+          calls.push(payload);
+          return {
+            contentPath: "/workspace/primary-user/input.pdf",
+            response: "ok",
+          };
         },
       },
-    },
+      systemRuntime: {},
+    }),
   });
 
   const tool = tools.find((item) => item?.name === "user_interaction");

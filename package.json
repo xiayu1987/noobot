@@ -71,6 +71,10 @@
     "vue": "3.5.43",
     "vue-eslint-parser": "^10.4.1"
   },
+  "overrides": {
+    "js-yaml": "4.3.2",
+    "lodash-es": "4.18.1"
+  },
   "scripts": {
     "project:launcher": "node ./scripts/project-launcher.mjs",
     "release:version": "node ./scripts/bump-version.mjs",
@@ -138,12 +142,5 @@
     "test:esm-import-extensions-guard": "node --test ./scripts/check-esm-relative-import-extensions.test.mjs",
     "check:barrel-star-exports": "node ./scripts/check-barrel-star-exports.mjs",
     "test:barrel-star-exports-guard": "node --test ./scripts/check-barrel-star-exports.test.mjs"
-  },
-  "allowScripts": {
-    "better-sqlite3": false,
-    "cpu-features": false,
-    "ssh2": false,
-    "esbuild@0.28.2": true,
-    "electron-winstaller@5.4.0": true
   }
 }

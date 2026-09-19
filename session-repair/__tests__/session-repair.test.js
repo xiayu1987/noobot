@@ -10,6 +10,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+} from "@noobot/session-protocol";
+import {
   migrateSessionDocument,
   readSessionForProtocolRepair,
   reconcileCompletedTurnSummaryMarks,
@@ -149,6 +153,49 @@ test("migrates the historical multimodal parse reason from verified tool transfe
   assert.equal(repeated.changed, false);
   assert.deepEqual(repeated.migrations, []);
   assert.deepEqual(repeated.document, result.document);
+});
+
+test("does not reinterpret non-canonical fields in the current artifact protocol", () => {
+  const source = {
+    schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+    sessionId: "session-1",
+    turnLifecycle: {
+      turns: {},
+      commandReceipts: [
+        {
+          commandId: "command-1",
+          type: "session.turn.commit",
+          result: { messageUid: "message-1", runState: "pending_start" },
+        },
+      ],
+    },
+    messages: [
+      {
+        messageUid: "message-1",
+        turnCommit: {
+          action: "send",
+          commandId: "command-1",
+          runState: "pending_start",
+        },
+      },
+    ],
+  };
+
+  const result = migrateSessionDocument(source);
+
+  assert.equal(result.document.messages[0].turnCommit.runState, "pending_start");
+  assert.equal(result.document.turnLifecycle.commandReceipts[0].result.runState, "pending_start");
+});
+
+test("rejects a future artifact schema instead of downgrading it", () => {
+  assert.throws(
+    () =>
+      migrateSessionDocument({
+        schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION + 1,
+        sessionId: "session-1",
+      }),
+    (error) => error.code === "SESSION_ARTIFACT_SCHEMA_UNSUPPORTED",
+  );
 });
 
 test("keeps unrelated unknown transfer reasons fail-closed during Session repair", () => {
@@ -543,7 +590,7 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
     writeFile(
       path.join(root, "session.json"),
       JSON.stringify({
-        schemaVersion: 6,
+        schemaVersion: SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
         turnOrder: [
           {
             turnId: "turn-000001",
@@ -557,6 +604,14 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
     ),
   ]);
   try {
+    const source = await readSessionForProtocolRepair({
+      sessionDir: root,
+      session: JSON.parse(await readFile(path.join(root, "session.json"), "utf8")),
+    });
+    assert.deepEqual(
+      source.messages.map((message) => message.messageUid),
+      ["m1", "m2", "m3"],
+    );
     const repaired = await resegmentMigratedCheckpointBaselines({ sessionDir: root });
     assert.deepEqual(repaired, [
       { turnId: "turn-000001", checkpointRecordCounts: [1, 1], tailRecordCount: 1 },

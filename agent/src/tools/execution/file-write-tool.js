@@ -59,6 +59,7 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
       const resourcePath = resolvedInput.resourcePath;
       const pathRef = resolvedInput.pathRef;
       await confirmToolOperation({
+        agentContext,
         runtime,
         declaredRiskLevel: riskLevel,
         serverEvidence: {

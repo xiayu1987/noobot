@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   SESSION_COMMAND,
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+  resolveSessionArtifactSchemaVersion,
   SESSION_ERROR_CODE,
   createCommandRequestHash,
   createTurnAttachmentBindFingerprint,
@@ -19,10 +21,63 @@ import {
   normalizeSessionId,
   decideAggregateConcurrency,
   decideCommandIdempotency,
+  normalizeCommandReceipt,
+  normalizeTurnCommitMetadata,
+  validateSessionAggregateInvariants,
   validateTurnAcceptanceUserMessage,
   validateSessionCommand,
   validateSessionSnapshot,
 } from "../src/index.js";
+
+test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 7);
+  assert.deepEqual(
+    normalizeTurnCommitMetadata({
+      action: " SEND ",
+      commandId: " command-1 ",
+      requestHash: " hash-1 ",
+      runState: "pending_start",
+    }),
+    { action: "send", commandId: "command-1", requestHash: "hash-1" },
+  );
+  assert.deepEqual(
+    normalizeCommandReceipt({
+      commandId: "command-1",
+      type: SESSION_COMMAND.TURN_COMMIT,
+      requestHash: "hash-1",
+      aggregateVersion: 1,
+      result: { messageUid: "message-1", runState: "pending_start" },
+    }).result,
+    { messageUid: "message-1" },
+  );
+  assert.equal(
+    validateSessionAggregateInvariants({
+      messages: [
+        {
+          messageUid: "message-1",
+          turnCommit: {
+            action: "send",
+            commandId: "command-1",
+            runState: "pending_start",
+          },
+        },
+      ],
+      turnLifecycle: { commandReceipts: [] },
+    }).valid,
+    false,
+  );
+});
+
+test("Session artifact schema versions are explicit protocol facts", () => {
+  assert.equal(resolveSessionArtifactSchemaVersion(undefined), 0);
+  assert.equal(resolveSessionArtifactSchemaVersion(SESSION_ARTIFACT_SCHEMA_VERSION), 7);
+  for (const value of [null, "7", 7.1, -1]) {
+    assert.throws(
+      () => resolveSessionArtifactSchemaVersion(value),
+      (error) => error.code === "SESSION_ARTIFACT_SCHEMA_VERSION_INVALID",
+    );
+  }
+});
 
 test("Turn acceptance owns exactly one authoritative user-message rule", () => {
   const accepted = validateTurnAcceptanceUserMessage({

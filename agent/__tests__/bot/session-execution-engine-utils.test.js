@@ -14,6 +14,7 @@ import {
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import os from "node:os";
 import path from "node:path";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 
 import {
   applyNormalizedMessageFlags,
@@ -260,7 +261,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const sessionPayload = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
   assert.equal(sessionPayload.sessionId, "s1");
   assert.equal(sessionPayload.parentSessionId, "p1");
-  assert.equal(sessionPayload.schemaVersion, 6);
+  assert.equal(sessionPayload.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
   assert.equal(sessionPayload.messageIdentityVersion, 1);
   assert.equal("messages" in sessionPayload, false);
   assert.equal(sessionPayload.turnOrder.length, 1);

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
+import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { fixedAttachment, selectPlugins } from "../helpers/browser-actions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
 import {
@@ -96,7 +97,10 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
 
   await expect
     .poll(() => readSessionFact(noobot.userId, noobot.sessionId), { timeout: 15000 })
-    .toMatchObject({ sessionId: noobot.sessionId, schemaVersion: 6 });
+    .toMatchObject({
+      sessionId: noobot.sessionId,
+      schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,
+    });
 
   const persisted = await readSessionFact(noobot.userId, noobot.sessionId);
   expect(Number.isSafeInteger(persisted.aggregateVersion)).toBe(true);

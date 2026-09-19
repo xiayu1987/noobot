@@ -55,6 +55,7 @@
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "@noobot/context-protocol": "file:../context-protocol",
     "@noobot/connector-protocol": "file:../connector-protocol",
+    "@noobot/event-protocol": "file:../event-protocol",
     "@noobot/agent-config-protocol": "file:../agent-config-protocol",
     "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol",
     "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",

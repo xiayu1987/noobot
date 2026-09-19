@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { isSettledTurn } from "../lifecycle/turn-state.js";
-import { normalizeCommandReceipt } from "../command/command-receipt.js";
+import {
+  normalizeCommandReceipt,
+  validateCommandReceiptResult,
+} from "../command/command-receipt.js";
+import { validateTurnCommitMetadata } from "./turn-commit-metadata.js";
 import { text as clean } from "../normalize.js";
 
 export function validateSessionAggregateInvariants(session = {}) {
@@ -16,6 +20,9 @@ export function validateSessionAggregateInvariants(session = {}) {
     if (!messageUid) errors.push("missing_message_uid");
     else if (messageUids.has(messageUid)) errors.push("duplicate_message_uid");
     messageUids.add(messageUid);
+    if (message?.turnCommit && !validateTurnCommitMetadata(message.turnCommit).valid) {
+      errors.push("invalid_turn_commit_metadata");
+    }
   }
   const lifecycle = session.turnLifecycle || {};
   const activeTurnScopeId = clean(lifecycle.activeTurnScopeId);
@@ -32,7 +39,11 @@ export function validateSessionAggregateInvariants(session = {}) {
   const commandIds = new Set();
   for (const receipt of commandReceipts) {
     const normalized = normalizeCommandReceipt(receipt);
-    if (!normalized || Object.hasOwn(receipt || {}, "eventType")) {
+    if (
+      !normalized ||
+      Object.hasOwn(receipt || {}, "eventType") ||
+      !validateCommandReceiptResult(clean(receipt?.type), receipt?.result).valid
+    ) {
       errors.push("invalid_command_receipt");
       continue;
     }
