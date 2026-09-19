@@ -234,7 +234,7 @@ watch(
   font-weight: 700;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .chat-message-navigator {
     max-height: calc(100dvh - 120px);
     padding: var(--noobot-space-xs) var(--noobot-space-sm);

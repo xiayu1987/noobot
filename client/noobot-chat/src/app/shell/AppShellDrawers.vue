@@ -6,10 +6,11 @@
 <script setup>
 import { ref } from "vue";
 import ChatMessageNavigator from "../../modules/chat/components/navigation/ChatMessageNavigator.vue";
+import { DESKTOP_DRAWER_SIZE } from "../../shared/composables/useMobileViewport.js";
 
 defineProps({
   drawerPanels: { type: Array, default: () => [] },
-  drawerSize: { type: [String, Number], default: "50%" },
+  drawerSize: { type: [String, Number], default: DESKTOP_DRAWER_SIZE },
   isMobile: { type: Boolean, default: false },
   mobileChatNavigatorVisible: { type: Boolean, default: false },
   chatMessageNavItems: { type: Array, default: () => [] },
@@ -63,7 +64,7 @@ function handleMobileNavigatorClose() {
     @opened="handleMobileNavigatorOpen"
     @closed="handleMobileNavigatorClose"
     direction="rtl"
-    size="82%"
+    :size="drawerSize"
     class="chat-message-nav-drawer noobot-side-drawer"
   >
     <ChatMessageNavigator

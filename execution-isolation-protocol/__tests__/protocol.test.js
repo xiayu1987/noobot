@@ -14,6 +14,8 @@ import {
   TOOL_EXECUTION_REGISTRY,
   TOOL_EXECUTION_VIEW,
   normalizeSandboxMounts,
+  NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS,
+  NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
   NATIVE_SCRIPT_CAPABILITY_BINDINGS,
   NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
   NATIVE_SCRIPT_FORBIDDEN_PROPERTIES,
@@ -48,6 +50,14 @@ test("native script source and result protocol is immutable and canonical", () =
   });
   assert.equal(Object.isFrozen(NATIVE_SCRIPT_CAPABILITY_BINDINGS), true);
   assert.equal(Object.isFrozen(NATIVE_SCRIPT_CAPABILITY_BINDINGS.media), true);
+  assert.equal(NATIVE_SCRIPT_BROWSER_PAGE_METHODS.length, 18);
+  assert.equal(NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS.length, 17);
+  assert.equal(NATIVE_SCRIPT_BROWSER_PAGE_METHODS.includes("evaluate"), false);
+  assert.equal(NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS.includes("all"), false);
+  assert.equal(NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS.includes("nth"), false);
+  assert.equal(NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS.includes("allTextContents"), false);
+  assert.equal(Object.isFrozen(NATIVE_SCRIPT_BROWSER_PAGE_METHODS), true);
+  assert.equal(Object.isFrozen(NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS), true);
 });
 
 test("command shell is derived from the authoritative execution view and platform", () => {

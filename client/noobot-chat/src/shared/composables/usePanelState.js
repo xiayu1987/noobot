@@ -5,8 +5,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-
-const MOBILE_BREAKPOINT = 768;
+import { MOBILE_BREAKPOINT, resolveDrawerSize } from "./useMobileViewport.js";
 
 function useThrottledResize(handler, delayMs = TIME_THRESHOLDS.client.panelResizeThrottleMs) {
   let timer = null;
@@ -84,7 +83,7 @@ export function usePanelState() {
     configParamsVisible.value = true;
   }
 
-  const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
+  const drawerSize = computed(() => resolveDrawerSize(isMobile.value));
 
   const throttledResize = useThrottledResize(updateViewportState);
 

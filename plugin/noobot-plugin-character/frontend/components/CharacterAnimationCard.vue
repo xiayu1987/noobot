@@ -222,7 +222,7 @@ button:disabled {
 .character-animation-card__diagnostics dd.is-warning {
   color: var(--noobot-preview-danger-text);
 }
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .character-animation-card__diagnostic-row dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

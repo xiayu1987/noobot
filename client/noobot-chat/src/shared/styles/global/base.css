@@ -17,6 +17,14 @@ body {
   box-sizing: border-box;
 }
 
+a,
+button,
+summary,
+[role="button"],
+[role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
 *::selection {
   background: color-mix(in srgb, var(--noobot-accent) 24%, transparent);
   color: var(--noobot-text-strong);

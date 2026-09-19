@@ -417,7 +417,7 @@ pre {
     transform: rotate(360deg);
   }
 }
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .startup-shell {
     padding: var(--startup-space-md) var(--startup-space-lg);
   }

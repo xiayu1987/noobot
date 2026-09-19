@@ -7,6 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createAgentContextBuildEnvelope } from "@noobot/context-protocol";
+import {
+  NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS,
+  NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
+} from "@noobot/execution-isolation-protocol/native-script";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
 import { PATH_REF_VIEWS, isHostFilesystemSentinel } from "@noobot/path-resolver";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
@@ -319,6 +323,18 @@ test("native script manual separates shared rules from mapped specialized capabi
     assert.equal(typeof detail.manual.summary, "string");
     assert.ok(Array.isArray(detail.manual.usage));
     assert.equal("bindings" in detail.manual, false);
+  }
+
+  const browserDetail = JSON.parse(
+    await helpTool.func({
+      command: "--tools --name execute_native_script --capability browser",
+    }),
+  );
+  for (const method of NATIVE_SCRIPT_BROWSER_PAGE_METHODS) {
+    assert.match(browserDetail.manual.api.pageMethods, new RegExp(`\\b${method}\\b`));
+  }
+  for (const method of NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS) {
+    assert.match(browserDetail.manual.api.locatorMethods, new RegExp(`\\b${method}\\b`));
   }
 });
 

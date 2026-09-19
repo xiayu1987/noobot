@@ -5,6 +5,8 @@
  */
 
 import {
+  NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS,
+  NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
   NATIVE_SCRIPT_CAPABILITY_BINDINGS,
   NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
   NATIVE_SCRIPT_FORBIDDEN_PROPERTIES,
@@ -29,7 +31,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
       files:
         "读写，全部为异步方法必须 await：const token = await files.input(index) 取 input:// 令牌；文本用 await files.readText(token)、readJson(token)、writeText(token, text)、writeJson(token, value)；二进制用 await files.readBase64(token)、writeBase64(token, base64) 与 await files.copy(sourceToken, destinationToken)，copy 返回 { path, bytes }，是把 temp:// 二进制产物提升为 output:// 正式附件的通道。读写只接受 input://、output:// 或 temp:// 令牌，不接受逻辑路径或宿主路径。",
       output:
-        "产物，全部为异步方法必须 await：await output.file(relativePath) 返回 output:// 令牌；await output.tempDirectory(relativePath) 返回 temp:// 目录令牌；await output.tempFile(relativePath) 或 await output.tempFile(tempDirectoryToken, fileName) 返回 temp:// 文件令牌。",
+        '产物：output.directory 是值为 "output://" 的同步常量属性；file、tempDirectory、tempFile 是异步方法，必须 await。await output.file(relativePath) 返回 output:// 令牌；await output.tempDirectory(relativePath) 返回 temp:// 目录令牌；await output.tempFile(relativePath) 或 await output.tempFile(tempDirectoryToken, fileName) 返回 temp:// 文件令牌。令牌是普通字符串；漏写 await 会把 Promise 传给后续 API，并触发任务路径校验错误。',
       ui: "共享用户交互通道，见 interaction 段。",
       args: "本次调用传入的 arguments 对象。",
       log: "log(...values) 写入 stdout 执行日志，用于过程诊断；结构化结果应通过顶层 return 返回。",
@@ -38,18 +40,19 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
       [NATIVE_SCRIPT_RESULT_FIELD]:
         "顶层 return 的 JSON 值。未写 return 或返回 undefined 时省略；函数、Symbol、BigInt、非有限数、循环引用及嵌套 undefined 不可返回。",
       stdout: "log(...values) 产生的文本执行日志。",
-      attachments: "只有写入 output:// 的文件会作为正式附件返回。",
+      attachments:
+        "只有脚本成功结束后，写入 output:// 的文件才会作为正式附件收集；运行期失败会放弃本次全部输出，output_file_count 与 output_bytes 均为 0。",
     },
     validation: {
       timing:
-        "运行任何脚本语句前，先解析并校验完整 script_body；任一违规都会拒绝整段脚本，脚本零执行。",
+        "运行任何脚本语句前，先解析并校验完整 script_body；任一违规都会拒绝整段脚本、脚本零执行，并报告源码行列位置。",
       forbiddenIdentifiers: `禁用标识符：${NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS.join(", ")}。标识符按 AST 检查，因此 typeof process 同样会被拒绝。`,
       forbiddenSyntax: `禁用语法节点：${NATIVE_SCRIPT_FORBIDDEN_SYNTAX.join(", ")}。`,
-      propertyAccess: `禁用属性名：${NATIVE_SCRIPT_FORBIDDEN_PROPERTIES.join(", ")}；同时禁止 values[key] 一类动态计算属性访问，只允许字面量计算属性。`,
+      propertyAccess: `禁用属性名：${NATIVE_SCRIPT_FORBIDDEN_PROPERTIES.join(", ")}；同时禁止 values[key] 和 arr[i] 一类动态计算属性访问，数组下标在 AST 中也属于属性访问。只允许 arr[0] 等字面量计算属性；变量索引可改用 arr.at(i)。`,
     },
     interaction: {
       waitForUser:
-        "await ui.waitForUser({ content, fields }) 挂起脚本并向用户提问，返回用户填写结果；等待期间超时计时暂停。fields 接受字段数组或 { fields: [...] }，每项必须含 name 与 displayName，形状不合法直接抛错，不会静默降级为确认弹窗。",
+        'await ui.waitForUser({ content, fields }) 挂起脚本并向用户提问，返回交互结果对象；等待期间超时计时暂停。完全省略 fields 是合法的确认弹窗用法，确认后返回形如 { confirmed: true, response: "confirmed" } 的对象。显式提供 fields 时只接受字段数组或 { fields: [...] }，每项必须含 name 与 displayName；已提供但形状不合法会在显示弹窗前直接抛错。',
     },
     capabilities: {
       browser: {
@@ -62,6 +65,8 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
         api: {
           newPage:
             '返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。page.screenshot 与 locator.screenshot 返回 { path, bytes }，不回传图片字节；省略 path 时返回 { path: "", bytes, base64 }。',
+          pageMethods: `page 公开 ${NATIVE_SCRIPT_BROWSER_PAGE_METHODS.length} 个方法：${NATIVE_SCRIPT_BROWSER_PAGE_METHODS.join(", ")}。`,
+          locatorMethods: `locator 公开 ${NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS.length} 个方法：${NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS.join(", ")}。不提供 all、nth 或 allTextContents；批量或索引操作应使用 count() 配合更精确的选择器。`,
           headed:
             "headed 为 true 时启动有头窗口，浏览器由主进程持有，脚本结束后窗口保留，便于人工登录或人工确认。",
           profile:
@@ -76,6 +81,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
         pitfalls: [
           "脚本结束时无头页面会被回收，有头页面不会。",
           "profile 名只接受受限字符集，不能包含路径分隔符或 ..。",
+          "setTimeout 未注入脚本运行环境；页面等待使用 await page.waitForTimeout(ms)，单次最长 30000 ms。",
         ],
       },
       document: {
@@ -110,6 +116,7 @@ export const EXECUTE_NATIVE_SCRIPT_MANUAL = {
     pitfalls: [
       "长时间人工操作应放在 ui.waitForUser 里等待，不要用轮询或长睡眠占住脚本。",
       "静态校验以整个 script_body 为单位；独立检查或批量断言宜拆成小批次，避免一处违规让整批零执行。",
+      "探测性调用与正式产物写入应分两次执行；同一脚本后续一旦抛错，之前写入 output:// 的文件也不会作为附件提交。",
     ],
   },
 };

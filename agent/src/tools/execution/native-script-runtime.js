@@ -20,6 +20,10 @@ import {
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { buildRestrictedProcessEnv } from "@noobot/platform-compatibility/process";
 import {
+  NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS,
+  NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
+} from "@noobot/execution-isolation-protocol/native-script";
+import {
   NATIVE_SCRIPT_IPC_CHANNEL,
   NATIVE_SCRIPT_IPC_RESULT_CHANNEL,
   isNativeScriptIpcMessage,
@@ -170,6 +174,17 @@ function opaqueFacade(values) {
   );
 }
 
+function protocolFacade(values, declaredMethods, label) {
+  const actualMethods = new Set(Object.keys(values));
+  if (
+    actualMethods.size !== declaredMethods.length ||
+    declaredMethods.some((method) => !actualMethods.has(method))
+  ) {
+    throw new TypeError(`${label} implementation does not match its protocol methods`);
+  }
+  return opaqueFacade(values);
+}
+
 async function runCapability(command, commandArgs, cwd, timeoutMs, label, roots) {
   try {
     return redactProcessResult(await runFixed(command, commandArgs, cwd, timeoutMs), roots);
@@ -283,66 +298,74 @@ function normalizeInteractionFields(value) {
 }
 
 function createLocatorFacade(locator, { resolveInput, resolveOutput }) {
-  return opaqueFacade({
-    click: (options) => locator.click(options),
-    dblclick: (options) => locator.dblclick(options),
-    fill: (value, options) => locator.fill(String(value ?? ""), options),
-    press: (key, options) => locator.press(String(key || ""), options),
-    check: (options) => locator.check(options),
-    uncheck: (options) => locator.uncheck(options),
-    selectOption: (values, options) => locator.selectOption(values, options),
-    hover: (options) => locator.hover(options),
-    focus: () => locator.focus(),
-    count: () => locator.count(),
-    isVisible: (options) => locator.isVisible(options),
-    textContent: (options) => locator.textContent(options),
-    innerText: (options) => locator.innerText(options),
-    getAttribute: (name, options) => locator.getAttribute(String(name || ""), options),
-    waitFor: (options) => locator.waitFor(options),
-    setInputFiles: async (references, options) => {
-      const values = Array.isArray(references) ? references : [references];
-      const paths = await Promise.all(values.map(resolveInput));
-      return locator.setInputFiles(paths, options);
+  return protocolFacade(
+    {
+      click: (options) => locator.click(options),
+      dblclick: (options) => locator.dblclick(options),
+      fill: (value, options) => locator.fill(String(value ?? ""), options),
+      press: (key, options) => locator.press(String(key || ""), options),
+      check: (options) => locator.check(options),
+      uncheck: (options) => locator.uncheck(options),
+      selectOption: (values, options) => locator.selectOption(values, options),
+      hover: (options) => locator.hover(options),
+      focus: () => locator.focus(),
+      count: () => locator.count(),
+      isVisible: (options) => locator.isVisible(options),
+      textContent: (options) => locator.textContent(options),
+      innerText: (options) => locator.innerText(options),
+      getAttribute: (name, options) => locator.getAttribute(String(name || ""), options),
+      waitFor: (options) => locator.waitFor(options),
+      setInputFiles: async (references, options) => {
+        const values = Array.isArray(references) ? references : [references];
+        const paths = await Promise.all(values.map(resolveInput));
+        return locator.setInputFiles(paths, options);
+      },
+      screenshot: async (options = {}) => captureScreenshot(locator, options, resolveOutput),
     },
-    screenshot: async (options = {}) => captureScreenshot(locator, options, resolveOutput),
-  });
+    NATIVE_SCRIPT_BROWSER_LOCATOR_METHODS,
+    "native script browser locator",
+  );
 }
 
 function createPageFacade(page, paths) {
-  return opaqueFacade({
-    goto: async (url, options) => {
-      const response = await page.goto(assertHttpUrl(url), options);
-      return response
-        ? {
-            ok: response.ok(),
-            status: response.status(),
-            statusText: response.statusText(),
-            url: response.url(),
-          }
-        : { ok: true, status: 0, statusText: "", url: page.url() };
+  return protocolFacade(
+    {
+      goto: async (url, options) => {
+        const response = await page.goto(assertHttpUrl(url), options);
+        return response
+          ? {
+              ok: response.ok(),
+              status: response.status(),
+              statusText: response.statusText(),
+              url: response.url(),
+            }
+          : { ok: true, status: 0, statusText: "", url: page.url() };
+      },
+      reload: (options) => page.reload(options),
+      goBack: (options) => page.goBack(options),
+      goForward: (options) => page.goForward(options),
+      title: () => page.title(),
+      url: () => page.url(),
+      content: () => page.content(),
+      setContent: (html, options) => page.setContent(String(html || ""), options),
+      textContent: (selector, options) => page.textContent(String(selector || ""), options),
+      click: (selector, options) => page.click(String(selector || ""), options),
+      fill: (selector, value, options) =>
+        page.fill(String(selector || ""), String(value ?? ""), options),
+      press: (selector, key, options) =>
+        page.press(String(selector || ""), String(key || ""), options),
+      waitForSelector: (selector, options) =>
+        page.waitForSelector(String(selector || ""), options).then(() => undefined),
+      waitForLoadState: (state, options) => page.waitForLoadState(state, options),
+      waitForTimeout: (timeout) =>
+        page.waitForTimeout(Math.min(30000, Math.max(0, Number(timeout || 0)))),
+      locator: (selector) => createLocatorFacade(page.locator(String(selector || "")), paths),
+      screenshot: async (options = {}) => captureScreenshot(page, options, paths.resolveOutput),
+      close: (options) => page.close(options),
     },
-    reload: (options) => page.reload(options),
-    goBack: (options) => page.goBack(options),
-    goForward: (options) => page.goForward(options),
-    title: () => page.title(),
-    url: () => page.url(),
-    content: () => page.content(),
-    setContent: (html, options) => page.setContent(String(html || ""), options),
-    textContent: (selector, options) => page.textContent(String(selector || ""), options),
-    click: (selector, options) => page.click(String(selector || ""), options),
-    fill: (selector, value, options) =>
-      page.fill(String(selector || ""), String(value ?? ""), options),
-    press: (selector, key, options) =>
-      page.press(String(selector || ""), String(key || ""), options),
-    waitForSelector: (selector, options) =>
-      page.waitForSelector(String(selector || ""), options).then(() => undefined),
-    waitForLoadState: (state, options) => page.waitForLoadState(state, options),
-    waitForTimeout: (timeout) =>
-      page.waitForTimeout(Math.min(30000, Math.max(0, Number(timeout || 0)))),
-    locator: (selector) => createLocatorFacade(page.locator(String(selector || "")), paths),
-    screenshot: async (options = {}) => captureScreenshot(page, options, paths.resolveOutput),
-    close: (options) => page.close(options),
-  });
+    NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
+    "native script browser page",
+  );
 }
 
 function requireOptionsObject(value, signature) {

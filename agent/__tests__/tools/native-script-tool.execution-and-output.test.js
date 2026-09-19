@@ -270,6 +270,40 @@ log(await files.readText(temporaryText), (await files.readJson(temporaryJson)).s
   assert.deepEqual(result.transferEnvelopes, []);
 });
 
+test("execute_native_script exposes output.directory and awaited task paths as strings", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-output-tokens-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const outputFile = await output.file("result.txt");
+const tempFile = await output.tempFile("scratch.bin");
+const tempDirectory = await output.tempDirectory("scratch");
+return {
+  directory: output.directory,
+  directoryType: typeof output.directory,
+  outputFile,
+  tempFile,
+  tempDirectory,
+};
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.script_result, {
+    directory: "output://",
+    directoryType: "string",
+    outputFile: "output://result.txt",
+    tempFile: "temp://scratch.bin",
+    tempDirectory: "temp://scratch",
+  });
+});
+
 test("execute_native_script joins a temp directory token with a file name exactly once", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-temp-directory-"));
   const runtime = createRuntime(basePath);

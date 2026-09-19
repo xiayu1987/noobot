@@ -450,7 +450,7 @@ const composerExtensionBaseProps = computed(() => ({
   white-space: nowrap;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .safe-confirm-level {
     grid-template-columns: 1fr;
     row-gap: var(--noobot-space-3xs);

@@ -641,7 +641,7 @@ const drawerPanels = computed(() =>
   background: transparent;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .app-shell-root {
     min-height: 100svh;
   }
