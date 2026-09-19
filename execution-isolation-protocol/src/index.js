@@ -5,3 +5,4 @@
  */
 
 export * from "./protocol.js";
+export * from "./native-script.js";

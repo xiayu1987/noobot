@@ -124,6 +124,13 @@ test("command options parse and stay bound to their command", () => {
   assert.equal(withName.command, HELP_COMMAND.TOOLS);
   assert.equal(withName.options[HELP_OPTION.NAME], "read_file");
 
+  const withCapability = parseHelpCommand(
+    "--tools --name execute_native_script --capability media",
+  );
+  assert.equal(withCapability.ok, true);
+  assert.equal(withCapability.options[HELP_OPTION.NAME], "execute_native_script");
+  assert.equal(withCapability.options[HELP_OPTION.CAPABILITY], "media");
+
   const withId = parseHelpCommand("--attachs --id abc-123");
   assert.equal(withId.ok, true);
   assert.equal(withId.options[HELP_OPTION.ID], "abc-123");
@@ -263,6 +270,76 @@ test("tool manual result never overrides the help tool identity", async () => {
     assert.equal(parsed.toolName, "help", `${command} must keep help identity`);
     assert.equal(typeof parsed.queriedTool, "string");
   }
+});
+
+test("native script manual separates shared rules from mapped specialized capabilities", async () => {
+  const toolNames = [...FIXTURE_TOOL_NAMES, TOOL_NAME.EXECUTE_NATIVE_SCRIPT];
+  const [helpTool] = createHelpTool({ agentContext: createScope({ toolNames }) });
+  const overview = JSON.parse(
+    await helpTool.func({ command: "--tools --name execute_native_script" }),
+  );
+
+  assert.equal(overview.ok, true);
+  assert.equal(overview.queriedTool, TOOL_NAME.EXECUTE_NATIVE_SCRIPT);
+  assert.equal(typeof overview.manual.bindings.ui, "string");
+  assert.equal(typeof overview.manual.bindings.files, "string");
+  assert.equal("browser" in overview.manual.bindings, false);
+  assert.equal("libreoffice" in overview.manual.bindings, false);
+  assert.equal("capabilities" in overview.manual, false);
+  assert.deepEqual(
+    overview.capabilities.map(({ name, bindings, command }) => ({ name, bindings, command })),
+    [
+      {
+        name: "browser",
+        bindings: ["browser"],
+        command: "--tools --name execute_native_script --capability browser",
+      },
+      {
+        name: "document",
+        bindings: ["libreoffice"],
+        command: "--tools --name execute_native_script --capability document",
+      },
+      {
+        name: "media",
+        bindings: ["ffmpeg", "ffprobe"],
+        command: "--tools --name execute_native_script --capability media",
+      },
+    ],
+  );
+
+  for (const { name, bindings } of overview.capabilities) {
+    const detail = JSON.parse(
+      await helpTool.func({
+        command: `--tools --name execute_native_script --capability ${name}`,
+      }),
+    );
+    assert.equal(detail.ok, true);
+    assert.equal(detail.queriedCapability, name);
+    assert.deepEqual(detail.capability, { name, bindings });
+    assert.equal(typeof detail.manual.summary, "string");
+    assert.ok(Array.isArray(detail.manual.usage));
+    assert.equal("bindings" in detail.manual, false);
+  }
+});
+
+test("capability queries require a tool name and a declared capability", async () => {
+  const toolNames = [...FIXTURE_TOOL_NAMES, TOOL_NAME.EXECUTE_NATIVE_SCRIPT];
+  const [helpTool] = createHelpTool({ agentContext: createScope({ toolNames }) });
+  const missingName = JSON.parse(await helpTool.func({ command: "--tools --capability browser" }));
+  assert.equal(missingName.ok, false);
+  assert.ok(missingName.reason.length > 0);
+
+  const unknown = JSON.parse(
+    await helpTool.func({
+      command: "--tools --name execute_native_script --capability interaction",
+    }),
+  );
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.queriedCapability, "interaction");
+  assert.deepEqual(
+    unknown.capabilities.map(({ name }) => name),
+    ["browser", "document", "media"],
+  );
 });
 
 test("context section exposes only whitelisted identity plus harmless metadata", () => {

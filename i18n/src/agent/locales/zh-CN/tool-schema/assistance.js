@@ -10,17 +10,21 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       key: "tools.help.description",
       text:
         "查询自身运行说明，命令行风格。不传 command 返回可用命令清单；" +
-        "command 形如 --tools、--tools --name read_file、--models、--runtime、--context、--attachs --id xxx。",
+        "command 形如 --tools、--tools --name read_file、--tools --name execute_native_script " +
+        "--capability browser、--models、--runtime、--context、--attachs --id xxx。",
     },
     params: {
       command: {
         key: "tools.help.fieldCommand",
-        text: "命令行字符串，如 --tools --name read_file；不传则返回命令清单。",
+        text: "命令行字符串，如 --tools --name read_file 或 --tools --name execute_native_script --capability media；不传则返回命令清单。",
       },
     },
     texts: {
       "tools.help.commandIndexHint": "以下为 help 可用命令，按需选择后再次调用。",
-      "tools.help.command.tools": "工具手册：不带选项列出可查工具名，--name 查指定工具明细。",
+      "tools.help.command.tools":
+        "工具手册：不带选项列出可查工具名，--name 查共享说明，--capability 查专项能力。",
+      "tools.help.capabilityRequiresToolName": "--capability 必须与 --name 同时使用",
+      "tools.help.unknownCapability": "专项能力不存在，请从 capabilities 中选择",
       "tools.help.command.experience": "经验记忆目录路径。",
       "tools.help.command.memory": "长短记忆与日周月年摘要目录路径。",
       "tools.help.command.runtime": "当前运行时路径上下文、工作目录与沙箱形态。",

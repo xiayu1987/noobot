@@ -12,6 +12,7 @@ export const HELP_MANUAL = {
       "help()",
       "help({ command: '--tools' })",
       "help({ command: '--tools --name read_file' })",
+      "help({ command: '--tools --name execute_native_script --capability browser' })",
       "help({ command: '--models' })",
       "help({ command: '--experience' })",
       "help({ command: '--memory' })",
@@ -28,7 +29,7 @@ export const HELP_MANUAL = {
     },
     notes: [
       "命令共八个：--tools、--models、--experience、--memory、--runtime、--context、--attachs、--isolation。",
-      "--tools 不带选项返回可查询的工具名清单，--name 返回指定工具的完整手册。各工具 schema 只保留最基本用途说明，完整参数语义、用法组合、注意事项与常见坑都在 --tools --name 里查。",
+      "--tools 不带选项返回可查询的工具名清单，--name 返回指定工具的共享手册及可查询专项能力，--capability 返回该工具某项专项能力的绑定关系与独有说明。",
       "--models 返回当前使用中的模型与本会话可用模型清单，含各模型的多模态生成与解析能力，判断能否交给某模型处理图片、文档、音视频时查它。",
       "--experience 返回经验记忆路径，--memory 返回长短记忆与日周月年摘要路径，两者都需再用 read_file 或 search 读取具体内容。",
       "--runtime 返回当前路径视角、相对路径基准、工作目录、允许根与沙箱形态，判断某路径能否被文件类工具访问时先查它。",
@@ -41,6 +42,7 @@ export const HELP_MANUAL = {
     pitfalls: [
       "命令必须带 -- 前缀，且一次只能指定一个命令，多个命令会被拒绝。",
       "--name 的取值要用工具注册名，不是中文描述或别名。",
+      "--capability 必须与 --name 同时使用，取值必须来自该工具顶层手册返回的 capabilities 清单。",
       "选项与命令是绑定的，给命令传它不支持的选项会被拒绝，可用组合见 usage。",
       "--attachs 依赖会话身份与附件服务，缺失时返回失败而非空清单。",
       "返回的附件路径是投影后的引用，请原样传给后续工具，不要自行拼接或改写。",

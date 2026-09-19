@@ -24,5 +24,8 @@
     "./client/locales/zh-CN": "./src/client/locales/zh-CN.js",
     "./agent-proxy": "./src/agent-proxy/index.js",
     "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol"
   }
 }

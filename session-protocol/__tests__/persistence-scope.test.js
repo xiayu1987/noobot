@@ -6,10 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  createSessionPersistenceScope,
-  validateSessionPersistenceScope,
-} from "../src/index.js";
+import { createSessionPersistenceScope, validateSessionPersistenceScope } from "../src/index.js";
 
 test("Session persistence scope is the canonical immutable routing DTO", () => {
   const source = {

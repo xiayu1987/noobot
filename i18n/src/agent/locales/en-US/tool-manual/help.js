@@ -12,6 +12,7 @@ export const HELP_MANUAL = {
       "help()",
       "help({ command: '--tools' })",
       "help({ command: '--tools --name read_file' })",
+      "help({ command: '--tools --name execute_native_script --capability browser' })",
       "help({ command: '--models' })",
       "help({ command: '--experience' })",
       "help({ command: '--memory' })",
@@ -28,7 +29,7 @@ export const HELP_MANUAL = {
     },
     notes: [
       "There are eight commands: --tools, --models, --experience, --memory, --runtime, --context, --attachs, --isolation.",
-      "--tools without options lists queryable tool names; --name returns the full manual for one tool. Tool schemas keep only the minimal purpose statement, while full parameter semantics, usage combinations, notes, and pitfalls live behind --tools --name.",
+      "--tools without options lists queryable tool names; --name returns one tool's shared manual and queryable specialized capabilities; --capability returns the binding relationship and unique manual for one specialized capability.",
       "--models returns the model in use plus the models available to this session, including each model's multimodal generation and parsing capabilities. Check it before handing images, documents, audio or video to a model.",
       "--experience returns experience memory paths and --memory returns long and short memory plus daily, weekly, monthly and yearly summary paths; read both with read_file or search.",
       "--runtime returns the current path view, relative path base, working directories, allowed roots, and sandbox shape. Check it before assuming a path is reachable by file tools.",
@@ -41,6 +42,7 @@ export const HELP_MANUAL = {
     pitfalls: [
       "Commands need the -- prefix and only one command is allowed per call; multiple commands are rejected.",
       "Use the registered tool name for --name, not a description or an alias.",
+      "--capability must be used with --name and its value must come from the capabilities returned by that tool's top-level manual.",
       "Options are bound to commands. Passing an unsupported option is rejected; see usage for valid combinations.",
       "--attachs depends on session identity and the attachment service; when either is missing it fails instead of returning an empty list.",
       "Returned attachment paths are projected references. Pass them to later tools as-is and never concatenate or rewrite them.",
