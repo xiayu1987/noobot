@@ -17,12 +17,13 @@ export const HELP_COMMAND = Object.freeze({
 
 export const HELP_OPTION = Object.freeze({
   NAME: "name",
+  CAPABILITY: "capability",
   ID: "id",
   SOURCE: "source",
 });
 
 export const HELP_COMMAND_OPTIONS = Object.freeze({
-  [HELP_COMMAND.TOOLS]: Object.freeze([HELP_OPTION.NAME]),
+  [HELP_COMMAND.TOOLS]: Object.freeze([HELP_OPTION.NAME, HELP_OPTION.CAPABILITY]),
   [HELP_COMMAND.MODELS]: Object.freeze([]),
   [HELP_COMMAND.EXPERIENCE]: Object.freeze([]),
   [HELP_COMMAND.MEMORY]: Object.freeze([]),
@@ -38,6 +39,7 @@ export const HELP_COMMAND_USAGE = Object.freeze([
   "help()",
   "help({ command: '--tools' })",
   "help({ command: '--tools --name read_file' })",
+  "help({ command: '--tools --name execute_native_script --capability browser' })",
   "help({ command: '--models' })",
   "help({ command: '--experience' })",
   "help({ command: '--memory' })",

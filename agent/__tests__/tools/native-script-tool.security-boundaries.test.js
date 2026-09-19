@@ -9,9 +9,24 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
+import { tToolManual } from "../../src/tools/core/tool-schema-i18n.js";
+import { isNativeScriptExecutionResult } from "../../src/tools/execution/native-script-ipc.js";
+import {
+  NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
+  NATIVE_SCRIPT_FORBIDDEN_PROPERTIES,
+  NATIVE_SCRIPT_FORBIDDEN_SYNTAX,
+} from "@noobot/execution-isolation-protocol/native-script";
 
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime, hasChromiumCapability } from "./native-script-tool.fixtures.js";
+
+test("native script execution result IPC accepts only its exact protocol shape", () => {
+  assert.equal(isNativeScriptExecutionResult({ present: false }), true);
+  assert.equal(isNativeScriptExecutionResult({ present: true, value: null }), true);
+  assert.equal(isNativeScriptExecutionResult({ present: false, value: null }), false);
+  assert.equal(isNativeScriptExecutionResult({ present: true }), false);
+  assert.equal(isNativeScriptExecutionResult({ present: true, value: null, legacy: true }), false);
+});
 
 test("execute_native_script rejects host runtime escape syntax before execution", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-guard-"));
@@ -65,6 +80,61 @@ test("execute_native_script reports the source location of forbidden dynamic pro
       ),
     /forbidden dynamic property access at line 4, column 5/,
   );
+});
+
+test("execute_native_script rejects typeof process before any script statement runs", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-static-guard-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+
+  await assert.rejects(
+    () =>
+      tool.invoke(
+        {
+          script_body: [
+            'log("must-not-run");',
+            'const target = await output.file("must-not-exist.txt");',
+            "log(typeof process);",
+          ].join("\n"),
+        },
+        { configurable: { transferIdentity: IDENTITY } },
+      ),
+    /forbidden runtime capability: process at line 3, column 12/,
+  );
+  await assert.rejects(fs.access(path.join(basePath, "runtime", "native_tasks")), {
+    code: "ENOENT",
+  });
+});
+
+test("execute_native_script manuals expose the authoritative static policy", () => {
+  const manuals = [
+    tToolManual({ locale: "en-US" }, "execute_native_script"),
+    tToolManual({ locale: "zh-CN" }, "execute_native_script"),
+  ];
+  for (const manual of manuals) {
+    assert.match(manual.validation.timing, /zero execution|零执行/);
+    for (const identifier of NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS) {
+      assert.match(manual.validation.forbiddenIdentifiers, new RegExp(`\\b${identifier}\\b`));
+    }
+    for (const syntax of NATIVE_SCRIPT_FORBIDDEN_SYNTAX) {
+      assert.match(manual.validation.forbiddenSyntax, new RegExp(`\\b${syntax}\\b`));
+    }
+    for (const property of NATIVE_SCRIPT_FORBIDDEN_PROPERTIES) {
+      assert.ok(manual.validation.propertyAccess.includes(property));
+    }
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.entries(manual.capabilities).map(([name, detail]) => [name, detail.bindings]),
+      ),
+      {
+        browser: ["browser"],
+        document: ["libreoffice"],
+        media: ["ffmpeg", "ffprobe"],
+      },
+    );
+    assert.equal(typeof manual.bindings.ui, "string");
+    assert.equal("browser" in manual.bindings, false);
+  }
 });
 
 test("execute_native_script rejects non-canonical capability call signatures", async () => {

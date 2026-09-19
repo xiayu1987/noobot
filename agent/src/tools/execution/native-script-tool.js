@@ -26,6 +26,12 @@ import { createFileInputSchema, resolveFileInput } from "../core/file-input.js";
 import { registerTransferAttachmentResources } from "../core/resource-broker.js";
 import { TOOL_NAME } from "../constants/index.js";
 import {
+  NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
+  NATIVE_SCRIPT_FORBIDDEN_PROPERTIES,
+  NATIVE_SCRIPT_FORBIDDEN_SYNTAX,
+  NATIVE_SCRIPT_RESULT_FIELD,
+} from "@noobot/execution-isolation-protocol/native-script";
+import {
   projectToolExecutionMeta,
   resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
@@ -54,29 +60,15 @@ import {
   NATIVE_SCRIPT_IPC_PENDING_CHANNELS,
   NATIVE_SCRIPT_IPC_RESULT_CHANNEL,
   createPendingInteractionClock,
+  isNativeScriptExecutionResult,
   isNativeScriptIpcMessage,
 } from "./native-script-ipc.js";
 import { acquireBrowserSession, closeBrowserSession } from "./browser-session-registry.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
 
-const FORBIDDEN_IDENTIFIERS = new Set([
-  "require",
-  "process",
-  "globalThis",
-  "global",
-  "eval",
-  "Function",
-  "WebAssembly",
-  "Buffer",
-  "fetch",
-  "module",
-  "Reflect",
-  "Proxy",
-  "constructor",
-  "prototype",
-  "__proto__",
-]);
-const FORBIDDEN_PROPERTIES = new Set(["constructor", "__proto__", "prototype"]);
+const FORBIDDEN_IDENTIFIERS = new Set(NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS);
+const FORBIDDEN_PROPERTIES = new Set(NATIVE_SCRIPT_FORBIDDEN_PROPERTIES);
+const FORBIDDEN_SYNTAX = new Set(NATIVE_SCRIPT_FORBIDDEN_SYNTAX);
 
 function projectNativeOutput(value, { inputRoot = "", outputRoot = "", tempRoot = "" } = {}) {
   return projectTaskPathText(value, [
@@ -84,6 +76,15 @@ function projectNativeOutput(value, { inputRoot = "", outputRoot = "", tempRoot 
     { hostRoot: outputRoot, taskRoot: "output://" },
     { hostRoot: tempRoot, taskRoot: "temp://" },
   ]);
+}
+
+function projectNativeResult(value, roots) {
+  if (typeof value === "string") return projectNativeOutput(value, roots);
+  if (Array.isArray(value)) return value.map((item) => projectNativeResult(item, roots));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, projectNativeResult(item, roots)]),
+  );
 }
 
 function validateScriptBody(value) {
@@ -107,17 +108,7 @@ function validateScriptBody(value) {
       const column = Math.max(1, Number(node.loc?.start?.column || 0) + 1);
       return ` at line ${line}, column ${column}`;
     };
-    if (
-      [
-        "ImportDeclaration",
-        "ImportExpression",
-        "ExportNamedDeclaration",
-        "ExportDefaultDeclaration",
-        "ExportAllDeclaration",
-        "MetaProperty",
-        "ThisExpression",
-      ].includes(node.type)
-    ) {
+    if (FORBIDDEN_SYNTAX.has(node.type)) {
       throw new Error(`script_body contains forbidden syntax: ${node.type}${location()}`);
     }
     if (node.type === "Identifier" && FORBIDDEN_IDENTIFIERS.has(node.name)) {
@@ -169,6 +160,8 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
     let timedOut = false;
     let aborted = false;
     let settled = false;
+    let scriptResult = null;
+    let protocolError = "";
     const capture = (target, chunk) => {
       if (bytes < LENGTH_THRESHOLDS.nativeScript.processOutputBytes) {
         target.push(
@@ -209,6 +202,15 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
     });
     child.on("message", async (message) => {
       if (!isNativeScriptIpcMessage(message)) return;
+      if (message.type === NATIVE_SCRIPT_IPC_CHANNEL.EXECUTION_RESULT) {
+        if (scriptResult || !isNativeScriptExecutionResult(message.payload)) {
+          protocolError = "native script sent an invalid or duplicate execution result";
+          terminate("protocol");
+          return;
+        }
+        scriptResult = message.payload;
+        return;
+      }
       const handler = ipcHandlers[message.type];
       const resultChannel = NATIVE_SCRIPT_IPC_RESULT_CHANNEL[message.type];
       if (!handler || !resultChannel) return;
@@ -235,11 +237,17 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal, ipcH
       abortSignal?.removeEventListener?.("abort", onAbort);
       await terminationPromise;
       if (spawnError) capture(stderr, Buffer.from(spawnError.message || String(spawnError)));
+      const exitCode = timedOut ? 124 : aborted ? 130 : Number(code || 0);
+      if (exitCode === 0 && !scriptResult) {
+        protocolError = "native script execution result is missing";
+      }
+      if (protocolError) capture(stderr, Buffer.from(`${protocolError}\n`));
       resolve({
-        code: timedOut ? 124 : aborted ? 130 : Number(code || 0),
+        code: protocolError ? 1 : exitCode,
         signal: signal || "",
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
+        scriptResult,
       });
     };
     child.on("error", (error) =>
@@ -417,7 +425,7 @@ export function createNativeScriptTool({ agentContext }) {
         const browserExecutablePath = resolveBrowserExecutable({
           playwrightExecutable: playwright.chromium.executablePath(),
         });
-        const generated = `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)}, browserExecutablePath: ${JSON.stringify(browserExecutablePath)} });\ntry { await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
+        const generated = `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nimport { publishNativeScriptResult } from ${JSON.stringify(new URL("./native-script-result.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)}, browserExecutablePath: ${JSON.stringify(browserExecutablePath)} });\ntry { const scriptResult = await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); await publishNativeScriptResult(scriptResult); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
         await writeFile(scriptPath, generated, "utf8");
         const result = await runGeneratedScript({
           scriptPath,
@@ -489,6 +497,15 @@ export function createNativeScriptTool({ agentContext }) {
           code: result.code,
           stdout: projectNativeOutput(result.stdout, { inputRoot, outputRoot, tempRoot }),
           stderr: projectNativeOutput(result.stderr, { inputRoot, outputRoot, tempRoot }),
+          ...(result.scriptResult?.present
+            ? {
+                [NATIVE_SCRIPT_RESULT_FIELD]: projectNativeResult(result.scriptResult.value, {
+                  inputRoot,
+                  outputRoot,
+                  tempRoot,
+                }),
+              }
+            : {}),
           output_file_count: outputFiles.length,
           output_bytes: outputBytes,
           transferEnvelopes,

@@ -10,14 +10,16 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       key: "tools.help.description",
       text:
         "Look up your own runtime documentation, command-line style. Omit command to list " +
-        "available commands; command looks like --tools, --tools --name read_file, --models, " +
-        "--runtime, --context, --attachs --id xxx.",
+        "available commands; command looks like --tools, --tools --name read_file, " +
+        "--tools --name execute_native_script --capability browser, --models, --runtime, " +
+        "--context, --attachs --id xxx.",
     },
     params: {
       command: {
         key: "tools.help.fieldCommand",
         text:
-          "Command-line string such as --tools --name read_file. " +
+          "Command-line string such as --tools --name read_file or " +
+          "--tools --name execute_native_script --capability media. " +
           "Omit it to list available commands.",
       },
     },
@@ -25,7 +27,9 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.commandIndexHint":
         "Available help commands. Pick one and call help again with it.",
       "tools.help.command.tools":
-        "Tool manuals: without options lists queryable tool names, --name shows one manual.",
+        "Tool manuals: without options lists queryable names, --name shows shared documentation, and --capability shows one specialized capability.",
+      "tools.help.capabilityRequiresToolName": "--capability must be used together with --name",
+      "tools.help.unknownCapability": "Unknown specialized capability, pick one from capabilities",
       "tools.help.command.experience": "Experience memory directory paths.",
       "tools.help.command.memory":
         "Long and short memory plus daily, weekly, monthly and yearly summary paths.",

@@ -40,6 +40,63 @@ function completed(command, payload) {
   return { ok: true, status: TOOL_RESULT_STATUS.COMPLETED, command, ...payload };
 }
 
+function failed(command, payload) {
+  return { ok: false, status: TOOL_RESULT_STATUS.FAILED, command, ...payload };
+}
+
+function projectManualCapabilities(toolName, manual) {
+  const declared = manual?.capabilities;
+  if (!declared || typeof declared !== "object" || Array.isArray(declared)) return [];
+  return Object.entries(declared).map(([name, detail]) => {
+    if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+      throw new TypeError(`tool manual capability must be an object: ${toolName}.${name}`);
+    }
+    const bindings = Array.isArray(detail.bindings)
+      ? [...new Set(detail.bindings.map(normalizeName).filter(Boolean))]
+      : [];
+    if (!normalizeName(name) || !bindings.length || !normalizeName(detail.summary)) {
+      throw new TypeError(`tool manual capability is incomplete: ${toolName}.${name}`);
+    }
+    return {
+      name,
+      bindings,
+      summary: detail.summary,
+      command: `--tools --name ${toolName} --capability ${name}`,
+      detail,
+    };
+  });
+}
+
+function buildToolManualResult({ runtime, toolName, manual, capabilityName }) {
+  const capabilities = projectManualCapabilities(toolName, manual);
+  if (capabilityName) {
+    const selected = capabilities.find((item) => item.name === capabilityName);
+    if (!selected) {
+      return failed(HELP_COMMAND.TOOLS, {
+        queriedTool: toolName,
+        queriedCapability: capabilityName,
+        reason: tTool(runtime, "tools.help.unknownCapability"),
+        capabilities: capabilities.map(({ detail: _detail, ...item }) => item),
+      });
+    }
+    const { bindings: _bindings, ...capabilityManual } = selected.detail;
+    return completed(HELP_COMMAND.TOOLS, {
+      queriedTool: toolName,
+      queriedCapability: capabilityName,
+      capability: { name: selected.name, bindings: selected.bindings },
+      manual: capabilityManual,
+    });
+  }
+  const { capabilities: _capabilities, ...sharedManual } = manual;
+  return completed(HELP_COMMAND.TOOLS, {
+    queriedTool: toolName,
+    manual: sharedManual,
+    ...(capabilities.length
+      ? { capabilities: capabilities.map(({ detail: _detail, ...item }) => item) }
+      : {}),
+  });
+}
+
 function buildCommandIndex(runtime) {
   return completed("", {
     hint: tTool(runtime, "tools.help.commandIndexHint"),
@@ -55,13 +112,19 @@ function buildCommandIndex(runtime) {
 function buildToolsResult({ runtime, availableTools, options }) {
   const { toolNames, source } = availableTools;
   const toolName = normalizeName(options.name);
+  const capabilityName = normalizeName(options.capability);
   if (!toolName) {
+    if (capabilityName) {
+      return failed(HELP_COMMAND.TOOLS, {
+        reason: tTool(runtime, "tools.help.capabilityRequiresToolName"),
+      });
+    }
     return completed(HELP_COMMAND.TOOLS, { toolNames, toolSource: source });
   }
   const isAvailable = toolNames.includes(toolName);
   const manual = isAvailable ? tToolManual(runtime, toolName) : null;
   if (manual) {
-    return completed(HELP_COMMAND.TOOLS, { queriedTool: toolName, manual });
+    return buildToolManualResult({ runtime, toolName, manual, capabilityName });
   }
   const isRegisteredTool = Object.values(TOOL_NAME).includes(toolName);
   return completed(HELP_COMMAND.TOOLS, {

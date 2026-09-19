@@ -60,6 +60,7 @@ const LENGTH_TIERS = deepFreeze({
   },
   bytes: {
     connectorCommandFile: 256 * KiB,
+    nativeScriptResult: 256 * KiB,
     nativeScriptSource: 100 * KiB,
     batchPayload: Math.floor(0.8 * MiB),
     clientNonImagePreview: 1 * MiB,
@@ -147,6 +148,7 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   },
 
   nativeScript: {
+    resultBytes: LENGTH_TIERS.bytes.nativeScriptResult,
     sourceBytes: LENGTH_TIERS.bytes.nativeScriptSource,
     textReadBytes: LENGTH_TIERS.bytes.directText,
     binaryReadBytes: LENGTH_TIERS.bytes.workspaceAssetFile,

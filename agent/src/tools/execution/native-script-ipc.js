@@ -10,6 +10,7 @@ export const NATIVE_SCRIPT_IPC_CHANNEL = Object.freeze({
   BROWSER_SESSION_CLOSE_RESULT: "native-script/browser-session-close-result",
   USER_INTERACTION_REQUEST: "native-script/user-interaction-request",
   USER_INTERACTION_RESULT: "native-script/user-interaction-result",
+  EXECUTION_RESULT: "native-script/execution-result",
 });
 
 export const NATIVE_SCRIPT_IPC_RESULT_CHANNEL = Object.freeze({
@@ -27,6 +28,18 @@ export const NATIVE_SCRIPT_IPC_PENDING_CHANNELS = Object.freeze([
 
 export function isNativeScriptIpcMessage(value) {
   return Boolean(value) && typeof value === "object" && typeof value.type === "string";
+}
+
+export function isNativeScriptExecutionResult(value) {
+  const keys = value && typeof value === "object" ? Object.keys(value) : [];
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    typeof value.present === "boolean" &&
+    keys.length === (value.present ? 2 : 1) &&
+    keys.every((key) => key === "present" || key === "value") &&
+    (value.present ? Object.hasOwn(value, "value") : !Object.hasOwn(value, "value"))
+  );
 }
 
 export function createPendingInteractionClock({ start, stop }) {

@@ -61,6 +61,7 @@ log("completed");
   });
   assert.equal("path_view" in result, false);
   assert.equal(result.output_file_count, 1);
+  assert.equal("script_result" in result, false);
   assert.match(result.stdout, /completed/);
   assert.equal(persistedRequest.generationSource, "execute_native_script");
   assert.equal(persistedRequest.artifacts[0].name, "report__result.txt");
@@ -70,6 +71,75 @@ log("completed");
   );
   const taskRoot = path.join(basePath, "runtime", "native_tasks");
   assert.deepEqual(await fs.readdir(taskRoot), []);
+});
+
+test("execute_native_script returns the top-level JSON value as script_result", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-result-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        arguments: { expected: 3 },
+        script_body: `
+const checks = [1, 2, 3].map((value) => ({ value, passed: value <= args.expected }));
+return { passed: checks.every((check) => check.passed), checks, empty: null };
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.script_result, {
+    passed: true,
+    checks: [
+      { value: 1, passed: true },
+      { value: 2, passed: true },
+      { value: 3, passed: true },
+    ],
+    empty: null,
+  });
+});
+
+test("execute_native_script rejects a non-JSON return value", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-invalid-result-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      { script_body: "return { valid: true, invalid: undefined };" },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal("script_result" in result, false);
+  assert.match(
+    result.stderr,
+    /script return value must be JSON-serializable: unsupported undefined/,
+  );
+});
+
+test("execute_native_script rejects implicit toJSON and oversized return values", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-result-contract-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+
+  for (const [scriptBody, expected] of [
+    ["return { toJSON() { return { hidden: true }; } };", /unsupported function value/],
+    ['return "x".repeat(300000);', /script return value exceeds 262144 bytes/],
+  ]) {
+    const result = JSON.parse(
+      await tool.invoke(
+        { script_body: scriptBody },
+        { configurable: { transferIdentity: IDENTITY } },
+      ),
+    );
+    assert.equal(result.ok, false);
+    assert.equal("script_result" in result, false);
+    assert.match(result.stderr, expected);
+  }
 });
 
 test("execute_native_script projects runtime roots but preserves caller path data", async () => {
@@ -102,6 +172,7 @@ const source = await files.input(0);
 const target = await output.file("reports/paths.json");
 log({ source, target, nested: args.nested });
 await files.writeJson(target, { source, target, nested: args.nested });
+return { source, target, nested: args.nested };
 `,
       },
       { configurable: { transferIdentity: IDENTITY } },
@@ -112,6 +183,11 @@ await files.writeJson(target, { source, target, nested: args.nested });
   assert.match(result.stdout, /input:\/\/0/);
   assert.match(result.stdout, /output:\/\/reports\/paths\.json/);
   assert.match(result.stdout, /\/home\/private\/source\.txt/);
+  assert.deepEqual(result.script_result, {
+    source: "input://0",
+    target: "output://reports/paths.json",
+    nested: { hostPath: "/home/private/source.txt" },
+  });
   const persistedJson = Buffer.from(persistedRequest.artifacts[0].contentBase64, "base64").toString(
     "utf8",
   );

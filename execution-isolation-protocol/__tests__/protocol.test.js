@@ -14,6 +14,12 @@ import {
   TOOL_EXECUTION_REGISTRY,
   TOOL_EXECUTION_VIEW,
   normalizeSandboxMounts,
+  NATIVE_SCRIPT_CAPABILITY_BINDINGS,
+  NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
+  NATIVE_SCRIPT_FORBIDDEN_PROPERTIES,
+  NATIVE_SCRIPT_FORBIDDEN_SYNTAX,
+  NATIVE_SCRIPT_RESULT_FIELD,
+  NATIVE_SCRIPT_SOURCE_POLICY,
   resolveExecutionIsolation,
   resolveCommandShell,
   resolveSandboxMountMappings,
@@ -24,9 +30,32 @@ import {
   resolveWorkspaceSandboxMountProjection,
 } from "../src/index.js";
 
+test("native script source and result protocol is immutable and canonical", () => {
+  assert.equal(NATIVE_SCRIPT_RESULT_FIELD, "script_result");
+  assert.equal(
+    NATIVE_SCRIPT_SOURCE_POLICY.forbiddenIdentifiers,
+    NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
+  );
+  assert.equal(NATIVE_SCRIPT_SOURCE_POLICY.forbiddenProperties, NATIVE_SCRIPT_FORBIDDEN_PROPERTIES);
+  assert.equal(NATIVE_SCRIPT_SOURCE_POLICY.forbiddenSyntax, NATIVE_SCRIPT_FORBIDDEN_SYNTAX);
+  assert.equal(NATIVE_SCRIPT_SOURCE_POLICY.dynamicComputedPropertyAccess, false);
+  assert.equal(Object.isFrozen(NATIVE_SCRIPT_SOURCE_POLICY), true);
+  assert.equal(Object.isFrozen(NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS), true);
+  assert.deepEqual(NATIVE_SCRIPT_CAPABILITY_BINDINGS, {
+    browser: ["browser"],
+    document: ["libreoffice"],
+    media: ["ffmpeg", "ffprobe"],
+  });
+  assert.equal(Object.isFrozen(NATIVE_SCRIPT_CAPABILITY_BINDINGS), true);
+  assert.equal(Object.isFrozen(NATIVE_SCRIPT_CAPABILITY_BINDINGS.media), true);
+});
+
 test("command shell is derived from the authoritative execution view and platform", () => {
   assert.equal(
-    resolveCommandShell({ executionView: TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX, platform: "win32" }),
+    resolveCommandShell({
+      executionView: TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX,
+      platform: "win32",
+    }),
     COMMAND_SHELL.BASH,
   );
   assert.equal(
