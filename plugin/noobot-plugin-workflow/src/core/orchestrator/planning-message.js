@@ -20,7 +20,8 @@ function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } =
     workflowRunId,
     autoTransitions: 0,
     completed: false,
-    pendingStepCount: nodeSessions.filter((item) => ["pending", "ready"].includes(item?.status)).length,
+    pendingStepCount: nodeSessions.filter((item) => ["pending", "ready"].includes(item?.status))
+      .length,
     actionRecords: [],
     nodeAgentRuns: [],
   };
@@ -77,7 +78,9 @@ export async function prepareWorkflowPlanningMessage({
   });
   const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
   const turnScopeId = String(ctx?.turnScopeId || parentRunConfig?.turnScopeId || "").trim();
-  const messageId = String(ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId || "").trim();
+  const messageId = String(
+    ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId || "",
+  ).trim();
   const presentationMessageId = String(
     workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId || "",
   ).trim();

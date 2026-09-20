@@ -23,9 +23,15 @@ function receipt(overrides = {}) {
 
 test("maps only committed child terminal lifecycle states to workflow node terminals", () => {
   assert.equal(resolveCommittedChildTerminal(receipt(), "agent:child-1").nodeStatus, "succeeded");
-  assert.equal(resolveCommittedChildTerminal(receipt({ state: "stop_completed" }), "agent:child-1").nodeStatus, "stopped");
+  assert.equal(
+    resolveCommittedChildTerminal(receipt({ state: "stop_completed" }), "agent:child-1").nodeStatus,
+    "stopped",
+  );
   for (const state of ["action_failed", "processing_failed", "completion_failed", "stop_failed"]) {
-    assert.equal(resolveCommittedChildTerminal(receipt({ state }), "agent:child-1").nodeStatus, "failed");
+    assert.equal(
+      resolveCommittedChildTerminal(receipt({ state }), "agent:child-1").nodeStatus,
+      "failed",
+    );
   }
 });
 
@@ -55,4 +61,3 @@ test("rejects missing, mismatched, non-terminal and malformed child receipts", (
     );
   }
 });
-

@@ -11,4 +11,3 @@ const WORKFLOW_CORE_ERROR = Object.freeze({
 export function formatWorkflowCoreError(code = "") {
   return WORKFLOW_CORE_ERROR[String(code || "").trim()] || "";
 }
-

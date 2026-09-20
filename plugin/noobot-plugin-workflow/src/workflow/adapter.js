@@ -21,14 +21,20 @@ export function executeWorkflowText({ semanticText = "", options = {} } = {}) {
   return { semantic };
 }
 
-export function createWorkflowInstance({ instanceId = "", semantic = {}, options = {}, meta = {} } = {}) {
+export function createWorkflowInstance({
+  instanceId = "",
+  semantic = {},
+  options = {},
+  meta = {},
+} = {}) {
   mountWorkflowExtensions({ options, meta });
   return startWorkflowInstanceById({
     instanceId,
     semantic,
     options: {
       maxAutoTransitions:
-        Number.isFinite(Number(options?.maxAutoTransitions)) && Number(options.maxAutoTransitions) > 0
+        Number.isFinite(Number(options?.maxAutoTransitions)) &&
+        Number(options.maxAutoTransitions) > 0
           ? Math.floor(Number(options.maxAutoTransitions))
           : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS,
     },
@@ -40,7 +46,10 @@ export function resolveWorkflowUpstreamActionSteps(params = {}) {
   return resolveWorkflowUpstreamActionStepsByRuntime(params);
 }
 
-export function advanceWorkflowInstance({ instanceId = "", action = { type: "submit", stepIndex: 0 } } = {}) {
+export function advanceWorkflowInstance({
+  instanceId = "",
+  action = { type: "submit", stepIndex: 0 },
+} = {}) {
   return advanceWorkflowInstanceById({ instanceId, action });
 }
 

@@ -9,7 +9,8 @@ import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
 import { registerWorkflowHooks } from "./orchestrator.js";
 
 export function createWorkflowRegistration(deps = {}) {
-  const createPluginRuntimeContextFn = deps.createPluginRuntimeContext || createPluginRuntimeContext;
+  const createPluginRuntimeContextFn =
+    deps.createPluginRuntimeContext || createPluginRuntimeContext;
   const assertHookManagerFn = deps.assertHookManager || assertHookManager;
   const registerWorkflowHooksFn = deps.registerWorkflowHooks || registerWorkflowHooks;
 
