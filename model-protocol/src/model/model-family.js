@@ -27,3 +27,16 @@ export function requireModelFamilyId(value, field = "model spec.modelFamily") {
   }
   return normalized;
 }
+
+export function resolveModelFamilyId({ model = "" } = {}) {
+  const normalized = String(model).trim().toLowerCase();
+  if (/grok|xai/.test(normalized)) return MODEL_FAMILY_ID.GROK;
+  if (/claude|anthropic/.test(normalized)) return MODEL_FAMILY_ID.CLAUDE;
+  if (/gemini/.test(normalized)) return MODEL_FAMILY_ID.GEMINI;
+  if (/qwen|qianwen/.test(normalized)) return MODEL_FAMILY_ID.QWEN;
+  if (/glm|zhipu/.test(normalized)) return MODEL_FAMILY_ID.GLM;
+  if (/deepseek/.test(normalized)) return MODEL_FAMILY_ID.DEEPSEEK;
+  if (/kimi|moonshot/.test(normalized)) return MODEL_FAMILY_ID.KIMI;
+  if (/gpt|codex|\bo[1-9]/.test(normalized)) return MODEL_FAMILY_ID.GPT;
+  return MODEL_FAMILY_ID.GENERIC;
+}

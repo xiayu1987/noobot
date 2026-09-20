@@ -164,7 +164,7 @@ test("bound OpenAI Responses clients preserve stable fields before input", async
   assert.deepEqual(Object.keys(transportedRequest), ["model", "tools", "input"]);
 });
 
-test("openai-compatible GPT cache protocol is compiled independently of operator identity", () => {
+test("openai-compatible cache protocol generates only explicitly selected fields", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
     flow: "agent.main",
@@ -180,16 +180,23 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
   });
   const params = client.invocationParams({});
 
-  assert.equal(params.prompt_cache_key, "noobot-main-gpt-5-6-sol");
-  assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
-  assert.deepEqual(
-    compileProviderModelKwargs({
-      model: "gpt-6-astra",
-      modelFamily: "gpt",
-      operatorId: "openai",
-    }).prompt_cache_options,
-    { ttl: "30m" },
-  );
+  assert.equal(params.prompt_cache_key, undefined);
+  assert.equal(params.prompt_cache_options, undefined);
+
+  const declaredClient = createOpenAiCompatibleClient({
+    credential: "test-key",
+    modelSpec: {
+      model: "vendor-routed-model",
+      base_url: "http://localhost",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["low", "medium", "high"],
+      prompt_cache_fields: ["prompt_cache_key", "prompt_cache_options", "prompt_cache_retention"],
+    },
+  });
+  const declaredParams = declaredClient.invocationParams({});
+  assert.equal(declaredParams.prompt_cache_key, "noobot-main-vendor-routed-model");
+  assert.deepEqual(declaredParams.prompt_cache_options, { ttl: "30m" });
+  assert.equal(declaredParams.prompt_cache_retention, "24h");
 });
 
 test("official OpenAI chat requests use the current completion token limit field", () => {
@@ -215,6 +222,7 @@ test("xAI Grok cache protocol uses only the x-grok-conv-id header", () => {
       operatorId: "generic",
       adapterId: "openai-compatible",
       model: "grok-4.6",
+      prompt_cache_fields: ["prompt_cache_key"],
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
       modelFamily: "grok",
@@ -230,6 +238,7 @@ test("xAI Grok cache protocol uses only the x-grok-conv-id header", () => {
     modelSpec: {
       model: "grok-4.6",
       base_url: "http://localhost",
+      prompt_cache_fields: ["prompt_cache_key"],
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["none", "low", "medium", "high", "xhigh"],
     },
@@ -243,6 +252,7 @@ test("normalized Grok clients use the xAI cache key protocol for each flow", () 
     flow: "plugin.analysis",
     modelSpec: {
       model: "grok-4.6",
+      prompt_cache_fields: ["prompt_cache_key"],
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
       base_url: "http://localhost",
@@ -257,6 +267,39 @@ test("normalized Grok clients use the xAI cache key protocol for each flow", () 
     client.clientConfig.defaultHeaders["x-grok-conv-id"],
     "noobot-plugin-analysis-grok-4-6",
   );
+});
+
+test("Grok omits the cache routing header when cache fields are not selected", () => {
+  const client = createOpenAiCompatibleClient({
+    credential: "test-key",
+    modelSpec: {
+      model: "grok-4.6",
+      prompt_cache_fields: [],
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
+      base_url: "http://localhost",
+    },
+  });
+
+  assert.equal(client.clientConfig.defaultHeaders["x-grok-conv-id"], undefined);
+});
+
+test("Grok Responses maps the selected cache key to the body instead of the chat header", () => {
+  const client = createOpenAiCompatibleClient({
+    credential: "test-key",
+    flow: "plugin.analysis",
+    modelSpec: {
+      model: "grok-4.6",
+      use_responses_api: true,
+      prompt_cache_fields: ["prompt_cache_key"],
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
+      base_url: "http://localhost",
+    },
+  });
+
+  assert.equal(client.invocationParams({}).prompt_cache_key, "noobot-plugin-analysis-grok-4-6");
+  assert.equal(client.clientConfig.defaultHeaders["x-grok-conv-id"], undefined);
 });
 
 test("Qwen uses the canonical OpenAI-compatible invocation", () => {
@@ -294,21 +337,28 @@ test("Claude uses top-level automatic caching and Qwen uses message-level cachin
       modelFamily: "claude",
       reasoning_effort_parameter: "reasoning_effort",
       reasoning_effort_options: ["low", "medium", "high"],
+      prompt_cache_fields: ["cache_control"],
     }),
     {
-      prompt_cache_key: "noobot-main-claude-sonnet-5",
       cache_control: { type: "ephemeral" },
     },
   );
-  const qwenBlocks = applyPromptCacheMessages({ model: "qwen3.7-max", modelFamily: "qwen" }, [
+  const qwenBlocks = applyPromptCacheMessages(
     {
-      role: "system",
-      content: [
-        { type: "text", text: "a" },
-        { type: "image_url", image_url: "x" },
-      ],
+      model: "qwen3.7-max",
+      modelFamily: "qwen",
+      prompt_cache_fields: ["cache_control"],
     },
-  ]);
+    [
+      {
+        role: "system",
+        content: [
+          { type: "text", text: "a" },
+          { type: "image_url", image_url: "x" },
+        ],
+      },
+    ],
+  );
   assert.deepEqual(qwenBlocks[0].content[0], {
     type: "text",
     text: "a",
@@ -468,7 +518,7 @@ test("Anthropic Messages adapter sends native endpoint and exposes cache usage",
         reasoning_effort: "none",
         reasoning_effort_options: ["none", "low", "medium", "high"],
         reasoning_effort_parameter: "reasoning_effort",
-        cache_control: { type: "ephemeral", ttl: "1h" },
+        prompt_cache_fields: ["cache_control"],
       },
     });
     const boundClient = anthropicMessagesAdapter.bindTools({
@@ -479,7 +529,7 @@ test("Anthropic Messages adapter sends native endpoint and exposes cache usage",
     const result = await boundClient.invoke([{ role: "user", content: "hello" }]);
     assert.equal(request.url, "https://api.anthropic.com/v1/messages");
     assert.equal(request.init.headers["x-api-key"], "sk-test");
-    assert.deepEqual(request.body.cache_control, { type: "ephemeral", ttl: "1h" });
+    assert.deepEqual(request.body.cache_control, { type: "ephemeral" });
     assert.deepEqual(Object.keys(request.body), [
       "model",
       "max_tokens",
@@ -525,7 +575,7 @@ test("Anthropic Messages keeps reasoning/cache fields before the append-only mes
         reasoning_effort: "medium",
         reasoning_effort_options: ["low", "medium", "high"],
         reasoning_effort_parameter: "reasoning_effort",
-        cache_control: { type: "ephemeral" },
+        prompt_cache_fields: ["cache_control"],
       },
     });
     await anthropicMessagesAdapter

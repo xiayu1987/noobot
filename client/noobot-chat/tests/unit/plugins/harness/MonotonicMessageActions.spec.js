@@ -105,4 +105,15 @@ describe("MonotonicMessageActions", () => {
     });
     expect(messageItem.__monotonicEditing).toBe(false);
   });
+
+  it("forwards attachment count parameters to the locale translator", async () => {
+    const wrapper = mountActions();
+
+    await wrapper.find(".monotonic-chip-btn.is-primary").trigger("click");
+    await nextTick();
+
+    const stats = wrapper.find(".monotonic-attachment-stats");
+    expect(stats.text()).toContain("0 个");
+    expect(stats.text()).not.toContain("{count}");
+  });
 });

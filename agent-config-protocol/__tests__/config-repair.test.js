@@ -98,7 +98,23 @@ test("default user template is the user-scope source of truth for system-owned n
   }
 });
 
-test("provider system declarations cannot be overridden by user config", () => {
+test("global and default-user providers project model-library cache defaults", () => {
+  const globalTemplate = readJsonFixture("../../service/config/global.config.example.json");
+  const userTemplate = readJsonFixture("../../user-template/default-user/config.example.json");
+  for (const template of [globalTemplate, userTemplate]) {
+    for (const [alias, provider] of Object.entries(template.providers)) {
+      const libraryProvider = resolveModelLibraryProvider(alias);
+      assert.ok(libraryProvider, `missing model-library provider ${alias}`);
+      assert.deepEqual(
+        provider.prompt_cache_fields,
+        libraryProvider.prompt_cache_fields,
+        `${alias} cache defaults diverged from the model library`,
+      );
+    }
+  }
+});
+
+test("provider system declarations stay authoritative while cache fields remain user-selected", () => {
   const globalConfig = {
     providers: {
       primary: {
@@ -106,7 +122,6 @@ test("provider system declarations cannot be overridden by user config", () => {
         reasoning_effort_options: ["none", "high"],
         reasoning_effort_parameter: "reasoning_effort",
         use_responses_api: true,
-        cache_control: { type: "ephemeral" },
         capabilities: { reasoning: true, tools: true },
       },
     },
@@ -118,7 +133,7 @@ test("provider system declarations cannot be overridden by user config", () => {
         reasoning_effort_options: ["forged"],
         reasoning_effort_parameter: "enable_thinking",
         use_responses_api: false,
-        cache_control: false,
+        prompt_cache_fields: ["cache_control"],
         capabilities: { reasoning: false, tools: false },
       },
     },
@@ -129,7 +144,7 @@ test("provider system declarations cannot be overridden by user config", () => {
     reasoning_effort_options: ["none", "high"],
     reasoning_effort_parameter: "reasoning_effort",
     use_responses_api: true,
-    cache_control: { type: "ephemeral" },
+    prompt_cache_fields: ["cache_control"],
     capabilities: { reasoning: true, tools: true },
   });
 });
@@ -144,6 +159,12 @@ test("provider runtime authority rejects user-owned system declarations", () => 
     reasoning_effort_options: ["low", "medium", "high"],
     reasoning_effort_parameter: "reasoning_effort",
     use_responses_api: true,
+    prompt_cache_fields: [
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+      "cache_control",
+    ],
     capabilities: { reasoning: true, tools: true },
   };
   const userConfig = {
@@ -172,6 +193,12 @@ test("provider runtime authority rejects user-owned system declarations", () => 
     model: "ZHIPU/GLM-5.3",
     reasoning_effort: "low",
     tool_reasoning_effort: "medium",
+    prompt_cache_fields: [
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+      "cache_control",
+    ],
   });
   const merged = mergeConfig(globalConfig, userConfig);
   const genericProvider = resolveDefaultModelLibraryProvider();
@@ -183,6 +210,12 @@ test("provider runtime authority rejects user-owned system declarations", () => 
     model: "ZHIPU/GLM-5.3",
     reasoning_effort: "low",
     tool_reasoning_effort: "medium",
+    prompt_cache_fields: [
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+      "cache_control",
+    ],
   });
   assert.equal(merged.providers.GLM_5_3.reasoning_effort, "low");
   assert.equal(merged.providers.GLM_5_3.tool_reasoning_effort, "medium");

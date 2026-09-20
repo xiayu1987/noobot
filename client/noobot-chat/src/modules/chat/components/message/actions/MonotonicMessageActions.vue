@@ -24,7 +24,7 @@ const editing = ref(false);
 const draftContent = ref("");
 const editCardRef = ref(null);
 
-const t = (key = "") => props.translate(key);
+const t = (key = "", params = {}) => props.translate(key, params);
 
 const {
   editAttachments,

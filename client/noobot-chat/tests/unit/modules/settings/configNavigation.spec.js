@@ -133,7 +133,24 @@ describe("configNavigation", () => {
     ]);
     expect(keys).toContain("reasoning_effort");
     expect(keys).not.toContain("reasoning_effort_options");
+    expect(keys).toContain("prompt_cache_fields");
     expect(keys).not.toContain("prompt_cache_key");
+    expect(keys).not.toContain("prompt_cache_options");
+    expect(keys).not.toContain("prompt_cache_retention");
+    expect(keys).not.toContain("cache_control");
     expect(keys).not.toContain("use_responses_api");
+
+    const cacheFields = configLeafFields(providerEntry.node).find(
+      (field) => field.key === "prompt_cache_fields",
+    );
+    expect(cacheFields).toMatchObject({
+      kind: CONFIG_FORM_NODE_KIND.ENUM_LIST,
+      options: [
+        "prompt_cache_key",
+        "prompt_cache_options",
+        "prompt_cache_retention",
+        "cache_control",
+      ],
+    });
   });
 });

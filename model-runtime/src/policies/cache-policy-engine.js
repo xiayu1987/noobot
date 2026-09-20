@@ -5,9 +5,13 @@
 
 import {
   MODEL_FAMILY_ID,
+  MODEL_PROMPT_CACHE_FIELD,
   MODEL_PROVIDER_ID,
   buildModelReasoningEffortTransport,
+  normalizeModelPromptCacheFields,
   requireModelFamilyId,
+  resolveModelFamilyPromptCacheFields,
+  resolveModelPromptCacheValue,
 } from "@noobot/model-protocol";
 
 const PROVIDER_IDS = new Set(Object.values(MODEL_PROVIDER_ID));
@@ -25,9 +29,17 @@ function modelFamily(spec = {}) {
   return requireModelFamilyId(spec.modelFamily);
 }
 
-function usesPromptCacheKeyProtocol(spec = {}) {
-  const family = modelFamily(spec);
-  return family === MODEL_FAMILY_ID.GPT || family === MODEL_FAMILY_ID.CLAUDE;
+function selectedCacheFields(spec = {}) {
+  const selected = normalizeModelPromptCacheFields(spec.prompt_cache_fields);
+  const supported = new Set(resolveModelFamilyPromptCacheFields(spec));
+  for (const field of selected) {
+    if (!supported.has(field)) {
+      throw new TypeError(
+        `model spec.prompt_cache_fields value ${field} is outside the model-family cache protocol for ${spec.model}`,
+      );
+    }
+  }
+  return selected;
 }
 
 function segment(value) {
@@ -46,18 +58,23 @@ export function resolveCacheVendor(spec = {}) {
   return operatorId(spec);
 }
 
-export function resolvePromptCacheHeaders(spec = {}, flow = "agent.main") {
+export function resolvePromptCacheHeaders(
+  spec = {},
+  flow = "agent.main",
+  { useResponsesApi = false } = {},
+) {
   if (modelFamily(spec) !== MODEL_FAMILY_ID.GROK) return {};
-  const key = String(spec.prompt_cache_key ?? "").trim() || buildCacheIdentity(spec, flow);
+  if (useResponsesApi) return {};
+  if (!selectedCacheFields(spec).includes(MODEL_PROMPT_CACHE_FIELD.KEY)) return {};
+  const key = buildCacheIdentity(spec, flow);
   return key ? { "x-grok-conv-id": key } : {};
 }
 
 function cacheControlValue(spec = {}) {
-  const value = spec.cache_control;
-  if (value === false) return null;
-  return value && typeof value === "object"
-    ? { type: value.type || "ephemeral", ...(value.ttl === "1h" ? { ttl: "1h" } : {}) }
-    : { type: "ephemeral" };
+  const fields = selectedCacheFields(spec);
+  return fields.includes(MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL)
+    ? resolveModelPromptCacheValue(spec, MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL)
+    : null;
 }
 
 export function cacheControlValueForRuntime(spec = {}) {
@@ -115,24 +132,11 @@ function buildCacheIdentity(spec = {}, flow = "agent.main") {
   ).slice(0, 200);
 }
 
-export function buildPromptCacheKey(spec = {}, flow = "agent.main") {
-  return usesPromptCacheKeyProtocol(spec) ? buildCacheIdentity(spec, flow) : "";
-}
-
-function gptVersion(name = "") {
-  const match = String(name)
-    .toLowerCase()
-    .match(/\bgpt[-_]?(\d+)(?:\.(\d+))?(?:\b|[-_])/);
-  return match ? { major: Number(match[1]), minor: Number(match[2] || 0) } : null;
-}
-
-function supportsPromptCacheOptions(spec = {}) {
-  if (modelFamily(spec) !== MODEL_FAMILY_ID.GPT) return false;
-  const version = gptVersion(spec.model);
-  return Boolean(version && (version.major > 5 || (version.major === 5 && version.minor >= 6)));
-}
-
-export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
+export function compileProviderModelKwargs(
+  spec = {},
+  flow = "agent.main",
+  { useResponsesApi = false } = {},
+) {
   const vendor = operatorId(spec);
   const out = { ...(spec.extra_body || {}) };
   for (const key of [
@@ -144,18 +148,26 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   ])
     delete out[key];
 
-  if (usesPromptCacheKeyProtocol(spec)) {
-    const key = String(spec.prompt_cache_key ?? "").trim() || buildCacheIdentity(spec, flow);
+  const cacheFields = selectedCacheFields(spec);
+  if (
+    cacheFields.includes(MODEL_PROMPT_CACHE_FIELD.KEY) &&
+    (modelFamily(spec) !== MODEL_FAMILY_ID.GROK || useResponsesApi)
+  ) {
+    const key = buildCacheIdentity(spec, flow);
     if (key) out.prompt_cache_key = key;
-    if (supportsPromptCacheOptions(spec)) {
-      out.prompt_cache_options = spec.prompt_cache_options || { ttl: "30m" };
-    }
   }
-
-  if (modelFamily(spec) === MODEL_FAMILY_ID.CLAUDE) {
-    const marker = cacheControlValue(spec);
-    if (marker) out.cache_control = marker;
-  }
+  if (cacheFields.includes(MODEL_PROMPT_CACHE_FIELD.OPTIONS))
+    out.prompt_cache_options = resolveModelPromptCacheValue(spec, MODEL_PROMPT_CACHE_FIELD.OPTIONS);
+  if (cacheFields.includes(MODEL_PROMPT_CACHE_FIELD.RETENTION))
+    out.prompt_cache_retention = resolveModelPromptCacheValue(
+      spec,
+      MODEL_PROMPT_CACHE_FIELD.RETENTION,
+    );
+  if (
+    cacheFields.includes(MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL) &&
+    modelFamily(spec) !== MODEL_FAMILY_ID.QWEN
+  )
+    out.cache_control = resolveModelPromptCacheValue(spec, MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL);
 
   if (
     modelFamily(spec) === MODEL_FAMILY_ID.GEMINI ||

@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: MIT
  */
 import libraryPayload from "../../model-library.json" with { type: "json" };
-import { normalizeModelReasoningConfiguration } from "./provider-spec.js";
+import {
+  normalizeModelPromptCacheFields,
+  normalizeModelReasoningConfiguration,
+  resolveModelFamilyPromptCacheFields,
+} from "./provider-spec.js";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -27,6 +31,21 @@ function validateReasoningConfiguration(provider, label) {
   }
 }
 
+function validatePromptCacheConfiguration(provider, label) {
+  if (!Object.hasOwn(provider, "prompt_cache_fields")) {
+    throw new TypeError(`${label}.prompt_cache_fields is required`);
+  }
+  const configured = normalizeModelPromptCacheFields(provider.prompt_cache_fields);
+  const familyFields = new Set(resolveModelFamilyPromptCacheFields(provider));
+  for (const field of configured) {
+    if (!familyFields.has(field)) {
+      throw new TypeError(
+        `${label}.prompt_cache_fields value ${field} is outside its model family`,
+      );
+    }
+  }
+}
+
 function validateLibrary(payload) {
   if (!isPlainObject(payload?.providers)) {
     throw new TypeError("model library providers are required");
@@ -41,11 +60,22 @@ function validateLibrary(payload) {
       }
     }
     validateReasoningConfiguration(provider, `model library provider ${alias}`);
+    validatePromptCacheConfiguration(provider, `model library provider ${alias}`);
   }
   return payload.providers;
 }
 
 const MODEL_LIBRARY_PROVIDERS = validateLibrary(libraryPayload);
+const MODEL_LIBRARY_CACHE_FIELDS = new Map();
+for (const provider of Object.values(MODEL_LIBRARY_PROVIDERS)) {
+  const model = String(provider.model).trim().toLowerCase();
+  const fields = normalizeModelPromptCacheFields(provider.prompt_cache_fields);
+  const existing = MODEL_LIBRARY_CACHE_FIELDS.get(model);
+  if (existing && JSON.stringify(existing) !== JSON.stringify(fields)) {
+    throw new TypeError(`model library has conflicting prompt cache facts for model ${model}`);
+  }
+  MODEL_LIBRARY_CACHE_FIELDS.set(model, fields);
+}
 const GENERIC_PROVIDER_TEMPLATE = isPlainObject(libraryPayload.defaults?.generic_provider)
   ? clone(libraryPayload.defaults.generic_provider)
   : null;
@@ -59,6 +89,7 @@ for (const field of ["model", "api_key", "base_url"]) {
   }
 }
 validateReasoningConfiguration(GENERIC_PROVIDER_TEMPLATE, "model library generic provider");
+validatePromptCacheConfiguration(GENERIC_PROVIDER_TEMPLATE, "model library generic provider");
 
 export function listModelLibraryOptions() {
   return Object.entries(MODEL_LIBRARY_PROVIDERS).map(([key, provider]) =>
@@ -82,4 +113,9 @@ export function resolveModelLibraryProvider(alias = "") {
 
 export function resolveDefaultModelLibraryProvider() {
   return clone(GENERIC_PROVIDER_TEMPLATE);
+}
+
+export function resolveModelLibraryPromptCacheFields(model = "") {
+  const fields = MODEL_LIBRARY_CACHE_FIELDS.get(String(model).trim().toLowerCase());
+  return fields ? Object.freeze([...fields]) : null;
 }

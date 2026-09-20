@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  MODEL_FAMILY_ID,
   normalizeModelReasoningConfiguration,
   resolveModelAdapterId,
+  resolveModelFamilyId,
   resolveModelOperatorId,
 } from "@noobot/model-protocol";
 
@@ -49,19 +49,6 @@ function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
 }
 
-function classifyModelFamily(modelSpec = {}) {
-  const model = String(modelSpec.model || "").toLowerCase();
-  if (/grok|xai/.test(model)) return MODEL_FAMILY_ID.GROK;
-  if (/claude|anthropic/.test(model)) return MODEL_FAMILY_ID.CLAUDE;
-  if (/gemini/.test(model)) return MODEL_FAMILY_ID.GEMINI;
-  if (/qwen|qianwen/.test(model)) return MODEL_FAMILY_ID.QWEN;
-  if (/glm|zhipu/.test(model)) return MODEL_FAMILY_ID.GLM;
-  if (/deepseek/.test(model)) return MODEL_FAMILY_ID.DEEPSEEK;
-  if (/kimi|moonshot/.test(model)) return MODEL_FAMILY_ID.KIMI;
-  if (/gpt|codex|\bo[1-9]/.test(model)) return MODEL_FAMILY_ID.GPT;
-  return MODEL_FAMILY_ID.GENERIC;
-}
-
 function resolveConcreteModelDefaults(model = "") {
   const normalized = String(model || "")
     .trim()
@@ -81,7 +68,7 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   out.operatorId = resolveModelOperatorId({
     baseUrl: out.base_url || out.baseUrl || "",
   });
-  out.modelFamily = classifyModelFamily(out);
+  out.modelFamily = resolveModelFamilyId(out);
   out.adapterId = resolveModelAdapterId({ modelFamily: out.modelFamily });
   Object.assign(out, normalizeModelReasoningConfiguration(out, reasoningFallback));
   const defaults = { ...TRANSPORT_DEFAULT_FIELDS };

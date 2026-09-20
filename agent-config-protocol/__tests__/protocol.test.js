@@ -566,6 +566,7 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
     base_url: "${DASHSCOPE_API_ADDRESS}",
     model: "ZHIPU/GLM-5.3",
     description: "Z.AI GLM-5.3 reasoning model (official OpenAI-compatible API)",
+    prompt_cache_fields: [],
   });
 });
 
@@ -597,6 +598,7 @@ test("config repair uses generic provider structure without repairing custom con
     ...customProvider,
     enabled: true,
     used_for_conversation: true,
+    prompt_cache_fields: [],
     multimodal_parsing: { enabled: false, input_modalities: [] },
     multimodal_generation: {
       support_generation: { enabled: false, support_scope: [] },

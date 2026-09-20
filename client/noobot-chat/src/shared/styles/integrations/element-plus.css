@@ -8,7 +8,10 @@
   border-radius: var(--noobot-radius-sm);
   box-shadow: none;
   color: var(--noobot-text-main);
-  transition: background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, box-shadow var(--noobot-duration-normal) ease;
+  transition:
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    box-shadow var(--noobot-duration-normal) ease;
 }
 
 .el-input__inner,
@@ -56,6 +59,29 @@
 
 .el-select__wrapper .el-select__placeholder.is-transparent {
   color: var(--noobot-text-muted);
+}
+
+.el-select__wrapper .el-tag {
+  --el-tag-bg-color: color-mix(in srgb, var(--noobot-accent) 14%, var(--noobot-control-bg));
+  --el-tag-border-color: color-mix(in srgb, var(--noobot-accent) 34%, var(--noobot-panel-border));
+  --el-tag-text-color: var(--noobot-text-accent);
+  background: var(--el-tag-bg-color);
+  border-color: var(--el-tag-border-color);
+  color: var(--el-tag-text-color);
+}
+
+.el-select__wrapper .el-tag .el-tag__content,
+.el-select__wrapper .el-tag .el-tag__close {
+  color: var(--el-tag-text-color);
+}
+
+.el-select__wrapper .el-select__selected-item .el-tag .el-tag__content {
+  color: var(--el-tag-text-color);
+}
+
+.el-select__wrapper .el-tag .el-tag__close:hover {
+  background: color-mix(in srgb, var(--noobot-accent) 22%, transparent);
+  color: var(--noobot-text-strong);
 }
 
 .el-select-dropdown,
@@ -288,7 +314,10 @@
 .el-button {
   border-radius: var(--noobot-btn-radius);
   min-height: var(--noobot-control-height-sm);
-  transition: background-color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease, color var(--noobot-duration-normal) ease;
+  transition:
+    background-color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease,
+    color var(--noobot-duration-normal) ease;
 }
 
 .el-button:not(:disabled):hover {
@@ -458,7 +487,9 @@
   line-height: var(--noobot-tab-height);
   border: 1px solid transparent;
   border-radius: 0;
-  transition: color var(--noobot-duration-normal) ease, border-color var(--noobot-duration-normal) ease;
+  transition:
+    color var(--noobot-duration-normal) ease,
+    border-color var(--noobot-duration-normal) ease;
 }
 
 .noobot-tabs .el-tabs__item:hover {

@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { getThinkingDetailsCount } from "./thinkingDetailsState.js";
+
 export function buildAppShellDrawerPanels({
   translate,
   workspaceVisible,
@@ -25,11 +27,11 @@ export function buildAppShellDrawerPanels({
   handleWorkspaceReset,
 } = {}) {
   const t = typeof translate === "function" ? translate : (key) => key;
+  const messageItem = thinkingDetailsMessageItem || {};
   const resolveThinkingTitle =
     typeof getThinkingDetailsTitle === "function"
       ? getThinkingDetailsTitle
-      : () => t("message.thinkingDetails");
-  const messageItem = thinkingDetailsMessageItem || {};
+      : (item) => t("message.thinkingDetails", { count: getThinkingDetailsCount(item) });
 
   return [
     {
