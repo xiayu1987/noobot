@@ -5,6 +5,7 @@
  */
 
 import { isPlainObject } from "./configStructureContract.js";
+import { resolveModelFamilyPromptCacheFields } from "@noobot/model-protocol";
 
 export const CONFIG_MODEL_REFERENCE_SOURCE = "providers";
 
@@ -35,6 +36,9 @@ function readDeclaredOptions(node, declarationContainer) {
 }
 
 export function resolveConfigFieldOptions(node, container, document, declarationContainer) {
+  if (node?.key === "prompt_cache_fields") {
+    return resolveModelFamilyPromptCacheFields({ model: container?.model });
+  }
   const referenceOptions = resolveConfigReferenceOptions(node, document);
   if (referenceOptions.length) return referenceOptions;
   const declaredOptions = readDeclaredOptions(node, declarationContainer);

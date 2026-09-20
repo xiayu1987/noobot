@@ -4,9 +4,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildPromptCacheKey, resolveUseResponsesApi } from "../src/index.js";
+import { resolveUseResponsesApi } from "../src/index.js";
 
-test("responses API and cache key selection are deterministic", () => {
+test("responses API selection is deterministic", () => {
   assert.equal(resolveUseResponsesApi({ model: "codex-mini" }), true);
   assert.equal(
     resolveUseResponsesApi({
@@ -18,17 +18,4 @@ test("responses API and cache key selection are deterministic", () => {
     true,
   );
   assert.equal(resolveUseResponsesApi({ model: "gpt-5" }), false);
-  assert.equal(
-    buildPromptCacheKey(
-      {
-        operatorId: "openai",
-        model: "gpt-5",
-        reasoning_effort_parameter: "reasoning_effort",
-        reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
-        modelFamily: "gpt",
-      },
-      "agent.main",
-    ),
-    "noobot-main-gpt-5",
-  );
 });

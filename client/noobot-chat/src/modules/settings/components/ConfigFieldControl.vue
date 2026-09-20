@@ -72,6 +72,19 @@ watch(
   { immediate: true },
 );
 
+watch(
+  selectOptions,
+  (options) => {
+    if (!isKind(KIND.ENUM_LIST) || !Array.isArray(value.value)) return;
+    const allowed = new Set(options);
+    const next = value.value.filter((item) => allowed.has(item));
+    if (next.length === value.value.length) return;
+    if (next.length) writeValue(next);
+    else delete props.container[props.node.key];
+  },
+  { immediate: true },
+);
+
 function syncRawDraft(text) {
   rawDraft.value = String(text ?? "");
   if (!rawDraft.value.trim()) {
@@ -148,8 +161,6 @@ function syncRawDraft(text) {
         :model-value="Array.isArray(value) ? value : []"
         multiple
         clearable
-        collapse-tags
-        collapse-tags-tooltip
         popper-class="noobot-select-popper"
         class="field-input"
         :placeholder="translate('settings.configSelectPlaceholder')"

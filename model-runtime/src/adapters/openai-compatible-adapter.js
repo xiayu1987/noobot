@@ -72,14 +72,18 @@ export function createOpenAiCompatibleClient({
   flow = "agent.main",
 }) {
   const spec = normalizeRuntimeModelSpec(modelSpec);
-  const modelKwargs = compileProviderModelKwargs(spec, flow);
-  const promptCacheKey = modelKwargs.prompt_cache_key;
   const useResponsesApi = resolveUseResponsesApi(spec);
+  const cacheTransport = { useResponsesApi };
+  const modelKwargs = compileProviderModelKwargs(spec, flow, cacheTransport);
+  const promptCacheKey = modelKwargs.prompt_cache_key;
   const maxTokens = spec.max_tokens !== undefined ? Number(spec.max_tokens) : undefined;
   if (spec.operatorId === MODEL_PROVIDER_ID.OPENAI && !useResponsesApi && maxTokens !== undefined) {
     modelKwargs.max_completion_tokens = maxTokens;
   }
-  const defaultHeaders = { ...headers, ...resolvePromptCacheHeaders(spec, flow) };
+  const defaultHeaders = {
+    ...headers,
+    ...resolvePromptCacheHeaders(spec, flow, cacheTransport),
+  };
   const configuration = { defaultHeaders, ...(spec.base_url ? { baseURL: spec.base_url } : {}) };
   const sampling = {};
   if (spec.temperature !== undefined && spec.top_p === undefined)
@@ -96,6 +100,7 @@ export function createOpenAiCompatibleClient({
     ...(promptCacheKey ? { promptCacheKey } : {}),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
+  applyInvocationOverrides(client, modelKwargs);
   return applyOpenAiResponsesRequestOrder(client);
 }
 

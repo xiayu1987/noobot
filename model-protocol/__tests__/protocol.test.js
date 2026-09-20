@@ -30,6 +30,7 @@ import {
   MODEL_PROVIDER_CONFIG_ACCESS,
   MODEL_PROVIDER_CONFIG_CONTRACT,
   MODEL_PROVIDER_DECLARATION_VISIBILITY,
+  MODEL_PROMPT_CACHE_FIELDS,
 } from "../src/index.js";
 
 test("model input processing keeps directly readable text out of multimodal parsing", () => {
@@ -575,8 +576,18 @@ test("provider config contract owns field configurability and declaration visibi
     false,
   );
   assert.equal(fields.model.configAccess, MODEL_PROVIDER_CONFIG_ACCESS.USER);
-  assert.equal(fields.cache_control.configAccess, MODEL_PROVIDER_CONFIG_ACCESS.SYSTEM);
+  assert.equal(fields.prompt_cache_fields.configAccess, MODEL_PROVIDER_CONFIG_ACCESS.USER);
+  assert.deepEqual(fields.prompt_cache_fields.items.values, MODEL_PROMPT_CACHE_FIELDS);
+  assert.deepEqual(MODEL_PROMPT_CACHE_FIELDS, [
+    "prompt_cache_key",
+    "prompt_cache_options",
+    "prompt_cache_retention",
+    "cache_control",
+  ]);
+  assert.equal("prompt_cache_key" in fields, false);
+  assert.equal("prompt_cache_options" in fields, false);
   assert.equal("prompt_cache_retention" in fields, false);
+  assert.equal("cache_control" in fields, false);
   assert.equal(
     fields.reasoning_effort_options.declarationVisibility,
     MODEL_PROVIDER_DECLARATION_VISIBILITY.USER,

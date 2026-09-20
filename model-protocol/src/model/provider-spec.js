@@ -5,7 +5,7 @@
 
 import { resolveModelAdapterId } from "./model-adapter.js";
 import { MODEL_IMAGE_GENERATION_API_TYPE } from "./model-capabilities.js";
-import { MODEL_FAMILY_ID } from "./model-family.js";
+import { MODEL_FAMILY_ID, resolveModelFamilyId } from "./model-family.js";
 
 export {
   MODEL_ADAPTER_ID,
@@ -44,6 +44,83 @@ export const MODEL_PROVIDER_DECLARATION_VISIBILITY = Object.freeze({
   HIDDEN: "hidden",
   USER: "user",
 });
+
+export const MODEL_PROMPT_CACHE_FIELD = Object.freeze({
+  KEY: "prompt_cache_key",
+  OPTIONS: "prompt_cache_options",
+  RETENTION: "prompt_cache_retention",
+  CACHE_CONTROL: "cache_control",
+});
+
+export const MODEL_PROMPT_CACHE_FIELDS = Object.freeze(Object.values(MODEL_PROMPT_CACHE_FIELD));
+
+const MODEL_PROMPT_CACHE_VALUE = Object.freeze({
+  OPTIONS: Object.freeze({ ttl: "30m" }),
+  KIMI_OPTIONS: Object.freeze({ mode: "implicit", ttl: "5m" }),
+  RETENTION: "24h",
+  CACHE_CONTROL: Object.freeze({ type: "ephemeral" }),
+});
+
+const MODEL_PROMPT_CACHE_FIELD_SET = new Set(MODEL_PROMPT_CACHE_FIELDS);
+const OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS = Object.freeze([
+  MODEL_PROMPT_CACHE_FIELD.KEY,
+  MODEL_PROMPT_CACHE_FIELD.OPTIONS,
+  MODEL_PROMPT_CACHE_FIELD.RETENTION,
+]);
+
+export const MODEL_FAMILY_PROMPT_CACHE_FIELDS = Object.freeze({
+  [MODEL_FAMILY_ID.GPT]: OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS,
+  [MODEL_FAMILY_ID.CLAUDE]: Object.freeze([MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL]),
+  [MODEL_FAMILY_ID.QWEN]: Object.freeze([
+    ...OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS,
+    MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL,
+  ]),
+  [MODEL_FAMILY_ID.GROK]: OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS,
+  [MODEL_FAMILY_ID.GEMINI]: OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS,
+  [MODEL_FAMILY_ID.GLM]: OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS,
+  [MODEL_FAMILY_ID.DEEPSEEK]: OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS,
+  [MODEL_FAMILY_ID.KIMI]: OPENAI_COMPATIBLE_PROMPT_CACHE_FIELDS,
+  [MODEL_FAMILY_ID.GENERIC]: MODEL_PROMPT_CACHE_FIELDS,
+});
+
+export function resolveModelFamilyPromptCacheFields(input = {}) {
+  const family = input.modelFamily || resolveModelFamilyId(input);
+  return MODEL_FAMILY_PROMPT_CACHE_FIELDS[family] || Object.freeze([]);
+}
+
+export function resolveModelPromptCacheValue(input = {}, field = "") {
+  const family = input.modelFamily || resolveModelFamilyId(input);
+  if (field === MODEL_PROMPT_CACHE_FIELD.OPTIONS) {
+    const value =
+      family === MODEL_FAMILY_ID.KIMI
+        ? MODEL_PROMPT_CACHE_VALUE.KIMI_OPTIONS
+        : MODEL_PROMPT_CACHE_VALUE.OPTIONS;
+    return Object.freeze({ ...value });
+  }
+  if (field === MODEL_PROMPT_CACHE_FIELD.RETENTION) return MODEL_PROMPT_CACHE_VALUE.RETENTION;
+  if (field === MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL) {
+    return Object.freeze({ ...MODEL_PROMPT_CACHE_VALUE.CACHE_CONTROL });
+  }
+  return null;
+}
+
+export function normalizeModelPromptCacheFields(input) {
+  if (input === undefined) return Object.freeze([]);
+  if (!Array.isArray(input)) {
+    throw new TypeError("model spec.prompt_cache_fields must be an array");
+  }
+  const selected = new Set();
+  for (const field of input) {
+    if (!MODEL_PROMPT_CACHE_FIELD_SET.has(field)) {
+      throw new TypeError(`unsupported model spec.prompt_cache_fields value: ${String(field)}`);
+    }
+    if (selected.has(field)) {
+      throw new TypeError(`duplicate model spec.prompt_cache_fields value: ${field}`);
+    }
+    selected.add(field);
+  }
+  return Object.freeze(MODEL_PROMPT_CACHE_FIELDS.filter((field) => selected.has(field)));
+}
 
 const stringField = Object.freeze({ type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING });
 const nonEmptyStringField = Object.freeze({
@@ -95,6 +172,10 @@ function cacheField(spec, familyScope) {
     group: MODEL_PROVIDER_FIELD_GROUP.CACHE,
     ...(familyScope ? { familyScope: Object.freeze([...familyScope]) } : {}),
   });
+}
+
+function configurableCacheField(spec) {
+  return userField(spec, { group: MODEL_PROVIDER_FIELD_GROUP.CACHE });
 }
 
 const modalityField = Object.freeze({
@@ -274,26 +355,13 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
       },
       { group: MODEL_PROVIDER_FIELD_GROUP.TRANSPORT },
     ),
-    prompt_cache_key: cacheField(stringField, [MODEL_FAMILY_ID.GPT, MODEL_FAMILY_ID.CLAUDE]),
-    prompt_cache_options: cacheField(
-      {
-        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-        additionalProperties: true,
-      },
-      [MODEL_FAMILY_ID.GPT, MODEL_FAMILY_ID.CLAUDE],
-    ),
-    cache_control: cacheField(
-      {
-        oneOf: Object.freeze([
-          booleanField,
-          Object.freeze({
-            type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
-            additionalProperties: true,
-          }),
-        ]),
-      },
-      [MODEL_FAMILY_ID.CLAUDE, MODEL_FAMILY_ID.QWEN],
-    ),
+    prompt_cache_fields: configurableCacheField({
+      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.ARRAY,
+      items: Object.freeze({
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
+        values: MODEL_PROMPT_CACHE_FIELDS,
+      }),
+    }),
     cached_content: cacheField(stringField, [MODEL_FAMILY_ID.GEMINI]),
     capabilities: internalField(
       {

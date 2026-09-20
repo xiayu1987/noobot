@@ -118,6 +118,45 @@ describe("resolveConfigReferenceOptions", () => {
       "high",
     ]);
   });
+
+  it("offers every compatible cache field in the model-family protocol", () => {
+    const node = findNode(userTree, "providers.*.prompt_cache_fields");
+    expect(resolveConfigFieldOptions(node, { model: "gpt-5.6-sol" }, document)).toEqual([
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+    ]);
+    expect(resolveConfigFieldOptions(node, { model: "gpt-5.5" }, document)).toEqual([
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+    ]);
+    expect(resolveConfigFieldOptions(node, { model: "claude-opus-5" }, document)).toEqual([
+      "cache_control",
+    ]);
+    expect(resolveConfigFieldOptions(node, { model: "qwen3-coder-plus" }, document)).toEqual([
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+      "cache_control",
+    ]);
+    expect(resolveConfigFieldOptions(node, { model: "qwen3.5-omni-plus" }, document)).toEqual([
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+      "cache_control",
+    ]);
+    expect(resolveConfigFieldOptions(node, { model: "gemini-3" }, document)).toEqual([
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+    ]);
+    expect(resolveConfigFieldOptions(node, { model: "kimi-k3" }, document)).toEqual([
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+    ]);
+  });
 });
 
 describe("hidden builtin sections on save", () => {

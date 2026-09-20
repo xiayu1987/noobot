@@ -104,4 +104,18 @@ describe("drawerPanelsState", () => {
     });
     expect(panels[3].props.active).toBe(false);
   });
+
+  it("forwards the thinking count through the default translated title path", () => {
+    const translate = vi.fn((key, params = {}) => `${key}:${params.count}`);
+    const panels = buildAppShellDrawerPanels({
+      translate,
+      thinkingDetailsMessageItem: {
+        turnScopeId: "turn-1",
+        thinkingDetailCount: 2,
+      },
+    });
+
+    expect(panels[2].title).toBe("message.thinkingDetails:2");
+    expect(translate).toHaveBeenCalledWith("message.thinkingDetails", { count: 2 });
+  });
 });

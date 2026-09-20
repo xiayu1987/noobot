@@ -204,6 +204,7 @@ export const zhCNMessages = {
     max_tokens: "最大 Token 数",
     reasoning_effort: "推理强度",
     tool_reasoning_effort: "工具推理强度",
+    prompt_cache_fields: "提示词缓存字段",
     image_generation: "图片生成",
     reasoning: "推理",
     streaming: "流式输出",
@@ -284,6 +285,7 @@ export const zhCNMessages = {
     max_tokens: "单次回复的最大输出 token 数。",
     reasoning_effort: "常规请求的推理强度档位，取值来自下方推理档位列表。",
     tool_reasoning_effort: "工具调用请求单独使用的推理强度档位。",
+    prompt_cache_fields: "选择目标接口支持的缓存字段；字段值由系统生成，未选择的字段不会发送。",
   },
   infra: {
     inputUserAndCodeFirst: "请先输入用户名和连接码，点击连接",

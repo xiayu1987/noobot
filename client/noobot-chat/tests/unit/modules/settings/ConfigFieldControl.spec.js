@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { defineComponent } from "vue";
+import { defineComponent, reactive } from "vue";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import ConfigFieldControl from "../../../../src/modules/settings/components/ConfigFieldControl.vue";
@@ -49,10 +49,10 @@ const EmptyControlStub = defineComponent({
   template: '<span class="empty-control-stub" />',
 });
 
-const mountControl = ({ declarationContainer, container }) =>
+const mountControl = ({ declarationContainer, container, node }) =>
   mount(ConfigFieldControl, {
     props: {
-      node: {
+      node: node || {
         key: "reasoning_effort",
         kind: CONFIG_FORM_NODE_KIND.STRING,
         optionsField: "reasoning_effort_options",
@@ -105,6 +105,44 @@ describe("ConfigFieldControl reasoning effort options", () => {
       "low",
       "medium",
       "high",
+    ]);
+  });
+});
+
+describe("ConfigFieldControl cache field options", () => {
+  it("removes selections that the current model series does not support", async () => {
+    const container = reactive({
+      model: "gpt-5.6-sol",
+      prompt_cache_fields: ["prompt_cache_key", "cache_control"],
+    });
+    const wrapper = mountControl({
+      container,
+      node: {
+        key: "prompt_cache_fields",
+        kind: CONFIG_FORM_NODE_KIND.ENUM_LIST,
+        options: [
+          "prompt_cache_key",
+          "prompt_cache_options",
+          "prompt_cache_retention",
+          "cache_control",
+        ],
+      },
+    });
+
+    expect(container.prompt_cache_fields).toEqual(["prompt_cache_key"]);
+    expect(wrapper.findAll("option").map((option) => option.attributes("value"))).toEqual([
+      "prompt_cache_key",
+      "prompt_cache_options",
+      "prompt_cache_retention",
+    ]);
+    expect(wrapper.find(".select-stub").attributes("collapse-tags")).toBeUndefined();
+    expect(wrapper.find(".select-stub").attributes("collapse-tags-tooltip")).toBeUndefined();
+
+    container.model = "claude-opus-5";
+    await wrapper.vm.$nextTick();
+    expect(container.prompt_cache_fields).toBeUndefined();
+    expect(wrapper.findAll("option").map((option) => option.attributes("value"))).toEqual([
+      "cache_control",
     ]);
   });
 });

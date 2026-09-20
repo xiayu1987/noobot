@@ -32,12 +32,16 @@ describe("configStructureContract", () => {
     expect(keys).not.toContain("streaming");
   });
 
-  it("hides provider transport, cache, and capability declarations from the user form", () => {
+  it("exposes configurable cache policy while hiding system provider declarations", () => {
     const providers = USER_CONFIG_SECTIONS.find((section) => section.key === "providers");
     const entryKeys = providers.entry.children.map((child) => child.key);
     expect(entryKeys).not.toContain("extra_body");
     expect(entryKeys).not.toContain("use_responses_api");
+    expect(entryKeys).toContain("prompt_cache_fields");
     expect(entryKeys).not.toContain("prompt_cache_key");
+    expect(entryKeys).not.toContain("prompt_cache_options");
+    expect(entryKeys).not.toContain("prompt_cache_retention");
+    expect(entryKeys).not.toContain("cache_control");
     expect(entryKeys).not.toContain("capabilities");
     expect(entryKeys).not.toContain("multimodal_parsing");
     expect(entryKeys).not.toContain("multimodal_generation");
@@ -183,7 +187,10 @@ describe("configDocumentState baseline-aware prune", () => {
             reasoning_effort_options: ["low", "high"],
             reasoning_effort_parameter: "reasoning_effort",
             use_responses_api: true,
-            prompt_cache_key: "stable-key",
+            prompt_cache_fields: ["prompt_cache_key", "cache_control"],
+            prompt_cache_key: "legacy-key",
+            prompt_cache_options: { ttl: "30m" },
+            cache_control: { type: "ephemeral" },
             capabilities: { reasoning: true, tools: true },
           },
         },
@@ -191,7 +198,13 @@ describe("configDocumentState baseline-aware prune", () => {
     );
     const saved = buildConfigDocumentForSave(loaded, JSON.parse(JSON.stringify(loaded)));
     expect(saved).toEqual({
-      providers: { p1: { model: "m", reasoning_effort: "high" } },
+      providers: {
+        p1: {
+          model: "m",
+          reasoning_effort: "high",
+          prompt_cache_fields: ["prompt_cache_key", "cache_control"],
+        },
+      },
     });
   });
 
