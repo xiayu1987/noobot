@@ -9,7 +9,7 @@ function text(value) {
   return String(value || "").trim();
 }
 
-export function resolveWorkflowViewerKey(workflowPayload = {}) {
+function resolveWorkflowViewerKey(workflowPayload = {}) {
   return text(
     workflowPayload?.workflowRunId ||
       workflowPayload?.execution?.workflowRunId ||

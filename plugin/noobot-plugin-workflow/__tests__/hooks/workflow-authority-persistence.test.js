@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { commitWorkflowRuntimeEvent } from "../../src/core/hooks/persistence.js";
+import { commitWorkflowRuntimeEvent } from "../../src/core/hooks/authority-event-commit.js";
 
 test("workflow authority commit uses the protocol persistence scope", async () => {
   const commits = [];

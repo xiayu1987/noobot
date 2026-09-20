@@ -12,7 +12,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import { normalizeOptions } from "../../src/core/options.js";
 import { createWorkflowRegistration } from "../../src/core/plugin.js";
-import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
+import { createRegisterWorkflowHooks } from "../../src/core/orchestrator.js";
 import { PLUGIN_NAME, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";

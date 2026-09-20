@@ -138,7 +138,7 @@ function resolveDslDefaultNodeNames(locale = "zh-CN") {
   return getWorkflowDslDefaultNodeNames(normalizeDslLocale(locale));
 }
 
-export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
+function parseWorkflowDslTextWithOptions(text = "", options = {}) {
   const locale = normalizeDslLocale(options?.locale || "en-US");
   const { startName, endName } = resolveDslDefaultNodeNames(locale);
   const normalized = stripCodeFence(text);

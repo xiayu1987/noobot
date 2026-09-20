@@ -6,7 +6,7 @@
 
 import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./hooks/runtime.js";
 
-export const WORKFLOW_LOCALE = Object.freeze({
+const WORKFLOW_LOCALE = Object.freeze({
   ZH_CN: "zh-CN",
   EN_US: "en-US",
 });

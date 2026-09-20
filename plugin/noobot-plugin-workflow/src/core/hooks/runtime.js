@@ -19,7 +19,7 @@ export function resolveWorkflowAbortSignal(ctx = {}) {
   return ctx?.abortSignal || runtime?.abortSignal || null;
 }
 
-export function createWorkflowAbortError(ctx = {}) {
+function createWorkflowAbortError(ctx = {}) {
   const signal = resolveWorkflowAbortSignal(ctx);
   const reason = signal?.reason;
   const reasonText =
@@ -72,6 +72,18 @@ export function hasOwnObjectKey(source = {}, key = "") {
     !Array.isArray(source) &&
     Object.prototype.hasOwnProperty.call(source, String(key || "").trim()),
   );
+}
+
+export function firstText(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+export function normalizeString(value) {
+  return String(value || "").trim();
 }
 
 export function withTimeout(promise, timeoutMs, message = "", { signal = null } = {}) {

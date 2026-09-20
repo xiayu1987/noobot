@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { appendWorkflowPlanningMessage, commitWorkflowRuntimeEvent } from "../hooks/persistence.js";
+import { appendWorkflowPlanningMessage } from "../hooks/persistence.js";
+import { commitWorkflowRuntimeEvent } from "../hooks/authority-event-commit.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import {
   WORKFLOW_RUNTIME_EVENT,
@@ -12,7 +13,7 @@ import {
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { resolveWorkflowParentRunConfig } from "../hooks/runtime.js";
 
-export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
+function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
   return {
     started: false,
     instanceId: workflowRunId,
@@ -25,7 +26,7 @@ export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions =
   };
 }
 
-export function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = null) {
+function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = null) {
   payload.planningDialog = {
     dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
     sessionId: String(ctx?.sessionId || "").trim(),

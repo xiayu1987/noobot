@@ -5,9 +5,8 @@
  */
 
 import { createPluginRuntimeContext, assertHookManager } from "./context.js";
-import { normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
-import { registerWorkflowHooks } from "./hooks/index.js";
+import { registerWorkflowHooks } from "./orchestrator.js";
 
 export function createWorkflowRegistration(deps = {}) {
   const createPluginRuntimeContextFn = deps.createPluginRuntimeContext || createPluginRuntimeContext;
@@ -39,22 +38,3 @@ export function createWorkflowRegistration(deps = {}) {
 }
 
 export const registerWorkflowCore = createWorkflowRegistration();
-
-export function createWorkflowCoreFactory(deps = {}) {
-  const normalizeOptionsFn = deps.normalizeOptions || normalizeOptions;
-  const registerWorkflowCoreFn = deps.registerWorkflowCore || registerWorkflowCore;
-
-  return function createWorkflowCore(userOptions = {}) {
-    const options = normalizeOptionsFn(userOptions);
-    return {
-      name: PLUGIN_NAME,
-      version: PLUGIN_VERSION,
-      options,
-      register(api = {}) {
-        return registerWorkflowCoreFn(api, options);
-      },
-    };
-  };
-}
-
-export const createWorkflowCore = createWorkflowCoreFactory();

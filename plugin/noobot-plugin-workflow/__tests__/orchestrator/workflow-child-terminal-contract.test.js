@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveCommittedChildTerminal } from "../../src/core/orchestrator/execution-runner.js";
+import { resolveCommittedChildTerminal } from "../../src/core/orchestrator/node-state-commit.js";
 
 function receipt(overrides = {}) {
   return {

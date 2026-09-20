@@ -6,8 +6,6 @@
 
 import {
   startWorkflowInstanceById,
-  getWorkflowInstanceSnapshot as getWorkflowInstanceSnapshotById,
-  resolveWorkflowUpstreamActionNodes as resolveWorkflowUpstreamActionNodesByRuntime,
   resolveWorkflowUpstreamActionSteps as resolveWorkflowUpstreamActionStepsByRuntime,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance as releaseWorkflowInstanceById,
@@ -36,14 +34,6 @@ export function createWorkflowInstance({ instanceId = "", semantic = {}, options
     },
     meta,
   });
-}
-
-export function getWorkflowInstanceSnapshot({ instanceId = "" } = {}) {
-  return getWorkflowInstanceSnapshotById({ instanceId });
-}
-
-export function resolveWorkflowUpstreamActionNodes(params = {}) {
-  return resolveWorkflowUpstreamActionNodesByRuntime(params);
 }
 
 export function resolveWorkflowUpstreamActionSteps(params = {}) {

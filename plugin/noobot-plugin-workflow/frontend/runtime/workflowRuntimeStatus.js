@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function normalizeStatus(value = "") {
+function normalizeStatus(value = "") {
   const status = String(value || "").trim().toLowerCase();
   if (status === "error") return "failed";
   if (status === "done" || status === "completed" || status === "succeeded") return "success";
