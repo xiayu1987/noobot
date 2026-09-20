@@ -25,6 +25,9 @@ export function createTestModelResponse(
     toolCalls = [],
     finishReason = "stop",
     usage = {},
+    content = undefined,
+    responseOutput = undefined,
+    responseReasoning = undefined,
     attempts = null,
     identity = {},
   } = {},
@@ -37,6 +40,13 @@ export function createTestModelResponse(
     toolCalls: Array.isArray(toolCalls) ? toolCalls : [],
     finishReason: String(finishReason ?? ""),
     usage: usage && typeof usage === "object" && !Array.isArray(usage) ? usage : {},
+    ...(typeof content === "string" || Array.isArray(content) ? { content } : {}),
+    ...(Array.isArray(responseOutput) ? { responseOutput } : {}),
+    ...(responseReasoning &&
+    typeof responseReasoning === "object" &&
+    !Array.isArray(responseReasoning)
+      ? { responseReasoning }
+      : {}),
   };
   const normalizedAttempts =
     Array.isArray(attempts) && attempts.length
