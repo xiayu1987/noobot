@@ -5,7 +5,9 @@
  */
 
 function normalizeStatus(value = "") {
-  const status = String(value || "").trim().toLowerCase();
+  const status = String(value || "")
+    .trim()
+    .toLowerCase();
   if (status === "error") return "failed";
   if (status === "done" || status === "completed" || status === "succeeded") return "success";
   return status;
@@ -38,7 +40,8 @@ export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
 export function resolveActionRuntimeStatus(actionNodeStates = [], resolveStepStatus) {
   const steps = [];
   for (const stateBox of Array.isArray(actionNodeStates) ? actionNodeStates : []) {
-    for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) steps.push(stepItem);
+    for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : [])
+      steps.push(stepItem);
   }
   if (!steps.length) return "pending";
 

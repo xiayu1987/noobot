@@ -27,9 +27,10 @@ function registryValue(registry) {
 export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistry = null) {
   const workflowRunId = computed(() => resolveWorkflowViewerKey(workflowPayload.value));
   const registry = registryValue(workflowNodeStateRegistry);
-  const initialState = workflowRunId.value && registry?.viewerStates?.[workflowRunId.value]
-    ? registry.viewerStates[workflowRunId.value]
-    : {};
+  const initialState =
+    workflowRunId.value && registry?.viewerStates?.[workflowRunId.value]
+      ? registry.viewerStates[workflowRunId.value]
+      : {};
 
   const viewerVisible = ref(false);
   const selectedNode = ref(initialState.selectedNode || null);
@@ -38,7 +39,14 @@ export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistr
   const selectedGraphDialogProcessId = ref(text(initialState.selectedGraphDialogProcessId));
 
   watch(
-    [workflowRunId, viewerVisible, selectedNode, selectedRuntimeNode, selectedRuntimeStep, selectedGraphDialogProcessId],
+    [
+      workflowRunId,
+      viewerVisible,
+      selectedNode,
+      selectedRuntimeNode,
+      selectedRuntimeStep,
+      selectedGraphDialogProcessId,
+    ],
     ([key, visible, node, runtimeNode, runtimeStep, dialogProcessId]) => {
       const target = registryValue(workflowNodeStateRegistry);
       if (!key || !target) return;

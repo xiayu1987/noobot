@@ -29,7 +29,9 @@ export function createWorkflowExtensionRuntime(deps = {}) {
     const api = getWorkflowExtensionApiFn();
     const extensionContext = { api, options, meta };
     const extensionMounter =
-      typeof options?.workflowExtensionMounter === "function" ? options.workflowExtensionMounter : null;
+      typeof options?.workflowExtensionMounter === "function"
+        ? options.workflowExtensionMounter
+        : null;
     if (extensionMounter) {
       extensionMounter(extensionContext);
     }
@@ -55,4 +57,3 @@ const workflowExtensionRuntime = createWorkflowExtensionRuntime();
 export function mountWorkflowExtensions(params = {}) {
   workflowExtensionRuntime.mount(params);
 }
-
