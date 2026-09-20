@@ -8,7 +8,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { HOOK_PHASE_STATUS } from "@noobot/hook-protocol/phase-status";
 
 export const PLUGIN_NAME = "noobot-plugin-harness";
-export const PLUGIN_VERSION = "4.3.3";
+export const PLUGIN_VERSION = "4.3.4";
 
 export const HARNESS_RUN_STATUS = Object.freeze({
   RUNNING: HOOK_PHASE_STATUS.RUNNING,
