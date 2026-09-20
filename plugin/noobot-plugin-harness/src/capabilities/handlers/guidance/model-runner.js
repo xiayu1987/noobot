@@ -207,9 +207,6 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     source: "planning_revision",
     stage: "revision",
   });
-  const flagsAfterRevision = resolveScenarioPolicyFlagsFromContext(ctx, meta);
-  const dynamicPolicyPromptAfterRevision =
-    flagsAfterRevision.dynamicPolicyPrompt || dynamicPolicyPrompt;
   const revisionAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_revision",
     content: revisionText,
@@ -244,11 +241,7 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "next_phase_plan_followup",
-    content: buildPostPlanUserFollowupPrompt(locale, "revision", {
-      programmingMode: flagsAfterRevision.programmingMode,
-      textMode: flagsAfterRevision.textMode,
-      dynamicPolicyPrompt: dynamicPolicyPromptAfterRevision,
-    }),
+    content: buildPostPlanUserFollowupPrompt(locale, "revision"),
     dedupe: true,
   });
   changed = true;

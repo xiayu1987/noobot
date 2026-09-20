@@ -4,20 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function resolveMessageDialogProcessId(messageItem = {}) {
-  return String(
-    messageItem?.dialogProcessId ||
-      messageItem?.dialogId ||
-      messageItem?.lc_kwargs?.dialogProcessId ||
-      messageItem?.lc_kwargs?.dialogId ||
-      "",
-  ).trim();
-}
-
 export function resolveDialogProcessIdFromContext(ctx = {}) {
   return String(ctx?.dialogProcessId || "").trim();
-}
-
-export function resolveDialogProcessId({ ctx = {} } = {}) {
-  return resolveDialogProcessIdFromContext(ctx);
 }

@@ -10,7 +10,7 @@ import {
   captureGuidanceSummaryCheckpoint,
   markGuidanceSummarizedMessages,
 } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
+import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared/index.js";
 import { appendMessage, replaceMessageProjection } from "../../src/core/message-store.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 import {

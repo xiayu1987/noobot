@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { createAcceptanceHandler as createAcceptanceHandlerImpl } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler as createGuidanceHandlerImpl } from "../../src/capabilities/handlers/guidance.js";
-import { createPlanningHandler as createPlanningHandlerImpl } from "../../src/capabilities/handlers/planning.js";
+import { createAcceptanceHandler as createAcceptanceHandlerImpl } from "../../src/capabilities/handlers/acceptance/index.js";
+import { createGuidanceHandler as createGuidanceHandlerImpl } from "../../src/capabilities/handlers/guidance/index.js";
+import { createPlanningHandler as createPlanningHandlerImpl } from "../../src/capabilities/handlers/planning/index.js";
 import {
   createTestResolveModelMessages,
   ensureTestHookContext,

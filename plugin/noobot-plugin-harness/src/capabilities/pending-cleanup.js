@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./handlers/shared.js";
+import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./handlers/shared/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 

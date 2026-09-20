@@ -38,20 +38,3 @@ export function ensureIntervalCleanupTask(
   });
   return timer;
 }
-
-export function stopIntervalCleanupTask(name = "") {
-  const taskName = String(name || "").trim();
-  if (!taskName) return false;
-  const existing = cleanupIntervals.get(taskName);
-  if (!existing?.timer) return false;
-  clearInterval(existing.timer);
-  cleanupIntervals.delete(taskName);
-  return true;
-}
-
-export function stopAllIntervalCleanupTasks() {
-  for (const { timer } of cleanupIntervals.values()) {
-    clearInterval(timer);
-  }
-  cleanupIntervals.clear();
-}

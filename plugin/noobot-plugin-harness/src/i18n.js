@@ -16,7 +16,6 @@ export {
   DEFAULT_TASK_OWNER,
   DEFAULT_SUBTASK_OWNERS,
   DEFAULT_TASK_TEMPLATE,
-  PROMPT_JSON_FORMAT_EXAMPLES,
 } from "./i18n/defaults.js";
 
 export const I18N_TEXT = Object.freeze({

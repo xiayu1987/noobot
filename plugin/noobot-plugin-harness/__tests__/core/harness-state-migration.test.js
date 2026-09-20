@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
+import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared/index.js";
 import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/constants.js";
 import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 import { ensureTestAgentExecutionScope } from "../helpers/public-runtime-fixtures.js";

@@ -196,11 +196,7 @@ export async function runPlanningRefinementBySeparateModel(
       locale,
       purpose: "next_phase_plan_refinement_followup",
       content: [
-        buildPostPlanUserFollowupPrompt(locale, "refinement", {
-          programmingMode,
-          textMode,
-          dynamicPolicyPrompt,
-        }),
+        buildPostPlanUserFollowupPrompt(locale, "refinement"),
         formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
       ]
         .filter(Boolean)

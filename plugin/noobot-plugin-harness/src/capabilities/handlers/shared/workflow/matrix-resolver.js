@@ -29,22 +29,13 @@ export function isTextScenarioText(value = "") {
   return text === "text" || text.includes("text") || text.includes("\u6587\u672c");
 }
 
-export function resolveRunConfigCandidatesFromContext(ctx = {}) {
+function resolveRunConfigCandidatesFromContext(ctx = {}) {
   const runtime = ctx?.agentContext?.bindings?.runtime || null;
   return [
     ctx?.runConfig,
     runtime?.runConfig,
     runtime?.systemRuntime?.runConfig,
     ctx?.agentContext?.runConfig,
-  ].filter((item) => item && typeof item === "object");
-}
-
-export function resolveHarnessOptionCandidates(ctx = {}, meta = {}) {
-  const runConfigs = resolveRunConfigCandidatesFromContext(ctx);
-  return [
-    meta?.harness,
-    ...runConfigs.map((item) => item?.plugins?.harness),
-    ...runConfigs.map((item) => item?.harness),
   ].filter((item) => item && typeof item === "object");
 }
 
