@@ -5,8 +5,8 @@
  */
 import { randomUUID } from "node:crypto";
 
-export const TURN_COMMAND_TYPE = Object.freeze({ SEND: "send", CONTINUE: "continue" });
-export const TURN_COMMAND_ORIGIN = Object.freeze({ USER: "user", INTERNAL: "internal" });
+const TURN_COMMAND_TYPE = Object.freeze({ SEND: "send", CONTINUE: "continue" });
+const TURN_COMMAND_ORIGIN = Object.freeze({ USER: "user", INTERNAL: "internal" });
 
 const trim = (value = "") => String(value || "").trim();
 

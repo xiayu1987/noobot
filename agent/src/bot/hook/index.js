@@ -18,9 +18,7 @@ function resolveBotRuntimeHookManager(runtime = {}) {
     : null;
 }
 
-export { resolveBotRuntimeHookManager };
-
-export function resolveBotHookRuntimeMeta({
+function resolveBotHookRuntimeMeta({
   userId = "",
   sessionId = "",
   parentSessionId = "",
