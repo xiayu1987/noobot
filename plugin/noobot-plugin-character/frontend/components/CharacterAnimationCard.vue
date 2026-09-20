@@ -4,10 +4,11 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref } from "vue";
-import ImportedCharacterViewer from "./ImportedCharacterViewer.vue";
+import { computed, defineAsyncComponent, ref } from "vue";
 import { useCharacterLocale } from "../i18n/index.js";
 import { analyzeAnimationSpatial } from "../../src/spatial-analysis.js";
+
+const ImportedCharacterViewer = defineAsyncComponent(() => import("./ImportedCharacterViewer.vue"));
 
 const props = defineProps({
   card: { type: Object, required: true },

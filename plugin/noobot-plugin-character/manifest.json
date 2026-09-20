@@ -76,9 +76,30 @@
       "extensions": [
         { "id": "character-animation-projector", "point": "runtime.stream.route" },
         { "id": "character-session-artifact-hydrator", "point": "session.detail.hydrator" },
-        { "id": "character-session-artifacts", "point": "session.artifact.panel" },
-        { "id": "character-right-panel", "point": "right.tool.panel" },
-        { "id": "character-more-actions", "point": "composer.more.actions" }
+        {
+          "id": "character-session-artifacts",
+          "point": "session.artifact.panel",
+          "component": {
+            "module": "./frontend/components/CharacterSessionArtifacts.vue",
+            "export": "default"
+          }
+        },
+        {
+          "id": "character-right-panel",
+          "point": "right.tool.panel",
+          "component": {
+            "module": "./frontend/components/CharacterAnimationAssets.vue",
+            "export": "default"
+          }
+        },
+        {
+          "id": "character-more-actions",
+          "point": "composer.more.actions",
+          "component": {
+            "module": "./frontend/components/CharacterAnimationAssets.vue",
+            "export": "default"
+          }
+        }
       ]
     }
   },

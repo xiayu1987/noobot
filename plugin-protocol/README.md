@@ -49,6 +49,24 @@ The host validates every Hook registration, Hook emission, Service route binding
 Frontend contribution against the same parsed Manifest. Handler ids are scoped by the
 host. A plugin never receives an unrestricted HookManager or Express application.
 
+Frontend component extension points declare their module boundary in the Manifest:
+
+```json
+{
+  "id": "example-card",
+  "point": "message.card.pre",
+  "component": {
+    "module": "./frontend/ExampleCard.vue",
+    "export": "default"
+  }
+}
+```
+
+`plugin-protocol` owns whether an extension point is a component or provider.
+`plugin-runtime` validates the generated loader against that declaration and resolves the
+declared export. Frontend hosts materialize the loader in their UI framework. Plugin
+activation entries do not import, wrap, or submit components themselves.
+
 ## Ownership
 
 | Concern                                                  | Authoritative project          |
@@ -56,6 +74,7 @@ host. A plugin never receives an unrestricted HookManager or Express application
 | Plugin manifest, activation, host ports, frontend points | `plugin-protocol`              |
 | Hook point names and execution semantics                 | `hook-protocol`                |
 | Discovery, strict loading, activation-result validation  | `plugin-runtime`               |
+| Declared frontend component loader resolution            | `plugin-runtime`               |
 | Agent context envelopes                                  | `context-protocol`             |
 | Host capability implementations and lifecycle events     | Agent, Service, Frontend hosts |
 

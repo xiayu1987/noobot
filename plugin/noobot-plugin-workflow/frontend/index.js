@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import WorkflowMessageCard from "./components/WorkflowMessageCard.vue";
-import WorkflowModelExtension from "./components/WorkflowModelExtension.vue";
 import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRoute.js";
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
@@ -119,7 +117,6 @@ export async function activate(ctx = {}) {
   contribute(points.COMPOSER_OPTIONS_MODEL, {
     id: "workflow-model-extension",
     priority: 20,
-    component: WorkflowModelExtension,
     when: (context = {}) => context?.selectedPluginKeySet?.has?.("workflow") === true,
     resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("workflow") }),
   });
@@ -128,7 +125,6 @@ export async function activate(ctx = {}) {
     capability: "message.panel.workflow",
     exclusiveGroup: "message.panel.workflow",
     priority: 100,
-    component: WorkflowMessageCard,
     when: (context = {}) => isWorkflowMessageLike(context?.messageItem),
     resolveProps: (context = {}) => ({
       messageItem: context?.messageItem || {},

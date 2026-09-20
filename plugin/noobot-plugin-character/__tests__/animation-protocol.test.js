@@ -22,7 +22,8 @@ import {
   CHARACTER_ANIMATION_TOOL_ID,
   CHARACTER_ANIMATION_UPDATE_TOOL_ID,
 } from "../src/contract.js";
-import { activate, injectAnimationContext } from "../src/entries/agent.js";
+import { activate } from "../src/entries/agent.js";
+import { injectAnimationContext } from "../src/animation-context.js";
 
 import { assets, generationProtocol, protocol } from "./fixtures/animation-fixtures.js";
 

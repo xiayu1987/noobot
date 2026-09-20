@@ -17,9 +17,17 @@ import {
   PLUGIN_SURFACE,
   PLUGIN_SURFACE_HOST_PORTS,
 } from "./activation.js";
-import { EXTENSION_POINT_DEFINITIONS } from "./frontend.js";
+import { EXTENSION_POINT_DEFINITIONS, FRONTEND_EXTENSION_KIND } from "./frontend.js";
 
 const strictString = z.string().trim().min(1);
+const frontendModuleSpecifierSchema = strictString.refine(
+  (value) =>
+    value.startsWith("./") ||
+    /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)(?:\/[a-z0-9][a-z0-9._-]*)*$/i.test(
+      value,
+    ),
+  (value) => ({ message: `invalid frontend component module: ${value}` }),
+);
 const hookPointSchema = strictString.refine(
   (point) => Boolean(HOOK_POINT_DESCRIPTORS[point]),
   (point) => ({ message: `unknown hook point: ${point}` }),
@@ -60,6 +68,13 @@ export const pluginFrontendContributionSchema = z
   .object({
     id: strictString,
     point: frontendPointSchema,
+    component: z
+      .object({
+        module: frontendModuleSpecifierSchema,
+        export: strictString,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -72,6 +87,27 @@ export const pluginExecutionIntentSchema = z
     stage: strictString.optional(),
   })
   .strict();
+
+function validateFrontendExtensionModules(extensions = [], context) {
+  for (const [index, extension] of extensions.entries()) {
+    const definition = EXTENSION_POINT_DEFINITIONS[extension.point];
+    const componentPath = ["contributes", "frontend", "extensions", index, "component"];
+    if (definition?.kind === FRONTEND_EXTENSION_KIND.COMPONENT && !extension.component) {
+      context.addIssue({
+        code: "custom",
+        path: componentPath,
+        message: `${extension.point} requires a declarative component module`,
+      });
+    }
+    if (definition?.kind === FRONTEND_EXTENSION_KIND.PROVIDER && extension.component) {
+      context.addIssue({
+        code: "custom",
+        path: componentPath,
+        message: `${extension.point} does not accept a component module`,
+      });
+    }
+  }
+}
 
 const surfaceContributionSchema = z
   .object({
@@ -279,6 +315,7 @@ export const pluginManifestSchema = z
         message: "frontend contribution ids must be unique",
       });
     }
+    validateFrontendExtensionModules(manifest.contributes.frontend?.extensions, context);
   });
 
 export function parsePluginManifest(input = {}) {

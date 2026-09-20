@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   createContributionTransaction,
+  createDeclaredFrontendComponentLoader,
   createPluginActivationScope,
   createPluginActivationScopeSync,
   createExtensionRegistry,
@@ -17,6 +18,41 @@ import {
   loadNoobotPlugins,
   resolveLoadedNoobotPlugin,
 } from "../src/index.js";
+
+test("frontend component loaders are resolved from manifest declarations", async () => {
+  const component = { name: "ExampleCard" };
+  const manifest = {
+    id: "example",
+    contributes: {
+      frontend: {
+        extensions: [
+          {
+            id: "example-card",
+            point: "message.card.pre",
+            component: { module: "./frontend/ExampleCard.vue", export: "default" },
+          },
+        ],
+      },
+    },
+  };
+  const loader = createDeclaredFrontendComponentLoader({
+    manifest,
+    componentLoaders: { "example-card": async () => ({ default: component }) },
+    contributionId: "example-card",
+    point: "message.card.pre",
+  });
+  assert.equal(await loader(), component);
+  assert.throws(
+    () =>
+      createDeclaredFrontendComponentLoader({
+        manifest,
+        componentLoaders: {},
+        contributionId: "example-card",
+        point: "message.card.pre",
+      }),
+    /loader mismatch; missing: example-card/,
+  );
+});
 
 test("extension registry publishes candidate generations atomically", () => {
   const registry = createExtensionRegistry({ pointDefinitions: { point: { strategy: "multi" } } });

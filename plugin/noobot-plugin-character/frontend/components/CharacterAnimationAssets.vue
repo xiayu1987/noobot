@@ -4,21 +4,26 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
-import { importGlbAsset } from "../runtime/importGlbAsset.js";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import {
   characterAssetCatalog,
   recordCharacterAsset,
   refreshCharacterAssetCatalog,
   removeCharacterAsset,
 } from "../runtime/characterAssetCatalog.js";
-import ImportedCharacterViewer from "./ImportedCharacterViewer.vue";
 import robotSampleUrl from "../../assets/samples/robot-expressive/RobotExpressive.glb?url";
 import soldierSampleUrl from "../../assets/samples/Soldier.glb?url";
 import flamingoSampleUrl from "../../assets/samples/Flamingo.glb?url";
 import horseSampleUrl from "../../assets/samples/Horse.glb?url";
 import parrotSampleUrl from "../../assets/samples/Parrot.glb?url";
 import { useCharacterLocale } from "../i18n/index.js";
+
+const ImportedCharacterViewer = defineAsyncComponent(() => import("./ImportedCharacterViewer.vue"));
+
+async function importGlbAsset(input) {
+  const module = await import("../runtime/importGlbAsset.js");
+  return module.importGlbAsset(input);
+}
 
 const props = defineProps({
   pluginModelConfig: { type: Object, default: () => ({}) },
