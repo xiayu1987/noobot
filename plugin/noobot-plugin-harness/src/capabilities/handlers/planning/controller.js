@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { synchronizeTaskAcceptanceTool } from "../acceptance.js";
+import { synchronizeTaskAcceptanceTool } from "../acceptance/index.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {

@@ -11,7 +11,7 @@ import {
   createTestHookContext,
 } from "../helpers/public-runtime-fixtures.js";
 
-import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
+import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared/index.js";
 import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/constants.js";
 
 test("ensureHarnessBucket fast-path keeps initialized references stable", async () => {

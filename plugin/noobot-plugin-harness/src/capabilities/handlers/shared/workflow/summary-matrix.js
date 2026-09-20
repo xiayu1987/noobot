@@ -9,8 +9,6 @@ import {
 } from "./matrix-resolver.js";
 import { resolveSummaryPatchProtocolSelection } from "./protocols.js";
 
-export const GUIDANCE_SUMMARY_SCENARIO = HARNESS_SCENARIO;
-
 export const GUIDANCE_SUMMARY_INSTRUCTION_MATRIX = Object.freeze({
   [HARNESS_SCENARIO.GENERAL]: Object.freeze({
     promptId: "guidance_summary_instruction/general",

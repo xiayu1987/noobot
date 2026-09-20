@@ -10,7 +10,6 @@ import {
   HARNESS_I18N_KEYSET,
   I18N_TEXT,
   LOCALE,
-  PROMPT_JSON_FORMAT_EXAMPLES,
 } from "../../../i18n.js";
 export { HARNESS_I18N_KEYSET };
 
@@ -51,9 +50,4 @@ export function getDefaultSubtaskOwners(locale = LOCALE.ZH_CN) {
 
 export function getTaskTemplate(locale = LOCALE.ZH_CN) {
   return DEFAULT_TASK_TEMPLATE[locale] || DEFAULT_TASK_TEMPLATE[LOCALE.ZH_CN];
-}
-
-export function getPromptJsonFormatExample(type = "planning_main") {
-  const key = String(type || "").trim();
-  return PROMPT_JSON_FORMAT_EXAMPLES[key] || PROMPT_JSON_FORMAT_EXAMPLES.planning_main || "{}";
 }

@@ -22,10 +22,6 @@ const TURN_START_POINTS = new Set([
 ]);
 const MAX_COMPLETED_DIALOG_IDS = QUANTITY_THRESHOLDS.harness.completedDialogIds;
 
-function resolveDialogProcessId(ctx = {}) {
-  return resolveDialogProcessIdFromContext(ctx);
-}
-
 export function markHarnessTurnLifecycle(point = "", ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -33,7 +29,7 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
   const normalizedPoint = String(point || "")
     .trim()
     .toLowerCase();
-  const dialogProcessId = resolveDialogProcessId(ctx);
+  const dialogProcessId = resolveDialogProcessIdFromContext(ctx);
   const completedIds = Array.isArray(bucket.completedDialogProcessIds)
     ? bucket.completedDialogProcessIds
     : (bucket.completedDialogProcessIds = []);
@@ -73,7 +69,7 @@ export function isHarnessAgentTurnEnded(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const dialogProcessId = resolveDialogProcessId(ctx);
+  const dialogProcessId = resolveDialogProcessIdFromContext(ctx);
   const activeDialogProcessId = String(state?.signals?.activeDialogProcessId || "").trim();
   const completedIds = Array.isArray(bucket.completedDialogProcessIds)
     ? bucket.completedDialogProcessIds

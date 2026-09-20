@@ -210,12 +210,6 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
           : [],
       });
       const locale = state?.locale || LOCALE.ZH_CN;
-      const {
-        programmingMode,
-        textMode,
-        dynamicPolicyPrompt,
-      } = resolveScenarioPolicyFlagsFromContext(currentCtx);
-      const dynamicPolicyPromptAfterPlanUpdate = dynamicPolicyPrompt;
       if (applied) {
         relaySeparateModelOutputAsUserMessage(currentCtx, {
           locale,
@@ -230,11 +224,7 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
               ? "next_phase_plan_followup"
               : "next_phase_plan_refinement_followup",
           content: [
-            buildPostPlanUserFollowupPrompt(locale, stage, {
-              programmingMode,
-              textMode,
-              dynamicPolicyPrompt: dynamicPolicyPromptAfterPlanUpdate,
-            }),
+            buildPostPlanUserFollowupPrompt(locale, stage),
             stage === "refinement"
               ? formatOperationDirectoryForRelay(resolveOperationDirectoryContext(currentCtx))
               : "",

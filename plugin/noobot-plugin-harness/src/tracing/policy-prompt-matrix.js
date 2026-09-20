@@ -19,8 +19,6 @@ import {
   resolveActiveDynamicPolicyPromptFromContext,
 } from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
 
-export const POLICY_PROMPT_SCENARIO = HARNESS_SCENARIO;
-
 export const POLICY_PROMPT_KEY_BY_SCENARIO = Object.freeze({
   [HARNESS_SCENARIO.GENERAL]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL,
   [HARNESS_SCENARIO.TEXT]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_TEXT,

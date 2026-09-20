@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LOCALE } from "../constants.js";
 import {
   resolveContextMessageContent,
   resolveContextMessageRole,
@@ -52,32 +51,6 @@ export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
     return Boolean(String(content || "").trim());
   }
   return false;
-}
-
-export function safeJsonStringify(value = null, space = 2) {
-  const seen = new WeakSet();
-  try {
-    return JSON.stringify(
-      value,
-      (_key, current) => {
-        if (typeof current === "bigint") return String(current);
-        if (typeof current === "function") {
-          return `[Function ${current.name || "anonymous"}]`;
-        }
-        if (current && typeof current === "object") {
-          if (seen.has(current)) return "[Circular]";
-          seen.add(current);
-        }
-        return current;
-      },
-      space,
-    );
-  } catch (error) {
-    return JSON.stringify({
-      error: "ctx_serialize_failed",
-      message: String(error?.message || error || ""),
-    });
-  }
 }
 
 function normalizePromptMessageItem(message = {}) {
@@ -132,25 +105,4 @@ export function buildModelMessagesWithStructuredEnvelope({
     });
   }
   return output;
-}
-
-export function isStructuredEnvelopeMessages(messages = []) {
-  const list = Array.isArray(messages) ? messages : [];
-  if (!list.length) return false;
-  const first = list[0];
-  if (
-    String(first?.role || "")
-      .trim()
-      .toLowerCase() !== "system"
-  )
-    return false;
-  const text = String(first?.content || "").trim();
-  return (
-    text.startsWith(
-      translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER),
-    ) ||
-    text.startsWith(
-      translateI18nText(LOCALE.ZH_CN, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER),
-    )
-  );
 }

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
+import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared/index.js";
 import {
   createTestHookContext,
   createTestModelResponse,

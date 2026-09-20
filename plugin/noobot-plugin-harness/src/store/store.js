@@ -494,11 +494,6 @@ async function writeJsonValidated(filePath, data, devMode = false) {
   });
 }
 
-export async function appendJsonl(filePath, record) {
-  const line = JSON.stringify(record) + "\n";
-  await appendFileValidated(filePath, line);
-}
-
 function buildRotatedJsonlPath(filePath = "") {
   const parsed = path.parse(filePath);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");

@@ -107,15 +107,10 @@ export function getPlanningSeparateModelEmptyRelay(locale = LOCALE.ZH_CN) {
   );
 }
 
-export function buildPostPlanUserFollowupPrompt(
-  locale = LOCALE.ZH_CN,
-  stage = "planning",
-  options = {},
-) {
+export function buildPostPlanUserFollowupPrompt(locale = LOCALE.ZH_CN, stage = "planning") {
   const normalizedStage = String(stage || "planning")
     .trim()
     .toLowerCase();
-  const promptOptions = normalizePromptOptions(options);
   const stageKey = normalizedStage.includes("refinement")
     ? "refinement"
     : normalizedStage.includes("revision")
@@ -126,7 +121,6 @@ export function buildPostPlanUserFollowupPrompt(
     revision: HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REVISION,
     planning: HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_PLANNING,
   };
-  void promptOptions;
   return translateI18nText(locale, keysByStage[stageKey]);
 }
 
@@ -149,18 +143,14 @@ export function buildDefaultScenarioPolicyText(locale = LOCALE.ZH_CN, options = 
   return translateI18nText(locale, key);
 }
 
-function buildDefaultScenarioPolicyBody(locale = LOCALE.ZH_CN, options = {}) {
-  return buildDefaultScenarioPolicyText(locale, options);
-}
-
-function buildScenarioPolicyText(
+export function buildScenarioPolicyPromptText(
   locale = LOCALE.ZH_CN,
   { programmingMode = false, textMode = false, dynamicPolicyPrompt = "" } = {},
 ) {
   const scenario = resolveScenarioPolicyScenario({ programmingMode, textMode });
   const dynamicPrompt = String(dynamicPolicyPrompt || "").trim();
   const body =
-    dynamicPrompt || buildDefaultScenarioPolicyBody(locale, { programmingMode, textMode });
+    dynamicPrompt || buildDefaultScenarioPolicyText(locale, { programmingMode, textMode });
   if (!body) return "";
   return [
     "[HARNESS_SCENARIO_POLICY]",
@@ -171,15 +161,6 @@ function buildScenarioPolicyText(
   ]
     .filter(Boolean)
     .join("\n");
-}
-
-export function buildScenarioPolicyPromptText(locale = LOCALE.ZH_CN, options = {}) {
-  return buildScenarioPolicyText(locale, options);
-}
-
-export function buildScenarioPolicySystemMessages(locale = LOCALE.ZH_CN, options = {}) {
-  const content = buildScenarioPolicyPromptText(locale, options);
-  return String(content || "").trim() ? [{ role: "system", content: String(content).trim() }] : [];
 }
 
 function shouldIncludeScenarioMismatchProtocol(stage = "") {
@@ -236,7 +217,7 @@ export function buildWorkflowResponsibilityConstraintUserPrompt(
   const programmingMode = options?.programmingMode === true || options?.isProgrammingMode === true;
   const textMode = !programmingMode && (options?.textMode === true || options?.isTextMode === true);
   if (options?.includeWorkflowPolicy !== true) return base;
-  const policy = buildScenarioPolicyText(locale, {
+  const policy = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
     dynamicPolicyPrompt: options?.dynamicPolicyPrompt,
@@ -300,7 +281,7 @@ export function buildGuidanceFailurePromptText({
     message,
     includeWorkflowPolicy === false
       ? ""
-      : buildScenarioPolicyText(locale, {
+      : buildScenarioPolicyPromptText(locale, {
           programmingMode,
           textMode,
           dynamicPolicyPrompt,
@@ -378,7 +359,7 @@ export function buildPlanningMainPrompt(options = {}) {
     currentTaskGoalProtocol,
     "",
     includeWorkflowPolicy
-      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
       : "",
     "",
     buildDynamicPolicyPromptProtocolInstruction(locale),
@@ -589,7 +570,7 @@ export function buildGuidanceSummaryInstructionPromptText(options = {}) {
         )
       : "",
     includeWorkflowPolicy
-      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
       : "",
   ]
     .filter(Boolean)
@@ -634,10 +615,6 @@ export function buildPreviousSummaryContextMessages(options = {}) {
   const content = buildPreviousSummaryContextContent(options);
   if (!content) return [];
   return [{ role: "system", content }];
-}
-
-export function buildAcceptanceValidationPromptText(options = {}) {
-  return buildAcceptanceValidationRequestPromptText(options);
 }
 
 export function buildAcceptanceMainPlanContextPromptText(options = {}) {
@@ -687,7 +664,7 @@ export function buildPhaseAcceptanceRequestPromptText(options = {}) {
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy
-      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
       : "",
     includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "phase" }) : "",
     translateI18nText(
@@ -698,21 +675,6 @@ export function buildPhaseAcceptanceRequestPromptText(options = {}) {
   ]
     .filter(Boolean)
     .join("\n");
-}
-
-export function buildAllPhaseAcceptanceReportsPromptText(options = {}) {
-  const { locale, marker, data } = normalizePromptOptions(options);
-  const reports = Array.isArray(data.phaseAcceptanceReports)
-    ? data.phaseAcceptanceReports
-    : Array.isArray(options?.phaseAcceptanceReports)
-      ? options.phaseAcceptanceReports
-      : [];
-  const parts = buildAllPhaseAcceptanceReportSystemContents({
-    locale,
-    marker,
-    data: { phaseAcceptanceReports: reports },
-  });
-  return parts.join("\n\n").trim();
 }
 
 export function buildAllPhaseAcceptanceReportSystemContents(options = {}) {
@@ -783,7 +745,7 @@ export function buildAcceptanceValidationRequestPromptText(options = {}) {
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.FINAL_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy
-      ? buildScenarioPolicyText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
+      ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
       : "",
     includeProtocol ? buildAcceptancePatchProtocolText({ locale, mode: "final" }) : "",
     payloadText,

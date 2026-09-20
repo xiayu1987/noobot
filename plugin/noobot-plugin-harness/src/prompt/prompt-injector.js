@@ -20,7 +20,6 @@ import {
   writeMessageBlocks,
 } from "../core/message-store.js";
 import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
-const HARNESS_MARKERS = new Map();
 
 const injectedPromptCache = new WeakMap();
 const HARNESS_MARKER_PATTERN = /<!--\s*([^<>]*?)\s*-->/g;
@@ -119,18 +118,6 @@ export function markPromptAsInjected(messages, id) {
   cache.scannedLength = messages.length;
 }
 
-export function registerPrompt(id, content, priority = 50, mode = "prepend") {
-  HARNESS_MARKERS.set(id, { content, priority, mode });
-}
-
-export function getRegisteredPrompts() {
-  return Array.from(HARNESS_MARKERS.entries()).map(([id, v]) => ({ id, ...v }));
-}
-
-export function clearRegisteredPrompts() {
-  HARNESS_MARKERS.clear();
-}
-
 function normalizePromptEntries(prompts = []) {
   return (Array.isArray(prompts) ? prompts : [])
     .map((item = {}) => ({
@@ -145,20 +132,6 @@ function normalizePromptEntries(prompts = []) {
         : null,
     }))
     .filter((item) => item.id && item.content);
-}
-
-function readLegacyPromptEntries() {
-  return Array.from(HARNESS_MARKERS.entries()).map(([id, value = {}]) => ({
-    id: String(id || "").trim(),
-    content: String(value?.content || ""),
-    priority: Number.isFinite(Number(value?.priority)) ? Number(value.priority) : 50,
-    mode: String(value?.mode || "prepend")
-      .trim()
-      .toLowerCase(),
-    messageBlockPolicy: isPlainObject(value?.messageBlockPolicy)
-      ? { ...value.messageBlockPolicy }
-      : null,
-  }));
 }
 
 function isPromptMessage(message = {}, id = "") {
@@ -251,9 +224,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   const messages = resolveModelMessages(ctx);
   let nextMessages = [...messages];
 
-  const promptEntries = normalizePromptEntries(
-    Array.isArray(options?.prompts) ? options.prompts : readLegacyPromptEntries(),
-  );
+  const promptEntries = normalizePromptEntries(options?.prompts);
   if (!promptEntries.length) return false;
 
   const systemBlockIds =
@@ -351,18 +322,4 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   }
 
   return injected;
-}
-
-export function injectSystemMessage(
-  ctx = {},
-  content = "",
-  id = "noobot-harness",
-  priority = 50,
-  mode = "prepend",
-) {
-  if (!content) return false;
-  return injectSystemMessages(ctx, {
-    skipIds: new Set(),
-    prompts: [{ id, content, priority, mode }],
-  });
 }
