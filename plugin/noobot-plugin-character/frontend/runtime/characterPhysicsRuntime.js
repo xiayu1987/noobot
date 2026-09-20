@@ -5,10 +5,20 @@
  */
 
 import * as THREE from "three";
-import * as RAPIER from "@dimforge/rapier3d-compat";
 
 const PHYSICS_DT = 1 / 60;
 let rapierInitPromise;
+let RAPIER;
+
+async function loadRapier() {
+  rapierInitPromise ||= import("@dimforge/rapier3d-compat").then(async (module) => {
+    const api = module.default || module;
+    await api.init();
+    return api;
+  });
+  RAPIER ||= await rapierInitPromise;
+  return RAPIER;
+}
 
 function findNode(root, name) {
   let result;
@@ -156,8 +166,7 @@ export function createCharacterPhysicsRuntime({ getPlayers, getScene, getRevisio
       !collisionSpace.colliders?.some(isPhysicalCollider)
     )
       return;
-    rapierInitPromise ||= RAPIER.init();
-    await rapierInitPromise;
+    await loadRapier();
     if (
       revision !== getRevision() ||
       setupGeneration !== generation ||

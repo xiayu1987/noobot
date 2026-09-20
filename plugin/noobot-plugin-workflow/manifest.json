@@ -54,8 +54,22 @@
     },
     "frontend": {
       "extensions": [
-        { "id": "workflow-model-extension", "point": "composer.options.model" },
-        { "id": "workflow-card", "point": "message.card.pre" },
+        {
+          "id": "workflow-model-extension",
+          "point": "composer.options.model",
+          "component": {
+            "module": "./frontend/components/WorkflowModelExtension.vue",
+            "export": "default"
+          }
+        },
+        {
+          "id": "workflow-card",
+          "point": "message.card.pre",
+          "component": {
+            "module": "./frontend/components/WorkflowMessageCard.vue",
+            "export": "default"
+          }
+        },
         { "id": "workflow-runtime-projector", "point": "runtime.stream.route" }
       ]
     }

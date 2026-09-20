@@ -9,13 +9,25 @@ const captured = vi.hoisted(() => ({
   contexts: [],
   activate: null,
   publish: vi.fn(() => []),
+  replacePlugin: vi.fn(() => []),
+  component: Object.freeze({ name: "SecurityBoundaryCard" }),
   manifest: Object.freeze({
     protocolVersion: 2,
     id: "security-boundary-test",
     name: "security-boundary-test",
     version: "1.0.0",
     entries: { frontend: "frontend.js" },
-    contributes: { frontend: { extensions: [] } },
+    contributes: {
+      frontend: {
+        extensions: [
+          {
+            id: "security-boundary-card",
+            point: "message.card.pre",
+            component: { module: "./SecurityBoundaryCard.vue", export: "default" },
+          },
+        ],
+      },
+    },
     requires: {
       ports: ["frontend.contribute", "authenticated_request"],
       permissions: ["http.authenticated"],
@@ -32,9 +44,13 @@ vi.mock("../../../src/plugins/generated/external-entries.js", () => ({
       name: captured.manifest.name,
       version: captured.manifest.version,
       manifest: captured.manifest,
+      componentLoaders: {
+        "security-boundary-card": async () => ({ default: captured.component }),
+      },
       module: {
         activate(context) {
           captured.contexts.push(context);
+          context.contributeExtension("message.card.pre", { id: "security-boundary-card" });
           if (typeof captured.activate === "function") return captured.activate(context);
           return { protocolVersion: 2, pluginId: captured.manifest.id, surface: "frontend" };
         },
@@ -47,7 +63,7 @@ vi.mock("../../../src/extensions/extension-registry.js", () => ({
   listExtensionContributions: vi.fn(() => []),
   createExtensionRegistryGeneration: vi.fn(() => {
     const generation = {
-      replacePlugin: vi.fn(() => []),
+      replacePlugin: captured.replacePlugin,
       removePlugin: vi.fn(),
       createGeneration: vi.fn(),
     };
@@ -73,6 +89,8 @@ describe("external frontend plugin service boundary", () => {
     captured.activate = null;
     captured.publish.mockReset();
     captured.publish.mockReturnValue([]);
+    captured.replacePlugin.mockReset();
+    captured.replacePlugin.mockReturnValue([]);
   });
 
   it("exposes only the declared browser host ports", async () => {
@@ -83,6 +101,14 @@ describe("external frontend plugin service boundary", () => {
     expect(services.attachments).toBeUndefined();
     expect(Object.isFrozen(services)).toBe(true);
     expect(captured.contexts[0].pluginMeta.protocolVersion).toBe(2);
+  });
+
+  it("materializes manifest component modules as async Vue components", async () => {
+    await registerExternalFrontendPlugins();
+    const staged = captured.replacePlugin.mock.calls[0][1];
+    const asyncComponent = staged[0].contribution.component;
+    expect(typeof asyncComponent.__asyncLoader).toBe("function");
+    expect(await asyncComponent.__asyncLoader()).toBe(captured.component);
   });
 
   it("disposes a candidate scope when registry publication fails", async () => {

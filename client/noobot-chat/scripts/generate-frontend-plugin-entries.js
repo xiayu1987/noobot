@@ -38,19 +38,34 @@ function toEntryModuleItem(item = {}, outputDir = "") {
     version: item.version,
     manifest: item.manifest,
     entryImportPath,
+    componentImports: Object.fromEntries(
+      Object.entries(item.componentModulePaths || {}).map(([id, modulePath]) => [
+        id,
+        modulePath.startsWith("./")
+          ? normalizeEntryImportPath(outputDir, path.resolve(item.pluginDir, modulePath))
+          : modulePath,
+      ]),
+    ),
   };
 }
 
 function buildOutputSource(entries = []) {
-  const objectLines = entries.map(
-    (item) => `  {
+  const objectLines = entries.map((item) => {
+    const componentLoaderLines = Object.entries(item.componentImports)
+      .map(
+        ([id, modulePath]) =>
+          `      ${JSON.stringify(id)}: () => import(${JSON.stringify(modulePath)})`,
+      )
+      .join(",\n");
+    return `  {
     pluginId: ${JSON.stringify(item.pluginId)},
     name: ${JSON.stringify(item.name)},
     version: ${JSON.stringify(item.version)},
     manifest: Object.freeze(${JSON.stringify(item.manifest)}),
     loadModule: () => import(${JSON.stringify(item.entryImportPath)}),
-  }`,
-  );
+    componentLoaders: Object.freeze({${componentLoaderLines ? `\n${componentLoaderLines}\n    ` : ""}}),
+  }`;
+  });
   return `/*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -89,12 +104,32 @@ async function discoverFrontendPluginEntries() {
       );
       continue;
     }
+    const componentModulePaths = Object.fromEntries(
+      (manifest.contributes.frontend.extensions || [])
+        .filter((extension) => extension.component)
+        .map((extension) => [extension.id, extension.component.module]),
+    );
+    for (const modulePath of Object.values(componentModulePaths)) {
+      if (!modulePath.startsWith("./")) continue;
+      const absoluteModulePath = path.resolve(pluginDir, modulePath);
+      const relativeModulePath = path.relative(pluginDir, absoluteModulePath);
+      if (
+        !relativeModulePath ||
+        relativeModulePath.startsWith("..") ||
+        path.isAbsolute(relativeModulePath)
+      ) {
+        throw new Error(`frontend component module escapes plugin root: ${modulePath}`);
+      }
+      await fs.access(absoluteModulePath);
+    }
     output.push({
       pluginId: String(manifest.id || dirent.name).trim(),
       name: String(manifest.name || "").trim(),
       version: String(manifest.version || "").trim(),
       manifest,
       entryPath,
+      pluginDir,
+      componentModulePaths,
     });
   }
   return output.sort((a, b) => a.pluginId.localeCompare(b.pluginId));

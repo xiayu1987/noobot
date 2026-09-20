@@ -5,8 +5,6 @@
  */
 
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
-import CharacterAnimationAssets from "./components/CharacterAnimationAssets.vue";
-import CharacterSessionArtifacts from "./components/CharacterSessionArtifacts.vue";
 import {
   animationRuntimeState,
   applyAnimationRuntimeEvent,
@@ -17,7 +15,7 @@ import { CHARACTER_ANIMATION_ARTIFACT_TYPE, CHARACTER_PLUGIN_ID } from "../src/c
 import { configureImportedAssetStore } from "./runtime/importedAssetStore.js";
 import { useCharacterLocale } from "./i18n/index.js";
 
-export function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
+function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
   if (
     descriptor?.family === EVENT_FAMILY.PLUGIN_ARTIFACT &&
     envelope?.payload?.pluginId === CHARACTER_PLUGIN_ID &&
@@ -93,21 +91,18 @@ export async function activate(ctx = {}) {
       const artifactCount = animationRuntimeState.cards.length;
       return Boolean(sessionId && projectedSessionId === sessionId && artifactCount > 0);
     },
-    component: CharacterSessionArtifacts,
     resolveProps: ({ sessionId } = {}) => ({ sessionId }),
   });
   contribute(points.COMPOSER_MORE_ACTIONS, {
     id: "character-more-actions",
     resolveTitle: () => translate("character.select"),
     capability: "character.animation.assets",
-    component: CharacterAnimationAssets,
     resolveProps: (context = {}) => resolveAssetProps(context, "select"),
   });
   contribute(points.RIGHT_TOOL_PANEL, {
     id: "character-right-panel",
     resolveTitle: () => translate("character.feature"),
     capability: "character.animation.assets",
-    component: CharacterAnimationAssets,
     resolveProps: (context = {}) => resolveAssetProps(context, "manage"),
   });
 

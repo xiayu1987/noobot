@@ -31,7 +31,15 @@ const manifest = {
         emits: ["workflow.node_agent_execute"],
       },
     },
-    frontend: { extensions: [{ id: "example-card", point: "message.card.pre" }] },
+    frontend: {
+      extensions: [
+        {
+          id: "example-card",
+          point: "message.card.pre",
+          component: { module: "./frontend/ExampleCard.vue", export: "default" },
+        },
+      ],
+    },
   },
   requires: {
     ports: ["hooks.register", "hooks.emit", "frontend.contribute"],
@@ -65,6 +73,39 @@ test("manifest V2 is strict and surface-owned", () => {
         requires: { ...manifest.requires, ports: ["hooks.register", "frontend.contribute"] },
       }),
     /hooks\.emit/,
+  );
+});
+
+test("frontend component loading is declared once in the manifest", () => {
+  assert.throws(
+    () =>
+      parsePluginManifest({
+        ...manifest,
+        contributes: {
+          ...manifest.contributes,
+          frontend: { extensions: [{ id: "missing", point: "message.card.pre" }] },
+        },
+      }),
+    /requires a declarative component module/,
+  );
+  assert.throws(
+    () =>
+      parsePluginManifest({
+        ...manifest,
+        contributes: {
+          ...manifest.contributes,
+          frontend: {
+            extensions: [
+              {
+                id: "projector",
+                point: "runtime.stream.route",
+                component: { module: "./frontend/Projector.vue", export: "default" },
+              },
+            ],
+          },
+        },
+      }),
+    /does not accept a component module/,
   );
 });
 

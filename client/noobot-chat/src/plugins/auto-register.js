@@ -22,6 +22,11 @@ import {
 } from "@noobot/plugin-runtime/core";
 import { createScopedAuthenticatedHttpService } from "../infrastructure/http/authenticatedHttpService.js";
 import { logPluginRuntimeDiagnostics } from "../modules/debug/loggers/pluginRuntimeDiagnosticsLogger.js";
+import { defineAsyncComponent } from "vue";
+import {
+  createDeclaredFrontendComponentLoader,
+  validateDeclaredFrontendComponentLoaders,
+} from "@noobot/plugin-runtime/contributions";
 
 let activeScope = null;
 let activeGeneration = null;
@@ -36,11 +41,16 @@ function runLifecycleOperation(operation) {
 function loadedFrontendEntries() {
   return externalFrontendPluginEntries.map((item) => {
     const pluginId = String(item?.pluginId || "").trim();
+    const componentLoaders = validateDeclaredFrontendComponentLoaders(
+      item.manifest,
+      item.componentLoaders,
+    );
     return {
       pluginId,
       manifest: item.manifest,
       surface: PLUGIN_SURFACE.FRONTEND,
       item,
+      componentLoaders,
       async activate(host, config) {
         const pluginModule =
           typeof item?.loadModule === "function" ? await item.loadModule() : item?.module;
@@ -83,7 +93,16 @@ async function activateFrontendPluginGeneration() {
           [PLUGIN_HOST_PORT.FRONTEND_CONTRIBUTE]: {
             path: ["contributeExtension"],
             value(point, contribution = {}) {
-              requireDeclaredFrontendContribution(entry.manifest, contribution?.id, point);
+              const declaration = requireDeclaredFrontendContribution(
+                entry.manifest,
+                contribution?.id,
+                point,
+              );
+              if (Object.hasOwn(contribution, "component")) {
+                throw new Error(
+                  `plugin ${entry.pluginId} frontend components must be declared in the manifest`,
+                );
+              }
               const key = `${point}#${contribution.id}`;
               if (
                 transaction
@@ -94,11 +113,24 @@ async function activateFrontendPluginGeneration() {
                   `plugin ${entry.pluginId} registered duplicate frontend contribution ${key}`,
                 );
               }
+              const resolvedContribution = declaration.component
+                ? {
+                    ...contribution,
+                    component: defineAsyncComponent(
+                      createDeclaredFrontendComponentLoader({
+                        manifest: entry.manifest,
+                        componentLoaders: entry.componentLoaders,
+                        contributionId: contribution.id,
+                        point,
+                      }),
+                    ),
+                  }
+                : contribution;
               transaction.stage({
                 type: "extension",
                 contributionId: contribution.id,
                 point,
-                contribution,
+                contribution: resolvedContribution,
               });
               return true;
             },

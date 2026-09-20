@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ThinkingPanel } from "noobot-chat/plugin-api/chat-ui";
-import HarnessModelExtension from "./components/HarnessModelExtension.vue";
 import { createThinkingDetailService } from "./services/thinkingDetailService.js";
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { matchesThinkingPanel } from "./thinking-panel-matcher.js";
@@ -26,7 +24,6 @@ export async function activate(ctx = {}) {
     id: "harness-model-extension",
     capability: "composer.model-extension",
     priority: 10,
-    component: HarnessModelExtension,
     when: (context = {}) => context?.selectedPluginKeySet?.has?.("harness") === true,
     resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
   });
@@ -36,7 +33,6 @@ export async function activate(ctx = {}) {
     exclusiveGroup: "message.panel.thinking",
     slot: "pre",
     priority: 10,
-    component: ThinkingPanel,
     when: (context = {}) => matchesThinkingPanel(context?.messageItem),
     resolveProps: (context = {}) => ({
       messageItem: context?.messageItem || {},

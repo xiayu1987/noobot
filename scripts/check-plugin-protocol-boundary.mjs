@@ -66,7 +66,11 @@ for (const file of files) {
   }
 }
 
-for (const pluginName of ["noobot-plugin-harness", "noobot-plugin-workflow"]) {
+for (const pluginName of [
+  "noobot-plugin-character",
+  "noobot-plugin-harness",
+  "noobot-plugin-workflow",
+]) {
   const pluginRoot = path.join(root, "plugin", pluginName);
   const manifest = parsePluginManifest(
     JSON.parse(await fs.readFile(path.join(pluginRoot, "manifest.json"), "utf8")),
@@ -74,12 +78,31 @@ for (const pluginName of ["noobot-plugin-harness", "noobot-plugin-workflow"]) {
   for (const [surface, entry] of Object.entries(manifest.entries)) {
     const entryFile = path.join(pluginRoot, entry);
     const source = await fs.readFile(entryFile, "utf8");
-    const [, exports] = parse(source);
+    const [imports, exports] = parse(source);
     const exportedNames = exports.map((item) => item.name).sort();
     if (exportedNames.length !== 1 || exportedNames[0] !== "activate") {
       violations.push(
         `${path.relative(root, entryFile)}: ${surface} entry must export only activate`,
       );
+    }
+    if (surface === "frontend") {
+      const declaredComponentModules = new Set(
+        (manifest.contributes.frontend?.extensions || [])
+          .map((extension) => extension.component?.module)
+          .filter(Boolean),
+      );
+      for (const imported of imports) {
+        if (declaredComponentModules.has(imported.n)) {
+          violations.push(
+            `${path.relative(root, entryFile)}: frontend component ${imported.n} must be loaded from its manifest declaration`,
+          );
+        }
+        if (imported.d === -1 && String(imported.n || "").endsWith(".vue")) {
+          violations.push(
+            `${path.relative(root, entryFile)}: frontend entry must not statically import Vue components`,
+          );
+        }
+      }
     }
   }
 }

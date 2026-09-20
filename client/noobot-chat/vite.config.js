@@ -7,6 +7,7 @@ import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+import { createChunkBudgetPlugin } from "./build/chunk-budget.js";
 
 const runtimeTopology = resolveRuntimeTopology(process.env);
 const devServerPort = Number(addressPort(runtimeTopology.clientAddr));
@@ -33,11 +34,12 @@ export default defineConfig(({ mode }) => {
   ).trim();
 
   return {
-    plugins: [vue()],
+    plugins: [vue(), createChunkBudgetPlugin()],
     resolve: {
       dedupe: ["vue"],
     },
     build: {
+      chunkSizeWarningLimit: 3000,
       rolldownOptions: {
         output: {
           manualChunks: resolveVendorChunk,

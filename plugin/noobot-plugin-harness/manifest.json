@@ -97,8 +97,22 @@
     "frontend": {
       "extensions": [
         { "id": "harness-legacy-collapse-marker", "point": "markdown.collapse.markers" },
-        { "id": "harness-model-extension", "point": "composer.options.model" },
-        { "id": "thinking-panel", "point": "message.card.pre" }
+        {
+          "id": "harness-model-extension",
+          "point": "composer.options.model",
+          "component": {
+            "module": "./frontend/components/HarnessModelExtension.vue",
+            "export": "default"
+          }
+        },
+        {
+          "id": "thinking-panel",
+          "point": "message.card.pre",
+          "component": {
+            "module": "noobot-chat/plugin-api/chat-ui",
+            "export": "ThinkingPanel"
+          }
+        }
       ]
     }
   },
