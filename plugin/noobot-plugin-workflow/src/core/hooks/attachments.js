@@ -50,12 +50,12 @@ export function resolveWorkflowInputAttachments(ctx = {}) {
   return [];
 }
 
-export function normalizeAttachmentRefs(input = []) {
+function normalizeAttachmentRefs(input = []) {
   const source = Array.isArray(input) ? input : String(input || "").split(/[,;，；]/);
   return source.map((item) => String(item || "").trim()).filter(Boolean);
 }
 
-export function isAllUserAttachmentRef(ref = "") {
+function isAllUserAttachmentRef(ref = "") {
   const normalized = String(ref || "")
     .trim()
     .toLowerCase();
@@ -84,7 +84,7 @@ export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {} } = {}
   return mergeAttachments([], selected);
 }
 
-export function isPlainObject(value) {
+function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 

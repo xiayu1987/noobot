@@ -91,7 +91,7 @@ function hasNodeSessionIdentity(item) {
   );
 }
 
-export function buildWorkflowNodeSessions({
+function buildWorkflowNodeSessions({
   ctx = {},
   semantic = {},
   nodeAgentRuns = [],
@@ -114,7 +114,7 @@ export function buildWorkflowNodeSessions({
     .filter(hasNodeSessionIdentity);
 }
 
-export function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = []) {
+function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = []) {
   return collectTransferEnvelopeLists(nodeAgentRuns, TRANSFER_ENVELOPE_FIELD.NODE_RESULT);
 }
 

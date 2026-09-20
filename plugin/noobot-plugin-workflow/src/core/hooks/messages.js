@@ -9,12 +9,9 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import {
-  extractContextTextContent,
-  projectAuxiliaryHistoryMessages,
-} from "@noobot/context-protocol/assembly/auxiliary-history";
+import { projectAuxiliaryHistoryMessages } from "@noobot/context-protocol/assembly/auxiliary-history";
 
-export function resolveAssistantOutput(agentResult = {}) {
+function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
   if (direct) return direct;
   const messages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -36,11 +33,7 @@ export function resolveWorkflowSourceText(ctx = {}, agentResult = {}, hookPoint 
   return String(ctx?.userMessage || "").trim();
 }
 
-export function extractWorkflowMessageTextContent(content = "") {
-  return extractContextTextContent(content);
-}
-
-export function compactWorkflowText(
+function compactWorkflowText(
   input = "",
   maxLength = LENGTH_THRESHOLDS.contextPreview.workflowCompactTextChars,
 ) {
@@ -55,7 +48,7 @@ export function compactWorkflowText(
   return `${raw.slice(0, limit).trim()}...`;
 }
 
-export function resolveWorkflowAvailableToolCatalog(ctx = {}) {
+function resolveWorkflowAvailableToolCatalog(ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const agentContext = resolveWorkflowAgentContext(ctx);
   const registry = Array.isArray(agentContext?.bindings?.tools) ? agentContext.bindings.tools : [];

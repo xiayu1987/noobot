@@ -8,7 +8,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { executeWorkflowText } from "../../workflow/adapter.js";
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { createPhaseTracker } from "../hooks/phase.js";
-import { persistWorkflowPlanningDialog } from "../hooks/persistence.js";
+import { persistWorkflowPlanningDialog } from "../hooks/planning-dialog-persistence.js";
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
 import {
   buildWorkflowPlanningNodeSessions,

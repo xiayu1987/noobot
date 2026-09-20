@@ -23,7 +23,7 @@ import {
   MODEL_CONTEXT_LANE,
 } from "@noobot/context-protocol/assembly/dual-lane";
 
-export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
+function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const lines = (Array.isArray(attachments) ? attachments : [])
     .map((item = {}, index) => {

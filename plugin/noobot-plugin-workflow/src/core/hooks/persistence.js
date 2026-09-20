@@ -12,22 +12,16 @@ import {
 import { resolveWorkflowParentRunConfig, resolveWorkflowRuntimeFromContext } from "./runtime.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
-import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 
-function normalizeString(value) {
-  return String(value || "").trim();
-}
-
-export function ensureTurnMessages(agentResult = {}) {
+function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
   agentResult.turnMessages = turnMessages;
   return turnMessages;
 }
 
-export function sanitizeArtifactFileNamePart(input = "", fallback = "result") {
+function sanitizeArtifactFileNamePart(input = "", fallback = "result") {
   const normalized = String(input || "")
     .trim()
     .replaceAll(/[^a-zA-Z0-9\u4e00-\u9fa5_-]+/g, "-")
@@ -69,7 +63,7 @@ export function stripHarnessReviewAppendix(text = "") {
   return raw.slice(0, markerIndex).trim();
 }
 
-export function buildWorkflowTransferReferenceBlock(workflowPayload = null, ctx = {}) {
+function buildWorkflowTransferReferenceBlock(workflowPayload = null, ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const references = resolveWorkflowTransferAttachmentReferences(
     workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
@@ -105,14 +99,14 @@ export function truncateWorkflowResultText(
   return `${raw.slice(0, limit).trim()}\n\n...`;
 }
 
-export function composeWorkflowFinalContent({ semanticText = "", attachmentPathBlock = "" } = {}) {
+function composeWorkflowFinalContent({ semanticText = "", attachmentPathBlock = "" } = {}) {
   return [semanticText, attachmentPathBlock]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join("\n\n");
 }
 
-export function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
+function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
   if (!workflowPayload || typeof workflowPayload !== "object") return null;
   let payload = null;
   try {
@@ -470,226 +464,4 @@ export function publishWorkflowFinalMessage(payload = {}) {
     ...payload,
     phase: "completed",
   });
-}
-
-export function buildWorkflowDialogRelativeDir({
-  ctx = {},
-  dialogProcessId = "",
-  scope = "auto",
-} = {}) {
-  const sessionId = String(ctx?.sessionId || "").trim();
-  const resolvedDialogProcessId = String(dialogProcessId || ctx?.dialogProcessId || "").trim();
-  if (!sessionId || !resolvedDialogProcessId) return "";
-  const normalizedScope = String(scope || "auto")
-    .trim()
-    .toLowerCase();
-  if (normalizedScope === "planning") {
-    return `runtime/workflow/planning/${sessionId}/${resolvedDialogProcessId}`;
-  }
-  if (normalizedScope === "node") {
-    return `runtime/workflow/session/${sessionId}/${resolvedDialogProcessId}`;
-  }
-  const isNodeDialog = isWorkflowNodeDialogProcessId(resolvedDialogProcessId);
-  return isNodeDialog
-    ? `runtime/workflow/session/${sessionId}/${resolvedDialogProcessId}`
-    : `runtime/workflow/planning/${sessionId}/${resolvedDialogProcessId}`;
-}
-
-function resolveWorkflowCommitScope({ ctx, runtime, payload }) {
-  return {
-    userId: String(runtime?.userId || ctx?.userId || "").trim(),
-    sessionId: String(ctx?.sessionId || "").trim(),
-    turnScopeId: String(
-      payload?.turnScopeId || ctx?.turnScopeId || runtime?.runConfig?.turnScopeId || "",
-    ).trim(),
-  };
-}
-
-function resolveWorkflowPersistenceScope(runtime) {
-  return runtime?.systemRuntime?.persistenceScope || null;
-}
-
-function projectWorkflowEventIdentity({
-  eventType,
-  messageId,
-  executionId,
-  turnScopeId,
-  payload,
-  ctx,
-}) {
-  return {
-    eventType: String(eventType || "").trim(),
-    turnScopeId,
-    messageId: String(messageId || payload?.messageId || "").trim(),
-    executionId: String(
-      executionId || payload?.nodeExecutionId || ctx?.workflowExecutionId || "",
-    ).trim(),
-  };
-}
-
-function projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision, payload }) {
-  return {
-    domain: String(orderingDomain || "").trim(),
-    scopeId: String(orderingScopeId || payload?.workflowRunId || "").trim(),
-    revision: Number(revision),
-  };
-}
-
-function projectWorkflowEventCausality({ payload, runtime }) {
-  return {
-    commandId: String(payload?.commandId || runtime?.runConfig?.commandId || "").trim(),
-    correlationId: String(payload?.workflowRunId || "").trim(),
-  };
-}
-
-function resolveWorkflowCommitRuntime(ctx) {
-  return ctx?.agentContext?.bindings?.runtime;
-}
-
-function requireWorkflowCommitCapability(runtime) {
-  const sessionManager = runtime?.sessionManager;
-  if (!sessionManager?.commitAuthorityEvent) {
-    throw new Error("workflow authority event commit capability is required");
-  }
-  return sessionManager;
-}
-
-function requireCommittedWorkflowEnvelope(committed) {
-  if (!committed?.committed || !committed?.envelope) {
-    throw new Error(`workflow authority event commit failed: ${committed?.reason || "unknown"}`);
-  }
-  return committed.envelope;
-}
-
-async function dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope }) {
-  if (typeof ctx?.eventListener?.onEvent !== "function") {
-    throw new Error("workflow authority event dispatcher is required");
-  }
-  await ctx.eventListener.onEvent({
-    event: "authority_event_committed",
-    data: { envelope, persistenceScope },
-  });
-}
-
-export async function commitWorkflowRuntimeEvent({
-  ctx = {},
-  eventType = "",
-  payload = {},
-  orderingDomain = "",
-  orderingScopeId = "",
-  revision = 1,
-  messageId = "",
-  executionId = "",
-} = {}) {
-  const runtime = resolveWorkflowCommitRuntime(ctx);
-  const sessionManager = requireWorkflowCommitCapability(runtime);
-  const { userId, sessionId, turnScopeId } = resolveWorkflowCommitScope({ ctx, runtime, payload });
-  const persistenceScope = resolveWorkflowPersistenceScope(runtime);
-  const committed = await sessionManager.commitAuthorityEvent({
-    userId,
-    sessionId,
-    family: WORKFLOW_RUNTIME_FAMILY,
-    identity: projectWorkflowEventIdentity({
-      eventType,
-      messageId,
-      executionId,
-      turnScopeId,
-      payload,
-      ctx,
-    }),
-    causality: projectWorkflowEventCausality({ payload, runtime }),
-    ordering: projectWorkflowEventOrdering({
-      orderingDomain,
-      orderingScopeId,
-      revision,
-      payload,
-    }),
-    producer: { type: "plugin", id: "workflow" },
-    payload,
-    persistenceScope,
-  });
-  const envelope = requireCommittedWorkflowEnvelope(committed);
-  await dispatchWorkflowAuthorityEvent({ ctx, envelope, persistenceScope });
-  return envelope;
-}
-
-function projectPlanningSemanticResolution(semanticResolution) {
-  return {
-    invoked: semanticResolution?.invoked === true,
-    traceCount: Number(semanticResolution?.traceCount || 0),
-    requestMessages: Array.isArray(semanticResolution?.requestMessages)
-      ? semanticResolution.requestMessages
-      : [],
-  };
-}
-
-function buildWorkflowPlanningDialogPayload({
-  ctx,
-  userId,
-  options,
-  sourceText,
-  semanticText,
-  semantic,
-  semanticResolution,
-  workflowRunId,
-  planningNodeSessions,
-}) {
-  return {
-    scope: "workflow_planning",
-    userId,
-    sessionId: normalizeString(ctx?.sessionId),
-    dialogProcessId: normalizeString(ctx?.dialogProcessId),
-    workflowRunId: normalizeString(workflowRunId),
-    revision: 1,
-    sequence: 1,
-    timestamp: new Date().toISOString(),
-    sourceText,
-    semanticText,
-    semantic,
-    nodeSessions: Array.isArray(planningNodeSessions) ? planningNodeSessions : [],
-    semanticModel: normalizeString(options?.semanticModel),
-    semanticPrompt: normalizeString(options?.semanticPrompt),
-    semanticResolution: projectPlanningSemanticResolution(semanticResolution),
-  };
-}
-
-export async function persistWorkflowPlanningDialog({
-  options = {},
-  ctx = {},
-  sourceText = "",
-  semanticText = "",
-  semantic = null,
-  semanticResolution = {},
-  workflowRunId = "",
-  planningNodeSessions = [],
-} = {}) {
-  if (typeof options?.workflowDialogPersister !== "function") return null;
-  const userId = normalizeString(ctx?.userId);
-  if (!userId) return null;
-  const relativeDir = buildWorkflowDialogRelativeDir({
-    ctx,
-    dialogProcessId: normalizeString(ctx?.dialogProcessId),
-    scope: "planning",
-  });
-  if (!relativeDir) return null;
-  try {
-    return await options.workflowDialogPersister({
-      userId,
-      relativeDir,
-      fileName: "planning.json",
-      payload: buildWorkflowPlanningDialogPayload({
-        ctx,
-        userId,
-        options,
-        sourceText,
-        semanticText,
-        semantic,
-        semanticResolution,
-        workflowRunId,
-        planningNodeSessions,
-      }),
-    });
-  } catch {
-    return null;
-  }
 }

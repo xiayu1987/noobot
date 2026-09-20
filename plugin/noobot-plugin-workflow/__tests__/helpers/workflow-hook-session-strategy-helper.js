@@ -15,7 +15,7 @@ import {
   TRANSFER_REASON,
 } from "@noobot/semantic-transfer-protocol";
 
-import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
+import { createRegisterWorkflowHooks } from "../../src/core/orchestrator.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { resolveWorkflowNodeDialogProcessId } from "../../src/core/node-dialog-process-id.js";
 import {

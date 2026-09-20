@@ -50,7 +50,7 @@ export function createWorkflowExtensionRuntime(deps = {}) {
   };
 }
 
-export const workflowExtensionRuntime = createWorkflowExtensionRuntime();
+const workflowExtensionRuntime = createWorkflowExtensionRuntime();
 
 export function mountWorkflowExtensions(params = {}) {
   workflowExtensionRuntime.mount(params);
