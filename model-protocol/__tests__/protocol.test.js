@@ -357,6 +357,58 @@ test("model response accepts only the canonical protocol shape", () => {
     /reasoning must be a string/,
   );
 
+  const responsesOutput = {
+    ...output,
+    responseOutput: [
+      { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+      {
+        id: "fc_1",
+        type: "function_call",
+        call_id: "call_1",
+        name: "read_file",
+        arguments: "{}",
+      },
+    ],
+    responseReasoning: {
+      id: "rs_1",
+      type: "reasoning",
+      encrypted_content: "encrypted",
+      summary: [],
+    },
+  };
+  const responsesResponse = createModelResponse({
+    invocation,
+    output: responsesOutput,
+    attempts: [
+      {
+        attempt: 1,
+        status: "completed",
+        kind: "response",
+        streaming: false,
+        output: responsesOutput,
+      },
+    ],
+    model,
+    provider: { operatorId: "openai", adapterId: "openai-compatible" },
+  });
+  assert.equal(validateModelResponse(responsesResponse), responsesResponse);
+  assert.throws(
+    () =>
+      validateModelResponse({
+        ...responsesResponse,
+        output: { ...responsesOutput, responseOutput: {} },
+      }),
+    /responseOutput must be an array/,
+  );
+  assert.throws(
+    () =>
+      validateModelResponse({
+        ...responsesResponse,
+        output: { ...responsesOutput, responseReasoning: [] },
+      }),
+    /responseReasoning must be an object/,
+  );
+
   const emptyOutput = {
     text: "",
     reasoning: "",

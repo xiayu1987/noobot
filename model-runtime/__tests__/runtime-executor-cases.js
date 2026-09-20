@@ -14,6 +14,7 @@ import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_ERROR_KIND,
   MODEL_OPERATION_KIND,
+  validateModelResponse,
 } from "@noobot/model-protocol";
 
 const invocation = {
@@ -239,6 +240,42 @@ test("tool calls are not discarded when the provider also returns reasoning", as
   });
   assert.equal(calls, 1);
   assert.equal(response.output.toolCalls[0].id, "call_tool");
+});
+
+test("Responses continuation metadata remains valid canonical model output", async () => {
+  const responseOutput = [
+    { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+    {
+      id: "fc_1",
+      type: "function_call",
+      call_id: "call_1",
+      name: "read_file",
+      arguments: "{}",
+    },
+  ];
+  const responseReasoning = responseOutput[0];
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: false }),
+    createClient: () => ({
+      invoke: async () => ({
+        content: "analysis complete",
+        additional_kwargs: { reasoning: responseReasoning },
+        response_metadata: { output: responseOutput, finish_reason: "stop" },
+      }),
+    }),
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  const response = await port.invoke({ invocation, model, messages: [] });
+
+  assert.equal(validateModelResponse(response), response);
+  assert.deepEqual(response.output.responseOutput, responseOutput);
+  assert.deepEqual(response.output.responseReasoning, responseReasoning);
+  assert.deepEqual(response.execution.attempts[0].output.responseOutput, responseOutput);
 });
 
 test("executor is the single model context trace authority at each provider attempt", async () => {

@@ -94,6 +94,58 @@ test("separate_model analysis uses aligned agent context then user request and u
   );
 });
 
+test("separate_model analysis relays canonical Responses continuation output to the main context", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({ pending: { analysis: true } });
+  const responseOutput = [
+    { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+    {
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      content: [{ type: "output_text", text: "已定位协议校验问题。" }],
+    },
+  ];
+  const responseReasoning = responseOutput[0];
+  const ctx = {
+    messages: [{ role: "assistant", content: "工具执行完成" }],
+    agentContext,
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () =>
+        createTestModelResponse("已定位协议校验问题。", {
+          content: [{ type: "output_text", text: "已定位协议校验问题。" }],
+          responseOutput,
+          responseReasoning,
+        }),
+    },
+  };
+
+  const result = await handler({
+    capability: "guidance",
+    point: "agent.before_llm_call",
+    ctx,
+    meta,
+  });
+
+  const relayMessages = ctx.modelContext.messageBlocks.incremental.filter(
+    (message = {}) => message?.injectedMessageType === "separate_model_relay:guidance",
+  );
+  assert.equal(result.changed, true);
+  assert.equal(relayMessages.length, 1);
+  assert.equal(relayMessages[0]?.pluginFlow, "analysis");
+  assert.equal(relayMessages[0]?.chain, "auxiliary");
+  assert.match(String(relayMessages[0]?.content || ""), /已定位协议校验问题/);
+  assert.equal(
+    agentContext.payload.harness.logs.guidance.some(
+      (entry = {}) => entry?.event === "guidance_separate_model_call_failed",
+    ),
+    false,
+  );
+});
+
 test("separate_model skips analysis when trailing assistant tool call has content", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];

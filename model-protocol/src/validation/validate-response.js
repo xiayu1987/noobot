@@ -30,6 +30,8 @@ const OUTPUT_KEYS = Object.freeze([
   "finishReason",
   "usage",
   "content",
+  "responseOutput",
+  "responseReasoning",
 ]);
 const EXECUTION_KEYS = Object.freeze(["attemptCount", "attempts", "model", "provider"]);
 const ATTEMPT_KEYS = Object.freeze(["attempt", "status", "kind", "streaming", "output", "error"]);
@@ -64,6 +66,12 @@ function validateOutput(value, path = "model response.output") {
   }
   if (!Array.isArray(output.toolCalls)) throw new TypeError(`${path}.toolCalls must be an array`);
   requirePlainObject(output.usage, `${path}.usage`);
+  if (output.responseOutput !== undefined && !Array.isArray(output.responseOutput)) {
+    throw new TypeError(`${path}.responseOutput must be an array`);
+  }
+  if (output.responseReasoning !== undefined) {
+    requirePlainObject(output.responseReasoning, `${path}.responseReasoning`);
+  }
   return output;
 }
 
