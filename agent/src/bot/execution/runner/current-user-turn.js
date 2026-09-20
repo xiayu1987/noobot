@@ -12,7 +12,7 @@ import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-comm
 import { assertTurnAttachmentsBoundEventData } from "@noobot/session-protocol/turn-attachment-bind";
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createTurnCommand, toCommitTurnPayload } from "../turn-command.js";
-import { summarizeDebugAttachments } from "./debug-utils.js";
+import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 
 function emitPreparedTurnDebug({
   eventListener,

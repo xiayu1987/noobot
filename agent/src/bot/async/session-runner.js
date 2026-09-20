@@ -118,7 +118,7 @@ export class AsyncSessionRunner {
 
   runAsyncSession(payload = {}) {
     if (typeof this.runSession !== "function") {
-      throw new TypeError("this.asyncJobManager.runAsyncSession is not a function");
+      throw new TypeError("AsyncSessionRunner requires a runSession function");
     }
     const {
       userId,

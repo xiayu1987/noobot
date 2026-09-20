@@ -6,12 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { AsyncJobManager } from "../../src/bot/async-job-manager.js";
+import { AsyncSessionRunner } from "../../src/bot/async/session-runner.js";
 
 function createTestManager(overrides = {}) {
-  const manager = Object.create(AsyncJobManager.prototype);
-  Object.assign(manager, overrides);
-  return manager;
+  return new AsyncSessionRunner(overrides);
 }
 
 test("_normalizeWaitAsyncTimeout enforces minimum and default", () => {

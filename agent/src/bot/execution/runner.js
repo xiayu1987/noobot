@@ -10,7 +10,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { CALLER_ROLE } from "../config/constants.js";
 import { syncLifecycleRuntimeState } from "../../runtime/lifecycle/state-machine.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "../../runtime/resume/model-message-snapshot-store.js";
-import { summarizeDebugAttachments } from "./runner/debug-utils.js";
+import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import { dispatchAgentTurn } from "./runner/agent-dispatch.js";
 import {
   buildAgentContextSummary,

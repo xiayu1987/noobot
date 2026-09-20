@@ -12,7 +12,7 @@ import {
   resolveInitialLifecycleState,
 } from "../../../runtime/lifecycle/state-machine.js";
 import { resolveRunTurnScopeId } from "../turn-command.js";
-import { readSelectedModelValue } from "./debug-utils.js";
+import { readSelectedModelValue } from "./selected-model.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
 
 function applyCanonicalRunMessageIdentity(runConfig = {}) {

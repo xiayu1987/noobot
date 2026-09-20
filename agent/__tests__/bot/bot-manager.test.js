@@ -52,7 +52,7 @@ test("BotManager should delegate workspace/config/session calls", async () => {
 
 test("BotManager should delegate async-job and attachment operations", async () => {
   const manager = createBotManagerWithMocks({
-    asyncJobManager: {
+    asyncSessionRunner: {
       runAsyncSession(payload = {}) {
         return { queued: true, payload };
       },
