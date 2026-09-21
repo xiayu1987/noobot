@@ -447,6 +447,20 @@ test("execute_script: foreground timeout terminates the process group and settle
   assert.match(result.stderr, /timed out after 50ms/);
 });
 
+test("execute_script: foreground timeout settles when an escaped descendant retains the output pipes", async (t) => {
+  if (process.platform === "win32") return t.skip("POSIX process-group semantics");
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-pipe-holder-"));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true }));
+  const startedAt = Date.now();
+  const result = await run("sh -c 'setsid sleep 60 >&1 2>&2 & exec sleep 60'", cwd, 50, null, {
+    generatedDataRoot: cwd,
+  });
+
+  assert.equal(result.code, 124);
+  assert.match(result.stderr, /timed out after 50ms/);
+  assert.ok(Date.now() - startedAt < 30000);
+});
+
 test("execute_script: foreground output limit terminates the process group and settles", async (t) => {
   if (process.platform === "win32") return t.skip("POSIX process-group semantics");
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-output-limit-"));

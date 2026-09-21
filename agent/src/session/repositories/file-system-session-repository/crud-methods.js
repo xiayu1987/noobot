@@ -169,10 +169,6 @@ class SessionCrudMethods {
       return await this._readNormalizedSession(scope, sessionId, resolvedParentSessionId);
     } catch (error) {
       try {
-        // The repair protocol is the only read-time migration boundary. It
-        // may auto-repair when version and lifecycle facts identify one
-        // deterministic result; ambiguous repairs fail atomically and remain
-        // unavailable instead of guessing.
         await this._repairSessionToCurrentProtocol(
           userId,
           sessionId,

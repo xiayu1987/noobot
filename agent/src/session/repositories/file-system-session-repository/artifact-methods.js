@@ -99,16 +99,10 @@ class SessionArtifactMethods {
           sessionId: normalizedSessionId,
         }).catch(() => null),
       ]);
-      // A display artifact is only a projection. Validate the canonical
-      // aggregate before trusting a cached projection, otherwise a stale
-      // "available" summary can expose a corrupt session and opening it
-      // surfaces a generic application error.
-      await this.findById(userId, normalizedSessionId, parentSessionId, persistenceContext);
       if (isSessionDisplaySummaryCurrent(summary, manifest)) {
         return { summary, migrated: false, rebuilt: false };
       }
       const migrated = Number(manifest?.schemaVersion || 0) !== SESSION_ARTIFACT_SCHEMA_VERSION;
-
       const session = await this.findById(
         userId,
         normalizedSessionId,

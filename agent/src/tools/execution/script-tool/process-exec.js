@@ -24,6 +24,7 @@ const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultIn
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 const OUTPUT_ARTIFACT_MAX_BYTES = LENGTH_THRESHOLDS.attachments.maxFileSizeBytes;
 const FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
+const SETTLE_GRACE_MS = TIME_THRESHOLDS.tools.processSettleGraceMs;
 
 function resolveOutputDir(sessionDir, kind) {
   return path.join(
@@ -79,12 +80,13 @@ function appendCapture(chunks, chunk, state, maxBytes) {
   state.bytes += retained.length;
 }
 
-function createTerminationController(child, abortSignal, timeoutMs, onTerminate) {
+function createTerminationController(child, abortSignal, timeoutMs, onTerminate, onSettle) {
   let timedOut = false;
   let aborted = abortSignal?.aborted === true;
   let outputLimitExceeded = false;
   let terminalReason = "";
   let forceKillTimer = null;
+  let settleTimer = null;
   let terminationHookCalled = false;
   const terminate = (reason = "timeout") => {
     if (terminalReason) return;
@@ -103,6 +105,10 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate)
         FORCE_KILL_GRACE_MS,
       );
       forceKillTimer.unref?.();
+    }
+    if (!settleTimer && typeof onSettle === "function") {
+      settleTimer = setTimeout(() => onSettle(), FORCE_KILL_GRACE_MS + SETTLE_GRACE_MS);
+      settleTimer.unref?.();
     }
   };
   const onAbort = () => terminate("abort");
@@ -129,6 +135,7 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate)
     dispose() {
       if (timeout) clearTimeout(timeout);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      if (settleTimer) clearTimeout(settleTimer);
       abortSignal?.removeEventListener?.("abort", onAbort);
     },
   };
@@ -151,11 +158,16 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
     const stdoutCapture = { bytes: 0 };
     const stderrCapture = { bytes: 0 };
     let spawnError = null;
+    let settled = false;
     const termination = createTerminationController(
       child,
       abortSignal,
       timeoutMs,
       options?.onTerminate,
+      () => {
+        detachChildOutput(child, [stdoutStream, stderrStream]);
+        settle(null, null);
+      },
     );
 
     const outputPipeOptions = {
@@ -177,9 +189,12 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
     child.on("error", (error) => {
       spawnError = error;
     });
-    child.on("close", (code, signal) => {
+    function settle(code, signal) {
+      if (settled) return;
+      settled = true;
       const finalize = async () => {
         termination.dispose();
+        detachChildOutput(child, [stdoutStream, stderrStream]);
         await Promise.allSettled([stdoutFinished, stderrFinished]);
         await Promise.all([
           normalizeCommandOutputFile(stdoutPath),
@@ -243,7 +258,8 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
         return result;
       };
       void finalize().then(resolve, reject);
-    });
+    }
+    child.on("close", (code, signal) => settle(code, signal));
   });
 }
 
@@ -258,8 +274,18 @@ export function normalizeExecutionMode(value = "") {
 function waitForWritableFinished(stream) {
   return new Promise((resolve, reject) => {
     stream.once("finish", resolve);
+    stream.once("close", resolve);
     stream.once("error", reject);
   });
+}
+
+function detachChildOutput(child, streams) {
+  for (const readable of [child?.stdout, child?.stderr]) {
+    if (readable && !readable.destroyed) readable.destroy();
+  }
+  for (const writable of streams) {
+    if (writable && !writable.writableEnded && !writable.destroyed) writable.end();
+  }
 }
 
 function pipeReadableToWritable(readable, writable, onChunk = null, options = {}) {
@@ -302,11 +328,16 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
   return await new Promise((resolve, reject) => {
     const child = spawnCommandProcess(cmd, cwd);
     let spawnError = null;
+    let settled = false;
     const termination = createTerminationController(
       child,
       abortSignal,
       timeoutMs,
       options?.onTerminate,
+      () => {
+        detachChildOutput(child, [stdoutStream, stderrStream]);
+        settle(null, null);
+      },
     );
 
     const outputPipeOptions = {
@@ -318,9 +349,12 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
     child.on("error", (error) => {
       spawnError = error;
     });
-    child.on("close", (code, signal) => {
+    function settle(code, signal) {
+      if (settled) return;
+      settled = true;
       const finalize = async () => {
         termination.dispose();
+        detachChildOutput(child, [stdoutStream, stderrStream]);
         try {
           await Promise.all([stdoutFinished, stderrFinished]);
         } catch (error) {
@@ -373,7 +407,8 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
         };
       };
       void finalize().then(resolve, reject);
-    });
+    }
+    child.on("close", (code, signal) => settle(code, signal));
   });
 }
 
