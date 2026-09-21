@@ -17,12 +17,43 @@ import {
   migrateSessionDocument,
   readSessionForProtocolRepair,
   reconcileCompletedTurnSummaryMarks,
+  reconcileDuplicateCanonicalAssistantPresentations,
   reconcileExecutionSegmentIndex,
   reconcileSessionSummaryIndex,
   reconcileUncommittedAggregateConflictContinuations,
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
 } from "../src/index.js";
+
+test("session repair demotes older duplicate canonical assistant presentations", () => {
+  const result = reconcileDuplicateCanonicalAssistantPresentations({
+    turnLifecycle: {
+      turns: {
+        "turn-1": { presentationMessageId: "presentation-new" },
+      },
+    },
+    messages: [
+      {
+        messageUid: "assistant-old",
+        role: "assistant",
+        chatPresentation: true,
+        turnScopeId: "turn-1",
+        presentationMessageId: "presentation-old",
+      },
+      {
+        messageUid: "assistant-new",
+        role: "assistant",
+        chatPresentation: true,
+        turnScopeId: "turn-1",
+        presentationMessageId: "presentation-new",
+      },
+    ],
+  });
+  assert.equal(result.changed, true);
+  assert.deepEqual(result.repaired, ["turn-1"]);
+  assert.equal(result.document.messages[0].chatPresentation, false);
+  assert.equal(result.document.messages[1].chatPresentation, true);
+});
 
 function aggregateConflictContinuationSession({ withCommittedMessage = false } = {}) {
   const sourceTurn = {

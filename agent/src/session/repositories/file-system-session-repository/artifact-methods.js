@@ -32,6 +32,20 @@ import {
 } from "@noobot/session-repair";
 
 class SessionArtifactMethods {
+  async repairSessionProtocol(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    return this._repairSessionToCurrentProtocol(
+      userId,
+      String(sessionId || "").trim(),
+      String(parentSessionId || "").trim(),
+      persistenceContext,
+    );
+  }
+
   async _sessionDisplaySummaryFile(
     userId,
     sessionId,
@@ -85,6 +99,11 @@ class SessionArtifactMethods {
           sessionId: normalizedSessionId,
         }).catch(() => null),
       ]);
+      // A display artifact is only a projection. Validate the canonical
+      // aggregate before trusting a cached projection, otherwise a stale
+      // "available" summary can expose a corrupt session and opening it
+      // surfaces a generic application error.
+      await this.findById(userId, normalizedSessionId, parentSessionId, persistenceContext);
       if (isSessionDisplaySummaryCurrent(summary, manifest)) {
         return { summary, migrated: false, rebuilt: false };
       }
