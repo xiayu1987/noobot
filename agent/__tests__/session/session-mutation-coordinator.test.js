@@ -5,10 +5,20 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { access, mkdir, readFile, readdir, stat, utimes, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  stat,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
+import { resetFsAdapter, setFsAdapter } from "../../src/shared/storage/fs-adapter.js";
 import { withTemp } from "./session-artifact-store-v2.test-helpers.js";
 
 test("mutation coordinator distinguishes nested re-entry from concurrent callers", async () =>
@@ -61,6 +71,62 @@ test("mutation coordinator replaces stale file and legacy directory locks", asyn
     await coordinator.run(directoryLock, async () => {
       assert.equal((await stat(directoryLock)).isFile(), true);
     });
+  }));
+
+test("mutation coordinator treats Windows EPERM for a legacy directory as an existing lock", async () =>
+  withTemp(async (root) => {
+    const coordinator = new SessionMutationCoordinator({ staleMs: 10, pollMs: 2 });
+    const lockPath = path.join(root, "windows-legacy.lock");
+    const ownerPath = path.join(lockPath, "owner");
+    await mkdir(lockPath);
+    await writeFile(ownerPath, "legacy-owner", "utf8");
+    const staleTime = new Date(Date.now() - 1000);
+    await utimes(ownerPath, staleTime, staleTime);
+
+    setFsAdapter({
+      open: async (target, flags, ...args) => {
+        if (target === lockPath && flags === "wx") {
+          const targetStat = await stat(target).catch(() => null);
+          if (targetStat?.isDirectory()) {
+            const error = new Error("operation not permitted");
+            error.code = "EPERM";
+            throw error;
+          }
+        }
+        return open(target, flags, ...args);
+      },
+    });
+    try {
+      let entered = false;
+      await coordinator.run(lockPath, async () => {
+        entered = true;
+      });
+      assert.equal(entered, true);
+      await assert.rejects(access(lockPath), { code: "ENOENT" });
+    } finally {
+      resetFsAdapter();
+    }
+  }));
+
+test("mutation coordinator preserves EPERM when no competing lock exists", async () =>
+  withTemp(async (root) => {
+    const coordinator = new SessionMutationCoordinator({ staleMs: 10, pollMs: 2 });
+    const lockPath = path.join(root, "forbidden.lock");
+    setFsAdapter({
+      open: async (target, flags, ...args) => {
+        if (target === lockPath && flags === "wx") {
+          const error = new Error("operation not permitted");
+          error.code = "EPERM";
+          throw error;
+        }
+        return open(target, flags, ...args);
+      },
+    });
+    try {
+      await assert.rejects(coordinator.run(lockPath, async () => {}), { code: "EPERM" });
+    } finally {
+      resetFsAdapter();
+    }
   }));
 
 test("mutation coordinator heartbeat prevents stale takeover by another coordinator", async () =>
