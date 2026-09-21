@@ -62,6 +62,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     imagesAsyncPollIntervalMs: TIME_TIERS.fiveSecondsMs,
     imagesAsyncTimeoutMs: TIME_TIERS.threeMinutesMs,
     processForceKillGraceMs: TIME_TIERS.flushMs,
+    processSettleGraceMs: TIME_TIERS.hookMs,
     nativeTaskCleanupRetryDelayMs: 100,
     dockerLockWaitTimeoutMs: TIME_TIERS.oneHourMs,
   },

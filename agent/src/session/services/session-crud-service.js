@@ -498,17 +498,15 @@ export class SessionCrudService {
     const expectedIds = new Set(
       sessionIds.map((item) => String(item || "").trim()).filter(Boolean),
     );
-    // Reconcile availability from the canonical aggregate before returning
-    // the derived session-list projection. A cached summary can outlive a
-    // later protocol violation, so list reads must not trust the cache alone.
     if (typeof this.sessionRepo?.ensureSessionDisplaySummary === "function") {
       for (const sessionId of sessionIds) {
-        const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+        const parentSessionId = String(
+          sessionTree?.nodes?.[sessionId]?.parentSessionId || "",
+        ).trim();
         try {
           await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
         } catch {
-          // ensureSessionDisplaySummary records the unavailable projection;
-          // the list remains readable and the session remains unopenable.
+          continue;
         }
       }
     }

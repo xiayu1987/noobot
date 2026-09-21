@@ -139,9 +139,6 @@ function migrateMessage(
   return { message: next, changed };
 }
 
-// Repair uses the authoritative lifecycle presentationMessageId. Message
-// order is not used to guess which presentation won; if the lifecycle fact is
-// missing or inconsistent the repair is explicitly ambiguous and aborts.
 export function reconcileDuplicateCanonicalAssistantPresentations(document = {}) {
   const next = structuredClone(document);
   const messages = Array.isArray(next.messages) ? next.messages : [];
@@ -165,8 +162,9 @@ export function reconcileDuplicateCanonicalAssistantPresentations(document = {})
     const authoritativePresentationMessageId = text(
       next.turnLifecycle?.turns?.[turnScopeId]?.presentationMessageId,
     );
-    const authoritativeIndex = indexes.find((index) =>
-      text(messages[index]?.presentationMessageId) === authoritativePresentationMessageId,
+    const authoritativeIndex = indexes.find(
+      (index) =>
+        text(messages[index]?.presentationMessageId) === authoritativePresentationMessageId,
     );
     if (!authoritativePresentationMessageId || authoritativeIndex === undefined) {
       throw Object.assign(
