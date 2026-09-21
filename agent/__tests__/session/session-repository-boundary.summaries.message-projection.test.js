@@ -266,3 +266,33 @@ test("session display summary projects one explicit assistant presentation from 
     },
   );
 });
+
+test("session display summary rejects multiple canonical assistants for one presentation", () => {
+  assert.throws(
+    () =>
+      buildSessionDisplaySummary({
+        sessionId: "duplicate-presentation-session",
+        messages: [
+          {
+            role: "assistant",
+            content: "first",
+            messageUid: "assistant-1",
+            messageId: "model-1",
+            presentationMessageId: "presentation-1",
+            chatPresentation: true,
+            turnScopeId: "turn-1",
+          },
+          {
+            role: "assistant",
+            content: "second",
+            messageUid: "assistant-2",
+            messageId: "model-2",
+            presentationMessageId: "presentation-1",
+            chatPresentation: true,
+            turnScopeId: "turn-1",
+          },
+        ],
+      }),
+    /multiple canonical assistant presentations/,
+  );
+});

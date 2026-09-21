@@ -64,6 +64,9 @@ function insertLifecyclePresentation(messages, presentation) {
 function mergeAssistantPresentation(existing, incoming) {
   const existingIsPlaceholder = Boolean(text(existing?.sourceMessageType));
   const incomingIsPlaceholder = Boolean(text(incoming?.sourceMessageType));
+  if (!existingIsPlaceholder && !incomingIsPlaceholder) {
+    throw new TypeError("session summary contains multiple canonical assistant presentations");
+  }
   const presentation = !incomingIsPlaceholder || existingIsPlaceholder ? incoming : existing;
   presentation.thinkingDetailCount = Math.max(
     Number(existing?.thinkingDetailCount || 0),

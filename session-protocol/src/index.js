@@ -32,6 +32,7 @@ export * from "./execution-lifecycle.js";
 export * from "./errors.js";
 export * from "./turn-attachment-bind.js";
 export * from "./turn-acceptance.js";
+export * from "./turn-presentation.js";
 export * from "./identity/session-identity.js";
 export * from "./identity/turn-identity.js";
 export * from "./identity/message-identity.js";

@@ -24,6 +24,7 @@ import {
   normalizeCommandReceipt,
   normalizeTurnCommitMetadata,
   validateSessionAggregateInvariants,
+  validateCanonicalAssistantPresentation,
   validateTurnAcceptanceUserMessage,
   validateSessionCommand,
   validateSessionSnapshot,
@@ -66,6 +67,37 @@ test("Session artifact and Turn commit metadata have one canonical protocol shap
     }).valid,
     false,
   );
+});
+
+test("canonical assistant presentation is unique and fully identified per Turn", () => {
+  assert.equal(
+    validateCanonicalAssistantPresentation({
+      role: "assistant",
+      chatPresentation: true,
+      turnScopeId: "turn-1",
+      presentationMessageId: "presentation-1",
+    }).valid,
+    true,
+  );
+  const result = validateSessionAggregateInvariants({
+    messages: [
+      {
+        messageUid: "assistant-1",
+        role: "assistant",
+        chatPresentation: true,
+        turnScopeId: "turn-1",
+        presentationMessageId: "presentation-1",
+      },
+      {
+        messageUid: "assistant-2",
+        role: "assistant",
+        chatPresentation: true,
+        turnScopeId: "turn-1",
+        presentationMessageId: "presentation-1",
+      },
+    ],
+  });
+  assert.equal(result.errors.includes("duplicate_canonical_assistant_presentation"), true);
 });
 
 test("Session artifact schema versions are explicit protocol facts", () => {

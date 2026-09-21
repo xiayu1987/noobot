@@ -15,6 +15,10 @@ import {
 } from "../../events/message-event-stream.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import {
+  assertCanonicalAssistantPresentation,
+  canonicalAssistantPresentationIdentity,
+} from "@noobot/session-protocol";
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime =
@@ -140,6 +144,19 @@ export function createStateCommitter({
           agentContext,
         }),
       });
+      if (assistantMessage.chatPresentation === true) {
+        assertCanonicalAssistantPresentation(assistantMessage);
+        if (typeof turnMessageStore.updateWhere !== "function") {
+          throw new Error("canonical assistant presentation requires an updatable Turn store");
+        }
+        const incomingPresentation = canonicalAssistantPresentationIdentity(assistantMessage);
+        turnMessageStore.updateWhere(
+          { chatPresentation: false },
+          (message) =>
+            canonicalAssistantPresentationIdentity(message)?.turnScopeId ===
+            incomingPresentation.turnScopeId,
+        );
+      }
       turnMessageStore.push(assistantMessage);
 
       await runtime?.persistCurrentTurnMessages?.();
