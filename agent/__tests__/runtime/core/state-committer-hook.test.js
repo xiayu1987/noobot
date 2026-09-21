@@ -34,6 +34,27 @@ function createInMemoryTurnStore() {
   };
 }
 
+function createUpdatableTurnStore() {
+  return {
+    items: [],
+    push(item = {}) {
+      this.items.push(item);
+    },
+    updateWhere(patch = {}, matcher = () => true) {
+      let count = 0;
+      for (const item of this.items) {
+        if (!matcher(item)) continue;
+        Object.assign(item, patch);
+        count += 1;
+      }
+      return count;
+    },
+    toArray() {
+      return this.items.slice();
+    },
+  };
+}
+
 function installEmptyMessageEventMaterializer(runtime = {}) {
   runtime.materializePendingCurrentTurnMessageEvents = () => ({
     activityTimeline: [],
@@ -91,6 +112,37 @@ test("state-committer emits before/after hooks for assistant message commit", as
   assert.equal(turnMessageStore.items.length, 1);
   assert.equal(turnMessageStore.items[0].role, "assistant");
   assert.equal(turnMessageStore.items[0].content, "[hooked]hello");
+});
+
+test("state-committer keeps one canonical assistant presentation per Turn", async () => {
+  const turnMessageStore = createUpdatableTurnStore();
+  const runtime = installEmptyMessageEventMaterializer({
+    systemRuntime: { turnScopeId: "turn-canonical" },
+    persistCurrentTurnMessages: async () => {},
+  });
+  const committer = createStateCommitter({
+    turnMessageStore,
+    dialogProcessId: "dialog-canonical",
+    runtime,
+  });
+
+  await committer.pushAssistantMessage({
+    content: "first",
+    messageId: "message-first",
+    presentationMessageId: "presentation-canonical",
+    chatPresentation: true,
+  });
+  await committer.pushAssistantMessage({
+    content: "second",
+    messageId: "message-second",
+    presentationMessageId: "presentation-canonical",
+    chatPresentation: true,
+  });
+
+  assert.deepEqual(
+    turnMessageStore.items.map((message) => message.chatPresentation),
+    [false, true],
+  );
 });
 
 test("state-committer emits before/after hooks for tool result commit", async () => {

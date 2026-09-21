@@ -255,14 +255,18 @@ export async function editLatestUserMessage(
 }
 
 export async function deleteLatestUserMessage(page) {
-  const deleteButton = page.locator(".monotonic-chip-btn.is-danger").last();
+  const deleteButtons = page.locator(".monotonic-chip-btn.is-danger");
+  const userMessages = page.locator(".base-message-shell.user");
+  const initialUserMessageCount = await userMessages.count();
+  expect(initialUserMessageCount).toBeGreaterThan(0);
+  const deleteButton = deleteButtons.last();
   await expect(deleteButton).toBeVisible();
   await deleteButton.click();
   const dialog = page.locator(".el-message-box");
   await expect(dialog).toBeVisible();
   await dialog.locator(".el-message-box__btns .el-button--primary").click();
   await expect(dialog).toBeHidden();
-  await expect(page.locator(".monotonic-chip-btn.is-danger")).toHaveCount(0);
+  await expect(userMessages).toHaveCount(initialUserMessageCount - 1);
 }
 
 export function fixedAttachment(name = "protocol-e2e.txt") {

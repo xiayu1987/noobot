@@ -74,6 +74,59 @@ test("appendTurns upserts an ordered message batch with one Session save", async
   );
 });
 
+test("appendTurns supersedes the prior canonical assistant presentation in one Turn", async () => {
+  const session = { currentTaskId: "", messages: [] };
+  const service = {
+    now: () => "2026-07-25T00:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: { findById: async () => session, save: async () => {} },
+  };
+  const canonical = (messageUid, content) => ({
+    messageUid,
+    messageId: `message-${messageUid}`,
+    role: "assistant",
+    content,
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    presentationMessageId: "presentation-1",
+    chatPresentation: true,
+  });
+
+  await appendTurns.call(service, {
+    userId: "user-1",
+    sessionId: "session-1",
+    turns: [canonical("assistant-1", "first")],
+  });
+  await assert.rejects(
+    appendTurns.call(service, {
+      userId: "user-1",
+      sessionId: "session-1",
+      turns: [
+        {
+          ...canonical("assistant-invalid", "invalid"),
+          presentationMessageId: "",
+        },
+      ],
+    }),
+    /invalid canonical assistant presentation/,
+  );
+  assert.equal(session.messages[0].chatPresentation, true);
+  await appendTurns.call(service, {
+    userId: "user-1",
+    sessionId: "session-1",
+    turns: [canonical("assistant-2", "second")],
+  });
+
+  assert.deepEqual(
+    session.messages.map((message) => [message.content, message.chatPresentation]),
+    [
+      ["first", false],
+      ["second", true],
+    ],
+  );
+});
+
 test("appendTurns persists the canonical tool policy", async () => {
   const session = { currentTaskId: "", messages: [] };
   const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);

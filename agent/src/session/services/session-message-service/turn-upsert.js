@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import {
+  assertCanonicalAssistantPresentation,
+  canonicalAssistantPresentationIdentity,
+  normalizeDialogProcessId,
+} from "@noobot/session-protocol";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { createSessionMessageUid } from "../../../context/session/message-uid.js";
@@ -189,6 +193,16 @@ function persistTurn(service, messages, turn) {
   const identity = findPersistedTurn(messages, turn);
   const existing = identity.existingIndex >= 0 ? messages[identity.existingIndex] || {} : null;
   assertMessageIdentityMatch(identity, existing);
+  const incomingPresentation = canonicalAssistantPresentationIdentity(turn);
+  if (incomingPresentation) {
+    assertCanonicalAssistantPresentation(turn);
+    for (const message of messages) {
+      const existingPresentation = canonicalAssistantPresentationIdentity(message);
+      if (existingPresentation?.turnScopeId === incomingPresentation.turnScopeId) {
+        message.chatPresentation = false;
+      }
+    }
+  }
   if (existing) {
     const persisted = mergeExistingTurn(service, existing, turn, identity.messageUid);
     messages[identity.existingIndex] = persisted;

@@ -10,11 +10,13 @@ import {
 } from "../command/command-receipt.js";
 import { validateTurnCommitMetadata } from "./turn-commit-metadata.js";
 import { text as clean } from "../normalize.js";
+import { validateCanonicalAssistantPresentation } from "../turn-presentation.js";
 
 export function validateSessionAggregateInvariants(session = {}) {
   const errors = [];
   const messages = Array.isArray(session.messages) ? session.messages : [];
   const messageUids = new Set();
+  const canonicalAssistantTurns = new Set();
   for (const message of messages) {
     const messageUid = clean(message?.messageUid);
     if (!messageUid) errors.push("missing_message_uid");
@@ -23,6 +25,13 @@ export function validateSessionAggregateInvariants(session = {}) {
     if (message?.turnCommit && !validateTurnCommitMetadata(message.turnCommit).valid) {
       errors.push("invalid_turn_commit_metadata");
     }
+    const presentation = validateCanonicalAssistantPresentation(message);
+    errors.push(...presentation.errors);
+    const presentationTurnScopeId = presentation.identity?.turnScopeId || "";
+    if (presentationTurnScopeId && canonicalAssistantTurns.has(presentationTurnScopeId)) {
+      errors.push("duplicate_canonical_assistant_presentation");
+    }
+    if (presentationTurnScopeId) canonicalAssistantTurns.add(presentationTurnScopeId);
   }
   const lifecycle = session.turnLifecycle || {};
   const activeTurnScopeId = clean(lifecycle.activeTurnScopeId);
