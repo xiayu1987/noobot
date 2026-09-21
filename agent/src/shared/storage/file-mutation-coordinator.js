@@ -10,6 +10,12 @@ import { runBestEffort } from "@noobot/shared/best-effort";
 import { fsMkdir, fsOpen, fsReadFile, fsReaddir, fsRename, fsRm, fsStat } from "./fs-adapter.js";
 
 const WAITER_TICKET_WIDTH = 16;
+const TRANSIENT_EXCLUSIVE_CREATE_WINDOW_MS = 1000;
+const TRANSIENT_EXCLUSIVE_CREATE_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+
+function isTransientExclusiveCreateFailure(error) {
+  return TRANSIENT_EXCLUSIVE_CREATE_CODES.has(String(error?.code || ""));
+}
 
 function heartbeatInterval(staleMs) {
   return Math.max(1, Math.floor(staleMs / 3));
@@ -171,6 +177,7 @@ async function statAfterExclusiveCreateFailure(lockPath, createError) {
   } catch (statError) {
     if (statError?.code !== "ENOENT") throw statError;
     if (createError?.code === "EEXIST") return null;
+    if (isTransientExclusiveCreateFailure(createError)) return null;
     throw createError;
   }
 }
@@ -202,6 +209,10 @@ export class FileMutationCoordinator {
     this.timeoutMessage = String(timeoutMessage || "file mutation lock timeout");
     this.timeoutErrorCode = String(timeoutErrorCode || "FILE_MUTATION_BUSY");
     this.operationName = String(operationName || "fileMutation.refreshLock");
+    this.transientCreateWindowMs = Math.max(
+      this.pollMs,
+      Math.min(this.staleMs, TRANSIENT_EXCLUSIVE_CREATE_WINDOW_MS),
+    );
     this.asyncHeldLocks = new AsyncLocalStorage();
   }
 
@@ -231,6 +242,7 @@ export class FileMutationCoordinator {
     }, heartbeatInterval(this.staleMs));
     waiterHeartbeat.unref?.();
     let lockHandle = null;
+    let transientCreateSince = 0;
     try {
       while (true) {
         if (await isElectedWaiter(key, this.staleMs, waiter.name)) {
@@ -254,7 +266,14 @@ export class FileMutationCoordinator {
             }
             try {
               const current = await statAfterExclusiveCreateFailure(key, error);
-              if (!current) continue;
+              if (!current) {
+                if (isTransientExclusiveCreateFailure(error)) {
+                  transientCreateSince ||= Date.now();
+                  if (Date.now() - transientCreateSince > this.transientCreateWindowMs) throw error;
+                }
+                continue;
+              }
+              transientCreateSince = 0;
               if (Date.now() - current.mtimeMs > this.staleMs) {
                 const currentOwner = await readLockOwner(key);
                 if (!isOwnerProcessAlive(currentOwner)) {
@@ -300,7 +319,9 @@ export class FileMutationCoordinator {
       clearInterval(heartbeat);
       await cleanupBestEffort(() => lockHandle.close(), "fileMutation.closeLock", key);
       const currentOwner = await fsReadFile(key, "utf8").catch(() => "");
-      if (currentOwner === ownerToken) await fsRm(key, { force: true });
+      if (currentOwner === ownerToken) {
+        await cleanupBestEffort(() => fsRm(key, { force: true }), "fileMutation.removeLock", key);
+      }
     }
   }
 }

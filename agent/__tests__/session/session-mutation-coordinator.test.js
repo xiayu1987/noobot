@@ -5,16 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  access,
-  mkdir,
-  open,
-  readFile,
-  readdir,
-  stat,
-  utimes,
-  writeFile,
-} from "node:fs/promises";
+import { access, mkdir, open, readFile, readdir, stat, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
@@ -123,7 +114,43 @@ test("mutation coordinator preserves EPERM when no competing lock exists", async
       },
     });
     try {
-      await assert.rejects(coordinator.run(lockPath, async () => {}), { code: "EPERM" });
+      await assert.rejects(
+        coordinator.run(lockPath, async () => {}),
+        { code: "EPERM" },
+      );
+    } finally {
+      resetFsAdapter();
+    }
+  }));
+
+test("mutation coordinator retries a transient EPERM when the lock file is not visible", async () =>
+  withTemp(async (root) => {
+    const coordinator = new SessionMutationCoordinator({
+      timeoutMs: 3000,
+      staleMs: 5000,
+      pollMs: 2,
+    });
+    const lockPath = path.join(root, "delete-pending.lock");
+    let deniedAttempts = 0;
+    setFsAdapter({
+      open: async (target, flags, ...args) => {
+        if (target === lockPath && flags === "wx" && deniedAttempts < 3) {
+          deniedAttempts += 1;
+          const error = new Error("operation not permitted");
+          error.code = "EPERM";
+          throw error;
+        }
+        return open(target, flags, ...args);
+      },
+    });
+    try {
+      let entered = false;
+      await coordinator.run(lockPath, async () => {
+        entered = true;
+      });
+      assert.equal(entered, true);
+      assert.equal(deniedAttempts, 3);
+      await assert.rejects(access(lockPath), { code: "ENOENT" });
     } finally {
       resetFsAdapter();
     }
