@@ -335,6 +335,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.createSession(payload);
     },
 
+    async repairSession(payload = {}) {
+      return sessionCrudService.repairSession(payload);
+    },
+
     async getSessionBundle(payload = {}) {
       return sessionCrudService.getSessionBundle(payload);
     },

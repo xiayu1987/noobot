@@ -222,6 +222,18 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     }),
   );
 
+  app.post(
+    "/internal/session/:userId/:sessionId/repair",
+    jsonRoute(async (req, res) => {
+      const { userId, sessionId } = req.params;
+      if (Object.keys(req.body || {}).length) {
+        throw new TypeError("session protocol repair does not accept a request body");
+      }
+      const result = await bot.session.repairSession({ userId, sessionId });
+      res.json({ ok: true, userId, sessionId, ...result });
+    }),
+  );
+
   const resolveTurnTerminalHandler = jsonRoute(async (req, res) => {
     const { userId, sessionId, turnScopeId } = req.params;
     if (Object.keys(req.query || {}).some((key) => key !== "commandId")) {

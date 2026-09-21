@@ -10,6 +10,7 @@ export { resegmentMigratedCheckpointBaselines } from "./checkpoint-resegment.js"
 export {
   migrateSessionDocument,
   reconcileCompletedTurnSummaryMarks,
+  reconcileDuplicateCanonicalAssistantPresentations,
   reconcileUncommittedAggregateConflictContinuations,
 } from "./document-migration.js";
 export { reconcileExecutionSegmentIndex, reconcileSessionSummaryIndex } from "./index-reconcile.js";

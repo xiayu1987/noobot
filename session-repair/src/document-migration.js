@@ -139,6 +139,50 @@ function migrateMessage(
   return { message: next, changed };
 }
 
+// Repair uses the authoritative lifecycle presentationMessageId. Message
+// order is not used to guess which presentation won; if the lifecycle fact is
+// missing or inconsistent the repair is explicitly ambiguous and aborts.
+export function reconcileDuplicateCanonicalAssistantPresentations(document = {}) {
+  const next = structuredClone(document);
+  const messages = Array.isArray(next.messages) ? next.messages : [];
+  const canonicalIndexes = new Map();
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (
+      text(message?.role) !== "assistant" ||
+      message?.chatPresentation !== true ||
+      !text(message?.turnScopeId)
+    )
+      continue;
+    const turnScopeId = text(message.turnScopeId);
+    const indexes = canonicalIndexes.get(turnScopeId) || [];
+    indexes.push(index);
+    canonicalIndexes.set(turnScopeId, indexes);
+  }
+  const repaired = [];
+  for (const [turnScopeId, indexes] of canonicalIndexes) {
+    if (indexes.length < 2) continue;
+    const authoritativePresentationMessageId = text(
+      next.turnLifecycle?.turns?.[turnScopeId]?.presentationMessageId,
+    );
+    const authoritativeIndex = indexes.find((index) =>
+      text(messages[index]?.presentationMessageId) === authoritativePresentationMessageId,
+    );
+    if (!authoritativePresentationMessageId || authoritativeIndex === undefined) {
+      throw Object.assign(
+        new Error(`canonical assistant presentation repair is ambiguous for Turn ${turnScopeId}`),
+        { code: "SESSION_CANONICAL_PRESENTATION_REPAIR_AMBIGUOUS" },
+      );
+    }
+    for (const index of indexes) {
+      if (index === authoritativeIndex) continue;
+      messages[index] = { ...messages[index], chatPresentation: false };
+    }
+    repaired.push(turnScopeId);
+  }
+  return { document: next, changed: repaired.length > 0, repaired };
+}
+
 export function reconcileCompletedTurnSummaryMarks(document = {}) {
   const next = structuredClone(document);
   const messages = Array.isArray(next.messages) ? next.messages : [];
@@ -446,6 +490,12 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
       changed ||= result.changed;
       return result.message;
     });
+  }
+  const canonicalPresentationRepair = reconcileDuplicateCanonicalAssistantPresentations(next);
+  if (canonicalPresentationRepair.changed) {
+    next.messages = canonicalPresentationRepair.document.messages;
+    changed = true;
+    migrations.push("duplicate-canonical-assistant-presentation");
   }
   const summaryRepair = reconcileCompletedTurnSummaryMarks(next);
   if (summaryRepair.changed) {

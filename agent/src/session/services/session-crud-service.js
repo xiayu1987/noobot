@@ -6,6 +6,7 @@
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import {
   buildSessionDisplaySummary,
+  buildUnavailableSessionSummary,
   SESSION_DETAIL_MESSAGE_PROJECTION,
 } from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
@@ -99,6 +100,20 @@ export class SessionCrudService {
     return this.getSessionBundle({ userId, sessionId, parentSessionId, persistenceContext });
   }
 
+  async repairSession({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
+    if (typeof this.sessionRepo?.repairSessionProtocol !== "function") {
+      const error = new Error("Session protocol repair is unavailable");
+      error.code = "SESSION_REPAIR_UNAVAILABLE";
+      throw error;
+    }
+    return this.sessionRepo.repairSessionProtocol(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+  }
+
   async getSessionBundle({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
     const session = await this.sessionRepo.findById(
       userId,
@@ -134,10 +149,28 @@ export class SessionCrudService {
 
   async getSessionData({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
-    const sessionBundle = await this.getSessionBundle({
-      userId,
-      sessionId: normalizedSessionId,
-    });
+    let sessionBundle;
+    try {
+      sessionBundle = await this.getSessionBundle({
+        userId,
+        sessionId: normalizedSessionId,
+      });
+    } catch (error) {
+      if (error?.code !== "SESSION_PROTOCOL_INVALID") throw error;
+      return {
+        exists: true,
+        sessionId: normalizedSessionId,
+        sessions: [
+          buildUnavailableSessionSummary({
+            sessionId: normalizedSessionId,
+            errorCode: error.code,
+            reason: error.message,
+          }),
+        ],
+        availability: "unavailable",
+        unavailableReason: { code: error.code, message: error.message },
+      };
+    }
     if (!sessionBundle.exists) {
       return { exists: false, sessionId: normalizedSessionId, sessions: [] };
     }
@@ -327,14 +360,25 @@ export class SessionCrudService {
       const depth = this.sessionTreeService
         ? await this.sessionTreeService.getSessionDepth({ userId, sessionId: currentSessionId })
         : this._getDepthFromTree(currentSessionId, sessionTree);
-      const summary =
-        typeof this.sessionRepo?.readSessionDisplaySummary === "function"
-          ? await this.sessionRepo.readSessionDisplaySummary(
-              userId,
-              currentSessionId,
-              currentParentSessionId,
-            )
-          : null;
+      let summary = null;
+      try {
+        summary =
+          typeof this.sessionRepo?.readSessionDisplaySummary === "function"
+            ? await this.sessionRepo.readSessionDisplaySummary(
+                userId,
+                currentSessionId,
+                currentParentSessionId,
+              )
+            : null;
+      } catch (error) {
+        summary = buildUnavailableSessionSummary({
+          sessionId: currentSessionId,
+          parentSessionId: currentParentSessionId,
+          errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
+          reason: error?.message || "Session requires protocol repair",
+          depth,
+        });
+      }
       if (!summary) continue;
       sessions.push(
         await projectSessionAttachmentState({
@@ -454,6 +498,20 @@ export class SessionCrudService {
     const expectedIds = new Set(
       sessionIds.map((item) => String(item || "").trim()).filter(Boolean),
     );
+    // Reconcile availability from the canonical aggregate before returning
+    // the derived session-list projection. A cached summary can outlive a
+    // later protocol violation, so list reads must not trust the cache alone.
+    if (typeof this.sessionRepo?.ensureSessionDisplaySummary === "function") {
+      for (const sessionId of sessionIds) {
+        const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+        try {
+          await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
+        } catch {
+          // ensureSessionDisplaySummary records the unavailable projection;
+          // the list remains readable and the session remains unopenable.
+        }
+      }
+    }
     let payload =
       typeof this.sessionRepo?.readSessionsSummary === "function"
         ? await this.sessionRepo.readSessionsSummary(userId)

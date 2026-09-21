@@ -66,6 +66,11 @@ export function validateSessionAggregateInvariants(session = {}) {
 
 export function assertSessionAggregateInvariants(session = {}) {
   const result = validateSessionAggregateInvariants(session);
-  if (!result.valid) throw new TypeError(`invalid session aggregate: ${result.errors.join(",")}`);
+  if (!result.valid) {
+    const error = new TypeError(`invalid session aggregate: ${result.errors.join(",")}`);
+    error.code = "SESSION_PROTOCOL_INVALID";
+    error.protocolErrors = result.errors;
+    throw error;
+  }
   return session;
 }
