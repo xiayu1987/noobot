@@ -67,7 +67,7 @@ let pendingDependencyResolve = null;
 let desktopConfigState = null;
 const startupStatuses = [];
 
-const { createWindow, resolveNoobotUrl, reloadWebContents, getMainWindow } =
+const { createWindow, resolveNoobotUrl, reloadWebContents, getMainWindow, allowQuit, showMainWindow } =
   createDesktopWindowManager({
     app,
     dirname: __dirname,
@@ -248,5 +248,13 @@ setTimeout(() => {
     });
   }
 }, 5000);
-app.on("window-all-closed", () => app.quit());
-app.on("before-quit", stopManagedService);
+app.on("activate", () => {
+  if (getMainWindow() && !getMainWindow().isDestroyed()) {
+    showMainWindow();
+  }
+});
+app.on("window-all-closed", () => {});
+app.on("before-quit", () => {
+  allowQuit();
+  stopManagedService();
+});

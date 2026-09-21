@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BrowserWindow, Menu, shell } from "electron";
+import { BrowserWindow, Menu, shell, Tray } from "electron";
 import fs from "node:fs";
 import { clientFilePath as path } from "../../path-resolver.js";
 
@@ -16,6 +16,43 @@ export function createDesktopWindowManager({
   appendDesktopLog = () => {},
 } = {}) {
   let mainWindow = null;
+  let tray = null;
+  let isQuitting = false;
+
+  function getTrayIconPath() {
+    if (process.env.NOOBOT_DESKTOP_TRAY_ICON) return process.env.NOOBOT_DESKTOP_TRAY_ICON;
+    if (process.platform === "darwin") {
+      return path.join(process.env.NOOBOT_DESKTOP_PROJECT_DIR, "assets", "noobot.icns");
+    }
+    return process.env.NOOBOT_DESKTOP_WINDOW_ICON;
+  }
+
+  function showMainWindow() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+
+  function quitFromTray() {
+    isQuitting = true;
+    app.quit();
+  }
+
+  function createTray() {
+    if (tray) return tray;
+    tray = new Tray(getTrayIconPath());
+    tray.setToolTip("Noobot");
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: "显示 Noobot", click: showMainWindow },
+        { type: "separator" },
+        { label: "退出 Noobot", click: quitFromTray },
+      ]),
+    );
+    tray.on("click", showMainWindow);
+    return tray;
+  }
 
   function reloadWebContents(webContents = mainWindow?.webContents) {
     if (!webContents || webContents.isDestroyed()) return { ok: false, error: "webContents unavailable" };
@@ -68,6 +105,14 @@ export function createDesktopWindowManager({
       },
     });
     appendEarlyLog("[main:create-window] after BrowserWindow");
+    createTray();
+
+    mainWindow.on("close", (event) => {
+      if (isQuitting) return;
+      event.preventDefault();
+      mainWindow?.hide();
+      appendDesktopLog("[main:window] close intercepted; window hidden");
+    });
 
     mainWindow.once("ready-to-show", () => {
       appendDesktopLog("[main:window] ready-to-show");
@@ -106,6 +151,11 @@ export function createDesktopWindowManager({
 
   return {
     createWindow,
+    createTray,
+    allowQuit: () => {
+      isQuitting = true;
+    },
+    showMainWindow,
     resolveNoobotUrl,
     reloadWebContents,
     getMainWindow: () => mainWindow,

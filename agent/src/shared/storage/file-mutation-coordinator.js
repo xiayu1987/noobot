@@ -165,6 +165,16 @@ async function statLock(lockPath) {
   });
 }
 
+async function statAfterExclusiveCreateFailure(lockPath, createError) {
+  try {
+    return await statLock(lockPath);
+  } catch (statError) {
+    if (statError?.code !== "ENOENT") throw statError;
+    if (createError?.code === "EEXIST") return null;
+    throw createError;
+  }
+}
+
 async function reclaimStaleLock(lockPath) {
   const stalePath = `${lockPath}.stale-${randomUUID()}`;
   try {
@@ -242,9 +252,9 @@ export class FileMutationCoordinator {
                 key,
               );
             }
-            if (error?.code !== "EEXIST") throw error;
             try {
-              const current = await statLock(key);
+              const current = await statAfterExclusiveCreateFailure(key, error);
+              if (!current) continue;
               if (Date.now() - current.mtimeMs > this.staleMs) {
                 const currentOwner = await readLockOwner(key);
                 if (!isOwnerProcessAlive(currentOwner)) {
