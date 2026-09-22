@@ -13,10 +13,7 @@ import {
   stopActiveTurn,
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
-import {
-  waitForSessionExecutionEventTree,
-  workspaceRoot,
-} from "../helpers/persistence-audit.js";
+import { waitForSessionExecutionEventTree, workspaceRoot } from "../helpers/persistence-audit.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import {
   commandsForSession,
@@ -160,9 +157,7 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
       ),
     { timeoutMs: PROTOCOL_TIMEOUTS.model },
   );
-  await expect
-    .poll(() => fs.readFile(toolStartedMarker, "utf8").catch(() => ""))
-    .toBe("started");
+  await expect.poll(() => fs.readFile(toolStartedMarker, "utf8").catch(() => "")).toBe("started");
 
   await expect
     .poll(async () => {
@@ -181,11 +176,7 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     .poll(async () => {
       try {
         await fs.mkdir(lockPath);
-        await fs.writeFile(
-          path.join(lockPath, "owner"),
-          `${process.pid}:e2e-lock-failure`,
-          "utf8",
-        );
+        await fs.writeFile(path.join(lockPath, "owner"), `${process.pid}:e2e-lock-failure`, "utf8");
         return true;
       } catch (error) {
         if (error?.code === "EEXIST") return false;
@@ -194,10 +185,12 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     })
     .toBe(true);
   const lockDirectory = path.dirname(lockPath);
-  const waiterPrefix = `${path.basename(lockPath)}.wait-`;
+  const settledWaiterPattern = new RegExp(
+    `^${path.basename(lockPath).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.wait-\\d+-`,
+  );
   try {
     const earlierWaiters = new Set(
-      (await fs.readdir(lockDirectory)).filter((name) => name.startsWith(waiterPrefix)),
+      (await fs.readdir(lockDirectory)).filter((name) => settledWaiterPattern.test(name)),
     );
     await expect
       .poll(() => fs.readFile(toolFinishedMarker, "utf8").catch(() => ""))
@@ -206,15 +199,18 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
     const timeoutWaiters = [];
     for (let timeoutIndex = 0; timeoutIndex < 2; timeoutIndex += 1) {
       await expect
-        .poll(async () => {
-          const names = await fs.readdir(lockDirectory);
-          for (const name of names) {
-            if (!name.startsWith(waiterPrefix) || observedWaiters.has(name)) continue;
-            observedWaiters.add(name);
-            timeoutWaiters.push(name);
-          }
-          return timeoutWaiters.length > timeoutIndex;
-        }, { timeout: PROTOCOL_TIMEOUTS.model })
+        .poll(
+          async () => {
+            const names = await fs.readdir(lockDirectory);
+            for (const name of names) {
+              if (!settledWaiterPattern.test(name) || observedWaiters.has(name)) continue;
+              observedWaiters.add(name);
+              timeoutWaiters.push(name);
+            }
+            return timeoutWaiters.length > timeoutIndex;
+          },
+          { timeout: PROTOCOL_TIMEOUTS.model },
+        )
         .toBe(true);
       const observedWaiter = timeoutWaiters[timeoutIndex];
       await expect
@@ -275,10 +271,7 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
 
   const thirdOffset = commandsForSession(protocolCapture, noobot.sessionId).length;
-  await sendMessage(
-    noobot.page,
-    uniquePrompt(testInfo, "第三轮。"),
-  );
+  await sendMessage(noobot.page, uniquePrompt(testInfo, "第三轮。"));
   const thirdSend = await waitForCommand(
     protocolCapture,
     noobot.sessionId,

@@ -586,9 +586,7 @@ export class SessionCrudService {
       ? await this.sessionTreeService.getRootSessionId({ userId, sessionId })
       : String(sessionId || "").trim();
     if (!rootSessionId) return normalizeSelectedConnectorIds([]);
-    const session = await this.sessionRepo.findById(userId, rootSessionId);
-    if (!session) return normalizeSelectedConnectorIds([]);
-    return normalizeSelectedConnectorIds(session.selectedConnectorIds);
+    return this.sessionRepo.readSelectedConnectorIds(userId, rootSessionId);
   }
 
   async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {

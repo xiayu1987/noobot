@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
@@ -89,6 +89,42 @@ test("file repository provisions Session and initial Turn in one persisted artif
 
     const summary = await runtime.repositories.sessionRepository.readSessionsSummary("u1");
     assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);
+  });
+});
+
+test("connector selection reads only the Session manifest fact", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const runtime = createSessionServices({ workspaceRoot });
+    const repository = runtime.repositories.sessionRepository;
+    await runtime.sessionCrudService.ensureSession("u1", "session-1");
+    await runtime.sessionCrudService.setRootSessionSelectedConnectorIds({
+      userId: "u1",
+      sessionId: "session-1",
+      selectedConnectorIds: ["connector-1"],
+    });
+
+    const scope = await repository.resolveSessionScope("u1", "session-1", "");
+    const manifest = JSON.parse(await readFile(scope.sessionFile, "utf8"));
+    manifest.turnOrder = [
+      {
+        turnId: "turn-000001",
+        file: "turns/turn-000001.jsonl",
+        committedBytes: 10,
+        messageOrder: [],
+      },
+    ];
+    await mkdir(path.join(scope.sessionDir, "turns"), { recursive: true });
+    await writeFile(path.join(scope.sessionDir, "turns/turn-000001.jsonl"), "invalid\n", "utf8");
+    await writeFile(scope.sessionFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    assert.deepEqual(
+      await runtime.sessionCrudService.getRootSessionSelectedConnectorIds({
+        userId: "u1",
+        sessionId: "session-1",
+      }),
+      ["connector-1"],
+    );
+    await assert.rejects(repository.findById("u1", "session-1", ""));
   });
 });
 
