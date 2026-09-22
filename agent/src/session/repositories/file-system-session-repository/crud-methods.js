@@ -192,6 +192,29 @@ class SessionCrudMethods {
     }
   }
 
+  async readSelectedConnectorIds(
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    if (await this.isSessionDeleted(userId, sessionId)) return [];
+    const { sessionFile } = await this.resolveSessionScope(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    if (!(await this.storageService.exists(sessionFile))) return [];
+    const manifest = await this.storageService.readJson(sessionFile, null);
+    if (String(manifest?.sessionId || "").trim() !== String(sessionId || "").trim()) {
+      const error = new Error("Session manifest identity does not match its storage scope");
+      error.code = "SESSION_MANIFEST_IDENTITY_MISMATCH";
+      throw error;
+    }
+    return this.normalizeSelectedConnectorIds(manifest.selectedConnectorIds);
+  }
+
   async save(
     userId,
     session = {},

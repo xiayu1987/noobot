@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { request as playwrightRequest } from "@playwright/test";
+import { admissionRetryDelayMs } from "./helpers/http-admission.js";
 
 const registryPath = String(process.env.NOOBOT_E2E_SESSION_REGISTRY || "").trim();
 const runId = String(process.env.NOOBOT_E2E_RUN_ID || "").trim();
@@ -23,14 +24,7 @@ async function deleteSessionWithAdmissionRetry(context, { userId, sessionId, api
         `Suite Session cleanup failed (${response.status()}): ${String(payload?.error || "unknown error")}`,
       );
     }
-    const retryAfterSeconds = Number(
-      response.headers()["retry-after"] || payload?.retryAfterSeconds || 1,
-    );
-    const delayMs = Math.max(
-      1000,
-      Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 1000,
-    );
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await new Promise((resolve) => setTimeout(resolve, admissionRetryDelayMs(response, payload)));
   }
 }
 
