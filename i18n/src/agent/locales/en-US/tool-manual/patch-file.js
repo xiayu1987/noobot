@@ -24,6 +24,7 @@ export const PATCH_FILE_MANUAL = {
     notes: [
       "This is the preferred way to edit existing files. Favor exact-context patches over hand-computed unified diff line counts.",
       "When a patch fails, read_file again for the current content before retrying instead of iterating on stale context.",
+      "Patching can continue after other tools or formatters edit a file. file_mutation_conflict means the file changed after this patch read it; reread and rebuild the patch. The aggregate diff shows the overall file changes during this turn; aggregate.externalChangeCount reports observed external changes.",
       "Multiple edits to the same file can share one patch, which cuts round trips.",
       "changes[].action reports the intent declared by the patch (write or delete), not that the write already happened. To confirm content actually landed, check whether changes[].mutation and the top-level mutations are non-empty. Under dryRun the action is still write while mutation is always null.",
     ],
