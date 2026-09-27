@@ -43,6 +43,7 @@ export function createWorkspaceIoExecutor({
     stat: (filePath) => operations.stat(filePath),
     readDirectory: (directoryPath) => operations.readdir(directoryPath, { withFileTypes: true }),
     readText: (filePath) => operations.readFile(filePath, "utf8"),
+    readBuffer: (filePath) => operations.readFile(filePath),
     async writeText(filePath, content) {
       await operations.mkdir(path.dirname(filePath), { recursive: true });
       await writeFileAtomic({

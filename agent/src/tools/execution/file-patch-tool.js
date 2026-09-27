@@ -19,6 +19,7 @@ import { registerResource } from "../core/resource-broker.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { applyFileMutation, rollbackFileMutation } from "./file-mutation-service.js";
+import { fileContentSha256, withFileMutationLocks } from "./file-mutation-state.js";
 import {
   applySearchHunks,
   applyUnifiedHunks,
@@ -121,9 +122,20 @@ function buildPatchSchema(agentContext) {
 async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
   const writePlans = [];
   const deletePlans = [];
+  const plannedContents = new Map();
+  const readContent = async (filePath) => {
+    if (plannedContents.has(filePath)) return plannedContents.get(filePath);
+    const buffer = await workspaceIo.readBuffer(filePath).catch((error) => {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    });
+    plannedContents.set(filePath, buffer);
+    return buffer;
+  };
+  const hash = (buffer) => (buffer === null ? null : fileContentSha256(buffer));
   for (const item of targets) {
     if (item.mode === "add") {
-      if (await workspaceIo.exists(item.resolvedNewPath)) {
+      if ((await readContent(item.resolvedNewPath)) !== null) {
         throw recoverableToolError(`target file already exists: ${item.newPath}`, {
           code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
           details: { field: "patch", filePath: item.newPath },
@@ -135,14 +147,27 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
           ? item.content
           : applyUnifiedHunks("", item.hunks || []),
         pathRef: item.newPathRef,
+        expectedSha256: null,
+      });
+      plannedContents.set(item.resolvedNewPath, Buffer.from(writePlans.at(-1).content, "utf8"));
+      continue;
+    }
+    const originalBuffer = await readContent(item.resolvedOldPath);
+    if (originalBuffer === null) {
+      throw recoverableToolError(`file not found: ${item.oldPath}`, {
+        code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
+      });
+    }
+    const originalSha256 = hash(originalBuffer);
+    if (item.mode === "delete") {
+      deletePlans.push({
+        filePath: item.resolvedOldPath,
+        pathRef: item.oldPathRef,
+        expectedSha256: originalSha256,
       });
       continue;
     }
-    if (item.mode === "delete") {
-      deletePlans.push({ filePath: item.resolvedOldPath, pathRef: item.oldPathRef });
-      continue;
-    }
-    const original = await workspaceIo.readText(item.resolvedOldPath);
+    const original = originalBuffer.toString("utf8");
     let nextContent = "";
     try {
       nextContent =
@@ -163,9 +188,15 @@ async function buildPatchPlans({ targets, normalizedFormat, workspaceIo }) {
       content: nextContent,
       displayPath: item.newPath || item.oldPath,
       pathRef: item.newPathRef || item.oldPathRef,
+      expectedSha256: hash(await readContent(outputPath)),
     });
+    plannedContents.set(outputPath, Buffer.from(nextContent, "utf8"));
     if (item.mode === "move" && item.resolvedOldPath !== outputPath) {
-      deletePlans.push({ filePath: item.resolvedOldPath, pathRef: item.oldPathRef });
+      deletePlans.push({
+        filePath: item.resolvedOldPath,
+        pathRef: item.oldPathRef,
+        expectedSha256: originalSha256,
+      });
     }
   }
   return { writePlans, deletePlans };
@@ -180,7 +211,7 @@ async function applyPatchMutations({
 }) {
   const mutations = [];
   const mutationByPath = new Map();
-  const rollbackStateByMutationId = new Map();
+  const committed = [];
   const mutationRoot = resolveRuntimeFileMutationRoot(runtime);
   try {
     for (const plan of writePlans) {
@@ -190,6 +221,7 @@ async function applyPatchMutations({
         logicalPath: mutationLogicalPath(plan.pathRef),
         content: plan.content,
         operation: "update",
+        expectedSha256: plan.expectedSha256,
         scopeId: mutationScopeId,
         mutationRoot,
         sessionScope: runtime?.systemRuntime?.persistenceScope || null,
@@ -199,7 +231,7 @@ async function applyPatchMutations({
       });
       mutations.push(mutation);
       mutationByPath.set(plan.filePath, mutation);
-      rollbackStateByMutationId.set(mutation.mutations[0].id, rollbackState);
+      committed.push({ mutation, plan, rollbackState });
     }
     for (const plan of deletePlans) {
       if (writePlans.some((item) => item.filePath === plan.filePath)) continue;
@@ -208,6 +240,7 @@ async function applyPatchMutations({
         filePath: plan.filePath,
         logicalPath: mutationLogicalPath(plan.pathRef),
         operation: "delete",
+        expectedSha256: plan.expectedSha256,
         mutationRoot,
         sessionScope: runtime?.systemRuntime?.persistenceScope || null,
         rollbackState,
@@ -216,23 +249,31 @@ async function applyPatchMutations({
       });
       mutations.push(mutation);
       mutationByPath.set(plan.filePath, mutation);
-      rollbackStateByMutationId.set(mutation.mutations[0].id, rollbackState);
+      committed.push({ mutation, plan, rollbackState });
     }
   } catch (error) {
-    for (const mutation of mutations.toReversed()) {
-      const plan = [...writePlans, ...deletePlans].find(
-        (item) =>
-          mutationByPath.get(item.filePath)?.mutations?.[0]?.id === mutation.mutations[0]?.id,
-      );
-      if (!plan) continue;
-      await rollbackFileMutation({
-        mutationRoot,
-        mutationId: mutation.mutations[0].id,
-        restoreState: rollbackStateByMutationId.get(mutation.mutations[0].id),
-        filePath: plan.filePath,
-        writeText: (target, value) => workspaceIo.writeText(target, value),
-        removeFile: (target) => workspaceIo.remove(target),
-      });
+    const rollbackErrors = [];
+    for (const { mutation, plan, rollbackState } of committed.toReversed()) {
+      try {
+        await rollbackFileMutation({
+          mutationRoot,
+          mutationId: mutation.mutations[0].id,
+          restoreState: rollbackState,
+          filePath: plan.filePath,
+          writeText: (target, value) => workspaceIo.writeText(target, value),
+          removeFile: (target) => workspaceIo.remove(target),
+        });
+      } catch (rollbackError) {
+        rollbackErrors.push({
+          path: mutationLogicalPath(plan.pathRef),
+          error: rollbackError.message,
+        });
+      }
+    }
+    if (rollbackErrors.length) {
+      error.code = "file_mutation_rollback_conflict";
+      error.message = `patch failed and some files could not be rolled back; read the affected files before retrying: ${error.message}`;
+      error.details = { ...error.details, rollbackErrors };
     }
     throw error;
   }
@@ -334,20 +375,29 @@ async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeI
       .filter((value) => value && value !== "/dev/null")
       .some((value) => !isAbsolutePathAnyPlatform(value)),
   );
-  const plans = await buildPatchPlans({
-    targets: prepared.targets,
-    normalizedFormat,
-    workspaceIo,
-  });
-  if (plans.failure) return plans.failure;
-  const mutations = dryRun
-    ? { mutations: [], mutationByPath: new Map() }
-    : await applyPatchMutations({
-        ...plans,
-        runtime,
+  const { plans, mutations } = await withFileMutationLocks(
+    prepared.targets
+      .flatMap((item) => [item.resolvedOldPath, item.resolvedNewPath])
+      .filter(Boolean),
+    async () => {
+      const plans = await buildPatchPlans({
+        targets: prepared.targets,
+        normalizedFormat,
         workspaceIo,
-        mutationScopeId,
       });
+      if (plans.failure) return { plans };
+      const mutations = dryRun
+        ? { mutations: [], mutationByPath: new Map() }
+        : await applyPatchMutations({
+            ...plans,
+            runtime,
+            workspaceIo,
+            mutationScopeId,
+          });
+      return { plans, mutations };
+    },
+  );
+  if (plans.failure) return plans.failure;
   const resources = await registerPatchResources({
     agentContext,
     writePlans: plans.writePlans,

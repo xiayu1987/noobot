@@ -11,14 +11,8 @@ import {
   createFileDiff,
   createFileMutationResult,
 } from "@noobot/file-mutation-protocol";
-import { FileMutationCoordinator } from "../../shared/storage/file-mutation-coordinator.js";
+import { assertFileMutationVersion, withFileMutationLocks } from "./file-mutation-state.js";
 import { resolveSessionGeneratedDataRoot } from "../../session/session-generated-data.js";
-
-const fileMutationCoordinator = new FileMutationCoordinator({
-  timeoutMessage: "file mutation lock timeout",
-  timeoutErrorCode: "FILE_MUTATION_BUSY",
-  operationName: "fileMutation.refreshLock",
-});
 
 export function resolveFileMutationRoot(sessionDir) {
   return resolveSessionGeneratedDataRoot(sessionDir, "fileMutations");
@@ -79,6 +73,21 @@ async function restoreTarget(filePath, before, { writeText, removeFile }) {
   }
 }
 
+function collectExternalChanges(existingRecord, before, beforeSha256) {
+  const changes = [...(existingRecord?.snapshots?.externalChanges || [])];
+  const mutation = existingRecord?.mutations?.[0];
+  if (mutation && mutation.after?.sha256 !== beforeSha256) {
+    changes.push({
+      beforeRevision: mutation.aggregate.revision + 1,
+      beforeSha256: mutation.after?.sha256,
+      afterSha256: beforeSha256,
+      before: existingRecord.snapshots?.after,
+      after: before.content,
+    });
+  }
+  return changes;
+}
+
 async function applyFileMutationInternal({
   filePath,
   logicalPath,
@@ -86,7 +95,7 @@ async function applyFileMutationInternal({
   operation = "replace",
   scopeId = "",
   mutationRoot,
-  expectedSha256 = null,
+  expectedSha256 = undefined,
   rollbackState = null,
   sessionScope = null,
   writeText,
@@ -105,10 +114,13 @@ async function applyFileMutationInternal({
   }
   const before = await readExisting(filePath);
   const beforeSha256 = before.exists ? digest(before.buffer) : null;
-  if (expectedSha256 !== null && beforeSha256 !== expectedSha256) {
-    const error = new Error("file changed since it was loaded");
+  if (expectedSha256 !== undefined && beforeSha256 !== expectedSha256) {
+    const error = new Error(
+      `file changed since it was loaded: ${normalizedLogicalPath}; read the file again and rebuild the patch`,
+    );
     error.code = "file_mutation_conflict";
     error.status = 409;
+    error.details = { filePath: normalizedLogicalPath, expectedSha256, actualSha256: beforeSha256 };
     throw error;
   }
   if (normalizedOperation === "create" && before.exists) {
@@ -148,13 +160,8 @@ async function applyFileMutationInternal({
     ) {
       throw new Error("file mutation aggregate identity conflict");
     }
-    if (existingMutation.after?.sha256 !== beforeSha256) {
-      const error = new Error("file changed outside the active mutation aggregate");
-      error.code = "file_mutation_aggregate_conflict";
-      error.status = 409;
-      throw error;
-    }
   }
+  const externalChanges = collectExternalChanges(existingRecord, before, beforeSha256);
   const initialBeforeContent = existingRecord ? existingRecord.snapshots?.before : before.content;
   const aggregateDiff =
     isAggregate && typeof initialBeforeContent === "string" && (nextContent === null || afterIsText)
@@ -188,6 +195,7 @@ async function applyFileMutationInternal({
         path: normalizedLogicalPath,
         revision,
         diffCount: diffs.length,
+        ...(externalChanges.length ? { externalChangeCount: externalChanges.length } : {}),
       }
     : null;
   const result = createFileMutationResult({
@@ -212,22 +220,25 @@ async function applyFileMutationInternal({
       before: initialBeforeContent,
       after: nextContent,
       diff: aggregateDiff,
-      ...(isAggregate ? { diffs } : {}),
+      ...(isAggregate ? { diffs, externalChanges } : {}),
     },
   };
   let targetCommitted = false;
   try {
+    await assertFileMutationVersion(filePath, beforeSha256);
     if (nextContent === null) await removeFile(filePath);
     else await writeText(filePath, nextContent);
     targetCommitted = true;
     await writeFile(temporaryRecordPath, JSON.stringify(record), "utf8");
     await rename(temporaryRecordPath, recordPath);
+    if (rollbackState && typeof rollbackState === "object") rollbackState.committedRecord = record;
   } catch (error) {
     await rm(temporaryRecordPath, { force: true }).catch((cleanupError) => {
       void cleanupError;
     });
     if (targetCommitted) {
       try {
+        await assertFileMutationVersion(filePath, afterMeta.sha256);
         await restoreTarget(filePath, before, { writeText, removeFile });
       } catch (rollbackError) {
         error.code = "file_mutation_commit_and_rollback_failed";
@@ -242,13 +253,8 @@ async function applyFileMutationInternal({
 }
 
 export async function applyFileMutation(options = {}) {
-  const root = String(options?.mutationRoot || "").trim();
-  const logicalPath = String(options?.logicalPath || "").trim();
-  const scopeId = String(options?.scopeId || "").trim();
-  if (!root || !logicalPath) return applyFileMutationInternal(options);
-  const lockIdentity = `${scopeId}\u0000${logicalPath}`;
-  const lockPath = path.join(`${root}.locks`, `${digest(lockIdentity)}.lock`);
-  return fileMutationCoordinator.run(lockPath, () => applyFileMutationInternal(options));
+  if (!options.filePath) return applyFileMutationInternal(options);
+  return withFileMutationLocks([options.filePath], () => applyFileMutationInternal(options));
 }
 
 export async function readFileMutation({ mutationRoot, mutationId } = {}) {
@@ -263,7 +269,7 @@ export async function readFileMutation({ mutationRoot, mutationId } = {}) {
   );
 }
 
-export async function rollbackFileMutation({
+async function rollbackFileMutationInternal({
   mutationRoot,
   mutationId,
   filePath,
@@ -273,6 +279,16 @@ export async function rollbackFileMutation({
 } = {}) {
   const root = String(mutationRoot || "").trim();
   const record = await readFileMutation({ mutationRoot: root, mutationId });
+  if (
+    restoreState?.committedRecord &&
+    JSON.stringify(record) !== JSON.stringify(restoreState.committedRecord)
+  ) {
+    const error = new Error("file mutation record changed before rollback");
+    error.code = "file_mutation_conflict";
+    error.status = 409;
+    throw error;
+  }
+  await assertFileMutationVersion(filePath, record.mutations[0].after.sha256);
   if (restoreState && typeof restoreState === "object" && restoreState.before) {
     await restoreTarget(filePath, restoreState.before, { writeText, removeFile });
     const recordPath = path.join(root, `${String(mutationId).trim()}.json`);
@@ -299,4 +315,8 @@ export async function rollbackFileMutation({
       if (error?.code !== "ENOENT") throw error;
     });
   await rm(path.join(root, `${String(mutationId).trim()}.json`), { force: true });
+}
+
+export async function rollbackFileMutation(options = {}) {
+  return withFileMutationLocks([options.filePath], () => rollbackFileMutationInternal(options));
 }
