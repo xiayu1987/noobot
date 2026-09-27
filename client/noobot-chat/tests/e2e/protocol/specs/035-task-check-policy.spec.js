@@ -94,7 +94,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
       testInfo,
       [
         "完成一个三步顺序只读计算链，每一步都必须等待上一步的实际输出。",
-        "依次调用 execute_script：生成随机十六进制 token、计算其 SHA-256、计算该 SHA-256 的字符数。",
+        "三次 execute_script 均使用 node -e 和内置 node:crypto：randomBytes(16).toString('hex') 生成 token；createHash('sha256').update(上一步真实 token).digest('hex') 计算哈希；读取上一步真实哈希的 length。每次 console.log 输出结果。",
         "第二次 execute_script 成功后，下一次只能调用 task_check，按协议记录当时的真实任务状态；task_check 成功前不得执行第三次 execute_script。",
         "不得并行调用，最后汇总每一步实际结果。",
       ].join(" "),

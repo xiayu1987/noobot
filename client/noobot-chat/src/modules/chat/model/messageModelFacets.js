@@ -50,9 +50,7 @@ function buildMessageTimelineFacet(canonicalMessage = {}) {
     thinkingContentTimeline: normalizeArray(canonicalMessage.thinkingContentTimeline),
     messageEventState: canonicalMessage.messageEventState,
     hasThinkingDetails: canonicalMessage.hasThinkingDetails === true,
-    thinkingDetailCount: Number(
-      canonicalMessage?.thinkingDetailCount ?? canonicalMessage?.thinking_detail_count ?? 0,
-    ),
+    thinkingDetailCount: Number(canonicalMessage?.thinkingDetailCount ?? 0),
   };
 }
 

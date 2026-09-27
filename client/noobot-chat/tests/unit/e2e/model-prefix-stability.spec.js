@@ -13,7 +13,7 @@ function trace({
   fingerprints,
   revision = 0,
   purpose = "main_agent",
-  ts,
+  ts = "2026-01-01T00:00:01.000Z",
   contextSequencePolicy = MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
   dialogProcessId = "dialog-1",
 } = {}) {
@@ -33,6 +33,29 @@ function trace({
 }
 
 describe("model prefix stability audit", () => {
+  it("orders persisted traces by canonical ts", () => {
+    const audit = auditModelPrefixStability([
+      trace({ id: "i2", fingerprints: ["a", "b"], ts: "2026-01-01T00:00:02.000Z" }),
+      trace({ id: "i1", fingerprints: ["a"], ts: "2026-01-01T00:00:01.000Z" }),
+    ]);
+
+    expect(audit.violations).toEqual([]);
+    expect(audit.stableComparisonCount).toBe(1);
+  });
+
+  it.each([undefined, null, "", "invalid", 0])(
+    "rejects invalid ts %s without accepting a legacy timestamp",
+    (ts) => {
+      const record = trace({ id: "i1", fingerprints: ["a"] });
+      record.ts = ts;
+      record.timestamp = "2026-01-01T00:00:01.000Z";
+
+      expect(() => auditModelPrefixStability([record])).toThrow(
+        "model invocation trace requires a valid ts",
+      );
+    },
+  );
+
   it("accepts append-only growth and one checkpoint rewrite", () => {
     const audit = auditModelPrefixStability([
       trace({ id: "i1", fingerprints: ["a"], ts: "2026-01-01T00:00:01.000Z" }),
