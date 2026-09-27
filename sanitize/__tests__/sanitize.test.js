@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   sanitizePersonalInformation,
   sanitizeSecrets,
+  sanitizeUrl,
   sanitizeToolResultText,
 } from "../src/index.js";
 
@@ -148,4 +149,19 @@ test("tool result combines field, secret and PII sanitization", async () => {
     parsed.message.length,
     "mail jane@example.com token ghp_1234567890abcdefghijklmnopqrstuvwxyz".length,
   );
+});
+
+test("redacts WebSocket credentials while preserving protocol and routing", () => {
+  for (const scheme of ["ws", "wss", "http", "https"]) {
+    const output = sanitizeUrl(
+      `${scheme}://localhost/socket?apikey=test-secret&sessionId=session-1`,
+    );
+    const parsed = new URL(output);
+    assert.equal(parsed.protocol, `${scheme}:`);
+    assert.equal(parsed.host, "localhost");
+    assert.equal(parsed.pathname, "/socket");
+    assert.equal(parsed.searchParams.get("apikey"), "[REDACTED]");
+    assert.equal(parsed.searchParams.get("sessionId"), "session-1");
+    assert.ok(!output.includes("test-secret"));
+  }
 });

@@ -60,6 +60,7 @@
     "vue": "^3.5.43"
   },
   "devDependencies": {
+    "@noobot/sanitize": "file:../../sanitize",
     "@playwright/test": "^1.63.0",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/test-utils": "^2.5.1",

@@ -51,8 +51,10 @@ describe("thinking details state", () => {
     ).toBe(3);
   });
 
-  it("counts tool calls when completed logs are absent", () => {
-    expect(getThinkingDetailsCount({ toolCalls: [{ id: 1 }, { id: 2 }, { id: 3 }] })).toBe(3);
+  it("does not infer detail counts from legacy fields or raw tool calls", () => {
+    expect(getThinkingDetailsCount({ toolCalls: [{ id: 1 }] })).toBe(0);
+    expect(getThinkingDetailsCount({ tool_calls: [{ id: 1 }] })).toBe(0);
+    expect(getThinkingDetailsCount({ thinking_detail_count: 3 })).toBe(0);
   });
 
   it("does not treat legacy realtime arrays as a second tool fact source", () => {
@@ -95,7 +97,7 @@ describe("thinking details state", () => {
   it("builds a translated title with the derived count", () => {
     const translate = vi.fn((key, params) => `${key}:${params.count}`);
 
-    expect(getThinkingDetailsTitle({ toolCalls: [{ id: 1 }] }, translate)).toBe(
+    expect(getThinkingDetailsTitle({ thinkingDetailCount: 1 }, translate)).toBe(
       "message.thinkingDetails:1",
     );
     expect(translate).toHaveBeenCalledWith("message.thinkingDetails", { count: 1 });

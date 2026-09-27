@@ -96,8 +96,9 @@ function isPrefix(previous = [], current = []) {
 }
 
 function traceTime(record = {}) {
-  const parsed = Date.parse(record.ts || record.timestamp || "");
-  return Number.isFinite(parsed) ? parsed : 0;
+  const parsed = typeof record.ts === "string" ? Date.parse(record.ts) : NaN;
+  if (!Number.isFinite(parsed)) throw new Error("model invocation trace requires a valid ts");
+  return parsed;
 }
 
 export function auditModelPrefixStability(records = []) {
@@ -105,7 +106,7 @@ export function auditModelPrefixStability(records = []) {
   (Array.isArray(records) ? records : []).forEach((record, sourceIndex) => {
     const key = modelFlowKey(record);
     const flow = flows.get(key) || [];
-    flow.push({ record, sourceIndex });
+    flow.push({ record, sourceIndex, time: traceTime(record) });
     flows.set(key, flow);
   });
 
@@ -114,10 +115,7 @@ export function auditModelPrefixStability(records = []) {
   let stableComparisonCount = 0;
   let checkpointRewriteCount = 0;
   for (const [key, entries] of flows) {
-    entries.sort(
-      (left, right) =>
-        traceTime(left.record) - traceTime(right.record) || left.sourceIndex - right.sourceIndex,
-    );
+    entries.sort((left, right) => left.time - right.time || left.sourceIndex - right.sourceIndex);
     let stableComparisons = 0;
     let checkpointRewrites = 0;
     const policies = new Set(
@@ -330,9 +328,7 @@ export function assertModelInvocationTraceSet(records, { rootSessionId } = {}) {
   expect(traces.length).toBeGreaterThan(0);
   traces.forEach((record) => assertModelInvocationTrace(record, { rootSessionId }));
 
-  const attempts = traces.map(
-    (record) => `${record.data.invocationId}:${record.data.attempt}`,
-  );
+  const attempts = traces.map((record) => `${record.data.invocationId}:${record.data.attempt}`);
   expect(new Set(attempts).size).toBe(attempts.length);
 
   const attemptsByInvocation = new Map();
@@ -342,9 +338,7 @@ export function assertModelInvocationTraceSet(records, { rootSessionId } = {}) {
     attemptsByInvocation.set(record.data.invocationId, attemptsForInvocation);
   }
   for (const invocationAttempts of attemptsByInvocation.values()) {
-    expect(invocationAttempts).toEqual(
-      invocationAttempts.map((_, index) => index + 1),
-    );
+    expect(invocationAttempts).toEqual(invocationAttempts.map((_, index) => index + 1));
   }
 
   const sequencesByModel = new Map();

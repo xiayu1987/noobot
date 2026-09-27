@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getMessageRole, isAssistantWithoutTurnScope } from "../../modules/chat/model/messageIdentity.js";
+import {
+  getMessageRole,
+  isAssistantWithoutTurnScope,
+} from "../../modules/chat/model/messageIdentity.js";
 import { hasToolTimeline } from "../../modules/chat/runtime/engine/toolTimeline.js";
 import { selectThinkingDetailCount } from "../../modules/chat/model/thinkingDetailCount.js";
 
@@ -13,12 +16,14 @@ export function getThinkingDetailsCount(messageItem = {}) {
 }
 
 function getSummaryThinkingDetailsCount(messageItem = {}) {
-  const count = Number(messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count);
+  const count = Number(messageItem?.thinkingDetailCount);
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
 function hasThinkingDetails(messageItem = {}) {
-  return messageItem?.hasThinkingDetails === true || getSummaryThinkingDetailsCount(messageItem) > 0;
+  return (
+    messageItem?.hasThinkingDetails === true || getSummaryThinkingDetailsCount(messageItem) > 0
+  );
 }
 
 export function getThinkingDetailsTitle(messageItem = {}, translate) {
@@ -27,11 +32,14 @@ export function getThinkingDetailsTitle(messageItem = {}, translate) {
 
 export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
   const messages = activeSession?.messages || [];
-  const messageItem = [...messages].reverse().find((item = {}) =>
-    getMessageRole(item) === "assistant" &&
-    !isAssistantWithoutTurnScope(item) &&
-    (item?.pending || hasToolTimeline(item) || hasThinkingDetails(item))
-  );
+  const messageItem = [...messages]
+    .reverse()
+    .find(
+      (item = {}) =>
+        getMessageRole(item) === "assistant" &&
+        !isAssistantWithoutTurnScope(item) &&
+        (item?.pending || hasToolTimeline(item) || hasThinkingDetails(item)),
+    );
   return { messageItem: messageItem || null };
 }
 

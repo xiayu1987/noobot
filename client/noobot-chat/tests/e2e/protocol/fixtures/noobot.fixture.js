@@ -245,7 +245,6 @@ export const test = artifactTest.extend({
       }
       try {
         await registerSuiteSession({
-          apiKey: connectConfig.apiKey,
           userId: credentials.userId,
           sessionId,
         });

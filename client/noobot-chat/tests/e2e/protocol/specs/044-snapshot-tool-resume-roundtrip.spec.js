@@ -5,6 +5,12 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
+  applyCanonicalToolTimelineEvent,
+  countCanonicalThinkingDetailEvents,
+} from "@noobot/event-protocol/tool-timeline";
+import { reduceCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
+import { findProtocolObjects } from "../helpers/websocket-capture.js";
+import {
   selectPlugins,
   sendMessage,
   stopActiveTurn,
@@ -84,15 +90,29 @@ async function stopAfterTools({ noobot, protocolCapture, command, minimumToolRes
   };
 }
 
-async function assertStoppedThinkingDetails(page, records, turnScopeId) {
+async function assertStoppedThinkingDetails(page, records, turnScopeId, capture) {
   const expectedRecordCount = executeScriptEvents(records, turnScopeId).length;
   expect(expectedRecordCount).toBeGreaterThan(0);
+  const envelopes = findProtocolObjects(capture.websocketReceived)
+    .filter(
+      ({ event, data }) => event === "message_event" && data.identity?.turnScopeId === turnScopeId,
+    )
+    .map(({ data }) => data);
+  const toolTimeline = envelopes.reduce(
+    (timeline, envelope) => applyCanonicalToolTimelineEvent(timeline, envelope),
+    [],
+  );
+  const activityTimeline = envelopes.reduce(reduceCanonicalActivityTimeline, []);
+  const expectedDetailCount = countCanonicalThinkingDetailEvents({
+    toolTimeline,
+    activityTimeline,
+  });
   const shell = page.locator(".thinking-realtime-shell").last();
   await expect(shell).toBeVisible({ timeout: 60000 });
   const header = shell.locator(".el-collapse-item__header");
   if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
   const action = shell.locator(".thinking-detail-action-button");
-  await expect(action).toContainText(`(${expectedRecordCount})`);
+  await expect(action).toContainText(`(${expectedDetailCount})`);
   await action.click();
   const panel = page.locator(".thinking-details-panel");
   await expect(panel).toBeVisible();
@@ -177,6 +197,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     noobot.page,
     firstStopped.records,
     firstStopped.command.identity.turnScopeId,
+    protocolCapture,
   );
 
   const beforeFirstContinue = commandsForSession(protocolCapture, noobot.sessionId).length;
@@ -200,6 +221,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     noobot.page,
     secondStopped.records,
     secondStopped.command.identity.turnScopeId,
+    protocolCapture,
   );
 
   const beforeSecondContinue = commandsForSession(protocolCapture, noobot.sessionId).length;

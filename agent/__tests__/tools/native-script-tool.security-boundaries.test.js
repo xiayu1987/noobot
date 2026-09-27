@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -19,6 +19,9 @@ import {
 
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime, hasChromiumCapability } from "./native-script-tool.fixtures.js";
+import { closeAllBrowserSessions } from "../../src/tools/execution/browser-session-registry.js";
+
+after(closeAllBrowserSessions);
 
 test("native script execution result IPC accepts only its exact protocol shape", () => {
   assert.equal(isNativeScriptExecutionResult({ present: false }), true);

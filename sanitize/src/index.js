@@ -360,7 +360,7 @@ function sanitizeUrl(rawUrl = "", options = {}) {
     for (const key of parsed.searchParams.keys()) {
       if (matchesSensitiveFieldPattern(key)) parsed.searchParams.set(key, replacement);
     }
-    const output = /^https?:\/\//i.test(value)
+    const output = /^(?:https?|wss?):\/\//i.test(value)
       ? parsed.toString()
       : `${parsed.pathname}${parsed.search}${parsed.hash}`;
     return sanitizePersonalInformation(output);

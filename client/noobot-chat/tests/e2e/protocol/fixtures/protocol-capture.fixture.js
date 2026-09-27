@@ -4,27 +4,45 @@
  * SPDX-License-Identifier: MIT
  */
 import { test as base } from "@playwright/test";
+import { sanitizeUrl } from "@noobot/sanitize";
 
 export const captureTest = base.extend({
   protocolCapture: async ({ page, context }, use) => {
-    const evidence = { console: [], httpRequests: [], httpResponses: [], websockets: [], websocketSent: [], websocketReceived: [] };
+    const evidence = {
+      console: [],
+      httpRequests: [],
+      httpResponses: [],
+      websockets: [],
+      websocketSent: [],
+      websocketReceived: [],
+    };
     const bindPage = (target) => {
-      target.on("console", (message) => evidence.console.push({ type: message.type(), text: message.text() }));
-      target.on("request", (request) => evidence.httpRequests.push({
-        method: request.method(), url: request.url(), resourceType: request.resourceType(),
-        ...(/replace-turn/i.test(request.url()) ? { postData: request.postData() } : {}),
-      }));
+      target.on("console", (message) =>
+        evidence.console.push({ type: message.type(), text: message.text() }),
+      );
+      target.on("request", (request) =>
+        evidence.httpRequests.push({
+          method: request.method(),
+          url: sanitizeUrl(request.url()),
+          resourceType: request.resourceType(),
+          ...(/replace-turn/i.test(request.url()) ? { postData: request.postData() } : {}),
+        }),
+      );
       target.on("response", async (response) => {
-        const record = { status: response.status(), url: response.url() };
+        const record = { status: response.status(), url: sanitizeUrl(response.url()) };
         if (/replace-turn/i.test(response.url()) && response.status() >= 400) {
           record.body = await response.text().catch(() => "");
         }
         evidence.httpResponses.push(record);
       });
       target.on("websocket", (socket) => {
-        evidence.websockets.push({ url: socket.url() });
-        socket.on("framesent", ({ payload }) => evidence.websocketSent.push({ url: socket.url(), payload }));
-        socket.on("framereceived", ({ payload }) => evidence.websocketReceived.push({ url: socket.url(), payload }));
+        evidence.websockets.push({ url: sanitizeUrl(socket.url()) });
+        socket.on("framesent", ({ payload }) =>
+          evidence.websocketSent.push({ url: sanitizeUrl(socket.url()), payload }),
+        );
+        socket.on("framereceived", ({ payload }) =>
+          evidence.websocketReceived.push({ url: sanitizeUrl(socket.url()), payload }),
+        );
       });
     };
     Object.defineProperty(evidence, "bindPage", { value: bindPage, enumerable: false });
