@@ -69,7 +69,6 @@ test("SessionExecutionFinalizer waits for execution event durability before read
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   await finalizer.finalizeRunSession({
@@ -83,21 +82,24 @@ test("SessionExecutionFinalizer waits for execution event durability before read
       complete: () => order.push("completed"),
     },
     runtimeEventListener: {
-      async flushPersistence() {
+      async flush() {
         order.push("flush");
       },
     },
   });
 
-  assert.deepEqual(order.slice(-3), ["completed", "flush", "bundle"]);
+  assert.deepEqual(order.slice(-2), ["flush", "bundle"]);
+  assert.equal(order.includes("completed"), false);
 });
 
-test("SessionExecutionFinalizer keeps persistence failures out of the runtime event channel after completion", async () => {
+test("SessionExecutionFinalizer rejects completion when execution event persistence fails", async () => {
   const events = [];
+  let bundleReads = 0;
   const finalizer = new SessionExecutionFinalizer({
     session: {
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
+        bundleReads += 1;
         return { logs: [] };
       },
     },
@@ -107,33 +109,31 @@ test("SessionExecutionFinalizer keeps persistence failures out of the runtime ev
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
-  const result = await finalizer.finalizeRunSession({
-    userId: "u1",
-    sessionId: "s1",
-    turnScopeId: "turn-1",
-    agentResult: { output: "done", turnTasks: [] },
-    lifecycle: {
-      complete: () => events.push("completed"),
-    },
-    runtimeEventListener: {
-      onEvent: ({ event, data }) => events.push({ event, data }),
-      async flushPersistence() {
-        const error = new Error("EPERM: operation not permitted");
-        error.code = "EPERM";
-        throw error;
+  await assert.rejects(
+    finalizer.finalizeRunSession({
+      userId: "u1",
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+      agentResult: { output: "done", turnTasks: [] },
+      lifecycle: {
+        complete: () => events.push("completed"),
       },
-    },
-  });
-
-  assert.equal(result.answer, "done");
-  assert.equal(
-    events.some((event) => event?.event === "execution_log_persistence_unavailable"),
-    false,
+      runtimeEventListener: {
+        onEvent: ({ event, data }) => events.push({ event, data }),
+        async flush() {
+          const error = new Error("EPERM: operation not permitted");
+          error.code = "EPERM";
+          throw error;
+        },
+      },
+    }),
+    { code: "EPERM" },
   );
-  assert.equal(events.includes("completed"), true);
+
+  assert.equal(bundleReads, 0);
+  assert.equal(events.includes("completed"), false);
 });
 
 test("SessionExecutionFinalizer promotes semantic-transfer attachments as transfer envelopes without mirror", async () => {
@@ -158,7 +158,6 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -221,7 +220,6 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -290,7 +288,6 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -352,7 +349,6 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -396,7 +392,6 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -445,7 +440,6 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   const result = await finalizer.finalizeRunSession({
@@ -472,6 +466,7 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
       turnTasks: [],
     },
     runtimeEventListener: {
+      async flush() {},
       onEvent(event) {
         events.push(event);
       },
@@ -517,7 +512,6 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
   await finalizer.finalizeRunSession({
     userId: "u1",
@@ -595,7 +589,6 @@ test("completed turn summary policy marks are durably upserted before the next d
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
   await finalizer.finalizeRunSession({
     userId: "u1",
@@ -635,7 +628,6 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
-    upsertParentAsyncTask: () => {},
   });
 
   await assert.rejects(

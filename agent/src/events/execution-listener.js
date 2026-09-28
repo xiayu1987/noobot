@@ -105,41 +105,12 @@ export function createExecutionEventListener({
     const diagnostic = summarizeDelivery(event, transportData);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.messageId);
     const task = deliveryTail.then(async () => {
-      if (shouldDiagnose) {
-        appendExecutionLog({
-          userId,
-          sessionId,
-          parentSessionId,
-          dialogProcessId,
-          event: "execution_upstream_forward_started",
-          category: "debug",
-          type: "execution_upstream_forward_started",
-          data: diagnostic,
-          ts: new Date().toISOString(),
-        });
-      }
       try {
         const result = await upstream?.onEvent?.({ event, data: transportData, ts });
         if (result === false) {
           const error = new Error("upstream rejected event delivery");
           error.code = "EVENT_UPSTREAM_DELIVERY_REJECTED";
           throw error;
-        }
-        if (shouldDiagnose) {
-          appendExecutionLog({
-            userId,
-            sessionId,
-            parentSessionId,
-            dialogProcessId,
-            event: "execution_upstream_forward_completed",
-            category: "debug",
-            type: "execution_upstream_forward_completed",
-            data: {
-              ...diagnostic,
-              result: result === true ? true : result === false ? false : "completed",
-            },
-            ts: new Date().toISOString(),
-          });
         }
         return result;
       } catch (error) {
@@ -173,14 +144,23 @@ export function createExecutionEventListener({
     });
 
   return {
-    flushPersistence: async ({ wait = true } = {}) => {
-      if (!wait) {
-        void persistenceTail.catch((error) => {
-          persistenceFailures.push({ error: error?.message || String(error), cause: error });
-        });
-        return;
+    flush: async () => {
+      let delivery;
+      let persistence;
+      do {
+        delivery = deliveryTail;
+        await delivery;
+        persistence = persistenceTail;
+        await persistence;
+      } while (delivery !== deliveryTail || persistence !== persistenceTail);
+
+      const errors = [];
+      if (deliveryFailures.length > 0) {
+        const error = new Error(`event upstream delivery failed: ${deliveryFailures[0].error}`);
+        error.code = "EVENT_UPSTREAM_DELIVERY_FAILED";
+        error.failures = [...deliveryFailures];
+        errors.push(error);
       }
-      await persistenceTail;
       if (persistenceFailures.length > 0) {
         const error = new Error(
           `execution log persistence failed: ${persistenceFailures[0].error}`,
@@ -188,15 +168,12 @@ export function createExecutionEventListener({
         );
         error.code = "EXECUTION_LOG_PERSISTENCE_FAILED";
         error.failures = persistenceFailures.map(({ cause: _cause, ...failure }) => failure);
-        throw error;
+        errors.push(error);
       }
-    },
-    flushDelivery: async () => {
-      await deliveryTail;
-      if (deliveryFailures.length > 0) {
-        const error = new Error(`event upstream delivery failed: ${deliveryFailures[0].error}`);
-        error.code = "EVENT_UPSTREAM_DELIVERY_FAILED";
-        error.failures = [...deliveryFailures];
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) {
+        const error = new AggregateError(errors, "execution event delivery and persistence failed");
+        error.code = "EXECUTION_EVENT_FLUSH_FAILED";
         throw error;
       }
     },

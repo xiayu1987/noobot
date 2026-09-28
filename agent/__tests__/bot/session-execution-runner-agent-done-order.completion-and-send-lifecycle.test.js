@@ -13,11 +13,12 @@ import {
   createTestAgentExecutionScope,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 
-test("runSession emits agent_done only after finalizeRunSession resolves", async () => {
+test("runSession completes only after finalizeRunSession resolves", async () => {
   const callOrder = [];
   const eventListener = {
-    onEvent({ event }) {
+    onEvent({ event, data }) {
       callOrder.push(`event:${event}`);
+      if (data?.state === "completed") callOrder.push("completed");
     },
   };
   const runner = createRunner({
@@ -37,7 +38,7 @@ test("runSession emits agent_done only after finalizeRunSession resolves", async
 
   assert.equal(result.ok, true);
   const finalizeIndex = callOrder.indexOf("finalizeRunSession");
-  const doneIndex = callOrder.indexOf("event:agent_done");
+  const doneIndex = callOrder.indexOf("completed");
   assert.ok(finalizeIndex >= 0);
   assert.ok(doneIndex >= 0);
   assert.ok(doneIndex > finalizeIndex);
@@ -90,7 +91,6 @@ test("runSession emits direct-send lifecycle sequence", async () => {
       callOrder.push("finalizeRunSession");
       lifecycle.transition(AGENT_LIFECYCLE_STATE.PERSISTING);
       lifecycle.transition(AGENT_LIFECYCLE_STATE.MEMORY);
-      lifecycle.transition(AGENT_LIFECYCLE_STATE.COMPLETED);
       return { ok: true };
     },
   });
@@ -125,7 +125,6 @@ test("runSession emits resume-send lifecycle sequence", async () => {
     finalizeRunSession: async ({ lifecycle }) => {
       lifecycle.transition(AGENT_LIFECYCLE_STATE.PERSISTING);
       lifecycle.transition(AGENT_LIFECYCLE_STATE.MEMORY);
-      lifecycle.transition(AGENT_LIFECYCLE_STATE.COMPLETED);
       return { ok: true };
     },
   });
@@ -173,7 +172,6 @@ test("runSession keeps resume snapshot identity separate from current run identi
       captured.finalize = { dialogProcessId, turnScopeId };
       lifecycle.enterPersisting();
       lifecycle.enterMemory();
-      lifecycle.complete();
       return { ok: true, dialogProcessId, turnScopeId };
     },
   });

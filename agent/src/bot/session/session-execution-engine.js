@@ -122,7 +122,6 @@ export class SessionExecutionEngine {
       runMemoryPostProcessFlow: (payload = {}) => this._runMemoryPostProcessFlow(payload),
       resolveExecutionBundleTimeoutMs: (userConfig = {}) =>
         this._resolveExecutionBundleTimeoutMs(userConfig),
-      upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
       now: () => this._now(),
     });
   }

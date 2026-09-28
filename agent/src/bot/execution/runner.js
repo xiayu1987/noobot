@@ -7,7 +7,7 @@
 import { emitEvent } from "../../events/index.js";
 import { runBotRuntimeHook } from "../hook/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { CALLER_ROLE } from "../config/constants.js";
+import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
 import { syncLifecycleRuntimeState } from "../../runtime/lifecycle/state-machine.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "../../runtime/resume/model-message-snapshot-store.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
@@ -112,6 +112,7 @@ export class SessionExecutionRunner {
     let resolvedUsedSessionId = sessionId;
     let resolvedDialogProcessId = parentDialogProcessId;
     let resolvedRuntimeEventListener = eventListener;
+    let executionEventListener = null;
     let lifecycle = null;
     let lifecycleRuntime = null;
     let pluginActivationScope = null;
@@ -129,7 +130,14 @@ export class SessionExecutionRunner {
         validateRunInput: this.validateRunInput,
         assertReusedUserTurnIdentity: this.assertReusedUserTurnIdentity,
         ensureParentAsyncResultContainer: this.ensureParentAsyncResultContainer,
-        initializeRunSessionRuntime: this.initializeRunSessionRuntime,
+        initializeRunSessionRuntime: async (payload) => {
+          const initialized = await this.initializeRunSessionRuntime(payload);
+          executionEventListener = initialized.runtimeEventListener;
+          resolvedRuntimeEventListener = initialized.runtimeEventListener;
+          resolvedUsedSessionId = initialized.usedSessionId;
+          resolvedDialogProcessId = initialized.dialogProcessId;
+          return initialized;
+        },
         resolveScenarioRunConfig: this.resolveScenarioRunConfig,
         prepareRunConfig: this.prepareRunConfig,
         now: () => this.now(),
@@ -319,7 +327,6 @@ export class SessionExecutionRunner {
         agentResult,
         executionStartIndex,
         userConfig,
-        resolvedParentAsyncResultContainer,
         lifecycle,
         persistenceContext,
       });
@@ -336,11 +343,33 @@ export class SessionExecutionRunner {
         },
         eventListener: runtimeEventListener,
       });
-      return finalizedResult;
+      await runtimeEventListener.flush();
+      lifecycle.complete();
+      await runtimeEventListener.flush();
+      syncLifecycleRuntimeState(lifecycleRuntime, lifecycle);
+      const result = { ...finalizedResult, lifecycle: lifecycle.snapshot };
+      this.upsertParentAsyncTask({
+        parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+        sessionId: usedSessionId,
+        parentSessionId,
+        patch: {
+          status: SESSION_ASYNC_STATUS.COMPLETED,
+          endedAt: this.now(),
+          error: "",
+          result,
+        },
+      });
+      return {
+        ...result,
+        ...(resolvedParentAsyncResultContainer
+          ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }
+          : {}),
+      };
     } catch (error) {
-      return handleSessionRunFailure({
+      return await handleSessionRunFailure({
         error,
         abortSignal,
+        executionEventListener,
         lifecycle,
         lifecycleRuntime,
         persistStoppedSnapshotFromRuntime,

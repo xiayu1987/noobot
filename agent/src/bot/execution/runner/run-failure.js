@@ -19,7 +19,7 @@ import {
 import { syncLifecycleRuntimeState } from "../../../runtime/lifecycle/state-machine.js";
 import { createExecutionFailure } from "../../../shared/errors/index.js";
 
-export async function handleSessionRunFailure({
+async function recordSessionRunFailure({
   error,
   abortSignal,
   lifecycle,
@@ -120,5 +120,26 @@ export async function handleSessionRunFailure({
       error: executionFailure,
     });
   }
-  throw executionFailure;
+  return executionFailure;
+}
+
+export async function handleSessionRunFailure({ executionEventListener, ...context }) {
+  let failure;
+  try {
+    failure = await recordSessionRunFailure(context);
+  } catch (error) {
+    failure = createExecutionFailure(
+      new AggregateError([context.error, error], error.message, { cause: context.error }),
+      context.lifecycle?.snapshot || null,
+    );
+  }
+  try {
+    await executionEventListener?.flush();
+  } catch (flushError) {
+    throw createExecutionFailure(
+      new AggregateError([failure, flushError], failure.message, { cause: failure }),
+      context.lifecycle?.snapshot || null,
+    );
+  }
+  throw failure;
 }
