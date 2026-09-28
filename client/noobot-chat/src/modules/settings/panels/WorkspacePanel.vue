@@ -23,6 +23,7 @@ import {
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
+import { saveFileBlob } from "../../../infrastructure/downloads/fileDownloadService.js";
 import { parseContentDisposition } from "../../chat/composables/message/useMessagePreview/path-utils.js";
 import {
   SettingsWorkspaceLayout,
@@ -106,17 +107,6 @@ function toParamTreeData(list = []) {
     description: String(item?.description || "").trim(),
     type: "param",
   }));
-}
-
-async function triggerBlobDownload(blob, fileName = "download") {
-  const downloadUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = downloadUrl;
-  anchor.download = String(fileName || "download");
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(downloadUrl);
 }
 
 async function loadTree() {
@@ -293,7 +283,7 @@ async function downloadFile() {
         .pop() ||
       "download";
     const blob = await response.blob();
-    await triggerBlobDownload(blob, fileName);
+    await saveFileBlob(blob, fileName);
   } catch (error) {
     ElMessage.error(error.message || translate("settings.readFileFailed"));
   }

@@ -14,10 +14,9 @@ const ATTACHMENT_ITEM = {
   name: "报告.pdf",
 };
 const REF = "attachment:v1:s1/tool/a1";
-const HREF = "/api/internal/attachment/admin/a1?sessionId=s1&attachmentSource=tool";
 
 function buildIndex(attachmentItems = [ATTACHMENT_ITEM]) {
-  return buildAttachmentRefIndex(attachmentItems, { resolveHref: () => HREF });
+  return buildAttachmentRefIndex(attachmentItems);
 }
 
 describe("attachment inline ref rendering", () => {
@@ -27,9 +26,10 @@ describe("attachment inline ref rendering", () => {
     const html = renderMarkdown(`见 ${REF} 附件`, { attachmentRefIndex: buildIndex() });
 
     expect(html).toContain("noobot-attachment-chip");
-    expect(html).toContain(`href="${HREF.replace(/&/g, "&amp;")}"`);
+    expect(html).toContain('href="#"');
+    expect(html).toContain(`data-noobot-attachment-ref="${REF}"`);
     expect(html).toContain("报告.pdf");
-    expect(html).not.toContain(REF);
+    expect(html).not.toContain("/api/internal/attachment/");
   });
 
   it("takes over markdown links using the attachment scheme", () => {
@@ -39,7 +39,8 @@ describe("attachment inline ref rendering", () => {
 
     expect(html).toContain("noobot-attachment-chip");
     expect(html).not.toContain("noobot-attachment-chip--missing");
-    expect(html).toContain(`href="${HREF.replace(/&/g, "&amp;")}"`);
+    expect(html).toContain(`data-noobot-attachment-ref="${REF}"`);
+    expect(html).not.toContain("/api/internal/attachment/");
     expect(html).toContain("下载报告");
     expect(html).not.toContain(`href="${REF}"`);
   });

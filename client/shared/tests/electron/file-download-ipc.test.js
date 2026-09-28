@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
 import { registerFileIpcHandlers } from "../../electron/ipc/files.js";
+import { clientFilePath as path } from "../../path-resolver.js";
 
 async function createHarness(t, chooseDestination) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-download-"));

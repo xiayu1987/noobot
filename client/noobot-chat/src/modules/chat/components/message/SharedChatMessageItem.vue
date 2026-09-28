@@ -11,7 +11,6 @@ import { useMessagePreview } from "../../composables/message/useMessagePreview.j
 import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
 import {
   resolveAttachmentDisplayKey,
-  resolveAttachmentAccessMeta,
   resolveParsedResultAccessMeta,
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { buildAttachmentRefIndex } from "../../composables/message/attachmentInlineRefPlugin.js";
@@ -130,12 +129,7 @@ const artifactAttachments = computed(() =>
   suppressDefaultAssets.value ? [] : displayedAttachments.value,
 );
 
-const attachmentRefIndex = computed(() =>
-  buildAttachmentRefIndex(displayedAttachments.value, {
-    resolveHref: (attachmentItem) =>
-      resolveAttachmentAccessMeta(attachmentItem, { userId: props.userId }).url,
-  }),
-);
+const attachmentRefIndex = computed(() => buildAttachmentRefIndex(displayedAttachments.value));
 const hasMessageArtifacts = computed(
   () =>
     artifactAttachments.value.length > 0 ||
@@ -562,6 +556,7 @@ function toggleAssistantContent() {
       :render-markdown="renderMarkdown"
       :attachment-ref-index="attachmentRefIndex"
       @download-workspace-file="onDownloadWorkspacePath"
+      @download-attachment="onDownloadAttachment"
     />
 
     <ExtensionOutlet
