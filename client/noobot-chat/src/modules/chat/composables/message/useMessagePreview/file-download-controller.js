@@ -72,10 +72,10 @@ async function downloadHostFile(context, fileItem, desktopDownload, attachmentSe
       traceId: context.traceId,
       channel: context.channel,
       ok: Boolean(result?.ok),
-      cancelled: result?.cancelled === true,
+      canceled: result?.canceled === true,
       hasSavedPath: Boolean(result?.savedPath),
     });
-    if (result?.cancelled) return;
+    if (result?.canceled) return;
     if (!result?.ok) throw new Error(result?.error || translate("message.downloadFailed"));
     return;
   }

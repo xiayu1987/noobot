@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createFileAccessTraceId } from "./path-utils.js";
+import { saveFileBlob } from "../../../../../infrastructure/downloads/fileDownloadService.js";
 
 export function logFileAccess(event, payload = {}) {
   try {
@@ -28,13 +29,9 @@ export async function triggerBlobDownload(blob, fileName) {
     size: Number(blob?.size || 0),
     type: String(blob?.type || ""),
   });
-  const downloadUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = downloadUrl;
-  anchor.download = String(fileName || "download");
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(downloadUrl);
-  logFileAccess("blobDownload.done", { traceId, fileName: String(fileName || "download") });
+  const result = await saveFileBlob(blob, fileName);
+  logFileAccess(result.canceled ? "blobDownload.canceled" : "blobDownload.done", {
+    traceId,
+    fileName: String(fileName || "download"),
+  });
 }
