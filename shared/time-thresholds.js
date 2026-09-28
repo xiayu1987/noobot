@@ -34,6 +34,9 @@ const TIME_TIERS = deepFreeze({
 });
 
 export const TIME_THRESHOLDS = deepFreeze({
+  diagnostics: {
+    modelAccessTimeoutMs: 2 * MINUTE_MS,
+  },
   agent: {
     runTimeoutMs: TIME_TIERS.fiveHoursMs,
     minRunTimeoutMs: 10000,

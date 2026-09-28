@@ -13,7 +13,6 @@ function documentAddress(url) {
   return address.href;
 }
 
-// Only the document selected by the main process belongs in the application window.
 export function installDesktopNavigation({
   webContents,
   getDocumentUrl,

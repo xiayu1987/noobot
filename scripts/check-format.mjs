@@ -34,6 +34,7 @@ const files = [
   ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR", "HEAD^", "HEAD"]),
   ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR"]),
   ...changedFiles(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]),
+  ...changedFiles(["ls-files", "--others", "--exclude-standard"]),
 ]
   .filter((file, index, all) => all.indexOf(file) === index)
   .filter(isFile)

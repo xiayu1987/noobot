@@ -6,10 +6,10 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { testModelAccess, redactModelDiagnostic } from "@noobot/model-runtime/diagnostics";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { publicModelList } from "./config.js";
 
-const BODY_LIMIT = 4 * 1024 * 1024;
-const TIMEOUT_MS = 120000;
 const STATIC_FILES = new Map([
   ["/", ["index.html", "text/html"]],
   ["/app.js", ["app.js", "text/javascript"]],
@@ -23,7 +23,8 @@ async function readJson(request) {
   const chunks = [];
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > BODY_LIMIT) throw new Error("Request too large / 请求体过大");
+    if (size > QUANTITY_THRESHOLDS.diagnostics.modelAccessBodyMaxBytes)
+      throw new Error("Request too large / 请求体过大");
     chunks.push(chunk);
   }
   const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -50,7 +51,10 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
       "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'",
     );
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timer = setTimeout(
+      () => controller.abort(),
+      TIME_THRESHOLDS.diagnostics.modelAccessTimeoutMs,
+    );
     response.on("close", () => controller.abort());
     try {
       const host = request.headers.host;

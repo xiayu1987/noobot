@@ -168,15 +168,15 @@ test("project launcher initializes a known provider from the model library", asy
   await runLauncher(serviceRoot, {
     env: {
       NOOBOT_MODEL_FORMAT: "openai_compatible",
-      NOOBOT_MODEL_NAME: "gpt-5.4",
+      NOOBOT_MODEL_NAME: "gpt-6-sol",
       NOOBOT_MODEL_API_KEY: "test-key",
       NOOBOT_MODEL_BASE_URL: "https://example.invalid/v1",
     },
   });
 
   const globalConfig = await readJson(path.join(serviceRoot, "config", "global.config.json"));
-  assert.equal(globalConfig.providers?.["gpt_5_4"]?.reasoning_effort, "medium");
-  assert.equal(globalConfig.providers?.["gpt_5_4"]?.tool_reasoning_effort, "medium");
+  assert.equal(globalConfig.providers?.["gpt_6_sol"]?.reasoning_effort, "medium");
+  assert.equal(globalConfig.providers?.["gpt_6_sol"]?.tool_reasoning_effort, "medium");
 });
 
 test("project launcher preserves explicit provider reasoning settings during incremental sync", async (t) => {

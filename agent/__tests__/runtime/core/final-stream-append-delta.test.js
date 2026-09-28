@@ -14,9 +14,7 @@ import {
   beginAssistantMessageEventStream,
   bindAssistantMessageEventStream,
 } from "../../../src/events/message-event-stream.js";
-import {
-  buildLoopResult,
-} from "../../../src/runtime/turn/turn-result-aggregator.js";
+import { buildLoopResult } from "../../../src/runtime/turn/turn-result-aggregator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
@@ -64,7 +62,20 @@ test("authoritative final content is the sole terminal content event", async () 
     },
   };
   bindTestTurn(runtime);
-  beginAssistantMessageEventStream(runtime);
+  const messageId = beginAssistantMessageEventStream(runtime);
+  result.assistantMessageId = messageId;
+  runtime.currentTurnMessages = createTurnMessageStore([
+    { role: "assistant", messageId, content: result.output },
+  ]);
+  assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
+  await emitAuthoritativeFinalMessageContent({ result, runtime });
+  const messageEvents = committedMessageEvents(events);
+  assert.deepEqual(
+    messageEvents.map((item) => item.payload.eventType),
+    ["authoritative_final_content"],
+  );
+  assert.equal(messageEvents[0].payload.text, "模型最终回答");
+  assert.equal(result.turnMessages[0].messageId, messageId);
 });
 
 test("final content commit follows hook-appended streaming delta", async () => {
@@ -195,9 +206,14 @@ test("rewritten final content is committed only through the authoritative final 
   };
   bindTestTurn(runtime, "rewrite");
   const messageId = beginAssistantMessageEventStream(runtime);
-  runtime.currentTurnMessages = createTurnMessageStore([{ role: "assistant", messageId, content: "旧回答" }]);
+  runtime.currentTurnMessages = createTurnMessageStore([
+    { role: "assistant", messageId, content: "旧回答" },
+  ]);
   result.assistantMessageId = messageId;
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
-  assert.equal((await emitAuthoritativeFinalMessageContent({ result, runtime }))?.payload?.eventType, "authoritative_final_content");
+  assert.equal(
+    (await emitAuthoritativeFinalMessageContent({ result, runtime }))?.payload?.eventType,
+    "authoritative_final_content",
+  );
   assert.equal(committedMessageEvents(events).length, 1);
 });

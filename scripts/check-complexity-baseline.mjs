@@ -9,10 +9,14 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 543,
-  longFunctionCount: 106,
+  complexityCount: 536,
+  longFunctionCount: 103,
   maxComplexity: 79,
   hotspots: Object.freeze({
+    "agent/src/runtime/capability-runner/index.js": [0, 0, 0],
+    "agent/src/runtime/capability-runner/model-step.js": [0, 0, 0],
+    "agent/src/runtime/capability-runner/request-context.js": [0, 0, 0],
+    "agent/src/runtime/capability-runner/tool-turns.js": [0, 0, 0],
     "agent/src/bot/session/detached-subsession-runner.js": [0, 0, 0],
     "agent/src/session/entities/session-entity.js": [0, 0, 0],
     "plugin/noobot-plugin-workflow/src/core/hooks/node-agent.js": [0, 0, 0],

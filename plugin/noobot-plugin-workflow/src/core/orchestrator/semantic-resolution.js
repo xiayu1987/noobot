@@ -14,6 +14,7 @@ import {
 } from "../hooks/messages.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { defineCapabilityActivity } from "@noobot/plugin-protocol";
 import {
   formatAttachmentIdentityRef,
   projectAttachmentIdentity,
@@ -101,6 +102,7 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
     taskMessages: [semanticTaskMessage],
   }).messages;
   const result = await options.capabilityModelInvoker({
+    activity: defineCapabilityActivity("workflow_semantic"),
     purpose: WORKFLOW_SEMANTIC.PURPOSE,
     domain: WORKFLOW_SEMANTIC.DOMAIN,
     model: options?.semanticModel || "",

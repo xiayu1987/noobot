@@ -16,7 +16,10 @@ import {
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
-import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
+import {
+  createStreamingCallbacks,
+  resolveCurrentModelInfo,
+} from "../../models/runtime/model-manager.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
@@ -55,7 +58,6 @@ import {
   emitMessageEvent,
 } from "../../events/message-event-stream.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
-import { createStreamingCallbacks } from "../../models/runtime/model-manager.js";
 export {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForLangChain,
@@ -230,7 +232,7 @@ export async function invokeNoToolsTurn({
     }),
   });
   await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
-  let responseContentText = String(modelResponse?.text || "");
+  const responseContentText = String(modelResponse?.text || "");
   appendMessage(
     modelContext,
     buildAssistantModelMessageForToolCalls({

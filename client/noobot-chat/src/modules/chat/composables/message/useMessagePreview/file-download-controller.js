@@ -26,7 +26,6 @@ export function createFileDownloadController({ userId, attachmentService, transl
   }
 
   async function onDownloadWorkspacePath(path = "") {
-    // Preserve the supplied path. Do not infer ownership or host access from its shape.
     const fileItem = { fileName: resolveFileItemName({}, path) };
     const context = {
       traceId: createFileAccessTraceId("download"),

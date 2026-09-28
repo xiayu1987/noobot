@@ -47,6 +47,7 @@ test("separate_model analysis uses aligned agent context then user request and u
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(capturedPayload?.purpose, "guidance");
+  assert.deepEqual(capturedPayload.activity, { activityKind: "guidance_analysis" });
   assert.equal(capturedPayload?.pluginFlow, "analysis");
   assert.equal(capturedPayload?.chain, "auxiliary");
   assert.equal(capturedPayload.messages[0]?.role, "system");

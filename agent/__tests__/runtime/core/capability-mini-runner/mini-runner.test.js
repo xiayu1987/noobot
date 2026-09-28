@@ -38,6 +38,11 @@ function createModelPort(outputs = []) {
     async invoke(request) {
       requests.push(request);
       const output = outputs[index] || outputs.at(-1) || { text: "" };
+      for (const token of output.tokens || []) {
+        for (const callback of request.options.callbacks || [])
+          await callback.handleLLMNewToken(token);
+      }
+      for (const callback of request.options.callbacks || []) await callback.handleLLMEnd();
       index += 1;
       responseSequence += 1;
       const canonicalOutput = {
@@ -147,6 +152,7 @@ test("guidance analysis publishes only the canonical Message Event content field
 
   await createInvoker({ enableToolBinding: false })({
     purpose: "guidance",
+    activity: { activityKind: "guidance_analysis" },
     domain: "guidance",
     pluginFlow: "analysis",
     chain: "auxiliary",
@@ -183,7 +189,9 @@ test("mini-runner appends assistant tool calls and tool results before the next 
   assert.equal(validateModelResponse(result), result);
   assert.equal(executed[0].name, "echo");
   assert.deepEqual(executed[0].args, { text: "hi" });
+  assert.deepEqual(modelPort.requests[0].messages, [{ role: "user", content: "go" }]);
   const secondMessages = modelPort.requests[1].messages;
+  assert.equal(secondMessages.length, 3);
   assert.equal(secondMessages[1].role, "assistant");
   assert.equal(secondMessages[1].tool_calls[0].id, "c1");
   assert.equal(secondMessages[2].role, "tool");
@@ -280,4 +288,90 @@ test("mini-runner enforces the configured tool-turn limit and finalizes through 
   assert.equal(result.output.text, "finalized");
   assert.equal(validateModelResponse(result), result);
   assert.equal(modelPort.requests.length, MAX_MINI_RUNNER_TOOL_TURNS + 1);
+});
+
+function bindPresentation(runtime) {
+  runtime.userId = "test-user";
+  runtime.sessionManager = createCanonicalMessageEventSessionManager();
+  runtime.systemRuntime.sessionId = "session-test";
+  runtime.systemRuntime.dialogProcessId = "dialog-test";
+  bindAssistantMessageEventStream(runtime, {
+    messageId: "message-test",
+    presentationMessageId: "presentation-test",
+  });
+}
+
+for (const streaming of [false, true]) {
+  for (const mode of ["unbound", "tools", "finalize"]) {
+    test(`explicit activity owns ${mode} presentation with streaming=${streaming}`, async () => {
+      const output = { text: "review result", tokens: ["review ", "result"] };
+      const tool = { name: "echo" };
+      const outputs =
+        mode === "unbound"
+          ? [output]
+          : [{ text: "", toolCalls: [{ id: "call-1", name: "echo", args: {} }] }, output];
+      const modelPort = createModelPort(outputs);
+      const events = [];
+      const { ctx, runtime } = createContext({
+        modelPort,
+        tools: [tool],
+        eventListener: { onEvent: (event) => events.push(event) },
+      });
+      runtime.runConfig = { streaming };
+      bindPresentation(runtime);
+      const response = await createInvoker({
+        enableToolBinding: mode !== "unbound",
+        maxTurns: mode === "finalize" ? 1 : 2,
+        toolAllowlist: ["echo"],
+        adaptToolsForBindingFn: () => ({ tools: [tool] }),
+        executeToolCallFn: async () => ({ toolResultText: "tool result" }),
+      })({ purpose: "third_party_review", activity: { activityKind: "custom_review" }, ctx });
+      assert.equal(response.output.text, "review result");
+      assert.ok(modelPort.requests.every((request) => request.options.streaming === streaming));
+      const payloads = events
+        .filter((event) => event.event === "authority_event_committed")
+        .map((event) => event.data.envelope.payload);
+      assert.equal(payloads.length, streaming ? 2 : 1);
+      assert.equal(payloads.map((payload) => payload.text).join(""), "review result");
+      assert.ok(payloads.every((payload) => payload.activityKind === "custom_review"));
+      assert.ok(
+        payloads.every(
+          (payload) => payload.eventType === (streaming ? "activity_delta" : "thinking"),
+        ),
+      );
+      assert.equal(new Set(payloads.map((payload) => payload.activityId)).size, 1);
+      if (mode === "finalize") assert.equal(modelPort.requests.at(-1).tools, undefined);
+    });
+  }
+}
+
+test("a non-streaming provider result completes the explicitly requested streaming activity once", async () => {
+  const modelPort = createModelPort([{ text: "whole result" }]);
+  const events = [];
+  const { ctx, runtime } = createContext({
+    modelPort,
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+  runtime.runConfig = { streaming: true };
+  bindPresentation(runtime);
+  await createInvoker()({ activity: { activityKind: "custom_review" }, ctx });
+  const payloads = events
+    .filter((event) => event.event === "authority_event_committed")
+    .map((event) => event.data.envelope.payload);
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].eventType, "activity_delta");
+  assert.equal(payloads[0].text, "whole result");
+});
+
+test("plugin purpose names never implicitly enable activity publication", async () => {
+  const modelPort = createModelPort([{ text: "internal result", tokens: ["internal result"] }]);
+  const events = [];
+  const { ctx, runtime } = createContext({
+    modelPort,
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+  runtime.runConfig = { streaming: true };
+  await createInvoker()({ purpose: "workflow_semantic", domain: "workflow", ctx });
+  assert.equal(modelPort.requests[0].options.callbacks, undefined);
+  assert.deepEqual(events, []);
 });
