@@ -8,7 +8,7 @@ export function createDesktopBootstrap({
   createWindow,
   ensureServiceStarted,
   resolveNoobotUrl,
-  getMainWindow,
+  loadNoobotUrl,
   sendStatus,
   appendEarlyLog = () => {},
   appendDesktopLog = () => {},
@@ -35,7 +35,7 @@ export function createDesktopBootstrap({
       appendEarlyLog("[main:boot] after ensureServiceStarted");
       const noobotUrl = await resolveNoobotUrl();
       sendStatus({ phase: "loading", message: `Loading ${noobotUrl}` });
-      await getMainWindow()?.loadURL(noobotUrl);
+      await loadNoobotUrl(noobotUrl);
     } catch (error) {
       sendStatus({
         phase: "error",

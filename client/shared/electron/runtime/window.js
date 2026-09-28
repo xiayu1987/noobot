@@ -3,25 +3,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BrowserWindow, Menu, shell, Tray } from "electron";
+import { createRequire } from "node:module";
 import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { clientFilePath as path } from "../../path-resolver.js";
+import { installDesktopNavigation } from "./navigation.js";
+
+const require = createRequire(import.meta.url);
 
 export function createDesktopWindowManager({
   app,
   dirname,
   agentProxyOrigin,
   defaultClientUrl,
+  electron = require("electron"),
+  platform = process.platform,
   appendEarlyLog = () => {},
   appendDesktopLog = () => {},
 } = {}) {
+  const { BrowserWindow, Menu, shell, Tray } = electron;
   let mainWindow = null;
   let tray = null;
   let isQuitting = false;
+  let startupUrl = "";
+  let noobotUrl = "";
 
   function getTrayIconPath() {
     if (process.env.NOOBOT_DESKTOP_TRAY_ICON) return process.env.NOOBOT_DESKTOP_TRAY_ICON;
-    if (process.platform === "darwin") {
+    if (platform === "darwin") {
       return path.join(process.env.NOOBOT_DESKTOP_PROJECT_DIR, "assets", "noobot.icns");
     }
     return process.env.NOOBOT_DESKTOP_WINDOW_ICON;
@@ -55,9 +64,16 @@ export function createDesktopWindowManager({
   }
 
   function reloadWebContents(webContents = mainWindow?.webContents) {
-    if (!webContents || webContents.isDestroyed()) return { ok: false, error: "webContents unavailable" };
+    if (!webContents || webContents.isDestroyed())
+      return { ok: false, error: "webContents unavailable" };
     webContents.reload();
     return { ok: true };
+  }
+
+  async function loadNoobotUrl(url) {
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error("Noobot window unavailable");
+    noobotUrl = new URL(url).href;
+    await mainWindow.loadURL(noobotUrl);
   }
 
   function createContextMenuTemplate(params = {}, webContents = mainWindow?.webContents) {
@@ -76,19 +92,40 @@ export function createDesktopWindowManager({
     } else if (params.selectionText) {
       template.push({ role: "copy" }, { type: "separator" });
     }
-    template.push({
-      label: process.platform === "darwin" ? "Reload" : "重新加载",
-      accelerator: "CmdOrCtrl+R",
-      click: () => reloadWebContents(webContents),
-    });
+    template.push(
+      {
+        label: platform === "darwin" ? "Return to Noobot" : "返回 Noobot",
+        enabled: Boolean(noobotUrl),
+        click: () =>
+          loadNoobotUrl(noobotUrl).catch((error) =>
+            appendDesktopLog(`[main:navigation] return to Noobot failed: ${error.message}`),
+          ),
+      },
+      {
+        label: platform === "darwin" ? "Reload" : "重新加载",
+        accelerator: "CmdOrCtrl+R",
+        click: () => reloadWebContents(webContents),
+      },
+    );
     return template;
   }
 
   function createWindow() {
     appendEarlyLog("[main:create-window] enter");
     appendDesktopLog("[main:create-window] creating startup window");
+    Menu.setApplicationMenu(
+      platform === "darwin"
+        ? Menu.buildFromTemplate([
+            { role: "appMenu" },
+            { role: "editMenu" },
+            { role: "windowMenu" },
+          ])
+        : null,
+    );
     appendEarlyLog("[main:create-window] before BrowserWindow");
-    const windowIconPath = process.env.NOOBOT_DESKTOP_WINDOW_ICON || path.join(dirname, "..", "..", "windows", "assets", "noobot.ico");
+    const windowIconPath =
+      process.env.NOOBOT_DESKTOP_WINDOW_ICON ||
+      path.join(dirname, "..", "..", "windows", "assets", "noobot.ico");
     mainWindow = new BrowserWindow({
       width: 1280,
       height: 860,
@@ -118,23 +155,61 @@ export function createDesktopWindowManager({
       appendDesktopLog("[main:window] ready-to-show");
       mainWindow?.show();
     });
-    mainWindow.webContents.once("did-finish-load", () => appendDesktopLog(`[main:window] did-finish-load ${mainWindow?.webContents.getURL() || ""}`));
-    mainWindow.webContents.on("did-fail-load", (_event, code, description, url) => appendDesktopLog(`[main:window] did-fail-load code=${code} description=${description} url=${url}`));
-    mainWindow.webContents.on("preload-error", (_event, preloadPath, error) => appendDesktopLog(`[main:window] preload-error path=${preloadPath} error=${error?.stack || error?.message || String(error)}`));
-    mainWindow.webContents.on("render-process-gone", (_event, details) => appendDesktopLog(`[main:window] render-process-gone reason=${details.reason} exitCode=${details.exitCode}`));
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      shell.openExternal(url);
-      return { action: "deny" };
+    mainWindow.webContents.once("did-finish-load", () =>
+      appendDesktopLog(`[main:window] did-finish-load ${mainWindow?.webContents.getURL() || ""}`),
+    );
+    mainWindow.webContents.on("did-fail-load", (_event, code, description, url) =>
+      appendDesktopLog(
+        `[main:window] did-fail-load code=${code} description=${description} url=${url}`,
+      ),
+    );
+    mainWindow.webContents.on("preload-error", (_event, preloadPath, error) =>
+      appendDesktopLog(
+        `[main:window] preload-error path=${preloadPath} error=${error?.stack || error?.message || String(error)}`,
+      ),
+    );
+    mainWindow.webContents.on("render-process-gone", (_event, details) =>
+      appendDesktopLog(
+        `[main:window] render-process-gone reason=${details.reason} exitCode=${details.exitCode}`,
+      ),
+    );
+    installDesktopNavigation({
+      webContents: mainWindow.webContents,
+      getDocumentUrl: () => noobotUrl || startupUrl,
+      openExternal: (url) => shell.openExternal(url),
+      appendDesktopLog,
+    });
+    mainWindow.webContents.on("before-input-event", (event, input) => {
+      if (input.type !== "keyDown" || input.alt || input.shift) return;
+      const primaryModifier =
+        platform === "darwin" ? input.meta && !input.control : input.control && !input.meta;
+      const refresh =
+        (primaryModifier && input.key.toLowerCase() === "r") ||
+        (input.key === "F5" && !input.control && !input.meta);
+      if (!refresh) return;
+      event.preventDefault();
+      reloadWebContents();
     });
     mainWindow.webContents.on("context-menu", (_event, params) => {
-      if (process.platform !== "win32" && process.platform !== "darwin") return;
-      Menu.buildFromTemplate(createContextMenuTemplate(params, mainWindow?.webContents)).popup({ window: mainWindow });
+      if (platform !== "win32" && platform !== "darwin") return;
+      Menu.buildFromTemplate(createContextMenuTemplate(params, mainWindow?.webContents)).popup({
+        window: mainWindow,
+      });
     });
     const builtStartupFile = path.join(dirname, "startup", "index.html");
-    const startupFile = fs.existsSync(builtStartupFile) ? builtStartupFile : path.join(dirname, "startup.html");
+    const startupFile = fs.existsSync(builtStartupFile)
+      ? builtStartupFile
+      : path.join(dirname, "startup.html");
+    startupUrl = pathToFileURL(startupFile).href;
     appendDesktopLog(`[main:create-window] loading ${startupFile}`);
     appendEarlyLog(`[main:create-window] before loadFile ${startupFile}`);
-    mainWindow.loadFile(startupFile).catch((error) => appendDesktopLog(`[main:create-window] loadFile failed: ${error?.stack || error?.message || String(error)}`));
+    mainWindow
+      .loadFile(startupFile)
+      .catch((error) =>
+        appendDesktopLog(
+          `[main:create-window] loadFile failed: ${error?.stack || error?.message || String(error)}`,
+        ),
+      );
     appendEarlyLog("[main:create-window] after loadFile call");
     return mainWindow;
   }
@@ -157,6 +232,7 @@ export function createDesktopWindowManager({
     },
     showMainWindow,
     resolveNoobotUrl,
+    loadNoobotUrl,
     reloadWebContents,
     getMainWindow: () => mainWindow,
   };
