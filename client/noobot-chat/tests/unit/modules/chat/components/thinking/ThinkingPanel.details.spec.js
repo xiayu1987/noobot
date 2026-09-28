@@ -564,7 +564,7 @@ describe("ThinkingPanel canonical details", () => {
           activityTimeline: [
             canonicalActivityFact({
               eventId: "evt-authoritative",
-              eventType: "main_model_content",
+              eventType: "model_analysis_delta",
               text: content,
             }),
           ],

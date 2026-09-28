@@ -103,12 +103,12 @@ export async function executeMcpTask({
       messages,
       tools: langchainTools,
       options: {
-          streaming: runtime?.runConfig?.streaming === true,
-          callbacks:
-            runtime?.runConfig?.streaming === true
+        streaming: runtime?.runConfig?.streaming === true,
+        callbacks:
+          runtime?.runConfig?.streaming === true
             ? createActivityStreamingCallbacks(runtime?.eventListener, runtime, {
                 activityKind: "mcp_model_analysis",
-                activityEventType: "main_model_content",
+                activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
                 purpose: "mcp_tool_execution",
               })
             : undefined,

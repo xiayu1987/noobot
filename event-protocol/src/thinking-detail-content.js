@@ -111,7 +111,7 @@ function activityContentFact(activity = {}, index) {
   return {
     contentId: `event:${eventId}`,
     contentKind:
-      text(activity?.eventType) === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT
+      text(activity?.eventType) === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA
         ? THINKING_DETAIL_CONTENT_KIND.MAIN_MODEL_CONTENT
         : THINKING_DETAIL_CONTENT_KIND.THINKING,
     sourceEventId: eventId,
@@ -138,11 +138,11 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
       .filter(Boolean),
   );
   const hasUnboundMainModelActivity = activities.some(
-    (item) => item.eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT && !text(item.messageId),
+    (item) => item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA && !text(item.messageId),
   );
   const boundMainModelIds = new Set(
     activities
-      .filter((item) => item.eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT)
+      .filter((item) => item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA)
       .map((item) => text(item.messageId))
       .filter(Boolean),
   );
@@ -150,7 +150,7 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
     (Array.isArray(messages) ? messages : [])
       .filter((message = {}) =>
         mergeCanonicalActivityTimelines(message?.activityTimeline || []).some(
-          (item) => item.eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT,
+          (item) => item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
         ),
       )
       .map((message = {}) => messageIdentity(message))

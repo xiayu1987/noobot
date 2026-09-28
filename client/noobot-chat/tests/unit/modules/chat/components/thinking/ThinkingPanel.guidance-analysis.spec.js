@@ -8,7 +8,7 @@ import { clearExtensionRegistry } from "../../../../../../src/extensions/extensi
 import { canonicalActivityFact, mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
 function activity(eventId, sequence, event, output, extra = {}) {
-  const eventType = event === "main_model_content" ? "main_model_content" : "thinking";
+  const eventType = event === "model_analysis_delta" ? "model_analysis_delta" : "thinking";
   return canonicalActivityFact({
     eventId,
     sequence,
@@ -39,7 +39,7 @@ describe("ThinkingPanel canonical analysis timeline", () => {
             pluginFlow: "analysis",
             chain: "auxiliary",
           }),
-          activity("model-1", 3, "main_model_content", "canonical model analysis"),
+          activity("model-1", 3, "model_analysis_delta", "canonical model analysis"),
         ],
       },
       { runtime: { running: true, terminal: false } },

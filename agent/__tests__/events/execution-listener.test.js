@@ -105,6 +105,36 @@ test("execution listener persists events in source order and exposes a durabilit
   assert.deepEqual(calls, [4, 5]);
 });
 
+test("execution listener can release completion before diagnostic persistence drains", async () => {
+  let releasePersistence;
+  let persistenceStarted;
+  const persistenceBlocked = new Promise((resolve) => {
+    releasePersistence = resolve;
+  });
+  const started = new Promise((resolve) => {
+    persistenceStarted = resolve;
+  });
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      appendExecutionLog: async () => {
+        persistenceStarted();
+        await persistenceBlocked;
+      },
+    },
+    userId: "user-a",
+    sessionId: "session-a",
+  });
+
+  listener.onEvent({
+    event: "agent_lifecycle_state_changed",
+    data: { state: "completed", sequence: 1 },
+  });
+  await started;
+  await listener.flushPersistence({ wait: false });
+  releasePersistence();
+  await listener.flushPersistence();
+});
+
 test("execution listener exposes persistence failures at the durability barrier", async () => {
   const listener = createExecutionEventListener({
     sessionManager: {
