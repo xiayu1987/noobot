@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// In a message, a Markdown path destination refers to a workspace file.
-// Only the workspace service resolves that path and authorizes file access.
 export function workspaceFileLinkPlugin(md) {
   const renderLink =
     md.renderer.rules.link_open ||
@@ -15,12 +13,11 @@ export function workspaceFileLinkPlugin(md) {
     const href = token.attrGet("href") || "";
     const isUri = /^[a-z][a-z\d+.-]*:/i.test(href);
     if (env?.workspaceFileLinks && href && !isUri && !/^(?:#|\/\/)/.test(href)) {
-      // markdown-it percent-encodes destinations; decode exactly once for the API.
       let path = href;
       try {
         path = decodeURIComponent(href);
       } catch {
-        // A literal percent sign is also a valid filename character.
+        path = href;
       }
       token.attrSet("data-noobot-workspace-path", path);
       token.attrSet("href", "#");

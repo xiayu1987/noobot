@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { defineCapabilityActivity } from "@noobot/plugin-protocol";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -412,6 +413,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       invoker,
       invokePayload: {
         purpose,
+        activity:
+          workflowPurpose === "analysis" ? defineCapabilityActivity("guidance_analysis") : null,
         pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
         chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
         relayCorrelationId,

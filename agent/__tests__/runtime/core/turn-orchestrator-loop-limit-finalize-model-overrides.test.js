@@ -12,7 +12,6 @@ import {
   createTestTurnMessagesStore,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
-import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(args.modelState, args.loopState, "orchestrator-model-overrides");

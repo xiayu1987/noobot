@@ -123,6 +123,7 @@ test("workflow semantic planning passes conversation context before current user
   });
 
   assert.equal(invokerCalls.length, 1);
+  assert.deepEqual(invokerCalls[0].activity, { activityKind: "workflow_semantic" });
   assert.equal(invokerCalls[0]?.prompt, "");
   const semanticMessages = invokerCalls[0]?.messages || [];
   assertSystemBlockPrecedesConversation(semanticMessages);
