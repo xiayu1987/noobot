@@ -3,9 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { createLlmDeltaVisibilityFilter } from "../../events/llm-filter.js";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { resolveModelSpecByName } from "../index.js";
 
 function updateModelState(modelState, spec, shouldSwitch) {
@@ -63,6 +65,45 @@ export function createStreamingCallbacks(eventListener = null, runtime = {}) {
     const text = String(value || "");
     if (!text) return null;
     return emitMessageEvent(eventListener, runtime, "llm_delta", { text });
+  };
+  return [
+    {
+      handleLLMNewToken: (token) => emitVisibleDelta(visibilityFilter.push(String(token || ""))),
+      handleLLMEnd: () => emitVisibleDelta(visibilityFilter.flush()),
+    },
+  ];
+}
+
+export function createActivityStreamingCallbacks(
+  eventListener = null,
+  runtime = {},
+  {
+    activityKind = "model_analysis",
+    activityEventType = MESSAGE_EVENT_TYPE.THINKING,
+    purpose = "",
+    pluginFlow = "",
+    chain = "",
+    relayCorrelationId = "",
+    activityId = randomUUID(),
+    state = null,
+  } = {},
+) {
+  if (!eventListener?.onEvent) return undefined;
+  const visibilityFilter = createLlmDeltaVisibilityFilter();
+  const emitVisibleDelta = (value = "") => {
+    const text = String(value || "");
+    if (!text) return null;
+    if (state && typeof state === "object") state.emitted = true;
+    return emitMessageEvent(eventListener, runtime, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA, {
+      activityId,
+      activityKind,
+      activityEventType,
+      purpose,
+      pluginFlow,
+      chain,
+      relayCorrelationId,
+      text,
+    });
   };
   return [
     {

@@ -74,6 +74,112 @@ test("transport errors classify temporary socket failures as retryable", () => {
   });
 });
 
+test("streaming mode retries once in the opposite direction and caches the successful mode", async () => {
+  const requestedModes = [];
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    createClient: ({ streaming }) => {
+      requestedModes.push(streaming);
+      return {
+        invoke: async () => {
+          if (streaming) throw new Error("stream transport is unavailable");
+          return { content: "ok" };
+        },
+      };
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+  const first = await port.invoke({ invocation, model, messages: [], options: { streaming: true } });
+  const second = await port.invoke({ invocation, model, messages: [], options: { streaming: true } });
+  assert.equal(first.output.text, "ok");
+  assert.equal(second.output.text, "ok");
+  assert.deepEqual(requestedModes, [true, false, false]);
+  assert.deepEqual(
+    first.execution.attempts.map(({ streaming }) => streaming),
+    [true, false],
+  );
+});
+
+test("non-streaming preference also falls back to streaming and caches it", async () => {
+  const requestedModes = [];
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    createClient: ({ streaming }) => {
+      requestedModes.push(streaming);
+      return {
+        invoke: async () => {
+          if (!streaming) throw new Error("non-stream transport is unavailable");
+          return { content: "streamed" };
+        },
+      };
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+  await port.invoke({ invocation, model, messages: [], options: { streaming: false } });
+  await port.invoke({ invocation, model, messages: [], options: { streaming: false } });
+  assert.deepEqual(requestedModes, [false, true, true]);
+});
+
+test("explicit model errors do not trigger an opposite streaming mode", async () => {
+  const requestedModes = [];
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.AUTHENTICATION }),
+    createClient: ({ streaming }) => {
+      requestedModes.push(streaming);
+      return { invoke: async () => { throw new Error("provider rejected request"); } };
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+  await assert.rejects(
+    port.invoke({ invocation, model, messages: [], options: { streaming: true } }),
+    /provider rejected request/,
+  );
+  assert.deepEqual(requestedModes, [true]);
+});
+
+test("streaming mode is not retried after output has started", async () => {
+  const requestedModes = [];
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    createClient: ({ streaming }) => {
+      requestedModes.push(streaming);
+      return {
+        invoke: async (_messages, options = {}) => {
+          options.callbacks?.[0]?.handleLLMNewToken?.("partial");
+          throw new Error("stream ended unexpectedly");
+        },
+      };
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+  await assert.rejects(
+    port.invoke({
+      invocation,
+      model,
+      messages: [],
+      options: { streaming: true, callbacks: [{ handleLLMNewToken() {} }] },
+    }),
+    /stream ended unexpectedly/,
+  );
+  assert.deepEqual(requestedModes, [true]);
+});
+
 test("executor is the single attempt and retry authority", async () => {
   let attempts = 0;
   const adapter = {

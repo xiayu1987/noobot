@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
@@ -28,6 +29,7 @@ import {
   validateModelResponse,
 } from "@noobot/model-protocol";
 import { validateConfigSnapshot } from "@noobot/agent-config-protocol";
+import { createActivityStreamingCallbacks } from "../../models/runtime/model-manager.js";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 
@@ -142,19 +144,32 @@ async function emitPluginCapabilityRealtimeLog({
     if (!canonicalOutput) {
       throw new Error("guidance analysis response is missing canonical output");
     }
+    if (data?.streaming === true && data?.streamedActivity === true) return;
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
     const activityKind = isGuidanceAnalysisResponse ? "guidance_analysis" : "workflow_semantic";
-    await emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
-      text: canonicalOutput,
-      purpose: String(data?.purpose || "").trim(),
-      pluginFlow: String(data?.pluginFlow || "").trim(),
-      chain: String(data?.chain || "").trim(),
-      relayCorrelationId: String(data?.relayCorrelationId || "").trim(),
-      activityKind,
-      ...sessionMeta,
-      dialogProcessId: String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
-    });
+    await emitMessageEvent(
+      runtime?.eventListener,
+      runtime,
+      data?.streaming === true ? MESSAGE_EVENT_TYPE.ACTIVITY_DELTA : MESSAGE_EVENT_TYPE.THINKING,
+      {
+        ...(data?.streaming === true
+          ? {
+              activityId: String(data?.activityId || randomUUID()),
+              activityKind,
+              activityEventType: MESSAGE_EVENT_TYPE.THINKING,
+            }
+          : {}),
+        text: canonicalOutput,
+        purpose: String(data?.purpose || "").trim(),
+        pluginFlow: String(data?.pluginFlow || "").trim(),
+        chain: String(data?.chain || "").trim(),
+        relayCorrelationId: String(data?.relayCorrelationId || "").trim(),
+        activityKind,
+        ...sessionMeta,
+        dialogProcessId: String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
+      },
+    );
     return;
   }
   if (!normalizedText) return;
@@ -272,7 +287,7 @@ export function createAgentCapabilityModelInvoker({
       contextSequencePolicy: normalizedContextSequencePolicy,
     };
     const baseInvokeOptions = {
-      streaming: false,
+      streaming: runtime?.runConfig?.streaming === true,
       signal: invocationSignal,
       headers: additionalHeaders,
     };
@@ -289,11 +304,31 @@ export function createAgentCapabilityModelInvoker({
       });
 
     if (enableToolBinding !== true) {
+      const activityId = randomUUID();
+      const activityState = { emitted: false };
       const ai = validateModelResponse(
         await modelPort.invoke({
           model: modelSpec,
           messages: runMessages,
-          options: { ...baseInvokeOptions },
+          options: {
+            ...baseInvokeOptions,
+            callbacks:
+              baseInvokeOptions.streaming === true
+                ? createActivityStreamingCallbacks(runtime?.eventListener, runtime, {
+                    activityId,
+                    activityKind:
+                      normalizedPurpose === "workflow_semantic"
+                        ? "workflow_semantic"
+                        : "guidance_analysis",
+                    activityEventType: MESSAGE_EVENT_TYPE.THINKING,
+                    purpose: normalizedPurpose,
+                    pluginFlow,
+                    chain,
+                    relayCorrelationId,
+                    state: activityState,
+                  })
+                : undefined,
+          },
           invocation: invocationDescriptor,
         }),
       );
@@ -301,6 +336,9 @@ export function createAgentCapabilityModelInvoker({
       await emitCapabilityResponseLog(text, {
         finishedReason: "tool_binding_disabled",
         turn: 1,
+        streaming: baseInvokeOptions.streaming,
+        streamedActivity: activityState.emitted,
+        activityId,
       });
       return ai;
     }
@@ -323,6 +361,8 @@ export function createAgentCapabilityModelInvoker({
     );
 
     for (let turn = 1; turn <= maxTurnCount; turn += 1) {
+      const activityId = randomUUID();
+      const activityState = { emitted: false };
       const ai = validateModelResponse(
         await modelPort.invoke({
           model: modelSpec,
@@ -330,6 +370,22 @@ export function createAgentCapabilityModelInvoker({
           tools: boundTools,
           options: {
             ...baseInvokeOptions,
+            callbacks:
+              baseInvokeOptions.streaming === true
+                ? createActivityStreamingCallbacks(runtime?.eventListener, runtime, {
+                    activityId,
+                    activityKind:
+                      normalizedPurpose === "workflow_semantic"
+                        ? "workflow_semantic"
+                        : "guidance_analysis",
+                    activityEventType: MESSAGE_EVENT_TYPE.THINKING,
+                    purpose: normalizedPurpose,
+                    pluginFlow,
+                    chain,
+                    relayCorrelationId,
+                    state: activityState,
+                  })
+                : undefined,
             toolBinding: bindOptions,
           },
           invocation: invocationDescriptor,
@@ -345,7 +401,13 @@ export function createAgentCapabilityModelInvoker({
         });
       }
       if (!calls.length) {
-        await emitCapabilityResponseLog(text, { finishedReason: "no_tool_call", turn });
+        await emitCapabilityResponseLog(text, {
+          finishedReason: "no_tool_call",
+          turn,
+          streaming: baseInvokeOptions.streaming,
+          streamedActivity: activityState.emitted,
+          activityId,
+        });
         return ai;
       }
 
@@ -397,11 +459,31 @@ export function createAgentCapabilityModelInvoker({
       locale === "en-US"
         ? "Based on the above tool results, provide the final planning answer now."
         : "请基于以上工具结果，立即给出最终规划答案。";
+    const finalActivityId = randomUUID();
+    const finalActivityState = { emitted: false };
     const finalAi = validateModelResponse(
       await modelPort.invoke({
         model: modelSpec,
         messages: [{ role: "system", content: finalizePrompt }, ...runMessages],
-        options: { ...baseInvokeOptions },
+        options: {
+          ...baseInvokeOptions,
+          callbacks:
+            baseInvokeOptions.streaming === true
+              ? createActivityStreamingCallbacks(runtime?.eventListener, runtime, {
+                  activityId: finalActivityId,
+                  activityKind:
+                    normalizedPurpose === "workflow_semantic"
+                      ? "workflow_semantic"
+                      : "guidance_analysis",
+                  activityEventType: MESSAGE_EVENT_TYPE.THINKING,
+                  purpose: normalizedPurpose,
+                  pluginFlow,
+                  chain,
+                  relayCorrelationId,
+                  state: finalActivityState,
+                })
+              : undefined,
+        },
         invocation: invocationDescriptor,
       }),
     );
@@ -411,6 +493,9 @@ export function createAgentCapabilityModelInvoker({
       finishedReason: "max_turn_reached_finalized",
       turn: maxTurnCount,
       toolTurnLimitReached: true,
+      streaming: baseInvokeOptions.streaming,
+      streamedActivity: finalActivityState.emitted,
+      activityId: finalActivityId,
     });
 
     return finalAi;

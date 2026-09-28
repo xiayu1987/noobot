@@ -6,13 +6,11 @@
 
 import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
-import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
 import { runAgentRuntimeHook } from "../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent } from "../events/index.js";
-import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
 import { emitMessageEvent } from "../events/message-event-stream.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistant-artifact-projection.js";
 import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
@@ -158,7 +156,6 @@ export async function commitAuthoritativeFinalResult({ result = {}, runtime = {}
   if (!commitAuthoritativeFinalOutput({ result, runtime })) {
     throw new Error("authoritative final result failed to update the canonical message");
   }
-  await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
   const event = await emitAuthoritativeFinalMessageContent({ result, runtime });
   if (!event) throw new Error("authoritative final result failed to emit its message event");
   emitEvent(runtime?.eventListener || null, "authoritative_final_commit_completed", {
@@ -166,49 +163,6 @@ export async function commitAuthoritativeFinalResult({ result = {}, runtime = {}
     eventId: String(event?.identity?.eventId || "").trim(),
     messageId: String(event?.identity?.messageId || "").trim(),
     presentationMessageId: String(event?.payload?.presentationMessageId || "").trim(),
-  });
-  return true;
-}
-
-export async function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
-  const meta = readFinalStreamingResultMeta(result);
-  if (meta?.streamed !== true) return false;
-
-  const streamedOutput = String(meta?.output || "");
-  const finalOutput = String(result?.output || "");
-  if (!streamedOutput || finalOutput.length <= streamedOutput.length) return false;
-
-  const eventListener = runtime?.eventListener || null;
-  if (!eventListener?.onEvent) return false;
-
-  const comparablePrefixes = [streamedOutput, streamedOutput.trim()]
-    .filter(Boolean)
-    .filter((item, index, list) => list.indexOf(item) === index);
-  const matchedPrefix = comparablePrefixes.find((prefix) => finalOutput.startsWith(prefix));
-  if (!matchedPrefix) {
-    emitEvent(eventListener, "llm_final_stream_append_delta_skipped", {
-      reason: "final_output_not_prefixed_by_streamed_output",
-      streamedChars: streamedOutput.length,
-      finalChars: finalOutput.length,
-      mode: String(meta?.mode || ""),
-    });
-    return false;
-  }
-
-  const appendedText = finalOutput.slice(matchedPrefix.length);
-  if (!appendedText) return false;
-
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  await emitMessageEvent(eventListener, runtime, "llm_delta", {
-    text: appendedText,
-    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
-    sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-    source: "before_final_output_append",
-  });
-  emitEvent(eventListener, "llm_final_stream_append_delta_emitted", {
-    appendedChars: appendedText.length,
-    finalChars: finalOutput.length,
-    mode: String(meta?.mode || ""),
   });
   return true;
 }

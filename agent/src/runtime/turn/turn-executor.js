@@ -27,11 +27,9 @@ import {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForStorage,
 } from "./tool-call-message.js";
-import { maybeInvokeFinalStreamingNoTools } from "./turn-stage.js";
 import { prepareToolBinding } from "./tool-binding-preparer.js";
 import { createBoundLlmToolChoiceInvoker } from "./tool-invoke-strategy.js";
 import { normalizeToolTurnAi } from "./tool-turn-normalizer.js";
-import { finalizeNoToolsStreamingTurn } from "./no-tools-final-stream-stage.js";
 import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { applyRequiredToolChoiceUnsupportedRetryDecision } from "./tool-choice-retry-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
@@ -57,6 +55,7 @@ import {
   emitMessageEvent,
 } from "../../events/message-event-stream.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
+import { createStreamingCallbacks } from "../../models/runtime/model-manager.js";
 export {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForLangChain,
@@ -108,6 +107,10 @@ function syncMessagesFromBlocks(loopState = {}) {
   const composed = Array.isArray(resolved?.messages) ? resolved.messages : [];
   replaceMessageProjection(modelContext, composed);
   return modelContext.messages;
+}
+
+function requestedStreaming(modelState = {}) {
+  return modelState?.runtime?.runConfig?.streaming === true;
 }
 
 export async function invokeNoToolsTurn({
@@ -165,7 +168,10 @@ export async function invokeNoToolsTurn({
     const protocolResponse = await modelState.modelPort.invoke({
       messages: filterForModelContext(messages),
       options: {
-        streaming: false,
+        streaming: requestedStreaming(modelState),
+        callbacks: requestedStreaming(modelState)
+          ? createStreamingCallbacks(eventListener, runtime)
+          : undefined,
         signal: abortSignal,
         invoke: {
           ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
@@ -225,15 +231,6 @@ export async function invokeNoToolsTurn({
   });
   await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
   let responseContentText = String(modelResponse?.text || "");
-  const finalStreamingTurn = await finalizeNoToolsStreamingTurn({
-    modelState,
-    messages,
-    modelResponse,
-    responseContentText,
-    turn,
-    forceToolChoiceNone,
-  });
-  ({ modelResponse, responseContentText } = finalStreamingTurn);
   appendMessage(
     modelContext,
     buildAssistantModelMessageForToolCalls({
@@ -244,8 +241,6 @@ export async function invokeNoToolsTurn({
     }),
     { block: "incremental" },
   );
-  const { finalStreamResult } = finalStreamingTurn;
-
   const { turnMessageStore, turnTaskStore } = await commitNoToolsTurnState({
     modelState,
     loopState,
@@ -263,15 +258,6 @@ export async function invokeNoToolsTurn({
     turnTaskStore,
     turnMessageStore,
     modelMessages: messages,
-    finalStreaming: finalStreamResult.streamed
-      ? {
-          streamed: true,
-          output: responseContentText,
-          mode:
-            finalStreamResult.mode ||
-            (forceToolChoiceNone ? "final_stream_no_tools_forced_none" : "final_stream_no_tools"),
-        }
-      : null,
   };
 }
 
@@ -454,19 +440,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       agentContext: modelState?.agentContext || null,
     }),
   });
-  let finalStreamResult = null;
-  if (!calls.length) {
-    finalStreamResult = await maybeInvokeFinalStreamingNoTools({
-      modelState,
-      baseMessages: messages,
-      fallbackAi: ai,
-      fallbackText: normalizedAiContentText,
-      turn,
-      mode: "final_stream_after_tools_no_calls",
-    });
-    ai = finalStreamResult.ai || ai;
-  }
-  const finalAiContentText = finalStreamResult?.text || normalizedAiContentText;
+  const finalAiContentText = normalizedAiContentText;
   const assistantMessageUid = createSessionMessageUid();
   if (!calls.length) {
     ai = {
@@ -557,12 +531,5 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turnMessageStore,
     turnTaskStore,
     traces,
-    finalStreaming: finalStreamResult?.streamed
-      ? {
-          streamed: true,
-          output: finalAiContentText,
-          mode: finalStreamResult.mode || "final_stream_after_tools_no_calls",
-        }
-      : null,
   };
 }

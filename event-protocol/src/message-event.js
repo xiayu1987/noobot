@@ -19,6 +19,7 @@ export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
 export const MESSAGE_EVENT_TYPE = Object.freeze({
   TURN_PRESENTATION_COMMITTED: "turn_presentation_committed",
   LLM_DELTA: "llm_delta",
+  ACTIVITY_DELTA: "activity_delta",
   MAIN_MODEL_CONTENT: "main_model_content",
   AUTHORITATIVE_FINAL_CONTENT: "authoritative_final_content",
   THINKING: "thinking",
@@ -139,6 +140,18 @@ export function validateMessageEventPayload(value) {
   }
   if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA && typeof value?.text !== "string") {
     errors.push("missing_text");
+  }
+  if (eventType === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA) {
+    if (typeof value?.text !== "string") errors.push("missing_text");
+    if (!text(value?.activityId)) errors.push("missing_activity_id");
+    if (!text(value?.activityKind)) errors.push("missing_activity_kind");
+    if (
+      ![MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT].includes(
+        text(value?.activityEventType),
+      )
+    ) {
+      errors.push("invalid_activity_event_type");
+    }
   }
   if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) && typeof value?.text !== "string")
     errors.push("missing_content");

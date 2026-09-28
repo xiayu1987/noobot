@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import {
   commitAuthoritativeFinalOutput,
   emitAuthoritativeFinalMessageContent,
-  emitFinalStreamingAppendDeltaAfterHooks,
 } from "../../../src/runtime/engine.js";
 import {
   beginAssistantMessageEventStream,
@@ -17,7 +16,6 @@ import {
 } from "../../../src/events/message-event-stream.js";
 import {
   buildLoopResult,
-  FINAL_STREAMING_RESULT_META_KEY,
 } from "../../../src/runtime/turn/turn-result-aggregator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
@@ -44,7 +42,7 @@ function bindTestTurn(runtime = {}, suffix = "1") {
   return runtime;
 }
 
-test("final streaming append delta: emits only hook-appended suffix after final output mutation", async () => {
+test("authoritative final content is the sole terminal content event", async () => {
   const events = [];
   const result = buildLoopResult({
     output: "模型最终回答",
@@ -52,16 +50,7 @@ test("final streaming append delta: emits only hook-appended suffix after final 
     loopState: { turnMessages: [], turnTasks: [] },
     turnMessageStore: createTurnMessageStore(),
     modelMessages: [],
-    finalStreaming: {
-      streamed: true,
-      output: "模型最终回答",
-      mode: "final_stream_no_tools",
-    },
   });
-
-  assert.equal(Object.keys(result).includes(FINAL_STREAMING_RESULT_META_KEY), false);
-
-  result.output = "模型最终回答\n\n---\n[Plugin-验收] 通过";
 
   const runtime = {
     eventListener: {
@@ -76,46 +65,6 @@ test("final streaming append delta: emits only hook-appended suffix after final 
   };
   bindTestTurn(runtime);
   beginAssistantMessageEventStream(runtime);
-  const emitted = await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
-
-  assert.equal(emitted, true);
-  const delta = committedMessageEvents(events).find(
-    (item) => item?.payload?.eventType === "llm_delta",
-  );
-  assert.ok(delta);
-  assert.equal(delta.payload.text, "\n\n---\n[Plugin-验收] 通过");
-  assert.equal(delta.payload.source, "before_final_output_append");
-});
-
-test("final streaming append delta: tolerates finalizer trim before appending", async () => {
-  const events = [];
-  const result = buildLoopResult({
-    output: "模型最终回答   ",
-    traces: [],
-    loopState: { turnMessages: [], turnTasks: [] },
-    turnMessageStore: createTurnMessageStore(),
-    finalStreaming: {
-      streamed: true,
-      output: "模型最终回答   ",
-      mode: "final_stream_no_tools",
-    },
-  });
-  result.output = "模型最终回答\n\n---\n验收";
-
-  const runtime = {
-    eventListener: {
-      onEvent(payload = {}) {
-        events.push(payload);
-      },
-    },
-    systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
-  };
-  bindTestTurn(runtime);
-  beginAssistantMessageEventStream(runtime);
-  const emitted = await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
-
-  assert.equal(emitted, true);
-  assert.equal(committedMessageEvents(events)[0]?.payload?.text, "\n\n---\n验收");
 });
 
 test("final content commit follows hook-appended streaming delta", async () => {
@@ -157,12 +106,10 @@ test("final content commit follows hook-appended streaming delta", async () => {
         messageId,
       },
     ]),
-    finalStreaming: { streamed: true, output: "draft", mode: "final_stream_no_tools" },
   });
   result.output = "draft plus hook";
 
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
-  assert.equal(await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime }), true);
   assert.equal(
     (await emitAuthoritativeFinalMessageContent({ result, runtime }))?.payload?.eventType,
     "authoritative_final_content",
@@ -170,14 +117,14 @@ test("final content commit follows hook-appended streaming delta", async () => {
   const messageEvents = committedMessageEvents(events);
   assert.deepEqual(
     messageEvents.map((item) => item.payload.eventType),
-    ["llm_delta", "authoritative_final_content"],
+    ["authoritative_final_content"],
   );
   assert.deepEqual(
     messageEvents.map((item) => item.ordering.sequence),
-    [1, 2],
+    [1],
   );
-  assert.equal(messageEvents[1].payload.text, "draft plus hook");
-  assert.equal(messageEvents[1].identity.messageId, "turn-message-1");
+  assert.equal(messageEvents[0].payload.text, "draft plus hook");
+  assert.equal(messageEvents[0].identity.messageId, "turn-message-1");
   assert.equal(result.turnMessages[0].messageId, messageId);
   assert.equal(result.turnMessages[0].content, "draft plus hook");
 });
@@ -233,39 +180,24 @@ test("final content uses the result message identity after active stream changes
   assert.equal(result.turnMessages[0].content, "authoritative final answer");
 });
 
-test("final streaming append delta: skips when hook rewrites instead of appends", async () => {
+test("rewritten final content is committed only through the authoritative final event", async () => {
   const events = [];
   const result = buildLoopResult({
     output: "旧回答",
     traces: [],
     loopState: { turnMessages: [], turnTasks: [] },
     turnMessageStore: createTurnMessageStore(),
-    finalStreaming: {
-      streamed: true,
-      output: "旧回答",
-      mode: "final_stream_no_tools",
-    },
   });
   result.output = "新回答\n\n---\n验收";
-
-  const emitted = await emitFinalStreamingAppendDeltaAfterHooks({
-    result,
-    runtime: {
-      eventListener: {
-        onEvent(payload = {}) {
-          events.push(payload);
-        },
-      },
-    },
-  });
-
-  assert.equal(emitted, false);
-  assert.equal(
-    events.some((item) => item?.event === "llm_delta"),
-    false,
-  );
-  assert.equal(
-    events.some((item) => item?.event === "llm_final_stream_append_delta_skipped"),
-    true,
-  );
+  const runtime = {
+    eventListener: { onEvent: (payload = {}) => events.push(payload) },
+    systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
+  };
+  bindTestTurn(runtime, "rewrite");
+  const messageId = beginAssistantMessageEventStream(runtime);
+  runtime.currentTurnMessages = createTurnMessageStore([{ role: "assistant", messageId, content: "旧回答" }]);
+  result.assistantMessageId = messageId;
+  assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
+  assert.equal((await emitAuthoritativeFinalMessageContent({ result, runtime }))?.payload?.eventType, "authoritative_final_content");
+  assert.equal(committedMessageEvents(events).length, 1);
 });

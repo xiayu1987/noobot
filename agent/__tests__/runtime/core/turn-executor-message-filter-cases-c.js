@@ -90,11 +90,6 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
   const result = await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
 
   assert.equal(result.aiContentText, "ok-without-final-stream");
-  assert.equal(result.finalStreaming, null);
-  assert.equal(
-    events.some((item) => String(item?.event || "") === "llm_final_stream_start"),
-    false,
-  );
   assert.equal(
     events.some((item) => item?.event === "main_model_content"),
     false,

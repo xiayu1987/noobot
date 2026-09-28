@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { resolveBoundToolModelRequestOverrides } from "../../../src/runtime/turn/tool-choice-strategy.js";
 import { createBoundLlmToolChoiceInvoker } from "../../../src/runtime/turn/tool-invoke-strategy.js";
-import { maybeInvokeFinalStreamingNoTools } from "../../../src/runtime/turn/turn-stage.js";
 import {
   createTestTurnMessagesStore,
   prepareTestTurnExecution,
@@ -245,7 +244,7 @@ test("bound tool overrides use active model spec when it differs from default sp
   assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "none");
 });
 
-test("bound tool invocations are non-streaming across tool rounds", async () => {
+test("bound tool invocations remain non-streaming when the run mode is disabled", async () => {
   const { modelPort, capturedInvocations } = createToolCallingModelPort([
     { content: "", tool_calls: [] },
     { content: "", tool_calls: [] },
@@ -271,12 +270,13 @@ test("bound tool invocations are non-streaming across tool rounds", async () => 
   );
 });
 
-test("bound tool invocations remain non-streaming when frontend enables streaming", async () => {
+test("bound tool invocations use streaming when frontend enables streaming", async () => {
   const { modelPort, capturedInvocations } = createToolCallingModelPort([
     { content: "", tool_calls: [] },
     { content: "", tool_calls: [] },
   ]);
   const modelState = createModelState(modelPort);
+  modelState.runtime.runConfig.streaming = true;
   modelState.globalConfig.streaming = true;
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding: { bindOptions: { tool_choice: "auto" } },
@@ -292,81 +292,6 @@ test("bound tool invocations remain non-streaming when frontend enables streamin
 
   assert.deepEqual(
     capturedInvocations.map((request) => request.options?.streaming),
-    [false, false],
-  );
-});
-
-test("only the final no-tools streaming stage owns delta callbacks", async () => {
-  const events = [];
-  const capturedInvocations = [];
-  const runtime = {
-    runConfig: { streaming: true },
-    systemRuntime: {},
-    sessionManager: createCanonicalMessageEventSessionManager(),
-  };
-  const eventListener = {
-    onEvent(payload = {}) {
-      events.push(payload);
-    },
-  };
-  const modelPort = {
-    async invoke(request = {}) {
-      capturedInvocations.push(request);
-      if (request.options?.streaming === true) {
-        const [callback] = request.options.callbacks || [];
-        await callback?.handleLLMNewToken?.("final ");
-        await callback?.handleLLMNewToken?.("answer");
-        await callback?.handleLLMEnd?.();
-      }
-      return {
-        output: {
-          text: request.options?.streaming === true ? "final answer" : "tool-free draft",
-          toolCalls: [],
-        },
-      };
-    },
-  };
-  const modelState = {
-    modelPort,
-    runtime,
-    eventListener,
-    globalConfig: {},
-    userConfig: {},
-    defaultModelSpec: { ...GPT_REASONING },
-    activeModelSpec: { ...GPT_REASONING },
-    abortSignal: null,
-  };
-  prepareTestTurnExecution(modelState, createLoopState(), "final-stream-callback-owner");
-  const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
-    adaptedBinding: { bindOptions: { tool_choice: "auto" } },
-    boundTools: [{ name: "execute_script" }],
-    messages: [{ role: "user", content: "run and answer" }],
-    modelState,
-    runtime,
-    abortSignal: null,
-  });
-
-  await invokeBoundLlmWithToolChoice();
-  const result = await maybeInvokeFinalStreamingNoTools({
-    modelState,
-    baseMessages: [{ role: "user", content: "run and answer" }],
-    fallbackText: "tool-free draft",
-    turn: 2,
-  });
-
-  assert.deepEqual(
-    capturedInvocations.map((request) => request.options?.streaming),
-    [false, true],
-  );
-  assert.equal(Object.hasOwn(capturedInvocations[0].options, "callbacks"), false);
-  assert.equal(Array.isArray(capturedInvocations[1].options.callbacks), true);
-  assert.equal(result.text, "final answer");
-  assert.deepEqual(
-    events
-      .filter((item) => item?.event === "authority_event_committed")
-      .map((item) => item?.data?.envelope?.payload)
-      .filter((payload) => payload?.eventType === "llm_delta")
-      .map((payload) => payload.text),
-    ["final ", "answer"],
+    [true, true],
   );
 });
