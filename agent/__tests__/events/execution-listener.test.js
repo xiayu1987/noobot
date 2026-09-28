@@ -50,7 +50,7 @@ test("execution listener forwards the authoritative persistence scope and its de
     },
   });
 
-  await listener.flushPersistence();
+  await listener.flush();
   assert.equal(persisted.length, 1);
   assert.equal(result, delivered);
   assert.equal(forwarded.length, 1);
@@ -101,11 +101,11 @@ test("execution listener persists events in source order and exposes a durabilit
   await firstStarted;
   assert.deepEqual(calls, [4]);
   releaseFirst();
-  await listener.flushPersistence();
+  await listener.flush();
   assert.deepEqual(calls, [4, 5]);
 });
 
-test("execution listener can release completion before diagnostic persistence drains", async () => {
+test("execution listener keeps completion behind the persistence durability barrier", async () => {
   let releasePersistence;
   let persistenceStarted;
   const persistenceBlocked = new Promise((resolve) => {
@@ -130,9 +130,15 @@ test("execution listener can release completion before diagnostic persistence dr
     data: { state: "completed", sequence: 1 },
   });
   await started;
-  await listener.flushPersistence({ wait: false });
+  let completed = false;
+  const completion = listener.flush().then(() => {
+    completed = true;
+  });
+  await Promise.resolve();
+  assert.equal(completed, false);
   releasePersistence();
-  await listener.flushPersistence();
+  await completion;
+  assert.equal(completed, true);
 });
 
 test("execution listener exposes persistence failures at the durability barrier", async () => {
@@ -151,7 +157,7 @@ test("execution listener exposes persistence failures at the durability barrier"
     data: { state: "processing", revision: 1, sequence: 1 },
   });
 
-  await assert.rejects(listener.flushPersistence(), {
+  await assert.rejects(listener.flush(), {
     code: "EXECUTION_LOG_PERSISTENCE_FAILED",
     message: "execution log persistence failed: storage unavailable",
   });
@@ -175,7 +181,7 @@ test("execution listener forwarding port delivers without taking persistence own
     event: "model_context_trace",
     data: { sessionId: "child-session", invocationId: "invoke-1" },
   });
-  await listener.flushPersistence();
+  await listener.flush();
 
   assert.equal(persisted.length, 0);
   assert.equal(forwarded.length, 1);
@@ -272,8 +278,9 @@ test("execution listener persists the canonical message fact instead of the priv
   });
 
   await listener.onEvent({ event: "authority_event_committed", data: { envelope } });
-  await listener.flushPersistence();
+  await listener.flush();
 
+  assert.equal(persisted.length, 1);
   assert.equal(persisted[0].event, "tool_call_start");
   assert.equal(persisted[0].data.tool, "read_file");
   assert.equal(persisted[0].data.eventId, "tool-event-a");
@@ -301,7 +308,7 @@ test("execution listener classifies context identity diagnostics under one proto
       sourceMessageUid: "sm_1",
     },
   });
-  await listener.flushPersistence();
+  await listener.flush();
 
   assert.equal(persisted.length, 1);
   assert.equal(persisted[0].userId, "user-a");
@@ -338,7 +345,7 @@ test("execution listener classifies agent context diagnostics under the dedicate
       envelope: { protocolVersion: 1 },
     },
   });
-  await listener.flushPersistence();
+  await listener.flush();
 
   assert.equal(persisted.length, 1);
   assert.equal(persisted[0].category, "agent_context");
@@ -380,10 +387,97 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
 
   assert.equal(delivered, false);
   await assert.rejects(
-    listener.flushDelivery(),
+    listener.flush(),
     (error) =>
       error?.code === "EVENT_UPSTREAM_DELIVERY_FAILED" &&
       error?.failures?.[0]?.eventId === "event-final" &&
       error?.failures?.[0]?.sourceEvent === "authority_event_committed",
   );
+});
+
+test("execution listener drains delivery failure diagnostics before rejecting flush", async () => {
+  const writeStarted = Promise.withResolvers();
+  const releaseWrite = Promise.withResolvers();
+  const persisted = [];
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      async appendExecutionLog(record) {
+        if (record.event === "execution_upstream_forward_failed") {
+          writeStarted.resolve();
+          await releaseWrite.promise;
+        }
+        persisted.push(record);
+      },
+    },
+    upstream: { onEvent: async () => false },
+  });
+  listener.forwardEvent({
+    event: "authority_event_committed",
+    data: {
+      envelope: {
+        identity: { eventId: "failed-delivery" },
+      },
+    },
+  });
+  let settled = false;
+  const completion = assert
+    .rejects(listener.flush(), { code: "EVENT_UPSTREAM_DELIVERY_FAILED" })
+    .then(() => {
+      settled = true;
+    });
+  await writeStarted.promise;
+  assert.equal(settled, false);
+  releaseWrite.resolve();
+  await completion;
+  assert.deepEqual(
+    persisted.map((record) => record.event),
+    ["execution_upstream_forward_failed"],
+  );
+});
+
+test("execution listener reports delivery and persistence failures together", async () => {
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      async appendExecutionLog() {
+        throw new Error("disk unavailable");
+      },
+    },
+    upstream: { onEvent: async () => false },
+  });
+  listener.onEvent({ event: "agent_lifecycle_state_changed", data: { state: "completed" } });
+  await assert.rejects(listener.flush(), (error) => {
+    assert.equal(error.code, "EXECUTION_EVENT_FLUSH_FAILED");
+    assert.deepEqual(
+      error.errors.map((failure) => failure.code),
+      ["EVENT_UPSTREAM_DELIVERY_FAILED", "EXECUTION_LOG_PERSISTENCE_FAILED"],
+    );
+    return true;
+  });
+});
+
+test("execution listener includes events enqueued during a flush", async () => {
+  const writeStarted = Promise.withResolvers();
+  const releaseWrite = Promise.withResolvers();
+  const persisted = [];
+  const forwarded = [];
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      async appendExecutionLog(record) {
+        if (record.data.sequence === 1) {
+          writeStarted.resolve();
+          await releaseWrite.promise;
+        }
+        persisted.push(record.data.sequence);
+      },
+    },
+    upstream: { onEvent: async ({ data }) => forwarded.push(data.sequence) },
+  });
+  listener.onEvent({ event: "agent_lifecycle_state_changed", data: { sequence: 1 } });
+  const completion = listener.flush();
+  await writeStarted.promise;
+  listener.onEvent({ event: "agent_lifecycle_state_changed", data: { sequence: 2 } });
+  releaseWrite.resolve();
+  await completion;
+  assert.deepEqual(persisted, [1, 2]);
+  assert.deepEqual(forwarded, [1, 2]);
 });

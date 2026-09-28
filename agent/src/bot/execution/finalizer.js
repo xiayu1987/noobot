@@ -6,10 +6,9 @@
 
 import { emitEvent } from "../../events/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
-import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
+import { CALLER_ROLE } from "../config/constants.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
-import { logWarn } from "../../observability/console/logger.js";
 import {
   canonicalMessageId,
   emitContextIdentityDebug,
@@ -30,7 +29,6 @@ export class SessionExecutionFinalizer {
     resolveMemoryPostProcessAsyncEnabled = () => true,
     runMemoryPostProcessFlow = async () => {},
     resolveExecutionBundleTimeoutMs = () => 5000,
-    upsertParentAsyncTask = () => {},
     now = () => new Date().toISOString(),
   } = {}) {
     this.session = session;
@@ -38,7 +36,6 @@ export class SessionExecutionFinalizer {
     this.resolveMemoryPostProcessAsyncEnabled = resolveMemoryPostProcessAsyncEnabled;
     this.runMemoryPostProcessFlow = runMemoryPostProcessFlow;
     this.resolveExecutionBundleTimeoutMs = resolveExecutionBundleTimeoutMs;
-    this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
   }
 
@@ -60,7 +57,6 @@ export class SessionExecutionFinalizer {
     executionStartIndex = 0,
     runtimeEventListener = null,
     userConfig = {},
-    resolvedParentAsyncResultContainer = null,
     lifecycle = null,
     persistenceContext = null,
   }) {
@@ -232,18 +228,7 @@ export class SessionExecutionFinalizer {
       });
     }
 
-    lifecycle?.complete?.();
-    await runtimeEventListener?.flushDelivery?.();
-    try {
-      await runtimeEventListener?.flushPersistence?.({ wait: false });
-    } catch (error) {
-      logWarn("[execution][execution_log_persistence_unavailable]", {
-        sessionId,
-        turnScopeId: String(turnScopeId || "").trim(),
-        error: error?.message || String(error),
-        errorCode: error?.code || "EXECUTION_LOG_PERSISTENCE_FAILED",
-      });
-    }
+    await runtimeEventListener?.flush();
 
     const executionBundleTimeoutMs = this.resolveExecutionBundleTimeoutMs(userConfig);
     let executionLogs = [];
@@ -272,7 +257,7 @@ export class SessionExecutionFinalizer {
       executionLogs = [];
     }
     const executionSummary = summarizeExecutionLogs(executionLogs, { dialogProcessId });
-    const completionResult = {
+    return {
       sessionId,
       parentSessionId: normalizeParentSessionId(parentSessionId),
       parentDialogProcessId: parentDialogProcessId || "",
@@ -285,25 +270,6 @@ export class SessionExecutionFinalizer {
       executionSummary,
       dialogProcessId,
       turnScopeId: String(turnScopeId || "").trim(),
-    };
-    this.upsertParentAsyncTask({
-      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-      sessionId,
-      parentSessionId,
-      patch: {
-        status: SESSION_ASYNC_STATUS.COMPLETED,
-        endedAt: this.now(),
-        error: "",
-        result: completionResult,
-      },
-    });
-
-    return {
-      ...completionResult,
-      lifecycle: lifecycle?.snapshot || null,
-      ...(resolvedParentAsyncResultContainer
-        ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }
-        : {}),
     };
   }
 }

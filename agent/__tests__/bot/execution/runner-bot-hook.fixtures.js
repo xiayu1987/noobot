@@ -130,8 +130,10 @@ export function createRunner({
     return {
       ...(initialized || {}),
       sessionManager: initialized?.sessionManager || sessionManager,
-      runtimeEventListener:
-        initialized?.runtimeEventListener || payload?.eventListener || NOOP_EVENT_LISTENER,
+      runtimeEventListener: {
+        flush: async () => {},
+        ...(initialized?.runtimeEventListener || payload?.eventListener || NOOP_EVENT_LISTENER),
+      },
     };
   };
   const prepareCanonicalAgentTurnExecution = async (payload = {}) => {

@@ -23,7 +23,6 @@ export async function finalizeAgentTurn({
   agentResult,
   executionStartIndex,
   userConfig,
-  resolvedParentAsyncResultContainer,
   lifecycle,
   persistenceContext,
 }) {
@@ -105,7 +104,7 @@ export async function finalizeAgentTurn({
     if (!messageUid || !checkpointPersistedMessageUids.has(messageUid)) break;
     recoveredActivePrefixCount += 1;
   }
-  const finalizedResult = await finalizeRunSession({
+  return finalizeRunSession({
     userId,
     sessionId: usedSessionId,
     parentSessionId,
@@ -138,13 +137,7 @@ export async function finalizeAgentTurn({
         ? { memoryModel: String(resolvedRunConfig.memoryModel).trim() }
         : {}),
     },
-    resolvedParentAsyncResultContainer,
     lifecycle,
     persistenceContext,
   });
-  emitEvent(runtimeEventListener, "agent_done", {
-    sessionId: usedSessionId,
-    traceCount: agentResult?.traces?.length || 0,
-  });
-  return finalizedResult;
 }

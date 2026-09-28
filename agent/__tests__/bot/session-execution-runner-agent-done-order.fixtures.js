@@ -110,7 +110,7 @@ export function createRunner({
       userConfig: {},
       currentSessionModelAlias: "",
       executionStartIndex: 0,
-      runtimeEventListener: eventListener,
+      runtimeEventListener: { flush: async () => {}, ...eventListener },
     }),
     resolveScenarioRunConfig: (runConfig) => runConfig,
     prepareRunConfig: ({ runConfig: inputRunConfig }) => ({
