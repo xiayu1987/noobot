@@ -65,7 +65,7 @@ test("model library exposes copy-safe provider templates", () => {
   assert.equal(options[0].key, "gpt_5_6_sol");
   assert.equal(
     options.some((item) => item.key === "gpt_5_4"),
-    true,
+    false,
   );
   assert.equal(
     options.some((item) => item.key === "gpt_6_astra"),
@@ -82,19 +82,23 @@ test("model library exposes copy-safe provider templates", () => {
       .map(({ key }) => key),
     [
       "gpt_5_6_sol",
+      "gpt_6_sol",
+      "gpt_6_luna",
       "gpt_6_astra",
       "gpt_5_6_terra",
       "gpt_5_6_luna",
-      "gpt_5_4",
       "gpt_5_5",
       "claude_fable_5",
       "claude_fable_5_1",
+      "claude_opus_5_5",
       "claude_opus_5",
       "claude_sonnet_5",
       "claude_haiku_4_5",
       "deepseek_v4_pro",
-      "deepseek_v4_flash",
+      "grok_4_7",
       "grok_4_6",
+      "qwen3_8_max",
+      "qwen3_8_flash",
       "qwen3_7_max",
       "qwen3_7_plus",
     ],
