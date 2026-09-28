@@ -70,7 +70,9 @@ describe("message workspace file links", () => {
       expect(fetcher).toHaveBeenCalledTimes(1);
       const request = new URL(fetcher.mock.calls[0][0], window.location.origin);
       expect(request.pathname).toBe("/api/internal/workspace/admin/download");
-      expect(request.searchParams.get("path")).toBe(path);
+      expect(request.searchParams.get("path")).toBe(
+        `runtime/tool-test/smoke-327b390f-20260928/${name}`,
+      );
       expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
       expect(HTMLAnchorElement.prototype.click.mock.instances[0].download).toBe(name);
@@ -78,35 +80,37 @@ describe("message workspace file links", () => {
     },
   );
 
-  it("shows the backend error without navigating or trying host-file access", async () => {
-    const fetcher = vi.fn(async () => ({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: "path outside workspace" }),
-    }));
-    attachmentService.configure({ fetcher });
-    const notify = vi.fn();
-    const { onDownloadWorkspacePath } = createFileDownloadController({
-      userId: "alice",
-      attachmentService,
-      translate: (key) => key,
-      notify,
-    });
-    const wrapper = mountMarkdown("[denied](/outside/secret.txt)", onDownloadWorkspacePath);
-    await wrapper.get("a").trigger("click");
-    await flushPromises();
-    expect(notify).toHaveBeenCalledWith({ type: "error", message: "path outside workspace" });
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(URL.createObjectURL).not.toHaveBeenCalled();
-  });
+  it.each(["/outside/secret.txt", "C:/outside/secret.txt"])(
+    "rejects workspace links outside the declared workspace before requesting a file",
+    async (path) => {
+      const fetcher = vi.fn();
+      attachmentService.configure({ fetcher });
+      const notify = vi.fn();
+      const { onDownloadWorkspacePath } = createFileDownloadController({
+        userId: "alice",
+        attachmentService,
+        translate: (key) => key,
+        notify,
+      });
+      const wrapper = mountMarkdown(`[denied](${path})`, onDownloadWorkspacePath);
+      await wrapper.get("a").trigger("click");
+      await flushPromises();
+      expect(notify).toHaveBeenCalledWith({ type: "error", message: "message.downloadFailed" });
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
+    },
+  );
 
-  it("preserves encoded filename characters and relative paths through streamed rerenders", async () => {
-    const download = vi.fn();
-    const wrapper = mountMarkdown("[file](runtime/old.txt)", download);
-    await wrapper.setProps({ content: "[file](<runtime/中文 # 100%.txt>)" });
-    await wrapper.get("a").trigger("click");
-    expect(download).toHaveBeenCalledWith("runtime/中文 # 100%.txt");
-  });
+  it.each(["runtime/中文 # 100%.txt", "C:/Users/xiayu/中文 # 100%.txt"])(
+    "preserves %s through streamed rerenders",
+    async (path) => {
+      const download = vi.fn();
+      const wrapper = mountMarkdown("[file](runtime/old.txt)", download);
+      await wrapper.setProps({ content: `[file](<${path}>)` });
+      await wrapper.get("a").trigger("click");
+      expect(download).toHaveBeenCalledWith(path);
+    },
+  );
 
   it("keeps web links, protocol-relative URLs and fragment links as links", () => {
     const wrapper = mountMarkdown(

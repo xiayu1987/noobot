@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isAbsolutePathForPlatform } from "@noobot/path-resolver/syntax";
 
 export function workspaceFileLinkPlugin(md) {
   const renderLink =
@@ -11,7 +12,7 @@ export function workspaceFileLinkPlugin(md) {
   md.renderer.rules.link_open = (tokens, index, options, env, self) => {
     const token = tokens[index];
     const href = token.attrGet("href") || "";
-    const isUri = /^[a-z][a-z\d+.-]*:/i.test(href);
+    const isUri = /^[a-z][a-z\d+.-]*:/i.test(href) && !isAbsolutePathForPlatform(href);
     if (env?.workspaceFileLinks && href && !isUri && !/^(?:#|\/\/)/.test(href)) {
       let path = href;
       try {
