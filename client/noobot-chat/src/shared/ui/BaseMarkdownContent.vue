@@ -6,13 +6,17 @@
 <script setup>
 import { computed } from "vue";
 import { useMermaidRender } from "../composables/useMermaidRender.js";
+import {
+  attachmentIdentityKey,
+  parseAttachmentIdentityRef,
+} from "@noobot/attachment-protocol/identity";
 
 const props = defineProps({
   content: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
   attachmentRefIndex: { type: Map, default: null },
 });
-const emit = defineEmits(["download-workspace-file"]);
+const emit = defineEmits(["download-workspace-file", "download-attachment"]);
 
 const { mermaidHostRef } = useMermaidRender();
 const renderedHtml = computed(() =>
@@ -23,10 +27,25 @@ const renderedHtml = computed(() =>
 );
 
 function handleFileLink(event) {
-  const link = event.target?.closest?.("a[data-noobot-workspace-path]");
+  const link = event.target?.closest?.(
+    "a[data-noobot-workspace-path], a[data-noobot-attachment-ref]",
+  );
   if (!link || !event.currentTarget?.contains(link)) return;
   event.preventDefault();
   if (event.type === "auxclick") return;
+  const attachmentRef = link.getAttribute("data-noobot-attachment-ref");
+  if (attachmentRef) {
+    let identity;
+    try {
+      identity = parseAttachmentIdentityRef(attachmentRef);
+    } catch {
+      return;
+    }
+    const key = attachmentIdentityKey(identity);
+    const attachment = props.attachmentRefIndex?.get(key);
+    if (attachment) emit("download-attachment", attachment);
+    return;
+  }
   emit("download-workspace-file", link.getAttribute("data-noobot-workspace-path"));
 }
 

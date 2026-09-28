@@ -40,20 +40,17 @@ function resolveIdentity(ref = "") {
   }
 }
 
-export function buildAttachmentRefIndex(attachmentItems = [], { resolveHref } = {}) {
+export function buildAttachmentRefIndex(attachmentItems = []) {
   const index = new Map();
-  if (typeof resolveHref !== "function") return index;
   for (const attachmentItem of Array.isArray(attachmentItems) ? attachmentItems : []) {
-    let key = "";
+    let identity;
     try {
-      key = attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
+      identity = projectAttachmentIdentity(attachmentItem);
     } catch {
       continue;
     }
-    const href = String(resolveHref(attachmentItem) || "").trim();
-    if (!href) continue;
-    index.set(key, {
-      href,
+    index.set(attachmentIdentityKey(identity), {
+      ...identity,
       name: String(attachmentItem?.name || attachmentItem?.fileName || "").trim(),
     });
   }
@@ -66,10 +63,10 @@ function lookupAttachment(env, identity) {
   return index.get(attachmentIdentityKey(identity)) || null;
 }
 
-function renderResolvedChip({ href, label }) {
+function renderResolvedChip({ ref, label }) {
   return [
-    `<a class="noobot-attachment-chip" href="${escapeHtmlAttribute(href)}"`,
-    ` download title="${escapeHtmlAttribute(label)}">`,
+    '<a class="noobot-attachment-chip" href="#" role="button"',
+    ` data-noobot-attachment-ref="${escapeHtmlAttribute(ref)}" title="${escapeHtmlAttribute(label)}">`,
     `<span class="noobot-attachment-chip__icon" aria-hidden="true">📎</span>`,
     `<span class="noobot-attachment-chip__name">${escapeHtmlAttribute(label)}</span>`,
     "</a>",
@@ -182,7 +179,7 @@ function renderAttachmentToken(tokens, idx, options, env) {
     });
   }
   return renderResolvedChip({
-    href: matched.href,
+    ref,
     label: label || matched.name || identity.attachmentId,
   });
 }
