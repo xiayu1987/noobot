@@ -90,6 +90,7 @@ const {
   openFilePreview,
   closePreviewDialog,
   onDownloadFile,
+  onDownloadWorkspacePath,
   onDownloadAttachment,
   onDownloadParsedResult,
   onCopyMarkdownRich,
@@ -560,6 +561,7 @@ function toggleAssistantContent() {
       :content="messageItem.content"
       :render-markdown="renderMarkdown"
       :attachment-ref-index="attachmentRefIndex"
+      @download-workspace-file="onDownloadWorkspacePath"
     />
 
     <ExtensionOutlet

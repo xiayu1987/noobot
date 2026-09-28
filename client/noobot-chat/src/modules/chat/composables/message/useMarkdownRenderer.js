@@ -7,6 +7,7 @@ import MarkdownIt from "markdown-it";
 import { provideExtensionValues } from "../../../../extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { attachmentInlineRefPlugin } from "./attachmentInlineRefPlugin.js";
+import { workspaceFileLinkPlugin } from "./workspaceFileLinkPlugin.js";
 
 const MERMAID_PREFIXES = [
   "graph ",
@@ -60,6 +61,7 @@ function normalizeMermaidMarkdown(inputText = "") {
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 attachmentInlineRefPlugin(md);
+workspaceFileLinkPlugin(md);
 const defaultFenceRenderer =
   md.renderer.rules.fence ||
   ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
@@ -207,8 +209,8 @@ function renderCollapsibleMarkdown(text = "", renderEnv = {}) {
 }
 
 export function useMarkdownRenderer() {
-  function renderMarkdown(text, { attachmentRefIndex = null } = {}) {
-    return renderCollapsibleMarkdown(text || "", { attachmentRefIndex });
+  function renderMarkdown(text, { attachmentRefIndex = null, workspaceFileLinks = false } = {}) {
+    return renderCollapsibleMarkdown(text || "", { attachmentRefIndex, workspaceFileLinks });
   }
 
   return {
