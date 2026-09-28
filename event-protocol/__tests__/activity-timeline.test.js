@@ -146,3 +146,35 @@ test("reduces repeated event identity to one fact and excludes legacy aliases", 
     timeline,
   );
 });
+
+test("aggregates activity deltas by activity identity without losing token boundaries", () => {
+  const first = activityEnvelope(
+    {
+      eventType: MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
+      activityId: "activity-stream-1",
+      activityKind: "guidance_analysis",
+      activityEventType: MESSAGE_EVENT_TYPE.THINKING,
+      text: "先确认 ",
+    },
+    { identity: { eventId: "delta-1" }, ordering: { sequence: 1 } },
+  );
+  const second = activityEnvelope(
+    {
+      eventType: MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
+      activityId: "activity-stream-1",
+      activityKind: "guidance_analysis",
+      activityEventType: MESSAGE_EVENT_TYPE.THINKING,
+      text: "当前状态。",
+    },
+    { identity: { eventId: "delta-2" }, ordering: { sequence: 2 } },
+  );
+
+  const timeline = reduceCanonicalActivityTimeline(
+    reduceCanonicalActivityTimeline([], first),
+    second,
+  );
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0].activityId, "activity-stream-1");
+  assert.equal(timeline[0].text, "先确认 当前状态。");
+  assert.equal(timeline[0].eventType, MESSAGE_EVENT_TYPE.THINKING);
+});

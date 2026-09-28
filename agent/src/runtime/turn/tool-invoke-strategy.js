@@ -9,6 +9,7 @@ import {
   resolveBoundToolModelRequestOverrides,
   resolveNonThinkingCallOverrides,
 } from "./tool-choice-strategy.js";
+import { createActivityStreamingCallbacks } from "../../models/runtime/model-manager.js";
 
 export function createBoundLlmToolChoiceInvoker({
   adaptedBinding,
@@ -46,7 +47,15 @@ export function createBoundLlmToolChoiceInvoker({
       messages: filterForModelContext(messages),
       tools: boundTools,
       options: {
-        streaming: false,
+        streaming: runtime?.runConfig?.streaming === true,
+        callbacks:
+          runtime?.runConfig?.streaming === true
+            ? createActivityStreamingCallbacks(modelState?.eventListener, runtime, {
+                activityKind: "main_model_analysis",
+                activityEventType: "main_model_content",
+                purpose: invokeMode,
+              })
+            : undefined,
         signal: abortSignal,
         invoke: {
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),

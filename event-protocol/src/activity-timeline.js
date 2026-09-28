@@ -31,6 +31,7 @@ const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
     "turnScopeId",
     "messageId",
     "presentationMessageId",
+    "activityId",
   ]),
 );
 
@@ -39,14 +40,20 @@ export function isCanonicalActivityMessageEvent(envelope = {}) {
   return Boolean(
     validation.valid &&
     validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
-    ACTIVITY_EVENT_TYPES.has(text(envelope?.payload?.eventType)),
+    ACTIVITY_EVENT_TYPES.has(text(envelope?.payload?.eventType)) ||
+      text(envelope?.payload?.eventType) === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
   );
 }
 
 export function projectCanonicalActivityTimelineEvent(envelope = {}) {
   if (!isCanonicalActivityMessageEvent(envelope)) return null;
   const eventId = text(envelope?.identity?.eventId);
-  const eventType = text(envelope?.payload?.eventType);
+  const payloadEventType = text(envelope?.payload?.eventType);
+  const isDelta = payloadEventType === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA;
+  const eventType =
+    isDelta
+      ? text(envelope?.payload?.activityEventType)
+      : payloadEventType;
   const sequence = Number(envelope?.ordering?.sequence || 0);
   const sequenceScopeId = text(envelope?.ordering?.scopeId);
   const sequenceDomain = text(envelope?.ordering?.domain);
@@ -62,10 +69,10 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}) {
   ) {
     return null;
   }
-  return Object.freeze({
+  const fact = {
     eventId,
     eventType,
-    text: content.trim(),
+    text: isDelta ? content : content.trim(),
     activityKind: text(envelope?.payload?.activityKind),
     purpose: text(envelope?.payload?.purpose),
     pluginFlow: text(envelope?.payload?.pluginFlow),
@@ -81,7 +88,10 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}) {
     turnScopeId: text(envelope?.identity?.turnScopeId),
     messageId: text(envelope?.identity?.messageId),
     presentationMessageId: text(envelope?.payload?.presentationMessageId),
-  });
+  };
+  const activityId = text(envelope?.payload?.activityId);
+  if (activityId) fact.activityId = activityId;
+  return Object.freeze(fact);
 }
 
 export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
@@ -90,7 +100,20 @@ export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
   if (!fact) return next;
   const index = next.findIndex((item) => text(item?.eventId) === fact.eventId);
   if (index >= 0) next[index] = fact;
-  else next.push(fact);
+  else {
+    const activityId = text(fact.activityId);
+    const activityIndex = activityId
+      ? next.findIndex((item) => text(item?.activityId) === activityId)
+      : -1;
+    if (activityIndex >= 0) {
+      const previous = next[activityIndex];
+      next[activityIndex] = Object.freeze({
+        ...fact,
+        text: `${String(previous?.text || "")}${fact.text}`,
+        activityId,
+      });
+    } else next.push(fact);
+  }
   return next.sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
 }
 

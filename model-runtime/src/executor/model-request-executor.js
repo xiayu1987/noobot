@@ -30,6 +30,25 @@ import { isToolCallStreamingMismatch } from "../policies/tool-call-retry-policy.
 import { runModelAttempt } from "./attempt-runner.js";
 import { executeTransportRetry } from "./retry-coordinator.js";
 import { createProviderAdapterRegistry } from "../adapters/registry.js";
+import {
+  alternateStreamingMode,
+  mayRetryWithAlternateStreaming,
+  resolvePreferredStreaming,
+  streamingProviderCacheKey,
+} from "../policies/streaming-mode-policy.js";
+
+function wrapStreamingCallbacks(callbacks, attemptState) {
+  if (!Array.isArray(callbacks) || !callbacks.length) return callbacks;
+  return callbacks.map((callback = {}) => ({
+    ...callback,
+    handleLLMNewToken: (...args) => {
+      const token = String(args[0] || "");
+      attemptState.streamedTokens += token.length;
+      return callback.handleLLMNewToken?.(...args);
+    },
+    handleLLMEnd: (...args) => callback.handleLLMEnd?.(...args),
+  }));
+}
 
 function projectObservableModel(model = {}) {
   return Object.freeze({
@@ -64,6 +83,7 @@ export function createModelRequestExecutor({
   requireCredentialPort(credentialPort);
   requireObservationPort(observationPort);
   const modelObservationStates = new Map();
+  const streamingModes = new Map();
   const resolveModelObservationState = (modelSpec = {}) => {
     const key = JSON.stringify([
       modelSpec.operatorId,
@@ -91,11 +111,21 @@ export function createModelRequestExecutor({
       let reasoningOnlyAttempts = 0;
       let emptyResponseAttempts = 0;
       let mismatchAttempts = 0;
+      let alternateStreamingAttempted = false;
       let totalAttempts = 0;
       const attempts = [];
       let finalResult;
       const requestBase = createModelRequest({ ...input, invocation, messages });
       const adapter = registry.resolve(requestBase.model);
+      const streamingCacheKey = streamingProviderCacheKey({
+        model: requestBase.model,
+        operation: requestBase.operation,
+        tools: requestBase.tools,
+      });
+      streaming = resolvePreferredStreaming({
+        requested: streaming,
+        cached: streamingModes.get(streamingCacheKey),
+      });
       const modelObservationState = resolveModelObservationState(requestBase.model);
       const credential = await credentialPort.resolve({ modelSpec: requestBase.model, invocation });
       if (!credential) {
@@ -211,73 +241,95 @@ export function createModelRequestExecutor({
           typeof clientDecorator === "function"
             ? clientDecorator(baseClient, { request })
             : baseClient;
-        const result = await executeTransportRetry({
-          policy: retry.transport,
-          clock,
-          classify: adapter.classifyError,
-          observe,
-          run: async () => {
-            totalAttempts += 1;
-            const attempt = totalAttempts;
-            modelObservationState.sequence += 1;
-            observationPort.emit("model_context_trace", {
-              stage: "llm_invoke_messages",
-              authority: "model_invoke_port",
-              protocolVersion: 2,
-              modelInstanceId: modelObservationState.modelInstanceId,
-              invocationId: invocation.invocationId,
-              invocationSequence: modelObservationState.sequence,
-              attempt,
-              model: {
-                alias: String(request.model.alias || "").trim(),
-                name: String(request.model.model || "").trim(),
-                streaming,
-                boundToolCount: request.tools.length,
-              },
-              invocation: {
-                ...invocation,
-                contextSequencePolicy: invocation.contextSequencePolicy,
-              },
-              context: {
-                summaryCheckpointRevision: Math.max(
-                  0,
-                  Number(request.metadata?.context?.summaryCheckpointRevision) || 0,
-                ),
-              },
-              messages: summarizeDiagnosticMessages(request.messages),
-            });
-            observe("model.invocation.attempt_started", { attempt, streaming });
-            try {
-              return await runModelAttempt({
-                adapter,
-                client,
-                modelSpec: request.model,
-                messages: request.messages,
-                tools: request.tools,
-                toolOptions: request.options.toolBinding || {},
-                invokeOptions: {
-                  signal: request.options.signal,
-                  callbacks: request.options.callbacks,
-                  ...request.options.invoke,
-                },
-              });
-            } catch (error) {
-              const classification = adapter.classifyError(error);
-              attempts.push({
+        let result;
+        try {
+          result = await executeTransportRetry({
+            policy: retry.transport,
+            clock,
+            classify: adapter.classifyError,
+            observe,
+            run: async () => {
+              totalAttempts += 1;
+              const attempt = totalAttempts;
+              const attemptState = { streamedTokens: 0 };
+              modelObservationState.sequence += 1;
+              observationPort.emit("model_context_trace", {
+                stage: "llm_invoke_messages",
+                authority: "model_invoke_port",
+                protocolVersion: 2,
+                modelInstanceId: modelObservationState.modelInstanceId,
+                invocationId: invocation.invocationId,
+                invocationSequence: modelObservationState.sequence,
                 attempt,
-                status: MODEL_ATTEMPT_STATUS.FAILED,
-                kind: MODEL_ATTEMPT_KIND.TRANSPORT,
-                streaming,
-                error: {
-                  message: String(error?.message || error || "model attempt failed"),
-                  retryable: classification?.retryable === true,
-                  kind: String(classification?.kind || MODEL_ERROR_KIND.UNKNOWN),
+                model: {
+                  alias: String(request.model.alias || "").trim(),
+                  name: String(request.model.model || "").trim(),
+                  streaming,
+                  boundToolCount: request.tools.length,
                 },
+                invocation: {
+                  ...invocation,
+                  contextSequencePolicy: invocation.contextSequencePolicy,
+                },
+                context: {
+                  summaryCheckpointRevision: Math.max(
+                    0,
+                    Number(request.metadata?.context?.summaryCheckpointRevision) || 0,
+                  ),
+                },
+                messages: summarizeDiagnosticMessages(request.messages),
               });
-              throw error;
-            }
-          },
-        });
+              observe("model.invocation.attempt_started", { attempt, streaming });
+              try {
+                return await runModelAttempt({
+                  adapter,
+                  client,
+                  modelSpec: request.model,
+                  messages: request.messages,
+                  tools: request.tools,
+                  toolOptions: request.options.toolBinding || {},
+                  invokeOptions: {
+                    signal: request.options.signal,
+                    callbacks: wrapStreamingCallbacks(request.options.callbacks, attemptState),
+                    ...request.options.invoke,
+                  },
+                });
+              } catch (error) {
+                const classification = adapter.classifyError(error);
+                error.streamedTokens = attemptState.streamedTokens;
+                attempts.push({
+                  attempt,
+                  status: MODEL_ATTEMPT_STATUS.FAILED,
+                  kind: MODEL_ATTEMPT_KIND.TRANSPORT,
+                  streaming,
+                  error: {
+                    message: String(error?.message || error || "model attempt failed"),
+                    retryable: classification?.retryable === true,
+                    kind: String(classification?.kind || MODEL_ERROR_KIND.UNKNOWN),
+                  },
+                });
+                throw error;
+              }
+            },
+          });
+        } catch (error) {
+          const classification = adapter.classifyError(error);
+          if (
+            !alternateStreamingAttempted &&
+            mayRetryWithAlternateStreaming(error, error?.streamedTokens, classification)
+          ) {
+            alternateStreamingAttempted = true;
+            streaming = alternateStreamingMode(streaming);
+            observe("model.invocation.streaming_mode_retry", {
+              attempt: totalAttempts,
+              nextStreaming: streaming,
+              reason: "request_failed_before_output",
+            });
+            continue;
+          }
+          throw error;
+        }
+        streamingModes.set(streamingCacheKey, streaming);
         const output = normalizeModelOutput(result.value);
         if (
           streaming &&
@@ -293,6 +345,7 @@ export function createModelRequestExecutor({
           });
           mismatchAttempts += 1;
           streaming = retry.toolCallMismatch.downgradeStreaming === true ? false : streaming;
+          streamingModes.set(streamingCacheKey, streaming);
           observe("model.invocation.semantic_retry", {
             kind: MODEL_ATTEMPT_KIND.TOOL_CALL_STREAMING_MISMATCH,
             attempt: totalAttempts,

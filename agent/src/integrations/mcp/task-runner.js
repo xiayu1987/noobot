@@ -11,6 +11,7 @@ import { buildLangChainMcpTools } from "./tool-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { createActivityStreamingCallbacks } from "../../models/runtime/model-manager.js";
 
 export async function createMcpAgentTools({
   globalConfig = {},
@@ -101,7 +102,18 @@ export async function executeMcpTask({
       model: modelSpec,
       messages,
       tools: langchainTools,
-      options: { streaming: false, signal: signal || undefined },
+      options: {
+          streaming: runtime?.runConfig?.streaming === true,
+          callbacks:
+            runtime?.runConfig?.streaming === true
+            ? createActivityStreamingCallbacks(runtime?.eventListener, runtime, {
+                activityKind: "mcp_model_analysis",
+                activityEventType: "main_model_content",
+                purpose: "mcp_tool_execution",
+              })
+            : undefined,
+        signal: signal || undefined,
+      },
       invocation: {
         flow: "mcp.task",
         purpose: "mcp_tool_execution",

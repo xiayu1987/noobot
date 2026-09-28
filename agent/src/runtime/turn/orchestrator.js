@@ -142,7 +142,6 @@ export function createTurnOrchestrator({
           turnTaskStore: noToolsResult.turnTaskStore,
           turnMessageStore: noToolsResult.turnMessageStore,
           modelMessages: noToolsResult.modelMessages,
-          finalStreaming: noToolsResult.finalStreaming,
         });
       } finally {
         markMainFlowFinalNoToolsTurnActive(systemRuntime, false);
@@ -174,7 +173,6 @@ export function createTurnOrchestrator({
           turnTaskStore: finalResult.turnTaskStore,
           turnMessageStore: finalResult.turnMessageStore,
           modelMessages: finalResult.modelMessages,
-          finalStreaming: finalResult.finalStreaming,
         });
       }
 
@@ -220,7 +218,6 @@ export function createTurnOrchestrator({
           turnTaskStore: noToolsResult.turnTaskStore,
           turnMessageStore: noToolsResult.turnMessageStore,
           modelMessages: noToolsResult.modelMessages,
-          finalStreaming: noToolsResult.finalStreaming,
         });
       }
 
@@ -252,7 +249,6 @@ export function createTurnOrchestrator({
             turnTaskStore,
             turnMessageStore,
             modelMessages: loopState.modelContext.messages,
-            finalStreaming: withToolsResult.finalStreaming,
           });
         }
         return buildLoopResultFn({
@@ -263,7 +259,6 @@ export function createTurnOrchestrator({
           turnTaskStore,
           turnMessageStore,
           modelMessages: loopState.modelContext.messages,
-          finalStreaming: withToolsResult.finalStreaming,
         });
       }
 
@@ -323,7 +318,6 @@ export function createTurnOrchestrator({
           turnTaskStore: finalResult.turnTaskStore,
           turnMessageStore: finalResult.turnMessageStore,
           modelMessages: finalResult.modelMessages,
-          finalStreaming: finalResult.finalStreaming,
         });
       }
 

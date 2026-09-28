@@ -19,7 +19,6 @@ const allowedFiles = new Set([
   path.normalize(path.join(coreRoot, "context/model-only-message.js")),
   path.normalize(path.join(coreRoot, "loop-control.js")),
   path.normalize(path.join(coreRoot, "turn/orchestrator.js")),
-  path.normalize(path.join(coreRoot, "turn/no-tools-final-stream-stage.js")),
   path.normalize(path.join(coreRoot, "turn/no-tools-reasoning-retry-stage.js")),
   path.normalize(path.join(coreRoot, "turn/tool-reasoning-retry-stage.js")),
   path.normalize(path.join(coreRoot, "execution/state-committer.js")),
