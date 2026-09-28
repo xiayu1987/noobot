@@ -42,6 +42,7 @@
     "@noobot/connector-protocol": "file:../../connector-protocol",
     "@noobot/event-protocol": "file:../../event-protocol",
     "@noobot/model-protocol": "file:../../model-protocol",
+    "@noobot/path-resolver": "file:../../path-resolver",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/runtime-topology-protocol": "file:../../runtime-topology-protocol",

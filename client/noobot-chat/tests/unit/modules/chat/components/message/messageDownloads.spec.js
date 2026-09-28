@@ -26,10 +26,10 @@ const attachment = {
 const ref = "attachment:v1:report-session/model/report-id";
 const wrappers = [];
 
-async function mountMessage(content, attachments = [attachment]) {
+async function mountMessage(content, attachments = [attachment], userId = "admin") {
   const wrapper = mount(SharedChatMessageItem, {
     props: {
-      userId: "admin",
+      userId,
       currentTurn: true,
       messageItem: { id: "download-message", role: "assistant", content, attachments },
       allMessages: [],
@@ -146,6 +146,56 @@ describe("main message download clicks", () => {
     expect(saveDownload.mock.calls[0][0].fileName).toBe("fixture.txt");
     expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe("workspace file");
   });
+
+  it.each(["browser", "desktop"])(
+    "downloads both Windows session links through the workspace API on %s",
+    async (platform) => {
+      const saveDownload = vi.fn().mockResolvedValue({ ok: true });
+      const downloadHostFile = vi.fn();
+      if (platform === "desktop")
+        vi.stubGlobal("noobotDesktop", { saveDownload, downloadHostFile });
+      const fetcher = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Headers(),
+        blob: async () => new NodeBlob(["session file"]),
+      });
+      attachmentService.configure({ fetcher });
+      const directory =
+        "C:/Users/xiayu/AppData/Roaming/Noobot/workspace/xiayu/tool_test/session-d3193767";
+      const wrapper = await mountMessage(
+        `[smoke.txt](${directory}/smoke.txt) 和 [完整测试报告 report.md](${directory}/report.md)`,
+        [],
+        "xiayu",
+      );
+      const location = window.location.href;
+      const links = wrapper.findAll(".base-markdown-content a");
+      expect(links).toHaveLength(2);
+      for (const [index, name] of ["smoke.txt", "report.md"].entries()) {
+        const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+        links[index].element.dispatchEvent(click);
+        await flushPromises();
+        expect(click.defaultPrevented).toBe(true);
+        const request = new URL(fetcher.mock.calls[index][0], window.location.origin);
+        expect(request.pathname).toBe("/api/internal/workspace/xiayu/download");
+        expect([...request.searchParams]).toEqual([["path", `tool_test/session-d3193767/${name}`]]);
+        if (platform === "desktop") {
+          expect(saveDownload.mock.calls[index][0].fileName).toBe(name);
+          expect(new TextDecoder().decode(saveDownload.mock.calls[index][0].bytes)).toBe(
+            "session file",
+          );
+        } else {
+          expect(HTMLAnchorElement.prototype.click.mock.instances[index].download).toBe(name);
+        }
+      }
+      expect(window.location.href).toBe(location);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(downloadHostFile).not.toHaveBeenCalled();
+      if (platform === "desktop") {
+        expect(saveDownload).toHaveBeenCalledTimes(2);
+        expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it("saves generated file snapshots through the desktop save service", async () => {
     vi.stubGlobal("Blob", NodeBlob);

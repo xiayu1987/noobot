@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  createFileAccessTraceId,
   maskHostPath,
   maskWorkspacePath,
   parseContentDisposition,
@@ -26,15 +25,12 @@ export function createFileDownloadController({ userId, attachmentService, transl
   }
 
   async function onDownloadWorkspacePath(path = "") {
-    const fileItem = { fileName: resolveFileItemName({}, path) };
-    const context = {
-      traceId: createFileAccessTraceId("download"),
-      normalizedUserId: String(userId || "").trim(),
+    const fileItem = {
       relativePath: path,
-      fileName: fileItem.fileName,
-      useHostChannel: false,
-      channel: "workspace-api",
+      fileName: resolveFileItemName({}, path),
     };
+    const desktopDownload = window?.noobotDesktop?.downloadHostFile;
+    const context = createFileAccessContext("download", fileItem, userId, desktopDownload);
     await downloadFile(context, fileItem);
   }
 

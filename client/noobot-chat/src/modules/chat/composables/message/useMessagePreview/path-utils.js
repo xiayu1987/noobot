@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isAbsolutePathForPlatform } from "@noobot/path-resolver/syntax";
 import { createSecureId } from "../../../../../shared/identity/secureIdentity.js";
 
 export function parseContentDisposition(contentDisposition = "") {
@@ -37,7 +38,7 @@ export function resolveWorkspaceRelativePath(pathValue = "", userId = "") {
     .trim()
     .replaceAll("\\", "/");
   if (!normalizedPath) return "";
-  if (!normalizedPath.startsWith("/") && !/^[a-zA-Z]:\//.test(normalizedPath)) {
+  if (!isAbsolutePathForPlatform(normalizedPath)) {
     return sanitizeWorkspaceRelativePath(normalizedPath);
   }
   const normalizedUserId = String(userId || "").trim();
@@ -65,17 +66,10 @@ export function resolveFileItemRelativePath(fileItem = {}, userId = "") {
   return resolveWorkspaceRelativePath(fileItem?.relativePath || "", userId);
 }
 
-export function isHostAbsolutePath(pathValue = "") {
-  const normalized = String(pathValue || "")
-    .trim()
-    .replaceAll("\\", "/");
-  return /^[a-zA-Z]:\//.test(normalized) || normalized.startsWith("/");
-}
-
 export function resolveFileItemHostPath(fileItem = {}) {
   for (const value of [fileItem?.hostPath, fileItem?.resolvedPath, fileItem?.path]) {
     const normalized = String(value || "").trim();
-    if (normalized && isHostAbsolutePath(normalized)) return normalized;
+    if (normalized && isAbsolutePathForPlatform(normalized)) return normalized;
   }
   return "";
 }
