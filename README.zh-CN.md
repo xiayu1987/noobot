@@ -150,6 +150,10 @@ npm run build
 - `ffmpeg`（音视频处理）
 - `docker`（可编程工作区计算沙箱）
 
+## 模型访问测试
+
+运行 `npm run test:model-access` 打开本地可视化测试程序，复用现有模型配置和调用运行时。支持逐项勾选、修改请求参数，导入 model-proxy 日志，查看实际发送体和原始响应。详见[使用说明](./agent/scripts/model-access-test/README.md)。
+
 ## 桌面端打包
 
 先在仓库根目录安装依赖：

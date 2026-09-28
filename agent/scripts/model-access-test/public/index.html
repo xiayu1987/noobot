@@ -1,0 +1,169 @@
+<!doctype html>
+<!-- Copyright (c) 2026 xiayu
+     Contact: 126240622+xiayu1987@users.noreply.github.com
+     SPDX-License-Identifier: MIT -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Noobot · Model access lab</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="brand-mark">N</span><strong>NOOBOT</strong
+        ><span class="badge" data-i18n="local"></span>
+      </div>
+      <select id="locale" aria-label="Language">
+        <option value="zh-CN">简体中文</option>
+        <option value="en-US">English</option>
+      </select>
+    </header>
+    <main>
+      <div class="intro">
+        <span class="eyebrow">MODEL / DIAGNOSTICS</span>
+        <h1 data-i18n="title"></h1>
+        <p data-i18n="subtitle"></p>
+      </div>
+      <div id="notice" role="status" aria-live="polite"></div>
+      <div class="workspace">
+        <div class="inputs">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2><span>01</span><span data-i18n="connection"></span></h2>
+              <span id="credential" class="hint"></span>
+            </div>
+            <fieldset id="connection-fields">
+              <label
+                ><span data-i18n="model"></span
+                ><select id="model"></select
+              ></label>
+              <div class="form-grid">
+                <label><span data-i18n="modelName"></span><input id="model-name" /></label>
+                <label
+                  ><span data-i18n="protocol"></span
+                  ><select id="protocol">
+                    <option value="default" data-i18n="default"></option>
+                    <option value="responses">Responses</option>
+                    <option value="chat">Chat Completions</option>
+                  </select></label
+                >
+              </div>
+              <label
+                ><span data-i18n="endpoint"></span
+                ><input id="endpoint" type="url" spellcheck="false"
+              /></label>
+              <label
+                ><span data-i18n="key"></span
+                ><input id="api-key" type="password" autocomplete="off" data-placeholder="keyHint"
+              /></label>
+              <label
+                ><span data-i18n="system"></span><textarea id="system" rows="2"></textarea>
+              </label>
+              <label
+                ><span data-i18n="prompt"></span><textarea id="prompt" rows="3"></textarea>
+              </label>
+              <label
+                ><span data-i18n="toolMode"></span
+                ><select id="tool-mode">
+                  <option value="none" data-i18n="withoutTools"></option>
+                  <option value="bound" data-i18n="withTools"></option></select
+              ></label>
+              <div id="tool-binding-fields" hidden>
+                <label
+                  ><span data-i18n="toolDefinitions"></span
+                  ><textarea id="tool-definitions" rows="10" spellcheck="false"></textarea>
+                </label>
+                <label
+                  ><span data-i18n="toolChoice"></span
+                  ><select id="tool-choice">
+                    <option value="auto">auto</option>
+                    <option value="required">required</option>
+                    <option value="none">none</option>
+                  </select></label
+                >
+                <p class="hint" data-i18n="toolsHint"></p>
+              </div>
+              <button id="generate" class="secondary wide" data-i18n="generate"></button>
+            </fieldset>
+          </section>
+          <section class="panel">
+            <div class="panel-heading">
+              <h2><span>02</span><span data-i18n="params"></span></h2>
+              <label class="file-button"
+                ><span data-i18n="import"></span
+                ><input id="import" type="file" accept=".json,.log,.txt"
+              /></label>
+            </div>
+            <p class="hint" data-i18n="paramsHint"></p>
+            <fieldset id="parameter-fields">
+              <div class="toolbar">
+                <button id="minimal" data-i18n="minimal"></button
+                ><button id="restore" data-i18n="restore"></button>
+              </div>
+              <div id="parameters"></div>
+              <div class="add-param">
+                <input
+                  id="param-name"
+                  data-placeholder="paramName"
+                  aria-label="Parameter name"
+                /><button id="add" data-i18n="add"></button>
+              </div>
+            </fieldset>
+            <details>
+              <summary data-i18n="actual"></summary>
+              <pre id="preview">{}</pre>
+            </details>
+            <p class="hint" data-i18n="streamHint"></p>
+            <p id="validation" class="error-text" role="alert"></p>
+            <div class="actions">
+              <button id="run" class="primary" data-i18n="run" disabled></button
+              ><button id="stop" data-i18n="stop" disabled></button>
+            </div>
+          </section>
+        </div>
+        <div class="outputs">
+          <section class="panel result-panel">
+            <div class="panel-heading">
+              <h2><span>03</span><span data-i18n="result"></span></h2>
+              <button id="export" data-i18n="export" disabled></button>
+            </div>
+            <div id="result-empty" class="empty">
+              <div class="empty-icon">⌁</div>
+              <p data-i18n="resultHint"></p>
+            </div>
+            <div id="result-content" hidden>
+              <div class="metrics">
+                <div><span data-i18n="http"></span><strong id="http-status"></strong></div>
+                <div><span data-i18n="elapsed"></span><strong id="elapsed"></strong></div>
+              </div>
+              <p id="outcome"></p>
+              <div id="error-block" hidden>
+                <h3 data-i18n="error"></h3>
+                <pre id="error-detail" class="error-text"></pre>
+              </div>
+              <h3 data-i18n="answer"></h3>
+              <pre id="answer"></pre>
+              <details open>
+                <summary data-i18n="raw"></summary>
+                <pre id="raw-response"></pre>
+              </details>
+              <details>
+                <summary data-i18n="request"></summary>
+                <pre id="actual-request"></pre>
+              </details>
+            </div>
+          </section>
+          <section class="panel">
+            <h2 data-i18n="history"></h2>
+            <p class="hint" data-i18n="historyHint"></p>
+            <div id="history"></div>
+          </section>
+        </div>
+      </div>
+      <footer data-i18n="footer"></footer>
+    </main>
+  </body>
+</html>

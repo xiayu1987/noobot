@@ -58,9 +58,14 @@ export function bindOpenAiCompatibleTools(
   invokeOverrides = {},
 ) {
   const bound = client.bindTools(tools, toolOptions);
-  applyInvocationOverrides(bound, invokeOverrides);
-  applyInvocationOverrides(bound?.completions, invokeOverrides);
-  applyInvocationOverrides(bound?.responses, invokeOverrides);
+  const { signal, callbacks, ...requestOverrides } = invokeOverrides;
+  applyInvocationOverrides(bound, requestOverrides);
+  applyInvocationOverrides(bound?.completions, requestOverrides);
+  const toolChoice = requestOverrides.tool_choice ?? toolOptions.tool_choice;
+  applyInvocationOverrides(bound?.responses, {
+    ...requestOverrides,
+    ...(["auto", "required", "none"].includes(toolChoice) ? { tool_choice: toolChoice } : {}),
+  });
   return applyOpenAiResponsesRequestOrder(bound);
 }
 
@@ -70,6 +75,8 @@ export function createOpenAiCompatibleClient({
   streaming = false,
   headers = {},
   flow = "agent.main",
+  fetch: transportFetch,
+  maxRetries,
 }) {
   const spec = normalizeRuntimeModelSpec(modelSpec);
   const useResponsesApi = resolveUseResponsesApi(spec);
@@ -84,7 +91,12 @@ export function createOpenAiCompatibleClient({
     ...headers,
     ...resolvePromptCacheHeaders(spec, flow, cacheTransport),
   };
-  const configuration = { defaultHeaders, ...(spec.base_url ? { baseURL: spec.base_url } : {}) };
+  const configuration = {
+    defaultHeaders,
+    ...(spec.base_url ? { baseURL: spec.base_url } : {}),
+    ...(transportFetch ? { fetch: transportFetch } : {}),
+    ...(maxRetries !== undefined ? { maxRetries } : {}),
+  };
   const sampling = {};
   if (spec.temperature !== undefined && spec.top_p === undefined)
     sampling.temperature = Number(spec.temperature);
@@ -97,6 +109,7 @@ export function createOpenAiCompatibleClient({
     apiKey: credential,
     configuration,
     useResponsesApi,
+    ...(maxRetries !== undefined ? { maxRetries } : {}),
     ...(promptCacheKey ? { promptCacheKey } : {}),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });

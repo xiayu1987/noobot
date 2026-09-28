@@ -155,6 +155,10 @@ Optional system deps:
 - `ffmpeg` (audio/video processing)
 - `docker` (programmable workspace compute sandbox)
 
+## Model Access Testing
+
+Run `npm run test:model-access` for a local visual tester that reuses existing model configuration and the model runtime. Toggle and edit request parameters, import model-proxy logs, and inspect actual requests and raw responses. See the [usage guide](./agent/scripts/model-access-test/README.md).
+
 ## Desktop Packaging
 
 Install dependencies first from the repository root:
