@@ -8,7 +8,11 @@ import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { text } from "./normalize.js";
 
 const ACTIVITY_EVENT_TYPES = Object.freeze(
-  new Set([MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT]),
+  new Set([
+    MESSAGE_EVENT_TYPE.THINKING,
+    MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
+    MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT,
+  ]),
 );
 
 const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
@@ -38,10 +42,10 @@ const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
 export function isCanonicalActivityMessageEvent(envelope = {}) {
   const validation = validateProtocolEvent(envelope);
   return Boolean(
-    validation.valid &&
-    validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
-    ACTIVITY_EVENT_TYPES.has(text(envelope?.payload?.eventType)) ||
-      text(envelope?.payload?.eventType) === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
+    (validation.valid &&
+      validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+      ACTIVITY_EVENT_TYPES.has(text(envelope?.payload?.eventType))) ||
+    text(envelope?.payload?.eventType) === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
   );
 }
 
@@ -50,10 +54,7 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}) {
   const eventId = text(envelope?.identity?.eventId);
   const payloadEventType = text(envelope?.payload?.eventType);
   const isDelta = payloadEventType === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA;
-  const eventType =
-    isDelta
-      ? text(envelope?.payload?.activityEventType)
-      : payloadEventType;
+  const eventType = isDelta ? text(envelope?.payload?.activityEventType) : payloadEventType;
   const sequence = Number(envelope?.ordering?.sequence || 0);
   const sequenceScopeId = text(envelope?.ordering?.scopeId);
   const sequenceDomain = text(envelope?.ordering?.domain);

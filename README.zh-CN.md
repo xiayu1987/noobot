@@ -1,4 +1,4 @@
-# Noobot
+# 菜鸟机器人（Noobot）
 
 告别 1 美元的 hello world 时代。
 

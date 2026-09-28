@@ -173,7 +173,13 @@ export function createExecutionEventListener({
     });
 
   return {
-    flushPersistence: async () => {
+    flushPersistence: async ({ wait = true } = {}) => {
+      if (!wait) {
+        void persistenceTail.catch((error) => {
+          persistenceFailures.push({ error: error?.message || String(error), cause: error });
+        });
+        return;
+      }
       await persistenceTail;
       if (persistenceFailures.length > 0) {
         const error = new Error(

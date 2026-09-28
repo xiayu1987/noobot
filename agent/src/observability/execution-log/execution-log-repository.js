@@ -231,20 +231,17 @@ export class ExecutionLogRepository {
       } else {
         delete bundle.resetExecutionLogs;
       }
-      await this._appendLogStore(
-        userId,
-        normalizedSessionId,
-        normalizedLog,
-        bundle,
-        parentSessionId,
-        persistenceContext,
-      );
-      await this._appendSessionChannelLog(
-        userId,
-        normalizedSessionId,
-        normalizedLog,
-        parentSessionId,
-      );
+      await Promise.all([
+        this._appendLogStore(
+          userId,
+          normalizedSessionId,
+          normalizedLog,
+          bundle,
+          parentSessionId,
+          persistenceContext,
+        ),
+        this._appendSessionChannelLog(userId, normalizedSessionId, normalizedLog, parentSessionId),
+      ]);
     });
   }
 }

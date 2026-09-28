@@ -168,7 +168,6 @@ export class SessionExecutionFinalizer {
       },
     );
     const thinkingFinishedAt = this.now();
-
     lifecycle?.enterPersisting?.();
     await this.turnPersister.appendAgentMessages({
       userId,
@@ -236,7 +235,7 @@ export class SessionExecutionFinalizer {
     lifecycle?.complete?.();
     await runtimeEventListener?.flushDelivery?.();
     try {
-      await runtimeEventListener?.flushPersistence?.();
+      await runtimeEventListener?.flushPersistence?.({ wait: false });
     } catch (error) {
       logWarn("[execution][execution_log_persistence_unavailable]", {
         sessionId,

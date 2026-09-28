@@ -40,7 +40,7 @@ export function selectLatestAnalysisActivities(message = {}) {
     ) {
       latestGuidance = item;
     }
-    if (!latestModelAnalysis && item.eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT) {
+    if (!latestModelAnalysis && item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA) {
       latestModelAnalysis = item;
     }
     if (latestGuidance && latestModelAnalysis) break;

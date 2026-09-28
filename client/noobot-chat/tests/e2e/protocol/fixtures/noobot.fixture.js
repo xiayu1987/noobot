@@ -27,11 +27,15 @@ import { registerSuiteSession } from "../suite-session-cleanup.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 const E2E_MODEL_ALIAS = String(process.env.NOOBOT_E2E_MODEL_ALIAS || "GLM_5_3").trim();
+const E2E_STREAM_OUTPUT =
+  String(process.env.NOOBOT_E2E_STREAM_OUTPUT || "")
+    .trim()
+    .toLowerCase() === "true";
 
 export async function installE2eModelPreferences(pageOrContext) {
   const e2eUserId = readE2eCredentials().userId;
   await pageOrContext.addInitScript(
-    ({ modelAlias, userId }) => {
+    ({ modelAlias, userId, streamOutput }) => {
       if (location.protocol !== "http:" && location.protocol !== "https:") return;
       const setInitialValue = (key, value, { force = false } = {}) => {
         if (force || localStorage.getItem(key) === null) localStorage.setItem(key, value);
@@ -60,6 +64,7 @@ export async function installE2eModelPreferences(pageOrContext) {
         ]),
       );
       setInitialValue("noobot_selected_model", modelAlias, { force: true });
+      setInitialValue("noobot_stream_output", streamOutput ? "true" : "false", { force: true });
       setInitialValue("noobot_safe_confirm", "false", { force: true });
       setInitialValue("noobot_selected_model_by_scenario", JSON.stringify(scenarioModels), {
         force: true,
@@ -84,7 +89,7 @@ export async function installE2eModelPreferences(pageOrContext) {
         sessionStorage.setItem(pluginBaselineKey, "1");
       }
     },
-    { modelAlias: E2E_MODEL_ALIAS, userId: e2eUserId },
+    { modelAlias: E2E_MODEL_ALIAS, userId: e2eUserId, streamOutput: E2E_STREAM_OUTPUT },
   );
 }
 
