@@ -27,6 +27,52 @@ async function withTestServer(app, run) {
   }
 }
 
+test("workspace downloads preserve file bytes for absolute and relative paths within the user root", async () => {
+  const app = express();
+  const root = await mkdtemp(path.join(os.tmpdir(), "noobot-message-download-"));
+  const workspace = path.join(root, "alice");
+  const relativePath = "runtime/tool-test/中文 fixture.txt";
+  const absolutePath = path.join(workspace, relativePath);
+  const content = Buffer.from("中文工具测试 ✓\n".repeat(12000));
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, content);
+  await writeFile(path.join(root, "outside.txt"), "outside");
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/workspace/:userId",
+    resolveRootPath: () => workspace,
+    buildDirectoryArchiveFile: async () => {
+      throw new Error("not a directory download");
+    },
+    translateText: (key) => key,
+  });
+  try {
+    await withTestServer(app, async (baseUrl) => {
+      for (const requestedPath of [absolutePath, relativePath]) {
+        const response = await fetch(
+          `${baseUrl}/internal/workspace/alice/download?path=${encodeURIComponent(requestedPath)}`,
+        );
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get("content-disposition"), /^attachment;/);
+        assert.deepEqual(Buffer.from(await response.arrayBuffer()), content);
+      }
+      for (const requestedPath of [
+        path.join(root, "outside.txt"),
+        "../outside.txt",
+        "missing.txt",
+      ]) {
+        const response = await fetch(
+          `${baseUrl}/internal/workspace/alice/download?path=${encodeURIComponent(requestedPath)}`,
+        );
+        assert.equal(response.ok, false);
+        assert.equal((await response.json()).ok, false);
+        assert.equal(response.headers.has("content-disposition"), false);
+      }
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("file-crud-routes: 缺少 path 时返回 400 + 标准错误体", async () => {
   const app = express();
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-test-"));

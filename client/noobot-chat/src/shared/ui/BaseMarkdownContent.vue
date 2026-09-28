@@ -12,13 +12,23 @@ const props = defineProps({
   renderMarkdown: { type: Function, required: true },
   attachmentRefIndex: { type: Map, default: null },
 });
+const emit = defineEmits(["download-workspace-file"]);
 
 const { mermaidHostRef } = useMermaidRender();
 const renderedHtml = computed(() =>
   props.renderMarkdown(String(props.content || ""), {
     attachmentRefIndex: props.attachmentRefIndex,
+    workspaceFileLinks: true,
   }),
 );
+
+function handleFileLink(event) {
+  const link = event.target?.closest?.("a[data-noobot-workspace-path]");
+  if (!link || !event.currentTarget?.contains(link)) return;
+  event.preventDefault();
+  if (event.type === "auxclick") return;
+  emit("download-workspace-file", link.getAttribute("data-noobot-workspace-path"));
+}
 
 function getHtml() {
   return String(mermaidHostRef.value?.innerHTML || "");
@@ -31,6 +41,8 @@ defineExpose({ getHtml });
   <div
     ref="mermaidHostRef"
     class="base-markdown-content noobot-rich-content"
+    @click="handleFileLink"
+    @auxclick="handleFileLink"
     v-html="renderedHtml"
   />
 </template>

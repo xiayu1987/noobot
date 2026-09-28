@@ -32,7 +32,7 @@ export function useMessagePreview({
   const { translate } = useLocale();
   const filePreview = createFilePreviewState();
   const attachmentPreview = createAttachmentPreviewState();
-  const { onDownloadFile } = createFileDownloadController({
+  const { onDownloadFile, onDownloadWorkspacePath } = createFileDownloadController({
     userId,
     attachmentService,
     translate,
@@ -83,6 +83,7 @@ export function useMessagePreview({
     closePreviewDialog: filePreview.reset,
     closeAttachmentPreview: attachmentPreview.reset,
     onDownloadFile,
+    onDownloadWorkspacePath,
   };
 }
 

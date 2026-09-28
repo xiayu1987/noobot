@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  createFileAccessTraceId,
   maskHostPath,
   maskWorkspacePath,
   parseContentDisposition,
@@ -21,6 +22,24 @@ export function createFileDownloadController({ userId, attachmentService, transl
   async function onDownloadFile(fileItem = {}) {
     const desktopDownload = window?.noobotDesktop?.downloadHostFile;
     const context = createFileAccessContext("download", fileItem, userId, desktopDownload);
+    await downloadFile(context, fileItem, desktopDownload);
+  }
+
+  async function onDownloadWorkspacePath(path = "") {
+    // Preserve the supplied path. Do not infer ownership or host access from its shape.
+    const fileItem = { fileName: resolveFileItemName({}, path) };
+    const context = {
+      traceId: createFileAccessTraceId("download"),
+      normalizedUserId: String(userId || "").trim(),
+      relativePath: path,
+      fileName: fileItem.fileName,
+      useHostChannel: false,
+      channel: "workspace-api",
+    };
+    await downloadFile(context, fileItem);
+  }
+
+  async function downloadFile(context, fileItem, desktopDownload) {
     logFileAccess("download.click", buildFileAccessLogPayload(context, fileItem));
     const validation = validateFileAccessContext(context, fileItem);
     if (!validation.valid) {
@@ -43,7 +62,7 @@ export function createFileDownloadController({ userId, attachmentService, transl
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
-  return { onDownloadFile };
+  return { onDownloadFile, onDownloadWorkspacePath };
 }
 
 async function downloadHostFile(context, fileItem, desktopDownload, attachmentService, translate) {
