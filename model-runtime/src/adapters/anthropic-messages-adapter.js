@@ -213,7 +213,14 @@ function responseFromAnthropic(raw = {}) {
   };
 }
 
-function createClient({ modelSpec, credential, headers = {}, tools = [], toolChoice = "auto" }) {
+function createClient({
+  modelSpec,
+  credential,
+  headers = {},
+  tools = [],
+  toolChoice = "auto",
+  fetch: transportFetch,
+}) {
   const spec = normalizeRuntimeModelSpec(modelSpec);
   const client = {
     async invoke(messages, invokeOptions = {}) {
@@ -246,6 +253,7 @@ function createClient({ modelSpec, credential, headers = {}, tools = [], toolCho
           headers,
           payload,
           signal: invokeOptions.signal,
+          fetch: transportFetch,
         }),
       );
     },
@@ -253,11 +261,19 @@ function createClient({ modelSpec, credential, headers = {}, tools = [], toolCho
   client.__modelSpec = modelSpec;
   client.__credential = credential;
   client.__headers = headers;
+  client.__transportFetch = transportFetch;
   return client;
 }
 
-async function requestAnthropicMessages({ spec, credential, headers = {}, payload, signal }) {
-  const response = await fetch(baseMessagesUrl(spec.base_url), {
+async function requestAnthropicMessages({
+  spec,
+  credential,
+  headers = {},
+  payload,
+  signal,
+  fetch: transportFetch = globalThis.fetch,
+}) {
+  const response = await transportFetch(baseMessagesUrl(spec.base_url), {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -404,6 +420,7 @@ export const anthropicMessagesAdapter = Object.freeze({
       modelSpec: client.__modelSpec,
       credential: client.__credential,
       headers: client.__headers,
+      fetch: client.__transportFetch,
       tools,
       toolChoice: toolOptions.tool_choice || "auto",
     });

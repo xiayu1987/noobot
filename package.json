@@ -76,6 +76,7 @@
     "lodash-es": "4.18.1"
   },
   "scripts": {
+    "test:model-access": "node agent/scripts/model-access-test/start.js",
     "project:launcher": "node ./scripts/project-launcher.mjs",
     "release:version": "node ./scripts/bump-version.mjs",
     "release": "node ./scripts/release.mjs",
