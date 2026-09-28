@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { app } from "electron";
+import { app, dialog, ipcMain } from "electron";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { clientFilePath as path } from "../path-resolver.js";
@@ -199,7 +199,7 @@ async function startBoot(reason) {
   }
 }
 
-registerFileIpcHandlers({ appendDesktopLog, getMainWindow });
+registerFileIpcHandlers({ app, dialog, ipcMain, appendDesktopLog, getMainWindow });
 registerStartupIpcHandlers({
   app,
   getStartupStatuses: () => startupStatuses,

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Blob as NodeBlob } from "node:buffer";
 import { useMessagePreview } from "../../../../../../src/modules/chat/composables/message/useMessagePreview.js";
 import { mountComposable } from "../../../../fixtures/mountComposable.js";
 
@@ -19,7 +20,7 @@ function createBlobResponse() {
   return {
     ok: true,
     status: 200,
-    blob: vi.fn(async () => new Blob(["content"], { type: "text/plain" })),
+    blob: vi.fn(async () => new NodeBlob(["content"], { type: "text/plain" })),
   };
 }
 
@@ -45,23 +46,116 @@ describe("useMessagePreview attachment downloads", () => {
 
   afterEach(() => {
     mountedComposables.splice(0).forEach(({ unmount }) => unmount());
+    vi.unstubAllGlobals();
   });
 
-  it("downloads an attachment using its canonical identity", async () => {
-    const attachmentService = createAttachmentService(createBlobResponse);
-    const { onDownloadAttachment } = createMessagePreview({ userId: "admin", attachmentService });
+  it.each(["browser", "desktop"])(
+    "downloads an attachment using its canonical identity on %s",
+    async (platform) => {
+      const saveDownload = vi.fn().mockResolvedValue({ ok: true, filePath: "/saved/report.txt" });
+      if (platform === "desktop") vi.stubGlobal("noobotDesktop", { saveDownload });
+      const attachmentService = createAttachmentService(createBlobResponse);
+      const { onDownloadAttachment } = createMessagePreview({ userId: "admin", attachmentService });
 
-    await onDownloadAttachment({
-      attachmentId: "file-123",
-      sessionId: "session-456",
-      attachmentSource: "upload",
-      name: "report.txt",
+      await onDownloadAttachment({
+        attachmentId: "file-123",
+        sessionId: "session-456",
+        attachmentSource: "upload",
+        name: "report.txt",
+      });
+
+      expect(attachmentService.fetchUrl).toHaveBeenCalledTimes(1);
+      expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
+        "/api/internal/attachment/admin/file-123?sessionId=session-456&attachmentSource=upload",
+      );
+      if (platform === "desktop") {
+        expect(saveDownload).toHaveBeenCalledTimes(1);
+        const { fileName, bytes } = saveDownload.mock.calls[0][0];
+        expect(fileName).toBe("report.txt");
+        expect(new TextDecoder().decode(bytes)).toBe("content");
+        expect(URL.createObjectURL).not.toHaveBeenCalled();
+        expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+      } else {
+        expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:attachment");
+      }
+    },
+  );
+
+  it("saves a desktop workspace link using the authorized response and server filename", async () => {
+    const saveDownload = vi.fn().mockResolvedValue({ ok: true });
+    const downloadHostFile = vi.fn();
+    vi.stubGlobal("noobotDesktop", { saveDownload, downloadHostFile });
+    const response = createBlobResponse();
+    response.headers = new Headers({
+      "content-disposition": "attachment; filename*=UTF-8''%E6%8A%A5%E5%91%8A.txt",
+    });
+    const attachmentService = { downloadWorkspaceFile: vi.fn().mockResolvedValue(response) };
+    const notify = vi.fn();
+    const preview = createMessagePreview({ userId: "admin", attachmentService, notify });
+
+    await preview.onDownloadWorkspacePath("runtime/tool-test/fixture.txt");
+
+    expect(attachmentService.downloadWorkspaceFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "admin",
+        path: "runtime/tool-test/fixture.txt",
+      }),
+    );
+    expect(saveDownload).toHaveBeenCalledTimes(1);
+    expect(saveDownload.mock.calls[0][0].fileName).toBe("报告.txt");
+    expect(new TextDecoder().decode(saveDownload.mock.calls[0][0].bytes)).toBe("content");
+    expect(downloadHostFile).not.toHaveBeenCalled();
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it.each(["canceled", "failed", "rejected"])(
+    "handles a %s desktop save without starting another download",
+    async (outcome) => {
+      const saveDownload = vi.fn();
+      if (outcome === "rejected") saveDownload.mockRejectedValue(new Error("Disk is full"));
+      else
+        saveDownload.mockResolvedValue(
+          outcome === "canceled"
+            ? { ok: false, canceled: true }
+            : { ok: false, error: "Disk is full" },
+        );
+      vi.stubGlobal("noobotDesktop", { saveDownload });
+      const attachmentService = createAttachmentService(createBlobResponse);
+      const notify = vi.fn();
+      const preview = createMessagePreview({ userId: "admin", attachmentService, notify });
+
+      await preview.onDownloadAttachment({
+        attachmentId: "file-123",
+        sessionId: "session-456",
+        attachmentSource: "model",
+        name: "report.txt",
+      });
+
+      expect(saveDownload).toHaveBeenCalledTimes(1);
+      if (outcome === "canceled") expect(notify).not.toHaveBeenCalled();
+      else expect(notify).toHaveBeenCalledWith({ type: "error", message: "Disk is full" });
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
+      expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+    },
+  );
+
+  it("treats the native host file save cancellation as cancellation", async () => {
+    const downloadHostFile = vi.fn().mockResolvedValue({ ok: false, canceled: true });
+    vi.stubGlobal("noobotDesktop", { downloadHostFile });
+    const notify = vi.fn();
+    const preview = createMessagePreview({ userId: "admin", attachmentService: {}, notify });
+
+    await preview.onDownloadFile({
+      isSandbox: false,
+      hostPath: "/host/report.txt",
+      fileName: "report.txt",
     });
 
-    expect(attachmentService.fetchUrl).toHaveBeenCalledTimes(1);
-    expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
-      "/api/internal/attachment/admin/file-123?sessionId=session-456&attachmentSource=upload",
-    );
+    expect(downloadHostFile).toHaveBeenCalledTimes(1);
+    expect(notify).not.toHaveBeenCalled();
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
   });
 
   it("rejects a non-canonical attachment instead of constructing an access URL", async () => {
