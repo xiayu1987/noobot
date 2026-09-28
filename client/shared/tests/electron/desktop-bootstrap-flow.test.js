@@ -38,8 +38,14 @@ async function createPackagedBackendFixture() {
   await mkdir(path.join(packagedBackendRoot, "agent-proxy"), { recursive: true });
   await mkdir(path.join(packagedBackendRoot, "model-proxy"), { recursive: true });
   await mkdir(path.join(resourcesPath, "frontend"), { recursive: true });
-  await writeFile(path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.config.example.json"), "{}");
-  await writeFile(path.join(packagedBackendRoot, "model-proxy", "model-proxy.config.example.json"), "{}");
+  await writeFile(
+    path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.config.example.json"),
+    "{}",
+  );
+  await writeFile(
+    path.join(packagedBackendRoot, "model-proxy", "model-proxy.config.example.json"),
+    "{}",
+  );
   await writeFile(path.join(resourcesPath, "frontend", "index.html"), "<html></html>");
   return { rootDir, resourcesPath, packagedBackendRoot, userDataPath };
 }
@@ -48,7 +54,10 @@ test("desktop boot flow reaches system after startup setup, config params, servi
   await withPlatform("darwin", async () => {
     const fixture = await createPackagedBackendFixture();
     const originalResourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
-    Object.defineProperty(process, "resourcesPath", { value: fixture.resourcesPath, configurable: true });
+    Object.defineProperty(process, "resourcesPath", {
+      value: fixture.resourcesPath,
+      configurable: true,
+    });
 
     let configStep = 0;
     let desktopConfigState = null;
@@ -155,7 +164,8 @@ test("desktop boot flow reaches system after startup setup, config params, servi
         startupTimeoutMs: 200,
         pollIntervalMs: 1,
         sendStatus,
-        getLogFilePath: (fileName = "desktop-startup.log") => path.join(fixture.userDataPath, "logs", fileName),
+        getLogFilePath: (fileName = "desktop-startup.log") =>
+          path.join(fixture.userDataPath, "logs", fileName),
         ensureDesktopGlobalConfig: () => makeConfigState(),
         getDesktopConfigState: () => desktopConfigState,
         setDesktopConfigState: (state) => {
@@ -188,11 +198,9 @@ test("desktop boot flow reaches system after startup setup, config params, servi
         },
         ensureServiceStarted: serviceManager.ensureServiceStarted,
         resolveNoobotUrl: async () => "http://127.0.0.1:10062",
-        getMainWindow: () => ({
-          loadURL: async (url) => {
-            loadedUrls.push(url);
-          },
-        }),
+        loadNoobotUrl: async (url) => {
+          loadedUrls.push(url);
+        },
         sendStatus,
         appendEarlyLog: (line) => earlyLogs.push(line),
         healthUrl: "http://127.0.0.1:10061/health",
@@ -252,9 +260,7 @@ test("desktop boot flow reports error and keeps startup page when service startu
       throw new Error("service boom");
     },
     resolveNoobotUrl: async () => "http://127.0.0.1:10062",
-    getMainWindow: () => ({
-      loadURL: async (url) => loadedUrls.push(url),
-    }),
+    loadNoobotUrl: async (url) => loadedUrls.push(url),
     sendStatus: (status) => statuses.push(status),
     healthUrl: "http://127.0.0.1:10061/health",
     defaultClientUrl: "http://127.0.0.1:10060",
@@ -302,5 +308,8 @@ test("desktop startup offers missing dependencies even when the service is alrea
 
   await manager.ensureServiceStarted();
   assert.equal(dependencyRequestCount, 1);
-  assert.deepEqual(statuses.map((status) => status.phase), ["checking", "ready"]);
+  assert.deepEqual(
+    statuses.map((status) => status.phase),
+    ["checking", "ready"],
+  );
 });

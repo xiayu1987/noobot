@@ -67,15 +67,22 @@ let pendingDependencyResolve = null;
 let desktopConfigState = null;
 const startupStatuses = [];
 
-const { createWindow, resolveNoobotUrl, reloadWebContents, getMainWindow, allowQuit, showMainWindow } =
-  createDesktopWindowManager({
-    app,
-    dirname: __dirname,
-    agentProxyOrigin,
-    defaultClientUrl,
-    appendEarlyLog,
-    appendDesktopLog,
-  });
+const {
+  createWindow,
+  resolveNoobotUrl,
+  loadNoobotUrl,
+  reloadWebContents,
+  getMainWindow,
+  allowQuit,
+  showMainWindow,
+} = createDesktopWindowManager({
+  app,
+  dirname: __dirname,
+  agentProxyOrigin,
+  defaultClientUrl,
+  appendEarlyLog,
+  appendDesktopLog,
+});
 
 function sendStatus(status) {
   const language = desktopConfigState?.superAdmin?.language === "en-US" ? "en-US" : "zh-CN";
@@ -168,7 +175,7 @@ const { boot, hasBootStarted } = createDesktopBootstrap({
   createWindow,
   ensureServiceStarted,
   resolveNoobotUrl,
-  getMainWindow,
+  loadNoobotUrl,
   sendStatus,
   appendEarlyLog,
   appendDesktopLog,
@@ -219,7 +226,7 @@ registerStartupIpcHandlers({
   ensureServiceStarted,
   reloadWebContents,
   resolveNoobotUrl,
-  getMainWindow,
+  loadNoobotUrl,
   sendStatus,
   runProcess: runDependencyProcess,
 });

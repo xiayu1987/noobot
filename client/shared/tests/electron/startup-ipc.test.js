@@ -18,6 +18,20 @@ function createIpcMainMock() {
   };
 }
 
+test("startup retry loads the app through the window manager", async () => {
+  const ipcMain = createIpcMainMock();
+  const calls = [];
+  const url = "http://127.0.0.1:23456/";
+  registerStartupIpcHandlers({
+    ipcMain,
+    ensureServiceStarted: async () => calls.push("ready"),
+    resolveNoobotUrl: async () => url,
+    loadNoobotUrl: async (target) => calls.push(target),
+  });
+  await ipcMain.handlers.get("noobot:retry-startup")();
+  assert.deepEqual(calls, ["ready", url]);
+});
+
 test("save super admin refreshes desktop config before writing user template config", async () => {
   const ipcMain = createIpcMainMock();
   const calls = [];
@@ -26,7 +40,12 @@ test("save super admin refreshes desktop config before writing user template con
     globalConfigPath: path.join(userDataPath, "config", "stale-global.config.json"),
     workspaceRootPath: path.join(userDataPath, "stale-workspace"),
     workspaceTemplatePath: path.join(userDataPath, "stale-user-template", "default-user"),
-    templateConfigPath: path.join(userDataPath, "stale-user-template", "default-user", "config.json"),
+    templateConfigPath: path.join(
+      userDataPath,
+      "stale-user-template",
+      "default-user",
+      "config.json",
+    ),
     superAdmin: { missing: true },
     missingParams: [],
   };
@@ -55,11 +74,17 @@ test("save super admin refreshes desktop config before writing user template con
       desktopConfigState = state;
     },
     ensureDesktopGlobalConfig: ({ isPackaged, userDataPath: requestedUserDataPath }) => {
-      calls.push(["ensureDesktopGlobalConfig", { isPackaged, userDataPath: requestedUserDataPath }]);
+      calls.push([
+        "ensureDesktopGlobalConfig",
+        { isPackaged, userDataPath: requestedUserDataPath },
+      ]);
       return refreshedState;
     },
     saveSuperAdminConfig: ({ globalConfigPath, userConfigPath, userId, connectCode }) => {
-      calls.push(["saveSuperAdminConfig", { globalConfigPath, userConfigPath, userId, connectCode }]);
+      calls.push([
+        "saveSuperAdminConfig",
+        { globalConfigPath, userConfigPath, userId, connectCode },
+      ]);
     },
     ensureSelectedDependencies: async () => {
       calls.push(["ensureSelectedDependencies"]);

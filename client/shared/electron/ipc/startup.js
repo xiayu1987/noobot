@@ -12,7 +12,12 @@ function getDefaultIpcMain() {
   return require("electron").ipcMain;
 }
 
-export function createStartupConfigRequesters({ sendStatus = () => {}, setPendingConfigResolve = () => {}, setPendingSuperAdminResolve = () => {}, setPendingDependencyResolve = () => {} } = {}) {
+export function createStartupConfigRequesters({
+  sendStatus = () => {},
+  setPendingConfigResolve = () => {},
+  setPendingSuperAdminResolve = () => {},
+  setPendingDependencyResolve = () => {},
+} = {}) {
   function requestSuperAdminConfig(superAdmin) {
     sendStatus({
       phase: "super-admin-required",
@@ -25,7 +30,11 @@ export function createStartupConfigRequesters({ sendStatus = () => {}, setPendin
   }
 
   function requestMissingConfigParams(missingParams) {
-    sendStatus({ phase: "config-optional", message: "Optional configuration variables can be filled now or skipped.", params: missingParams });
+    sendStatus({
+      phase: "config-optional",
+      message: "Optional configuration variables can be filled now or skipped.",
+      params: missingParams,
+    });
     return new Promise((resolve) => {
       setPendingConfigResolve(resolve);
     });
@@ -62,12 +71,15 @@ export function registerStartupIpcHandlers({
   ensureServiceStarted,
   reloadWebContents = () => ({ ok: false, error: "reload unavailable" }),
   resolveNoobotUrl,
-  getMainWindow = () => null,
+  loadNoobotUrl,
   sendStatus = () => {},
   runProcess,
 } = {}) {
   function refreshDesktopConfigState() {
-    const state = ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") });
+    const state = ensureDesktopGlobalConfig({
+      isPackaged: app.isPackaged,
+      userDataPath: app.getPath("userData"),
+    });
     setDesktopConfigState(state);
     return state;
   }
@@ -75,7 +87,7 @@ export function registerStartupIpcHandlers({
   ipcMain.handle("noobot:retry-startup", async () => {
     await ensureServiceStarted();
     const noobotUrl = await resolveNoobotUrl();
-    await getMainWindow()?.loadURL(noobotUrl);
+    await loadNoobotUrl(noobotUrl);
   });
 
   ipcMain.handle("noobot:get-startup-statuses", () => getStartupStatuses());
@@ -126,21 +138,59 @@ export function registerStartupIpcHandlers({
     const state = refreshDesktopConfigState();
     const proxyUrl = String(values.dependencyProxyUrl || "").trim();
     if (proxyUrl) {
-      sendStatus({ phase: "dependency", message: `Checking dependency download proxy ${maskDependencyProxyUrl(proxyUrl)}...` });
+      sendStatus({
+        phase: "dependency",
+        message: `Checking dependency download proxy ${maskDependencyProxyUrl(proxyUrl)}...`,
+      });
       const proxyValidation = await validateDependencyProxy({ proxyUrl, runProcess });
       if (!proxyValidation.ok) {
-        const superAdmin = { ...state.superAdmin, language: values.language, model: values.model, userId: values.userId, connectCode: values.connectCode, dependencyProxyUrl: proxyUrl };
-        sendStatus({ phase: "super-admin-required", message: `Dependency download proxy is not reachable: ${proxyValidation.error || "validation failed"}`, superAdmin });
-        return { ok: false, error: `Dependency download proxy is not reachable: ${proxyValidation.error || "validation failed"}`, superAdmin };
+        const superAdmin = {
+          ...state.superAdmin,
+          language: values.language,
+          model: values.model,
+          userId: values.userId,
+          connectCode: values.connectCode,
+          dependencyProxyUrl: proxyUrl,
+        };
+        sendStatus({
+          phase: "super-admin-required",
+          message: `Dependency download proxy is not reachable: ${proxyValidation.error || "validation failed"}`,
+          superAdmin,
+        });
+        return {
+          ok: false,
+          error: `Dependency download proxy is not reachable: ${proxyValidation.error || "validation failed"}`,
+          superAdmin,
+        };
       }
-      sendStatus({ phase: "dependency", message: `Dependency download proxy is available: ${proxyValidation.maskedProxyUrl}` });
+      sendStatus({
+        phase: "dependency",
+        message: `Dependency download proxy is available: ${proxyValidation.maskedProxyUrl}`,
+      });
     }
-    saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userConfigPath: state.templateConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language, model: values.model, dependencyProxyUrl: proxyUrl });
+    saveSuperAdminConfig({
+      globalConfigPath: state.globalConfigPath,
+      userConfigPath: state.templateConfigPath,
+      userId: values.userId,
+      connectCode: values.connectCode,
+      language: values.language,
+      model: values.model,
+      dependencyProxyUrl: proxyUrl,
+    });
     refreshDesktopConfigState();
-    sendStatus({ phase: "dependency", message: proxyUrl ? `Dependency downloads will use proxy ${maskDependencyProxyUrl(proxyUrl)}.` : "Dependency downloads will not use a proxy." });
+    sendStatus({
+      phase: "dependency",
+      message: proxyUrl
+        ? `Dependency downloads will use proxy ${maskDependencyProxyUrl(proxyUrl)}.`
+        : "Dependency downloads will not use a proxy.",
+    });
     const nextState = refreshDesktopConfigState();
     if (nextState.superAdmin?.missing) {
-      sendStatus({ phase: "super-admin-required", message: "Please complete super admin setup.", superAdmin: nextState.superAdmin });
+      sendStatus({
+        phase: "super-admin-required",
+        message: "Please complete super admin setup.",
+        superAdmin: nextState.superAdmin,
+      });
       return { ok: false, superAdmin: nextState.superAdmin };
     }
     const pendingSuperAdminResolve = getPendingSuperAdminResolve();
