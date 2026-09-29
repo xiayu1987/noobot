@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { classifyExecutionEvent } from "../../src/observability/event-log/log-normalizer.js";
 import { createEventEnvelope, EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import {
+  ACTIVITY_EVENT_TYPES,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
@@ -285,6 +286,10 @@ test("transient message events bypass the authority commit and take no sequence"
 });
 
 test("classifyExecutionEvent classifies structured execution events", () => {
+  assert.deepEqual(classifyExecutionEvent("model_context_trace"), {
+    category: "model_context_trace",
+    type: "model_context_trace_debug",
+  });
   assert.deepEqual(classifyExecutionEvent("semantic_transfer_validation"), {
     category: "semantic_transfer",
     type: "semantic_transfer",
@@ -297,4 +302,8 @@ test("classifyExecutionEvent classifies structured execution events", () => {
     category: "tool",
     type: "tool_result",
   });
+  // Every protocol activity event type is classified as activity, never the system fallback.
+  for (const eventType of ACTIVITY_EVENT_TYPES) {
+    assert.deepEqual(classifyExecutionEvent(eventType), { category: "activity", type: eventType });
+  }
 });

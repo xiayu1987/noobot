@@ -169,6 +169,67 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     await streamPromise;
   });
 
+  it("acknowledges lifecycle received before the stream handler binds exactly once", async () => {
+    MockWebSocket.initialReadyState = MockWebSocket.CONNECTING;
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const payload = streamCommand({ sessionId: "session-early", turnScopeId: "turn-early" });
+    const streamPromise = client.stream(payload, onEvent);
+    const socket = MockWebSocket.instances[0];
+    const lifecycle = createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      eventId: "event-early",
+      commandId: "command-early",
+      sessionId: "session-early",
+      turnScopeId: "turn-early",
+      messageId: "message-early",
+      presentationMessageId: "assistant-early",
+      dialogProcessId: "dialog-early",
+      revision: 2,
+      sequence: 2,
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+    });
+    const receipts = () =>
+      socket.sent
+        .map((raw) => JSON.parse(raw))
+        .filter((item) => item.action === "turn.lifecycle.received");
+
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(receipts().map((item) => item.eventId)).toEqual(["event-early"]);
+
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "turn_lifecycle",
+      data: turnLifecycleProtocolEvent(lifecycle),
+    });
+    expect(receipts()).toHaveLength(1);
+
+    emitCommandReceipt(socket, payload);
+    await streamPromise;
+  });
+
+  it("notifies transport-closed subscribers only for passive disconnects", () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onClosed = vi.fn();
+    client.subscribeTransportClosed(onClosed);
+
+    const first = client.connect();
+    first.close(1011, "delivery_receipt_exhausted");
+    expect(onClosed).toHaveBeenCalledTimes(1);
+
+    const second = client.connect();
+    second.onerror?.({});
+    expect(onClosed).toHaveBeenCalledTimes(2);
+
+    const third = client.connect();
+    client.dispose();
+    third.close(1000, "after_dispose");
+    expect(onClosed).toHaveBeenCalledTimes(2);
+  });
+
   it("uses channelSessionId only as transport routing identity", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();

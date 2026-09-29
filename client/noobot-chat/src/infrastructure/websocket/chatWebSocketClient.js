@@ -60,6 +60,7 @@ export function createChatWebSocketClient({
   let reconnectReject = null;
   let reconnectTimeout = null;
   let liveEventSubscriber = null;
+  const transportClosedSubscribers = new Set();
 
   const pendingStreamEvents = [];
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
@@ -125,7 +126,23 @@ export function createChatWebSocketClient({
   }
 
   function cleanupSocketRef(ws) {
-    transport.release(ws);
+    // release 只对当前 socket 返回 true；主动关闭（替换、重连失败、dispose）都会先 release，
+    // 因此这里返回 true 即为被动断线，通知上层按冷却策略重连。
+    if (!transport.release(ws)) return false;
+    for (const subscriber of [...transportClosedSubscribers]) {
+      try {
+        subscriber();
+      } catch {
+        void 0;
+      }
+    }
+    return true;
+  }
+
+  function subscribeTransportClosed(subscriber) {
+    if (typeof subscriber !== "function") return () => {};
+    transportClosedSubscribers.add(subscriber);
+    return () => transportClosedSubscribers.delete(subscriber);
   }
 
   function closeFailedSocket(ws, reason = "transport_error") {
@@ -267,6 +284,9 @@ export function createChatWebSocketClient({
             activeStreamContext?.payload &&
             isEventForStreamScope(data, activeStreamContext.payload, channelSessionId)
           ) {
+            // 回执只表示“已收到”，与分发解耦：暂存的 lifecycle 事件也必须立即回执，
+            // 否则 agent-proxy 会在回执耗尽后清掉后续终态（drain 路径不再回执）。
+            acknowledgeTurnLifecycleReceipt(ws, event, lifecycleData);
             pendingStreamEvents.push(transportEvent);
             return;
           }
@@ -764,6 +784,7 @@ export function createChatWebSocketClient({
 
   function dispose() {
     clearTimers();
+    transportClosedSubscribers.clear();
     commandRequests.rejectAll(new Error("websocket_client_disposed"));
     transport.dispose();
     resolveCurrentStream = null;
@@ -785,6 +806,7 @@ export function createChatWebSocketClient({
     requestJson,
     getActiveSocket,
     getTransportStatus: transport.status,
+    subscribeTransportClosed,
     dispose,
   };
 }

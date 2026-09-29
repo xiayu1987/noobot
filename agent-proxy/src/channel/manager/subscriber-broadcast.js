@@ -230,6 +230,17 @@ class SubscriberBroadcastMethods {
       delivery.timer = null;
     }
     if (delivery.attempts >= config.turnLifecycleDeliveryMaxAttempts) {
+      // 清队会连带丢弃同一 socket 上排队的后续 lifecycle（含终态），它们由前端被动断线
+      // 重连后的 lifecycle replay 补齐；这里必须把被丢弃项记下来，保证链路可追溯。
+      const droppedDeliveries = [
+        ...(targetSocket.__agentProxyPendingLifecycleDeliveries?.values?.() || []),
+      ]
+        .filter((item) => item !== delivery)
+        .map((item) => ({
+          eventId: item.eventId,
+          eventType: item.eventType,
+          lifecycleSequence: item.lifecycleSequence,
+        }));
       this.logSessionEvent(delivery.channel, {
         category: "transport",
         level: "error",
@@ -244,6 +255,7 @@ class SubscriberBroadcastMethods {
           transportSequence: delivery.transportSequence,
           attempts: delivery.attempts,
           connectionId: ensureConnectionId(targetSocket),
+          droppedDeliveries,
         },
       });
       this.clearPendingLifecycleDeliveries(targetSocket);

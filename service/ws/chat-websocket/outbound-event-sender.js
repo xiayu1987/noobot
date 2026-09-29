@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { asEventProtocolEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
+import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
+import { RUNTIME_EVENT_CATEGORIES } from "@noobot/runtime-events";
+import { STREAM_DELTA_DEBUG_TYPE } from "@noobot/shared/runtime-events-config";
 import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
 import { isTerminalTurnEvent, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
@@ -12,6 +15,13 @@ import { recordServiceWebSocketSendFailure } from "./runtime-events.js";
 function text(value) {
   return String(value || "").trim();
 }
+
+// 传输 delta 逐块发送，其 eventSent 诊断归入可关闭的 stream-delta debug 分类，不进 backend-websocket 主分类。
+const TRANSIENT_DELTA_LOG_ROUTING = Object.freeze({
+  category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+  level: "debug",
+  debugType: STREAM_DELTA_DEBUG_TYPE,
+});
 
 function getProtocolEnvelope(data) {
   return asEventProtocolEnvelope(data);
@@ -137,6 +147,7 @@ function logSuccessfulTransport({
   toolFrame,
   terminalLifecycle,
   authorityEnvelope,
+  transientDelta,
 }) {
   if (toolFrame) {
     logConnection("service.websocket.toolFrame.sent", {
@@ -149,12 +160,16 @@ function logSuccessfulTransport({
     });
   }
   if (authorityEnvelope) {
-    logConnection("service.authorityOutbox.eventSent", {
-      ...transportDiagnostic,
-      eventName,
-      transportSequence: sequence,
-      readyState,
-    });
+    logConnection(
+      "service.authorityOutbox.eventSent",
+      {
+        ...transportDiagnostic,
+        eventName,
+        transportSequence: sequence,
+        readyState,
+      },
+      transientDelta ? TRANSIENT_DELTA_LOG_ROUTING : undefined,
+    );
   }
   if (terminalLifecycle) {
     logConnection("service.authorityOutbox.terminalSent", {
@@ -216,6 +231,7 @@ export function createOutboundEventSender({ webSocket, state, logConnection, ses
     const classification = {
       ...classifyOutboundEvent(eventName, eventType),
       authorityEnvelope: Boolean(protocolEnvelope),
+      transientDelta: Boolean(protocolEnvelope) && isTransientMessageEvent(protocolEnvelope),
     };
     if (webSocket.readyState !== 1) {
       logRejectedTransport({

@@ -57,6 +57,7 @@ import {
 import { setToolLogWindowDebugLogSink } from "../../debug/loggers/toolLogWindowDebugLogger.js";
 import { setTerminalResolutionDebugLogSink } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 import { setTransportDiagnosticsLogSink } from "../../debug/loggers/transportDiagnosticsLogger.js";
+import { setStreamDeltaDebugLogSink } from "../../debug/loggers/streamDeltaDebugLogger.js";
 import { setPluginRuntimeDiagnosticsLogSink } from "../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
 import { setTurnRuntimeDiagnosticsLogSink } from "../../debug/loggers/turnRuntimeDiagnosticsLogger.js";
 import { setMessageMutationDiagnosticsLogSink } from "../../debug/loggers/messageMutationDiagnosticsLogger.js";
@@ -336,6 +337,7 @@ export function useChatSession({
   setToolLogWindowDebugLogSink(sessionLogWebSocketClient);
   setTerminalResolutionDebugLogSink(sessionLogWebSocketClient);
   setTransportDiagnosticsLogSink(sessionLogWebSocketClient);
+  setStreamDeltaDebugLogSink(sessionLogWebSocketClient);
   setPluginRuntimeDiagnosticsLogSink(sessionLogWebSocketClient);
   setTurnRuntimeDiagnosticsLogSink(sessionLogWebSocketClient);
   setMessageMutationDiagnosticsLogSink(sessionLogWebSocketClient);

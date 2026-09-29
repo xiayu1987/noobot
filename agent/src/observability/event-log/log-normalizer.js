@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { ACTIVITY_EVENT_TYPES } from "@noobot/event-protocol/message-event";
+
 const ERROR_EVENT_SUFFIX_RE = /(_error|_aborted)$/i;
 const SEMANTIC_TRANSFER_EVENTS = new Set([
   "semantic_transfer_validation",
@@ -28,11 +30,16 @@ export function classifyExecutionEvent(event = "") {
   if (String(event || "").startsWith("agent.contextIdentity.")) {
     return { category: "context_identity", type: "context_identity_debug" };
   }
+  if (event === "model_context_trace") {
+    return { category: "model_context_trace", type: "model_context_trace_debug" };
+  }
   if (SEMANTIC_TRANSFER_EVENTS.has(String(event || "").trim())) {
     return { category: "semantic_transfer", type: "semantic_transfer" };
   }
   if (event === "tool_call_start") return { category: "tool", type: "tool_call" };
   if (event === "tool_call_end") return { category: "tool", type: "tool_result" };
+  // Durable activity events (thinking / model analysis) are message facts, not system noise.
+  if (ACTIVITY_EVENT_TYPES.has(event)) return { category: "activity", type: event };
   if (ERROR_EVENT_SUFFIX_RE.test(event)) {
     return { category: "error", type: resolveErrorType(event) };
   }

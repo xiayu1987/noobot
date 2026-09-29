@@ -19,8 +19,32 @@ import {
   resolveRuntimeEventsRetentionDays,
   resolveRuntimeEventsSessionLogControls,
   resolveRuntimeEventsStorageConfig,
+  resolveExecutionCategoryDebugType,
   shouldRecordRuntimeExecutionLog,
 } from "../runtime-events-config.js";
+
+test("execution-log debug categories derive their debugType from the single registry", () => {
+  assert.equal(resolveExecutionCategoryDebugType("context_identity"), "context-identity");
+  assert.equal(resolveExecutionCategoryDebugType("AGENT_CONTEXT"), "agent-context");
+  assert.equal(resolveExecutionCategoryDebugType("agent_context_protocol"), "agent-context-protocol");
+  assert.equal(resolveExecutionCategoryDebugType("model_context_trace"), "model-context-trace");
+  assert.equal(resolveExecutionCategoryDebugType("system"), "");
+  assert.equal(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES["stream-delta"].exposeToClient, true);
+  assert.equal(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES["model-context-trace"].exposeToClient, false);
+});
+
+test("bundle-gated debug categories follow their switch; model context trace keeps the bundle", () => {
+  const off = {
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: "false",
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.modelContextTrace]: "false",
+  };
+  assert.equal(shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: off }), false);
+  assert.equal(shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: {} }), true);
+  assert.equal(
+    shouldRecordRuntimeExecutionLog({ event: "model_context_trace", category: "model_context_trace" }, { env: off }),
+    true,
+  );
+});
 
 test("session log registries reference controls with defaults and environment keys", () => {
   for (const controlKey of Object.values(RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS)) {

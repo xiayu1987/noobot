@@ -44,6 +44,9 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
       agentContext: "NOOBOT_RUNTIME_EVENT_AGENT_CONTEXT_DEBUG",
       agentTransport: "NOOBOT_RUNTIME_EVENT_AGENT_TRANSPORT_DEBUG",
       agentContextProtocol: "NOOBOT_RUNTIME_EVENT_AGENT_CONTEXT_PROTOCOL_DEBUG",
+      modelContextTrace: "NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG",
+      frontendStreamDelta: "NOOBOT_RUNTIME_EVENT_FRONTEND_STREAM_DELTA_DEBUG",
+      frontendTransportDiagnostics: "NOOBOT_RUNTIME_EVENT_FRONTEND_TRANSPORT_DIAGNOSTICS_DEBUG",
     },
   },
   hookRuntimeEvents: {
@@ -93,6 +96,9 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
       agentContext: true,
       agentTransport: true,
       agentContextProtocol: true,
+      modelContextTrace: true,
+      frontendStreamDelta: true,
+      frontendTransportDiagnostics: false,
     },
   },
   hookRuntimeEvents: {
@@ -125,6 +131,10 @@ export const RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS = deepFreeze({
   "backend-lifecycle": "backendLifecycle",
 });
 
+// Named debug type for per-chunk transient (live-only) message delta diagnostics; shared by
+// the service eventSent routing and the frontend stream-delta logger.
+export const STREAM_DELTA_DEBUG_TYPE = "stream-delta";
+
 export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   "state-machine": { controlKey: "stateMachine", exposeToClient: true },
   resend: { controlKey: "resend", exposeToClient: true },
@@ -138,11 +148,57 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   "terminal-resolution": { controlKey: "frontendTerminalResolution", exposeToClient: true },
   "agent-proxy-route": { controlKey: "agentProxyRoute", exposeToClient: false },
   "workflow-diagnostics": { controlKey: "workflowDiagnostics", exposeToClient: true },
-  "context-identity": { controlKey: "contextIdentity", exposeToClient: false },
-  "agent-context": { controlKey: "agentContext", exposeToClient: false },
+  "context-identity": {
+    controlKey: "contextIdentity",
+    exposeToClient: false,
+    executionCategory: "context_identity",
+    gatesExecutionBundle: true,
+  },
+  "agent-context": {
+    controlKey: "agentContext",
+    exposeToClient: false,
+    executionCategory: "agent_context",
+    gatesExecutionBundle: true,
+  },
   "agent-transport": { controlKey: "agentTransport", exposeToClient: true },
-  "agent-context-protocol": { controlKey: "agentContextProtocol", exposeToClient: false },
+  "agent-context-protocol": {
+    controlKey: "agentContextProtocol",
+    exposeToClient: false,
+    executionCategory: "agent_context_protocol",
+    gatesExecutionBundle: true,
+  },
+  // Full model context snapshots (resolve / hook / compose / invoke stages). Session-channel
+  // copy only; the execution-events bundle keeps the record regardless of this switch.
+  "model-context-trace": {
+    controlKey: "modelContextTrace",
+    exposeToClient: false,
+    executionCategory: "model_context_trace",
+    gatesExecutionBundle: false,
+  },
+  // Per-chunk frontend transport diagnostics for live-only (transient) message deltas.
+  [STREAM_DELTA_DEBUG_TYPE]: { controlKey: "frontendStreamDelta", exposeToClient: true },
+  // Frontend WebSocket receipt / transport-event / reconnect-control rejection diagnostics.
+  "transport-diagnostics": {
+    controlKey: "frontendTransportDiagnostics",
+    exposeToClient: true,
+  },
 });
+
+const EXECUTION_CATEGORY_DEBUG_TYPES = Object.freeze(
+  Object.fromEntries(
+    Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
+      .filter(([, descriptor]) => descriptor.executionCategory)
+      .map(([debugType, descriptor]) => [descriptor.executionCategory, debugType]),
+  ),
+);
+
+/** Resolves the session-log debugType owning an execution-log category, or "" when none. */
+export function resolveExecutionCategoryDebugType(category = "") {
+  const normalized = String(category || "")
+    .trim()
+    .toLowerCase();
+  return EXECUTION_CATEGORY_DEBUG_TYPES[normalized] || "";
+}
 
 export const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([
   "verbose",
@@ -250,38 +306,16 @@ export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
       return true;
     }
   }
-  if (
-    String(event?.category || "")
-      .trim()
-      .toLowerCase() === "context_identity"
-  ) {
+  const debugType = resolveExecutionCategoryDebugType(event?.category);
+  const descriptor = debugType ? RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES[debugType] : null;
+  // Descriptors that do not gate the bundle are only filtered on the session channel
+  // (runtime-events shouldRecordSessionLog by debugType); the bundle keeps the record.
+  if (descriptor?.gatesExecutionBundle === true) {
     const controls = resolveRuntimeEventsSessionLogControls(
       options.env || process.env,
       options.sessionLogControls || {},
     );
-    return controls.debug.contextIdentity === true;
-  }
-  if (
-    String(event?.category || "")
-      .trim()
-      .toLowerCase() === "agent_context"
-  ) {
-    const controls = resolveRuntimeEventsSessionLogControls(
-      options.env || process.env,
-      options.sessionLogControls || {},
-    );
-    return controls.debug.agentContext === true;
-  }
-  if (
-    String(event?.category || "")
-      .trim()
-      .toLowerCase() === "agent_context_protocol"
-  ) {
-    const controls = resolveRuntimeEventsSessionLogControls(
-      options.env || process.env,
-      options.sessionLogControls || {},
-    );
-    return controls.debug.agentContextProtocol === true;
+    return controls.debug[descriptor.controlKey] === true;
   }
   const eventName = String(typeof event === "string" ? event : event?.event || event?.name || "")
     .trim()
