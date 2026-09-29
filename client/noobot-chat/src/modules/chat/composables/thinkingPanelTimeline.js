@@ -44,6 +44,7 @@ import {
 import { selectThinkingDetailCount } from "../model/thinkingDetailCount.js";
 import {
   projectThinkingDetailContentTimeline,
+  reduceThinkingDetailContentTimelines,
   selectThinkingDetailContentTimeline,
 } from "@noobot/event-protocol/thinking-detail-content";
 
@@ -99,14 +100,13 @@ export function useThinkingTimeline(
     if (selectActivityTimelineLogs(current).length > 0) return current;
     return timelineMessage(loadedThinkingDetail.value?.messageItem || current);
   }
-  function selectThinkingContentMessage(messageItem = props.messageItem) {
-    const current = timelineMessage(messageItem);
-    const loaded = timelineMessage(loadedThinkingDetail.value?.messageItem || {});
-    if (selectThinkingDetailContentTimeline(loaded).length > 0) return loaded;
-    return current;
-  }
   const thinkingContentItems = computed(() =>
-    selectThinkingDetailContentTimeline(selectThinkingContentMessage()).map((item = {}) => ({
+    reduceThinkingDetailContentTimelines(
+      selectThinkingDetailContentTimeline(
+        timelineMessage(loadedThinkingDetail.value?.messageItem || {}),
+      ),
+      selectThinkingDetailContentTimeline(timelineMessage(props.messageItem)),
+    ).map((item = {}) => ({
       ...item,
       content: item.text,
     })),
