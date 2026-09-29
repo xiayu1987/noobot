@@ -532,6 +532,7 @@ test("Anthropic Messages adapter sends native endpoint and exposes cache usage",
     assert.deepEqual(request.body.cache_control, { type: "ephemeral" });
     assert.deepEqual(Object.keys(request.body), [
       "model",
+      "stream",
       "max_tokens",
       "temperature",
       "tools",
@@ -591,6 +592,7 @@ test("Anthropic Messages keeps reasoning/cache fields before the append-only mes
 
     assert.deepEqual(Object.keys(request.body), [
       "model",
+      "stream",
       "max_tokens",
       "tools",
       "tool_choice",
