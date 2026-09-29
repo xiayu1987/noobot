@@ -115,8 +115,21 @@ test("ExecutionLogService applies the context identity debug switch without a fl
   assert.equal(skipped.skipped, true);
   assert.equal(disabled.resolvedScopeCount, 0);
 
-  const flatOverride = createService({ env: {}, contextIdentityDebug: false });
-  const appended = await flatOverride.service.appendExecutionLog({
+  const flatOverride = createService({ env: {}, contextIdentityDebug: true });
+  const flatSkipped = await flatOverride.service.appendExecutionLog({
+    userId: "u1",
+    sessionId: "s1",
+    event: "agent.contextIdentity.contextBuildInput",
+    category: "context_identity",
+    data: {},
+  });
+  assert.equal(flatSkipped.skipped, true);
+
+  const enabled = createService({
+    env: {},
+    sessionLogControls: { debug: { contextIdentity: true } },
+  });
+  const appended = await enabled.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",
     event: "agent.contextIdentity.contextBuildInput",
@@ -126,8 +139,21 @@ test("ExecutionLogService applies the context identity debug switch without a fl
   assert.equal(appended.appended, true);
 });
 
-test("ExecutionLogService applies the default-on agent context debug switch", async () => {
-  const enabled = createService({ env: {} });
+test("ExecutionLogService applies the default-off agent context debug switch", async () => {
+  const defaults = createService({ env: {} });
+  const defaultSkipped = await defaults.service.appendExecutionLog({
+    userId: "u1",
+    sessionId: "s1",
+    event: "agent.context.executionScopeCreated",
+    category: "agent_context",
+    data: {},
+  });
+  assert.equal(defaultSkipped.skipped, true);
+
+  const enabled = createService({
+    env: {},
+    sessionLogControls: { debug: { agentContext: true } },
+  });
   const appended = await enabled.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",

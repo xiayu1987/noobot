@@ -129,8 +129,7 @@ const descriptors = Object.freeze(
       wireEvents: [MESSAGE_EVENT_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.MESSAGE,
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
-      // Sequence rules are event-type specific (transient = 0, durable >= 1) and are owned by
-      // validateMessageEnvelope.
+
       minimumSequence: 0,
       validateEnvelope: validateMessageEnvelope,
       validatePayload: (payload) => domainResult(validateMessageEventPayload(payload)),

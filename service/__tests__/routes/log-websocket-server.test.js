@@ -370,7 +370,13 @@ test("log-websocket-server: skips registered debug types by default", async () =
 test("log-websocket-server: rejects debug logs without a registered debug type", async () => {
   const logRoot = await withTempLogDir();
   const result = await writeSessionLogEvent(
-    { source: "client", userId: "u1", category: "debug", sessionId: "s-debug", event: "debug.untyped" },
+    {
+      source: "client",
+      userId: "u1",
+      category: "debug",
+      sessionId: "s-debug",
+      event: "debug.untyped",
+    },
     { root: logRoot },
   );
   assert.equal(result.ok, false);

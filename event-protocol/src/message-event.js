@@ -20,8 +20,7 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
   TURN_PRESENTATION_COMMITTED: "turn_presentation_committed",
   LLM_DELTA: "llm_delta",
   ACTIVITY_DELTA: "activity_delta",
-  // Complete model-analysis activity. The wire value keeps its historical spelling so that
-  // persisted facts stay readable; it is not a delta.
+
   MODEL_ANALYSIS: "model_analysis_delta",
   AUTHORITATIVE_FINAL_CONTENT: "authoritative_final_content",
   THINKING: "thinking",
@@ -32,12 +31,10 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
 
 export const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
 
-// Standalone activity events: each carries the complete text of one activity.
 export const ACTIVITY_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MODEL_ANALYSIS]),
 );
 
-// Activity kinds shared by producers and projections.
 export const ACTIVITY_KIND = Object.freeze({
   MODEL_ANALYSIS: "model_analysis",
   MAIN_MODEL_ANALYSIS: "main_model_analysis",
@@ -45,10 +42,6 @@ export const ACTIVITY_KIND = Object.freeze({
   GUIDANCE_ANALYSIS: "guidance_analysis",
 });
 
-// Transport-only fragments. Each is superseded by a durable event under the same identity
-// (llm_delta by authoritative_final_content, activity_delta by its standalone activity
-// event), so it is delivered live but never committed, journaled or logged, and it does
-// not occupy an authoritative sequence position: its envelope carries sequence 0.
 export const TRANSIENT_MESSAGE_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.LLM_DELTA, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),
 );
@@ -66,8 +59,6 @@ export function isTransientMessageEvent(envelope = {}) {
   );
 }
 
-// Events produced by one model invocation. They belong to the assistant message committed for
-// that invocation, identified by modelMessageId; Turn-level events carry no such owner.
 export const MODEL_MESSAGE_SCOPED_EVENT_TYPES = Object.freeze(
   new Set([
     MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,

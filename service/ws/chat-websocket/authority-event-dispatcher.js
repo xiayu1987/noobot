@@ -107,7 +107,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       }
     }
     if (typeof bot.compactAuthorityEvents === "function") {
-      // Session-wide retention sweep, throttled per session: reclaims streams of ended turns too.
       const now = Date.now();
       const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${clean(
         persistenceScope?.scopeId,

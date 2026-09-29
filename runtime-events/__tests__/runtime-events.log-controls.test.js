@@ -113,27 +113,34 @@ test("runtime-events writer separates debug session logs by debug type", async (
   assert.equal((await readJsonl(resend.file))[0].category, "debug");
 });
 
-test("agent context debug logs default on and use their own file", async () => {
+test("agent context debug logs default off and use their own file when enabled", async () => {
   const root = await tempRoot();
-  const recorded = await writeRuntimeEvent(
-    {
-      source: "agent",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "agent.context.executionScopeCreated",
-      userId: "admin",
-      sessionId: "session-agent-context",
-      debugType: "agent-context",
-      data: { envelope: { protocolVersion: 1 } },
-    },
-    { root, includeProcess: false },
-  );
+  const event = {
+    source: "agent",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "agent.context.executionScopeCreated",
+    userId: "admin",
+    sessionId: "session-agent-context",
+    debugType: "agent-context",
+    data: { envelope: { protocolVersion: 1 } },
+  };
+  const skipped = await writeRuntimeEvent(event, { root, includeProcess: false });
+  assert.equal(skipped.skipped, true);
 
+  const recorded = await writeRuntimeEvent(event, {
+    root,
+    includeProcess: false,
+    sessionLogControls: { debug: { agentContext: true } },
+  });
   assert.equal(recorded.ok, true);
   assert.equal(recorded.skipped, undefined);
   assert.match(recorded.file, /session-agent-context\/debug-agent-context\.jsonl$/);
+});
 
+test("agent context debug logs honor an explicit disabled control", async () => {
+  const root = await tempRoot();
   const disabled = await writeRuntimeEvent(
     {
       source: "agent",
@@ -238,6 +245,38 @@ test("runtime-events writer never suppresses an error with a disabled debug cont
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
   assert.match(result.file, /session-debug-error\/debug-context-identity\.jsonl$/);
+});
+
+test("disabled debug logs are skipped before payload sanitization", async () => {
+  const root = await tempRoot();
+  let payloadReads = 0;
+  const data = {};
+  Object.defineProperty(data, "chunk", {
+    enumerable: true,
+    get() {
+      payloadReads += 1;
+      return "delta";
+    },
+  });
+
+  const result = await writeRuntimeEvent(
+    {
+      source: "service",
+      scope: "session",
+      category: "debug",
+      level: "debug",
+      event: "service.authorityOutbox.eventSent",
+      userId: "admin",
+      sessionId: "session-skip-before-sanitize",
+      debugType: "stream-delta",
+      data,
+    },
+    { root, includeProcess: false, sessionLogControls: { debug: { frontendStreamDelta: false } } },
+  );
+
+  assert.equal(result.skipped, true);
+  assert.equal(payloadReads, 0);
+  assert.equal("data" in result.record, false);
 });
 
 test("routed debug logs without session context still honor their debug control", async () => {

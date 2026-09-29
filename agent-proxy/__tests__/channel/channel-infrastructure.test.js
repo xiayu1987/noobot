@@ -46,15 +46,25 @@ test("channel event journal is the bounded ordered replay source", () => {
   journal.append("thinking", { value: 1 });
   journal.append("delta", { value: 2 });
   journal.append("done", { value: 3 });
-  assert.deepEqual(journal.events.map((event) => event.sequence), [2, 3]);
-  assert.deepEqual(journal.after(2).map((event) => event.event), ["done"]);
+  assert.deepEqual(
+    journal.events.map((event) => event.sequence),
+    [2, 3],
+  );
+  assert.deepEqual(
+    journal.after(2).map((event) => event.event),
+    ["done"],
+  );
 });
 
 test("command registry cancels requester commands and expires routes", () => {
   let currentMs = 0;
   const requester = {};
   const registry = new CommandRegistry({ now: () => currentMs, defaultTtlMs: 100 });
-  registry.register("snapshot-1", { channelKey: "channel-1", commandType: "turn_snapshot", requester });
+  registry.register("snapshot-1", {
+    channelKey: "channel-1",
+    commandType: "turn_snapshot",
+    requester,
+  });
   registry.registerRoute("interaction-1", { channelKey: "channel-1" });
   assert.equal(registry.cancelRequester(requester), 1);
   currentMs = 100;
@@ -71,7 +81,9 @@ test("command registry cancels reconnect snapshot commands by nested socket requ
     commandType: "turn_snapshot",
     requester: {
       socket,
-      resolve: (result) => { resolution = result; },
+      resolve: (result) => {
+        resolution = result;
+      },
     },
   });
 
@@ -86,7 +98,9 @@ test("subscriber delivery closes a slow consumer at the backpressure boundary", 
   const socket = {
     readyState: 1,
     bufferedAmount: config.wsMaxBufferedBytes + 1,
-    close(_code, reason) { closeReason = reason; },
+    close(_code, reason) {
+      closeReason = reason;
+    },
   };
   const result = manager.sendSocketEvent(socket, { event: "delta", data: {} });
   assert.equal(result.reason, "backpressure_limit");
@@ -100,7 +114,9 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
-    send(raw) { this.sent.push(JSON.parse(raw)); },
+    send(raw) {
+      this.sent.push(JSON.parse(raw));
+    },
   };
   const lifecycle = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.PROCESSING_STARTED,
@@ -117,11 +133,14 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
     state: TURN_STATE.PROCESSING,
   });
 
-  assert.equal(manager.sendChannelEvent(channel, socket, {
-    sequence: 7,
-    event: "turn_lifecycle",
-    data: canonicalTurnLifecycle(lifecycle),
-  }).result, "sent");
+  assert.equal(
+    manager.sendChannelEvent(channel, socket, {
+      sequence: 7,
+      event: "turn_lifecycle",
+      data: canonicalTurnLifecycle(lifecycle),
+    }).result,
+    "sent",
+  );
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-1"), true);
   assert.equal(socket.__agentProxyLastSequenceByChannel?.[channel.key], undefined);
 
@@ -148,7 +167,9 @@ test("newer lifecycle state supersedes the in-flight state and is delivered imme
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
-    send(raw) { this.sent.push(JSON.parse(raw)); },
+    send(raw) {
+      this.sent.push(JSON.parse(raw));
+    },
   };
   const createLifecycle = ({ eventType, eventId, sequence, phase, state }) =>
     createTurnLifecycleEnvelope({
@@ -180,23 +201,31 @@ test("newer lifecycle state supersedes the in-flight state and is delivered imme
     state: TURN_STATE.COMPLETION_REQUESTING,
   });
 
-  assert.equal(manager.sendChannelEvent(channel, socket, {
-    sequence: 12,
-    event: "turn_lifecycle",
-    data: canonicalTurnLifecycle(started),
-  }).result, "sent");
-  assert.equal(manager.sendChannelEvent(channel, socket, {
-    sequence: 13,
-    event: "turn_lifecycle",
-    data: canonicalTurnLifecycle(completed),
-  }).result, "sent");
-  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), [
-    "event-ordered-2",
-    "event-ordered-3",
-  ]);
+  assert.equal(
+    manager.sendChannelEvent(channel, socket, {
+      sequence: 12,
+      event: "turn_lifecycle",
+      data: canonicalTurnLifecycle(started),
+    }).result,
+    "sent",
+  );
+  assert.equal(
+    manager.sendChannelEvent(channel, socket, {
+      sequence: 13,
+      event: "turn_lifecycle",
+      data: canonicalTurnLifecycle(completed),
+    }).result,
+    "sent",
+  );
+  assert.deepEqual(
+    socket.sent.map((item) => item.data.identity.eventId),
+    ["event-ordered-2", "event-ordered-3"],
+  );
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-ordered-2"), false);
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-ordered-3"), true);
-  const superseded = logged.find((entry) => entry.event === "agentProxy.channel.lifecycle.superseded");
+  const superseded = logged.find(
+    (entry) => entry.event === "agentProxy.channel.lifecycle.superseded",
+  );
   assert.equal(superseded?.data?.supersededEventId, "event-ordered-2");
   assert.equal(superseded?.data?.eventId, "event-ordered-3");
 
@@ -221,7 +250,9 @@ test("older lifecycle state is superseded by the in-flight newer state and not s
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
-    send(raw) { this.sent.push(JSON.parse(raw)); },
+    send(raw) {
+      this.sent.push(JSON.parse(raw));
+    },
   };
   const base = {
     commandId: "command-stale",
@@ -251,18 +282,24 @@ test("older lifecycle state is superseded by the in-flight newer state and not s
     phase: TURN_PHASE.PROCESSING,
     state: TURN_STATE.PROCESSING,
   });
-  assert.equal(manager.sendChannelEvent(channel, socket, {
-    sequence: 31,
-    event: "turn_lifecycle",
-    data: canonicalTurnLifecycle(completed),
-  }).result, "sent");
+  assert.equal(
+    manager.sendChannelEvent(channel, socket, {
+      sequence: 31,
+      event: "turn_lifecycle",
+      data: canonicalTurnLifecycle(completed),
+    }).result,
+    "sent",
+  );
   const stale = manager.sendChannelEvent(channel, socket, {
     sequence: 30,
     event: "turn_lifecycle",
     data: canonicalTurnLifecycle(processing),
   });
   assert.deepEqual(stale, { result: "superseded", reason: "newer_lifecycle_in_flight" });
-  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), ["event-stale-completed"]);
+  assert.deepEqual(
+    socket.sent.map((item) => item.data.identity.eventId),
+    ["event-stale-completed"],
+  );
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-stale-processing"), false);
 });
 
@@ -276,7 +313,9 @@ test("detaching a subscriber clears lifecycle receipt timers", () => {
     ]),
   };
   const originalClearTimeout = globalThis.clearTimeout;
-  globalThis.clearTimeout = () => { timerCleared = true; };
+  globalThis.clearTimeout = () => {
+    timerCleared = true;
+  };
   try {
     manager.detachSocketFromAllChannels(socket);
   } finally {
@@ -294,7 +333,9 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
     readyState: 1,
     bufferedAmount: 0,
     send() {},
-    close(code, reason) { closeCalls.push({ code, reason }); },
+    close(code, reason) {
+      closeCalls.push({ code, reason });
+    },
   };
   const lifecycle = createTurnLifecycleEnvelope({
     eventType: TURN_EVENT.COMPLETED,
@@ -336,8 +377,12 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
     readyState: 1,
     bufferedAmount: 0,
     sent: [],
-    send(raw) { this.sent.push(JSON.parse(raw)); },
-    close(code, reason) { closeCalls.push({ code, reason }); },
+    send(raw) {
+      this.sent.push(JSON.parse(raw));
+    },
+    close(code, reason) {
+      closeCalls.push({ code, reason });
+    },
   };
   const base = {
     commandId: "command-drop",
@@ -378,11 +423,11 @@ test("terminal lifecycle supersedes an unacknowledged state instead of waiting b
     data: canonicalTurnLifecycle(completed),
   });
   assert.equal(terminal.result, "sent");
-  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), [
-    "event-drop-processing",
-    "event-drop-completed",
-  ]);
-  // 被覆盖的旧状态不再参与重试。
+  assert.deepEqual(
+    socket.sent.map((item) => item.data.identity.eventId),
+    ["event-drop-processing", "event-drop-completed"],
+  );
+
   assert.equal(manager._retryPendingLifecycleDelivery(socket, "event-drop-processing"), false);
 
   for (let attempt = 1; attempt <= config.turnLifecycleDeliveryMaxAttempts; attempt += 1) {

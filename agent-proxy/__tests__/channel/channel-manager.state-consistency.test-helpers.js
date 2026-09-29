@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEventEnvelope, EVENT_FAMILY, INTERACTION_EVENT_TYPE, INTERACTION_SEQUENCE_DOMAIN } from "@noobot/event-protocol";
+import {
+  createEventEnvelope,
+  EVENT_FAMILY,
+  INTERACTION_EVENT_TYPE,
+  INTERACTION_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_TYPE,

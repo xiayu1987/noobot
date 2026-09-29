@@ -242,7 +242,7 @@ describe("useChatSession reconnect replay", () => {
     await vi.waitFor(() => {
       expect(assistant.content).toContain("message continued after replay");
     });
-    // 传输 delta 只投影、不进入权威 consumed 集合与序号水位。
+
     expect(assistant.messageEventState?.consumedEventIds || []).not.toContain(
       "evt-after-reconnect-delta",
     );

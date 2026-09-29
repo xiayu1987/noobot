@@ -24,8 +24,7 @@ const ORDERING_FIELDS = new Set([
 
 export function canonicalMessageEvent(overrides = {}) {
   const eventType = overrides.eventType || "tool_call_start";
-  // Transport-only events are unsequenced by protocol; the caller's sequence only
-  // keeps their default eventIds distinct.
+
   const transient = isTransientMessageEventType(eventType);
   const values = {
     eventId: transient ? `evt-transient-${overrides.sequence ?? 1}` : "evt-1",

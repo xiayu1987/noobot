@@ -66,9 +66,19 @@ describe("sessionLogWebSocketClient", () => {
 
   it("connects to resolved log websocket url and flushes queued session log events", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
-    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs", source: "frontend" });
+    const client = createSessionLogWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test/logs",
+      source: "frontend",
+    });
 
-    expect(client.log({ category: "state", event: "stateMachine.event", sessionId: "s-1", data: { state: "sending" } })).toBe(true);
+    expect(
+      client.log({
+        category: "state",
+        event: "stateMachine.event",
+        sessionId: "s-1",
+        data: { state: "sending" },
+      }),
+    ).toBe(true);
     expect(MockWebSocket.instances).toHaveLength(1);
     expect(MockWebSocket.instances[0].url).toBe("ws://test/logs");
     expect(MockWebSocket.instances[0].sent).toHaveLength(0);
@@ -76,13 +86,15 @@ describe("sessionLogWebSocketClient", () => {
     MockWebSocket.instances[0].readyState = MockWebSocket.OPEN;
     MockWebSocket.instances[0].onopen?.();
 
-    expect(sentBusinessRecords(MockWebSocket.instances[0])).toContainEqual(expect.objectContaining({
-      source: "frontend",
-      category: "state",
-      event: "stateMachine.event",
-      sessionId: "s-1",
-      data: { state: "sending" },
-    }));
+    expect(sentBusinessRecords(MockWebSocket.instances[0])).toContainEqual(
+      expect.objectContaining({
+        source: "frontend",
+        category: "state",
+        event: "stateMachine.event",
+        sessionId: "s-1",
+        data: { state: "sending" },
+      }),
+    );
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0 }));
 
     MockWebSocket.instances[0].onmessage?.({
@@ -105,14 +117,20 @@ describe("sessionLogWebSocketClient", () => {
 
     expect(socket.sent).toHaveLength(100);
     expect(sentBusinessRecords(socket)[0].event).toBe("message.0");
-    expect(client.status()).toMatchObject({ queueLength: 400, inFlightLength: 100, rejectedReliableCount: 5 });
+    expect(client.status()).toMatchObject({
+      queueLength: 400,
+      inFlightLength: 100,
+      rejectedReliableCount: 5,
+    });
 
     for (let batch = 0; batch < 5; batch += 1) {
       socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 100 }) });
     }
     socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 100 }) });
     const records = sentRecords(socket);
-    expect(records.filter((record) => record.event === "frontend.sessionLogWs.queueCapacityExceeded")).toHaveLength(0);
+    expect(
+      records.filter((record) => record.event === "frontend.sessionLogWs.queueCapacityExceeded"),
+    ).toHaveLength(0);
     expect(sentBusinessRecords(socket)).toHaveLength(500);
     expect(sentBusinessRecords(socket).at(-1).event).toBe("message.499");
   });
@@ -120,7 +138,8 @@ describe("sessionLogWebSocketClient", () => {
   it("sends the next bounded batch only after the current batch is fully acknowledged", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
-    for (let index = 0; index < 150; index += 1) client.log({ event: `ordered.${index}`, sessionId: "s-order" });
+    for (let index = 0; index < 150; index += 1)
+      client.log({ event: `ordered.${index}`, sessionId: "s-order" });
     const socket = MockWebSocket.instances[0];
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
@@ -150,7 +169,9 @@ describe("sessionLogWebSocketClient", () => {
     socket.readyState = MockWebSocket.CLOSED;
     socket.onclose?.({ code: 1006, reason: "" });
 
-    expect(client.status()).toEqual(expect.objectContaining({ inFlightLength: 0, hasReconnectTimer: true }));
+    expect(client.status()).toEqual(
+      expect.objectContaining({ inFlightLength: 0, hasReconnectTimer: true }),
+    );
     expect(client.status().queueLength).toBeGreaterThanOrEqual(1);
   });
 
@@ -174,7 +195,9 @@ describe("sessionLogWebSocketClient", () => {
 
     client.log({ category: "message", event: "message.send-failure", sessionId: "s-retry" });
     const socket = MockWebSocket.instances[0];
-    socket.send = () => { throw new DOMException("socket closing", "InvalidStateError"); };
+    socket.send = () => {
+      throw new DOMException("socket closing", "InvalidStateError");
+    };
     socket.readyState = MockWebSocket.OPEN;
 
     expect(() => socket.onopen?.()).not.toThrow();
@@ -223,21 +246,25 @@ describe("sessionLogWebSocketClient", () => {
     await vi.waitFor(() => expect(client.status().hasReconnectTimer).toBe(true));
 
     expect(refreshAuthentication).toHaveBeenCalledTimes(1);
-    expect(client.status()).toEqual(expect.objectContaining({
-      queueLength: 1,
-      hasReconnectTimer: true,
-      suspended: false,
-    }));
+    expect(client.status()).toEqual(
+      expect.objectContaining({
+        queueLength: 1,
+        hasReconnectTimer: true,
+        suspended: false,
+      }),
+    );
     await vi.advanceTimersByTimeAsync(1000);
     expect(MockWebSocket.instances).toHaveLength(2);
 
     const recoveredSocket = MockWebSocket.instances[1];
     recoveredSocket.readyState = MockWebSocket.OPEN;
     recoveredSocket.onopen?.();
-    expect(sentBusinessRecords(recoveredSocket)).toContainEqual(expect.objectContaining({
-      event: "message.pending",
-      sessionId: "s-auth",
-    }));
+    expect(sentBusinessRecords(recoveredSocket)).toContainEqual(
+      expect.objectContaining({
+        event: "message.pending",
+        sessionId: "s-auth",
+      }),
+    );
   });
 
   it("forwards only debug types enabled by the server policy", async () => {
@@ -252,13 +279,15 @@ describe("sessionLogWebSocketClient", () => {
     const socket = MockWebSocket.instances[0];
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
-    expect(JSON.parse(socket.sent[0])).toEqual(expect.objectContaining({
-      category: "debug",
-      event: "debug.trace",
-      sessionId: "s-debug",
-      debugType: "state-machine",
-      data: { step: 1 },
-    }));
+    expect(JSON.parse(socket.sent[0])).toEqual(
+      expect.objectContaining({
+        category: "debug",
+        event: "debug.trace",
+        sessionId: "s-debug",
+        debugType: "state-machine",
+        data: { step: 1 },
+      }),
+    );
   });
 
   it("does not invoke a lazy debug payload factory while its type is disabled", async () => {
@@ -315,15 +344,21 @@ describe("sessionLogWebSocketClient", () => {
       debug: { "state-machine": true },
       limits: { maxDebugQueue: 1, maxDebugBytes: 10000 },
     });
-    expect(client.debug("state-machine", () => ({ event: "debug.one", sessionId: "s-debug" }))).toBe(true);
-    expect(client.debug("state-machine", () => ({ event: "debug.two", sessionId: "s-debug" }))).toBe(false);
+    expect(
+      client.debug("state-machine", () => ({ event: "debug.one", sessionId: "s-debug" })),
+    ).toBe(true);
+    expect(
+      client.debug("state-machine", () => ({ event: "debug.two", sessionId: "s-debug" })),
+    ).toBe(false);
     expect(client.status()).toMatchObject({ debugQueueLength: 1, droppedDebugCount: 1 });
 
     client.updatePolicy({
       debug: { "state-machine": true },
       limits: { maxDebugQueue: 10, maxDebugBytes: 1 },
     });
-    expect(client.debug("state-machine", () => ({ event: "debug.bytes", sessionId: "s-debug" }))).toBe(false);
+    expect(
+      client.debug("state-machine", () => ({ event: "debug.bytes", sessionId: "s-debug" })),
+    ).toBe(false);
     expect(client.status().droppedDebugCount).toBe(2);
   });
 });

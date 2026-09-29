@@ -38,9 +38,6 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
       return envelope;
     }
 
-    // Ownership is the model invocation that produced the event, never store position:
-    // a non-streaming completion is emitted before its assistant message is committed.
-    // Unowned events (raised before any invocation) wait for the next committed message.
     const modelMessageId = resolveMessageEventModelMessageId(envelope?.payload);
     const messages = store.toArray();
     const ownerIndex = modelMessageId
@@ -94,8 +91,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
           activityTimeline: reduceCanonicalActivityTimeline(currentTimeline, envelope),
         };
     store.updateWhere(patch, (_item, index) => index === ownerIndex);
-    // Activity deltas only feed the live projection; the completed activity event is the
-    // durable fact, so persistence happens once per activity instead of once per chunk.
+
     if (isToolEvent || isDurableActivityMessageEvent(envelope)) {
       await runtime.persistCurrentTurnMessages?.();
     }
@@ -109,11 +105,12 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
   } = {}) => {
     const ownerId = text(messageId);
     if (!ownerId) throw new Error("pending message event materialization requires messageId");
-    // Materialize the events owned by this assistant message plus unowned ones; events
-    // owned by another invocation stay pending for their own message.
+
     const facts = [];
     for (let index = pendingMessageEvents.length - 1; index >= 0; index -= 1) {
-      const pendingOwnerId = resolveMessageEventModelMessageId(pendingMessageEvents[index]?.payload);
+      const pendingOwnerId = resolveMessageEventModelMessageId(
+        pendingMessageEvents[index]?.payload,
+      );
       if (!pendingOwnerId || pendingOwnerId === ownerId) {
         facts.unshift(...pendingMessageEvents.splice(index, 1));
       }

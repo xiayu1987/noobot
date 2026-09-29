@@ -15,16 +15,16 @@ import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
 const message = () => ({ ...identity, id: "message-1", messageId: "message-1", content: "" });
-const envelope = (overrides) => canonicalMessageEvent({
-  sessionId: identity.sessionId,
-  turnScopeId: identity.turnScopeId,
-  messageId: "message-1",
-  presentationMessageId: "message-1",
-  occurredAt: "2026-01-01T00:00:00.000Z",
-  ...overrides,
-});
+const envelope = (overrides) =>
+  canonicalMessageEvent({
+    sessionId: identity.sessionId,
+    turnScopeId: identity.turnScopeId,
+    messageId: "message-1",
+    presentationMessageId: "message-1",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  });
 const events = [
-  // 持久事件承载 1..3 连续序号；尾部 delta 只传输、不带序号。
   envelope({ eventId: "evt-1", eventType: "thinking", sequence: 1, text: "hello " }),
   envelope({
     eventId: "evt-2",

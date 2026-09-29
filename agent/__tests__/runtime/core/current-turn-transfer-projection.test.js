@@ -170,7 +170,6 @@ test("streamed activity deltas update the live projection and persist once on co
 });
 
 test("a completed activity attaches to its own model message, not the latest assistant", async () => {
-  // Non-streaming: the next invocation's activity completes before its message is committed.
   const store = createCurrentTurnMessagesStore([
     {
       role: "assistant",

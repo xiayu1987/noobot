@@ -198,7 +198,11 @@ test("appendLog mirrors session execution logs to runtime-events session events"
 test("appendLog mirrors context identity diagnostics to their dedicated runtime-events file", async () => {
   const workspaceRoot = await makeTempDir();
   const sessionRepository = createInMemorySessionRepository();
-  const repo = new ExecutionLogRepository({ sessionRepository, workspaceRoot });
+  const repo = new ExecutionLogRepository({
+    sessionRepository,
+    workspaceRoot,
+    runtimeEventsConfig: { env: {}, sessionLogControls: { debug: { contextIdentity: true } } },
+  });
 
   await repo.appendLog(
     "u1",
@@ -238,7 +242,11 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
 test("appendLog routes model context traces to the registry-derived debug file, not system", async () => {
   const workspaceRoot = await makeTempDir();
   const sessionRepository = createInMemorySessionRepository();
-  const repo = new ExecutionLogRepository({ sessionRepository, workspaceRoot });
+  const repo = new ExecutionLogRepository({
+    sessionRepository,
+    workspaceRoot,
+    runtimeEventsConfig: { env: {}, sessionLogControls: { debug: { modelContextTrace: true } } },
+  });
 
   await repo.appendLog(
     "u1",

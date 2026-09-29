@@ -38,7 +38,7 @@ export function classifyExecutionEvent(event = "") {
   }
   if (event === "tool_call_start") return { category: "tool", type: "tool_call" };
   if (event === "tool_call_end") return { category: "tool", type: "tool_result" };
-  // Durable activity events (thinking / model analysis) are message facts, not system noise.
+
   if (ACTIVITY_EVENT_TYPES.has(event)) return { category: "activity", type: event };
   if (ERROR_EVENT_SUFFIX_RE.test(event)) {
     return { category: "error", type: resolveErrorType(event) };

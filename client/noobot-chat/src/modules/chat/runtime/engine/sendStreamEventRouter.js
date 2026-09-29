@@ -25,8 +25,6 @@ import { logStreamDeltaDebug } from "../../../debug/loggers/streamDeltaDebugLogg
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 
-// Transient (live-only) deltas are per-chunk; their per-event diagnostics go to the
-// switchable `stream-delta` debug channel instead of the main transport category.
 function logStreamDeltaEntry(entry) {
   logStreamDeltaDebug(entry.event, () => ({
     sessionId: entry.sessionId,
@@ -123,8 +121,6 @@ export function logRuntimeRouteCompleted({
   sessionId,
   turnScopeId,
 }) {
-  // routed=false only means "not a runtime-stream event": the event continues to the
-  // message-projection / post-projection routers, so it is neither completed nor anomalous here.
   if (!routed) return;
   const entry = {
     category: "transport",

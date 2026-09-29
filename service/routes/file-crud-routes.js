@@ -14,11 +14,7 @@ import {
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { safeJoin } from "#agent/utils";
 import { createJsonRouteWrapper } from "./route-wrapper.js";
-import {
-  RUNTIME_EVENT_CATEGORIES,
-  RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
-} from "@noobot/runtime-events";
+import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 
 const DEFAULT_I18N_KEYS = {
   treeFailed: "common.loadWorkspaceTreeFailed",
@@ -110,24 +106,12 @@ export function registerFileCrudRoutes(
       : normalized;
   };
 
-  const logFileAccess = (req, event, payload = {}) => {
-    const traceId = String(req?.headers?.["x-noobot-file-trace-id"] || "").trim();
-    if (!traceId) return;
-    void writeRoutedRuntimeEvent({
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
-      level: "debug",
-      debugType: "file-access",
+  const logFileAccess = (req, event, payload = {}) =>
+    recordFileAccessDebug(req, {
       event: "service.fileCrud.fileAccess.trace",
-      data: {
-        traceEvent: event,
-        traceIdLength: traceId.length,
-        routePrefixLength: String(routePrefix || "").length,
-        ...payload,
-      },
+      traceEvent: event,
+      data: { routePrefixLength: String(routePrefix || "").length, ...payload },
     });
-  };
 
   const isAbsolutePathAllowed = (req) =>
     typeof allowAbsolutePath === "function"

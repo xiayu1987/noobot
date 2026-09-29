@@ -21,19 +21,22 @@ export function recordServiceAgentTransportDebug({
   data = {},
 } = {}) {
   const summary = summarizeAgentTransportCommand(command, data);
-  return writeRoutedRuntimeEvent({
-    scope: summary.sessionId ? "session" : "system",
-    source: "service",
-    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.DEBUG,
-    level: "debug",
-    debugType: AGENT_TRANSPORT_DEBUG_TYPE,
-    event,
-    userId: String(userId || "").trim(),
-    sessionId: summary.sessionId,
-    parentSessionId: summary.parentSessionId,
-    dialogProcessId: summary.dialogProcessId,
-    turnScopeId: summary.turnScopeId,
-    data: { event, ...summary },
-  }, sessionLogConfig);
+  return writeRoutedRuntimeEvent(
+    {
+      scope: summary.sessionId ? "session" : "system",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+      level: "debug",
+      debugType: AGENT_TRANSPORT_DEBUG_TYPE,
+      event,
+      userId: String(userId || "").trim(),
+      sessionId: summary.sessionId,
+      parentSessionId: summary.parentSessionId,
+      dialogProcessId: summary.dialogProcessId,
+      turnScopeId: summary.turnScopeId,
+      data: { event, ...summary },
+    },
+    sessionLogConfig,
+  );
 }

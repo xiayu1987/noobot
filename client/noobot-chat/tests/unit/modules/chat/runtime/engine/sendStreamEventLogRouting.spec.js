@@ -23,8 +23,18 @@ function createSink(enabled = true) {
 const delta = () =>
   canonicalMessageEvent({ eventType: "llm_delta", text: "chunk", eventId: "evt-delta" });
 const durable = () =>
-  canonicalMessageEvent({ eventType: "thinking", text: "done", eventId: "evt-thinking", sequence: 1 });
-const entry = { category: "transport", event: "stream.message_event", sessionId: "s1", data: { seq: 0 } };
+  canonicalMessageEvent({
+    eventType: "thinking",
+    text: "done",
+    eventId: "evt-thinking",
+    sequence: 1,
+  });
+const entry = {
+  category: "transport",
+  event: "stream.message_event",
+  sessionId: "s1",
+  data: { seq: 0 },
+};
 const routeArgs = (authoritativeEvent, routed) => ({
   routed,
   data: {},
@@ -70,7 +80,9 @@ describe("stream event log routing", () => {
     logRuntimeRouteCompleted({ ...routeArgs(durable(), false), logSessionEvent });
     logRuntimeRouteCompleted({ ...routeArgs(delta(), false), logSessionEvent });
     expect(sink.records).toHaveLength(0);
-    expect(logSessionEvent.mock.calls.map(([record]) => [record.category, record.level || ""])).toEqual([
+    expect(
+      logSessionEvent.mock.calls.map(([record]) => [record.category, record.level || ""]),
+    ).toEqual([
       ["transport", ""],
       ["transport", "info"],
     ]);

@@ -34,11 +34,6 @@ function normalizeIdentity(value) {
     .slice(0, 256);
 }
 
-/**
- * debugType is a top-level record field owned by the debug category: category=debug requires a
- * registered debugType, every other category must not carry one, and level=debug is reserved for
- * the debug category so switch gating never depends on level or event-name inference.
- */
 function resolveRecordDebugType({ category, level, debugType }) {
   const isDebugCategory = category === RUNTIME_EVENT_CATEGORIES.DEBUG;
   if (level === RUNTIME_EVENT_LEVELS.DEBUG && !isDebugCategory) {
@@ -56,7 +51,7 @@ function resolveRecordDebugType({ category, level, debugType }) {
   return debugType;
 }
 
-export function normalizeRuntimeEvent(event = {}, defaults = {}) {
+export function normalizeRuntimeEventEnvelope(event = {}, defaults = {}) {
   const scope = event.scope || defaults.scope || RUNTIME_EVENT_SCOPES.SYSTEM;
   if (!scopes.has(scope)) throw new Error(`Invalid runtime event scope: ${scope}`);
   const level = event.level || defaults.level || RUNTIME_EVENT_LEVELS.INFO;
@@ -103,6 +98,12 @@ export function normalizeRuntimeEvent(event = {}, defaults = {}) {
     const value = normalizeOptionalSessionId(event[key] ?? defaults[key]);
     if (value) record[key] = safeSegment(value);
   }
+  const error = event.error || defaults.error;
+  if (error) record.error = serializeError(error);
+  return record;
+}
+
+export function attachRuntimeEventPayload(record, event = {}, defaults = {}) {
   const processInfo =
     event.process ?? defaults.process ?? buildProcessInfo(defaults.includeProcess ?? true);
   if (processInfo) record.process = sanitizeValue(processInfo);
@@ -115,9 +116,11 @@ export function normalizeRuntimeEvent(event = {}, defaults = {}) {
       else delete record.data[key];
     }
   }
-  const error = event.error || defaults.error;
-  if (error) record.error = serializeError(error);
   const tags = event.tags || defaults.tags;
   if (Array.isArray(tags) && tags.length) record.tags = tags.map((tag) => safeSegment(tag));
   return record;
+}
+
+export function normalizeRuntimeEvent(event = {}, defaults = {}) {
+  return attachRuntimeEventPayload(normalizeRuntimeEventEnvelope(event, defaults), event, defaults);
 }

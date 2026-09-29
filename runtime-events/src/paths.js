@@ -78,6 +78,5 @@ function resolveRuntimeEventFileCategory(record = {}) {
   const category = safeSegment(record.category);
   if (record.scope !== RUNTIME_EVENT_SCOPES.SESSION || category !== DEBUG_CATEGORY) return category;
 
-  // schema guarantees every debug-category record carries a registered top-level debugType.
   return `${DEBUG_CATEGORY}-${safeSegment(record.debugType)}`;
 }

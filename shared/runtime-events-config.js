@@ -51,7 +51,8 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
       pluginRunConfig: "NOOBOT_RUNTIME_EVENT_PLUGIN_RUN_CONFIG_DEBUG",
       semanticTransfer: "NOOBOT_RUNTIME_EVENT_SEMANTIC_TRANSFER_DEBUG",
       agentProxyHttpTrace: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_HTTP_TRACE_DEBUG",
-      frontendTurnRuntimeDiagnostics: "NOOBOT_RUNTIME_EVENT_FRONTEND_TURN_RUNTIME_DIAGNOSTICS_DEBUG",
+      frontendTurnRuntimeDiagnostics:
+        "NOOBOT_RUNTIME_EVENT_FRONTEND_TURN_RUNTIME_DIAGNOSTICS_DEBUG",
       frontendPluginRuntimeDiagnostics:
         "NOOBOT_RUNTIME_EVENT_FRONTEND_PLUGIN_RUNTIME_DIAGNOSTICS_DEBUG",
       frontendMessageMutationDiagnostics:
@@ -95,18 +96,18 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
       sessionLogWs: false,
       frontendStopContinue: false,
       frontendReconnectTiming: false,
-      frontendThinkingReplay: true,
+      frontendThinkingReplay: false,
       timelinePipeline: false,
       frontendToolLogWindow: false,
       frontendTerminalResolution: false,
       agentProxyRoute: false,
       workflowDiagnostics: false,
-      contextIdentity: true,
-      agentContext: true,
-      agentTransport: true,
-      agentContextProtocol: true,
-      modelContextTrace: true,
-      frontendStreamDelta: true,
+      contextIdentity: false,
+      agentContext: false,
+      agentTransport: false,
+      agentContextProtocol: false,
+      modelContextTrace: false,
+      frontendStreamDelta: false,
       frontendTransportDiagnostics: false,
       fileAccess: false,
       pluginRunConfig: false,
@@ -147,9 +148,9 @@ export const RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS = deepFreeze({
   "backend-lifecycle": "backendLifecycle",
 });
 
-// Named debug type for per-chunk transient (live-only) message delta diagnostics; shared by
-// the service eventSent routing and the frontend stream-delta logger.
 export const STREAM_DELTA_DEBUG_TYPE = "stream-delta";
+export const FILE_ACCESS_DEBUG_TYPE = "file-access";
+export const FILE_TRACE_ID_HEADER = "x-noobot-file-trace-id";
 
 export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   "state-machine": { controlKey: "stateMachine", exposeToClient: true },
@@ -183,33 +184,32 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
     executionCategory: "agent_context_protocol",
     gatesExecutionBundle: true,
   },
-  // Full model context snapshots (resolve / hook / compose / invoke stages). Session-channel
-  // copy only; the execution-events bundle keeps the record regardless of this switch.
+
   "model-context-trace": {
     controlKey: "modelContextTrace",
     exposeToClient: false,
     executionCategory: "model_context_trace",
     gatesExecutionBundle: false,
   },
-  // Per-chunk frontend transport diagnostics for live-only (transient) message deltas.
+
   [STREAM_DELTA_DEBUG_TYPE]: { controlKey: "frontendStreamDelta", exposeToClient: true },
-  // Frontend WebSocket receipt / transport-event / reconnect-control rejection diagnostics.
+
   "transport-diagnostics": {
     controlKey: "frontendTransportDiagnostics",
     exposeToClient: true,
   },
-  // Service host-file / file-crud access traces keyed by the x-noobot-file-trace-id header.
-  "file-access": { controlKey: "fileAccess", exposeToClient: false },
-  // Service per-run normalized plugin configuration snapshot.
+
+  [FILE_ACCESS_DEBUG_TYPE]: { controlKey: "fileAccess", exposeToClient: false },
+
   "plugin-run-config": { controlKey: "pluginRunConfig", exposeToClient: false },
-  // Agent semantic transfer execution logs. Session-channel copy only.
+
   "semantic-transfer": {
     controlKey: "semanticTransfer",
     exposeToClient: false,
     executionCategory: "semantic_transfer",
     gatesExecutionBundle: false,
   },
-  // agent-proxy HTTP request trace keyed by the file trace id.
+
   "agent-proxy-http-trace": { controlKey: "agentProxyHttpTrace", exposeToClient: false },
   "turn-runtime-diagnostics": {
     controlKey: "frontendTurnRuntimeDiagnostics",
@@ -225,7 +225,6 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   },
 });
 
-/** True only for debug types registered in RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES. */
 export function isRegisteredSessionLogDebugType(debugType) {
   return (
     typeof debugType === "string" &&
@@ -241,7 +240,6 @@ const EXECUTION_CATEGORY_DEBUG_TYPES = Object.freeze(
   ),
 );
 
-/** Resolves the session-log debugType owning an execution-log category, or "" when none. */
 export function resolveExecutionCategoryDebugType(category = "") {
   const normalized = String(category || "")
     .trim()
@@ -357,8 +355,7 @@ export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
   }
   const debugType = resolveExecutionCategoryDebugType(event?.category);
   const descriptor = debugType ? RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES[debugType] : null;
-  // Descriptors that do not gate the bundle are only filtered on the session channel
-  // (runtime-events shouldRecordSessionLog by debugType); the bundle keeps the record.
+
   if (descriptor?.gatesExecutionBundle === true) {
     const controls = resolveRuntimeEventsSessionLogControls(
       options.env || process.env,

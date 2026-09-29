@@ -333,7 +333,7 @@ for (const streaming of [false, true]) {
         .filter((event) => event.event === "authority_event_committed")
         .map((event) => event.data.envelope);
       const payloads = envelopes.map((envelope) => envelope.payload);
-      // Streaming emits fragments, then one completion; non-streaming emits only the completion.
+
       assert.deepEqual(
         payloads.map((payload) => payload.eventType),
         streaming ? ["activity_delta", "activity_delta", "thinking"] : ["thinking"],

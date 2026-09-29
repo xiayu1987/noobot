@@ -104,20 +104,20 @@ test("turn lifecycle envelope does not expose persistence locators", () => {
 test("authority outbox tracks attempts and acknowledges delivery idempotently", () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
     event: {
-    eventType: TURN_EVENT.PROCESSING_STARTED,
-    eventId: "outbox-event-1",
-    commandId: "outbox-command-1",
-    sessionId: "outbox-session-1",
-    turnScopeId: "outbox-turn-1",
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      eventId: "outbox-event-1",
+      commandId: "outbox-command-1",
+      sessionId: "outbox-session-1",
+      turnScopeId: "outbox-turn-1",
     },
     turn: {
-    messageId: "outbox-message-1",
-    presentationMessageId: "outbox-presentation-1",
-    revision: 1,
-    sequence: 1,
-    phase: TURN_PHASE.PROCESSING,
-    state: TURN_STATE.PROCESSING,
-    updatedAt: "2026-07-18T00:00:00.000Z",
+      messageId: "outbox-message-1",
+      presentationMessageId: "outbox-presentation-1",
+      revision: 1,
+      sequence: 1,
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+      updatedAt: "2026-07-18T00:00:00.000Z",
     },
   });
   const initial = normalizeAuthorityEventOutbox([
@@ -208,20 +208,20 @@ test("outbox compaction reclaims only this consumer's deliveries older than the 
   const envelope = (eventId, sequence) =>
     createCommittedTurnLifecycleEnvelope({
       event: {
-      eventType: TURN_EVENT.PROCESSING_STARTED,
-      eventId,
-      commandId: `command-${eventId}`,
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
+        eventType: TURN_EVENT.PROCESSING_STARTED,
+        eventId,
+        commandId: `command-${eventId}`,
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
       },
       turn: {
-      messageId: "message-1",
-      presentationMessageId: "presentation-1",
-      revision: sequence,
-      sequence,
-      phase: TURN_PHASE.PROCESSING,
-      state: TURN_STATE.PROCESSING,
-      updatedAt: "2026-07-01T00:00:00.000Z",
+        messageId: "message-1",
+        presentationMessageId: "presentation-1",
+        revision: sequence,
+        sequence,
+        phase: TURN_PHASE.PROCESSING,
+        state: TURN_STATE.PROCESSING,
+        updatedAt: "2026-07-01T00:00:00.000Z",
       },
     });
   const delivered = (eventId, sequence, consumerId, deliveredAt, scopeId = "message-1") => {
@@ -240,7 +240,11 @@ test("outbox compaction reclaims only this consumer's deliveries older than the 
     };
   };
   const source = [
-    { eventId: "pending", envelope: envelope("pending", 1), committedAt: "2026-07-01T00:00:00.000Z" },
+    {
+      eventId: "pending",
+      envelope: envelope("pending", 1),
+      committedAt: "2026-07-01T00:00:00.000Z",
+    },
     delivered("recent", 2, "service-websocket", "2026-07-20T00:00:00.000Z"),
     delivered("other-consumer", 3, "other", "2026-07-02T00:00:00.000Z"),
     delivered("old-stream-a", 4, "service-websocket", "2026-07-02T00:00:00.000Z", "message-a"),
@@ -256,7 +260,8 @@ test("outbox compaction reclaims only this consumer's deliveries older than the 
     ["pending", "recent", "other-consumer"],
   );
   assert.equal(
-    compactAuthorityEventOutbox(source, { retainDeliveredAfter: "2026-07-10T00:00:00.000Z" }).reason,
+    compactAuthorityEventOutbox(source, { retainDeliveredAfter: "2026-07-10T00:00:00.000Z" })
+      .reason,
     "missing_compaction_consumer",
   );
 });

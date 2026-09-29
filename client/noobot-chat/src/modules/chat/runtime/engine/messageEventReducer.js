@@ -71,8 +71,7 @@ function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, ga
     targetMessage.dialogProcessId = event.payload.dialogProcessId;
   Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
   targetMessage.hasFirstStreamEvent = true;
-  // Transient events are live-only (never replayed or redelivered): they take no sequence and
-  // must not evict durable eventIds from the consumed window.
+
   if (transient) return { result: MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
   state.lastSequence = sequence;
   appendConsumedMessageEvent(state, event.identity.eventId);

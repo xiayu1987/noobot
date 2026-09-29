@@ -23,7 +23,6 @@ const DEFAULT_MAX_DEBUG_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueu
 const DEFAULT_MAX_DEBUG_QUEUE_BYTES = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueBytes;
 const DEFAULT_DEBUG_TTL_MS = TIME_THRESHOLDS.client.sessionLogDebugTtlMs;
 
-/** Registry debug type that gates this channel's own console diagnostics. */
 const SESSION_LOG_WS_DEBUG_TYPE = "session-log-ws";
 
 export function createSessionLogWebSocketClient({
@@ -57,7 +56,6 @@ export function createSessionLogWebSocketClient({
   });
   const isSuspended = () => transport.status().phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED;
 
-  // Self-diagnostics go to the console only: routing them through this channel would recurse.
   function logDiagnostic(message, data = {}) {
     if (!isEnabled(SESSION_LOG_WS_DEBUG_TYPE)) return;
     console.info("[session-log-ws][frontend]", message, data);

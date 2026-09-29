@@ -26,7 +26,10 @@ import {
 test("execution-log debug categories derive their debugType from the single registry", () => {
   assert.equal(resolveExecutionCategoryDebugType("context_identity"), "context-identity");
   assert.equal(resolveExecutionCategoryDebugType("AGENT_CONTEXT"), "agent-context");
-  assert.equal(resolveExecutionCategoryDebugType("agent_context_protocol"), "agent-context-protocol");
+  assert.equal(
+    resolveExecutionCategoryDebugType("agent_context_protocol"),
+    "agent-context-protocol",
+  );
   assert.equal(resolveExecutionCategoryDebugType("model_context_trace"), "model-context-trace");
   assert.equal(resolveExecutionCategoryDebugType("system"), "");
   assert.equal(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES["stream-delta"].exposeToClient, true);
@@ -38,10 +41,26 @@ test("bundle-gated debug categories follow their switch; model context trace kee
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: "false",
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.modelContextTrace]: "false",
   };
-  assert.equal(shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: off }), false);
-  assert.equal(shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: {} }), true);
+  const on = {
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: "true",
+  };
   assert.equal(
-    shouldRecordRuntimeExecutionLog({ event: "model_context_trace", category: "model_context_trace" }, { env: off }),
+    shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: off }),
+    false,
+  );
+  assert.equal(
+    shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: {} }),
+    false,
+  );
+  assert.equal(
+    shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: on }),
+    true,
+  );
+  assert.equal(
+    shouldRecordRuntimeExecutionLog(
+      { event: "model_context_trace", category: "model_context_trace" },
+      { env: off },
+    ),
     true,
   );
 });
@@ -171,50 +190,58 @@ test("session log controls honor explicit environment values independently of de
   }
 });
 
-test("context identity diagnostics default on while other diagnostics retain their defaults", () => {
+test("high-frequency diagnostics default off", () => {
   const defaults = resolveRuntimeEventsSessionLogControls({});
-  assert.equal(defaults.debug.contextIdentity, true);
-  assert.equal(defaults.debug.agentContext, true);
-  assert.equal(defaults.debug.agentTransport, true);
+  for (const controlKey of [
+    "contextIdentity",
+    "agentContext",
+    "agentTransport",
+    "agentContextProtocol",
+    "modelContextTrace",
+    "frontendStreamDelta",
+    "frontendThinkingReplay",
+  ]) {
+    assert.equal(defaults.debug[controlKey], false, controlKey);
+  }
   assert.equal(defaults.debug.resend, false);
   assert.equal(defaults.debug.stop, false);
 
-  const disabled = resolveRuntimeEventsSessionLogControls({
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: "false",
+  const enabled = resolveRuntimeEventsSessionLogControls({
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: "true",
   });
-  assert.equal(disabled.debug.contextIdentity, false);
+  assert.equal(enabled.debug.contextIdentity, true);
 
-  const agentContextDisabled = resolveRuntimeEventsSessionLogControls({
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.agentContext]: "false",
+  const agentContextEnabled = resolveRuntimeEventsSessionLogControls({
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.agentContext]: "true",
   });
-  assert.equal(agentContextDisabled.debug.agentContext, false);
+  assert.equal(agentContextEnabled.debug.agentContext, true);
 });
 
-test("agent transport diagnostics are independently configurable and default on", () => {
+test("agent transport diagnostics are independently configurable and default off", () => {
   const envName = RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.agentTransport;
   assert.equal(envName, "NOOBOT_RUNTIME_EVENT_AGENT_TRANSPORT_DEBUG");
   assert.deepEqual(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES["agent-transport"], {
     controlKey: "agentTransport",
     exposeToClient: true,
   });
-  assert.equal(resolveRuntimeEventsSessionLogControls({}).debug.agentTransport, true);
+  assert.equal(resolveRuntimeEventsSessionLogControls({}).debug.agentTransport, false);
   assert.equal(
-    resolveRuntimeEventsSessionLogControls({ [envName]: "off" }).debug.agentTransport,
-    false,
+    resolveRuntimeEventsSessionLogControls({ [envName]: "on" }).debug.agentTransport,
+    true,
   );
 });
 
-test("frontend thinking replay diagnostics are independently configurable and default on", () => {
+test("frontend thinking replay diagnostics are independently configurable and default off", () => {
   const envName = RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.frontendThinkingReplay;
   assert.equal(envName, "NOOBOT_RUNTIME_EVENT_FRONTEND_THINKING_REPLAY_DEBUG");
   assert.deepEqual(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES["thinking-replay"], {
     controlKey: "frontendThinkingReplay",
     exposeToClient: true,
   });
-  assert.equal(resolveRuntimeEventsSessionLogControls({}).debug.frontendThinkingReplay, true);
+  assert.equal(resolveRuntimeEventsSessionLogControls({}).debug.frontendThinkingReplay, false);
   assert.equal(
-    resolveRuntimeEventsSessionLogControls({ [envName]: "off" }).debug.frontendThinkingReplay,
-    false,
+    resolveRuntimeEventsSessionLogControls({ [envName]: "on" }).debug.frontendThinkingReplay,
+    true,
   );
 });
 
@@ -223,11 +250,11 @@ test("session log controls do not accept the removed flat override protocol", ()
     {},
     {
       messageLog: false,
-      contextIdentityDebug: false,
+      contextIdentityDebug: true,
     },
   );
   assert.equal(controls.log.message, true);
-  assert.equal(controls.debug.contextIdentity, true);
+  assert.equal(controls.debug.contextIdentity, false);
 });
 
 test("hook runtime-events mode defaults to summary and recognizes verbose values", () => {

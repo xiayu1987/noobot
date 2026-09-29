@@ -16,11 +16,6 @@ import {
 } from "@noobot/runtime-events";
 import { resolveExecutionCategoryDebugType } from "@noobot/shared/runtime-events-config";
 
-/**
- * Session-channel routing for an execution log. Debug-owned execution categories come from
- * the runtime-events debug registry, which also supplies the debugType that names the
- * `debug-<debugType>.jsonl` file and selects its switch.
- */
 function mapExecutionLogToSessionChannel(normalizedLog = {}) {
   const category = String(normalizedLog?.category || "")
     .trim()
@@ -38,11 +33,13 @@ export class ExecutionLogRepository {
     sessionRepository = null,
     now = () => new Date().toISOString(),
     workspaceRoot = "",
+    runtimeEventsConfig = {},
   } = {}) {
     this.executionRepository = executionRepository;
     this.sessionRepository = sessionRepository;
     this.now = now;
     this.workspaceRoot = workspaceRoot;
+    this.runtimeEventsConfig = runtimeEventsConfig;
     this.appendQueues = new Map();
   }
 
@@ -71,7 +68,10 @@ export class ExecutionLogRepository {
           ...logData,
         },
       },
-      this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : undefined,
+      {
+        ...this.runtimeEventsConfig,
+        ...(this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : {}),
+      },
     );
   }
 

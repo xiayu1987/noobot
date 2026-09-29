@@ -42,7 +42,7 @@ test("session log protocol exports stable categories and helpers from runtime-ev
   }
   assert.equal(normalizeSessionLogCategory("missing"), SESSION_LOG_DEFAULT_CATEGORY);
   assert.equal(normalizeSessionLogCategory("DEBUG"), SESSION_LOG_DEBUG_CATEGORY);
-  // 守卫：会话日志分类必须全部被 runtime schema 接受，否则整批日志会被拒收。
+
   for (const category of [...SESSION_LOG_CATEGORIES, SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY]) {
     const debugType = category === SESSION_LOG_DEBUG_CATEGORY ? "state-machine" : undefined;
     assert.doesNotThrow(
@@ -51,7 +51,12 @@ test("session log protocol exports stable categories and helpers from runtime-ev
     );
   }
   assert.throws(
-    () => normalizeRuntimeEvent({ source: "test", event: "test.debug", category: SESSION_LOG_DEBUG_CATEGORY }),
+    () =>
+      normalizeRuntimeEvent({
+        source: "test",
+        event: "test.debug",
+        category: SESSION_LOG_DEBUG_CATEGORY,
+      }),
     /Invalid runtime event debugType/,
   );
   assert.throws(
@@ -65,14 +70,17 @@ test("session log protocol exports stable categories and helpers from runtime-ev
     /debugType is only allowed for category debug: system/,
   );
   assert.throws(
-    () => normalizeRuntimeEvent({ source: "test", event: "test.level", category: "system", level: "debug" }),
+    () =>
+      normalizeRuntimeEvent({
+        source: "test",
+        event: "test.level",
+        category: "system",
+        level: "debug",
+      }),
     /level debug requires category debug, got: system/,
   );
   assert.equal(getSessionLogControlKey({ category: "message" }, "message"), "message");
-  assert.equal(
-    getSessionLogDebugControlKey({ debugType: "state-machine" }),
-    "stateMachine",
-  );
+  assert.equal(getSessionLogDebugControlKey({ debugType: "state-machine" }), "stateMachine");
   assert.equal(
     getSessionLogDebugControlKey({ debugType: "stop-continue" }),
     "frontendStopContinue",
@@ -97,22 +105,10 @@ test("session log protocol exports stable categories and helpers from runtime-ev
     getSessionLogDebugControlKey({ debugType: "transport-diagnostics" }),
     "frontendTransportDiagnostics",
   );
-  assert.equal(
-    getSessionLogDebugControlKey({ debugType: "agent-proxy-route" }),
-    "agentProxyRoute",
-  );
-  assert.equal(
-    getSessionLogDebugControlKey({ debugType: "context-identity" }),
-    "contextIdentity",
-  );
-  assert.equal(
-    getSessionLogDebugControlKey({ debugType: "agent-context" }),
-    "agentContext",
-  );
-  assert.equal(
-    getSessionLogDebugControlKey({ debugType: "agent-transport" }),
-    "agentTransport",
-  );
+  assert.equal(getSessionLogDebugControlKey({ debugType: "agent-proxy-route" }), "agentProxyRoute");
+  assert.equal(getSessionLogDebugControlKey({ debugType: "context-identity" }), "contextIdentity");
+  assert.equal(getSessionLogDebugControlKey({ debugType: "agent-context" }), "agentContext");
+  assert.equal(getSessionLogDebugControlKey({ debugType: "agent-transport" }), "agentTransport");
 
   const record = buildSessionLogRecord(
     {
@@ -154,9 +150,9 @@ test("session log client policy is derived from the shared debug registry", () =
   assert.equal(policy.debug["tool-log-window"], true);
   assert.equal(policy.debug.resend, false);
   assert.equal(policy.debug.stop, false);
-  assert.equal(policy.debug["agent-transport"], true);
+  assert.equal(policy.debug["agent-transport"], false);
   assert.equal(Object.hasOwn(policy.debug, "timeline-pipeline"), false);
-  assert.equal(policy.debug["stream-delta"], true);
+  assert.equal(policy.debug["stream-delta"], false);
   assert.equal(policy.debug["transport-diagnostics"], false);
   assert.equal(Object.hasOwn(policy.debug, "model-context-trace"), false);
   assert.deepEqual(

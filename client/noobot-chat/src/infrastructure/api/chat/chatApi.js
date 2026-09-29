@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
+import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
 function resolveFetcher(fetcher) {
   return fetcher || fetch;
 }
 
 function buildOptionalHeaders(traceId = "") {
-  return traceId ? { "x-noobot-file-trace-id": String(traceId) } : undefined;
+  return traceId ? { [FILE_TRACE_ID_HEADER]: String(traceId) } : undefined;
 }
 
 function buildQueryString(params = {}) {

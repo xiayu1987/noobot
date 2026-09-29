@@ -272,9 +272,14 @@ test("transient message events bypass the authority commit and take no sequence"
   };
   const emitted = [];
   beginAssistantMessageEventStream(runtime);
-  const delta = await emitMessageEvent({ onEvent: (event) => emitted.push(event) }, runtime, "llm_delta", {
-    text: "token",
-  });
+  const delta = await emitMessageEvent(
+    { onEvent: (event) => emitted.push(event) },
+    runtime,
+    "llm_delta",
+    {
+      text: "token",
+    },
+  );
   const durable = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "done" });
 
   assert.equal(commits, 1);
@@ -302,7 +307,7 @@ test("classifyExecutionEvent classifies structured execution events", () => {
     category: "tool",
     type: "tool_result",
   });
-  // Every protocol activity event type is classified as activity, never the system fallback.
+
   for (const eventType of ACTIVITY_EVENT_TYPES) {
     assert.deepEqual(classifyExecutionEvent(eventType), { category: "activity", type: eventType });
   }

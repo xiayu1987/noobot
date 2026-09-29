@@ -198,9 +198,6 @@ export function acknowledgeAuthorityEventDelivery(
   return { found, changed, outbox };
 }
 
-// Retention is the single compaction rule: every event this consumer acknowledged before the
-// cutoff is reclaimed, across all ordering streams of the session. Streams whose turn has ended
-// never receive another delivery, so compaction must not be scoped to the streams of one drain.
 export function compactAuthorityEventOutbox(
   source = [],
   { consumerId = "", retainDeliveredAfter = "" } = {},

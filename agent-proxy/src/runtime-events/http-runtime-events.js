@@ -12,7 +12,10 @@ import {
 function resolveRequestUrlInfo({ requestUrl = "", method = "" } = {}) {
   const rawUrl = String(requestUrl || "");
   return {
-    method: String(method || "").trim().toUpperCase() || "GET",
+    method:
+      String(method || "")
+        .trim()
+        .toUpperCase() || "GET",
     requestUrlLength: rawUrl.length,
   };
 }
@@ -54,7 +57,10 @@ export function writeAgentProxyUpstreamRequestFailedEvent({
       : "agentProxy.http.upstreamRequest.failed",
     workspaceRoot,
     data: {
-      method: String(method || "").trim().toUpperCase() || "GET",
+      method:
+        String(method || "")
+          .trim()
+          .toUpperCase() || "GET",
       pathname: String(pathname || "").slice(0, 200),
       statusCode: Number(statusCode || 502),
       timeoutMs: Number(timeoutMs || 0),
@@ -86,7 +92,10 @@ export function writeAgentProxyHttpTraceEvent({
     data: {
       traceEvent: String(event || ""),
       traceIdLength: String(traceId || "").length,
-      method: String(method || "").trim().toUpperCase() || "GET",
+      method:
+        String(method || "")
+          .trim()
+          .toUpperCase() || "GET",
       pathname: String(pathname || "").slice(0, 200),
       status: Number(status || 0),
       contentType: String(contentType || "").slice(0, 120),
@@ -96,10 +105,28 @@ export function writeAgentProxyHttpTraceEvent({
   });
 }
 
-export function writeAgentProxyHttpLifecycleEvent({ event, method = "", pathname = "", traceId = "", status = 0, durationMs = 0, workspaceRoot } = {}) {
+export function writeAgentProxyHttpLifecycleEvent({
+  event,
+  method = "",
+  pathname = "",
+  traceId = "",
+  status = 0,
+  durationMs = 0,
+  workspaceRoot,
+} = {}) {
   return writeRoutedRuntimeEvent({
-    source: "agent-proxy", channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: "agent-proxy-http", level: "info", event, workspaceRoot,
-    data: { method: String(method || "").toUpperCase() || "GET", pathname: String(pathname || "").slice(0, 200), traceIdLength: String(traceId || "").length, status: Number(status || 0), durationMs: Number(durationMs || 0) },
+    source: "agent-proxy",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: "agent-proxy-http",
+    level: "info",
+    event,
+    workspaceRoot,
+    data: {
+      method: String(method || "").toUpperCase() || "GET",
+      pathname: String(pathname || "").slice(0, 200),
+      traceIdLength: String(traceId || "").length,
+      status: Number(status || 0),
+      durationMs: Number(durationMs || 0),
+    },
   });
 }
