@@ -53,101 +53,45 @@ export function useThinkingTimeline(
   getRuntimeView,
   { shouldLoadThinkingDetail = () => true } = {},
 ) {
-  let canonicalRoundCache = null;
-
-  function roundMessageVersion(message = {}) {
-    const toolTimeline = Array.isArray(message?.toolTimeline) ? message.toolTimeline : [];
-    const activityTimeline = Array.isArray(message?.activityTimeline)
-      ? message.activityTimeline
-      : [];
-    const thinkingContentTimeline = selectThinkingDetailContentTimeline(message);
-    const lastTool = toolTimeline.at(-1) || {};
-    const lastActivity = activityTimeline.at(-1) || {};
-    const toolFactVersion = toolTimeline
-      .map((entry = {}) => ({
-        key: entry.key || entry.toolCallId || entry.tool_call_id || "",
-        tool: entry.tool || "",
-        args: entry.args,
-        result: entry.result,
-        call: entry.call?.eventId || "",
-        resultEvent: entry.resultEvent?.eventId || "",
-      }))
-      .map((entry) => JSON.stringify(entry))
-      .join(";");
-    return [
-      String(message?.messageUid || ""),
-      String(message?.content || ""),
-      Number(message?.messageEventState?.lastSequence || 0),
-      toolTimeline.length,
-      String(lastTool?.resultEvent?.eventId || lastTool?.call?.eventId || lastTool?.eventId || ""),
-      toolFactVersion,
-      activityTimeline.length,
-      String(lastActivity?.eventId || ""),
-      thinkingContentTimeline.length,
-      String(thinkingContentTimeline.at(-1)?.contentId || ""),
-    ].join(":");
-  }
-
-  function projectCanonicalRound(messageItem = {}) {
-    if (messageItem !== props.messageItem) return messageItem;
+  const roundMessages = computed(() => {
+    const messageItem = props.messageItem || {};
     const sessionId = getMessageSessionId(messageItem);
     const turnScopeId = getMessageTurnScopeId(messageItem);
-    if (!turnScopeId || !Array.isArray(props.allMessages)) return messageItem;
-    const roundMessages = props.allMessages.filter(
+    if (!turnScopeId || !Array.isArray(props.allMessages)) return [];
+    return props.allMessages.filter(
       (candidate) =>
         getMessageSessionId(candidate) === sessionId &&
         getMessageTurnScopeId(candidate) === turnScopeId,
     );
-    if (roundMessages.length <= 1) return messageItem;
-    const cacheKey = roundMessages
-      .map(
-        (candidate) => `${getMessageDialogProcessId(candidate)}:${roundMessageVersion(candidate)}`,
-      )
-      .join("|");
-    if (canonicalRoundCache?.key === cacheKey) {
-      return {
-        ...messageItem,
-        ...(canonicalRoundCache.dialogProcessId
-          ? { dialogProcessId: canonicalRoundCache.dialogProcessId }
-          : {}),
-        toolTimeline: canonicalRoundCache.toolTimeline,
-        activityTimeline: canonicalRoundCache.activityTimeline,
-        thinkingContentTimeline: canonicalRoundCache.thinkingContentTimeline,
-      };
-    }
-    const canonicalDialogProcessId =
-      roundMessages
-        .map((candidate) => getMessageDialogProcessId(candidate))
-        .find((candidate) => String(candidate || "").trim()) || "";
-    const projection = {
-      ...messageItem,
-      ...(canonicalDialogProcessId ? { dialogProcessId: canonicalDialogProcessId } : {}),
-      toolTimeline: mergeToolTimelines(
-        ...roundMessages.map((candidate) =>
-          Array.isArray(candidate?.toolTimeline) ? candidate.toolTimeline : [],
-        ),
+  });
+  const roundToolTimeline = computed(() =>
+    mergeToolTimelines(
+      ...roundMessages.value.map((candidate) =>
+        Array.isArray(candidate?.toolTimeline) ? candidate.toolTimeline : [],
       ),
-      activityTimeline: mergeActivityTimelines(
-        ...roundMessages.map((candidate) => candidate?.activityTimeline || []),
-      ),
-      thinkingContentTimeline: projectThinkingDetailContentTimeline(
-        roundMessages,
-        mergeActivityTimelines(
-          ...roundMessages.map((candidate) => candidate?.activityTimeline || []),
-        ),
-      ),
+    ),
+  );
+  const roundActivityTimeline = computed(() =>
+    mergeActivityTimelines(
+      ...roundMessages.value.map((candidate) => candidate?.activityTimeline || []),
+    ),
+  );
+  const roundThinkingContentTimeline = computed(() =>
+    projectThinkingDetailContentTimeline(roundMessages.value, roundActivityTimeline.value),
+  );
+  const roundTimelineView = computed(() => {
+    if (roundMessages.value.length <= 1) return null;
+    return {
+      toolTimeline: roundToolTimeline.value,
+      activityTimeline: roundActivityTimeline.value,
+      thinkingContentTimeline: roundThinkingContentTimeline.value,
     };
-    canonicalRoundCache = {
-      key: cacheKey,
-      dialogProcessId: canonicalDialogProcessId,
-      toolTimeline: projection.toolTimeline,
-      activityTimeline: projection.activityTimeline,
-      thinkingContentTimeline: projection.thinkingContentTimeline,
-    };
-    return projection;
-  }
+  });
 
-  const timelineMessage = (messageItem = {}) => projectCanonicalRound(messageItem);
+  function timelineMessage(messageItem = {}) {
+    if (messageItem !== props.messageItem) return messageItem;
+    return roundTimelineView.value || messageItem;
+  }
   const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);
   function selectActivityMessage(messageItem = props.messageItem) {
