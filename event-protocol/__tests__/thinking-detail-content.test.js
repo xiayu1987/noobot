@@ -93,7 +93,7 @@ function message(overrides = {}) {
   };
 }
 
-test("projects non-control injected messages and intermediate assistant content in message order", () => {
+test("projects injected messages only; assistant tool_call messages are not thinking facts", () => {
   const timeline = projectThinkingDetailContentTimeline([
     message({
       messageUid: "assistant-source",
@@ -120,13 +120,6 @@ test("projects non-control injected messages and intermediate assistant content 
       sequence,
     })),
     [
-      {
-        contentId: "message:assistant-source",
-        contentKind: THINKING_DETAIL_CONTENT_KIND.MAIN_MODEL_CONTENT,
-        sourceMessageUid: "assistant-source",
-        text: "先确认当前真实状态。",
-        sequence: 1,
-      },
       {
         contentId: "message:guidance-source",
         contentKind: THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE,

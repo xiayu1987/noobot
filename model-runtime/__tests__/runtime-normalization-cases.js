@@ -543,6 +543,7 @@ test("empty signed thinking responses are retried before completion", async () =
   const port = createModelRequestExecutor({
     registry: { resolve: () => adapter },
     credentialPort: { resolve: () => "secret" },
+    clock: { now: () => new Date(), sleep: async () => {} },
   });
 
   const response = await port.invoke({
@@ -577,6 +578,7 @@ test("empty signed thinking response exhaustion is a typed protocol error", asyn
   const port = createModelRequestExecutor({
     registry: { resolve: () => adapter },
     credentialPort: { resolve: () => "secret" },
+    clock: { now: () => new Date(), sleep: async () => {} },
   });
 
   await assert.rejects(
@@ -622,4 +624,68 @@ test("image-only chat output completes without an empty-response retry", async (
   assert.equal(response.output.text, "");
   assert.equal(response.execution.attempts[0]?.status, "completed");
   assert.equal(response.execution.attempts[0]?.kind, "response");
+});
+
+function createEmptyThenAnswerAdapter(emptyCount) {
+  const state = { calls: 0 };
+  const adapter = {
+    id: "anthropic-messages",
+    classifyError: () => ({ retryable: false }),
+    createClient: () => ({
+      invoke: async () =>
+        ++state.calls <= emptyCount
+          ? { content: "", response_metadata: { finish_reason: "stop" } }
+          : { content: "final answer" },
+    }),
+  };
+  return { adapter, state };
+}
+
+function createRecordingClock() {
+  const sleeps = [];
+  return { sleeps, clock: { now: () => new Date(), sleep: async (ms) => void sleeps.push(ms) } };
+}
+
+test("default empty-response policy retries with linear backoff until an answer arrives", async () => {
+  const { adapter, state } = createEmptyThenAnswerAdapter(2);
+  const { sleeps, clock } = createRecordingClock();
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+    clock,
+  });
+
+  const response = await port.invoke({ invocation, model, messages: [] });
+
+  assert.equal(state.calls, 3);
+  assert.equal(response.output.text, "final answer");
+  assert.deepEqual(sleeps, [500, 1000]);
+  assert.deepEqual(
+    response.execution.attempts.map(({ status, kind }) => ({ status, kind })),
+    [
+      { status: "retry", kind: "empty_response" },
+      { status: "retry", kind: "empty_response" },
+      { status: "completed", kind: "response" },
+    ],
+  );
+});
+
+test("default empty-response policy exhausts after three retries with a typed error", async () => {
+  const { adapter, state } = createEmptyThenAnswerAdapter(Infinity);
+  const { sleeps, clock } = createRecordingClock();
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+    clock,
+  });
+
+  await assert.rejects(
+    port.invoke({ invocation, model, messages: [] }),
+    (error) =>
+      error?.code === "MODEL_EMPTY_RESPONSE_RETRY_EXHAUSTED" &&
+      error?.kind === "empty_response" &&
+      error?.details?.attemptCount === 4,
+  );
+  assert.equal(state.calls, 4);
+  assert.deepEqual(sleeps, [500, 1000, 1500]);
 });

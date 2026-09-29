@@ -27,7 +27,7 @@ describe("turnTransportEnvelope", () => {
       data: {
         ...canonicalMessageEvent({
           eventId: "event-1",
-          eventType: "main_model_content",
+          eventType: "model_analysis_delta",
           messageId: "message-1",
           presentationMessageId: "message-1",
           sessionId: "session-1",

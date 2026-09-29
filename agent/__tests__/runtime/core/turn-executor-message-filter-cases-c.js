@@ -90,10 +90,10 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
   const result = await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
 
   assert.equal(result.aiContentText, "ok-without-final-stream");
-  assert.equal(
-    events.some((item) => item?.event === "main_model_content"),
-    false,
-  );
+  const streamedEventTypes = events
+    .map((item) => item?.data?.envelope?.payload?.eventType || item?.event)
+    .filter((eventType) => eventType === "llm_delta" || eventType === "activity_delta");
+  assert.deepEqual(streamedEventTypes, []);
 });
 
 test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {

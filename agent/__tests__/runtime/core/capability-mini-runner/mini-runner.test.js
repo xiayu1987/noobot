@@ -19,6 +19,7 @@ import {
 import { bindAssistantMessageEventStream } from "../../../../src/events/message-event-stream.js";
 import { createCanonicalMessageEventSessionManager } from "../../../helpers/canonical-message-event-session-manager.js";
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
+import { reduceCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
 
 const modelSpec = Object.freeze({
   alias: "test",
@@ -328,18 +329,20 @@ for (const streaming of [false, true]) {
       })({ purpose: "third_party_review", activity: { activityKind: "custom_review" }, ctx });
       assert.equal(response.output.text, "review result");
       assert.ok(modelPort.requests.every((request) => request.options.streaming === streaming));
-      const payloads = events
+      const envelopes = events
         .filter((event) => event.event === "authority_event_committed")
-        .map((event) => event.data.envelope.payload);
-      assert.equal(payloads.length, streaming ? 2 : 1);
-      assert.equal(payloads.map((payload) => payload.text).join(""), "review result");
-      assert.ok(payloads.every((payload) => payload.activityKind === "custom_review"));
-      assert.ok(
-        payloads.every(
-          (payload) => payload.eventType === (streaming ? "activity_delta" : "thinking"),
-        ),
+        .map((event) => event.data.envelope);
+      const payloads = envelopes.map((envelope) => envelope.payload);
+      // Streaming emits fragments, then one completion; non-streaming emits only the completion.
+      assert.deepEqual(
+        payloads.map((payload) => payload.eventType),
+        streaming ? ["activity_delta", "activity_delta", "thinking"] : ["thinking"],
       );
+      assert.ok(payloads.every((payload) => payload.activityKind === "custom_review"));
       assert.equal(new Set(payloads.map((payload) => payload.activityId)).size, 1);
+      const timeline = envelopes.reduce(reduceCanonicalActivityTimeline, []);
+      assert.equal(timeline.length, 1);
+      assert.equal(timeline[0].text, "review result");
       if (mode === "finalize") assert.equal(modelPort.requests.at(-1).tools, undefined);
     });
   }
@@ -359,7 +362,7 @@ test("a non-streaming provider result completes the explicitly requested streami
     .filter((event) => event.event === "authority_event_committed")
     .map((event) => event.data.envelope.payload);
   assert.equal(payloads.length, 1);
-  assert.equal(payloads[0].eventType, "activity_delta");
+  assert.equal(payloads[0].eventType, "thinking");
   assert.equal(payloads[0].text, "whole result");
 });
 

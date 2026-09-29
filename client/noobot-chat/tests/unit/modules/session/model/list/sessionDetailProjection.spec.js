@@ -96,7 +96,7 @@ describe("buildSessionDetailProjection", () => {
             activityTimeline: [
               canonicalActivityFact({
                 eventId: "activity-1",
-                eventType: "main_model_content",
+                eventType: "model_analysis_delta",
                 text: "inspect first",
                 sessionId: "session-resend",
                 turnScopeId: "client-turn:resend",

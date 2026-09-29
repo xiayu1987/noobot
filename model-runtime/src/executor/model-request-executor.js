@@ -400,10 +400,15 @@ export function createModelRequestExecutor({
               output,
             });
             emptyResponseAttempts += 1;
+            // Linear backoff mirrors transport retry; empty responses are often transient.
+            const delayMs =
+              Math.max(0, Number(retry.emptyResponse.baseDelayMs) || 0) * emptyResponseAttempts;
             observe("model.invocation.semantic_retry", {
               kind: MODEL_ATTEMPT_KIND.EMPTY_RESPONSE,
               attempt: totalAttempts,
+              delayMs,
             });
+            if (delayMs > 0) await clock.sleep(delayMs);
             continue;
           }
           const error = new ModelProtocolError("model returned no final text or tool call", {

@@ -112,7 +112,7 @@ function activityContentFact(activity = {}, index) {
     contentId: `event:${eventId}`,
     contentKind:
       text(activity?.eventType) === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA
-        ? THINKING_DETAIL_CONTENT_KIND.MAIN_MODEL_CONTENT
+        ? THINKING_DETAIL_CONTENT_KIND.MODEL_ANALYSIS
         : THINKING_DETAIL_CONTENT_KIND.THINKING,
     sourceEventId: eventId,
     text: value,
@@ -137,25 +137,6 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
       .map((message = {}) => text(message?.relayCorrelationId))
       .filter(Boolean),
   );
-  const hasUnboundMainModelActivity = activities.some(
-    (item) => item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA && !text(item.messageId),
-  );
-  const boundMainModelIds = new Set(
-    activities
-      .filter((item) => item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA)
-      .map((item) => text(item.messageId))
-      .filter(Boolean),
-  );
-  const messageUidsWithMainModelActivity = new Set(
-    (Array.isArray(messages) ? messages : [])
-      .filter((message = {}) =>
-        mergeCanonicalActivityTimelines(message?.activityTimeline || []).some(
-          (item) => item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
-        ),
-      )
-      .map((message = {}) => messageIdentity(message))
-      .filter(Boolean),
-  );
   for (const [index, message] of (Array.isArray(messages) ? messages : []).entries()) {
     if (isThinkingDetailUserInterjection(message)) {
       const fact = messageContentFact(
@@ -170,22 +151,6 @@ export function projectThinkingDetailContentTimeline(messages = [], activityTime
       const fact = messageContentFact(
         message,
         THINKING_DETAIL_CONTENT_KIND.INJECTED_MESSAGE,
-        index,
-      );
-      if (fact) timeline.push(fact);
-      continue;
-    }
-    const messageId = text(message?.messageId || message?.id);
-    if (
-      text(message?.role) === "assistant" &&
-      text(message?.type) === "tool_call" &&
-      !hasUnboundMainModelActivity &&
-      !boundMainModelIds.has(messageId) &&
-      !messageUidsWithMainModelActivity.has(messageIdentity(message))
-    ) {
-      const fact = messageContentFact(
-        message,
-        THINKING_DETAIL_CONTENT_KIND.MAIN_MODEL_CONTENT,
         index,
       );
       if (fact) timeline.push(fact);

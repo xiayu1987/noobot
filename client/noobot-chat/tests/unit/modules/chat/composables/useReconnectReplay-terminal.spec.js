@@ -213,7 +213,7 @@ describe("useReconnectReplay", () => {
       seq: 1,
       text: "A",
     });
-    await api.applyCanonicalMessageEvent("main_model_content", {
+    await api.applyCanonicalMessageEvent("model_analysis_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-terminal",
       seq: 2,

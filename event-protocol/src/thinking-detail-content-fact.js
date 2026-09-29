@@ -25,7 +25,7 @@ const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
 export const THINKING_DETAIL_CONTENT_KIND = Object.freeze({
   INJECTED_MESSAGE: "injected_message",
   USER_INTERJECTION: "user_interjection",
-  MAIN_MODEL_CONTENT: "main_model_content",
+  MODEL_ANALYSIS: "model_analysis",
   THINKING: "thinking",
 });
 

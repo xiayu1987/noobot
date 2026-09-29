@@ -188,7 +188,7 @@ function formatThinkingContentTitle(item = {}, index = 0) {
   const sourceKeyByKind = {
     user_interjection: "message.userInterjection",
     injected_message: "message.injectedMessage",
-    main_model_content: "message.modelAnalysis",
+    model_analysis: "message.modelAnalysis",
     thinking: "message.analysisFlow",
   };
   const sourceLabel = sourceKeyByKind[source] ? props.translate(sourceKeyByKind[source]) : source;

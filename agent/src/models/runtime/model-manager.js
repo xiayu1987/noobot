@@ -74,7 +74,13 @@ export function createStreamingCallbacks(eventListener = null, runtime = {}) {
   ];
 }
 
-export function createActivityStreamingCallbacks(
+/**
+ * The single producer of one model activity. Streaming emits ACTIVITY_DELTA fragments;
+ * complete() always emits the standalone activity event with the final text under the
+ * same activityId, which the protocol reducer treats as the activity's complete text.
+ * This covers streaming, non-streaming, and in-request streaming downgrade identically.
+ */
+export function createModelActivity(
   eventListener = null,
   runtime = {},
   {
@@ -85,30 +91,44 @@ export function createActivityStreamingCallbacks(
     chain = "",
     relayCorrelationId = "",
     activityId = randomUUID(),
-    state = null,
+    streaming = false,
   } = {},
 ) {
-  if (!eventListener?.onEvent) return undefined;
+  const activity = {
+    activityId,
+    activityKind,
+    purpose,
+    pluginFlow,
+    chain,
+    relayCorrelationId,
+  };
+  if (!eventListener?.onEvent) {
+    return { callbacks: undefined, complete: async () => null };
+  }
   const visibilityFilter = createLlmDeltaVisibilityFilter();
   const emitVisibleDelta = (value = "") => {
     const text = String(value || "");
     if (!text) return null;
-    if (state && typeof state === "object") state.emitted = true;
     return emitMessageEvent(eventListener, runtime, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA, {
-      activityId,
-      activityKind,
+      ...activity,
       activityEventType,
-      purpose,
-      pluginFlow,
-      chain,
-      relayCorrelationId,
       text,
     });
   };
-  return [
-    {
-      handleLLMNewToken: (token) => emitVisibleDelta(visibilityFilter.push(String(token || ""))),
-      handleLLMEnd: () => emitVisibleDelta(visibilityFilter.flush()),
+  return {
+    callbacks: streaming
+      ? [
+          {
+            handleLLMNewToken: (token) =>
+              emitVisibleDelta(visibilityFilter.push(String(token || ""))),
+            handleLLMEnd: () => emitVisibleDelta(visibilityFilter.flush()),
+          },
+        ]
+      : undefined,
+    async complete(finalText = "") {
+      const text = String(finalText || "").trim();
+      if (!text) return null;
+      return emitMessageEvent(eventListener, runtime, activityEventType, { ...activity, text });
     },
-  ];
+  };
 }

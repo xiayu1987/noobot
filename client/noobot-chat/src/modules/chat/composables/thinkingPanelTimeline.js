@@ -345,7 +345,7 @@ export function useThinkingTimeline(
     return selectTaskCheckReceipts(timelineMessage(loadedThinkingDetail.value?.messageItem || {}));
   });
 
-  const { getLatestMainModelContentLog, getLatestPluginAnalysisLog, summarizeAnalysisProjection } =
+  const { getLatestModelAnalysisLog, getLatestPluginAnalysisLog, summarizeAnalysisProjection } =
     createThinkingAnalysisProjection({
       props,
       currentAnalysisProjection,
@@ -604,7 +604,7 @@ export function useThinkingTimeline(
     latestTaskCheckReceipt,
     taskCheckReceipts,
     getLatestPluginAnalysisLog,
-    getLatestMainModelContentLog,
+    getLatestModelAnalysisLog,
     getExecutionLogs,
     getCanonicalExecutionLogs,
     getExecutionLogCount,

@@ -55,9 +55,7 @@ import {
   applyAuthoritativeMessageId,
   beginAssistantMessageEventStream,
   currentAssistantPresentationMessageId,
-  emitMessageEvent,
 } from "../../events/message-event-stream.js";
-import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 export {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForLangChain,
@@ -500,14 +498,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       turnMessageStore,
     }),
   });
-
-  const mainModelToolTurnContent = String(finalAiContentText || "").trim();
-  if (mainModelToolTurnContent && calls.length) {
-    await emitMessageEvent(eventListener, runtime, MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT, {
-      turn,
-      text: mainModelToolTurnContent,
-    });
-  }
 
   emitEvent(eventListener, "llm_call_end", {
     turn,

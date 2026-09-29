@@ -71,7 +71,7 @@ test("tool result transfer envelopes project onto the canonical assistant turn",
   assert.deepEqual(store.toArray()[0].transferEnvelopes, [transferEnvelope]);
 });
 
-test("main model content projects once and awaits its durable checkpoint", async () => {
+test("model analysis activity projects once and awaits its durable checkpoint", async () => {
   const store = createCurrentTurnMessagesStore([
     { role: "assistant", messageUid: "assistant-1", activityTimeline: [] },
   ]);
@@ -84,7 +84,7 @@ test("main model content projects once and awaits its durable checkpoint", async
     },
   };
   initializeCurrentTurnMessageEventProjection(runtime);
-  const envelope = messageEvent("activity-1", "main_model_content", 1, {
+  const envelope = messageEvent("activity-1", "model_analysis_delta", 1, {
     text: "先确认当前真实状态。",
   });
 
@@ -95,7 +95,7 @@ test("main model content projects once and awaits its durable checkpoint", async
   assert.equal(store.toArray()[0].activityTimeline.length, 1);
   assert.deepEqual(store.toArray()[0].activityTimeline[0], {
     eventId: "activity-1",
-    eventType: "main_model_content",
+    eventType: "model_analysis_delta",
     text: "先确认当前真实状态。",
     activityKind: "",
     purpose: "",
@@ -113,4 +113,46 @@ test("main model content projects once and awaits its durable checkpoint", async
     messageId: "message-1",
     presentationMessageId: "presentation-1",
   });
+});
+
+test("streamed activity deltas update the live projection and persist once on completion", async () => {
+  const store = createCurrentTurnMessagesStore([
+    { role: "assistant", messageUid: "assistant-1", activityTimeline: [] },
+  ]);
+  let persisted = 0;
+  const runtime = {
+    currentTurnMessages: store,
+    systemRuntime: {},
+    persistCurrentTurnMessages: async () => {
+      persisted += 1;
+    },
+  };
+  initializeCurrentTurnMessageEventProjection(runtime);
+  const fragments = ["先确认", "当前", "真实状态。"];
+  for (const [index, fragment] of fragments.entries()) {
+    await runtime.projectCurrentTurnMessageEvent(
+      messageEvent(`delta-${index + 1}`, "activity_delta", index + 1, {
+        activityId: "activity-a",
+        activityKind: "main_model_analysis",
+        activityEventType: "model_analysis_delta",
+        text: fragment,
+      }),
+    );
+  }
+
+  assert.equal(persisted, 0);
+  assert.equal(store.toArray()[0].activityTimeline.length, 1);
+  assert.equal(store.toArray()[0].activityTimeline[0].text, "先确认当前真实状态。");
+
+  await runtime.projectCurrentTurnMessageEvent(
+    messageEvent("complete-1", "model_analysis_delta", 4, {
+      activityId: "activity-a",
+      text: "先确认当前真实状态。",
+    }),
+  );
+
+  assert.equal(persisted, 1);
+  assert.equal(store.toArray()[0].activityTimeline.length, 1);
+  assert.equal(store.toArray()[0].activityTimeline[0].eventId, "complete-1");
+  assert.equal(store.toArray()[0].activityTimeline[0].text, "先确认当前真实状态。");
 });
