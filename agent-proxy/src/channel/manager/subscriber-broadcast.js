@@ -20,8 +20,10 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 
+// 生命周期被同回合更新状态覆盖时视为已受理：最新状态已在途。
+const LIFECYCLE_SUPERSEDED = "superseded";
 const isAcceptedChannelDelivery = (result = {}) =>
-  result.result === "sent" || result.result === "queued";
+  result.result === "sent" || result.result === "queued" || result.result === LIFECYCLE_SUPERSEDED;
 
 class SubscriberBroadcastMethods {
   attachSubscriber(channel, socket, { sendStateSnapshot = true } = {}) {
@@ -59,10 +61,13 @@ class SubscriberBroadcastMethods {
     }
     const cleared = pendingDeliveries.size;
     pendingDeliveries.clear();
-    socket.__agentProxyLifecycleDeliveryQueues?.clear?.();
+    socket.__agentProxyLifecycleDeliveriesByTurn?.clear?.();
     return cleared;
   }
 
+  // 生命周期是状态事件：同一 (channel, session, turn) 每个 socket 只保留最新一条在途投递，
+  // 新状态直接覆盖旧状态并立即下发，终态不再排在前序回执之后。
+  // 前端按 revision/sequence 单调接收，不要求连号，被覆盖的中间态无需补发。
   acknowledgeTurnLifecycleDelivery(socket, receipt = {}) {
     const validation = validateTurnLifecycleReceipt(receipt);
     if (!validation.valid) {
@@ -78,15 +83,7 @@ class SubscriberBroadcastMethods {
     ) {
       return { acknowledged: false, reason: "delivery_scope_mismatch" };
     }
-    const deliveryQueues = socket?.__agentProxyLifecycleDeliveryQueues;
-    const queue = deliveryQueues instanceof Map ? deliveryQueues.get(delivery.queueKey) : null;
-    if (!queue || queue[0] !== delivery) {
-      return { acknowledged: false, reason: "delivery_out_of_order" };
-    }
-    if (delivery.timer) clearTimeout(delivery.timer);
-    pendingDeliveries.delete(eventId);
-    queue.shift();
-    if (!queue.length) deliveryQueues.delete(delivery.queueKey);
+    this._removePendingLifecycleDelivery(socket, delivery);
     this.recordSuccessfulDataPlaneOperation("lifecycleReceipts");
     if (isTerminalTurnEvent(delivery.eventType)) {
       this.logSessionEvent(delivery.channel, {
@@ -111,10 +108,6 @@ class SubscriberBroadcastMethods {
       Number(socket.__agentProxyLastSequenceByChannel[delivery.channel.key] || 0),
       delivery.transportSequence,
     );
-    const nextDelivery = queue[0] || null;
-    const nextDeliveryResult = nextDelivery
-      ? this._deliverPendingLifecycle(socket, nextDelivery)
-      : null;
     return {
       acknowledged: true,
       reason: "",
@@ -129,7 +122,6 @@ class SubscriberBroadcastMethods {
         transportSequence: delivery.transportSequence,
         attempts: delivery.attempts,
       },
-      nextDeliveryResult,
     };
   }
 
@@ -148,16 +140,35 @@ class SubscriberBroadcastMethods {
       return { result: "failed", reason: "invalid_lifecycle_delivery_identity" };
     }
     targetSocket.__agentProxyPendingLifecycleDeliveries ||= new Map();
-    targetSocket.__agentProxyLifecycleDeliveryQueues ||= new Map();
+    targetSocket.__agentProxyLifecycleDeliveriesByTurn ||= new Map();
     const pendingDeliveries = targetSocket.__agentProxyPendingLifecycleDeliveries;
-    const existing = pendingDeliveries.get(eventId);
-    if (existing) {
-      return {
-        result: existing.timer ? "sent" : "queued",
-        reason: existing.timer ? "awaiting_receipt" : "waiting_for_prior_receipt",
-      };
+    if (pendingDeliveries.has(eventId)) return { result: "sent", reason: "awaiting_receipt" };
+    const turnKey = `${channel.key}\u0000${sessionId}\u0000${turnScopeId}`;
+    const lifecycleSequence = Number(eventEnvelope?.ordering?.sequence || 0);
+    const inFlight = targetSocket.__agentProxyLifecycleDeliveriesByTurn.get(turnKey) || null;
+    if (inFlight && inFlight.lifecycleSequence >= lifecycleSequence) {
+      // 更新的状态已在途，旧状态（如回放补发）被覆盖，无需下发。
+      return { result: LIFECYCLE_SUPERSEDED, reason: "newer_lifecycle_in_flight" };
     }
-    const queueKey = `${channel.key}\u0000${sessionId}\u0000${turnScopeId}`;
+    if (inFlight) {
+      this._removePendingLifecycleDelivery(targetSocket, inFlight);
+      this.logSessionEvent(channel, {
+        category: "transport",
+        event: "agentProxy.channel.lifecycle.superseded",
+        sessionId,
+        dialogProcessId: String(eventData.dialogProcessId || "").trim(),
+        turnScopeId,
+        data: {
+          connectionId: ensureConnectionId(targetSocket),
+          supersededEventId: inFlight.eventId,
+          supersededEventType: inFlight.eventType,
+          supersededLifecycleSequence: inFlight.lifecycleSequence,
+          eventId,
+          eventType: String(eventData.eventType || "").trim(),
+          lifecycleSequence,
+        },
+      });
+    }
     const delivery = {
       channel,
       envelope: deliveryEnvelope,
@@ -166,19 +177,14 @@ class SubscriberBroadcastMethods {
       sessionId,
       turnScopeId,
       dialogProcessId: String(eventData.dialogProcessId || "").trim(),
-      lifecycleSequence: Number(eventEnvelope?.ordering?.sequence || 0),
+      lifecycleSequence,
       transportSequence: Number(envelope?.sequence || 0),
-      queueKey,
+      turnKey,
       attempts: 0,
       timer: null,
     };
     pendingDeliveries.set(eventId, delivery);
-    const queue = targetSocket.__agentProxyLifecycleDeliveryQueues.get(queueKey) || [];
-    queue.push(delivery);
-    targetSocket.__agentProxyLifecycleDeliveryQueues.set(queueKey, queue);
-    if (queue[0] !== delivery) {
-      return { result: "queued", reason: "waiting_for_prior_receipt" };
-    }
+    targetSocket.__agentProxyLifecycleDeliveriesByTurn.set(turnKey, delivery);
     return this._deliverPendingLifecycle(targetSocket, delivery);
   }
 
@@ -213,13 +219,12 @@ class SubscriberBroadcastMethods {
   _removePendingLifecycleDelivery(targetSocket, delivery) {
     if (!delivery) return;
     if (delivery.timer) clearTimeout(delivery.timer);
+    delivery.timer = null;
     targetSocket?.__agentProxyPendingLifecycleDeliveries?.delete(delivery.eventId);
-    const queues = targetSocket?.__agentProxyLifecycleDeliveryQueues;
-    const queue = queues instanceof Map ? queues.get(delivery.queueKey) : null;
-    if (!queue) return;
-    const index = queue.indexOf(delivery);
-    if (index >= 0) queue.splice(index, 1);
-    if (!queue.length) queues.delete(delivery.queueKey);
+    const byTurn = targetSocket?.__agentProxyLifecycleDeliveriesByTurn;
+    if (byTurn instanceof Map && byTurn.get(delivery.turnKey) === delivery) {
+      byTurn.delete(delivery.turnKey);
+    }
   }
 
   _retryPendingLifecycleDelivery(targetSocket, eventId = "") {
@@ -230,17 +235,8 @@ class SubscriberBroadcastMethods {
       delivery.timer = null;
     }
     if (delivery.attempts >= config.turnLifecycleDeliveryMaxAttempts) {
-      // 清队会连带丢弃同一 socket 上排队的后续 lifecycle（含终态），它们由前端被动断线
-      // 重连后的 lifecycle replay 补齐；这里必须把被丢弃项记下来，保证链路可追溯。
-      const droppedDeliveries = [
-        ...(targetSocket.__agentProxyPendingLifecycleDeliveries?.values?.() || []),
-      ]
-        .filter((item) => item !== delivery)
-        .map((item) => ({
-          eventId: item.eventId,
-          eventType: item.eventType,
-          lifecycleSequence: item.lifecycleSequence,
-        }));
+      // 只有最新状态在途，耗尽不会连带丢弃其他生命周期；关闭不可靠连接后，
+      // 前端被动断线重连，由 channel 级 lifecycle replay 补回最新状态。
       this.logSessionEvent(delivery.channel, {
         category: "transport",
         level: "error",
@@ -255,7 +251,6 @@ class SubscriberBroadcastMethods {
           transportSequence: delivery.transportSequence,
           attempts: delivery.attempts,
           connectionId: ensureConnectionId(targetSocket),
-          droppedDeliveries,
         },
       });
       this.clearPendingLifecycleDeliveries(targetSocket);

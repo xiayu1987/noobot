@@ -12,27 +12,30 @@ import {
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { normalizeOptionalSessionId } from "./session-id.js";
+import { RUNTIME_EVENT_CATEGORIES } from "./constants.js";
 
+// 会话日志分类是 runtime schema 分类的子集（不含 security/config），
+// 必须引用唯一注册表，避免手写副本与 schema 白名单漂移导致整批日志被拒收。
 export const SESSION_LOG_CATEGORIES = Object.freeze([
-  "state",
-  "message",
-  "interaction",
-  "transport",
-  "debug",
-  "agent-proxy",
-  "system",
-  "frontend-lifecycle",
-  "agent-proxy-http",
-  "agent-proxy-websocket",
-  "agent-proxy-route",
-  "backend-websocket",
-  "backend-lifecycle",
+  RUNTIME_EVENT_CATEGORIES.STATE,
+  RUNTIME_EVENT_CATEGORIES.MESSAGE,
+  RUNTIME_EVENT_CATEGORIES.INTERACTION,
+  RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+  RUNTIME_EVENT_CATEGORIES.DEBUG,
+  RUNTIME_EVENT_CATEGORIES.AGENT_PROXY,
+  RUNTIME_EVENT_CATEGORIES.SYSTEM,
+  RUNTIME_EVENT_CATEGORIES.FRONTEND_LIFECYCLE,
+  RUNTIME_EVENT_CATEGORIES.AGENT_PROXY_HTTP,
+  RUNTIME_EVENT_CATEGORIES.AGENT_PROXY_WEBSOCKET,
+  RUNTIME_EVENT_CATEGORIES.AGENT_PROXY_ROUTE,
+  RUNTIME_EVENT_CATEGORIES.BACKEND_WEBSOCKET,
+  RUNTIME_EVENT_CATEGORIES.BACKEND_LIFECYCLE,
 ]);
 
 const SESSION_LOG_CATEGORY_SET = new Set(SESSION_LOG_CATEGORIES);
-export const SESSION_LOG_DEBUG_CATEGORY = "debug";
-export const SESSION_LOG_DEFAULT_CATEGORY = "system";
-export const SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY = "agent-proxy";
+export const SESSION_LOG_DEBUG_CATEGORY = RUNTIME_EVENT_CATEGORIES.DEBUG;
+export const SESSION_LOG_DEFAULT_CATEGORY = RUNTIME_EVENT_CATEGORIES.SYSTEM;
+export const SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY = RUNTIME_EVENT_CATEGORIES.AGENT_PROXY;
 
 export const SESSION_LOG_CONTROL_KEYS = RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS;
 
