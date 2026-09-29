@@ -198,36 +198,24 @@ export function acknowledgeAuthorityEventDelivery(
   return { found, changed, outbox };
 }
 
+// Retention is the single compaction rule: every event this consumer acknowledged before the
+// cutoff is reclaimed, across all ordering streams of the session. Streams whose turn has ended
+// never receive another delivery, so compaction must not be scoped to the streams of one drain.
 export function compactAuthorityEventOutbox(
   source = [],
-  {
-    consumerId = "",
-    orderingDomain = "",
-    orderingScopeId = "",
-    deliveredThroughSequence,
-    retainDeliveredAfter = "",
-  } = {},
+  { consumerId = "", retainDeliveredAfter = "" } = {},
 ) {
   const normalizedConsumerId = text(consumerId);
-  const normalizedDomain = text(orderingDomain);
-  const normalizedScopeId = text(orderingScopeId);
-  const watermark = Number(deliveredThroughSequence);
-  if (
-    !normalizedConsumerId ||
-    !normalizedDomain ||
-    !normalizedScopeId ||
-    !Number.isInteger(watermark) ||
-    watermark < 0
-  ) {
+  if (!normalizedConsumerId) {
     return {
       compacted: false,
-      reason: "invalid_delivery_watermark",
+      reason: "missing_compaction_consumer",
       removed: 0,
       outbox: normalizeAuthorityEventOutbox(source),
     };
   }
-  const cutoff = text(retainDeliveredAfter);
-  if (!cutoff || !Number.isFinite(Date.parse(cutoff))) {
+  const cutoff = Date.parse(text(retainDeliveredAfter));
+  if (!Number.isFinite(cutoff)) {
     return {
       compacted: false,
       reason: "invalid_retention_cutoff",
@@ -236,18 +224,12 @@ export function compactAuthorityEventOutbox(
     };
   }
   const outbox = normalizeAuthorityEventOutbox(source);
-  const retained = outbox.filter((item) => {
-    if (!item.delivery.deliveredAt) return true;
-    if (item.delivery.consumerId !== normalizedConsumerId) return true;
-    if (
-      item.delivery.orderingDomain !== normalizedDomain ||
-      item.delivery.orderingScopeId !== normalizedScopeId
-    )
-      return true;
-    if (item.delivery.sequence > watermark) return true;
-    if (Date.parse(item.delivery.deliveredAt) >= Date.parse(cutoff)) return true;
-    return false;
-  });
+  const retained = outbox.filter(
+    (item) =>
+      !item.delivery.deliveredAt ||
+      item.delivery.consumerId !== normalizedConsumerId ||
+      Date.parse(item.delivery.deliveredAt) >= cutoff,
+  );
   return {
     compacted: retained.length !== outbox.length,
     removed: outbox.length - retained.length,

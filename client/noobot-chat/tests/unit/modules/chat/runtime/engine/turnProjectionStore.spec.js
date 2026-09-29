@@ -24,7 +24,8 @@ const envelope = (overrides) => canonicalMessageEvent({
   ...overrides,
 });
 const events = [
-  envelope({ eventId: "evt-1", eventType: "llm_delta", sequence: 1, text: "hello " }),
+  // 持久事件承载 1..3 连续序号；尾部 delta 只传输、不带序号。
+  envelope({ eventId: "evt-1", eventType: "thinking", sequence: 1, text: "hello " }),
   envelope({
     eventId: "evt-2",
     eventType: "tool_call_start",

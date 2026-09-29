@@ -593,7 +593,7 @@ test("successful upstream messages bypass session logs and retain data-plane met
       event: "message_event",
       data: canonicalMessageEvent({
         sessionId: "session-upstream-content",
-        eventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
+        eventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
         text: "authoritative result",
       }),
     }),

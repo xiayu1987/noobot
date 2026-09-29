@@ -355,13 +355,10 @@ export async function compactAuthorityEvents({
   sessionId,
   parentSessionId = "",
   persistenceContext = null,
-  deliveredThroughSequence,
   consumerId = "",
-  orderingDomain = "",
-  orderingScopeId = "",
   retainDeliveredAfter = "",
 } = {}) {
-  if (!userId || !sessionId || !consumerId || !orderingDomain || !orderingScopeId) {
+  if (!userId || !sessionId || !consumerId) {
     return { compacted: false, reason: "missing_compaction_identity" };
   }
   const sessionDir = await readOutboxSessionDir(
@@ -374,13 +371,7 @@ export async function compactAuthorityEvents({
   if (!sessionDir) return { compacted: false, reason: "session_not_found" };
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const outbox = await readAuthorityOutbox(sessionDir);
-    const result = compactAuthorityEventOutbox(outbox, {
-      deliveredThroughSequence,
-      consumerId,
-      orderingDomain,
-      orderingScopeId,
-      retainDeliveredAfter,
-    });
+    const result = compactAuthorityEventOutbox(outbox, { consumerId, retainDeliveredAfter });
     if (result.reason || !result.compacted) return result;
     const checkpoint = await readAuthorityOutboxCheckpoint(sessionDir);
     await writeAuthorityOutboxCheckpoint(sessionDir, {

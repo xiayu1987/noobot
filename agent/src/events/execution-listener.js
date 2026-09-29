@@ -12,6 +12,7 @@ import {
 } from "./transport-payload.js";
 import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
+import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 
 function projectExecutionLogRecord(event = "", data = {}) {
   if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
@@ -183,19 +184,23 @@ export function createExecutionEventListener({
       const data = evt?.data || {};
       const ts = evt?.ts || new Date().toISOString();
 
-      const executionRecord = projectExecutionLogRecord(event, data);
-      const { category, type } = classifyExecutionEvent(executionRecord.event);
-      appendExecutionLog({
-        userId,
-        sessionId,
-        parentSessionId,
-        dialogProcessId,
-        event: executionRecord.event,
-        category,
-        type,
-        data: executionRecord.data,
-        ts,
-      });
+      // Transient message events are live-only by protocol: forward them, never persist them
+      // into the execution log (the durable activity / final content event is logged instead).
+      if (!isTransientMessageEvent(data?.envelope)) {
+        const executionRecord = projectExecutionLogRecord(event, data);
+        const { category, type } = classifyExecutionEvent(executionRecord.event);
+        appendExecutionLog({
+          userId,
+          sessionId,
+          parentSessionId,
+          dialogProcessId,
+          event: executionRecord.event,
+          category,
+          type,
+          data: executionRecord.data,
+          ts,
+        });
+      }
 
       if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
       return forwardEvent({ event, data, ts });

@@ -143,7 +143,7 @@ test("streamed activity deltas update the live projection and persist once on co
   const fragments = ["先确认", "当前", "真实状态。"];
   for (const [index, fragment] of fragments.entries()) {
     await runtime.projectCurrentTurnMessageEvent(
-      messageEvent(`delta-${index + 1}`, "activity_delta", index + 1, {
+      messageEvent(`delta-${index + 1}`, "activity_delta", 0, {
         activityId: "activity-a",
         activityKind: "main_model_analysis",
         activityEventType: "model_analysis_delta",

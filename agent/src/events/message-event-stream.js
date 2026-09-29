@@ -5,10 +5,19 @@
  */
 import { randomUUID } from "node:crypto";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
+import {
+  EVENT_FAMILY,
+  createEventEnvelope,
+  validateProtocolEvent,
+} from "@noobot/event-protocol";
 import { emitEvent } from "./emitter.js";
 import {
   MODEL_MESSAGE_SCOPED_EVENT_TYPES,
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_WIRE_EVENT,
+  TRANSIENT_MESSAGE_EVENT_SEQUENCE,
   assertMessageEventPayload,
+  isTransientMessageEventType,
 } from "@noobot/event-protocol/message-event";
 import { AGENT_RUN_EVENT } from "./run-event.js";
 
@@ -193,10 +202,8 @@ export function createMessageEventPayload(runtime = {}, eventType = "", data = {
   return payload;
 }
 
-export async function emitMessageEvent(eventListener, runtime = {}, eventType = "", data = {}) {
-  const payload = createMessageEventPayload(runtime, eventType, data);
-  const state = runtimeState(runtime);
-  const committed = await runtime?.sessionManager?.commitMessageEvent?.({
+function messageEventCommitInput(runtime, state, payload) {
+  return {
     userId: text(runtime?.userId),
     sessionId: text(state?.sessionId || runtime?.sessionId),
     parentSessionId: text(payload.parentSessionId),
@@ -209,19 +216,70 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
     correlationId: text(runtime?.runConfig?.turnScopeId),
     payload,
     persistenceContext: state?.persistenceContext || null,
+  };
+}
+
+// Transient events (protocol TRANSIENT_MESSAGE_EVENT_TYPES) are live-only: they never enter the
+// authority outbox, take no authoritative sequence and are superseded by the durable event of
+// the same activity / the authoritative final content.
+function createTransientMessageEventEnvelope(input) {
+  // Transient envelopes carry no user identity and touch no user storage.
+  if (!input.sessionId || !input.turnScopeId || !input.messageId) {
+    throw new TypeError("message event requires session, Turn and message identity");
+  }
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId: `evt_${randomUUID()}`,
+      eventType: MESSAGE_EVENT_WIRE_EVENT,
+      sessionId: input.sessionId,
+      turnScopeId: input.turnScopeId,
+      messageId: input.messageId,
+      executionId: input.executionId,
+    },
+    causality: {
+      commandId: input.commandId,
+      causationId: "",
+      correlationId: input.correlationId,
+    },
+    ordering: {
+      domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+      scopeId: input.messageId,
+      sequence: TRANSIENT_MESSAGE_EVENT_SEQUENCE,
+    },
+    producer: { type: "agent", id: "message-runtime" },
+    occurredAt: new Date().toISOString(),
+    payload: input.payload,
   });
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid) {
+    throw new TypeError(`invalid transient message event: ${validation.errors.join(",")}`);
+  }
+  return envelope;
+}
+
+async function commitDurableMessageEvent(runtime, input) {
+  const committed = await runtime?.sessionManager?.commitMessageEvent?.(input);
   if (!committed?.committed || !committed?.envelope) {
     throw new Error(`authoritative message event commit failed: ${committed?.reason || "unknown"}`);
   }
-  const projected = await runtime?.projectCurrentTurnMessageEvent?.(committed.envelope);
+  return committed.envelope;
+}
+
+export async function emitMessageEvent(eventListener, runtime = {}, eventType = "", data = {}) {
+  const payload = createMessageEventPayload(runtime, eventType, data);
+  const state = runtimeState(runtime);
+  const input = messageEventCommitInput(runtime, state, payload);
+  const envelope = isTransientMessageEventType(payload.eventType)
+    ? createTransientMessageEventEnvelope(input)
+    : await commitDurableMessageEvent(runtime, input);
+  const projected = await runtime?.projectCurrentTurnMessageEvent?.(envelope);
   if (runtime?.projectCurrentTurnMessageEvent && !projected) {
-    throw new Error(
-      `canonical message event projector rejected event: ${committed.envelope.identity.eventId}`,
-    );
+    throw new Error(`canonical message event projector rejected event: ${envelope.identity.eventId}`);
   }
   await emitEvent(eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
-    envelope: committed.envelope,
+    envelope,
     persistenceScope: state?.persistenceScope || null,
   });
-  return committed.envelope;
+  return envelope;
 }

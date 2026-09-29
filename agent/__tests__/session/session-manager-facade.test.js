@@ -197,7 +197,7 @@ test("createSessionFacade resolves authority outbox access from the protocol per
     ...identity,
     acknowledgements: [{ eventId: "event-1" }],
   });
-  await session.compactAuthorityEvents({ ...identity, deliveredThroughSequence: 4 });
+  await session.compactAuthorityEvents({ ...identity, consumerId: "service.websocket" });
 
   assert.equal(calls.length, 4);
   assert.equal(contexts.length, 4);

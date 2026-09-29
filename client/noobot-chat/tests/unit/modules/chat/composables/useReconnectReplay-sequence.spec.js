@@ -23,28 +23,29 @@ describe("useReconnectReplay", () => {
       createCanonicalAssistant({ dialogProcessId: "dp-1" }),
     ];
 
-    await api.applyCanonicalMessageEvent("llm_delta", {
+    // 序号排序与去重只由持久事件承载；传输 delta 不带序号。
+    await api.applyCanonicalMessageEvent("thinking", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
       seq: 3,
       text: "C",
     });
-    await api.applyCanonicalMessageEvent("llm_delta", {
+    await api.applyCanonicalMessageEvent("thinking", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
       seq: 1,
       text: "A",
     });
-    await api.applyCanonicalMessageEvent("llm_delta", {
+    await api.applyCanonicalMessageEvent("thinking", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
       seq: 2,
       text: "B",
     });
-    await api.applyCanonicalMessageEvent("llm_delta", {
+    await api.applyCanonicalMessageEvent("thinking", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "turn-dp-1",
@@ -55,7 +56,7 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-1",
     );
-    expect(assistant?.content).toBe("C");
+    expect((assistant?.activityTimeline || []).map((item) => item.text)).toEqual(["C"]);
   });
 
   it("SQ-04: sequence gap is allowed and progresses watermark", async () => {
@@ -121,7 +122,7 @@ describe("useReconnectReplay", () => {
     expect(assistant?.content).toBe("ABC");
   });
 
-  it("SQ-05: distinct protocol events at the same transport sequence are each consumed once", async () => {
+  it("SQ-05: a replayed durable event is consumed once while transient deltas stay unsequenced", async () => {
     const { api, refs } = createFixture({ processStore: createFakeProcessStore() });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q", turnScopeId: "turn-boundary" },
@@ -135,7 +136,13 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-boundary",
       turnScopeId: "turn-boundary",
       seq: 9,
-      event: "execution_step",
+      text: "thinking once",
+    });
+    await api.applyCanonicalMessageEvent("thinking", {
+      sessionId: "s-1",
+      dialogProcessId: "dp-boundary",
+      turnScopeId: "turn-boundary",
+      seq: 9,
       text: "thinking once",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
@@ -145,16 +152,10 @@ describe("useReconnectReplay", () => {
       seq: 10,
       text: "answer",
     });
-    await api.applyCanonicalMessageEvent("llm_delta", {
-      sessionId: "s-1",
-      dialogProcessId: "dp-boundary",
-      turnScopeId: "turn-boundary",
-      seq: 10,
-      eventId: "message-dp-boundary-llm_delta-10",
-      text: " duplicate",
-    });
 
     const assistant = refs.activeSession.value.messages[1];
     expect(assistant.content).toBe("answer");
+    expect((assistant.activityTimeline || []).map((item) => item.text)).toEqual(["thinking once"]);
+    expect(assistant.messageEventState?.consumedEventIds || []).toHaveLength(1);
   });
 });

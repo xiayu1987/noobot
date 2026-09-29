@@ -187,11 +187,7 @@ test("durable command receipt returns the original envelope after outbox compact
   }).outbox;
   const compacted = compactAuthorityEventOutbox(delivered, {
     consumerId: "service-websocket",
-    orderingDomain: committed.envelope.ordering.domain,
-    orderingScopeId: committed.envelope.ordering.scopeId,
-    deliveredThroughSequence: 1,
     retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
-    commandReceipts: committed.lifecycle.commandReceipts,
   });
   assert.equal(compacted.removed, 1);
   assert.deepEqual(compacted.outbox, []);
@@ -208,7 +204,7 @@ test("durable command receipt returns the original envelope after outbox compact
   assert.equal(replay.committedEvent, null);
 });
 
-test("outbox compaction never removes pending, unreceipted, recent or above-watermark events", () => {
+test("outbox compaction reclaims only this consumer's deliveries older than the cutoff, across every stream", () => {
   const envelope = (eventId, sequence) =>
     createCommittedTurnLifecycleEnvelope({
       event: {
@@ -228,46 +224,40 @@ test("outbox compaction never removes pending, unreceipted, recent or above-wate
       updatedAt: "2026-07-01T00:00:00.000Z",
       },
     });
+  const delivered = (eventId, sequence, consumerId, deliveredAt, scopeId = "message-1") => {
+    const item = envelope(eventId, sequence);
+    return {
+      eventId,
+      envelope: item,
+      committedAt: "2026-07-01T00:00:00.000Z",
+      delivery: {
+        consumerId,
+        orderingDomain: item.ordering.domain,
+        orderingScopeId: scopeId,
+        sequence,
+        deliveredAt,
+      },
+    };
+  };
   const source = [
-    {
-      eventId: "pending",
-      envelope: envelope("pending", 1),
-      committedAt: "2026-07-01T00:00:00.000Z",
-    },
-    {
-      eventId: "unreceipted",
-      envelope: envelope("unreceipted", 2),
-      committedAt: "2026-07-01T00:00:00.000Z",
-      deliveredAt: "2026-07-02T00:00:00.000Z",
-    },
-    {
-      eventId: "recent",
-      envelope: envelope("recent", 3),
-      committedAt: "2026-07-01T00:00:00.000Z",
-      deliveredAt: "2026-07-20T00:00:00.000Z",
-    },
-    {
-      eventId: "above-watermark",
-      envelope: envelope("above-watermark", 4),
-      committedAt: "2026-07-01T00:00:00.000Z",
-      deliveredAt: "2026-07-02T00:00:00.000Z",
-    },
+    { eventId: "pending", envelope: envelope("pending", 1), committedAt: "2026-07-01T00:00:00.000Z" },
+    delivered("recent", 2, "service-websocket", "2026-07-20T00:00:00.000Z"),
+    delivered("other-consumer", 3, "other", "2026-07-02T00:00:00.000Z"),
+    delivered("old-stream-a", 4, "service-websocket", "2026-07-02T00:00:00.000Z", "message-a"),
+    delivered("old-stream-b", 5, "service-websocket", "2026-07-02T00:00:00.000Z", "message-b"),
   ];
-  const receipts = source.slice(2).map((item) => ({
-    commandId: item.envelope.causality.commandId,
-    type: item.envelope.payload.eventType,
-    eventId: item.eventId,
-    envelope: item.envelope,
-  }));
   const result = compactAuthorityEventOutbox(source, {
-    deliveredThroughSequence: 3,
+    consumerId: "service-websocket",
     retainDeliveredAfter: "2026-07-10T00:00:00.000Z",
-    commandReceipts: receipts,
   });
-  assert.equal(result.removed, 0);
+  assert.equal(result.removed, 2);
   assert.deepEqual(
     result.outbox.map((item) => item.eventId),
-    ["pending", "unreceipted", "recent", "above-watermark"],
+    ["pending", "recent", "other-consumer"],
+  );
+  assert.equal(
+    compactAuthorityEventOutbox(source, { retainDeliveredAfter: "2026-07-10T00:00:00.000Z" }).reason,
+    "missing_compaction_consumer",
   );
 });
 

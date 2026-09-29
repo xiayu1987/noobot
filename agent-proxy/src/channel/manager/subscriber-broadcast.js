@@ -18,6 +18,7 @@ import {
   createAgentTransportEvent,
   getAgentTransportEventSessionId,
 } from "@noobot/agent-transport-protocol";
+import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 
 const isAcceptedChannelDelivery = (result = {}) =>
   result.result === "sent" || result.result === "queued";
@@ -397,6 +398,9 @@ class SubscriberBroadcastMethods {
       if (!deliveryAccepted) continue;
       this.recordSuccessfulDataPlaneOperation("deliveries");
       if (envelope?.event === TURN_LIFECYCLE_WIRE_EVENT) continue;
+      // Transport-only deltas are not in the journal; advancing the cursor on
+      // them would mask a previously failed durable delivery.
+      if (isTransientMessageEvent(envelope?.data)) continue;
       subscriberSocket.__agentProxyLastSequenceByChannel =
         subscriberSocket.__agentProxyLastSequenceByChannel || {};
       subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(

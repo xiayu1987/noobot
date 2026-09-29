@@ -5,7 +5,7 @@
  */
 import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
+import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   resolveBoundToolModelRequestOverrides,
   resolveNonThinkingCallOverrides,
@@ -45,8 +45,8 @@ export function createBoundLlmToolChoiceInvoker({
     const boundToolOverrides = resolveBoundToolModelRequestOverrides(effectiveModelSpec);
     const streaming = runtime?.runConfig?.streaming === true;
     const modelActivity = createModelActivity(modelState?.eventListener, runtime, {
-      activityKind: "main_model_analysis",
-      activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
+      activityKind: ACTIVITY_KIND.MAIN_MODEL_ANALYSIS,
+      activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       purpose: invokeMode,
       streaming,
     });

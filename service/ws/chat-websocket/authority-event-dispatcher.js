@@ -10,7 +10,7 @@ const clean = (value) => String(value || "").trim();
 
 export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
   const inFlightByScope = new Map();
-  const lastCompactAtByStream = new Map();
+  const lastCompactAtBySession = new Map();
 
   const drainAuthorityEvents = async (
     { userId, sessionId, parentSessionId = "", persistenceScope = null, limit = 100 } = {},
@@ -35,7 +35,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
     }
     let delivered = 0;
     const consumerId = "service.websocket";
-    const watermarks = new Map();
     while (true) {
       const pending = await bot.getPendingAuthorityEvents({ ...identity, limit });
       if (!pending?.found) {
@@ -102,43 +101,30 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
           };
         }
         delivered += acknowledgements.length;
-        for (const receipt of acknowledgements) {
-          const streamKey = `${receipt.orderingDomain}\u0000${receipt.orderingScopeId}`;
-          watermarks.set(streamKey, {
-            orderingDomain: receipt.orderingDomain,
-            orderingScopeId: receipt.orderingScopeId,
-            deliveredThroughSequence: Math.max(
-              receipt.sequence,
-              watermarks.get(streamKey)?.deliveredThroughSequence || 0,
-            ),
-          });
-        }
       }
       if (sendFailed) {
         return { dispatched: false, reason: "authority_event_send_failed", delivered };
       }
     }
-    if (watermarks.size && typeof bot.compactAuthorityEvents === "function") {
-      const retainDeliveredAfter = new Date(
-        Date.now() - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
-      ).toISOString();
+    if (typeof bot.compactAuthorityEvents === "function") {
+      // Session-wide retention sweep, throttled per session: reclaims streams of ended turns too.
       const now = Date.now();
-      for (const [streamKey, watermark] of watermarks) {
-        const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${streamKey}`;
-        const lastCompactAt = lastCompactAtByStream.get(accountingKey);
-        if (
-          lastCompactAt !== undefined &&
-          now - lastCompactAt < TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs
-        ) {
-          continue;
-        }
+      const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${clean(
+        persistenceScope?.scopeId,
+      )}`;
+      const lastCompactAt = lastCompactAtBySession.get(accountingKey);
+      if (
+        lastCompactAt === undefined ||
+        now - lastCompactAt >= TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs
+      ) {
         await bot.compactAuthorityEvents({
           ...identity,
           consumerId,
-          ...watermark,
-          retainDeliveredAfter,
+          retainDeliveredAfter: new Date(
+            now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
+          ).toISOString(),
         });
-        lastCompactAtByStream.set(accountingKey, now);
+        lastCompactAtBySession.set(accountingKey, now);
       }
     }
     return { dispatched: true, delivered };

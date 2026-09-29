@@ -119,10 +119,7 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
   const invalid = await h.service.compactAuthorityEvents({
     userId: "u1",
     sessionId: "s1",
-    deliveredThroughSequence: 1,
     consumerId: receipt.consumerId,
-    orderingDomain: receipt.orderingDomain,
-    orderingScopeId: receipt.orderingScopeId,
   });
   assert.equal(invalid.reason, "invalid_retention_cutoff");
   assert.equal((await h.outbox()).length, 1);
@@ -132,10 +129,7 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
     h.service.compactAuthorityEvents({
       userId: "u1",
       sessionId: "s1",
-      deliveredThroughSequence: 1,
       consumerId: receipt.consumerId,
-      orderingDomain: receipt.orderingDomain,
-      orderingScopeId: receipt.orderingScopeId,
       retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
     }),
   );
@@ -145,10 +139,7 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
   const compacted = await h.service.compactAuthorityEvents({
     userId: "u1",
     sessionId: "s1",
-    deliveredThroughSequence: 1,
     consumerId: receipt.consumerId,
-    orderingDomain: receipt.orderingDomain,
-    orderingScopeId: receipt.orderingScopeId,
     retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
   });
   assert.equal(compacted.compacted, true);

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { selectLatestAnalysisActivities } from "../runtime/engine/activityTimeline.js";
-import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
+import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 
 function normalizeLogString(value = "") {
   return String(value || "")
@@ -20,7 +20,7 @@ export function isPluginAnalysisResponseLog(logItem = {}) {
   const chain = normalizeLogString(logItem?.chain);
   return (
     eventType === MESSAGE_EVENT_TYPE.THINKING &&
-    activityKind === "guidance_analysis" &&
+    activityKind === ACTIVITY_KIND.GUIDANCE_ANALYSIS &&
     purpose === "guidance" &&
     pluginFlow === "analysis" &&
     chain === "auxiliary"
@@ -30,7 +30,7 @@ export function isPluginAnalysisResponseLog(logItem = {}) {
 export function isGuidanceAnalysisResponseLog(logItem = {}) {
   return (
     normalizeLogString(logItem?.eventType) === MESSAGE_EVENT_TYPE.THINKING &&
-    normalizeLogString(logItem?.activityKind) === "guidance_analysis"
+    normalizeLogString(logItem?.activityKind) === ACTIVITY_KIND.GUIDANCE_ANALYSIS
   );
 }
 

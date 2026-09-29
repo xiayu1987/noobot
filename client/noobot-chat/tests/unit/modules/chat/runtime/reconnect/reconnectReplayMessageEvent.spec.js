@@ -115,8 +115,12 @@ describe("reconnect authoritative message event replay", () => {
     ]);
     const findCanonicalMessageById = (sessionId, messageId) =>
       sessionId === "session-1" ? canonicalMessages.get(messageId) || null : null;
-    const first = authoritative("llm_delta", 1, { messageId: "message-1", text: "first" });
-    const second = authoritative("llm_delta", 1, {
+    // 每条消息的序号水位由持久事件承载；传输 delta 不带序号。
+    const first = authoritative("authoritative_final_content", 1, {
+      messageId: "message-1",
+      text: "first",
+    });
+    const second = authoritative("authoritative_final_content", 1, {
       messageId: "message-2",
       presentationMessageId: "message-2",
       eventId: "message-2-event-1",
@@ -368,7 +372,7 @@ describe("reconnect authoritative message event replay", () => {
     for (const sequence of [1, 2]) {
       dispatchTurnEnvelope({
         targetMessage,
-        envelope: authoritative("llm_delta", sequence, { text: String(sequence) }),
+        envelope: authoritative("thinking", sequence, { text: String(sequence) }),
       });
     }
     const result = hydrateTurnSnapshot({
@@ -377,14 +381,14 @@ describe("reconnect authoritative message event replay", () => {
     });
 
     expect(result).toMatchObject({ applied: false, result: "snapshot_stale", currentSequence: 2 });
-    expect(targetMessage.content).toBe("12");
+    expect(targetMessage.activityTimeline.map((item) => item.text)).toEqual(["1", "2"]);
   });
 
   it("buffers sequence gaps so out-of-order replay converges with ordered live state", () => {
     const ordered = { messageId: "message-1", turnScopeId: "turn-1" };
     const reordered = { messageId: "message-1", turnScopeId: "turn-1" };
     const events = [
-      authoritative("llm_delta", 1, { text: "A" }),
+      authoritative("thinking", 1, { text: "A" }),
       authoritative("tool_call_start", 2, { tool: "read_file", toolCallId: "call-1", args: {} }),
       authoritative("tool_call_end", 3, {
         tool: "read_file",

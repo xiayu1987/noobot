@@ -111,7 +111,7 @@ function activityContentFact(activity = {}, index) {
   return {
     contentId: `event:${eventId}`,
     contentKind:
-      text(activity?.eventType) === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA
+      text(activity?.eventType) === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS
         ? THINKING_DETAIL_CONTENT_KIND.MODEL_ANALYSIS
         : THINKING_DETAIL_CONTENT_KIND.THINKING,
     sourceEventId: eventId,

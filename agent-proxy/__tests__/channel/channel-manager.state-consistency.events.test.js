@@ -30,7 +30,7 @@ function messageEnvelope({
   sessionId = "session-1",
   turnScopeId = "turn-1",
   messageId = "message-1",
-  eventType = MESSAGE_EVENT_TYPE.LLM_DELTA,
+  eventType = MESSAGE_EVENT_TYPE.THINKING,
   text = "content",
 } = {}) {
   return createEventEnvelope({
@@ -168,7 +168,7 @@ test("broadcast event order should be identical across same-channel clients", ()
     event: MESSAGE_EVENT_WIRE_EVENT,
     data: messageEnvelope({
       sequence: index + 1,
-      eventType: index % 2 ? MESSAGE_EVENT_TYPE.THINKING : MESSAGE_EVENT_TYPE.LLM_DELTA,
+      eventType: index % 2 ? MESSAGE_EVENT_TYPE.THINKING : MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       text: `content-${index + 1}`,
     }),
   }));
@@ -263,4 +263,53 @@ test("broadcast only records unsuccessful delivery results", () => {
   assert.ok(deliveries.every((item) => item.data.connectionId));
   assert.equal(openSocket.__agentProxyLastSequenceByChannel[channelKey], 1);
   assert.equal(closedSocket.__agentProxyLastSequenceByChannel?.[channelKey], undefined);
+});
+
+test("transport-only deltas broadcast live without entering the journal or moving cursors", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+
+  const durable = manager.pushChannelEvent(
+    channel,
+    MESSAGE_EVENT_WIRE_EVENT,
+    messageEnvelope({ sequence: 1 }),
+  );
+  manager.broadcastChannelEvent(channel, durable);
+  for (const index of [1, 2, 3]) {
+    const delta = manager.pushChannelEvent(
+      channel,
+      MESSAGE_EVENT_WIRE_EVENT,
+      messageEnvelope({
+        sequence: 0,
+        eventType: MESSAGE_EVENT_TYPE.LLM_DELTA,
+        text: `chunk-${index}`,
+      }),
+    );
+    assert.ok(delta, "transport delta must pass data-plane validation");
+    manager.broadcastChannelEvent(channel, delta);
+  }
+
+  const delivered = client.sentEvents.filter((item) => item?.event === MESSAGE_EVENT_WIRE_EVENT);
+  assert.deepEqual(
+    delivered.map((item) => item.data.payload.text),
+    ["content", "chunk-1", "chunk-2", "chunk-3"],
+  );
+  assert.equal(channel.eventLog.length, 1);
+  assert.equal(channel.eventSequence, 1);
+  assert.equal(client.__agentProxyLastSequenceByChannel[channelKey], 1);
+
+  const joiner = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.replayChannelEvents(channel, joiner, 0);
+  assert.deepEqual(
+    joiner.sentEvents
+      .filter((item) => item?.event === MESSAGE_EVENT_WIRE_EVENT)
+      .map((item) => item.data.payload.text),
+    ["content"],
+  );
 });

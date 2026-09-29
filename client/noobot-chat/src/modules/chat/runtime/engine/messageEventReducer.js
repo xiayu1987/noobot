@@ -7,6 +7,7 @@ import {
   MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_TYPE,
   isAuthoritativeFinalContentEvent,
+  isTransientMessageEvent,
   projectAuthoritativeFinalMessage,
   projectMessageEventContent,
   projectMessageEventMetadata,
@@ -65,11 +66,14 @@ function conflicts(message, event) {
   return Boolean(eventTurn && messageTurn !== eventTurn);
 }
 
-function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap }) {
+function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap, transient }) {
   if (event.payload.dialogProcessId && !targetMessage.dialogProcessId)
     targetMessage.dialogProcessId = event.payload.dialogProcessId;
   Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
   targetMessage.hasFirstStreamEvent = true;
+  // Transient events are live-only (never replayed or redelivered): they take no sequence and
+  // must not evict durable eventIds from the consumed window.
+  if (transient) return { result: MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
   state.lastSequence = sequence;
   appendConsumedMessageEvent(state, event.identity.eventId);
   syncMessageEventAggregateState(targetMessage, event.identity.eventId);
@@ -96,11 +100,12 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
   if (hasConsumedMessageEvent(state, event.identity.eventId)) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
+  const transient = isTransientMessageEvent(event);
   const sequence = Number(event.ordering.sequence);
   const lastSequence = Number(state.lastSequence || 0);
-  if (lastSequence && sequence <= lastSequence)
+  if (!transient && lastSequence && sequence <= lastSequence)
     return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
-  const gap = Boolean(lastSequence && sequence > lastSequence + 1);
+  const gap = Boolean(!transient && lastSequence && sequence > lastSequence + 1);
 
   if (event.payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     state.lastSequence = sequence;
@@ -204,5 +209,5 @@ export function reduceMessageEvent({ targetMessage, event } = {}) {
       }));
     }
   }
-  return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap });
+  return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap, transient });
 }

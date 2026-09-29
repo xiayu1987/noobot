@@ -9,7 +9,7 @@ import {
   reduceCanonicalActivityTimeline,
   selectCanonicalActivityTimeline,
 } from "@noobot/event-protocol/activity-timeline";
-import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
+import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 
 export function reduceActivityTimeline(timeline = [], envelope = {}) {
   return reduceCanonicalActivityTimeline(timeline, envelope);
@@ -36,11 +36,11 @@ export function selectLatestAnalysisActivities(message = {}) {
     if (
       !latestGuidance &&
       item.eventType === MESSAGE_EVENT_TYPE.THINKING &&
-      item.activityKind === "guidance_analysis"
+      item.activityKind === ACTIVITY_KIND.GUIDANCE_ANALYSIS
     ) {
       latestGuidance = item;
     }
-    if (!latestModelAnalysis && item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA) {
+    if (!latestModelAnalysis && item.eventType === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS) {
       latestModelAnalysis = item;
     }
     if (latestGuidance && latestModelAnalysis) break;

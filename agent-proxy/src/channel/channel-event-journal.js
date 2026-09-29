@@ -24,6 +24,16 @@ export class ChannelEventJournal {
     return envelope;
   }
 
+  // Transport-only envelope: carries the current cursor without retaining the
+  // event, so it never occupies capacity or reappears in gap replay.
+  transient(event = "message", data = {}) {
+    return {
+      sequence: this.sequence,
+      event: String(event || "message").trim() || "message",
+      data: data && typeof data === "object" ? data : {},
+    };
+  }
+
   after(sequence = 0) {
     const cursor = Math.max(0, Number(sequence || 0));
     return this.events.filter((event) => Number(event?.sequence || 0) > cursor);
