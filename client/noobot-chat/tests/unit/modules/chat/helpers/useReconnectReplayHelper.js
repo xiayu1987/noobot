@@ -26,8 +26,10 @@ import {
   INTERACTION_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol";
 import {
+  isTransientMessageEventType,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
+  TRANSIENT_MESSAGE_EVENT_SEQUENCE,
 } from "@noobot/event-protocol/message-event";
 import { workflowSequenceDomainForEvent } from "@noobot/event-protocol/workflow-runtime-event";
 import { classifyRealtimeLog } from "../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
@@ -101,7 +103,11 @@ export function createAuthoritativeMessageEnvelope(
     turnScopeId,
     `turn-${normalizedDialogProcessId}`,
   );
+  // `seq` stays the eventId discriminator; transport-only events are unsequenced by protocol.
   const sequence = Number(seq || 0);
+  const orderingSequence = isTransientMessageEventType(eventType)
+    ? TRANSIENT_MESSAGE_EVENT_SEQUENCE
+    : sequence;
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
     identity: {
@@ -115,7 +121,7 @@ export function createAuthoritativeMessageEnvelope(
     ordering: {
       domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: normalizedMessageId,
-      sequence,
+      sequence: orderingSequence,
     },
     producer: { type: "test", id: "client-reconnect-fixture" },
     occurredAt: `2026-01-01T00:00:${String(sequence % 60).padStart(2, "0")}.000Z`,

@@ -75,6 +75,7 @@ export function createSubSessionEventOperations({
       currentSession,
       sequenceIdentity: incomingSequenceIdentity,
       sequenceDomain,
+      transient,
     } = gate;
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
     const incoming = eventData;
@@ -113,14 +114,16 @@ export function createSubSessionEventOperations({
         message: currentMessage,
       };
     }
-    applySubSessionMessageOrdering({
-      targetMessage: nextMessage,
-      eventId,
-      ordering,
-      payload,
-      sequenceDomain,
-      occurredAt: eventTime(eventData),
-    });
+    if (!transient) {
+      applySubSessionMessageOrdering({
+        targetMessage: nextMessage,
+        eventId,
+        ordering,
+        payload,
+        sequenceDomain,
+        occurredAt: eventTime(eventData),
+      });
+    }
     if (existingIndex >= 0) messages[existingIndex] = nextMessage;
     else messages.push(nextMessage);
     messages.sort(compareMessageEventOrder);
@@ -136,6 +139,7 @@ export function createSubSessionEventOperations({
       sequenceIdentity: incomingSequenceIdentity,
       sequenceDomain,
       occurredAt: eventTime(eventData),
+      transient,
     });
     registry.sessions[sessionId] = nextSession;
     subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };

@@ -15,7 +15,7 @@ export function canonicalMessageEvent({
   sessionId = "session-1",
   turnScopeId = "turn-1",
   messageId = `message-${sequence}`,
-  eventType = MESSAGE_EVENT_TYPE.LLM_DELTA,
+  eventType = MESSAGE_EVENT_TYPE.THINKING,
   text = "content",
 } = {}) {
   return createEventEnvelope({

@@ -28,6 +28,7 @@ import {
   isTerminalInteractionLifecycle,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
+import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
 
 function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
@@ -287,6 +288,10 @@ class ChannelStoreMethods {
       }
     }
     channel.updatedAtMs = nowMs();
+    if (isTransientMessageEvent(data)) {
+      this.recordSuccessfulDataPlaneOperation("channelEvents");
+      return channel.eventJournal.transient(normalizedEventName, data);
+    }
     const envelope = channel.eventJournal.append(normalizedEventName, data);
     if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) {
       this.recordTurnLifecycleEnvelope(channel, envelope.data);

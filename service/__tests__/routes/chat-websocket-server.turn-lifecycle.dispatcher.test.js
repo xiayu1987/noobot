@@ -254,7 +254,8 @@ test("authority dispatcher preserves the child persistence scope across every ou
     calls[2].input.acknowledgements.map((receipt) => receipt.eventId),
     [envelope.identity.eventId],
   );
-  assert.equal(calls[4].input.deliveredThroughSequence, 9);
+  assert.equal(calls[4].input.consumerId, "service.websocket");
+  assert.equal("deliveredThroughSequence" in calls[4].input, false);
   assert.equal(
     Date.now() - Date.parse(calls[4].input.retainDeliveredAfter) >=
       TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,

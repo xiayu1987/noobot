@@ -5,6 +5,7 @@
  */
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  isTransientMessageEvent,
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
@@ -82,7 +83,8 @@ function validateEnvelopeFamily(eventData) {
 function hasCompleteEventIdentity({ eventData, eventId, projectionEventName, ordering }) {
   if (!eventId || !projectionEventName) return false;
   if (!text(resolveMessageEventPresentationId(eventData?.payload))) return false;
-  return Number(ordering.sequence) > 0;
+  // Transient events carry the protocol's unsequenced marker; durable events must be sequenced.
+  return isTransientMessageEvent(eventData) || Number(ordering.sequence) > 0;
 }
 
 function evaluateSequenceMonotonicity({ currentSession, sequenceKey, sequence }) {
@@ -129,6 +131,7 @@ export function evaluateSubSessionEventGate({ eventData, registry, createEmptySe
     currentSession,
     sequenceIdentity,
     sequenceDomain: text(ordering.domain),
+    transient: isTransientMessageEvent(eventData),
   };
 }
 
@@ -212,8 +215,12 @@ export function buildNextSubSessionState({
   sequenceIdentity,
   sequenceDomain,
   occurredAt,
+  transient = false,
 }) {
   const scopeKey = sequenceIdentity.sequenceKey;
+  // Transient events are live-only: they are never redelivered, so they are not retained for
+  // deduplication and do not move any sequence watermark.
+  if (transient) return { ...currentSession, sessionId, id: sessionId, messages, updatedAt: occurredAt };
   return {
     ...currentSession,
     sessionId,

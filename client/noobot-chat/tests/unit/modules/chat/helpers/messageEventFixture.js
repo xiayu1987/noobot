@@ -5,8 +5,10 @@
  */
 import { EVENT_FAMILY, EVENT_PROTOCOL_NAME, EVENT_PROTOCOL_VERSION } from "@noobot/event-protocol";
 import {
+  isTransientMessageEventType,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
+  TRANSIENT_MESSAGE_EVENT_SEQUENCE,
 } from "@noobot/event-protocol/message-event";
 import { projectCanonicalActivityTimelineEvent } from "@noobot/event-protocol/activity-timeline";
 
@@ -22,8 +24,11 @@ const ORDERING_FIELDS = new Set([
 
 export function canonicalMessageEvent(overrides = {}) {
   const eventType = overrides.eventType || "tool_call_start";
+  // Transport-only events are unsequenced by protocol; the caller's sequence only
+  // keeps their default eventIds distinct.
+  const transient = isTransientMessageEventType(eventType);
   const values = {
-    eventId: "evt-1",
+    eventId: transient ? `evt-transient-${overrides.sequence ?? 1}` : "evt-1",
     eventType,
     sessionId: "session-1",
     messageId: "message-1",
@@ -73,9 +78,9 @@ export function canonicalMessageEvent(overrides = {}) {
     ordering: {
       domain: values.sequenceDomain || MESSAGE_EVENT_SEQUENCE_DOMAIN,
       scopeId: values.sequenceScopeId || values.messageId,
-      sequence: values.sequence,
-      ...(values.revision !== undefined ? { revision: values.revision } : {}),
-      ...(values.aggregateVersion !== undefined
+      sequence: transient ? TRANSIENT_MESSAGE_EVENT_SEQUENCE : values.sequence,
+      ...(!transient && values.revision !== undefined ? { revision: values.revision } : {}),
+      ...(!transient && values.aggregateVersion !== undefined
         ? { aggregateVersion: values.aggregateVersion }
         : {}),
     },

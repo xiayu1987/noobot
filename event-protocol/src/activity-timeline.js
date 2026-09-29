@@ -4,14 +4,15 @@
  */
 
 import { EVENT_FAMILY, validateProtocolEvent } from "./event-registry.js";
-import { MESSAGE_EVENT_TYPE } from "./message-event.js";
+import {
+  ACTIVITY_EVENT_TYPES,
+  MESSAGE_EVENT_TYPE,
+  isTransientMessageEvent,
+} from "./message-event.js";
 import { text } from "./normalize.js";
 
-// Activity fact kinds. A standalone activity event carries the complete text of one
-// activity; ACTIVITY_DELTA carries an incremental fragment of the same activity.
-const ACTIVITY_EVENT_TYPES = Object.freeze(
-  new Set([MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA]),
-);
+// A standalone activity event carries the complete text of one activity; ACTIVITY_DELTA is a
+// transient fragment of the same activity.
 
 const ACTIVITY_WIRE_EVENT_TYPES = Object.freeze(
   new Set([...ACTIVITY_EVENT_TYPES, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),
@@ -50,23 +51,24 @@ export function isCanonicalActivityMessageEvent(envelope = {}) {
   );
 }
 
-// Durability boundary of an activity. ACTIVITY_DELTA is a transport fragment: it feeds the
-// live projection only. The standalone activity event carries the complete text and is the
-// single durable fact of that activity, so only it may trigger persistence.
+// Durability boundary of an activity: the transient delta feeds the live projection only; the
+// standalone activity event is the single durable fact of that activity.
 export function isDurableActivityMessageEvent(envelope = {}) {
-  return (
-    isCanonicalActivityMessageEvent(envelope) &&
-    text(envelope?.payload?.eventType) !== MESSAGE_EVENT_TYPE.ACTIVITY_DELTA
-  );
+  return isCanonicalActivityMessageEvent(envelope) && !isTransientMessageEvent(envelope);
 }
 
-export function projectCanonicalActivityTimelineEvent(envelope = {}) {
+// A transient delta has no authoritative sequence. Its fact takes the given timeline position
+// (the owning activity's position, or the tail) until the durable activity event replaces it.
+export function projectCanonicalActivityTimelineEvent(envelope = {}, { position = 1 } = {}) {
   if (!isCanonicalActivityMessageEvent(envelope)) return null;
   const eventId = text(envelope?.identity?.eventId);
-  const payloadEventType = text(envelope?.payload?.eventType);
-  const isDelta = payloadEventType === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA;
-  const eventType = isDelta ? text(envelope?.payload?.activityEventType) : payloadEventType;
-  const sequence = Number(envelope?.ordering?.sequence || 0);
+  const isDelta = isTransientMessageEvent(envelope);
+  const eventType = text(
+    isDelta ? envelope?.payload?.activityEventType : envelope?.payload?.eventType,
+  );
+  const sequence = isDelta
+    ? Math.max(1, Number(position) || 1)
+    : Number(envelope?.ordering?.sequence || 0);
   const sequenceScopeId = text(envelope?.ordering?.scopeId);
   const sequenceDomain = text(envelope?.ordering?.domain);
   const content = envelope?.payload?.text;
@@ -84,7 +86,7 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}) {
   const fact = {
     eventId,
     eventType,
-    text: isDelta ? content : content.trim(),
+    text: content,
     activityKind: text(envelope?.payload?.activityKind),
     purpose: text(envelope?.payload?.purpose),
     pluginFlow: text(envelope?.payload?.pluginFlow),
@@ -106,30 +108,51 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}) {
   return Object.freeze(fact);
 }
 
-export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
-  const fact = projectCanonicalActivityTimelineEvent(envelope);
-  const next = Array.isArray(timeline) ? [...timeline] : [];
-  if (!fact) return next;
-  const index = next.findIndex((item) => text(item?.eventId) === fact.eventId);
-  if (index >= 0) next[index] = fact;
-  else {
-    const activityId = text(fact.activityId);
-    const activityIndex = activityId
-      ? next.findIndex((item) => text(item?.activityId) === activityId)
-      : -1;
-    if (activityIndex >= 0) {
-      // Deltas append to their activity; a standalone activity event is the activity's
-      // complete text and replaces every fragment streamed before it.
-      const isDelta = text(envelope?.payload?.eventType) === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA;
-      const previous = next[activityIndex];
-      next[activityIndex] = Object.freeze({
-        ...fact,
-        text: isDelta ? `${String(previous?.text || "")}${fact.text}` : fact.text,
-        activityId,
-      });
-    } else next.push(fact);
+function insertBySequence(timeline, fact) {
+  // Timelines are kept sorted by sequence; equal sequences keep arrival order.
+  let index = timeline.length;
+  while (index > 0 && Number(timeline[index - 1]?.sequence || 0) > Number(fact.sequence)) {
+    index -= 1;
   }
-  return next.sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
+  timeline.splice(index, 0, fact);
+  return timeline;
+}
+
+export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
+  const next = Array.isArray(timeline) ? [...timeline] : [];
+  if (!isCanonicalActivityMessageEvent(envelope)) return next;
+  const eventId = text(envelope?.identity?.eventId);
+  const isDelta = isTransientMessageEvent(envelope);
+  const sameEventIndex = next.findIndex((item) => text(item?.eventId) === eventId);
+  if (sameEventIndex >= 0) {
+    // A redelivered delta must not append twice; a durable event with the same identity is the
+    // same fact and replaces it in place.
+    if (isDelta) return next;
+    const replacement = projectCanonicalActivityTimelineEvent(envelope);
+    if (!replacement) return next;
+    next.splice(sameEventIndex, 1);
+    return insertBySequence(next, replacement);
+  }
+  const activityId = text(envelope?.payload?.activityId);
+  const activityIndex = activityId
+    ? next.findIndex((item) => text(item?.activityId) === activityId)
+    : -1;
+  const previous = activityIndex >= 0 ? next[activityIndex] : null;
+  const tail = Number(next[next.length - 1]?.sequence || 0);
+  const fact = projectCanonicalActivityTimelineEvent(envelope, {
+    position: previous ? Number(previous.sequence) : tail,
+  });
+  if (!fact) return next;
+  if (!previous) return insertBySequence(next, fact);
+  // A delta appends to its activity in place; the durable activity event carries the complete
+  // text and replaces every fragment streamed before it.
+  next.splice(activityIndex, 1);
+  return insertBySequence(
+    next,
+    isDelta
+      ? Object.freeze({ ...fact, text: `${String(previous.text || "")}${fact.text}` })
+      : fact,
+  );
 }
 
 export function isCanonicalActivityTimelineFact(value = {}) {

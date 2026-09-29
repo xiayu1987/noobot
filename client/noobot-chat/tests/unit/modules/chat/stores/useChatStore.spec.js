@@ -22,14 +22,23 @@ describe("useChatStore sub session projection", () => {
   it("applies strict eventId dedupe for repeated realtime events", () => {
     const store = useChatStore();
     commitPresentation(store);
-    const first = applyMessageEvent(store, createSubSessionEvent({ content: "he" }));
-    const second = applyMessageEvent(store, createSubSessionEvent({ content: "llo" }));
+    // eventId 幂等由持久事件承载；传输 delta 不参与去重。
+    const first = applyMessageEvent(
+      store,
+      createSubSessionEvent({ eventType: "thinking", text: "he" }),
+    );
+    const second = applyMessageEvent(
+      store,
+      createSubSessionEvent({ eventType: "thinking", sequence: 2, text: "llo" }),
+    );
 
     expect(first.applied).toBe(true);
     expect(second.applied).toBe(false);
     expect(second.reason).toBe("duplicate");
     expect(assistantMessages(store)).toHaveLength(1);
-    expect(assistantMessages(store)[0].content).toBe("he");
+    expect(assistantMessages(store)[0].activityTimeline).toEqual([
+      expect.objectContaining({ eventType: "thinking", text: "he" }),
+    ]);
   });
 
   it("deduplicates the same child message sequence received from parent and child channels", () => {
@@ -39,22 +48,26 @@ describe("useChatStore sub session projection", () => {
       store,
       createSubSessionEvent({
         eventId: "parent-channel-event",
+        eventType: "thinking",
         sequence: 1,
-        content: "文件写入成功。",
+        text: "文件写入成功。",
       }),
     );
     const duplicate = applyMessageEvent(
       store,
       createSubSessionEvent({
         eventId: "child-channel-event",
+        eventType: "thinking",
         sequence: 1,
-        content: "文件写入成功。",
+        text: "文件写入成功。",
       }),
     );
 
     expect(first.applied).toBe(true);
     expect(duplicate).toMatchObject({ applied: false, reason: "duplicate_sequence" });
-    expect(assistantMessages(store)[0]?.content).toBe("文件写入成功。");
+    expect(assistantMessages(store)[0]?.activityTimeline).toEqual([
+      expect.objectContaining({ text: "文件写入成功。" }),
+    ]);
   });
 
   it("converges workflow child streaming and non-streaming content on the final event", () => {
@@ -82,7 +95,7 @@ describe("useChatStore sub session projection", () => {
       store,
       createSubSessionEvent({
         eventId: "final-3",
-        sequence: 3,
+        sequence: 1,
         eventType: "authoritative_final_content",
         text: "authoritative final",
       }),
@@ -93,7 +106,7 @@ describe("useChatStore sub session projection", () => {
       content: "authoritative final",
       messageId: "msg-assistant-1",
     });
-    expect(message.messageEventState.finalContentSequence).toBe(4);
+    expect(message.messageEventState.finalContentSequence).toBe(2);
   });
 
   it("merges delta, thinking, tool and lifecycle updates in sequence order", () => {
@@ -118,7 +131,7 @@ describe("useChatStore sub session projection", () => {
       store,
       createSubSessionEvent({
         eventId: "event-3",
-        sequence: 3,
+        sequence: 1,
         eventType: "thinking",
         text: "plan",
         content: "",
@@ -128,7 +141,7 @@ describe("useChatStore sub session projection", () => {
       store,
       createSubSessionEvent({
         eventId: "event-4",
-        sequence: 4,
+        sequence: 2,
         eventType: "tool_call_start",
         tool: "search",
         toolCallId: "call-search",
@@ -139,7 +152,7 @@ describe("useChatStore sub session projection", () => {
       store,
       createSubSessionEvent({
         eventId: "event-5",
-        sequence: 5,
+        sequence: 3,
         eventType: "tool_call_end",
         tool: "search",
         toolCallId: "call-search",
@@ -176,7 +189,8 @@ describe("useChatStore sub session projection", () => {
       expect.objectContaining({ tool: "search", result: "ok", status: "completed" }),
     ]);
     expect(store.selectSubSessionTurnRuntime("sub-session-1", "turn-1")).toBeNull();
-    expect(session?.sequence).toBe(6);
+    // presentation(1) + thinking/tool_start/tool_end(2..4)；传输 delta 不推进序号。
+    expect(session?.sequence).toBe(4);
     expect(session?.revision).toBe(1);
   });
 
@@ -356,20 +370,33 @@ describe("useChatStore sub session projection", () => {
     commitPresentation(store);
     applyMessageEvent(
       store,
-      createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "first" }),
+      createSubSessionEvent({ eventId: "event-1", eventType: "thinking", sequence: 1, text: "first" }),
     );
     applyMessageEvent(
       store,
-      createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "second" }),
+      createSubSessionEvent({
+        eventId: "event-2",
+        eventType: "thinking",
+        sequence: 2,
+        text: "second",
+      }),
     );
     const earlier = applyMessageEvent(
       store,
-      createSubSessionEvent({ eventId: "late-event-1", sequence: 1, content: "stale" }),
+      createSubSessionEvent({
+        eventId: "late-event-1",
+        eventType: "thinking",
+        sequence: 1,
+        text: "stale",
+      }),
     );
 
     expect(earlier.applied).toBe(false);
     expect(earlier.reason).toBe("stale");
-    expect(assistantMessages(store).map((message) => message.content)).toEqual(["firstsecond"]);
+    expect(assistantMessages(store)[0].activityTimeline.map((item) => item.text)).toEqual([
+      "first",
+      "second",
+    ]);
   });
 
   it("rejects a message-event cursor declared for another message scope", () => {
@@ -413,9 +440,10 @@ describe("useChatStore sub session projection", () => {
       store,
       createSubSessionEvent({
         eventId: "event-live-1",
+        eventType: "thinking",
         sequence: 1,
         revision: 1,
-        content: " live",
+        text: " live",
       }),
     );
 
@@ -545,7 +573,7 @@ describe("useChatStore sub session projection", () => {
     commitPresentation(store);
     applyMessageEvent(
       store,
-      createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }),
+      createSubSessionEvent({ eventId: "event-1", eventType: "thinking", sequence: 1, text: "hello" }),
     );
     const snapshot = applySessionSnapshot(store, {
       sessionId: "sub-session-1",
@@ -809,7 +837,7 @@ describe("useChatStore sub session projection", () => {
         eventId: "tool-1",
         messageId: "msg-2",
         turnScopeId: "turn-2",
-        sequence: 2,
+        sequence: 1,
         toolCallId: "call-1",
         tool: "one",
         content: "",
@@ -822,7 +850,7 @@ describe("useChatStore sub session projection", () => {
         eventId: "tool-2",
         messageId: "msg-2",
         turnScopeId: "turn-2",
-        sequence: 3,
+        sequence: 2,
         toolCallId: "call-2",
         tool: "two",
         content: "",
@@ -833,10 +861,11 @@ describe("useChatStore sub session projection", () => {
     expect(messages.map((message) => message.content)).toEqual(["first", "second"]);
     expect(messages[1].toolTimeline).toHaveLength(2);
     expect(messages[1].toolTimeline[1]).toMatchObject({ tool: "two" });
-    expect(messages[1].messageEventState.consumedEventIds).toHaveLength(4);
+    // 传输 delta 不进入 consumed 与序号水位：只有 presentation 与两次工具事件。
+    expect(messages[1].messageEventState.consumedEventIds).toHaveLength(3);
     expect(store.selectSubSessionMessages("sub-session-1")?.sequenceByScopeKey).toMatchObject({
-      "msg-1": 2,
-      "msg-2": 4,
+      "msg-1": 1,
+      "msg-2": 3,
     });
   });
 });

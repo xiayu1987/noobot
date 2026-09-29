@@ -287,6 +287,69 @@ test("execution listener persists the canonical message fact instead of the priv
   assert.equal(persisted[0].data.sequence, 1);
 });
 
+test("execution listener forwards transient message events without persisting them", async () => {
+  const persisted = [];
+  const forwarded = [];
+  const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    userId: "user-a",
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: {
+      dialogProcessId: "dialog-a",
+      onEvent: async (event) => {
+        forwarded.push(event);
+        return true;
+      },
+    },
+  });
+  const messageEnvelope = (eventId, sequence, payload) =>
+    createEventEnvelope({
+      family: EVENT_FAMILY.MESSAGE_TIMELINE,
+      identity: {
+        eventId,
+        eventType: "message_event",
+        sessionId: "session-a",
+        turnScopeId: "turn-a",
+        messageId: "message-a",
+      },
+      causality: {},
+      ordering: { domain: "message-event", scopeId: "message-a", sequence },
+      producer: { type: "agent", id: "message-runtime" },
+      occurredAt: "2026-08-16T00:00:00.000Z",
+      payload: { presentationMessageId: "presentation-a", ...payload },
+    });
+  const transientEnvelopes = [
+    messageEnvelope("delta-a", 0, { eventType: "llm_delta", text: "he" }),
+    messageEnvelope("activity-delta-a", 0, {
+      eventType: "activity_delta",
+      text: "plan",
+      activityId: "activity-a",
+      activityKind: "analysis",
+      activityEventType: "thinking",
+    }),
+  ];
+  const durable = messageEnvelope("tool-event-a", 1, {
+    eventType: "tool_call_start",
+    tool: "read_file",
+    toolCallId: "call-a",
+  });
+
+  for (const envelope of [...transientEnvelopes, durable]) {
+    await listener.onEvent({ event: "authority_event_committed", data: { envelope } });
+  }
+  await listener.flush();
+
+  assert.deepEqual(
+    forwarded.map((event) => event.data.envelope.identity.eventId),
+    ["delta-a", "activity-delta-a", "tool-event-a"],
+  );
+  assert.deepEqual(
+    persisted.map((record) => record.data.eventId),
+    ["tool-event-a"],
+  );
+});
+
 test("execution listener classifies context identity diagnostics under one protocol category", async () => {
   const persisted = [];
   const listener = createExecutionEventListener({

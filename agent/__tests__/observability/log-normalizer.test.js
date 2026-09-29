@@ -87,7 +87,7 @@ test("message events use the execution-bound persistence context", async () => {
   };
 
   beginAssistantMessageEventStream(runtime);
-  await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "token" });
+  await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "token" });
 
   assert.equal(committedContext, persistenceContext);
 });
@@ -118,10 +118,10 @@ test("one Turn Aggregate owns a contiguous event sequence across model messages"
   const runtime = runtimeForTurn();
   const listener = { onEvent() {} };
   const firstMessageId = beginAssistantMessageEventStream(runtime);
-  const first = await emitMessageEvent(listener, runtime, "llm_delta", { text: "first" });
-  const second = await emitMessageEvent(listener, runtime, "llm_delta", { text: "second" });
+  const first = await emitMessageEvent(listener, runtime, "thinking", { text: "first" });
+  const second = await emitMessageEvent(listener, runtime, "thinking", { text: "second" });
   const nextMessageId = beginAssistantMessageEventStream(runtime);
-  const next = await emitMessageEvent(listener, runtime, "llm_delta", { text: "next" });
+  const next = await emitMessageEvent(listener, runtime, "thinking", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
   assert.deepEqual(
@@ -138,9 +138,9 @@ test("model streams keep independent identities while sharing the run presentati
     presentationMessageId: "msg_preallocated",
   });
   const firstMessageId = beginAssistantMessageEventStream(runtime);
-  const first = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "first" });
+  const first = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "first" });
   const nextMessageId = beginAssistantMessageEventStream(runtime);
-  const next = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "next" });
+  const next = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
   assert.equal(first.identity.messageId, "turn-message-preallocated");
@@ -237,7 +237,7 @@ test("authoritative message envelope validation rejects partial events", () => {
       turnScopeId: "turn-1",
       messageId: "message-1",
     },
-    ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: "message-1", sequence: 1 },
+    ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: "message-1", sequence: 0 },
     producer: { type: "test", id: "message-event-validation" },
     occurredAt: "2026-01-01T00:00:00.000Z",
     payload: { eventType: "llm_delta", presentationMessageId: "presentation-1", text: "token" },
@@ -255,6 +255,33 @@ test("authoritative message envelope validation rejects partial events", () => {
     validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, eventId: "" } }).valid,
     false,
   );
+  assert.deepEqual(
+    validateProtocolEvent({ ...envelope, ordering: { ...envelope.ordering, sequence: 1 } }).errors,
+    ["transient_event_sequenced"],
+  );
+});
+
+test("transient message events bypass the authority commit and take no sequence", async () => {
+  const runtime = runtimeForTurn();
+  let commits = 0;
+  const commit = runtime.sessionManager.commitMessageEvent;
+  runtime.sessionManager.commitMessageEvent = async (payload) => {
+    commits += 1;
+    return commit(payload);
+  };
+  const emitted = [];
+  beginAssistantMessageEventStream(runtime);
+  const delta = await emitMessageEvent({ onEvent: (event) => emitted.push(event) }, runtime, "llm_delta", {
+    text: "token",
+  });
+  const durable = await emitMessageEvent({ onEvent() {} }, runtime, "thinking", { text: "done" });
+
+  assert.equal(commits, 1);
+  assert.equal(delta.ordering.sequence, 0);
+  assert.equal(durable.ordering.sequence, 1);
+  assert.equal(validateProtocolEvent(delta).valid, true);
+  assert.equal(emitted[0]?.event, "authority_event_committed");
+  assert.equal(emitted[0]?.data?.envelope, delta);
 });
 
 test("classifyExecutionEvent classifies structured execution events", () => {

@@ -62,7 +62,7 @@ function envelope(payloadOverrides = {}, envelopeOverrides = {}) {
 test("message family validates canonical v3 identity, ordering, and domain payload", () => {
   assert.deepEqual(validateProtocolEvent(envelope()).valid, true);
   assert.deepEqual(validateProtocolEvent(envelope({}, { ordering: { sequence: 0 } })).errors, [
-    "sequence_below_family_minimum",
+    "durable_event_unsequenced",
   ]);
   assert.deepEqual(validateProtocolEvent(envelope({}, { identity: { messageId: "" } })).errors, [
     "missing_message_id",

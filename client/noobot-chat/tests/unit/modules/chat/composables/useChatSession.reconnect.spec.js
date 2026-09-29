@@ -242,7 +242,10 @@ describe("useChatSession reconnect replay", () => {
     await vi.waitFor(() => {
       expect(assistant.content).toContain("message continued after replay");
     });
-    expect(assistant.messageEventState.consumedEventIds).toEqual(["evt-after-reconnect-delta"]);
+    // 传输 delta 只投影、不进入权威 consumed 集合与序号水位。
+    expect(assistant.messageEventState?.consumedEventIds || []).not.toContain(
+      "evt-after-reconnect-delta",
+    );
   });
 
   it("projects a stopped-turn continuation by turnScopeId when both assistants share a dialogProcessId", async () => {

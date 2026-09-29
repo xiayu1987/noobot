@@ -6,7 +6,12 @@
 import { validateExecutionIdentity } from "@noobot/session-protocol";
 import { createAttachmentLifecycleEvent } from "@noobot/attachment-protocol";
 import { INTERACTION_SEQUENCE_DOMAIN } from "./interaction.js";
-import { MESSAGE_EVENT_SEQUENCE_DOMAIN, MESSAGE_EVENT_TYPE } from "./message-event.js";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_TYPE,
+  TRANSIENT_MESSAGE_EVENT_SEQUENCE,
+  isTransientMessageEventType,
+} from "./message-event.js";
 import { text } from "./normalize.js";
 
 export const domainResult = (result, fallback = "invalid_domain_payload") => {
@@ -52,6 +57,12 @@ export const validateMessageEnvelope = (envelope) => {
   }
   if (messageId && envelope?.ordering?.scopeId !== messageId) {
     errors.push("sequence_scope_mismatch");
+  }
+  const sequence = Number(envelope?.ordering?.sequence);
+  if (isTransientMessageEventType(envelope?.payload?.eventType)) {
+    if (sequence !== TRANSIENT_MESSAGE_EVENT_SEQUENCE) errors.push("transient_event_sequenced");
+  } else if (!(sequence >= 1)) {
+    errors.push("durable_event_unsequenced");
   }
   if (envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     for (const role of ["user", "assistant"]) {

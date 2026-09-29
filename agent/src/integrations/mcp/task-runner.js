@@ -11,7 +11,7 @@ import { buildLangChainMcpTools } from "./tool-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
+import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
 
 export async function createMcpAgentTools({
@@ -101,8 +101,8 @@ export async function executeMcpTask({
   for (let turn = 1; turn <= maxTurns; turn += 1) {
     const streaming = runtime?.runConfig?.streaming === true;
     const modelActivity = createModelActivity(runtime?.eventListener, runtime, {
-      activityKind: "mcp_model_analysis",
-      activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
+      activityKind: ACTIVITY_KIND.MCP_MODEL_ANALYSIS,
+      activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS,
       purpose: "mcp_tool_execution",
       streaming,
     });

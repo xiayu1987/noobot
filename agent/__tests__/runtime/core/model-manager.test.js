@@ -50,7 +50,7 @@ test("createStreamingCallbacks should emit llm_delta event", async () => {
   assert.equal(events[0]?.data?.envelope?.payload?.text, "hello");
 });
 
-test("stream visibility filtering happens before authoritative sequence allocation", async () => {
+test("stream visibility filtering happens before the transient delta is emitted", async () => {
   const events = [];
   const runtime = {
     sessionManager: createCanonicalMessageEventSessionManager({ producerId: "model-filter" }),
@@ -82,7 +82,7 @@ test("stream visibility filtering happens before authoritative sequence allocati
 
   assert.equal(events.length, 1);
   assert.equal(events[0]?.data?.envelope?.payload?.text, "visible");
-  assert.equal(events[0]?.data?.envelope?.ordering?.sequence, 1);
+  assert.equal(events[0]?.data?.envelope?.ordering?.sequence, 0);
 });
 
 test("resolveLlmForTurn should switch model by runtimeModel and emit model_switched", () => {
