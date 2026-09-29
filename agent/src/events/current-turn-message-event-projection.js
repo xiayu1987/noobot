@@ -12,6 +12,7 @@ import {
   isCanonicalToolMessageEvent,
   reduceCanonicalToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
+import { resolveMessageEventModelMessageId } from "@noobot/event-protocol/message-event";
 
 function text(value) {
   return String(value || "").trim();
@@ -37,22 +38,26 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
       return envelope;
     }
 
+    // Ownership is the model invocation that produced the event, never store position:
+    // a non-streaming completion is emitted before its assistant message is committed.
+    // Unowned events (raised before any invocation) wait for the next committed message.
+    const modelMessageId = resolveMessageEventModelMessageId(envelope?.payload);
     const messages = store.toArray();
-    const existingAssistantIndex = [...messages]
-      .map((item, index) => ({ item, index }))
-      .reverse()
-      .find(({ item }) => item?.role === "assistant");
-    if (!existingAssistantIndex) {
+    const ownerIndex = modelMessageId
+      ? messages.findIndex(
+          (item) => item?.role === "assistant" && text(item?.messageId) === modelMessageId,
+        )
+      : -1;
+    if (ownerIndex < 0) {
       if (!pendingMessageEvents.some((item) => text(item?.identity?.eventId) === eventId)) {
         pendingMessageEvents.push(envelope);
       }
       return envelope;
     }
+    const owner = messages[ownerIndex];
 
     const isToolEvent = isCanonicalToolMessageEvent(envelope);
-    const currentTimeline = isToolEvent
-      ? existingAssistantIndex.item.toolTimeline
-      : existingAssistantIndex.item.activityTimeline;
+    const currentTimeline = isToolEvent ? owner.toolTimeline : owner.activityTimeline;
     const transferEnvelopes = Array.isArray(envelope?.payload?.transferEnvelopes)
       ? envelope.payload.transferEnvelopes
       : [];
@@ -72,9 +77,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
           ...(transferEnvelopes.length
             ? {
                 transferEnvelopes: [
-                  ...(Array.isArray(existingAssistantIndex.item.transferEnvelopes)
-                    ? existingAssistantIndex.item.transferEnvelopes
-                    : []),
+                  ...(Array.isArray(owner.transferEnvelopes) ? owner.transferEnvelopes : []),
                   ...transferEnvelopes,
                 ].filter(
                   (item, index, all) =>
@@ -90,7 +93,7 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
       : {
           activityTimeline: reduceCanonicalActivityTimeline(currentTimeline, envelope),
         };
-    store.updateWhere(patch, (_item, index) => index === existingAssistantIndex.index);
+    store.updateWhere(patch, (_item, index) => index === ownerIndex);
     // Activity deltas only feed the live projection; the completed activity event is the
     // durable fact, so persistence happens once per activity instead of once per chunk.
     if (isToolEvent || isDurableActivityMessageEvent(envelope)) {
@@ -100,10 +103,21 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
   };
 
   runtime.materializePendingCurrentTurnMessageEvents = ({
+    messageId = "",
     activityTimeline = [],
     toolTimeline = [],
   } = {}) => {
-    const facts = pendingMessageEvents.splice(0, pendingMessageEvents.length);
+    const ownerId = text(messageId);
+    if (!ownerId) throw new Error("pending message event materialization requires messageId");
+    // Materialize the events owned by this assistant message plus unowned ones; events
+    // owned by another invocation stay pending for their own message.
+    const facts = [];
+    for (let index = pendingMessageEvents.length - 1; index >= 0; index -= 1) {
+      const pendingOwnerId = resolveMessageEventModelMessageId(pendingMessageEvents[index]?.payload);
+      if (!pendingOwnerId || pendingOwnerId === ownerId) {
+        facts.unshift(...pendingMessageEvents.splice(index, 1));
+      }
+    }
     return facts.reduce(
       (projection, fact) => {
         if (isCanonicalToolMessageEvent(fact)) {
