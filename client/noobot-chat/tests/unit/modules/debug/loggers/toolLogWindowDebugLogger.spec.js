@@ -30,11 +30,9 @@ describe("toolLogWindowDebugLogger", () => {
       level: "debug",
       debugType: "tool-log-window",
       sessionId: "session-1",
-      data: expect.objectContaining({
-        debugType: "tool-log-window",
-        selectedCount: 10,
-      }),
+      data: expect.objectContaining({ selectedCount: 10 }),
     }));
+    expect(Object.hasOwn(debug.mock.results[0].value.data, "debugType")).toBe(false);
   });
 
   it("does not construct a lazy payload when the policy disables the type", () => {

@@ -22,7 +22,8 @@ test("runtime-events writer drops debug session logs when their control is disab
       event: "state.transition",
       userId: "admin",
       sessionId: "session-debug-default",
-      data: { debugType: "state-machine" },
+      debugType: "state-machine",
+      data: {},
     },
     { root, includeProcess: false, sessionLogControls: { debug: { stateMachine: false } } },
   );
@@ -75,7 +76,8 @@ test("runtime-events writer separates debug session logs by debug type", async (
       event: "state.transition",
       userId: "admin",
       sessionId: "session-debug-files",
-      data: { debugType: "state-machine" },
+      debugType: "state-machine",
+      data: {},
     },
     {
       root,
@@ -92,7 +94,8 @@ test("runtime-events writer separates debug session logs by debug type", async (
       event: "resend.tick",
       userId: "admin",
       sessionId: "session-debug-files",
-      data: { debugType: "resend" },
+      debugType: "resend",
+      data: {},
     },
     {
       root,
@@ -121,7 +124,8 @@ test("agent context debug logs default on and use their own file", async () => {
       event: "agent.context.executionScopeCreated",
       userId: "admin",
       sessionId: "session-agent-context",
-      data: { debugType: "agent-context", envelope: { protocolVersion: 1 } },
+      debugType: "agent-context",
+      data: { envelope: { protocolVersion: 1 } },
     },
     { root, includeProcess: false },
   );
@@ -139,7 +143,8 @@ test("agent context debug logs default on and use their own file", async () => {
       event: "agent.context.executionScopeCreated",
       userId: "admin",
       sessionId: "session-agent-context-disabled",
-      data: { debugType: "agent-context" },
+      debugType: "agent-context",
+      data: {},
     },
     {
       root,
@@ -161,7 +166,8 @@ test("runtime-events writer filters debug session logs by business debug control
       event: "resend.tick",
       userId: "admin",
       sessionId: "session-debug-type",
-      data: { debugType: "resend" },
+      debugType: "resend",
+      data: {},
     },
     { root, includeProcess: false, sessionLogControls: { debug: { resend: false } } },
   );
@@ -174,7 +180,8 @@ test("runtime-events writer filters debug session logs by business debug control
       event: "state.transition",
       userId: "admin",
       sessionId: "session-debug-type",
-      data: { debugType: "state-machine" },
+      debugType: "state-machine",
+      data: {},
     },
     { root, includeProcess: false, sessionLogControls: { debug: { stateMachine: true } } },
   );
@@ -186,7 +193,7 @@ test("runtime-events writer filters debug session logs by business debug control
   assert.equal((await readJsonl(recorded.file)).length, 1);
 });
 
-test("runtime-events writer drops unknown debug session logs by default", async () => {
+test("runtime-events writer rejects unregistered debug types", async () => {
   const root = await tempRoot();
   const result = await writeRuntimeEvent(
     {
@@ -197,13 +204,14 @@ test("runtime-events writer drops unknown debug session logs by default", async 
       event: "unknown.trace",
       userId: "admin",
       sessionId: "session-debug-unknown",
-      data: { debugType: "unknown-debug" },
+      debugType: "unknown-debug",
+      data: {},
     },
     { root, includeProcess: false },
   );
 
-  assert.equal(result.ok, true);
-  assert.equal(result.skipped, true);
+  assert.equal(result.ok, false);
+  assert.match(result.error.message, /Invalid runtime event debugType: unknown-debug/);
 });
 
 test("runtime-events writer never suppresses an error with a disabled debug control", async () => {
@@ -217,7 +225,8 @@ test("runtime-events writer never suppresses an error with a disabled debug cont
       event: "agent.contextIdentity.failed",
       userId: "admin",
       sessionId: "session-debug-error",
-      data: { debugType: "context-identity", reason: "invalid identity" },
+      debugType: "context-identity",
+      data: { reason: "invalid identity" },
     },
     {
       root,
@@ -239,7 +248,8 @@ test("routed debug logs without session context still honor their debug control"
     level: "debug",
     event: "frontend.toolLogWindow.executionWindowSelected",
     userId: "admin",
-    data: { debugType: "tool-log-window", candidateCount: 100 },
+    debugType: "tool-log-window",
+    data: { candidateCount: 100 },
   };
 
   const skipped = await writeRoutedRuntimeEvent(event, {

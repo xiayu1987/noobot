@@ -29,9 +29,6 @@ function mapExecutionLogToSessionChannel(normalizedLog = {}) {
   if (category === "activity") return { category: RUNTIME_EVENT_CATEGORIES.MESSAGE, debugType: "" };
   const debugType = resolveExecutionCategoryDebugType(category);
   if (debugType) return { category: RUNTIME_EVENT_CATEGORIES.DEBUG, debugType };
-  if (category === "semantic_transfer") {
-    return { category: RUNTIME_EVENT_CATEGORIES.DEBUG, debugType: "" };
-  }
   return { category: RUNTIME_EVENT_CATEGORIES.SYSTEM, debugType: "" };
 }
 
@@ -64,6 +61,7 @@ export class ExecutionLogRepository {
         turnScopeId: normalizedLog.turnScopeId,
         source: "agent",
         category: route.category,
+        ...(route.debugType ? { debugType: route.debugType } : {}),
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         event: normalizedLog.event || "agent.execution",
         data: {
@@ -71,7 +69,6 @@ export class ExecutionLogRepository {
           type: normalizedLog.type || "",
           ts: normalizedLog.ts || "",
           ...logData,
-          ...(route.debugType ? { debugType: route.debugType } : {}),
         },
       },
       this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : undefined,

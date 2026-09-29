@@ -365,7 +365,6 @@ test("execution listener classifies context identity diagnostics under one proto
   await listener.onEvent({
     event: "agent.contextIdentity.modelContextCreated",
     data: {
-      debugType: "context-identity",
       dialogProcessId: "dialog-a",
       turnScopeId: "turn-a",
       sourceMessageUid: "sm_1",
@@ -383,7 +382,6 @@ test("execution listener classifies context identity diagnostics under one proto
   assert.equal(persisted[0].data.turnScopeId, persisted[0].turnScopeId);
   assert.equal(persisted[0].category, "context_identity");
   assert.equal(persisted[0].type, "context_identity_debug");
-  assert.equal(persisted[0].data.debugType, "context-identity");
   assert.equal(persisted[0].data.sourceMessageUid, "sm_1");
 });
 
@@ -402,7 +400,6 @@ test("execution listener classifies agent context diagnostics under the dedicate
   await listener.onEvent({
     event: "agent.context.executionScopeCreated",
     data: {
-      debugType: "agent-context",
       dialogProcessId: "dialog-a",
       turnScopeId: "turn-a",
       envelope: { protocolVersion: 1 },
@@ -413,7 +410,6 @@ test("execution listener classifies agent context diagnostics under the dedicate
   assert.equal(persisted.length, 1);
   assert.equal(persisted[0].category, "agent_context");
   assert.equal(persisted[0].type, "agent_context_debug");
-  assert.equal(persisted[0].data.debugType, "agent-context");
 });
 
 test("execution listener exposes rejected asynchronous upstream delivery at the final barrier", async () => {

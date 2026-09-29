@@ -7,6 +7,7 @@
 import {
   RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS,
   RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES,
+  isRegisteredSessionLogDebugType,
   resolveRuntimeEventsSessionLogControls,
 } from "@noobot/shared/runtime-events-config";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
@@ -97,29 +98,9 @@ export function resolveSessionLogClientPolicy(options = {}) {
   };
 }
 
+/** A session log event is a debug event exactly when its category is debug. */
 export function isSessionLogDebugEvent(event = {}) {
-  return (
-    isSessionLogDebugCategory(event.category || event.type) ||
-    String(event.level || "")
-      .trim()
-      .toLowerCase() === "debug" ||
-    Boolean(String(event.debugType || event.data?.debugType || "").trim())
-  );
-}
-
-function getSessionLogDebugType(event = {}) {
-  return (
-    String(
-      event.debugType ||
-        event.data?.debugType ||
-        event.event ||
-        event.name ||
-        event.category ||
-        SESSION_LOG_DEBUG_CATEGORY,
-    )
-      .trim()
-      .toLowerCase() || SESSION_LOG_DEBUG_CATEGORY
-  );
+  return isSessionLogDebugCategory(event.category || event.type);
 }
 
 export function getSessionLogControlKey(
@@ -129,29 +110,11 @@ export function getSessionLogControlKey(
   return SESSION_LOG_CONTROL_KEYS[category] || SESSION_LOG_CONTROL_KEYS.system;
 }
 
+/** Exact registry lookup of the record's top-level debugType; unregistered types have no switch. */
 export function getSessionLogDebugControlKey(event = {}) {
-  const debugType = getSessionLogDebugType(event);
-  if (SESSION_LOG_DEBUG_CONTROL_KEYS[debugType]) return SESSION_LOG_DEBUG_CONTROL_KEYS[debugType];
-  if (debugType.includes("state")) return SESSION_LOG_DEBUG_CONTROL_KEYS["state-machine"];
-  if (debugType.includes("resend")) return SESSION_LOG_DEBUG_CONTROL_KEYS.resend;
-  if (
-    debugType.includes("stop-continue") ||
-    (debugType.includes("continue") && debugType.includes("stop"))
-  )
-    return SESSION_LOG_DEBUG_CONTROL_KEYS["stop-continue"];
-  if (debugType.includes("stop")) return SESSION_LOG_DEBUG_CONTROL_KEYS.stop;
-  if (
-    debugType.includes("agent-proxy-route") ||
-    (debugType.includes("agent-proxy") && debugType.includes("route"))
-  )
-    return SESSION_LOG_DEBUG_CONTROL_KEYS["agent-proxy-route"];
-  if (
-    debugType.includes("session-log") ||
-    debugType.includes("log-ws") ||
-    debugType.includes("websocket")
-  )
-    return SESSION_LOG_DEBUG_CONTROL_KEYS["session-log-ws"];
-  return "";
+  return isRegisteredSessionLogDebugType(event.debugType)
+    ? SESSION_LOG_DEBUG_CONTROL_KEYS[event.debugType]
+    : "";
 }
 
 export function shouldRecordSessionLog(event = {}, options = {}) {
@@ -177,7 +140,6 @@ export function buildSessionLogRecord(event = {}, options = {}) {
     if (value) data[key] = value;
     else delete data[key];
   }
-  if (event.debugType && !data.debugType) data.debugType = event.debugType;
   const fallbackCategory = options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY;
   const category = normalizeSessionLogCategory(event.category || event.type, fallbackCategory);
   const includeTimestamp = options.includeTimestamp !== false;
@@ -212,6 +174,9 @@ export function buildSessionLogRecord(event = {}, options = {}) {
     }),
     data,
   };
+  if (category === SESSION_LOG_DEBUG_CATEGORY && typeof event.debugType === "string") {
+    record.debugType = event.debugType;
+  }
   for (const key of ["parentSessionId", "rootSessionId", "storageSessionId"]) {
     const value = normalizeOptionalSessionId(event[key]) || normalizeOptionalSessionId(data[key]);
     if (value) record[key] = value;

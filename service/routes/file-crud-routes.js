@@ -118,6 +118,7 @@ export function registerFileCrudRoutes(
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.DEBUG,
       level: "debug",
+      debugType: "file-access",
       event: "service.fileCrud.fileAccess.trace",
       data: {
         traceEvent: event,

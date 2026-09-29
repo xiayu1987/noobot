@@ -36,6 +36,6 @@ export function writeAgentTransportDebugEvent({
     dialogProcessId: summary.dialogProcessId,
     turnScopeId: summary.turnScopeId,
     workspaceRoot,
-    data: { debugType: AGENT_TRANSPORT_DEBUG_TYPE, event, ...summary },
+    data: { event, ...summary },
   });
 }

@@ -26,7 +26,6 @@ export function emitLazyDebug(sink, debugType, event, payload = {}) {
         resolvedPayload?.dialogProcessId || resolvedPayload?.runState?.dialogProcessId || "",
       turnScopeId: resolvedPayload?.turnScopeId || resolvedPayload?.runState?.turnScopeId || "",
       data: {
-        debugType,
         event,
         at: new Date().toISOString(),
         ...(resolvedPayload && typeof resolvedPayload === "object" ? resolvedPayload : {}),

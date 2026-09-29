@@ -110,7 +110,7 @@ test("ExecutionLogService applies the context identity debug switch without a fl
     sessionId: "s1",
     event: "agent.contextIdentity.contextBuildInput",
     category: "context_identity",
-    data: { debugType: "context-identity" },
+    data: {},
   });
   assert.equal(skipped.skipped, true);
   assert.equal(disabled.resolvedScopeCount, 0);
@@ -121,7 +121,7 @@ test("ExecutionLogService applies the context identity debug switch without a fl
     sessionId: "s1",
     event: "agent.contextIdentity.contextBuildInput",
     category: "context_identity",
-    data: { debugType: "context-identity" },
+    data: {},
   });
   assert.equal(appended.appended, true);
 });
@@ -133,7 +133,7 @@ test("ExecutionLogService applies the default-on agent context debug switch", as
     sessionId: "s1",
     event: "agent.context.executionScopeCreated",
     category: "agent_context",
-    data: { debugType: "agent-context" },
+    data: {},
   });
   assert.equal(appended.appended, true);
 
@@ -146,7 +146,7 @@ test("ExecutionLogService applies the default-on agent context debug switch", as
     sessionId: "s1",
     event: "agent.context.executionScopeCreated",
     category: "agent_context",
-    data: { debugType: "agent-context" },
+    data: {},
   });
   assert.equal(skipped.skipped, true);
   assert.equal(disabled.resolvedScopeCount, 0);

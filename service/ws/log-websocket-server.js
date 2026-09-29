@@ -11,32 +11,27 @@ import {
   MAX_SESSION_CHANNEL_MESSAGE_BYTES,
   resolveSessionChannelConfig,
 } from "@noobot/runtime-events/session-channel";
-import { RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
-import { resolveSessionLogClientPolicy } from "@noobot/runtime-events/session-log-protocol";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
+import {
+  isSessionLogDebugEvent,
+  resolveSessionLogClientPolicy,
+} from "@noobot/runtime-events/session-log-protocol";
 import { HTTP_STATUS } from "#agent/constants";
 
 const MAX_LOG_MESSAGE_BYTES = MAX_SESSION_CHANNEL_MESSAGE_BYTES;
 const MAX_LOG_BATCH_SIZE = MAX_SESSION_CHANNEL_BATCH_SIZE;
 
-function envFlag(name, fallback = false) {
-  const raw = String(process.env[name] || "")
-    .trim()
-    .toLowerCase();
-  if (!raw) return fallback;
-  return ["1", "true", "yes", "on"].includes(raw);
-}
-
-function diagnosticEnabled() {
-  return envFlag("NOOBOT_SESSION_LOG_DIAGNOSTIC", true);
-}
-
 function logDiagnostic(message, data = {}) {
-  if (!diagnosticEnabled()) return;
   void writeRoutedRuntimeEvent({
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
-    category: "debug",
-    level: "info",
+    category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+    level: "debug",
+    debugType: "session-log-ws",
     event: "service.logWebSocket.diagnostic",
     data: {
       message: String(message || ""),
@@ -65,14 +60,6 @@ export async function writeSessionLogEvent(event = {}, config = resolveSessionLo
       sessionId: event.sessionId,
     });
   return result;
-}
-
-function isBestEffortDebugEvent(event = {}) {
-  return (
-    event?.category === "debug" ||
-    event?.level === "debug" ||
-    Boolean(event?.debugType || event?.data?.debugType)
-  );
 }
 
 export async function cleanupSessionLogs(config = resolveSessionLogConfig(), now = Date.now()) {
@@ -145,7 +132,7 @@ export function registerLogWebSocketServer(
         const reliableWrites = [];
         for (const item of events) {
           const event = { ...item, userId: request.auth?.userId || item.userId };
-          if (isBestEffortDebugEvent(event)) {
+          if (isSessionLogDebugEvent(event)) {
             void writeLogEvent(event, logConfig)
               .then((result) => {
                 if (result?.ok === false) {

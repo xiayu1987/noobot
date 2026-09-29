@@ -6,6 +6,7 @@
 
 import {
   buildSessionLogRecord,
+  isSessionLogDebugEvent,
   SESSION_LOG_DEFAULT_CATEGORY,
 } from "@noobot/runtime-events/session-log-protocol";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
@@ -22,20 +23,8 @@ const DEFAULT_MAX_DEBUG_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueu
 const DEFAULT_MAX_DEBUG_QUEUE_BYTES = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueBytes;
 const DEFAULT_DEBUG_TTL_MS = TIME_THRESHOLDS.client.sessionLogDebugTtlMs;
 
-function envFlag(name, fallback = false) {
-  const raw = String(import.meta?.env?.[name] || "")
-    .trim()
-    .toLowerCase();
-  if (!raw) return fallback;
-  return ["1", "true", "yes", "on"].includes(raw);
-}
-
-const DIAGNOSTIC_ENABLED = envFlag("VITE_NOOBOT_SESSION_LOG_DIAGNOSTIC", false);
-
-function logDiagnostic(message, data = {}) {
-  if (!DIAGNOSTIC_ENABLED) return;
-  console.info("[session-log-ws][frontend]", message, data);
-}
+/** Registry debug type that gates this channel's own console diagnostics. */
+const SESSION_LOG_WS_DEBUG_TYPE = "session-log-ws";
 
 export function createSessionLogWebSocketClient({
   resolveWebSocketUrl = () => "",
@@ -67,6 +56,12 @@ export function createSessionLogWebSocketClient({
     reconnectMaxDelayMs: TIME_THRESHOLDS.client.sessionLogReconnectMaxDelayMs,
   });
   const isSuspended = () => transport.status().phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED;
+
+  // Self-diagnostics go to the console only: routing them through this channel would recurse.
+  function logDiagnostic(message, data = {}) {
+    if (!isEnabled(SESSION_LOG_WS_DEBUG_TYPE)) return;
+    console.info("[session-log-ws][frontend]", message, data);
+  }
 
   function recoverAuthentication() {
     void transport.recover({
@@ -215,12 +210,6 @@ export function createSessionLogWebSocketClient({
     if (count) logDiagnostic("flushed", { count, inFlightLength: inFlight.length });
   }
 
-  function debugTypeOf(event = {}) {
-    return String(event.debugType || event.data?.debugType || event.event || "")
-      .trim()
-      .toLowerCase();
-  }
-
   function isEnabled(debugType = "") {
     const type = String(debugType || "")
       .trim()
@@ -246,7 +235,7 @@ export function createSessionLogWebSocketClient({
       },
     };
     for (let index = debugQueue.length - 1; index >= 0; index -= 1) {
-      if (isEnabled(debugTypeOf(debugQueue[index].record))) continue;
+      if (isEnabled(debugQueue[index].record.debugType)) continue;
       debugQueueBytes -= debugQueue[index].bytes;
       debugQueue.splice(index, 1);
       droppedDebugCount += 1;
@@ -263,11 +252,9 @@ export function createSessionLogWebSocketClient({
       defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
       includeTimestamp: false,
     });
-    const isDebug =
-      record.category === "debug" || record.level === "debug" || Boolean(record.data?.debugType);
-    if (isDebug) {
+    if (isSessionLogDebugEvent(record)) {
       if (
-        !isEnabled(debugTypeOf(record)) ||
+        !isEnabled(record.debugType) ||
         reliableQueue.length ||
         inFlight.some((entry) => entry.reliable)
       ) {
@@ -342,14 +329,9 @@ export function createSessionLogWebSocketClient({
   return {
     connect,
     log,
-    debug: (debugTypeOrEvent = {}, factory = null) => {
-      const type =
-        typeof debugTypeOrEvent === "string"
-          ? String(debugTypeOrEvent).trim().toLowerCase()
-          : debugTypeOf(debugTypeOrEvent);
-      if (!type || !isEnabled(type)) return false;
-      const event = typeof factory === "function" ? factory() : debugTypeOrEvent;
-      return log({ ...event, debugType: type, category: "debug" });
+    debug: (debugType, factory) => {
+      if (!isEnabled(debugType)) return false;
+      return log({ ...factory(), debugType, category: "debug" });
     },
     isEnabled,
     updatePolicy,

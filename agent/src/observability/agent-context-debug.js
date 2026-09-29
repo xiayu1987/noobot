@@ -6,8 +6,6 @@
 
 import { emitEvent } from "../events/index.js";
 
-export const AGENT_CONTEXT_DEBUG_TYPE = "agent-context";
-
 function messageBlockCounts(modelContext = {}) {
   const blocks = modelContext?.messageBlocks || {};
   return {
@@ -35,7 +33,6 @@ export function buildAgentContextDebugData(scope = {}) {
     ? bindings.extensions
     : {};
   return {
-    debugType: AGENT_CONTEXT_DEBUG_TYPE,
     userId: String(identity.userId || "").trim(),
     sessionId: String(identity.sessionId || "").trim(),
     rootSessionId: String(identity.rootSessionId || "").trim(),

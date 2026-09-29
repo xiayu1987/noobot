@@ -37,7 +37,7 @@ void writeRoutedRuntimeEvent({
   source: "service",
   channel: RUNTIME_EVENT_CHANNELS.STARTUP,
   category: RUNTIME_EVENT_CATEGORIES.CONFIG,
-  level: "debug",
+  level: "info",
   event: "service.startup.context.loaded",
   workspaceRoot: startupContext?.workspaceRoot,
   data: safeStartupContextForLog(startupContext),

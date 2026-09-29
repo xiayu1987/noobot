@@ -348,14 +348,34 @@ test("log-websocket-server: works when chat websocket server is registered first
   }
 });
 
-test("log-websocket-server: skips debug logs by default", async () => {
+test("log-websocket-server: skips registered debug types by default", async () => {
   const logRoot = await withTempLogDir();
   const result = await writeSessionLogEvent(
-    { source: "client", userId: "u1", category: "debug", sessionId: "s-debug", event: "debug.off" },
+    {
+      source: "client",
+      userId: "u1",
+      category: "debug",
+      debugType: "state-machine",
+      sessionId: "s-debug",
+      event: "debug.off",
+    },
     { root: logRoot },
   );
+  assert.equal(result.ok, true);
   assert.equal(result.skipped, true);
-  await assert.rejects(() => fs.stat(path.join(logRoot, "s-debug", "debug.jsonl")));
+  await assert.rejects(() => fs.stat(path.join(logRoot, "s-debug")));
+  await fs.rm(logRoot, { recursive: true, force: true });
+});
+
+test("log-websocket-server: rejects debug logs without a registered debug type", async () => {
+  const logRoot = await withTempLogDir();
+  const result = await writeSessionLogEvent(
+    { source: "client", userId: "u1", category: "debug", sessionId: "s-debug", event: "debug.untyped" },
+    { root: logRoot },
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error.message, /Invalid runtime event debugType: undefined/);
+  await assert.rejects(() => fs.stat(path.join(logRoot, "s-debug")));
   await fs.rm(logRoot, { recursive: true, force: true });
 });
 

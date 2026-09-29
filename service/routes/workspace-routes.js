@@ -89,6 +89,7 @@ export function registerWorkspaceRoutes(
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.DEBUG,
       level: "debug",
+      debugType: "file-access",
       event: "service.hostFile.fileAccess.trace",
       data: {
         traceEvent: event,

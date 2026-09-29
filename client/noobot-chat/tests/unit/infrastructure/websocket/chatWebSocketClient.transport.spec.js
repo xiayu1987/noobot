@@ -3,8 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
+import { setTransportDiagnosticsLogSink } from "../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
   emitCommandReceipt,
@@ -31,6 +32,8 @@ import {
 setupWebSocketTestHooks();
 
 describe("chatWebSocketClient transport lifecycle and failures", () => {
+  afterEach(() => setTransportDiagnosticsLogSink(null));
+
   it("does not reuse a websocket authenticated for a previous account", () => {
     let owner = "admin";
     let apiKey = "admin-key";
@@ -70,11 +73,9 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   });
 
   it("records every received protocol event at the shared websocket transport boundary", async () => {
-    const sessionLogSink = { log: vi.fn(() => true) };
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      sessionLogSink,
-    });
+    const debug = vi.fn((debugType, factory) => factory());
+    setTransportDiagnosticsLogSink({ debug, isEnabled: (type) => type === "transport-diagnostics" });
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
     const payload = streamCommand({
       sessionId: "session-transport-log",
@@ -103,9 +104,14 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       event: MESSAGE_EVENT_WIRE_EVENT,
       data: authoritativeEvent,
     });
-    expect(sessionLogSink.log).toHaveBeenCalledWith({
-      category: "transport",
+    const received = debug.mock.results
+      .map((result) => result.value)
+      .filter((record) => record.event === "frontend.websocket.transportEventReceived");
+    expect(debug).toHaveBeenCalledWith("transport-diagnostics", expect.any(Function));
+    expect(received[0]).toEqual({
+      category: "debug",
       level: "debug",
+      debugType: "transport-diagnostics",
       event: "frontend.websocket.transportEventReceived",
       sessionId: "session-transport-log",
       dialogProcessId: "dialog-transport-log",
@@ -127,13 +133,6 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
 
     emitCommandReceipt(socket, payload);
     await streamPromise;
-    expect(sessionLogSink.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        category: "transport",
-        event: "frontend.websocket.transportEventReceived",
-        sessionId: "session-transport-log",
-      }),
-    );
   });
 
   it("preserves stream-scoped runtime events received before the stream handler binds", async () => {

@@ -244,9 +244,10 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    expect(client.debug({ event: "debug.trace", sessionId: "s-debug", data: { debugType: "state-machine" } })).toBe(false);
+    const factory = () => ({ event: "debug.trace", sessionId: "s-debug", data: { step: 1 } });
+    expect(client.debug("state-machine", factory)).toBe(false);
     client.updatePolicy({ debug: { "state-machine": true } });
-    expect(client.debug({ event: "debug.trace", sessionId: "s-debug", data: { debugType: "state-machine" } })).toBe(true);
+    expect(client.debug("state-machine", factory)).toBe(true);
     expect(MockWebSocket.instances).toHaveLength(1);
     const socket = MockWebSocket.instances[0];
     socket.readyState = MockWebSocket.OPEN;
@@ -255,7 +256,8 @@ describe("sessionLogWebSocketClient", () => {
       category: "debug",
       event: "debug.trace",
       sessionId: "s-debug",
-      data: { debugType: "state-machine" },
+      debugType: "state-machine",
+      data: { step: 1 },
     }));
   });
 

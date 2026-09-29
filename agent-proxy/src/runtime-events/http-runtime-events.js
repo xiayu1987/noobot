@@ -78,8 +78,9 @@ export function writeAgentProxyHttpTraceEvent({
   return writeRoutedRuntimeEvent({
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+    category: RUNTIME_EVENT_CATEGORIES.DEBUG,
     level: "debug",
+    debugType: "agent-proxy-http-trace",
     event: "agentProxy.http.trace",
     workspaceRoot,
     data: {

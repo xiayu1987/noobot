@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setTransportDiagnosticsLogSink } from "../../../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import { routeMessageProjectionEvent } from "../../../../../../src/modules/chat/runtime/engine/messageProjectionRouter.js";
 import { hydrateTurnSnapshot } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
@@ -46,6 +47,16 @@ function contextFor(messages, logSessionEvent = vi.fn()) {
 }
 
 describe("live canonical message projection", () => {
+  let diagnostics = [];
+  beforeEach(() => {
+    diagnostics = [];
+    setTransportDiagnosticsLogSink({
+      isEnabled: (type) => type === "transport-diagnostics",
+      debug: (debugType, factory) => diagnostics.push(factory()) > 0,
+    });
+  });
+  afterEach(() => setTransportDiagnosticsLogSink(null));
+
   it("records ordinary non-message routing decisions as debug diagnostics", () => {
     const logSessionEvent = vi.fn();
 
@@ -53,11 +64,13 @@ describe("live canonical message projection", () => {
       false,
     );
 
-    expect(logSessionEvent).toHaveBeenCalledOnce();
-    expect(logSessionEvent).toHaveBeenCalledWith(
+    expect(logSessionEvent).not.toHaveBeenCalled();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toEqual(
       expect.objectContaining({
-        category: "transport",
+        category: "debug",
         level: "debug",
+        debugType: "transport-diagnostics",
         event: "frontend.messageEvent.routeEvaluated",
         data: expect.objectContaining({
           channelEvent: "agent_done",
@@ -133,15 +146,16 @@ describe("live canonical message projection", () => {
     ).toBe(true);
 
     expect(messages[0].content).toBe("");
-    expect(logSessionEvent).toHaveBeenCalledWith(
+    expect(diagnostics).toContainEqual(
       expect.objectContaining({
         event: "frontend.messageEvent.routeEvaluated",
         data: expect.objectContaining({ shouldProjectMain: false }),
       }),
     );
-    expect(logSessionEvent).not.toHaveBeenCalledWith(
-      expect.objectContaining({ event: "frontend.messageEvent.presentationMaterialized" }),
+    expect(diagnostics.map(({ event }) => event)).not.toContain(
+      "frontend.messageEvent.presentationMaterialized",
     );
+    expect(logSessionEvent).not.toHaveBeenCalled();
   });
 
   it("keeps the canonical entity set identical after live completion and snapshot hydration", () => {
@@ -163,7 +177,8 @@ describe("live canonical message projection", () => {
       messageId: "assistant-message-1",
       content: "final answer",
     });
-    expect(context.logSessionEvent).toHaveBeenCalledWith(
+    expect(context.logSessionEvent).not.toHaveBeenCalled();
+    expect(diagnostics).toContainEqual(
       expect.objectContaining({
         event: "frontend.messageEvent.targetResolved",
         data: expect.objectContaining({
@@ -172,7 +187,7 @@ describe("live canonical message projection", () => {
         }),
       }),
     );
-    expect(context.logSessionEvent).toHaveBeenCalledWith(
+    expect(diagnostics).toContainEqual(
       expect.objectContaining({
         event: "frontend.messageEvent.reduced",
         data: expect.objectContaining({
