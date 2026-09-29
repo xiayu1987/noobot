@@ -67,6 +67,10 @@ test("session log protocol exports stable categories and helpers from runtime-ev
     "timelinePipeline",
   );
   assert.equal(
+    getSessionLogDebugControlKey({ data: { debugType: "transport-diagnostics" } }),
+    "frontendTransportDiagnostics",
+  );
+  assert.equal(
     getSessionLogDebugControlKey({ data: { debugType: "agent-proxy-route" } }),
     "agentProxyRoute",
   );
@@ -125,6 +129,9 @@ test("session log client policy is derived from the shared debug registry", () =
   assert.equal(policy.debug.stop, false);
   assert.equal(policy.debug["agent-transport"], true);
   assert.equal(Object.hasOwn(policy.debug, "timeline-pipeline"), false);
+  assert.equal(policy.debug["stream-delta"], true);
+  assert.equal(policy.debug["transport-diagnostics"], false);
+  assert.equal(Object.hasOwn(policy.debug, "model-context-trace"), false);
   assert.deepEqual(
     Object.keys(policy.debug).sort(),
     Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)

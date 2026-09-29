@@ -262,3 +262,70 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
   assert.deepEqual(closeCalls, [{ code: 1011, reason: "lifecycle_receipt_timeout" }]);
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.size, 0);
 });
+
+test("receipt exhaustion records queued terminal lifecycle dropped with the socket", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channel = { key: "user-1:session-drop" };
+  const logged = [];
+  manager.logSessionEvent = (_channel, entry) => logged.push(entry);
+  const socket = {
+    readyState: 1,
+    bufferedAmount: 0,
+    send() {},
+    close() {},
+  };
+  const base = {
+    commandId: "command-drop",
+    sessionId: "session-drop",
+    turnScopeId: "turn-drop",
+    messageId: "message-drop",
+    presentationMessageId: "assistant-drop",
+    dialogProcessId: "dialog-drop",
+  };
+  const processing = createTurnLifecycleEnvelope({
+    ...base,
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    eventId: "event-drop-processing",
+    revision: 3,
+    sequence: 3,
+    phase: TURN_PHASE.PROCESSING,
+    state: TURN_STATE.PROCESSING,
+  });
+  const completed = createTurnLifecycleEnvelope({
+    ...base,
+    eventType: TURN_EVENT.COMPLETED,
+    eventId: "event-drop-completed",
+    revision: 4,
+    sequence: 4,
+    summaryVersion: 1,
+    completionCommitId: "completion-drop",
+    phase: TURN_PHASE.COMPLETION,
+    state: TURN_STATE.COMPLETED,
+  });
+  manager.sendChannelEvent(channel, socket, {
+    sequence: 21,
+    event: "turn_lifecycle",
+    data: canonicalTurnLifecycle(processing),
+  });
+  const queued = manager.sendChannelEvent(channel, socket, {
+    sequence: 22,
+    event: "turn_lifecycle",
+    data: canonicalTurnLifecycle(completed),
+  });
+  assert.equal(queued.reason, "waiting_for_prior_receipt");
+
+  for (let attempt = 1; attempt <= config.turnLifecycleDeliveryMaxAttempts; attempt += 1) {
+    manager._retryPendingLifecycleDelivery(socket, "event-drop-processing");
+  }
+  const exhausted = logged.find(
+    (entry) => entry.event === "agentProxy.channel.lifecycleReceipt.exhausted",
+  );
+  assert.deepEqual(exhausted?.data?.droppedDeliveries, [
+    {
+      eventId: "event-drop-completed",
+      eventType: TURN_EVENT.COMPLETED,
+      lifecycleSequence: 4,
+    },
+  ]);
+  assert.equal(socket.__agentProxyPendingLifecycleDeliveries.size, 0);
+});

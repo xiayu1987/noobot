@@ -25,11 +25,13 @@ function text(value) {
 }
 
 function createConnectionLogger(state, sessionLogConfig) {
-  return (event, data = {}) => {
+  // routing 可选：{ category, level, debugType }，用于把逐块诊断改道到可关闭的 debug 分类。
+  return (event, data = {}, routing = {}) => {
     const meta = state.currentRunMeta || {};
     void recordServiceWebSocketLifecycle({
       sessionLogConfig,
       event,
+      ...routing,
       userId: meta.userId,
       sessionId: meta.sessionId,
       dialogProcessId: meta.dialogProcessId,

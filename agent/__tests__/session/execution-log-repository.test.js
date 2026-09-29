@@ -235,3 +235,56 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
   assert.equal(records[0].data.sourceMessageUid, "sm_1");
   assert.equal(records[0].data.userMetaProjectionId, "sm_1::user_meta");
 });
+
+test("appendLog routes model context traces to the registry-derived debug file, not system", async () => {
+  const workspaceRoot = await makeTempDir();
+  const sessionRepository = createInMemorySessionRepository();
+  const repo = new ExecutionLogRepository({ sessionRepository, workspaceRoot });
+
+  await repo.appendLog(
+    "u1",
+    "s1",
+    {
+      dialogProcessId: "d1",
+      event: "model_context_trace",
+      category: "model_context_trace",
+      type: "model_context_trace_debug",
+      data: { stage: "resolve_model_messages", turnScopeId: "t1" },
+    },
+    "p1",
+  );
+
+  const eventsDir = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events");
+  const records = await readJsonLines(path.join(eventsDir, "debug-model-context-trace.jsonl"));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].data.debugType, "model-context-trace");
+  assert.equal(records[0].data.stage, "resolve_model_messages");
+  const systemRecords = await readJsonLines(path.join(eventsDir, "system.jsonl")).catch(() => []);
+  assert.equal(systemRecords.length, 0);
+});
+
+test("appendLog routes durable activity events to the message channel, not system", async () => {
+  const workspaceRoot = await makeTempDir();
+  const sessionRepository = createInMemorySessionRepository();
+  const repo = new ExecutionLogRepository({ sessionRepository, workspaceRoot });
+
+  await repo.appendLog(
+    "u1",
+    "s1",
+    {
+      dialogProcessId: "d1",
+      event: "thinking",
+      category: "activity",
+      type: "thinking",
+      data: { eventType: "thinking", text: "analysis", turnScopeId: "t1" },
+    },
+    "p1",
+  );
+
+  const eventsDir = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events");
+  const records = await readJsonLines(path.join(eventsDir, "message.jsonl"));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].data.eventType, "thinking");
+  const systemRecords = await readJsonLines(path.join(eventsDir, "system.jsonl")).catch(() => []);
+  assert.equal(systemRecords.length, 0);
+});

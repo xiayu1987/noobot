@@ -21,7 +21,28 @@ import {
 import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
 import { buildStreamEventLogEntry } from "./streamEventLogEntry.js";
 import { logPluginRuntimeDiagnostics } from "../../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
+import { logStreamDeltaDebug } from "../../../debug/loggers/streamDeltaDebugLogger.js";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
+import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
+
+// Transient (live-only) deltas are per-chunk; their per-event diagnostics go to the
+// switchable `stream-delta` debug channel instead of the main transport category.
+function logStreamDeltaEntry(entry) {
+  logStreamDeltaDebug(entry.event, () => ({
+    sessionId: entry.sessionId,
+    dialogProcessId: entry.dialogProcessId,
+    turnScopeId: entry.turnScopeId,
+    ...entry.data,
+  }));
+}
+
+export function logStreamEvent(entry, authoritativeEvent, logSessionEvent) {
+  if (isTransientMessageEvent(authoritativeEvent)) {
+    logStreamDeltaEntry(entry);
+    return;
+  }
+  logSessionEvent(entry);
+}
 
 function routePostProjectionEvent(event, data, context) {
   const {
@@ -92,7 +113,7 @@ function routePostProjectionEvent(event, data, context) {
   return true;
 }
 
-function logRuntimeRouteCompleted({
+export function logRuntimeRouteCompleted({
   routed,
   data,
   authoritativeEvent,
@@ -102,7 +123,7 @@ function logRuntimeRouteCompleted({
   sessionId,
   turnScopeId,
 }) {
-  logSessionEvent?.({
+  const entry = {
     category: "transport",
     level: routed ? "info" : "warn",
     event: "frontend.runtimeStream.routeCompleted",
@@ -114,7 +135,14 @@ function logRuntimeRouteCompleted({
       eventFamily: String(authoritativeEvent?.protocol?.family || ""),
       routed,
     },
-  });
+  };
+  // routed=false here only means "not a runtime-stream event"; transient deltas are then
+  // consumed by routeMessageProjectionEvent, so they always go to the stream-delta channel.
+  if (isTransientMessageEvent(authoritativeEvent)) {
+    logStreamDeltaEntry(entry);
+    return;
+  }
+  logSessionEvent?.(entry);
 }
 
 function routeAuthoritativeRuntimeEvent({
@@ -192,7 +220,7 @@ export function createSendStreamEventHandler(context) {
     const authoritativeEvent = protocolEnvelope;
     const authoritativeIdentity = authoritativeEvent?.identity || {};
     const authoritativePayload = authoritativeEvent?.payload || {};
-    logSessionEvent(
+    logStreamEvent(
       buildStreamEventLogEntry({
         activeSession,
         authoritativeEvent,
@@ -202,6 +230,8 @@ export function createSendStreamEventHandler(context) {
         sessionId,
         turnScopeId,
       }),
+      authoritativeEvent,
+      logSessionEvent,
     );
     logResendDebug("send.stream.event", () => ({
       event,

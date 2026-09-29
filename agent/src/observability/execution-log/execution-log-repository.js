@@ -14,21 +14,25 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import { resolveExecutionCategoryDebugType } from "@noobot/shared/runtime-events-config";
 
-function mapExecutionLogToSessionChannelCategory(normalizedLog = {}) {
+/**
+ * Session-channel routing for an execution log. Debug-owned execution categories come from
+ * the runtime-events debug registry, which also supplies the debugType that names the
+ * `debug-<debugType>.jsonl` file and selects its switch.
+ */
+function mapExecutionLogToSessionChannel(normalizedLog = {}) {
   const category = String(normalizedLog?.category || "")
     .trim()
     .toLowerCase();
-  if (category === "tool") return RUNTIME_EVENT_CATEGORIES.INTERACTION;
-  if (category === "error") return RUNTIME_EVENT_CATEGORIES.SYSTEM;
-  if (
-    ["semantic_transfer", "context_identity", "agent_context", "agent_context_protocol"].includes(
-      category,
-    )
-  ) {
-    return RUNTIME_EVENT_CATEGORIES.DEBUG;
+  if (category === "tool") return { category: RUNTIME_EVENT_CATEGORIES.INTERACTION, debugType: "" };
+  if (category === "activity") return { category: RUNTIME_EVENT_CATEGORIES.MESSAGE, debugType: "" };
+  const debugType = resolveExecutionCategoryDebugType(category);
+  if (debugType) return { category: RUNTIME_EVENT_CATEGORIES.DEBUG, debugType };
+  if (category === "semantic_transfer") {
+    return { category: RUNTIME_EVENT_CATEGORIES.DEBUG, debugType: "" };
   }
-  return RUNTIME_EVENT_CATEGORIES.SYSTEM;
+  return { category: RUNTIME_EVENT_CATEGORIES.SYSTEM, debugType: "" };
 }
 
 export class ExecutionLogRepository {
@@ -47,6 +51,9 @@ export class ExecutionLogRepository {
 
   async _appendSessionChannelLog(userId, sessionId, normalizedLog = {}, parentSessionId = "") {
     if (!sessionId) return;
+    const route = mapExecutionLogToSessionChannel(normalizedLog);
+    const logData =
+      normalizedLog.data && typeof normalizedLog.data === "object" ? normalizedLog.data : {};
     await writeRoutedRuntimeEvent(
       {
         scope: "session",
@@ -56,16 +63,15 @@ export class ExecutionLogRepository {
         dialogProcessId: resolveContextMessageDialogProcessId(normalizedLog),
         turnScopeId: normalizedLog.turnScopeId,
         source: "agent",
-        category: mapExecutionLogToSessionChannelCategory(normalizedLog),
+        category: route.category,
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         event: normalizedLog.event || "agent.execution",
         data: {
           executionCategory: normalizedLog.category || "",
           type: normalizedLog.type || "",
           ts: normalizedLog.ts || "",
-          ...(normalizedLog.data && typeof normalizedLog.data === "object"
-            ? normalizedLog.data
-            : {}),
+          ...logData,
+          ...(route.debugType ? { debugType: route.debugType } : {}),
         },
       },
       this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : undefined,
