@@ -6,6 +6,23 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { effectScope, nextTick, reactive } from "vue";
 import { useThinkingTimeline } from "../../../../../src/modules/chat/composables/thinkingPanelTimeline.js";
+import { __resetThinkingDetailCacheForTests } from "../../../../../src/modules/chat/model/thinkingDetailCache.js";
+import {
+  createUserInterjectionContentFact,
+  reduceThinkingDetailContentTimelines,
+} from "@noobot/event-protocol/thinking-detail-content";
+
+function interjectionFact(index) {
+  return createUserInterjectionContentFact({
+    messageUid: `interjection-${index}`,
+    message: `interjection ${index}`,
+    receivedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+    sequence: index,
+    sessionId: "session-a",
+    dialogProcessId: "process-a",
+    turnScopeId: "turn-a",
+  });
+}
 
 function toolMessage(index) {
   return {
@@ -38,6 +55,7 @@ describe("thinking panel round timeline reactivity", () => {
   afterEach(() => {
     scope?.stop();
     scope = null;
+    __resetThinkingDetailCacheForTests();
   });
 
   function mountRound() {
@@ -87,5 +105,59 @@ describe("thinking panel round timeline reactivity", () => {
     const after = timeline.currentExecutionLogs.value;
     expect(after).not.toBe(before);
     expect(after.at(-1).detailValue).not.toEqual(before.at(-1).detailValue);
+  });
+
+  it("merges a loaded thinking detail snapshot with later realtime interjections", async () => {
+    const settled = {
+      role: "assistant",
+      messageUid: "uid-settled",
+      messageId: "message-settled",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+      dialogProcessId: "process-a",
+      content: "",
+      pending: false,
+      toolTimeline: [],
+      activityTimeline: [],
+    };
+    const allMessages = reactive([settled]);
+    const thinkingDetailService = {
+      getDetail: async () => ({
+        exists: true,
+        revision: "revision-1",
+        messageItem: { ...settled, thinkingContentTimeline: [interjectionFact(1)] },
+      }),
+    };
+    const props = reactive({
+      messageItem: allMessages[0],
+      allMessages,
+      thinkingDetailService,
+      userId: "user-a",
+    });
+    scope = effectScope();
+    const timeline = scope.run(() =>
+      useThinkingTimeline(
+        props,
+        (key) => key,
+        () => ({ running: true }),
+      ),
+    );
+    const texts = () => timeline.thinkingContentItems.value.map((item) => item.text);
+    const live = allMessages[0];
+
+    live.thinkingContentTimeline = reduceThinkingDetailContentTimelines([], [interjectionFact(1)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    expect(timeline.loadedThinkingDetail.value).toBeTruthy();
+
+    for (const index of [2, 3]) {
+      live.thinkingContentTimeline = reduceThinkingDetailContentTimelines(
+        live.thinkingContentTimeline,
+        [interjectionFact(index)],
+      );
+      await nextTick();
+    }
+
+    expect(texts()).toEqual(["interjection 1", "interjection 2", "interjection 3"]);
   });
 });
