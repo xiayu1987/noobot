@@ -8,6 +8,7 @@ import { classifyTransportError } from "../policies/default-retry-policy.js";
 import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import { readAnthropicMessageStream } from "./anthropic-message-stream.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
@@ -216,6 +217,7 @@ function responseFromAnthropic(raw = {}) {
 function createClient({
   modelSpec,
   credential,
+  streaming = false,
   headers = {},
   tools = [],
   toolChoice = "auto",
@@ -229,6 +231,7 @@ function createClient({
         .flatMap((message) => textBlocks(message.content));
       const payload = {
         model: spec.model,
+        stream: streaming === true,
         max_tokens: Number(spec.max_tokens || 10000),
         ...((!spec.reasoning_effort || spec.reasoning_effort === "none") &&
         spec.temperature !== undefined
@@ -246,20 +249,46 @@ function createClient({
         ...(system.length ? { system } : {}),
         messages: convertMessages(messages),
       };
-      return responseFromAnthropic(
-        await requestAnthropicMessages({
+      const notify = async (method, ...args) => {
+        for (const callback of invokeOptions.callbacks || []) {
+          await callback[method]?.(...args);
+        }
+      };
+      try {
+        const raw = await requestAnthropicMessages({
           spec,
           credential,
           headers,
           payload,
           signal: invokeOptions.signal,
           fetch: transportFetch,
-        }),
-      );
+          onText: (text) => notify("handleLLMNewToken", text),
+        });
+        const result = responseFromAnthropic(raw);
+        await notify("handleLLMEnd", {
+          generations: [
+            [
+              {
+                text: result.content
+                  .filter((block) => block.type === "text")
+                  .map((block) => block.text)
+                  .join(""),
+                message: result,
+              },
+            ],
+          ],
+          llmOutput: { tokenUsage: result.usage_metadata },
+        });
+        return result;
+      } catch (error) {
+        await notify("handleLLMError", error);
+        throw error;
+      }
     },
   };
   client.__modelSpec = modelSpec;
   client.__credential = credential;
+  client.__streaming = streaming === true;
   client.__headers = headers;
   client.__transportFetch = transportFetch;
   return client;
@@ -271,6 +300,7 @@ async function requestAnthropicMessages({
   headers = {},
   payload,
   signal,
+  onText,
   fetch: transportFetch = globalThis.fetch,
 }) {
   const response = await transportFetch(baseMessagesUrl(spec.base_url), {
@@ -284,15 +314,17 @@ async function requestAnthropicMessages({
     body: JSON.stringify(payload),
     signal: signal || undefined,
   });
-  const body = await response.text();
-  const parsed = parseJson(body, { error: { message: body } });
   if (!response.ok) {
+    const body = await response.text();
+    const parsed = parseJson(body, { error: { message: body } });
     const error = new Error(parsed?.error?.message || `Anthropic API returned ${response.status}`);
     error.status = response.status;
     error.response = parsed;
     throw error;
   }
-  return parsed;
+  if (payload.stream === true) return readAnthropicMessageStream(response, { onText, signal });
+  const body = await response.text();
+  return parseJson(body, { error: { message: body } });
 }
 
 function resultFromAnthropicBlocks(parsed = {}) {
@@ -419,6 +451,7 @@ export const anthropicMessagesAdapter = Object.freeze({
     return createClient({
       modelSpec: client.__modelSpec,
       credential: client.__credential,
+      streaming: client.__streaming,
       headers: client.__headers,
       fetch: client.__transportFetch,
       tools,
