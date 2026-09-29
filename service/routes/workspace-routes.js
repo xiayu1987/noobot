@@ -7,6 +7,7 @@ import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import path from "node:path";
 import { access, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
+import { recordFileAccessDebug } from "../runtime-events/file-access-debug.js";
 import { resolveFileMutationRoot } from "noobot-agent/file-mutation-service";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
@@ -81,24 +82,12 @@ export function registerWorkspaceRoutes(
     return `${parts[0]}/.../${parts.at(-1)}`;
   };
 
-  const logHostFileAccess = (req, event, payload = {}) => {
-    const traceId = String(req?.headers?.["x-noobot-file-trace-id"] || "").trim();
-    if (!traceId) return;
-    void writeRoutedRuntimeEvent({
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
-      level: "debug",
-      debugType: "file-access",
+  const logHostFileAccess = (req, event, payload = {}) =>
+    recordFileAccessDebug(req, {
       event: "service.hostFile.fileAccess.trace",
-      data: {
-        traceEvent: event,
-        traceIdLength: traceId.length,
-        apiChannel: "backend-host-api",
-        ...payload,
-      },
+      traceEvent: event,
+      data: { apiChannel: "backend-host-api", ...payload },
     });
-  };
 
   const assertHostAccessAllowed = (req) => {
     const isSandbox = String(req?.query?.isSandbox || "")

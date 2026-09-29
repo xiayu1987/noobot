@@ -23,7 +23,6 @@ describe("useReconnectReplay", () => {
       createCanonicalAssistant({ dialogProcessId: "dp-1" }),
     ];
 
-    // 序号排序与去重只由持久事件承载；传输 delta 不带序号。
     await api.applyCanonicalMessageEvent("thinking", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
@@ -127,7 +126,10 @@ describe("useReconnectReplay", () => {
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q", turnScopeId: "turn-boundary" },
       {
-        ...createCanonicalAssistant({ dialogProcessId: "dp-boundary", turnScopeId: "turn-boundary" }),
+        ...createCanonicalAssistant({
+          dialogProcessId: "dp-boundary",
+          turnScopeId: "turn-boundary",
+        }),
       },
     ];
 

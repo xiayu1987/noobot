@@ -6,8 +6,6 @@
 
 import { createDiagnosticsLogger } from "./createDiagnosticsLogger.js";
 
-// Per-chunk diagnostics for live-only (transient) message deltas; gated by the
-// server-issued `stream-delta` session-log debug policy.
 const logger = createDiagnosticsLogger("stream-delta");
 export const setStreamDeltaDebugLogSink = logger.setSink;
 export const logStreamDeltaDebug = logger.log;

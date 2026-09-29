@@ -70,8 +70,7 @@ function rejectGate(reason, current = null) {
 
 function validateEnvelopeFamily(eventData) {
   const envelopeValidation = validateProtocolEvent(eventData);
-  const familyMatched =
-    envelopeValidation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE;
+  const familyMatched = envelopeValidation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE;
   if (envelopeValidation.valid && familyMatched) return null;
   return {
     ok: false,
@@ -83,7 +82,7 @@ function validateEnvelopeFamily(eventData) {
 function hasCompleteEventIdentity({ eventData, eventId, projectionEventName, ordering }) {
   if (!eventId || !projectionEventName) return false;
   if (!text(resolveMessageEventPresentationId(eventData?.payload))) return false;
-  // Transient events carry the protocol's unsequenced marker; durable events must be sequenced.
+
   return isTransientMessageEvent(eventData) || Number(ordering.sequence) > 0;
 }
 
@@ -218,9 +217,9 @@ export function buildNextSubSessionState({
   transient = false,
 }) {
   const scopeKey = sequenceIdentity.sequenceKey;
-  // Transient events are live-only: they are never redelivered, so they are not retained for
-  // deduplication and do not move any sequence watermark.
-  if (transient) return { ...currentSession, sessionId, id: sessionId, messages, updatedAt: occurredAt };
+
+  if (transient)
+    return { ...currentSession, sessionId, id: sessionId, messages, updatedAt: occurredAt };
   return {
     ...currentSession,
     sessionId,

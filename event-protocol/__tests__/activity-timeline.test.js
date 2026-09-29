@@ -253,7 +253,8 @@ test("only standalone activity events are durable; activity deltas are transport
   const { isCanonicalActivityMessageEvent, isDurableActivityMessageEvent } =
     await import("../src/activity-timeline.js");
   const { createEventEnvelope, EVENT_FAMILY } = await import("../src/index.js");
-  const { MESSAGE_EVENT_WIRE_EVENT, isTransientMessageEventType } = await import("../src/message-event.js");
+  const { MESSAGE_EVENT_WIRE_EVENT, isTransientMessageEventType } =
+    await import("../src/message-event.js");
   const envelope = (eventId, eventType, payload = {}) =>
     createEventEnvelope({
       family: EVENT_FAMILY.MESSAGE_TIMELINE,
@@ -265,7 +266,11 @@ test("only standalone activity events are durable; activity deltas are transport
         messageId: "message-1",
       },
       causality: {},
-      ordering: { domain: "message-event", scopeId: "message-1", sequence: isTransientMessageEventType(eventType) ? 0 : 1 },
+      ordering: {
+        domain: "message-event",
+        scopeId: "message-1",
+        sequence: isTransientMessageEventType(eventType) ? 0 : 1,
+      },
       producer: { type: "agent", id: "agent-1" },
       occurredAt: "2026-09-05T03:39:01.000Z",
       payload: { eventType, presentationMessageId: "p-1", dialogProcessId: "d-1", ...payload },

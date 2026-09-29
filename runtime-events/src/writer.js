@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RUNTIME_EVENT_SCOPES } from "./constants.js";
-import { normalizeRuntimeEvent } from "./schema.js";
+import { attachRuntimeEventPayload, normalizeRuntimeEventEnvelope } from "./schema.js";
 import {
   resolveRuntimeEventFile,
   resolveRuntimeEventsConfig,
@@ -25,12 +25,13 @@ export async function writeRuntimeEvent(event = {}, options = {}) {
       ...options,
       workspaceRoot: event.workspaceRoot ?? defaults.workspaceRoot ?? options.workspaceRoot,
     });
-    const record = normalizeRuntimeEvent(event, defaults);
+    const record = normalizeRuntimeEventEnvelope(event, defaults);
     const controlledLog =
       record.scope === RUNTIME_EVENT_SCOPES.SESSION || isSessionLogDebugEvent(record);
     if (controlledLog && !shouldRecordSessionLog(record, { ...defaults, ...options, ...config })) {
       return { ok: true, skipped: true, record };
     }
+    attachRuntimeEventPayload(record, event, defaults);
     if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !config.root) {
       const storageSessionId = resolveRuntimeEventStorageSessionId(record);
       const sessionIds = [...new Set([record.sessionId, storageSessionId].filter(Boolean))];

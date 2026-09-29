@@ -126,8 +126,6 @@ export function createChatWebSocketClient({
   }
 
   function cleanupSocketRef(ws) {
-    // release 只对当前 socket 返回 true；主动关闭（替换、重连失败、dispose）都会先 release，
-    // 因此这里返回 true 即为被动断线，通知上层按冷却策略重连。
     if (!transport.release(ws)) return false;
     for (const subscriber of [...transportClosedSubscribers]) {
       try {
@@ -185,6 +183,38 @@ export function createChatWebSocketClient({
     return Number(data?.ordering?.sequence) || null;
   }
 
+  function countArray(value) {
+    return Array.isArray(value) ? value.length : 0;
+  }
+
+  function summarizeReceivedEventIdentity(identity = {}) {
+    return {
+      sessionId: normalizeTrimmedString(identity.sessionId),
+      turnScopeId: normalizeTrimmedString(identity.turnScopeId),
+      eventId: normalizeTrimmedString(identity.eventId),
+      messageId: normalizeTrimmedString(identity.messageId),
+    };
+  }
+
+  function summarizeReceivedEventPayload(payload = {}) {
+    return {
+      dialogProcessId: normalizeTrimmedString(payload.dialogProcessId),
+      eventType: normalizeTrimmedString(payload.eventType),
+      parentSessionId: normalizeTrimmedString(payload.parentSessionId),
+      presentationMessageId: normalizeTrimmedString(payload.presentationMessageId),
+      contentLength: String(payload.content ?? payload.text ?? "").length,
+      attachmentCount: countArray(payload.attachments),
+      transferEnvelopeCount: countArray(payload.transferEnvelopes),
+    };
+  }
+
+  function summarizeReceivedEventData(data) {
+    return {
+      ...summarizeReceivedEventIdentity(data?.identity || {}),
+      ...summarizeReceivedEventPayload(data?.payload || {}),
+    };
+  }
+
   function attachTransportHandlers(ws) {
     if (!ws) return null;
     registerSocketHandlers(ws, "transport", {
@@ -211,24 +241,10 @@ export function createChatWebSocketClient({
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
           const observedData = receivedTransportEvent.data;
           logTransportDiagnostics("frontend.websocket.transportEventReceived", () => ({
-            sessionId: normalizeTrimmedString(observedData?.identity?.sessionId),
-            dialogProcessId: normalizeTrimmedString(observedData?.payload?.dialogProcessId),
-            turnScopeId: normalizeTrimmedString(observedData?.identity?.turnScopeId),
+            ...summarizeReceivedEventData(observedData),
             protocolEvent: event,
-            eventId: normalizeTrimmedString(observedData?.identity?.eventId),
-            eventType: normalizeTrimmedString(observedData?.payload?.eventType),
-            parentSessionId: normalizeTrimmedString(observedData?.payload?.parentSessionId),
-            messageId: normalizeTrimmedString(observedData?.identity?.messageId),
-            presentationMessageId: normalizeTrimmedString(observedData?.payload?.presentationMessageId),
             transportSequence: null,
             authoritativeSequence: resolveAuthoritativeSequence(event, observedData),
-            contentLength: String(observedData?.payload?.content ?? observedData?.payload?.text ?? "").length,
-            attachmentCount: Array.isArray(observedData?.payload?.attachments)
-              ? observedData.payload.attachments.length
-              : 0,
-            transferEnvelopeCount: Array.isArray(observedData?.payload?.transferEnvelopes)
-              ? observedData.payload.transferEnvelopes.length
-              : 0,
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
@@ -257,8 +273,6 @@ export function createChatWebSocketClient({
             activeStreamContext?.payload &&
             isEventForStreamScope(data, activeStreamContext.payload, channelSessionId)
           ) {
-            // 回执只表示“已收到”，与分发解耦：暂存的 lifecycle 事件也必须立即回执，
-            // 否则 agent-proxy 会在回执耗尽后清掉后续终态（drain 路径不再回执）。
             acknowledgeTurnLifecycleReceipt(ws, event, lifecycleData);
             pendingStreamEvents.push(transportEvent);
             return;

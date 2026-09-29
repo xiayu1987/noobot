@@ -11,9 +11,6 @@ import {
 } from "./message-event.js";
 import { text } from "./normalize.js";
 
-// A standalone activity event carries the complete text of one activity; ACTIVITY_DELTA is a
-// transient fragment of the same activity.
-
 const ACTIVITY_WIRE_EVENT_TYPES = Object.freeze(
   new Set([...ACTIVITY_EVENT_TYPES, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),
 );
@@ -51,14 +48,10 @@ export function isCanonicalActivityMessageEvent(envelope = {}) {
   );
 }
 
-// Durability boundary of an activity: the transient delta feeds the live projection only; the
-// standalone activity event is the single durable fact of that activity.
 export function isDurableActivityMessageEvent(envelope = {}) {
   return isCanonicalActivityMessageEvent(envelope) && !isTransientMessageEvent(envelope);
 }
 
-// A transient delta has no authoritative sequence. Its fact takes the given timeline position
-// (the owning activity's position, or the tail) until the durable activity event replaces it.
 export function projectCanonicalActivityTimelineEvent(envelope = {}, { position = 1 } = {}) {
   if (!isCanonicalActivityMessageEvent(envelope)) return null;
   const eventId = text(envelope?.identity?.eventId);
@@ -109,7 +102,6 @@ export function projectCanonicalActivityTimelineEvent(envelope = {}, { position 
 }
 
 function insertBySequence(timeline, fact) {
-  // Timelines are kept sorted by sequence; equal sequences keep arrival order.
   let index = timeline.length;
   while (index > 0 && Number(timeline[index - 1]?.sequence || 0) > Number(fact.sequence)) {
     index -= 1;
@@ -118,21 +110,15 @@ function insertBySequence(timeline, fact) {
   return timeline;
 }
 
-export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
-  const next = Array.isArray(timeline) ? [...timeline] : [];
-  if (!isCanonicalActivityMessageEvent(envelope)) return next;
-  const eventId = text(envelope?.identity?.eventId);
-  const isDelta = isTransientMessageEvent(envelope);
-  const sameEventIndex = next.findIndex((item) => text(item?.eventId) === eventId);
-  if (sameEventIndex >= 0) {
-    // A redelivered delta must not append twice; a durable event with the same identity is the
-    // same fact and replaces it in place.
-    if (isDelta) return next;
-    const replacement = projectCanonicalActivityTimelineEvent(envelope);
-    if (!replacement) return next;
-    next.splice(sameEventIndex, 1);
-    return insertBySequence(next, replacement);
-  }
+function replaceSameEventFact(next, sameEventIndex, envelope, isDelta) {
+  if (isDelta) return next;
+  const replacement = projectCanonicalActivityTimelineEvent(envelope);
+  if (!replacement) return next;
+  next.splice(sameEventIndex, 1);
+  return insertBySequence(next, replacement);
+}
+
+function mergeActivityFact(next, envelope, isDelta) {
   const activityId = text(envelope?.payload?.activityId);
   const activityIndex = activityId
     ? next.findIndex((item) => text(item?.activityId) === activityId)
@@ -144,15 +130,22 @@ export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
   });
   if (!fact) return next;
   if (!previous) return insertBySequence(next, fact);
-  // A delta appends to its activity in place; the durable activity event carries the complete
-  // text and replaces every fragment streamed before it.
+
   next.splice(activityIndex, 1);
   return insertBySequence(
     next,
-    isDelta
-      ? Object.freeze({ ...fact, text: `${String(previous.text || "")}${fact.text}` })
-      : fact,
+    isDelta ? Object.freeze({ ...fact, text: `${String(previous.text || "")}${fact.text}` }) : fact,
   );
+}
+
+export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
+  const next = Array.isArray(timeline) ? [...timeline] : [];
+  if (!isCanonicalActivityMessageEvent(envelope)) return next;
+  const eventId = text(envelope?.identity?.eventId);
+  const isDelta = isTransientMessageEvent(envelope);
+  const sameEventIndex = next.findIndex((item) => text(item?.eventId) === eventId);
+  if (sameEventIndex >= 0) return replaceSameEventFact(next, sameEventIndex, envelope, isDelta);
+  return mergeActivityFact(next, envelope, isDelta);
 }
 
 export function isCanonicalActivityTimelineFact(value = {}) {
@@ -178,8 +171,6 @@ export function isCanonicalActivityTimelineFact(value = {}) {
 }
 
 export function mergeCanonicalActivityTimelines(...timelines) {
-  // One fact per activity: facts sharing an activityId are the same activity observed at
-  // different points (mid-stream snapshot vs. completed); the higher sequence wins.
   const byIdentity = new Map();
   for (const fact of timelines.flat()) {
     if (!isCanonicalActivityTimelineFact(fact)) continue;

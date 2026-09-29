@@ -80,8 +80,7 @@ export function createThinkingAnalysisProjection({
       latestGuidanceOutputLength: getPluginAnalysisLogOutput(latestGuidance || {}).length,
       latestGuidanceTimestamp: String(latestGuidance?.timestamp || ""),
       latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
-      latestModelAnalysisOutputLength: getModelAnalysisLogOutput(latestModelAnalysis || {})
-        .length,
+      latestModelAnalysisOutputLength: getModelAnalysisLogOutput(latestModelAnalysis || {}).length,
       latestModelAnalysisTimestamp: String(latestModelAnalysis?.timestamp || ""),
     };
   }

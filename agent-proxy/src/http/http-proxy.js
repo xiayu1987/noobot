@@ -7,10 +7,8 @@ import http from "node:http";
 import https from "node:https";
 import { config } from "../shared/config.js";
 import { AGENT_PROXY_ERROR } from "../shared/constants.js";
-import {
-  localizeAgentProxyMessage,
-  resolveLocaleFromRequest,
-} from "noobot-i18n/agent-proxy";
+import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
+import { localizeAgentProxyMessage, resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 import { buildSecurityHeaders } from "./security.js";
 import {
   writeAgentProxyInvalidRequestUrlEvent,
@@ -37,12 +35,7 @@ export function decorateProxyResponseHeaders(headers = {}) {
   };
 }
 
-export function writeProxyError(
-  response,
-  statusCode = 502,
-  message = "Bad Gateway",
-  locale = "",
-) {
+export function writeProxyError(response, statusCode = 502, message = "Bad Gateway", locale = "") {
   if (!response || response.headersSent) return;
   const localizedMessage = localizeAgentProxyMessage(message, locale) || message;
   response.writeHead(
@@ -81,7 +74,10 @@ export function collectRequestBody(request) {
   });
 }
 
-export function normalizeProxyPathname(pathname = "/", stripPrefix = config.upstreamHttpStripPrefix) {
+export function normalizeProxyPathname(
+  pathname = "/",
+  stripPrefix = config.upstreamHttpStripPrefix,
+) {
   const normalizedPathname = String(pathname || "/").trim() || "/";
   const normalizedStripPrefix = String(stripPrefix || "").trim();
   if (!normalizedStripPrefix || normalizedStripPrefix === "/") return normalizedPathname;
@@ -95,8 +91,11 @@ export function normalizeProxyPathname(pathname = "/", stripPrefix = config.upst
 export function proxyHttpRequest(request, response) {
   const startedAt = Date.now();
   const locale = resolveLocaleFromRequest(request);
-  const method = String(request?.method || "GET").trim().toUpperCase() || "GET";
-  const traceId = String(request?.headers?.["x-noobot-file-trace-id"] || "").trim();
+  const method =
+    String(request?.method || "GET")
+      .trim()
+      .toUpperCase() || "GET";
+  const traceId = String(request?.headers?.[FILE_TRACE_ID_HEADER] || "").trim();
   let targetUrl = null;
   try {
     targetUrl = new URL(request?.url || "/", config.upstreamHttpBase);
@@ -126,7 +125,12 @@ export function proxyHttpRequest(request, response) {
       hasSearch: Boolean(targetUrl.search),
     });
   }
-  void writeAgentProxyHttpLifecycleEvent({ event: "agentProxy.http.request.started", method, pathname: targetUrl.pathname, traceId });
+  void writeAgentProxyHttpLifecycleEvent({
+    event: "agentProxy.http.request.started",
+    method,
+    pathname: targetUrl.pathname,
+    traceId,
+  });
   const isHttps = targetUrl.protocol === "https:";
   const requestHeaders = { ...(request?.headers || {}) };
   delete requestHeaders.host;
@@ -144,7 +148,14 @@ export function proxyHttpRequest(request, response) {
     },
     (upstreamResponse) => {
       const statusCode = Number(upstreamResponse?.statusCode || 502);
-      void writeAgentProxyHttpLifecycleEvent({ event: "agentProxy.http.response.received", method, pathname: targetUrl.pathname, traceId, status: statusCode, durationMs: Date.now() - startedAt });
+      void writeAgentProxyHttpLifecycleEvent({
+        event: "agentProxy.http.response.received",
+        method,
+        pathname: targetUrl.pathname,
+        traceId,
+        status: statusCode,
+        durationMs: Date.now() - startedAt,
+      });
       if (traceId) {
         void writeAgentProxyHttpTraceEvent({
           event: "proxy.response",
@@ -168,7 +179,14 @@ export function proxyHttpRequest(request, response) {
     upstreamRequest.destroy(new Error("upstream timeout"));
   });
   upstreamRequest.on("error", (error) => {
-    void writeAgentProxyHttpLifecycleEvent({ event: "agentProxy.http.request.failed", method, pathname: targetUrl?.pathname || "", traceId, status: 502, durationMs: Date.now() - startedAt });
+    void writeAgentProxyHttpLifecycleEvent({
+      event: "agentProxy.http.request.failed",
+      method,
+      pathname: targetUrl?.pathname || "",
+      traceId,
+      status: 502,
+      durationMs: Date.now() - startedAt,
+    });
     void writeAgentProxyUpstreamRequestFailedEvent({
       method,
       pathname: targetUrl?.pathname || "",
@@ -186,12 +204,7 @@ export function proxyHttpRequest(request, response) {
         error: String(error?.message || error || ""),
       });
     }
-    writeProxyError(
-      response,
-      502,
-      error?.message || AGENT_PROXY_ERROR.UPSTREAM_HTTP_ERROR,
-      locale,
-    );
+    writeProxyError(response, 502, error?.message || AGENT_PROXY_ERROR.UPSTREAM_HTTP_ERROR, locale);
   });
   request.pipe(upstreamRequest);
 }

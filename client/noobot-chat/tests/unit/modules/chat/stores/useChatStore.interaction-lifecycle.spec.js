@@ -37,32 +37,40 @@ describe("useChatStore interaction lifecycle", () => {
   it("closes the same Turn interaction when Authority commits a terminal lifecycle", () => {
     const store = useChatStore();
     store.activeSessionId = "session-a";
-    store.pendingInteractionRequests = [{
-      requestId: "interaction-a",
-      sessionId: "session-a",
-      dialogProcessId: "dialog-a",
-      turnScopeId: "client-turn:a",
-    }, {
-      requestId: "interaction-b",
-      sessionId: "session-b",
-      dialogProcessId: "dialog-b",
-      turnScopeId: "client-turn:b",
-    }];
+    store.pendingInteractionRequests = [
+      {
+        requestId: "interaction-a",
+        sessionId: "session-a",
+        dialogProcessId: "dialog-a",
+        turnScopeId: "client-turn:a",
+      },
+      {
+        requestId: "interaction-b",
+        sessionId: "session-b",
+        dialogProcessId: "dialog-b",
+        turnScopeId: "client-turn:b",
+      },
+    ];
     store.pendingInteractionRequest = store.pendingInteractionRequests[0];
 
-    expect(store.applyTurnLifecycleEnvelope(
-      lifecycle("turn.action_accepted", 1, "action_requesting", "accepted"),
-    ).applied).toBe(true);
+    expect(
+      store.applyTurnLifecycleEnvelope(
+        lifecycle("turn.action_accepted", 1, "action_requesting", "accepted"),
+      ).applied,
+    ).toBe(true);
     expect(store.pendingInteractionRequest?.requestId).toBe("interaction-a");
 
-    expect(store.applyTurnLifecycleEnvelope(lifecycle(
-      "turn.completed",
-      2,
-      "completed",
-      "completed",
-      { completionCommitId: "commit-a", summaryVersion: 1 },
-    )).applied).toBe(true);
-    expect(store.pendingInteractionRequests.map((item) => item.requestId)).toEqual(["interaction-b"]);
+    expect(
+      store.applyTurnLifecycleEnvelope(
+        lifecycle("turn.completed", 2, "completed", "completed", {
+          completionCommitId: "commit-a",
+          summaryVersion: 1,
+        }),
+      ).applied,
+    ).toBe(true);
+    expect(store.pendingInteractionRequests.map((item) => item.requestId)).toEqual([
+      "interaction-b",
+    ]);
     expect(store.pendingInteractionRequest).toBeNull();
   });
 });

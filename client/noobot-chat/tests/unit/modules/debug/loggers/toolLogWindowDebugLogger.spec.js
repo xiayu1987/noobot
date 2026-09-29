@@ -25,13 +25,15 @@ describe("toolLogWindowDebugLogger", () => {
     });
 
     expect(debug).toHaveBeenCalledWith("tool-log-window", expect.any(Function));
-    expect(debug.mock.results[0].value).toEqual(expect.objectContaining({
-      category: "debug",
-      level: "debug",
-      debugType: "tool-log-window",
-      sessionId: "session-1",
-      data: expect.objectContaining({ selectedCount: 10 }),
-    }));
+    expect(debug.mock.results[0].value).toEqual(
+      expect.objectContaining({
+        category: "debug",
+        level: "debug",
+        debugType: "tool-log-window",
+        sessionId: "session-1",
+        data: expect.objectContaining({ selectedCount: 10 }),
+      }),
+    );
     expect(Object.hasOwn(debug.mock.results[0].value.data, "debugType")).toBe(false);
   });
 

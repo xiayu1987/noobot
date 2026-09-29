@@ -525,16 +525,15 @@ describe("useChatEngine.send-stream", () => {
       emitAuthorityProcessing(onEvent, payload);
       emitAuthorityTerminal(onEvent, payload);
     });
-    const { engine, activeSession, activeSessionId, sending, activeTurnRuntime } =
-      createHarness({
-        sessionId: "local-1",
-        stream,
-        deps: {
-          fetchSessionDetail: vi.fn(async () => {
-            throw new Error("ignore detail fetch in this unit test");
-          }),
-        },
-      });
+    const { engine, activeSession, activeSessionId, sending, activeTurnRuntime } = createHarness({
+      sessionId: "local-1",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => {
+          throw new Error("ignore detail fetch in this unit test");
+        }),
+      },
+    });
 
     const diagnostics = [];
     setTransportDiagnosticsLogSink({

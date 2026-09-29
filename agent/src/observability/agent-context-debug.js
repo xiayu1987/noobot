@@ -29,9 +29,8 @@ export function buildAgentContextDebugData(scope = {}) {
   const bindings = scope?.bindings || {};
   const identity = context?.identity || {};
   const tools = Array.isArray(bindings.tools) ? bindings.tools : [];
-  const extensions = bindings?.extensions && typeof bindings.extensions === "object"
-    ? bindings.extensions
-    : {};
+  const extensions =
+    bindings?.extensions && typeof bindings.extensions === "object" ? bindings.extensions : {};
   return {
     userId: String(identity.userId || "").trim(),
     sessionId: String(identity.sessionId || "").trim(),

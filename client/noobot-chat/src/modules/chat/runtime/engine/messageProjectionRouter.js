@@ -11,11 +11,11 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { logTransportDiagnostics } from "../../../debug/loggers/transportDiagnosticsLogger.js";
 
-/**
- * Projection outcome logging: successful steps are transport diagnostics (debug category,
- * switch-gated); failed steps are transport warnings recorded on the main log.
- */
-function logProjectionOutcome(context, succeeded, { event, sessionId, dialogProcessId, turnScopeId, data }) {
+function logProjectionOutcome(
+  context,
+  succeeded,
+  { event, sessionId, dialogProcessId, turnScopeId, data },
+) {
   if (succeeded) {
     logTransportDiagnostics(event, () => ({ sessionId, dialogProcessId, turnScopeId, ...data }));
     return;

@@ -115,7 +115,7 @@ describe("reconnect authoritative message event replay", () => {
     ]);
     const findCanonicalMessageById = (sessionId, messageId) =>
       sessionId === "session-1" ? canonicalMessages.get(messageId) || null : null;
-    // 每条消息的序号水位由持久事件承载；传输 delta 不带序号。
+
     const first = authoritative("authoritative_final_content", 1, {
       messageId: "message-1",
       text: "first",

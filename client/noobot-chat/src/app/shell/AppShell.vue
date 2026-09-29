@@ -271,8 +271,7 @@ const { reconnectActiveSession } = useReconnect({
   hasActiveSession: hasActiveSessionForReconnect,
   handleReconnect,
 });
-// 被动断线（如 agent-proxy 回执耗尽以 1011 关闭）后主动重连补齐终态；
-// 不带 force，由 signalCooldownMs 冷却挡住服务端持续拒绝时的重连自激循环。
+
 const unsubscribeTransportClosed = chatWebSocketClient.subscribeTransportClosed(() => {
   reconnectActiveSession();
 });

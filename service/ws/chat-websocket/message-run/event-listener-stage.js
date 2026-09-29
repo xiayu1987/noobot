@@ -142,8 +142,6 @@ async function dispatchCommittedTurn(context, run, envelope = {}, dispatchContex
 
 async function dispatchAuthorityEvent(context, run, active, envelope = {}, dispatchContext = {}) {
   if (isTransientMessageEvent(envelope)) {
-    // Transient events never enter the outbox: publish live, best effort. Their content is
-    // superseded by the durable activity event / authoritative final content.
     const sent = await publishRunEvent(active.runHandle, envelope.identity.eventType, envelope);
     return { dispatched: true, delivered: sent === true ? 1 : 0 };
   }

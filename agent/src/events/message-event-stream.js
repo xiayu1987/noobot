@@ -5,11 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
-import {
-  EVENT_FAMILY,
-  createEventEnvelope,
-  validateProtocolEvent,
-} from "@noobot/event-protocol";
+import { EVENT_FAMILY, createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
 import { emitEvent } from "./emitter.js";
 import {
   MODEL_MESSAGE_SCOPED_EVENT_TYPES,
@@ -174,9 +170,7 @@ export function createMessageEventPayload(runtime = {}, eventType = "", data = {
     throw new Error(`authoritative message event requires presentationMessageId: ${eventType}`);
   }
   const toolCallId = text(data?.toolCallId);
-  // Model-scoped events are owned by the assistant message of the active model invocation.
-  // Events raised before any invocation (dispatch hooks, guidance) carry no owner and are
-  // materialized onto the next committed assistant message.
+
   const modelScoped = MODEL_MESSAGE_SCOPED_EVENT_TYPES.has(text(eventType));
   const modelMessageId = modelScoped ? text(stream.activeModelMessageId) : "";
   const payload = deepFreeze({
@@ -219,11 +213,7 @@ function messageEventCommitInput(runtime, state, payload) {
   };
 }
 
-// Transient events (protocol TRANSIENT_MESSAGE_EVENT_TYPES) are live-only: they never enter the
-// authority outbox, take no authoritative sequence and are superseded by the durable event of
-// the same activity / the authoritative final content.
 function createTransientMessageEventEnvelope(input) {
-  // Transient envelopes carry no user identity and touch no user storage.
   if (!input.sessionId || !input.turnScopeId || !input.messageId) {
     throw new TypeError("message event requires session, Turn and message identity");
   }
@@ -275,7 +265,9 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
     : await commitDurableMessageEvent(runtime, input);
   const projected = await runtime?.projectCurrentTurnMessageEvent?.(envelope);
   if (runtime?.projectCurrentTurnMessageEvent && !projected) {
-    throw new Error(`canonical message event projector rejected event: ${envelope.identity.eventId}`);
+    throw new Error(
+      `canonical message event projector rejected event: ${envelope.identity.eventId}`,
+    );
   }
   await emitEvent(eventListener, AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED, {
     envelope,

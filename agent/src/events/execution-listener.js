@@ -184,8 +184,6 @@ export function createExecutionEventListener({
       const data = evt?.data || {};
       const ts = evt?.ts || new Date().toISOString();
 
-      // Transient message events are live-only by protocol: forward them, never persist them
-      // into the execution log (the durable activity / final content event is logged instead).
       if (!isTransientMessageEvent(data?.envelope)) {
         const executionRecord = projectExecutionLogRecord(event, data);
         const { category, type } = classifyExecutionEvent(executionRecord.event);

@@ -103,7 +103,7 @@ export function createAuthoritativeMessageEnvelope(
     turnScopeId,
     `turn-${normalizedDialogProcessId}`,
   );
-  // `seq` stays the eventId discriminator; transport-only events are unsequenced by protocol.
+
   const sequence = Number(seq || 0);
   const orderingSequence = isTransientMessageEventType(eventType)
     ? TRANSIENT_MESSAGE_EVENT_SEQUENCE

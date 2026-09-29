@@ -74,12 +74,6 @@ export function createStreamingCallbacks(eventListener = null, runtime = {}) {
   ];
 }
 
-/**
- * The single producer of one model activity. Streaming emits ACTIVITY_DELTA fragments;
- * complete() always emits the standalone activity event with the final text under the
- * same activityId, which the protocol reducer treats as the activity's complete text.
- * This covers streaming, non-streaming, and in-request streaming downgrade identically.
- */
 export function createModelActivity(
   eventListener = null,
   runtime = {},

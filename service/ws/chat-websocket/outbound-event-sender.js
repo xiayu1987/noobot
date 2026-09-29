@@ -16,7 +16,6 @@ function text(value) {
   return String(value || "").trim();
 }
 
-// 传输 delta 逐块发送，其 eventSent 诊断归入可关闭的 stream-delta debug 分类，不进 backend-websocket 主分类。
 const TRANSIENT_DELTA_LOG_ROUTING = Object.freeze({
   category: RUNTIME_EVENT_CATEGORIES.DEBUG,
   level: "debug",

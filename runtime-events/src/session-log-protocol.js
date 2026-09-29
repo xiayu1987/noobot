@@ -15,8 +15,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { normalizeOptionalSessionId } from "./session-id.js";
 import { RUNTIME_EVENT_CATEGORIES } from "./constants.js";
 
-// 会话日志分类是 runtime schema 分类的子集（不含 security/config），
-// 必须引用唯一注册表，避免手写副本与 schema 白名单漂移导致整批日志被拒收。
 export const SESSION_LOG_CATEGORIES = Object.freeze([
   RUNTIME_EVENT_CATEGORIES.STATE,
   RUNTIME_EVENT_CATEGORIES.MESSAGE,
@@ -98,7 +96,6 @@ export function resolveSessionLogClientPolicy(options = {}) {
   };
 }
 
-/** A session log event is a debug event exactly when its category is debug. */
 export function isSessionLogDebugEvent(event = {}) {
   return isSessionLogDebugCategory(event.category || event.type);
 }
@@ -110,7 +107,6 @@ export function getSessionLogControlKey(
   return SESSION_LOG_CONTROL_KEYS[category] || SESSION_LOG_CONTROL_KEYS.system;
 }
 
-/** Exact registry lookup of the record's top-level debugType; unregistered types have no switch. */
 export function getSessionLogDebugControlKey(event = {}) {
   return isRegisteredSessionLogDebugType(event.debugType)
     ? SESSION_LOG_DEBUG_CONTROL_KEYS[event.debugType]

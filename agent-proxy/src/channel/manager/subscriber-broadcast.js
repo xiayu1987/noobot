@@ -20,7 +20,6 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 
-// 生命周期被同回合更新状态覆盖时视为已受理：最新状态已在途。
 const LIFECYCLE_SUPERSEDED = "superseded";
 const isAcceptedChannelDelivery = (result = {}) =>
   result.result === "sent" || result.result === "queued" || result.result === LIFECYCLE_SUPERSEDED;
@@ -65,9 +64,6 @@ class SubscriberBroadcastMethods {
     return cleared;
   }
 
-  // 生命周期是状态事件：同一 (channel, session, turn) 每个 socket 只保留最新一条在途投递，
-  // 新状态直接覆盖旧状态并立即下发，终态不再排在前序回执之后。
-  // 前端按 revision/sequence 单调接收，不要求连号，被覆盖的中间态无需补发。
   acknowledgeTurnLifecycleDelivery(socket, receipt = {}) {
     const validation = validateTurnLifecycleReceipt(receipt);
     if (!validation.valid) {
@@ -147,7 +143,6 @@ class SubscriberBroadcastMethods {
     const lifecycleSequence = Number(eventEnvelope?.ordering?.sequence || 0);
     const inFlight = targetSocket.__agentProxyLifecycleDeliveriesByTurn.get(turnKey) || null;
     if (inFlight && inFlight.lifecycleSequence >= lifecycleSequence) {
-      // 更新的状态已在途，旧状态（如回放补发）被覆盖，无需下发。
       return { result: LIFECYCLE_SUPERSEDED, reason: "newer_lifecycle_in_flight" };
     }
     if (inFlight) {
@@ -235,8 +230,6 @@ class SubscriberBroadcastMethods {
       delivery.timer = null;
     }
     if (delivery.attempts >= config.turnLifecycleDeliveryMaxAttempts) {
-      // 只有最新状态在途，耗尽不会连带丢弃其他生命周期；关闭不可靠连接后，
-      // 前端被动断线重连，由 channel 级 lifecycle replay 补回最新状态。
       this.logSessionEvent(delivery.channel, {
         category: "transport",
         level: "error",
@@ -405,8 +398,7 @@ class SubscriberBroadcastMethods {
       if (!deliveryAccepted) continue;
       this.recordSuccessfulDataPlaneOperation("deliveries");
       if (envelope?.event === TURN_LIFECYCLE_WIRE_EVENT) continue;
-      // Transport-only deltas are not in the journal; advancing the cursor on
-      // them would mask a previously failed durable delivery.
+
       if (isTransientMessageEvent(envelope?.data)) continue;
       subscriberSocket.__agentProxyLastSequenceByChannel =
         subscriberSocket.__agentProxyLastSequenceByChannel || {};

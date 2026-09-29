@@ -105,10 +105,12 @@ export function createSessionServices(
     now: nowFn,
   });
 
+  const executionLogRuntimeEventsConfig = {};
   const executionRepository = new ExecutionLogRepository({
     executionRepository: fileSystemExecutionRepository,
     now: nowFn,
     workspaceRoot: globalConfig?.workspaceRoot || "",
+    runtimeEventsConfig: executionLogRuntimeEventsConfig,
   });
 
   const sessionTreeService = new SessionTreeService({
@@ -152,6 +154,7 @@ export function createSessionServices(
   const executionLogService = new ExecutionLogService({
     executionRepo: executionRepository,
     sessionRepo: sessionRepository,
+    runtimeEventsConfig: executionLogRuntimeEventsConfig,
   });
 
   return {
