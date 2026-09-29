@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { setTransportDiagnosticsLogSink } from "../../../../../src/modules/debug/loggers/transportDiagnosticsLogger.js";
 import {
   createHarness,
   assistantMessage,
@@ -26,6 +27,8 @@ import {
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
 
 describe("useChatEngine.send-stream", () => {
+  afterEach(() => setTransportDiagnosticsLogSink(null));
+
   it("uses one preallocated identity for the local user message and transport payload", async () => {
     let capturedPayload = null;
     const stream = vi.fn(async (payload) => {
@@ -522,7 +525,7 @@ describe("useChatEngine.send-stream", () => {
       emitAuthorityProcessing(onEvent, payload);
       emitAuthorityTerminal(onEvent, payload);
     });
-    const { engine, deps, activeSession, activeSessionId, sending, activeTurnRuntime } =
+    const { engine, activeSession, activeSessionId, sending, activeTurnRuntime } =
       createHarness({
         sessionId: "local-1",
         stream,
@@ -533,13 +536,20 @@ describe("useChatEngine.send-stream", () => {
         },
       });
 
+    const diagnostics = [];
+    setTransportDiagnosticsLogSink({
+      isEnabled: (type) => type === "transport-diagnostics",
+      debug: (debugType, factory) => diagnostics.push(factory()) > 0,
+    });
+
     await engine.send();
 
-    const reductionLog = deps.sessionLogWebSocketClient.log.mock.calls
-      .map(([entry]) => entry)
-      .find((entry) => entry?.event === "frontend.messageEvent.reduced");
+    const reductionLog = diagnostics.find(
+      (entry) => entry?.event === "frontend.messageEvent.reduced",
+    );
     expect(reductionLog).toEqual(
       expect.objectContaining({
+        debugType: "transport-diagnostics",
         sessionId: "local-1",
         data: expect.objectContaining({
           messageId: "model-output-final-answer",

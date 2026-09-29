@@ -111,13 +111,6 @@ export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runCo
   });
 }
 
-export function isPluginDebugEnabled() {
-  const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "")
-    .trim()
-    .toLowerCase();
-  return value === "1" || value === "true" || value === "yes" || value === "on";
-}
-
 export function summarizePluginConfig(plugins = {}) {
   if (!plugins || typeof plugins !== "object" || Array.isArray(plugins)) return {};
   return Object.fromEntries(

@@ -7,7 +7,6 @@ import { createExecutionAbortReason, EXECUTION_ABORT_TYPE } from "@noobot/sessio
 import { attachRunTransport, registerActiveRun } from "../run-registry.js";
 import { recordServiceWebSocketLifecycle } from "../runtime-events.js";
 import {
-  isPluginDebugEnabled,
   resolveEffectiveRunTimeoutMs,
   resolveEffectiveStreamingEnabled,
   summarizePluginConfig,
@@ -21,12 +20,13 @@ import {
 const text = (value) => String(value || "").trim();
 
 async function recordPluginDebug(context, command, run) {
-  if (!isPluginDebugEnabled()) return;
   await writeRoutedRuntimeEvent({
     scope: "session",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+    level: "debug",
+    debugType: "plugin-run-config",
     event: "service.websocket.pluginDebug.runConfig",
     userId: text(run.userId),
     sessionId: text(run.sessionId),

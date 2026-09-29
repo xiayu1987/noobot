@@ -162,7 +162,7 @@ test("buildNewSessionContext emits the default agent context debug structure", a
 
   const event = events.find((item = {}) => item.event === "agent.context.executionScopeCreated");
   assert.ok(event);
-  assert.equal(event.data.debugType, "agent-context");
+  assert.equal(Object.hasOwn(event.data, "debugType"), false);
   assert.equal(event.data.sessionId, "s1");
   assert.equal(event.data.dialogProcessId, "dp-debug");
   assert.equal(event.data.turnScopeId, "turn-1");

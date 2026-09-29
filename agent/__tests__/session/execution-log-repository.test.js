@@ -209,7 +209,6 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
       category: "context_identity",
       type: "context_identity_debug",
       data: {
-        debugType: "context-identity",
         turnScopeId: "t1",
         sourceMessageUid: "sm_1",
         contentProjectionId: "sm_1",
@@ -257,7 +256,8 @@ test("appendLog routes model context traces to the registry-derived debug file, 
   const eventsDir = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events");
   const records = await readJsonLines(path.join(eventsDir, "debug-model-context-trace.jsonl"));
   assert.equal(records.length, 1);
-  assert.equal(records[0].data.debugType, "model-context-trace");
+  assert.equal(records[0].debugType, "model-context-trace");
+  assert.equal(Object.hasOwn(records[0].data, "debugType"), false);
   assert.equal(records[0].data.stage, "resolve_model_messages");
   const systemRecords = await readJsonLines(path.join(eventsDir, "system.jsonl")).catch(() => []);
   assert.equal(systemRecords.length, 0);

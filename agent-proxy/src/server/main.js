@@ -164,15 +164,12 @@ function isLogProxyPath(pathname = "") {
 }
 
 function agentProxyLogDiagnostic(message, data = {}) {
-  const raw = String(process.env.AGENT_PROXY_SESSION_LOG_DIAGNOSTIC || "true")
-    .trim()
-    .toLowerCase();
-  if (["0", "false", "no", "off"].includes(raw)) return;
   void writeRoutedRuntimeEvent({
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+    category: RUNTIME_EVENT_CATEGORIES.DEBUG,
     level: "debug",
+    debugType: "session-log-ws",
     event: "agentProxy.sessionLogWs.diagnostic",
     data: {
       message: String(message || ""),

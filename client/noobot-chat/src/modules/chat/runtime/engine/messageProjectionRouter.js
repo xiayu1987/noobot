@@ -9,25 +9,41 @@ import {
   MESSAGE_EVENT_TYPE,
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
+import { logTransportDiagnostics } from "../../../debug/loggers/transportDiagnosticsLogger.js";
+
+/**
+ * Projection outcome logging: successful steps are transport diagnostics (debug category,
+ * switch-gated); failed steps are transport warnings recorded on the main log.
+ */
+function logProjectionOutcome(context, succeeded, { event, sessionId, dialogProcessId, turnScopeId, data }) {
+  if (succeeded) {
+    logTransportDiagnostics(event, () => ({ sessionId, dialogProcessId, turnScopeId, ...data }));
+    return;
+  }
+  context.logSessionEvent({
+    category: "transport",
+    level: "warn",
+    event,
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    data,
+  });
+}
 
 function logRouteEvaluation(event, messageEvent, shouldProjectMain, context) {
   const { identity = {}, payload = {} } = messageEvent;
-  context.logSessionEvent({
-    category: "transport",
-    level: "debug",
-    event: "frontend.messageEvent.routeEvaluated",
+  logTransportDiagnostics("frontend.messageEvent.routeEvaluated", () => ({
     sessionId: identity.sessionId || context.sessionId,
     dialogProcessId: payload.dialogProcessId || "",
     turnScopeId: identity.turnScopeId || context.turnScopeId,
-    data: {
-      channelEvent: String(event || ""),
-      shouldProjectMain,
-      eventId: identity.eventId || "",
-      eventType: payload.eventType || "",
-      messageId: identity.messageId || "",
-      presentationMessageId: resolveMessageEventPresentationId(payload),
-    },
-  });
+    channelEvent: String(event || ""),
+    shouldProjectMain,
+    eventId: identity.eventId || "",
+    eventType: payload.eventType || "",
+    messageId: identity.messageId || "",
+    presentationMessageId: resolveMessageEventPresentationId(payload),
+  }));
 }
 
 function isMessageAuthorityOwnedByChannel(messageEvent, channelSessionId = "") {
@@ -43,9 +59,7 @@ function materializeCommittedPresentation(messageEvent, context) {
     applied: false,
     reason: "presentation_materializer_unavailable",
   };
-  context.logSessionEvent({
-    category: "transport",
-    level: materialized.applied ? "debug" : "warn",
+  logProjectionOutcome(context, materialized.applied === true, {
     event: "frontend.messageEvent.presentationMaterialized",
     sessionId: identity.sessionId || context.sessionId,
     dialogProcessId: payload.dialogProcessId || "",
@@ -129,9 +143,7 @@ function logProjectionReduction({
 }) {
   const { identity = {}, payload = {}, ordering = {} } = messageEvent;
   const fields = projectionEventFields(identity, payload, context);
-  context.logSessionEvent({
-    category: "transport",
-    level: reduction.applied ? "debug" : "warn",
+  logProjectionOutcome(context, reduction.applied === true, {
     event: "frontend.messageEvent.reduced",
     sessionId: fields.sessionId,
     dialogProcessId: fields.dialogProcessId,
@@ -166,9 +178,7 @@ function projectMainSessionEvent(messageEvent, context) {
   const targetMessage = targetMessages[targetMessages.length - 1] || null;
   const targetBefore = describeProjectionTarget(targetMessage);
   const fields = projectionEventFields(identity, payload, context);
-  context.logSessionEvent({
-    category: "transport",
-    level: targetMessage ? "debug" : "warn",
+  logProjectionOutcome(context, Boolean(targetMessage), {
     event: "frontend.messageEvent.targetResolved",
     sessionId: targetSessionId,
     dialogProcessId: fields.dialogProcessId,

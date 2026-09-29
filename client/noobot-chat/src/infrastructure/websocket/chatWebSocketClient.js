@@ -77,7 +77,7 @@ export function createChatWebSocketClient({
           sessionId: summary.sessionId,
           dialogProcessId: summary.dialogProcessId,
           turnScopeId: summary.turnScopeId,
-          data: { debugType: AGENT_TRANSPORT_DEBUG_TYPE, event, ...summary },
+          data: { event, ...summary },
         };
       });
     } catch {
@@ -185,41 +185,6 @@ export function createChatWebSocketClient({
     return Number(data?.ordering?.sequence) || null;
   }
 
-  function logTransportEventReceived(event, data = {}, { hasLiveSubscriber = false } = {}) {
-    const identity = data?.identity && typeof data.identity === "object" ? data.identity : {};
-    const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
-    try {
-      sessionLogSink?.log?.({
-        category: "transport",
-        level: "debug",
-        event: "frontend.websocket.transportEventReceived",
-        sessionId: normalizeTrimmedString(identity.sessionId),
-        dialogProcessId: normalizeTrimmedString(payload.dialogProcessId),
-        turnScopeId: normalizeTrimmedString(identity.turnScopeId),
-        data: {
-          protocolEvent: event,
-          eventId: normalizeTrimmedString(identity.eventId),
-          eventType: normalizeTrimmedString(payload.eventType),
-          parentSessionId: normalizeTrimmedString(payload.parentSessionId),
-          messageId: normalizeTrimmedString(identity.messageId),
-          presentationMessageId: normalizeTrimmedString(payload.presentationMessageId),
-          transportSequence: null,
-          authoritativeSequence: resolveAuthoritativeSequence(event, data),
-          contentLength: String(payload.content ?? payload.text ?? "").length,
-          attachmentCount: Array.isArray(payload.attachments) ? payload.attachments.length : 0,
-          transferEnvelopeCount: Array.isArray(payload.transferEnvelopes)
-            ? payload.transferEnvelopes.length
-            : 0,
-          reconnecting,
-          activeStream: Boolean(activeStreamContext),
-          hasLiveSubscriber,
-        },
-      });
-    } catch {
-      void 0;
-    }
-  }
-
   function attachTransportHandlers(ws) {
     if (!ws) return null;
     registerSocketHandlers(ws, "transport", {
@@ -245,7 +210,6 @@ export function createChatWebSocketClient({
           parsedData = data;
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
           const observedData = receivedTransportEvent.data;
-          logTransportEventReceived(event, observedData, { hasLiveSubscriber });
           logTransportDiagnostics("frontend.websocket.transportEventReceived", () => ({
             sessionId: normalizeTrimmedString(observedData?.identity?.sessionId),
             dialogProcessId: normalizeTrimmedString(observedData?.payload?.dialogProcessId),
@@ -254,8 +218,17 @@ export function createChatWebSocketClient({
             eventId: normalizeTrimmedString(observedData?.identity?.eventId),
             eventType: normalizeTrimmedString(observedData?.payload?.eventType),
             parentSessionId: normalizeTrimmedString(observedData?.payload?.parentSessionId),
+            messageId: normalizeTrimmedString(observedData?.identity?.messageId),
+            presentationMessageId: normalizeTrimmedString(observedData?.payload?.presentationMessageId),
             transportSequence: null,
             authoritativeSequence: resolveAuthoritativeSequence(event, observedData),
+            contentLength: String(observedData?.payload?.content ?? observedData?.payload?.text ?? "").length,
+            attachmentCount: Array.isArray(observedData?.payload?.attachments)
+              ? observedData.payload.attachments.length
+              : 0,
+            transferEnvelopeCount: Array.isArray(observedData?.payload?.transferEnvelopes)
+              ? observedData.payload.transferEnvelopes.length
+              : 0,
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,

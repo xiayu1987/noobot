@@ -47,6 +47,15 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
       modelContextTrace: "NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG",
       frontendStreamDelta: "NOOBOT_RUNTIME_EVENT_FRONTEND_STREAM_DELTA_DEBUG",
       frontendTransportDiagnostics: "NOOBOT_RUNTIME_EVENT_FRONTEND_TRANSPORT_DIAGNOSTICS_DEBUG",
+      fileAccess: "NOOBOT_RUNTIME_EVENT_FILE_ACCESS_DEBUG",
+      pluginRunConfig: "NOOBOT_RUNTIME_EVENT_PLUGIN_RUN_CONFIG_DEBUG",
+      semanticTransfer: "NOOBOT_RUNTIME_EVENT_SEMANTIC_TRANSFER_DEBUG",
+      agentProxyHttpTrace: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_HTTP_TRACE_DEBUG",
+      frontendTurnRuntimeDiagnostics: "NOOBOT_RUNTIME_EVENT_FRONTEND_TURN_RUNTIME_DIAGNOSTICS_DEBUG",
+      frontendPluginRuntimeDiagnostics:
+        "NOOBOT_RUNTIME_EVENT_FRONTEND_PLUGIN_RUNTIME_DIAGNOSTICS_DEBUG",
+      frontendMessageMutationDiagnostics:
+        "NOOBOT_RUNTIME_EVENT_FRONTEND_MESSAGE_MUTATION_DIAGNOSTICS_DEBUG",
     },
   },
   hookRuntimeEvents: {
@@ -99,6 +108,13 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
       modelContextTrace: true,
       frontendStreamDelta: true,
       frontendTransportDiagnostics: false,
+      fileAccess: false,
+      pluginRunConfig: false,
+      semanticTransfer: false,
+      agentProxyHttpTrace: false,
+      frontendTurnRuntimeDiagnostics: false,
+      frontendPluginRuntimeDiagnostics: false,
+      frontendMessageMutationDiagnostics: false,
     },
   },
   hookRuntimeEvents: {
@@ -139,7 +155,7 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   "state-machine": { controlKey: "stateMachine", exposeToClient: true },
   resend: { controlKey: "resend", exposeToClient: true },
   stop: { controlKey: "stop", exposeToClient: true },
-  "session-log-ws": { controlKey: "sessionLogWs", exposeToClient: false },
+  "session-log-ws": { controlKey: "sessionLogWs", exposeToClient: true },
   "stop-continue": { controlKey: "frontendStopContinue", exposeToClient: true },
   "reconnect-timing": { controlKey: "frontendReconnectTiming", exposeToClient: true },
   "thinking-replay": { controlKey: "frontendThinkingReplay", exposeToClient: true },
@@ -182,7 +198,40 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
     controlKey: "frontendTransportDiagnostics",
     exposeToClient: true,
   },
+  // Service host-file / file-crud access traces keyed by the x-noobot-file-trace-id header.
+  "file-access": { controlKey: "fileAccess", exposeToClient: false },
+  // Service per-run normalized plugin configuration snapshot.
+  "plugin-run-config": { controlKey: "pluginRunConfig", exposeToClient: false },
+  // Agent semantic transfer execution logs. Session-channel copy only.
+  "semantic-transfer": {
+    controlKey: "semanticTransfer",
+    exposeToClient: false,
+    executionCategory: "semantic_transfer",
+    gatesExecutionBundle: false,
+  },
+  // agent-proxy HTTP request trace keyed by the file trace id.
+  "agent-proxy-http-trace": { controlKey: "agentProxyHttpTrace", exposeToClient: false },
+  "turn-runtime-diagnostics": {
+    controlKey: "frontendTurnRuntimeDiagnostics",
+    exposeToClient: true,
+  },
+  "plugin-runtime-diagnostics": {
+    controlKey: "frontendPluginRuntimeDiagnostics",
+    exposeToClient: true,
+  },
+  "message-mutation-diagnostics": {
+    controlKey: "frontendMessageMutationDiagnostics",
+    exposeToClient: true,
+  },
 });
+
+/** True only for debug types registered in RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES. */
+export function isRegisteredSessionLogDebugType(debugType) {
+  return (
+    typeof debugType === "string" &&
+    Object.prototype.hasOwnProperty.call(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES, debugType)
+  );
+}
 
 const EXECUTION_CATEGORY_DEBUG_TYPES = Object.freeze(
   Object.fromEntries(

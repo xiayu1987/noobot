@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isRegisteredSessionLogDebugType } from "@noobot/shared/runtime-events-config";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -33,6 +34,28 @@ function normalizeIdentity(value) {
     .slice(0, 256);
 }
 
+/**
+ * debugType is a top-level record field owned by the debug category: category=debug requires a
+ * registered debugType, every other category must not carry one, and level=debug is reserved for
+ * the debug category so switch gating never depends on level or event-name inference.
+ */
+function resolveRecordDebugType({ category, level, debugType }) {
+  const isDebugCategory = category === RUNTIME_EVENT_CATEGORIES.DEBUG;
+  if (level === RUNTIME_EVENT_LEVELS.DEBUG && !isDebugCategory) {
+    throw new Error(`Runtime event level debug requires category debug, got: ${category}`);
+  }
+  if (!isDebugCategory) {
+    if (debugType !== undefined && debugType !== "") {
+      throw new Error(`Runtime event debugType is only allowed for category debug: ${category}`);
+    }
+    return "";
+  }
+  if (!isRegisteredSessionLogDebugType(debugType)) {
+    throw new Error(`Invalid runtime event debugType: ${debugType}`);
+  }
+  return debugType;
+}
+
 export function normalizeRuntimeEvent(event = {}, defaults = {}) {
   const scope = event.scope || defaults.scope || RUNTIME_EVENT_SCOPES.SYSTEM;
   if (!scopes.has(scope)) throw new Error(`Invalid runtime event scope: ${scope}`);
@@ -44,6 +67,11 @@ export function normalizeRuntimeEvent(event = {}, defaults = {}) {
   const name = event.event || defaults.event;
   if (!source) throw new Error("Runtime event source is required");
   if (!name) throw new Error("Runtime event name is required");
+  const debugType = resolveRecordDebugType({
+    category,
+    level,
+    debugType: event.debugType ?? defaults.debugType,
+  });
   if (
     scope === RUNTIME_EVENT_SCOPES.SESSION &&
     ((!event.userId && !defaults.userId) || (!event.sessionId && !defaults.sessionId))
@@ -66,6 +94,7 @@ export function normalizeRuntimeEvent(event = {}, defaults = {}) {
     level,
     event: String(name),
   };
+  if (debugType) record.debugType = debugType;
   for (const key of ["userId", "sessionId", "dialogProcessId", "turnScopeId"]) {
     const value = event[key] ?? defaults[key];
     if (value) record[key] = normalizeIdentity(value);

@@ -6,8 +6,6 @@
 
 import { emitEvent } from "../events/index.js";
 
-export const CONTEXT_IDENTITY_DEBUG_TYPE = "context-identity";
-
 export function canonicalMessageId(message = {}) {
   return String(
     message?.messageUid ||
@@ -54,7 +52,6 @@ export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
 export function emitContextIdentityDebug(eventListener, event, identity = {}, data = {}) {
   emitEvent(eventListener, `agent.contextIdentity.${String(event || "observed").trim()}`, {
     ...(data && typeof data === "object" ? data : {}),
-    debugType: CONTEXT_IDENTITY_DEBUG_TYPE,
     userId: String(identity?.userId || "").trim(),
     sessionId: String(identity?.sessionId || "").trim(),
     parentSessionId: String(identity?.parentSessionId || "").trim(),

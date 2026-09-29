@@ -124,7 +124,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     contextIdentityEvents.map((event) => event.event),
     ["agent.contextIdentity.modelContextCreated", "agent.contextIdentity.snapshotCandidateCreated"],
   );
-  assert.equal(contextIdentityEvents[0].data.debugType, "context-identity");
+  assert.equal(Object.hasOwn(contextIdentityEvents[0].data, "debugType"), false);
   assert.equal(contextIdentityEvents[0].data.sourceMessageUid, "sm_current_task");
   assert.equal(contextIdentityEvents[0].data.contentProjectionId, "sm_current_task");
   assert.equal(contextIdentityEvents[0].data.userMetaProjectionId, "");

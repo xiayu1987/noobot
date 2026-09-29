@@ -28,6 +28,7 @@ export function writeAgentProxyRouteDebugEvent({
     channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,
     level: "debug",
+    debugType: "agent-proxy-route",
     event,
     userId,
     sessionId,
@@ -35,7 +36,6 @@ export function writeAgentProxyRouteDebugEvent({
     turnScopeId: String(payload?.identity?.turnScopeId || payload?.turnScopeId || data?.turnScopeId || "").trim(),
     workspaceRoot,
     data: {
-      debugType: "agent-proxy-route",
       action: String(payload?.action || data?.action || "").trim().toLowerCase(),
       commandType: String(payload?.commandType || data?.commandType || "").trim().toLowerCase(),
       payloadSessionId: String(payload?.identity?.sessionId || payload?.sessionId || "").trim(),

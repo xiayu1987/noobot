@@ -44,14 +44,33 @@ test("session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(normalizeSessionLogCategory("DEBUG"), SESSION_LOG_DEBUG_CATEGORY);
   // 守卫：会话日志分类必须全部被 runtime schema 接受，否则整批日志会被拒收。
   for (const category of [...SESSION_LOG_CATEGORIES, SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY]) {
+    const debugType = category === SESSION_LOG_DEBUG_CATEGORY ? "state-machine" : undefined;
     assert.doesNotThrow(
-      () => normalizeRuntimeEvent({ source: "test", event: "test.category", category }),
+      () => normalizeRuntimeEvent({ source: "test", event: "test.category", category, debugType }),
       `schema rejects session log category: ${category}`,
     );
   }
+  assert.throws(
+    () => normalizeRuntimeEvent({ source: "test", event: "test.debug", category: SESSION_LOG_DEBUG_CATEGORY }),
+    /Invalid runtime event debugType/,
+  );
+  assert.throws(
+    () =>
+      normalizeRuntimeEvent({
+        source: "test",
+        event: "test.debugType",
+        category: "system",
+        debugType: "state-machine",
+      }),
+    /debugType is only allowed for category debug: system/,
+  );
+  assert.throws(
+    () => normalizeRuntimeEvent({ source: "test", event: "test.level", category: "system", level: "debug" }),
+    /level debug requires category debug, got: system/,
+  );
   assert.equal(getSessionLogControlKey({ category: "message" }, "message"), "message");
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "state-machine" } }),
+    getSessionLogDebugControlKey({ debugType: "state-machine" }),
     "stateMachine",
   );
   assert.equal(
@@ -59,39 +78,39 @@ test("session log protocol exports stable categories and helpers from runtime-ev
     "frontendStopContinue",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "stop-continue" } }),
+    getSessionLogDebugControlKey({ debugType: "stop-continue" }),
     "frontendStopContinue",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "terminal-resolution" } }),
+    getSessionLogDebugControlKey({ debugType: "terminal-resolution" }),
     "frontendTerminalResolution",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "tool-log-window" } }),
+    getSessionLogDebugControlKey({ debugType: "tool-log-window" }),
     "frontendToolLogWindow",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "timeline-pipeline" } }),
+    getSessionLogDebugControlKey({ debugType: "timeline-pipeline" }),
     "timelinePipeline",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "transport-diagnostics" } }),
+    getSessionLogDebugControlKey({ debugType: "transport-diagnostics" }),
     "frontendTransportDiagnostics",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "agent-proxy-route" } }),
+    getSessionLogDebugControlKey({ debugType: "agent-proxy-route" }),
     "agentProxyRoute",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "context-identity" } }),
+    getSessionLogDebugControlKey({ debugType: "context-identity" }),
     "contextIdentity",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "agent-context" } }),
+    getSessionLogDebugControlKey({ debugType: "agent-context" }),
     "agentContext",
   );
   assert.equal(
-    getSessionLogDebugControlKey({ data: { debugType: "agent-transport" } }),
+    getSessionLogDebugControlKey({ debugType: "agent-transport" }),
     "agentTransport",
   );
 
@@ -202,7 +221,8 @@ test("tool log window debug uses its own file when enabled", async () => {
       event: "frontend.toolLogWindow.rendererReceived",
       userId: "admin",
       sessionId: "session-tool-window",
-      data: { debugType: "tool-log-window", selectedCount: 10 },
+      debugType: "tool-log-window",
+      data: { selectedCount: 10 },
     },
     { root, includeProcess: false, sessionLogControls: { debug: { frontendToolLogWindow: true } } },
   );
@@ -227,7 +247,8 @@ test("workflow diagnostics debug follows explicit disabled and enabled controls"
     event: "frontend.workflowRender.cardMounted",
     userId: "admin",
     sessionId: "session-workflow",
-    data: { debugType: "workflow-diagnostics", workflowRunId: "workflow-1" },
+    debugType: "workflow-diagnostics",
+    data: { workflowRunId: "workflow-1" },
   };
   const skipped = await writeRuntimeEvent(event, {
     root,
@@ -254,7 +275,7 @@ test("workflow diagnostics debug follows explicit disabled and enabled controls"
   assert.equal((await readJsonl(result.file))[0].data.workflowRunId, "workflow-1");
 });
 
-test("session log record preserves top-level debug type in data", () => {
+test("session log record carries debug type only at top level", () => {
   const record = buildSessionLogRecord(
     {
       source: "frontend",
@@ -268,7 +289,8 @@ test("session log record preserves top-level debug type in data", () => {
     { includeTimestamp: false },
   );
 
-  assert.equal(record.data.debugType, "stop-continue");
+  assert.equal(record.debugType, "stop-continue");
+  assert.equal(record.data.debugType, undefined);
   assert.equal(getSessionLogDebugControlKey(record), "frontendStopContinue");
 });
 
