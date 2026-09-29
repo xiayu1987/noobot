@@ -64,7 +64,7 @@ test("thinking detail message carries its session identity without duplicating s
   assert.equal(payload.counts.thinkingContentCount, 1);
 });
 
-test("thinking detail projects assistant tool-call content once and excludes control injections", () => {
+test("thinking detail projects only activity facts, not assistant tool-call content, and excludes control injections", () => {
   const payload = buildThinkingDetailPayload(
     {
       sessionId: "content-session",
@@ -120,11 +120,10 @@ test("thinking detail projects assistant tool-call content once and excludes con
     payload.messageItem.thinkingContentTimeline.map((item) => [item.contentKind, item.text]),
     [
       ["thinking", "analysis"],
-      ["main_model_content", "先确认当前真实状态。"],
     ],
   );
   assert.equal(payload.counts.injectedMessageCount, 0);
-  assert.equal(payload.counts.thinkingContentCount, 2);
+  assert.equal(payload.counts.thinkingContentCount, 1);
 });
 
 test("thinking detail projects the complete turn timeline onto the final assistant message", () => {

@@ -5,6 +5,7 @@
  */
 import {
   isCanonicalActivityMessageEvent,
+  isDurableActivityMessageEvent,
   reduceCanonicalActivityTimeline,
 } from "@noobot/event-protocol/activity-timeline";
 import {
@@ -90,7 +91,11 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
           activityTimeline: reduceCanonicalActivityTimeline(currentTimeline, envelope),
         };
     store.updateWhere(patch, (_item, index) => index === existingAssistantIndex.index);
-    await runtime.persistCurrentTurnMessages?.();
+    // Activity deltas only feed the live projection; the completed activity event is the
+    // durable fact, so persistence happens once per activity instead of once per chunk.
+    if (isToolEvent || isDurableActivityMessageEvent(envelope)) {
+      await runtime.persistCurrentTurnMessages?.();
+    }
     return envelope;
   };
 

@@ -21,7 +21,6 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
   LLM_DELTA: "llm_delta",
   ACTIVITY_DELTA: "activity_delta",
   MODEL_ANALYSIS_DELTA: "model_analysis_delta",
-  MAIN_MODEL_CONTENT: "main_model_content",
   AUTHORITATIVE_FINAL_CONTENT: "authoritative_final_content",
   THINKING: "thinking",
   TOOL_CALL_START: "tool_call_start",
@@ -147,11 +146,9 @@ export function validateMessageEventPayload(value) {
     if (!text(value?.activityId)) errors.push("missing_activity_id");
     if (!text(value?.activityKind)) errors.push("missing_activity_kind");
     if (
-      ![
-        MESSAGE_EVENT_TYPE.THINKING,
-        MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
-        MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT,
-      ].includes(text(value?.activityEventType))
+      ![MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA].includes(
+        text(value?.activityEventType),
+      )
     ) {
       errors.push("invalid_activity_event_type");
     }
@@ -167,11 +164,7 @@ export function validateMessageEventPayload(value) {
     }
   }
   if (
-    [
-      MESSAGE_EVENT_TYPE.THINKING,
-      MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
-      MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT,
-    ].includes(eventType) &&
+    [MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA].includes(eventType) &&
     typeof value?.text !== "string"
   ) {
     errors.push("missing_text");

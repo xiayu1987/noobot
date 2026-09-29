@@ -73,7 +73,7 @@ const {
   isThinkingRuntimeRunning,
   getThinkingModelLoopRound,
   getLatestPluginAnalysisLog,
-  getLatestMainModelContentLog,
+  getLatestModelAnalysisLog,
   currentExecutionLogs,
   latestTaskCheckReceipt,
   taskCheckReceipts,
@@ -102,7 +102,7 @@ defineExpose({
     :thinking-model-loop-round="getThinkingModelLoopRound(messageItem)"
     :is-running="isThinkingRuntimeRunning(messageItem)"
     :latest-plugin-analysis-log="getLatestPluginAnalysisLog(messageItem)"
-    :latest-main-model-content-log="getLatestMainModelContentLog(messageItem)"
+    :latest-model-analysis-log="getLatestModelAnalysisLog(messageItem)"
     :execution-logs="currentExecutionLogs"
     :execution-log-count="getExecutionLogCount(messageItem)"
     :task-check-receipt="latestTaskCheckReceipt"

@@ -112,7 +112,7 @@ describe("authoritative message event end-to-end fidelity", () => {
       }),
     );
     produced.push(
-      await emitMessageEvent(listener, runtime, "main_model_content", {
+      await emitMessageEvent(listener, runtime, "model_analysis_delta", {
         sessionId: "child-session",
         parentSessionId: "parent-session",
         dialogProcessId: "child-dialog",
@@ -155,7 +155,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     });
     expect(assistantMessage.activityTimeline).toEqual([
       expect.objectContaining({
-        eventType: "main_model_content",
+        eventType: "model_analysis_delta",
         text: "```mermaid\ngraph TD; A-->B\n```",
       }),
     ]);

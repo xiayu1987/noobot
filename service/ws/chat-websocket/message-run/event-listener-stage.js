@@ -16,7 +16,6 @@ const text = (value) => String(value || "").trim();
 const TIMELINE_EVENT_TYPES = new Set([
   "tool_call_start",
   "tool_call_end",
-  "main_model_content",
   "guidance_analysis_response",
   "guidance_analysis",
   "timeline_checkpoint_persisted",

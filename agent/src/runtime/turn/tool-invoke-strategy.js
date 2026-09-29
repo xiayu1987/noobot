@@ -10,7 +10,7 @@ import {
   resolveBoundToolModelRequestOverrides,
   resolveNonThinkingCallOverrides,
 } from "./tool-choice-strategy.js";
-import { createActivityStreamingCallbacks } from "../../models/runtime/model-manager.js";
+import { createModelActivity } from "../../models/runtime/model-manager.js";
 
 export function createBoundLlmToolChoiceInvoker({
   adaptedBinding,
@@ -43,20 +43,20 @@ export function createBoundLlmToolChoiceInvoker({
       effectiveModelSpec,
     );
     const boundToolOverrides = resolveBoundToolModelRequestOverrides(effectiveModelSpec);
+    const streaming = runtime?.runConfig?.streaming === true;
+    const modelActivity = createModelActivity(modelState?.eventListener, runtime, {
+      activityKind: "main_model_analysis",
+      activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
+      purpose: invokeMode,
+      streaming,
+    });
 
     const response = await modelState.modelPort.invoke({
       messages: filterForModelContext(messages),
       tools: boundTools,
       options: {
-        streaming: runtime?.runConfig?.streaming === true,
-        callbacks:
-          runtime?.runConfig?.streaming === true
-            ? createActivityStreamingCallbacks(modelState?.eventListener, runtime, {
-                activityKind: "main_model_analysis",
-                activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
-                purpose: invokeMode,
-              })
-            : undefined,
+        streaming,
+        callbacks: modelActivity.callbacks,
         signal: abortSignal,
         invoke: {
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
@@ -75,6 +75,7 @@ export function createBoundLlmToolChoiceInvoker({
         contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
       },
     });
+    await modelActivity.complete(response.output?.text);
     return response.output;
   };
 }

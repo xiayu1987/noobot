@@ -31,7 +31,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     isThinkingRuntimeRunning: runtime.isThinkingRuntimeRunning,
     getThinkingModelLoopRound: runtime.getThinkingModelLoopRound,
     getLatestPluginAnalysisLog: timeline.getLatestPluginAnalysisLog,
-    getLatestMainModelContentLog: timeline.getLatestMainModelContentLog,
+    getLatestModelAnalysisLog: timeline.getLatestModelAnalysisLog,
     getExecutionLogs: timeline.getExecutionLogs,
     getCanonicalExecutionLogs: timeline.getCanonicalExecutionLogs,
     currentExecutionLogs: timeline.currentExecutionLogs,

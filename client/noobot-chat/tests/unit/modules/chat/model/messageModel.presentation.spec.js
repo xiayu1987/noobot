@@ -26,7 +26,7 @@ describe("messageModel presentation identity", () => {
           activityTimeline: [
             canonicalActivityFact({
               eventId: "activity-model-1",
-              eventType: "main_model_content",
+              eventType: "model_analysis_delta",
               text: "I should inspect the repository first.",
               sequenceScopeId: "msg-model-1",
               messageId: "msg-model-1",
@@ -63,7 +63,7 @@ describe("messageModel presentation identity", () => {
     });
     expect(selectActivityTimelineLogs(messages[0])).toEqual([
       expect.objectContaining({
-        eventType: "main_model_content",
+        eventType: "model_analysis_delta",
         text: "I should inspect the repository first.",
       }),
     ]);
@@ -84,7 +84,7 @@ describe("messageModel presentation identity", () => {
           activityTimeline: [
             canonicalActivityFact({
               eventId: "activity-1",
-              eventType: "main_model_content",
+              eventType: "model_analysis_delta",
               text: "inspect first",
               sequenceScopeId: "model-tool-call-1",
               messageId: "model-tool-call-1",

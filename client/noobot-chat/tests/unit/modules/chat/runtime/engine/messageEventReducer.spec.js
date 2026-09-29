@@ -707,7 +707,7 @@ describe("reduceMessageEvent", () => {
     const projected = event({
       eventId: "evt-model-analysis",
       sequence: 2,
-      eventType: "main_model_content",
+      eventType: "model_analysis_delta",
       messageId: "model-message-1",
       presentationMessageId: "presentation-1",
       tool: "",
@@ -727,7 +727,7 @@ describe("reduceMessageEvent", () => {
           text: "guidance analysis",
         }),
         expect.objectContaining({
-          eventType: "main_model_content",
+          eventType: "model_analysis_delta",
           text: "intermediate model analysis",
           messageId: "model-message-1",
           presentationMessageId: "presentation-1",

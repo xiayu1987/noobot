@@ -5,7 +5,7 @@
 export const DEFAULT_RETRY_POLICY = Object.freeze({
   transport: Object.freeze({ maxAttempts: 3, baseDelayMs: 250 }),
   reasoningOnly: Object.freeze({ maxAttempts: 1 }),
-  emptyResponse: Object.freeze({ maxAttempts: 1 }),
+  emptyResponse: Object.freeze({ maxAttempts: 3, baseDelayMs: 500 }),
   toolCallMismatch: Object.freeze({ maxAttempts: 1, downgradeStreaming: true }),
   providerFallback: Object.freeze({ enabled: false, candidates: Object.freeze([]) }),
 });

@@ -34,11 +34,7 @@ export function isGuidanceAnalysisResponseLog(logItem = {}) {
   );
 }
 
-export function isMainModelContentLog(logItem = {}) {
-  return normalizeLogString(logItem?.eventType) === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT;
-}
-
-function getMainModelContentLogOutput(logItem = {}) {
+function getModelAnalysisLogOutput(logItem = {}) {
   return String(logItem?.text || "").trim();
 }
 
@@ -51,12 +47,12 @@ export function createThinkingAnalysisProjection({
   currentAnalysisProjection,
   timelineMessage,
 }) {
-  function getLatestMainModelContentLog(messageItem = {}) {
+  function getLatestModelAnalysisLog(messageItem = {}) {
     const projection =
       messageItem === props.messageItem
         ? currentAnalysisProjection.value
         : selectLatestAnalysisActivities(timelineMessage(messageItem));
-    return getMainModelContentLogOutput(projection.latestModelAnalysis || {})
+    return getModelAnalysisLogOutput(projection.latestModelAnalysis || {})
       ? projection.latestModelAnalysis
       : null;
   }
@@ -84,14 +80,14 @@ export function createThinkingAnalysisProjection({
       latestGuidanceOutputLength: getPluginAnalysisLogOutput(latestGuidance || {}).length,
       latestGuidanceTimestamp: String(latestGuidance?.timestamp || ""),
       latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
-      latestModelAnalysisOutputLength: getMainModelContentLogOutput(latestModelAnalysis || {})
+      latestModelAnalysisOutputLength: getModelAnalysisLogOutput(latestModelAnalysis || {})
         .length,
       latestModelAnalysisTimestamp: String(latestModelAnalysis?.timestamp || ""),
     };
   }
 
   return {
-    getLatestMainModelContentLog,
+    getLatestModelAnalysisLog,
     getLatestPluginAnalysisLog,
     summarizeAnalysisProjection,
   };

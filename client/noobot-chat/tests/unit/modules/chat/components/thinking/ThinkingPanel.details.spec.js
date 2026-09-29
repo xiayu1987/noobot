@@ -502,7 +502,7 @@ describe("ThinkingPanel canonical details", () => {
           },
           {
             contentId: "event:analysis-after",
-            contentKind: "main_model_content",
+            contentKind: "model_analysis",
             sourceEventId: "analysis-after",
             text: "analysis after first interjection",
             timestamp: "2026-08-01T10:00:03.000Z",

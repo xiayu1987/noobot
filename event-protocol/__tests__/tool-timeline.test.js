@@ -116,7 +116,7 @@ test("canonical detail counts match the event records exposed to renderers", () 
       toolTimeline,
       activityTimeline: [
         projectCanonicalActivityTimelineEvent(
-          event("main_model_content", 3, {
+          event("model_analysis_delta", 3, {
             toolCallId: undefined,
             tool: undefined,
             text: "model analysis",

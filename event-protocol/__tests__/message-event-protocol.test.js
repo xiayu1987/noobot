@@ -162,7 +162,7 @@ test("message payload owns presentation identity and content semantics", () => {
   const current = payload();
   assert.equal(resolveMessageEventPresentationId(current), "presentation-1");
   assert.equal(
-    isAuthoritativeFinalContentEvent(payload({ eventType: "main_model_content" })),
+    isAuthoritativeFinalContentEvent(payload({ eventType: "model_analysis_delta" })),
     false,
   );
   assert.equal(

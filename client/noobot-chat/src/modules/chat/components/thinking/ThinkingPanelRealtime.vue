@@ -32,7 +32,7 @@ const props = defineProps({
   thinkingModelLoopRound: { type: Number, default: 0 },
   isRunning: Boolean,
   latestPluginAnalysisLog: { type: Object, default: null },
-  latestMainModelContentLog: { type: Object, default: null },
+  latestModelAnalysisLog: { type: Object, default: null },
   executionLogs: { type: Array, default: () => [] },
   executionLogCount: { type: Number, default: 0 },
   taskCheckReceipt: { type: Object, default: null },
@@ -45,7 +45,7 @@ const props = defineProps({
 });
 const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
 const runningEmptyHintKey = computed(() =>
-  props.latestPluginAnalysisLog || props.latestMainModelContentLog
+  props.latestPluginAnalysisLog || props.latestModelAnalysisLog
     ? "message.analyzingRealtimeLog"
     : "message.waitingRealtimeLog",
 );
@@ -157,11 +157,11 @@ watch(
           :text="translate('message.analysisFlow')"
         /><BaseNoteBlock :content="latestPluginAnalysisLog.text" />
       </div>
-      <div v-if="latestMainModelContentLog" class="thinking-analysis-block">
+      <div v-if="latestModelAnalysisLog" class="thinking-analysis-block">
         <BaseMetaLabel
           class="thinking-analysis-title"
           :text="translate('message.modelAnalysis')"
-        /><BaseNoteBlock :content="latestMainModelContentLog.text" />
+        /><BaseNoteBlock :content="latestModelAnalysisLog.text" />
       </div>
       <div
         v-if="taskCheckReceipt"

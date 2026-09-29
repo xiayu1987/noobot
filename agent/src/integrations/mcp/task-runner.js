@@ -11,7 +11,8 @@ import { buildLangChainMcpTools } from "./tool-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { createActivityStreamingCallbacks } from "../../models/runtime/model-manager.js";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
+import { createModelActivity } from "../../models/runtime/model-manager.js";
 
 export async function createMcpAgentTools({
   globalConfig = {},
@@ -98,20 +99,20 @@ export async function executeMcpTask({
   const traces = [];
   const maxTurns = TURN_THRESHOLDS.subTasks.mcpTaskMaxTurns;
   for (let turn = 1; turn <= maxTurns; turn += 1) {
+    const streaming = runtime?.runConfig?.streaming === true;
+    const modelActivity = createModelActivity(runtime?.eventListener, runtime, {
+      activityKind: "mcp_model_analysis",
+      activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
+      purpose: "mcp_tool_execution",
+      streaming,
+    });
     const ai = await modelPort.invoke({
       model: modelSpec,
       messages,
       tools: langchainTools,
       options: {
-        streaming: runtime?.runConfig?.streaming === true,
-        callbacks:
-          runtime?.runConfig?.streaming === true
-            ? createActivityStreamingCallbacks(runtime?.eventListener, runtime, {
-                activityKind: "mcp_model_analysis",
-                activityEventType: MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
-                purpose: "mcp_tool_execution",
-              })
-            : undefined,
+        streaming,
+        callbacks: modelActivity.callbacks,
         signal: signal || undefined,
       },
       invocation: {
@@ -122,6 +123,7 @@ export async function executeMcpTask({
       },
     });
     const output = ai.output;
+    await modelActivity.complete(output.text);
     messages.push({ role: "assistant", content: output.text, tool_calls: output.toolCalls || [] });
     const calls = Array.isArray(output.toolCalls) ? output.toolCalls : [];
     if (!calls.length) {

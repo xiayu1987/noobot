@@ -7,12 +7,14 @@ import { EVENT_FAMILY, validateProtocolEvent } from "./event-registry.js";
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { text } from "./normalize.js";
 
+// Activity fact kinds. A standalone activity event carries the complete text of one
+// activity; ACTIVITY_DELTA carries an incremental fragment of the same activity.
 const ACTIVITY_EVENT_TYPES = Object.freeze(
-  new Set([
-    MESSAGE_EVENT_TYPE.THINKING,
-    MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
-    MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT,
-  ]),
+  new Set([MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA]),
+);
+
+const ACTIVITY_WIRE_EVENT_TYPES = Object.freeze(
+  new Set([...ACTIVITY_EVENT_TYPES, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),
 );
 
 const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
@@ -42,10 +44,19 @@ const ACTIVITY_TIMELINE_FACT_FIELDS = Object.freeze(
 export function isCanonicalActivityMessageEvent(envelope = {}) {
   const validation = validateProtocolEvent(envelope);
   return Boolean(
-    (validation.valid &&
-      validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
-      ACTIVITY_EVENT_TYPES.has(text(envelope?.payload?.eventType))) ||
-    text(envelope?.payload?.eventType) === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
+    validation.valid &&
+    validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+    ACTIVITY_WIRE_EVENT_TYPES.has(text(envelope?.payload?.eventType)),
+  );
+}
+
+// Durability boundary of an activity. ACTIVITY_DELTA is a transport fragment: it feeds the
+// live projection only. The standalone activity event carries the complete text and is the
+// single durable fact of that activity, so only it may trigger persistence.
+export function isDurableActivityMessageEvent(envelope = {}) {
+  return (
+    isCanonicalActivityMessageEvent(envelope) &&
+    text(envelope?.payload?.eventType) !== MESSAGE_EVENT_TYPE.ACTIVITY_DELTA
   );
 }
 
@@ -107,10 +118,13 @@ export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
       ? next.findIndex((item) => text(item?.activityId) === activityId)
       : -1;
     if (activityIndex >= 0) {
+      // Deltas append to their activity; a standalone activity event is the activity's
+      // complete text and replaces every fragment streamed before it.
+      const isDelta = text(envelope?.payload?.eventType) === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA;
       const previous = next[activityIndex];
       next[activityIndex] = Object.freeze({
         ...fact,
-        text: `${String(previous?.text || "")}${fact.text}`,
+        text: isDelta ? `${String(previous?.text || "")}${fact.text}` : fact.text,
         activityId,
       });
     } else next.push(fact);
@@ -141,12 +155,20 @@ export function isCanonicalActivityTimelineFact(value = {}) {
 }
 
 export function mergeCanonicalActivityTimelines(...timelines) {
-  const byEventId = new Map();
+  // One fact per activity: facts sharing an activityId are the same activity observed at
+  // different points (mid-stream snapshot vs. completed); the higher sequence wins.
+  const byIdentity = new Map();
   for (const fact of timelines.flat()) {
     if (!isCanonicalActivityTimelineFact(fact)) continue;
-    byEventId.set(text(fact.eventId), fact);
+    const identity = text(fact.activityId)
+      ? `activity:${text(fact.activityId)}`
+      : `event:${text(fact.eventId)}`;
+    const previous = byIdentity.get(identity);
+    if (!previous || Number(fact.sequence) >= Number(previous.sequence)) {
+      byIdentity.set(identity, fact);
+    }
   }
-  return [...byEventId.values()].sort(
+  return [...byIdentity.values()].sort(
     (left, right) => Number(left.sequence) - Number(right.sequence),
   );
 }
