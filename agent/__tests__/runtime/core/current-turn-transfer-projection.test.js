@@ -29,6 +29,7 @@ function messageEvent(eventId, eventType, sequence, payload = {}) {
       eventType,
       presentationMessageId: "presentation-1",
       dialogProcessId: "dialog-1",
+      modelMessageId: "model-message-1",
       ...payload,
     },
   });
@@ -38,6 +39,7 @@ test("tool result transfer envelopes project onto the canonical assistant turn",
   const store = createCurrentTurnMessagesStore([
     {
       role: "assistant",
+      messageId: "model-message-1",
       messageUid: "assistant-1",
       toolTimeline: [],
     },
@@ -73,7 +75,12 @@ test("tool result transfer envelopes project onto the canonical assistant turn",
 
 test("model analysis activity projects once and awaits its durable checkpoint", async () => {
   const store = createCurrentTurnMessagesStore([
-    { role: "assistant", messageUid: "assistant-1", activityTimeline: [] },
+    {
+      role: "assistant",
+      messageId: "model-message-1",
+      messageUid: "assistant-1",
+      activityTimeline: [],
+    },
   ]);
   let persisted = 0;
   const runtime = {
@@ -117,7 +124,12 @@ test("model analysis activity projects once and awaits its durable checkpoint", 
 
 test("streamed activity deltas update the live projection and persist once on completion", async () => {
   const store = createCurrentTurnMessagesStore([
-    { role: "assistant", messageUid: "assistant-1", activityTimeline: [] },
+    {
+      role: "assistant",
+      messageId: "model-message-1",
+      messageUid: "assistant-1",
+      activityTimeline: [],
+    },
   ]);
   let persisted = 0;
   const runtime = {
@@ -155,4 +167,63 @@ test("streamed activity deltas update the live projection and persist once on co
   assert.equal(store.toArray()[0].activityTimeline.length, 1);
   assert.equal(store.toArray()[0].activityTimeline[0].eventId, "complete-1");
   assert.equal(store.toArray()[0].activityTimeline[0].text, "先确认当前真实状态。");
+});
+
+test("a completed activity attaches to its own model message, not the latest assistant", async () => {
+  // Non-streaming: the next invocation's activity completes before its message is committed.
+  const store = createCurrentTurnMessagesStore([
+    {
+      role: "assistant",
+      messageId: "model-message-1",
+      messageUid: "assistant-1",
+      activityTimeline: [],
+    },
+  ]);
+  const runtime = { currentTurnMessages: store, systemRuntime: {} };
+  initializeCurrentTurnMessageEventProjection(runtime);
+
+  await runtime.projectCurrentTurnMessageEvent(
+    messageEvent("analysis-2", "model_analysis_delta", 1, {
+      activityId: "activity-2",
+      modelMessageId: "model-message-2",
+      text: "第二次调用的分析。",
+    }),
+  );
+  assert.deepEqual(store.toArray()[0].activityTimeline, []);
+
+  const own = runtime.materializePendingCurrentTurnMessageEvents({ messageId: "model-message-2" });
+  assert.equal(own.activityTimeline.length, 1);
+  assert.equal(own.activityTimeline[0].text, "第二次调用的分析。");
+});
+
+test("pending materialization keeps events owned by another invocation pending", async () => {
+  const store = createCurrentTurnMessagesStore([]);
+  const runtime = { currentTurnMessages: store, systemRuntime: {} };
+  initializeCurrentTurnMessageEventProjection(runtime);
+
+  await runtime.projectCurrentTurnMessageEvent(
+    messageEvent("unowned-1", "thinking", 1, { modelMessageId: "", text: "调度前思考" }),
+  );
+  await runtime.projectCurrentTurnMessageEvent(
+    messageEvent("owned-2", "model_analysis_delta", 2, {
+      modelMessageId: "model-message-2",
+      text: "第二次调用",
+    }),
+  );
+
+  const first = runtime.materializePendingCurrentTurnMessageEvents({
+    messageId: "model-message-1",
+  });
+  assert.deepEqual(
+    first.activityTimeline.map((item) => item.eventId),
+    ["unowned-1"],
+  );
+  const second = runtime.materializePendingCurrentTurnMessageEvents({
+    messageId: "model-message-2",
+  });
+  assert.deepEqual(
+    second.activityTimeline.map((item) => item.eventId),
+    ["owned-2"],
+  );
+  assert.throws(() => runtime.materializePendingCurrentTurnMessageEvents(), /requires messageId/);
 });

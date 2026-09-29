@@ -81,7 +81,7 @@ export function createStateCommitter({
       if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
         throw new Error("Turn message event materializer is required");
       }
-      const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents();
+      const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
       const canonicalActivityTimeline = Array.isArray(pendingProjection.activityTimeline)
         ? pendingProjection.activityTimeline
         : [];

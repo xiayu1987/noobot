@@ -6,7 +6,10 @@
 import { randomUUID } from "node:crypto";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
 import { emitEvent } from "./emitter.js";
-import { assertMessageEventPayload } from "@noobot/event-protocol/message-event";
+import {
+  MODEL_MESSAGE_SCOPED_EVENT_TYPES,
+  assertMessageEventPayload,
+} from "@noobot/event-protocol/message-event";
 import { AGENT_RUN_EVENT } from "./run-event.js";
 
 export { assertMessageEventPayload };
@@ -162,6 +165,11 @@ export function createMessageEventPayload(runtime = {}, eventType = "", data = {
     throw new Error(`authoritative message event requires presentationMessageId: ${eventType}`);
   }
   const toolCallId = text(data?.toolCallId);
+  // Model-scoped events are owned by the assistant message of the active model invocation.
+  // Events raised before any invocation (dispatch hooks, guidance) carry no owner and are
+  // materialized onto the next committed assistant message.
+  const modelScoped = MODEL_MESSAGE_SCOPED_EVENT_TYPES.has(text(eventType));
+  const modelMessageId = modelScoped ? text(stream.activeModelMessageId) : "";
   const payload = deepFreeze({
     ...data,
     eventType: text(eventType),
@@ -178,6 +186,7 @@ export function createMessageEventPayload(runtime = {}, eventType = "", data = {
       ? { nodeExecutionId: text(data?.nodeExecutionId || stream.nodeExecutionId) }
       : {}),
     presentationMessageId,
+    ...(modelMessageId ? { modelMessageId } : {}),
     ...(toolCallId ? { toolCallId } : {}),
   });
   assertMessageEventPayload(payload);

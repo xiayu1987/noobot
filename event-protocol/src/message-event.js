@@ -30,6 +30,22 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
 
 export const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
 
+// Events produced by one model invocation. They belong to the assistant message committed for
+// that invocation, identified by modelMessageId; Turn-level events carry no such owner.
+export const MODEL_MESSAGE_SCOPED_EVENT_TYPES = Object.freeze(
+  new Set([
+    MESSAGE_EVENT_TYPE.ACTIVITY_DELTA,
+    MESSAGE_EVENT_TYPE.MODEL_ANALYSIS_DELTA,
+    MESSAGE_EVENT_TYPE.THINKING,
+    MESSAGE_EVENT_TYPE.TOOL_CALL_START,
+    MESSAGE_EVENT_TYPE.TOOL_CALL_END,
+  ]),
+);
+
+export function resolveMessageEventModelMessageId(value = {}) {
+  return text(value?.modelMessageId);
+}
+
 export const AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT]),
 );
