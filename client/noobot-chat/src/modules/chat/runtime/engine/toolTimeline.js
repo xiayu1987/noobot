@@ -19,7 +19,7 @@ import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { isToolResultFailure } from "../../model/toolLogFormatting.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
-import { createWeakArrayIndex, upsertOrderedFact } from "@noobot/timeline-runtime";
+import { createWeakArrayIndex } from "@noobot/timeline-runtime";
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
@@ -74,10 +74,6 @@ function timelineKey(value = {}) {
 const toolTimelineIndex = createWeakArrayIndex({
   keyOf: (entry) => text(entry?.key) || timelineKey(entry),
 });
-const toolLogProjectionIndex = createWeakArrayIndex({
-  keyOf: (log) => `${text(log?.toolCallId)}:${text(log?.event)}`,
-});
-const toolLogProjectionStates = new WeakMap();
 
 function isAuthoritativeToolFacet(value = {}) {
   if (text(value?.authority) === TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE) return true;
@@ -159,7 +155,7 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "", includeDeta
   };
 }
 
-function buildToolLogProjectionState(timeline = []) {
+function projectToolTimelineLogs(timeline = []) {
   const logs = [];
   for (const entry of timeline) {
     if (entry?.call) {
@@ -179,47 +175,11 @@ function buildToolLogProjectionState(timeline = []) {
     }
   }
   logs.sort(compareTimelineFacts);
-  toolLogProjectionIndex.indexFor(logs);
-  const state = { logs };
-  toolLogProjectionStates.set(timeline, state);
-  return state;
-}
-
-function toolLogProjectionState(timeline = []) {
-  return buildToolLogProjectionState(timeline);
-}
-
-function updateToolLogProjection(timeline = [], envelope = {}) {
-  const state = toolLogProjectionStates.get(timeline);
-  if (!state) return;
-  const toolCallId = text(envelope?.payload?.toolCallId);
-  const position = toolTimelineIndex.indexFor(timeline).get(`call:${toolCallId}`);
-  const entry = Number.isInteger(position) ? timeline[position] : null;
-  if (!entry) return;
-  const isCall = envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START;
-  const facet = isCall ? entry.call : entry.resultEvent;
-  if (!facet) return;
-  const fact = projectToolTimelineLog({
-    entry,
-    facet,
-    kind: isCall ? "call" : "result",
-    includeDetail: false,
-  });
-  const key = `${toolCallId}:${fact.event}`;
-  upsertOrderedFact({
-    values: state.logs,
-    fact,
-    key,
-    index: toolLogProjectionIndex.indexFor(state.logs),
-    compare: compareTimelineFacts,
-    recordInsertion: toolLogProjectionIndex.recordInsertion,
-  });
+  return logs;
 }
 
 function selectProjectedToolLogs(message = {}, { completedOnly = false } = {}) {
-  const state = toolLogProjectionState(selectToolTimeline(message));
-  state.messageSequence = Number(message?.messageEventState?.lastSequence || 0);
-  const logs = state.logs;
+  const logs = projectToolTimelineLogs(selectToolTimeline(message));
   return completedOnly ? logs.filter((log) => log.event === "tool_result") : logs;
 }
 
@@ -234,11 +194,9 @@ export function selectToolTimelineLogWindow(
 
 export function reduceToolTimeline(timeline = [], envelope = {}) {
   const target = Array.isArray(timeline) ? timeline : [];
-  const reduced = applyCanonicalToolTimelineEvent(target, envelope, {
+  return applyCanonicalToolTimelineEvent(target, envelope, {
     indexByKey: toolTimelineIndex.indexFor(target),
   });
-  updateToolLogProjection(target, envelope);
-  return reduced;
 }
 
 export function selectToolTimelineLogs(
