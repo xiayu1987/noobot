@@ -18,6 +18,7 @@ import {
   getSessionLogDebugControlKey,
   normalizeSessionLogCategory,
   resolveSessionLogClientPolicy,
+  SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
   SESSION_LOG_CATEGORIES,
   SESSION_LOG_DEBUG_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
@@ -41,6 +42,13 @@ test("session log protocol exports stable categories and helpers from runtime-ev
   }
   assert.equal(normalizeSessionLogCategory("missing"), SESSION_LOG_DEFAULT_CATEGORY);
   assert.equal(normalizeSessionLogCategory("DEBUG"), SESSION_LOG_DEBUG_CATEGORY);
+  // 守卫：会话日志分类必须全部被 runtime schema 接受，否则整批日志会被拒收。
+  for (const category of [...SESSION_LOG_CATEGORIES, SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY]) {
+    assert.doesNotThrow(
+      () => normalizeRuntimeEvent({ source: "test", event: "test.category", category }),
+      `schema rejects session log category: ${category}`,
+    );
+  }
   assert.equal(getSessionLogControlKey({ category: "message" }, "message"), "message");
   assert.equal(
     getSessionLogDebugControlKey({ data: { debugType: "state-machine" } }),

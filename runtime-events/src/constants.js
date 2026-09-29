@@ -9,6 +9,7 @@ export const RUNTIME_EVENT_CATEGORIES = Object.freeze({
   SYSTEM: 'system', STATE: 'state', MESSAGE: 'message', INTERACTION: 'interaction',
   TRANSPORT: 'transport', DEBUG: 'debug', SECURITY: 'security', CONFIG: 'config',
   FRONTEND_LIFECYCLE: 'frontend-lifecycle', AGENT_PROXY_HTTP: 'agent-proxy-http',
+  AGENT_PROXY: 'agent-proxy',
   AGENT_PROXY_WEBSOCKET: 'agent-proxy-websocket', AGENT_PROXY_ROUTE: 'agent-proxy-route',
   BACKEND_WEBSOCKET: 'backend-websocket', BACKEND_LIFECYCLE: 'backend-lifecycle',
 });

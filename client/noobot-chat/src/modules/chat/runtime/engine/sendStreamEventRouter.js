@@ -123,9 +123,12 @@ export function logRuntimeRouteCompleted({
   sessionId,
   turnScopeId,
 }) {
+  // routed=false only means "not a runtime-stream event": the event continues to the
+  // message-projection / post-projection routers, so it is neither completed nor anomalous here.
+  if (!routed) return;
   const entry = {
     category: "transport",
-    level: routed ? "info" : "warn",
+    level: "info",
     event: "frontend.runtimeStream.routeCompleted",
     sessionId: authoritativeIdentity.sessionId || data?.sessionId || sessionId,
     dialogProcessId: authoritativePayload.dialogProcessId || data?.dialogProcessId || "",
@@ -136,8 +139,6 @@ export function logRuntimeRouteCompleted({
       routed,
     },
   };
-  // routed=false here only means "not a runtime-stream event"; transient deltas are then
-  // consumed by routeMessageProjectionEvent, so they always go to the stream-delta channel.
   if (isTransientMessageEvent(authoritativeEvent)) {
     logStreamDeltaEntry(entry);
     return;

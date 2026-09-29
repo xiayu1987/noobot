@@ -61,7 +61,7 @@ describe("stream event log routing", () => {
     expect(logSessionEvent).not.toHaveBeenCalled();
   });
 
-  it("keeps durable events in transport and never writes deltas there", () => {
+  it("keeps durable events in transport, never writes deltas there, and skips pass-through routes", () => {
     const sink = createSink();
     setStreamDeltaDebugLogSink(sink);
     const logSessionEvent = vi.fn();
@@ -69,11 +69,11 @@ describe("stream event log routing", () => {
     logRuntimeRouteCompleted({ ...routeArgs(durable(), true), logSessionEvent });
     logRuntimeRouteCompleted({ ...routeArgs(durable(), false), logSessionEvent });
     logRuntimeRouteCompleted({ ...routeArgs(delta(), false), logSessionEvent });
-    expect(sink.records.map((record) => record.debugType)).toEqual(["stream-delta"]);
+    expect(sink.records).toHaveLength(0);
     expect(logSessionEvent.mock.calls.map(([record]) => [record.category, record.level || ""])).toEqual([
       ["transport", ""],
       ["transport", "info"],
-      ["transport", "warn"],
     ]);
+    expect(logSessionEvent.mock.calls.some(([record]) => record.level === "warn")).toBe(false);
   });
 });

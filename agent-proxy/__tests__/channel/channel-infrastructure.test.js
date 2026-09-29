@@ -139,9 +139,11 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
   assert.equal(manager._retryPendingLifecycleDelivery(socket, "event-1"), false);
 });
 
-test("authoritative lifecycle delivery is ordered by browser receipts within a turn", () => {
+test("newer lifecycle state supersedes the in-flight state and is delivered immediately", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
   const channel = { key: "user-1:session-ordered" };
+  const logged = [];
+  manager.logSessionEvent = (_channel, entry) => logged.push(entry);
   const socket = {
     readyState: 1,
     bufferedAmount: 0,
@@ -187,20 +189,81 @@ test("authoritative lifecycle delivery is ordered by browser receipts within a t
     sequence: 13,
     event: "turn_lifecycle",
     data: canonicalTurnLifecycle(completed),
-  }).result, "queued");
-  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), ["event-ordered-2"]);
-
-  const receipt = manager.acknowledgeTurnLifecycleDelivery(
-    socket,
-    createTurnLifecycleReceipt(started),
-  );
-  assert.equal(receipt.acknowledged, true);
-  assert.equal(receipt.nextDeliveryResult?.result, "sent");
+  }).result, "sent");
   assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), [
     "event-ordered-2",
     "event-ordered-3",
   ]);
+  assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-ordered-2"), false);
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-ordered-3"), true);
+  const superseded = logged.find((entry) => entry.event === "agentProxy.channel.lifecycle.superseded");
+  assert.equal(superseded?.data?.supersededEventId, "event-ordered-2");
+  assert.equal(superseded?.data?.eventId, "event-ordered-3");
+
+  const staleReceipt = manager.acknowledgeTurnLifecycleDelivery(
+    socket,
+    createTurnLifecycleReceipt(started),
+  );
+  assert.equal(staleReceipt.acknowledged, false);
+  const receipt = manager.acknowledgeTurnLifecycleDelivery(
+    socket,
+    createTurnLifecycleReceipt(completed),
+  );
+  assert.equal(receipt.acknowledged, true);
+  assert.equal(socket.__agentProxyPendingLifecycleDeliveries.size, 0);
+  assert.equal(socket.__agentProxyLifecycleDeliveriesByTurn.size, 0);
+});
+
+test("older lifecycle state is superseded by the in-flight newer state and not sent", () => {
+  const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
+  const channel = { key: "user-1:session-stale" };
+  const socket = {
+    readyState: 1,
+    bufferedAmount: 0,
+    sent: [],
+    send(raw) { this.sent.push(JSON.parse(raw)); },
+  };
+  const base = {
+    commandId: "command-stale",
+    sessionId: "session-stale",
+    turnScopeId: "turn-stale",
+    messageId: "message-stale",
+    presentationMessageId: "assistant-stale",
+    dialogProcessId: "dialog-stale",
+  };
+  const completed = createTurnLifecycleEnvelope({
+    ...base,
+    eventType: TURN_EVENT.COMPLETED,
+    eventId: "event-stale-completed",
+    revision: 4,
+    sequence: 4,
+    summaryVersion: 1,
+    completionCommitId: "completion-stale",
+    phase: TURN_PHASE.COMPLETION,
+    state: TURN_STATE.COMPLETED,
+  });
+  const processing = createTurnLifecycleEnvelope({
+    ...base,
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    eventId: "event-stale-processing",
+    revision: 3,
+    sequence: 3,
+    phase: TURN_PHASE.PROCESSING,
+    state: TURN_STATE.PROCESSING,
+  });
+  assert.equal(manager.sendChannelEvent(channel, socket, {
+    sequence: 31,
+    event: "turn_lifecycle",
+    data: canonicalTurnLifecycle(completed),
+  }).result, "sent");
+  const stale = manager.sendChannelEvent(channel, socket, {
+    sequence: 30,
+    event: "turn_lifecycle",
+    data: canonicalTurnLifecycle(processing),
+  });
+  assert.deepEqual(stale, { result: "superseded", reason: "newer_lifecycle_in_flight" });
+  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), ["event-stale-completed"]);
+  assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-stale-processing"), false);
 });
 
 test("detaching a subscriber clears lifecycle receipt timers", () => {
@@ -263,16 +326,18 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.size, 0);
 });
 
-test("receipt exhaustion records queued terminal lifecycle dropped with the socket", () => {
+test("terminal lifecycle supersedes an unacknowledged state instead of waiting behind it", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channel = { key: "user-1:session-drop" };
   const logged = [];
   manager.logSessionEvent = (_channel, entry) => logged.push(entry);
+  const closeCalls = [];
   const socket = {
     readyState: 1,
     bufferedAmount: 0,
-    send() {},
-    close() {},
+    sent: [],
+    send(raw) { this.sent.push(JSON.parse(raw)); },
+    close(code, reason) { closeCalls.push({ code, reason }); },
   };
   const base = {
     commandId: "command-drop",
@@ -307,25 +372,28 @@ test("receipt exhaustion records queued terminal lifecycle dropped with the sock
     event: "turn_lifecycle",
     data: canonicalTurnLifecycle(processing),
   });
-  const queued = manager.sendChannelEvent(channel, socket, {
+  const terminal = manager.sendChannelEvent(channel, socket, {
     sequence: 22,
     event: "turn_lifecycle",
     data: canonicalTurnLifecycle(completed),
   });
-  assert.equal(queued.reason, "waiting_for_prior_receipt");
+  assert.equal(terminal.result, "sent");
+  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), [
+    "event-drop-processing",
+    "event-drop-completed",
+  ]);
+  // 被覆盖的旧状态不再参与重试。
+  assert.equal(manager._retryPendingLifecycleDelivery(socket, "event-drop-processing"), false);
 
   for (let attempt = 1; attempt <= config.turnLifecycleDeliveryMaxAttempts; attempt += 1) {
-    manager._retryPendingLifecycleDelivery(socket, "event-drop-processing");
+    manager._retryPendingLifecycleDelivery(socket, "event-drop-completed");
   }
   const exhausted = logged.find(
     (entry) => entry.event === "agentProxy.channel.lifecycleReceipt.exhausted",
   );
-  assert.deepEqual(exhausted?.data?.droppedDeliveries, [
-    {
-      eventId: "event-drop-completed",
-      eventType: TURN_EVENT.COMPLETED,
-      lifecycleSequence: 4,
-    },
-  ]);
+  assert.equal(exhausted?.data?.eventId, "event-drop-completed");
+  assert.equal("droppedDeliveries" in (exhausted?.data || {}), false);
+  assert.deepEqual(closeCalls, [{ code: 1011, reason: "lifecycle_receipt_timeout" }]);
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.size, 0);
+  assert.equal(socket.__agentProxyLifecycleDeliveriesByTurn.size, 0);
 });
