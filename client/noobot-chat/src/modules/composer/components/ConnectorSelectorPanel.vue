@@ -63,7 +63,7 @@ const selectedConnectorIds = computed(() =>
   display: flex;
   align-items: center;
   gap: var(--noobot-space-xs);
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 .connector-options {
   display: grid;
@@ -77,7 +77,7 @@ const selectedConnectorIds = computed(() =>
   padding: var(--noobot-space-xs);
 }
 .connector-name {
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 .connector-kind {
   margin-left: var(--noobot-space-xs);

@@ -237,7 +237,7 @@ function sectionClass(name) {
   color: var(--noobot-text-main);
   border-bottom: 1px solid var(--noobot-divider);
   font-size: var(--noobot-font-size-md);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .resource-collapse :deep(.el-collapse-item__header:hover) {

@@ -50,6 +50,8 @@ const MARKDOWN_EXPORT_TOKENS = `
       --noobot-font-size-md: 14px;
       --noobot-font-size-lg: 16px;
       --noobot-font-size-base: var(--noobot-font-size-md);
+      --noobot-line-height-body: 1.6;
+      --noobot-line-height-loose: 1.7;
       --noobot-radius-xs: 8px;
       --noobot-radius-sm: 10px;
     }
@@ -159,7 +161,7 @@ function buildHtmlDocumentForCopy(htmlBodyContent = "") {
   <title>Noobot Markdown Preview</title>
   <style>
 ${MARKDOWN_EXPORT_TOKENS}
-    body { margin: 0; padding: 16px; color: var(--noobot-base-slate-900); background: var(--noobot-base-white); line-height: 1.6; font-size: var(--noobot-font-size-base); }
+    body { margin: 0; padding: 16px; color: var(--noobot-base-slate-900); background: var(--noobot-base-white); line-height: var(--noobot-line-height-body); font-size: var(--noobot-font-size-base); }
     p { margin: 0 0 12px 0; }
     a { color: var(--noobot-base-blue-600); text-decoration: none; }
     a:hover { text-decoration: underline; }
@@ -171,7 +173,7 @@ ${MARKDOWN_EXPORT_TOKENS}
     th { background: var(--noobot-base-indigo-50); font-weight: 600; }
     tr:nth-child(even) td { background: var(--noobot-base-slate-50); }
     ul, ol { margin: 8px 0 12px 20px; padding-left: 16px; }
-    li { margin: 4px 0; line-height: 1.7; }
+    li { margin: 4px 0; line-height: var(--noobot-line-height-loose); }
     ul li::marker { color: var(--noobot-base-blue-400); }
     ol li::marker { color: var(--noobot-base-blue-400); font-weight: 600; }
     .mermaid { margin: 12px 0; padding: 10px; border: 1px solid var(--noobot-base-slate-200); border-radius: var(--noobot-radius-xs); background: var(--noobot-base-white); overflow-x: auto; max-width: 760px; }
@@ -201,7 +203,7 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
   const exportStyles = `
       <style>
         .markdown-export-container {
-          color: var(--noobot-base-slate-800); font-size: var(--noobot-font-size-lg); line-height: 1.7; word-wrap: break-word;
+          color: var(--noobot-base-slate-800); font-size: var(--noobot-font-size-lg); line-height: var(--noobot-line-height-loose); word-wrap: break-word;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           padding: 20px; max-width: 900px; margin: 0 auto;
         }

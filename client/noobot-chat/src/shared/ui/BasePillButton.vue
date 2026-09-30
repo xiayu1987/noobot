@@ -27,7 +27,7 @@ defineEmits(["click"]);
   height: 20px;
   padding: 0 var(--noobot-space-xs);
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.2;
+  line-height: var(--noobot-line-height-compact);
   border-radius: var(--noobot-radius-pill);
 }
 

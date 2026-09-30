@@ -144,7 +144,7 @@ defineExpose({ getHtml });
   cursor: pointer;
   user-select: none;
   padding: var(--noobot-space-sm) var(--noobot-space-md);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
   color: var(--noobot-text-main);
   background: color-mix(in srgb, var(--noobot-accent-soft) 70%, transparent);
   border-bottom: 1px solid transparent;
@@ -171,7 +171,7 @@ defineExpose({ getHtml });
 .base-markdown-content :deep(h3),
 .base-markdown-content :deep(h4) {
   margin: var(--noobot-space-md) 0 var(--noobot-space-sm);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
 }
 
 .base-markdown-content :deep(.mermaid svg) {
@@ -190,7 +190,7 @@ defineExpose({ getHtml });
   border-radius: var(--noobot-radius-sm);
   background: var(--noobot-msg-file-card-bg);
   font-size: var(--noobot-font-size-sm);
-  line-height: 1.5;
+  line-height: var(--noobot-line-height-comfortable);
   text-decoration: none;
   vertical-align: baseline;
 }

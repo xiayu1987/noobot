@@ -61,6 +61,6 @@ function normalizedItems() {
 }
 .base-status-chip.done {
   color: var(--noobot-status-success);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 </style>

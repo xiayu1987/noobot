@@ -227,7 +227,7 @@ function handleHeaderAction(command = "") {
   max-height: var(--noobot-control-height-md);
   flex: 0 0 var(--noobot-control-height-md);
   padding: 0;
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
   aspect-ratio: 1 / 1;
   border-radius: 50%;
 }
@@ -279,7 +279,7 @@ function handleHeaderAction(command = "") {
 .head-title {
   margin: 0;
   font-size: var(--noobot-font-size-xl);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-strong);
 }
 

@@ -162,7 +162,7 @@
   border-radius: var(--noobot-radius-xs);
   background: transparent;
   color: var(--noobot-text-main);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
   white-space: normal;
 }
 
@@ -218,7 +218,7 @@
 
 .el-form-item__label {
   color: var(--noobot-text-main);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   line-height: var(--noobot-line-height-body);
 }
 
@@ -366,7 +366,7 @@
   padding: var(--noobot-space-xs) var(--noobot-space-sm);
   color: var(--noobot-text-main);
   border-radius: var(--noobot-radius-xs);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -483,7 +483,7 @@
   padding: 0 var(--noobot-tab-padding);
   color: var(--noobot-tab-color);
   font-size: var(--noobot-font-size-md);
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
   line-height: var(--noobot-tab-height);
   border: 1px solid transparent;
   border-radius: 0;
@@ -499,7 +499,7 @@
 
 .noobot-tabs .el-tabs__item.is-active {
   color: var(--noobot-tab-active-color);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .noobot-tabs .el-tabs__active-bar {
@@ -543,7 +543,7 @@
 .el-drawer__title,
 .el-dialog__title {
   color: var(--noobot-text-strong);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .el-collapse,

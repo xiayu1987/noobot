@@ -297,15 +297,15 @@ defineExpose({ focusTextarea });
 .monotonic-edit-title {
   color: var(--noobot-text-strong);
   font-size: var(--noobot-font-size-xl);
-  font-weight: 600;
-  line-height: 1.4;
+  font-weight: var(--noobot-font-weight-semibold);
+  line-height: var(--noobot-line-height-balanced);
 }
 
 .monotonic-edit-subtitle {
   margin-top: var(--noobot-space-2xs);
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-md);
-  line-height: 1.4;
+  line-height: var(--noobot-line-height-balanced);
 }
 
 .monotonic-mode-tag {
@@ -314,7 +314,7 @@ defineExpose({ focusTextarea });
   justify-content: center;
   flex-shrink: 0;
   gap: var(--noobot-space-2xs);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   padding: 0 var(--noobot-space-sm);
   height: 26px;
   line-height: 26px;
@@ -328,7 +328,7 @@ defineExpose({ focusTextarea });
   align-items: center;
   justify-content: center;
   gap: var(--noobot-space-2xs);
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
 }
 
 .monotonic-mode-icon,
@@ -352,7 +352,7 @@ defineExpose({ focusTextarea });
   background: var(--noobot-control-bg);
   border: none;
   font-size: var(--noobot-font-size-base);
-  line-height: 1.6;
+  line-height: var(--noobot-line-height-body);
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
@@ -381,7 +381,7 @@ defineExpose({ focusTextarea });
 
 .monotonic-attachment-title {
   font-size: var(--noobot-font-size-base);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main);
 }
 
@@ -393,7 +393,7 @@ defineExpose({ focusTextarea });
 .stat-tag {
   border: none;
   background: transparent;
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
 }
 
 .monotonic-attachment-empty {
@@ -450,7 +450,7 @@ defineExpose({ focusTextarea });
   color: var(--noobot-attachment-icon-text);
   background: transparent;
   font-size: var(--noobot-font-size-xs);
-  font-weight: bold;
+  font-weight: var(--noobot-font-weight-bold);
   border: 1px solid var(--noobot-attachment-icon-border);
 }
 
@@ -465,7 +465,7 @@ defineExpose({ focusTextarea });
 
 .monotonic-attachment-name {
   font-size: var(--noobot-font-size-md);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main);
   white-space: nowrap;
   overflow: hidden;
@@ -542,7 +542,7 @@ defineExpose({ focusTextarea });
   background: transparent;
   color: var(--noobot-text-main);
   font-size: var(--noobot-font-size-md);
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
   cursor: pointer;
   transition:
     color var(--noobot-duration-normal) ease,
@@ -589,7 +589,7 @@ defineExpose({ focusTextarea });
   align-items: center;
   justify-content: center;
   padding: var(--noobot-space-xs) 20px;
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
 }
 
 .monotonic-footer-btn :deep(.el-button__content) {
@@ -597,7 +597,7 @@ defineExpose({ focusTextarea });
   align-items: center;
   justify-content: center;
   gap: var(--noobot-space-xs);
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
 }
 
 @media (max-width: 640px) {

@@ -32,7 +32,7 @@ summary,
 
 .mermaidTooltip {
   position: fixed;
-  z-index: 4000;
+  z-index: var(--noobot-layer-tooltip);
   max-width: min(360px, 80vw);
   pointer-events: none;
 }

@@ -361,7 +361,7 @@ watch(() => [props.connected, props.userId], refresh);
 }
 .manager-title {
   gap: var(--noobot-space-2xs);
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 .manager-title .el-tag {
   margin-left: var(--noobot-space-3xs);
@@ -405,12 +405,12 @@ watch(() => [props.connected, props.userId], refresh);
 .connector-identity strong {
   color: var(--noobot-text-strong);
   font-size: var(--noobot-font-size-sm);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
 }
 .connector-identity small {
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
 }
 .connector-meta {
   display: flex !important;

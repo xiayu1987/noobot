@@ -5,8 +5,11 @@
  */
 
 :root {
-  --noobot-font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  --noobot-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --noobot-font-sans:
+    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --noobot-font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
   --noobot-base-white: #ffffff;
   --noobot-base-black: #000000;
   --noobot-base-blue-400: #60a5fa;
@@ -21,12 +24,24 @@
   --noobot-base-slate-600: #475569;
   --noobot-base-slate-800: #1e293b;
   --noobot-base-slate-900: #0f172a;
-  --noobot-base-indigo-50: color-mix(in srgb, var(--noobot-base-blue-500) 8%, var(--noobot-base-white));
+  --noobot-base-indigo-50: color-mix(
+    in srgb,
+    var(--noobot-base-blue-500) 8%,
+    var(--noobot-base-white)
+  );
   --noobot-base-emerald-400: #10b981;
   --noobot-base-emerald-500: var(--noobot-base-emerald-400);
   --noobot-base-red-500: #ef4444;
-  --noobot-base-red-100: color-mix(in srgb, var(--noobot-base-red-500) 8%, var(--noobot-base-white));
-  --noobot-base-red-200: color-mix(in srgb, var(--noobot-base-red-500) 24%, var(--noobot-base-white));
+  --noobot-base-red-100: color-mix(
+    in srgb,
+    var(--noobot-base-red-500) 8%,
+    var(--noobot-base-white)
+  );
+  --noobot-base-red-200: color-mix(
+    in srgb,
+    var(--noobot-base-red-500) 24%,
+    var(--noobot-base-white)
+  );
   --noobot-base-amber-500: #f59e0b;
 
   --noobot-font-size-xs: 12px;
@@ -36,6 +51,10 @@
   --noobot-font-size-2xs: var(--noobot-font-size-xs);
   --noobot-font-size-base: var(--noobot-font-size-md);
   --noobot-font-size-xl: var(--noobot-font-size-lg);
+  --noobot-font-weight-regular: 400;
+  --noobot-font-weight-medium: 500;
+  --noobot-font-weight-semibold: 600;
+  --noobot-font-weight-bold: 700;
   --noobot-duration-fast: 0.16s;
   --noobot-duration-normal: 0.2s;
   --noobot-duration-slow: 0.3s;

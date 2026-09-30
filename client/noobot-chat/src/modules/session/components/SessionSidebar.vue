@@ -213,9 +213,9 @@ const { translate } = useLocale();
 
 .brand-text {
   font-size: var(--noobot-font-size-xl);
-  font-weight: 800;
+  font-weight: var(--noobot-font-weight-bold);
   color: var(--noobot-text-accent);
-  letter-spacing: 0;
+  letter-spacing: var(--noobot-letter-spacing-none);
   white-space: nowrap;
 }
 
@@ -226,7 +226,7 @@ const { translate } = useLocale();
   min-height: var(--noobot-control-icon-size-lg);
   flex: 0 0 var(--noobot-control-icon-size-lg);
   padding: 0;
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
   border-radius: 50%;
   cursor: pointer;
   display: flex;
@@ -309,8 +309,8 @@ const { translate } = useLocale();
   min-width: 0;
   height: var(--noobot-control-icon-size-lg);
   border-radius: var(--noobot-radius-xs);
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: var(--noobot-font-weight-semibold);
+  letter-spacing: var(--noobot-letter-spacing-caps);
 }
 
 .new-chat-btn {
@@ -396,7 +396,7 @@ const { translate } = useLocale();
   width: 100vw;
   min-width: 100vw;
   transform: translateX(-100%);
-  z-index: 100;
+  z-index: var(--noobot-layer-mobile-sidebar);
 }
 
 .sidebar.mobile.mobile-open {

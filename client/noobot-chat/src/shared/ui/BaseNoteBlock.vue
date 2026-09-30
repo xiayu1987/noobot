@@ -36,6 +36,6 @@ defineProps({
   word-break: break-word;
   color: var(--noobot-thinking-text);
   font: inherit;
-  line-height: 1.5;
+  line-height: var(--noobot-line-height-comfortable);
 }
 </style>

@@ -313,7 +313,7 @@ watch(
   background: transparent;
   color: var(--noobot-text-muted);
   font-size: var(--noobot-font-size-sm);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .session-date-collapse :deep(.el-collapse-item__wrap) {
@@ -438,7 +438,7 @@ watch(
 
 .title {
   font-size: var(--noobot-font-size-md);
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
   color: var(--noobot-text-main);
   white-space: nowrap;
   overflow: hidden;
@@ -448,7 +448,7 @@ watch(
 
 .session-item.active .title {
   color: var(--noobot-text-strong);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .sid {
@@ -530,7 +530,7 @@ watch(
 }
 
 .session-popover__title {
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   font-size: var(--noobot-font-size-md);
   margin-bottom: var(--noobot-space-xs);
   word-break: break-word;
@@ -550,7 +550,7 @@ watch(
   display: flex;
   gap: var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
-  line-height: 1.4;
+  line-height: var(--noobot-line-height-balanced);
 }
 
 .session-popover__meta .k {

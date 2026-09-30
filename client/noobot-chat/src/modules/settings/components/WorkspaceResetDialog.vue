@@ -74,7 +74,7 @@ defineEmits(["update:visible", "update:sections", "select-all", "clear-all", "co
 
 :deep(.workspace-reset-dialog .el-dialog__title) {
   color: var(--noobot-text-main);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 :deep(.workspace-reset-dialog .el-dialog__body) {
@@ -95,7 +95,7 @@ defineEmits(["update:visible", "update:sections", "select-all", "clear-all", "co
 .reset-dialog-tip {
   font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-secondary);
-  line-height: 1.6;
+  line-height: var(--noobot-line-height-body);
   padding: var(--noobot-space-sm) var(--noobot-space-md);
   background: var(--noobot-panel-muted);
 }

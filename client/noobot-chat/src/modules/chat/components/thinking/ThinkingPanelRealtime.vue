@@ -245,7 +245,7 @@ watch(
   gap: var(--noobot-space-2xs);
   padding: 0 var(--noobot-space-xs);
   min-height: 20px;
-  line-height: 1.2;
+  line-height: var(--noobot-line-height-compact);
   border-radius: var(--noobot-radius-pill);
 }
 .thinking-analysis-block {

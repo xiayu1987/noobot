@@ -25,7 +25,9 @@
   font-family: var(--noobot-font-mono, monospace);
 }
 
-.mutation-diff-pane + .mutation-diff-pane { border-left: 1px solid var(--noobot-panel-border); }
+.mutation-diff-pane + .mutation-diff-pane {
+  border-left: 1px solid var(--noobot-panel-border);
+}
 .mutation-diff-heading {
   position: sticky;
   top: 0;
@@ -42,11 +44,35 @@
   min-height: 1.45rem;
   white-space: pre;
 }
-.mutation-line-number { padding-right: 0.5rem; color: var(--noobot-text-muted); text-align: right; user-select: none; }
-.mutation-line-sign { color: var(--noobot-text-muted); font-weight: 700; text-align: center; user-select: none; }
-.mutation-diff-line code { overflow: hidden; padding: 0 0.5rem; text-overflow: ellipsis; }
-.mutation-diff-line.is-empty { background: var(--noobot-control-bg); }
-.mutation-diff-line.is-added { background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-msg-file-card-bg)); }
-.mutation-diff-line.is-added .mutation-line-sign { color: var(--noobot-status-success); }
-.mutation-diff-line.is-removed { background: color-mix(in srgb, var(--noobot-status-error) 16%, var(--noobot-msg-file-card-bg)); }
-.mutation-diff-line.is-removed .mutation-line-sign { color: var(--noobot-status-error); }
+.mutation-line-number {
+  padding-right: 0.5rem;
+  color: var(--noobot-text-muted);
+  text-align: right;
+  user-select: none;
+}
+.mutation-line-sign {
+  color: var(--noobot-text-muted);
+  font-weight: var(--noobot-font-weight-bold);
+  text-align: center;
+  user-select: none;
+}
+.mutation-diff-line code {
+  overflow: hidden;
+  padding: 0 0.5rem;
+  text-overflow: ellipsis;
+}
+.mutation-diff-line.is-empty {
+  background: var(--noobot-control-bg);
+}
+.mutation-diff-line.is-added {
+  background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-msg-file-card-bg));
+}
+.mutation-diff-line.is-added .mutation-line-sign {
+  color: var(--noobot-status-success);
+}
+.mutation-diff-line.is-removed {
+  background: color-mix(in srgb, var(--noobot-status-error) 16%, var(--noobot-msg-file-card-bg));
+}
+.mutation-diff-line.is-removed .mutation-line-sign {
+  color: var(--noobot-status-error);
+}

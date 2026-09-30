@@ -465,7 +465,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   font-size: var(--noobot-font-size-md);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .composer {
@@ -507,8 +507,8 @@ defineExpose({
 
 .more-panel-title {
   font-size: var(--noobot-font-size-md);
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: var(--noobot-font-weight-bold);
+  letter-spacing: var(--noobot-letter-spacing-subtle);
   color: var(--noobot-text-strong);
 }
 

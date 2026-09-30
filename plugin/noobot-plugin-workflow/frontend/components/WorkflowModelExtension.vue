@@ -89,14 +89,14 @@ function onWorkflowSemanticModelChange(value = "") {
 
 .plugin-model-title {
   font-size: var(--noobot-font-size-sm);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
   color: var(--noobot-text-strong, var(--el-text-color-primary));
 }
 
 .plugin-model-description {
   margin: var(--noobot-space-3xs) 0 0;
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.45;
+  line-height: var(--noobot-line-height-relaxed);
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
 
@@ -119,7 +119,7 @@ function onWorkflowSemanticModelChange(value = "") {
 
 .plugin-model-label {
   font-size: var(--noobot-font-size-xs);
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
 
@@ -175,7 +175,7 @@ function onWorkflowSemanticModelChange(value = "") {
 }
 
 .model-option-label {
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
 
@@ -183,7 +183,7 @@ function onWorkflowSemanticModelChange(value = "") {
 .model-option-description,
 .plugin-empty-text {
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
 

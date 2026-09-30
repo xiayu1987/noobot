@@ -23,7 +23,7 @@
 .workspace-drawer .el-drawer__title,
 .noobot-side-drawer__title {
   color: var(--noobot-text-strong);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .noobot-side-drawer .el-drawer__body,
