@@ -75,6 +75,16 @@ from **More actions**, and describe the movement you want to see.
 | macOS packaged archive   | [Latest release](https://github.com/xiayu1987/noobot/releases/latest), then choose `Noobot-<version>-mac.zip`   | Packaged macOS desktop client             |
 | Self-hosted Web          | [`./start.sh`](#quick-start)                                                                                    | Linux or macOS server deployment          |
 
+### Opening the macOS app
+
+The macOS release is not signed with an Apple Developer ID or notarized. After extracting the ZIP, move `Noobot.app` to Applications. If macOS blocks it, try opening it once, then go to **System Settings > Privacy & Security** and click **Open Anyway**. See [Apple's Gatekeeper guidance](https://support.apple.com/en-us/102445).
+
+Alternatively, if you trust the downloaded release, remove the quarantine attribute from this app in Terminal, then open it again:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Noobot.app
+```
+
 ## Quick Start
 
 ```bash
