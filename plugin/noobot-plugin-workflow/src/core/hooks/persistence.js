@@ -384,7 +384,7 @@ async function upsertWorkflowMessage({
   if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
     throw new Error("Turn message event materializer is required");
   }
-  const messageEventProjection = runtime.materializePendingCurrentTurnMessageEvents();
+  const messageEventProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
   applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
   const authoritativeWorkflowRunId = String(
     workflowRunId ||

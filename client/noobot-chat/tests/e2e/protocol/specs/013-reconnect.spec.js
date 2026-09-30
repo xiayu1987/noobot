@@ -5,6 +5,10 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
+  countCanonicalThinkingDetailEvents,
+  countCanonicalToolTimelineEvents,
+} from "@noobot/event-protocol/tool-timeline";
+import {
   sendMessage,
   stopActiveTurn,
   waitForNaturalCompletion,
@@ -14,7 +18,10 @@ import {
   reloadAndWaitForReconnect,
   waitForReconnect,
 } from "../helpers/reconnect-scenarios.js";
-import { waitForSessionExecutionEventTree } from "../helpers/persistence-audit.js";
+import {
+  readSessionTurnMessages,
+  waitForSessionExecutionEventTree,
+} from "../helpers/persistence-audit.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
@@ -110,7 +117,22 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
     send.identity.turnScopeId,
   );
   await expect(thinkingShell).not.toHaveClass(/is-running/);
-  await expect(thinkingShell.locator(".thinking-detail-action-button")).toContainText("2");
+  const persistedAssistants = (
+    await readSessionTurnMessages(noobot.userId, noobot.sessionId)
+  ).filter(
+    (message) => message.role === "assistant" && message.turnScopeId === send.identity.turnScopeId,
+  );
+  const persistedTools = persistedAssistants.flatMap((message) => message.toolTimeline || []);
+  const persistedDetailCount = persistedAssistants.reduce(
+    (count, message) => count + countCanonicalThinkingDetailEvents(message),
+    0,
+  );
+  expect(persistedTools.map((entry) => [entry.tool, entry.status])).toEqual([
+    ["execute_script", "completed"],
+  ]);
+  await expect(thinkingShell.locator(".thinking-detail-action-button")).toHaveText(
+    `Thinking Details (${persistedDetailCount})`,
+  );
   await noobot.page.keyboard.press("Escape");
   await expect(detailsDrawer.locator(".thinking-details-panel")).toBeHidden();
   if ((await thinkingHeader.getAttribute("aria-expanded")) !== "true") {
@@ -119,7 +141,7 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
   await thinkingShell.locator(".thinking-detail-action-button").click();
   await expect(detailsDrawer.locator(".thinking-details-panel")).toBeVisible();
   const completedToolLines = detailsDrawer.locator(".base-thinking-log-line.is-tool");
-  await expect(completedToolLines).toHaveCount(2);
+  await expect(completedToolLines).toHaveCount(countCanonicalToolTimelineEvents(persistedTools));
   for (const line of await completedToolLines.all()) {
     const trigger = line.locator(".base-thinking-log-line__text");
     await trigger.click();
