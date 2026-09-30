@@ -71,6 +71,16 @@ Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI A
 | macOS 打包归档   | 进入[最新版本](https://github.com/xiayu1987/noobot/releases/latest)，选择 `Noobot-<版本>-mac.zip`   | 已打包的 macOS 桌面客户端   |
 | 自托管 Web       | [`./start.sh`](#快速开始)                                                                           | Linux 或 macOS 服务器部署   |
 
+### 打开 macOS 客户端
+
+macOS 发布包未经 Apple Developer ID 签名，也未经过 Apple 公证。解压 ZIP 后，将 `Noobot.app` 移到“应用程序”文件夹。如果 macOS 阻止打开，先尝试打开一次，再到“系统设置 > 隐私与安全性”点击“仍要打开”。详见 [Apple 的 Gatekeeper 说明](https://support.apple.com/zh-cn/102445)。
+
+也可以在确认下载的发布包可信后，在“终端”中仅移除该应用的隔离属性，再重新打开：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Noobot.app
+```
+
 ## 快速开始
 
 ```bash
