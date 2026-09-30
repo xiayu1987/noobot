@@ -97,7 +97,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       execution: {
         controllers: {
           runtime: {
-            materializePendingCurrentTurnMessageEvents() {
+            materializePendingCurrentTurnMessageEvents({ messageId } = {}) {
+              assert.equal(messageId, "assistant-message-1");
               return {
                 activityTimeline: [
                   {

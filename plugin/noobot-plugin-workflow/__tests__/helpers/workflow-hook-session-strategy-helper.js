@@ -361,10 +361,10 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
     target.eventListener = { async onEvent() {} };
   }
   if (typeof runtime.materializePendingCurrentTurnMessageEvents !== "function") {
-    runtime.materializePendingCurrentTurnMessageEvents = () => ({
-      activityTimeline: [],
-      toolTimeline: [],
-    });
+    runtime.materializePendingCurrentTurnMessageEvents = ({ messageId } = {}) => {
+      assert.ok(String(messageId || "").trim(), "materializer requires messageId");
+      return { activityTimeline: [], toolTimeline: [] };
+    };
   }
   return target;
 }
