@@ -166,7 +166,7 @@ watch(
   background: var(--noobot-surface-soft);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
   font-size: var(--noobot-font-size-sm);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
   transition:
     color var(--noobot-duration-normal) ease,
     background-color var(--noobot-duration-normal) ease,
@@ -192,9 +192,9 @@ watch(
   align-items: center;
   justify-content: center;
   font-size: var(--noobot-font-size-2xs);
-  line-height: 1.25;
-  font-weight: 800;
-  letter-spacing: 0;
+  line-height: var(--noobot-line-height-snug);
+  font-weight: var(--noobot-font-weight-bold);
+  letter-spacing: var(--noobot-letter-spacing-none);
   text-align: center;
   color: var(--noobot-msg-avatar-text);
   background: var(--noobot-msg-avatar-bg);
@@ -231,7 +231,7 @@ watch(
   color: var(--noobot-text-strong);
   background: var(--noobot-surface-primary-soft);
   border-color: color-mix(in srgb, var(--noobot-accent) 42%, var(--noobot-panel-border));
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
 }
 
 @media (max-width: 768px) {
@@ -284,7 +284,7 @@ watch(
   display: flex;
   gap: var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
-  line-height: 1.45;
+  line-height: var(--noobot-line-height-relaxed);
 }
 
 .chat-nav-popover__meta .k {

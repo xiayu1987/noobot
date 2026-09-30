@@ -403,8 +403,8 @@ watch(
 }
 
 .param-key-input :deep(.el-input__inner) {
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: var(--noobot-font-weight-semibold);
+  letter-spacing: var(--noobot-letter-spacing-subtle);
 }
 
 .param-value-input :deep(.el-input__inner) {

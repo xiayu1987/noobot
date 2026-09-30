@@ -204,7 +204,7 @@ function emitPreview() {
   height: 18px;
   padding: 0 var(--noobot-space-xs);
   font-size: var(--noobot-font-size-2xs);
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
 }
 .file-size {
   font-size: var(--noobot-msg-file-size-font-size);
@@ -220,7 +220,7 @@ function emitPreview() {
   flex: 0 0 auto;
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-msg-file-size);
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
 }
 .parsed-result-label::after {
   content: "";
@@ -236,7 +236,7 @@ function emitPreview() {
   width: auto;
   min-width: 34px;
   height: 22px;
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
   font-size: var(--noobot-msg-meta-font-size);
   padding: 0 var(--noobot-space-xs);
   border-color: transparent;

@@ -84,8 +84,8 @@ const { translate } = useLocale();
   align-items: center;
   justify-content: center;
   font-size: var(--noobot-msg-avatar-font-size);
-  font-weight: 600;
-  line-height: 1;
+  font-weight: var(--noobot-font-weight-semibold);
+  line-height: var(--noobot-line-height-none);
   flex: 0 0 var(--noobot-msg-avatar-size);
   overflow: hidden;
 }
@@ -108,7 +108,7 @@ const { translate } = useLocale();
   gap: var(--noobot-space-xs);
   min-height: var(--noobot-msg-avatar-size);
   font-size: var(--noobot-msg-meta-font-size);
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
   color: var(--noobot-msg-meta);
 }
 
@@ -123,7 +123,7 @@ const { translate } = useLocale();
   background: var(--noobot-msg-tag-bg);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
   padding: var(--noobot-space-3xs) var(--noobot-space-xs);
-  line-height: 1.4;
+  line-height: var(--noobot-line-height-balanced);
 }
 
 .base-message-content {

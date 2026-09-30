@@ -27,4 +27,23 @@
   --noobot-line-height-tight: 1.3;
   --noobot-line-height-body: 1.6;
   --noobot-line-height-loose: 1.7;
+  --noobot-line-height-none: 1;
+  --noobot-line-height-compact: 1.2;
+  --noobot-line-height-snug: 1.25;
+  --noobot-line-height-cozy: 1.35;
+  --noobot-line-height-balanced: 1.4;
+  --noobot-line-height-relaxed: 1.45;
+  --noobot-line-height-comfortable: 1.5;
+  --noobot-line-height-roomy: 1.55;
+  --noobot-letter-spacing-none: 0;
+  --noobot-letter-spacing-subtle: 0.01em;
+  --noobot-letter-spacing-wide: 0.04em;
+  --noobot-letter-spacing-caps: 0.5px;
+  --noobot-letter-spacing-caps-wide: 0.65px;
+  --noobot-layer-mobile-mask: 18;
+  --noobot-layer-mobile-sidebar: 100;
+  --noobot-layer-floating-action: 2001;
+  --noobot-layer-tooltip: 4000;
+  --noobot-layer-file-preview: 5000;
+  --noobot-floating-action-gap: 52px;
 }

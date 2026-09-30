@@ -17,7 +17,7 @@
 .noobot-file-preview-overlay {
   position: fixed;
   inset: 0;
-  z-index: 5000;
+  z-index: var(--noobot-layer-file-preview);
 }
 
 .noobot-file-preview-overlay .el-overlay-dialog {
@@ -90,7 +90,7 @@
 .generated-file-preview-dialog .el-dialog__title,
 .workflow-session-preview-dialog .el-dialog__title {
   color: var(--noobot-text-strong);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .attachment-preview-dialog .el-dialog__headerbtn .el-dialog__close,

@@ -154,15 +154,15 @@ watch(
   flex: 0 0 auto;
   padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   font-size: var(--noobot-font-size-sm);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
 }
 
 .interaction-title {
   color: var(--noobot-text-main);
   font-size: var(--noobot-font-size-base);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   margin-bottom: 0;
-  line-height: 1.5;
+  line-height: var(--noobot-line-height-comfortable);
   word-break: break-word;
 }
 

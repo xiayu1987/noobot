@@ -49,7 +49,7 @@ const statusClass = computed(() => {
   border: 1px solid transparent;
   flex-shrink: 0;
   white-space: nowrap;
-  line-height: 1.2;
+  line-height: var(--noobot-line-height-compact);
 }
 
 .workflow-node-status.success {

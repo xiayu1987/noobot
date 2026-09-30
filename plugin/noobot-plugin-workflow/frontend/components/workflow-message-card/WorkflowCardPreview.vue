@@ -84,8 +84,8 @@ defineEmits([
 }
 
 .workflow-card-title {
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: var(--noobot-font-weight-semibold);
+  line-height: var(--noobot-line-height-cozy);
 }
 
 .workflow-card-subtitle {
@@ -125,7 +125,7 @@ defineEmits([
   padding: var(--noobot-space-md) var(--noobot-space-lg);
   color: var(--noobot-text-primary);
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.55;
+  line-height: var(--noobot-line-height-roomy);
   background: transparent;
   overflow: visible;
 }

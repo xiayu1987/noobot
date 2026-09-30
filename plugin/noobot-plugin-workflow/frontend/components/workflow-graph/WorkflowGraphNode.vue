@@ -230,8 +230,8 @@ function handleClick(nodeItem = {}, clickable = true) {
 
 .workflow-node.is-boundary {
   justify-content: center;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-weight: var(--noobot-font-weight-bold);
+  letter-spacing: var(--noobot-letter-spacing-caps);
   cursor: default;
 }
 
@@ -271,7 +271,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   align-items: center;
   justify-content: center;
   font-size: var(--noobot-font-size-xs);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
   flex: 0 0 auto;
 }
 
@@ -298,8 +298,8 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node-name {
-  font-weight: 600;
-  line-height: 1.25;
+  font-weight: var(--noobot-font-weight-semibold);
+  line-height: var(--noobot-line-height-snug);
   font-size: var(--noobot-font-size-xs);
   word-break: break-word;
 }
@@ -308,14 +308,14 @@ function handleClick(nodeItem = {}, clickable = true) {
   margin-top: var(--noobot-space-3xs);
   font-size: var(--noobot-font-size-xs);
   color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
-  line-height: 1.2;
+  line-height: var(--noobot-line-height-compact);
 }
 
 .workflow-node-runtime-hint {
   margin-top: var(--noobot-space-3xs);
   font-size: var(--noobot-font-size-xs);
   color: color-mix(in srgb, var(--noobot-accent) 82%, var(--noobot-text-secondary) 18%);
-  line-height: 1.2;
+  line-height: var(--noobot-line-height-compact);
 }
 
 .workflow-node-expand-icon {
@@ -334,7 +334,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   padding: var(--noobot-space-3xs) var(--noobot-space-xs);
   border-radius: var(--noobot-radius-pill);
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.3;
+  line-height: var(--noobot-line-height-tight);
   color: color-mix(in srgb, var(--noobot-status-success) 74%, var(--noobot-text-secondary) 26%);
   background: color-mix(
     in srgb,
@@ -369,7 +369,7 @@ function handleClick(nodeItem = {}, clickable = true) {
 
   .workflow-node-name {
     font-size: var(--noobot-font-size-xs);
-    line-height: 1.25;
+    line-height: var(--noobot-line-height-snug);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;

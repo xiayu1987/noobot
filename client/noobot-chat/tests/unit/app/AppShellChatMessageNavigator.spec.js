@@ -352,6 +352,9 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain(".right-tool-panels > * {\n  flex: 0 0 auto;");
     expect(appShellLayoutSource).toContain(".right-tool-panels > *.is-collapsed {");
     expect(appShellLayoutSource).toContain("overflow-y: auto;");
+    const rightToolPanelsRule = appShellLayoutSource.match(/\.right-tool-panels \{[^}]*\}/)?.[0];
+    expect(rightToolPanelsRule).toContain("overflow-y: auto;");
+    expect(rightToolPanelsRule).not.toContain("pointer-events");
     expect(chatMessageListPanelSource).not.toContain("has-right-tool-panel");
     expect(chatMessageListPanelSource).not.toContain("rightToolPanelOpen");
   });
@@ -360,7 +363,9 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain("chat-message-nav-title-group");
     expect(appShellLayoutSource).toContain("{{ chatMessageNavItems.length }}");
     expect(appShellLayoutSource).toContain("position: fixed;");
-    expect(appShellLayoutSource).toContain("top: calc(56px + 16px + env(safe-area-inset-top));");
+    expect(appShellLayoutSource).toContain(
+      "var(--noobot-header-height-mobile) + 16px + var(--mobile-floating-trigger-index) *",
+    );
     expect(appShellLayoutSource).toContain("right: calc(16px + env(safe-area-inset-right));");
     expect(appShellLayoutSource).not.toContain(':style="mobileChatNavigatorTriggerStyle"');
     expect(appShellLayoutSource).not.toContain("@pointerdown=");
@@ -370,14 +375,14 @@ describe("AppShell chat message navigator", () => {
 
   it("hosts right-tool extensions in a dedicated mobile trigger and drawer", () => {
     expect(appShellLayoutSource).toContain(
-      'class="mobile-feature-trigger noobot-floating-action-btn noobot-icon-button"',
+      'class="mobile-feature-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button"',
     );
     expect(appShellLayoutSource).toContain('data-testid="mobile-feature-panel-trigger"');
     expect(appShellLayoutSource).toContain('data-testid="mobile-feature-panel"');
     expect(appShellLayoutSource).toContain('class="mobile-feature-drawer noobot-side-drawer"');
     expect(appShellLayoutSource).toContain(':title="featurePanelTitle"');
     expect(appShellLayoutSource).toContain(':point="EXTENSION_POINTS.RIGHT_TOOL_PANEL"');
-    expect(appShellLayoutSource).toContain("top: calc(56px + 120px + env(safe-area-inset-top));");
+    expect(appShellLayoutSource).toContain("--mobile-floating-trigger-index: 2;");
   });
 
   it("uses Element Plus icons, theme variables, and pseudo route for the mobile navigator", () => {
@@ -405,7 +410,7 @@ describe("AppShell chat message navigator", () => {
       "replacePseudoRoute(buildChatMessageNavigatorCloseRoute({",
     );
     expect(appShellLayoutSource).toContain(
-      'class="mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button"',
+      'class="mobile-chat-message-nav-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button"',
     );
     expect(appShellLayoutSource).toContain('class="connector-overview-panel noobot-panel-card"');
     expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !connectorVisible }\"");
@@ -425,7 +430,7 @@ describe("AppShell chat message navigator", () => {
       /class="connector-overview-header"[\s\S]*?translate\("connectors\.collapse"\)/,
     );
     expect(appShellLayoutSource).toContain(
-      'class="mobile-connector-trigger noobot-floating-action-btn noobot-icon-button"',
+      'class="mobile-connector-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button"',
     );
   });
 
@@ -434,19 +439,21 @@ describe("AppShell chat message navigator", () => {
       "@click=\"emit('mobile-chat-navigator-trigger-click')\"",
     );
     expect(appShellLayoutSource).toContain("position: fixed;");
-    expect(appShellLayoutSource).toContain("top: calc(56px + 16px + env(safe-area-inset-top));");
+    expect(appShellLayoutSource).toContain(
+      "var(--noobot-header-height-mobile) + 16px + var(--mobile-floating-trigger-index) *",
+    );
     expect(appShellLayoutSource).toContain("right: calc(16px + env(safe-area-inset-right));");
     expect(appShellLayoutSource).toContain('<Teleport to="body">');
-    expect(appShellLayoutSource).toContain("z-index: 2001;");
-    expect(appShellLayoutSource).toContain("pointer-events: auto;");
+    expect(appShellLayoutSource).toContain("z-index: var(--noobot-layer-floating-action);");
+    expect(appShellLayoutSource).not.toContain("pointer-events: auto;");
     expect(appShellLayoutSource.indexOf('class=\"chat-content-body\"')).toBeLessThan(
       appShellLayoutSource.indexOf(
-        'class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button\"',
+        'class=\"mobile-chat-message-nav-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button\"',
       ),
     );
     expect(
       appShellLayoutSource.indexOf(
-        'class=\"mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button\"',
+        'class=\"mobile-chat-message-nav-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button\"',
       ),
     ).toBeLessThan(appShellLayoutSource.indexOf('class=\"chat-composer-body\"'));
     expect(appShellLayoutSource).not.toContain("@pointercancel=");

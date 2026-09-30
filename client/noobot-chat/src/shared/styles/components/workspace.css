@@ -16,7 +16,7 @@
 }
 
 .noobot-workspace-layout .panel-title {
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .noobot-workspace-layout .panel-body {
@@ -130,19 +130,19 @@
 .thinking-details-tabs .base-meta-label {
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-text-muted);
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: var(--noobot-font-weight-semibold);
+  letter-spacing: var(--noobot-letter-spacing-subtle);
 }
 
 .thinking-details-tabs .base-thinking-log-line {
   font-size: var(--noobot-msg-caption-font-size);
-  line-height: 1.6;
+  line-height: var(--noobot-line-height-body);
   color: var(--noobot-text-secondary);
 }
 
 .thinking-details-tabs .base-note-block__content {
   font-size: var(--noobot-msg-caption-font-size);
-  line-height: 1.6;
+  line-height: var(--noobot-line-height-body);
 }
 
 .noobot-workspace-layout .icon-btn {
@@ -264,8 +264,8 @@
 .noobot-workspace-layout .user-idx {
   font-size: var(--noobot-font-size-xs);
   color: var(--noobot-text-muted);
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: var(--noobot-font-weight-bold);
+  letter-spacing: var(--noobot-letter-spacing-wide);
   text-transform: uppercase;
 }
 
@@ -312,9 +312,9 @@
 
 .noobot-workspace-title {
   font-size: var(--noobot-font-size-md);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--noobot-letter-spacing-subtle);
 }
 
 .noobot-workspace-body {
@@ -367,7 +367,7 @@
   padding: var(--noobot-space-xl);
   font-family: var(--noobot-font-mono);
   font-size: var(--noobot-msg-caption-font-size);
-  line-height: 1.6;
+  line-height: var(--noobot-line-height-body);
   resize: none;
 }
 

@@ -228,7 +228,7 @@ function handleToggle() {
 }
 .base-thinking-log-line__tool-name {
   font-family: var(--noobot-font-mono);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 .base-thinking-log-line__risk {
   display: inline-block;
@@ -238,7 +238,7 @@ function handleToggle() {
   background: var(--noobot-thinking-detail-background);
   color: var(--noobot-thinking-muted);
   font-size: 0.9em;
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 .base-thinking-log-line__risk.is-medium {
   color: var(--noobot-status-warning);

@@ -26,6 +26,6 @@ defineProps({
 .base-section-header__title {
   color: var(--noobot-msg-file-size);
   font-size: var(--noobot-msg-meta-font-size);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 </style>

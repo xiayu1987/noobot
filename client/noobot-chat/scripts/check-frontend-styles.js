@@ -82,6 +82,18 @@ const checks = [
   ],
   ["literal hex color must be declared in a token location", /#[0-9a-f]{3,8}\b/i],
   ["literal rgb color must be declared in a token location", /\brgba?\(\s*\d/i],
+  [
+    "literal font weight must use a font-weight token",
+    /(?:^|[^-\w])font-weight\s*:\s*(?:\d+|bold|bolder|lighter)\b/i,
+  ],
+  [
+    "literal line height must use a line-height token",
+    /(?:^|[^-\w])line-height\s*:\s*(?!0(?![.\d]))\d*\.?\d+(?![\w.%])/i,
+  ],
+  [
+    "literal letter spacing must use a letter-spacing token",
+    /(?:^|[^-\w])letter-spacing\s*:\s*-?\d*\.?\d+/i,
+  ],
 ];
 
 function isInside(parent, candidate) {
@@ -159,6 +171,21 @@ function inspectResponsiveBreakpoints(filePath, source) {
   }
 }
 
+function inspectFixedLayers(filePath, source) {
+  for (const match of source.matchAll(/[^{}]*\{([^{}]*)\}/g)) {
+    const body = match[1] || "";
+    if (!/\bposition\s*:\s*fixed\b/.test(body)) continue;
+    const zIndex = body.match(/\bz-index\s*:\s*([^;}\n]+)/);
+    if (!zIndex || /^var\(--noobot-layer-[\w-]+\)$/.test(zIndex[1].trim())) continue;
+    const lineNumber = source
+      .slice(0, match.index + match[0].indexOf(zIndex[0]))
+      .split(/\r?\n/).length;
+    violations.push(
+      `${path.relative(repoRoot, filePath)}:${lineNumber}: fixed overlay z-index must use a --noobot-layer-* token`,
+    );
+  }
+}
+
 function inspectFile(filePath) {
   const source = fs.readFileSync(filePath, "utf8");
   const lines = source.split(/\r?\n/);
@@ -166,7 +193,9 @@ function inspectFile(filePath) {
     for (const [message, pattern] of checks) {
       if (!pattern.test(line)) continue;
       if (
-        (message.includes("color") || message.includes("radius")) &&
+        (message.includes("color") ||
+          message.includes("radius") ||
+          message.includes("font weight")) &&
         isTokenDeclaration(filePath, line)
       )
         continue;
@@ -176,6 +205,7 @@ function inspectFile(filePath) {
   if (filePath.endsWith(".css") || filePath.endsWith(".vue")) {
     inspectEmptyStyleRules(filePath, source);
     inspectResponsiveBreakpoints(filePath, source);
+    inspectFixedLayers(filePath, source);
   }
 
   if (filePath.endsWith(".vue")) {

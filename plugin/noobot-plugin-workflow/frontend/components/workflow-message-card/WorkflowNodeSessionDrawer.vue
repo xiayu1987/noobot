@@ -478,7 +478,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 .workflow-execution-directory__title {
   margin-bottom: var(--noobot-space-sm);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 .workflow-execution-directory__actions {
   display: flex;
@@ -549,15 +549,15 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 
 .workflow-runtime-panel-title {
   font-size: var(--noobot-font-size-md);
-  font-weight: 700;
-  line-height: 1.35;
+  font-weight: var(--noobot-font-weight-bold);
+  line-height: var(--noobot-line-height-cozy);
   color: var(--noobot-text-primary);
 }
 
 .workflow-runtime-panel-subtitle {
   margin-top: var(--noobot-space-2xs);
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.45;
+  line-height: var(--noobot-line-height-relaxed);
   color: var(--noobot-text-secondary);
 }
 
@@ -582,14 +582,14 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   margin-bottom: var(--noobot-space-sm);
   color: var(--noobot-text-primary);
   font-size: var(--noobot-font-size-xs);
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .workflow-runtime-state-count {
   flex: 0 0 auto;
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
 }
 
 .workflow-runtime-step-box {
@@ -632,7 +632,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--noobot-font-size-xs);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .workflow-runtime-step-status {

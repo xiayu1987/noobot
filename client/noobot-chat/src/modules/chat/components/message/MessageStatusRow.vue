@@ -107,11 +107,11 @@ const stepView = computed(() => {
 
 .message-status-steps :deep(.el-step__title) {
   font-size: 11px !important;
-  line-height: 1 !important;
+  line-height: var(--noobot-line-height-none) !important;
   margin-top: var(--noobot-space-xs) !important;
-  font-weight: 400 !important;
+  font-weight: var(--noobot-font-weight-regular) !important;
   color: var(--noobot-thinking-muted);
-  letter-spacing: 0.5px;
+  letter-spacing: var(--noobot-letter-spacing-caps);
 }
 
 .message-status-steps :deep(.el-step__head.is-success .el-step__icon),
@@ -134,10 +134,10 @@ const stepView = computed(() => {
 }
 .message-status-steps :deep(.el-step__title.is-process) {
   color: var(--noobot-status-running);
-  font-weight: 600 !important;
+  font-weight: var(--noobot-font-weight-semibold) !important;
 }
 .message-status-steps.is-running :deep(.el-step__title.is-process) {
-  letter-spacing: 0.65px;
+  letter-spacing: var(--noobot-letter-spacing-caps-wide);
 }
 
 .message-status-steps.is-error :deep(.el-step__head.is-error .el-step__icon) {

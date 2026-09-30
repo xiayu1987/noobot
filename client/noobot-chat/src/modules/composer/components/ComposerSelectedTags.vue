@@ -91,7 +91,7 @@ function onRemoveUpload(draftAttachmentId) {
   color: var(--noobot-text-secondary);
   padding: var(--noobot-space-2xs) var(--noobot-space-lg);
   font-size: var(--noobot-font-size-md);
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
 }
 
 .selected-scenario-name {

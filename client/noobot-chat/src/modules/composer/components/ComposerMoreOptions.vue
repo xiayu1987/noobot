@@ -412,7 +412,7 @@ const composerExtensionBaseProps = computed(() => ({
 .safe-confirm-level-label {
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   line-height: var(--noobot-space-2xl);
   white-space: nowrap;
 }
@@ -445,7 +445,7 @@ const composerExtensionBaseProps = computed(() => ({
   margin-top: var(--noobot-space-xs);
   color: var(--noobot-text-muted);
   font-size: var(--noobot-font-size-xs);
-  font-weight: 500;
+  font-weight: var(--noobot-font-weight-medium);
   line-height: var(--noobot-space-xl);
   white-space: nowrap;
 }
@@ -476,7 +476,7 @@ const composerExtensionBaseProps = computed(() => ({
   font-size: var(--noobot-font-size-sm);
   line-height: var(--noobot-space-2xl);
   color: var(--noobot-text-secondary);
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
 }
 
 .option-button-group {
@@ -545,7 +545,7 @@ const composerExtensionBaseProps = computed(() => ({
 .model-config-header,
 .model-config-subtitle {
   font-size: var(--noobot-font-size-md);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
   color: var(--noobot-text-strong);
 }
 
@@ -553,7 +553,7 @@ const composerExtensionBaseProps = computed(() => ({
 .model-field-hint {
   margin: 3px 0 0;
   font-size: var(--noobot-font-size-sm);
-  line-height: 1.45;
+  line-height: var(--noobot-line-height-relaxed);
   color: var(--noobot-text-secondary);
 }
 
@@ -587,7 +587,7 @@ const composerExtensionBaseProps = computed(() => ({
 
 .model-field-label {
   font-size: var(--noobot-font-size-md);
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main);
 }
 
@@ -607,14 +607,14 @@ const composerExtensionBaseProps = computed(() => ({
 }
 
 .model-option-label {
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main);
 }
 
 .model-option-meta,
 .model-option-description {
   font-size: var(--noobot-font-size-sm);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
   color: var(--noobot-text-secondary);
 }
 
@@ -731,7 +731,7 @@ const composerExtensionBaseProps = computed(() => ({
   .model-field-hint,
   .scenario-description {
     font-size: var(--noobot-font-size-sm);
-    line-height: 1.5;
+    line-height: var(--noobot-line-height-comfortable);
   }
 }
 </style>

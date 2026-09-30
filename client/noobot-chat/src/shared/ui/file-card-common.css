@@ -54,7 +54,7 @@
   width: var(--noobot-msg-file-icon-size);
   height: var(--noobot-msg-file-icon-size);
   font-size: var(--noobot-msg-file-icon-size);
-  line-height: 1;
+  line-height: var(--noobot-line-height-none);
 }
 
 .file-icon-button {
@@ -93,12 +93,12 @@
   white-space: nowrap;
   font-size: var(--noobot-msg-caption-font-size);
   color: var(--noobot-msg-file-name);
-  line-height: 1.25;
+  line-height: var(--noobot-line-height-snug);
 }
 
 .file-size {
   font-size: var(--noobot-msg-file-size-font-size);
-  line-height: 1.25;
+  line-height: var(--noobot-line-height-snug);
   color: var(--noobot-msg-file-size);
 }
 

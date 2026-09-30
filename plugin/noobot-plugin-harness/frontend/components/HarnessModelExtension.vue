@@ -250,14 +250,14 @@ function isHarnessStepModelDisabled(stepKey = "") {
 
 .plugin-model-title {
   font-size: var(--noobot-font-size-sm);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
   color: var(--noobot-text-strong, var(--el-text-color-primary));
 }
 
 .plugin-model-description {
   margin: var(--noobot-space-3xs) 0 0;
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.45;
+  line-height: var(--noobot-line-height-relaxed);
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
 
@@ -281,7 +281,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 
 .plugin-model-label {
   font-size: var(--noobot-font-size-xs);
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
 
@@ -346,7 +346,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
   gap: var(--noobot-space-xs);
   max-width: 42%;
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.2;
+  line-height: var(--noobot-line-height-compact);
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
   white-space: nowrap;
 }
@@ -354,7 +354,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .plugin-guidance-analysis-title strong {
   color: var(--el-color-primary);
   font-size: var(--noobot-font-size-sm);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
 }
 
 .plugin-guidance-analysis-control :deep(.el-slider) {
@@ -421,7 +421,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 }
 
 .model-option-label {
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-main, var(--el-text-color-primary));
 }
 
@@ -429,7 +429,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
 .model-option-description,
 .plugin-empty-text {
   font-size: var(--noobot-font-size-xs);
-  line-height: 1.35;
+  line-height: var(--noobot-line-height-cozy);
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
 }
 

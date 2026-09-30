@@ -164,7 +164,7 @@ function onInputKeydown(event) {
   padding: var(--noobot-space-xs) var(--noobot-space-2xs);
   background: transparent;
   font-size: var(--noobot-font-size-lg);
-  line-height: 1.5;
+  line-height: var(--noobot-line-height-comfortable);
   color: var(--noobot-text-main);
 }
 
@@ -202,8 +202,8 @@ function onInputKeydown(event) {
   padding: 0 var(--composer-send-padding-x);
   height: var(--composer-send-height);
   border-radius: var(--composer-icon-radius);
-  font-weight: 500;
-  letter-spacing: 0.5px;
+  font-weight: var(--noobot-font-weight-medium);
+  letter-spacing: var(--noobot-letter-spacing-caps);
   flex-shrink: 0;
   border: none;
   box-shadow: none;

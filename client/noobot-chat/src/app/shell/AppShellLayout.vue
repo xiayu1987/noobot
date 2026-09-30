@@ -379,7 +379,7 @@ defineExpose({
       <Teleport to="body">
         <el-button
           v-if="isMobile"
-          class="mobile-chat-message-nav-trigger noobot-floating-action-btn noobot-icon-button"
+          class="mobile-chat-message-nav-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button"
           type="primary"
           circle
           size="large"
@@ -392,7 +392,7 @@ defineExpose({
       <Teleport to="body">
         <el-button
           v-if="isMobile"
-          class="mobile-connector-trigger noobot-floating-action-btn noobot-icon-button"
+          class="mobile-connector-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button"
           circle
           size="large"
           :aria-label="translate('connectors.management')"
@@ -404,7 +404,7 @@ defineExpose({
       <Teleport to="body">
         <el-button
           v-if="isMobile && hasFeaturePanel"
-          class="mobile-feature-trigger noobot-floating-action-btn noobot-icon-button"
+          class="mobile-feature-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button"
           circle
           size="large"
           data-testid="mobile-feature-panel-trigger"
@@ -608,12 +608,10 @@ defineExpose({
   max-height: calc(100% - 36px);
   overflow-y: auto;
   overflow-x: hidden;
-  pointer-events: none;
 }
 
 .right-tool-panels > * {
   flex: 0 0 auto;
-  pointer-events: auto;
 }
 
 .right-tool-panels > *.is-collapsed {
@@ -697,7 +695,7 @@ defineExpose({
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-weight: 650;
+  font-weight: var(--noobot-font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -731,7 +729,7 @@ defineExpose({
   border-radius: 50%;
   color: var(--noobot-text-accent);
   background: var(--noobot-accent-soft);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
 }
 
 .chat-message-nav-icon-button {
@@ -752,7 +750,7 @@ defineExpose({
 .chat-message-nav-title {
   display: inline-flex;
   font-size: var(--noobot-font-size-md);
-  font-weight: 700;
+  font-weight: var(--noobot-font-weight-bold);
   line-height: var(--noobot-line-height-tight);
 }
 
@@ -760,7 +758,7 @@ defineExpose({
   display: block;
   margin-top: var(--noobot-space-3xs);
   font-size: var(--noobot-font-size-xs);
-  font-weight: 600;
+  font-weight: var(--noobot-font-weight-semibold);
   color: var(--noobot-text-secondary);
 }
 
@@ -768,39 +766,32 @@ defineExpose({
   flex: 0 0 auto;
 }
 
-.mobile-chat-message-nav-trigger {
+.mobile-floating-trigger {
+  --mobile-floating-trigger-index: 0;
   position: fixed;
-  top: calc(56px + 16px + env(safe-area-inset-top));
+  top: calc(
+    var(--noobot-header-height-mobile) + 16px + var(--mobile-floating-trigger-index) *
+      var(--noobot-floating-action-gap) + env(safe-area-inset-top)
+  );
   right: calc(16px + env(safe-area-inset-right));
-  z-index: 2001;
+  z-index: var(--noobot-layer-floating-action);
   width: var(--noobot-control-height-xl);
   height: var(--noobot-control-height-xl);
-  pointer-events: auto;
   user-select: none;
+}
+
+.mobile-connector-trigger {
+  --mobile-floating-trigger-index: 1;
+}
+
+.mobile-feature-trigger {
+  --mobile-floating-trigger-index: 2;
 }
 
 .mobile-chat-message-nav-trigger-icon {
   font-size: var(--noobot-font-size-lg);
-  font-weight: 800;
-  line-height: 1;
-}
-
-.mobile-connector-trigger {
-  position: fixed;
-  top: calc(56px + 68px + env(safe-area-inset-top));
-  right: calc(16px + env(safe-area-inset-right));
-  z-index: 2001;
-  width: var(--noobot-control-height-xl);
-  height: var(--noobot-control-height-xl);
-}
-
-.mobile-feature-trigger {
-  position: fixed;
-  top: calc(56px + 120px + env(safe-area-inset-top));
-  right: calc(16px + env(safe-area-inset-right));
-  z-index: 2001;
-  width: var(--noobot-control-height-xl);
-  height: var(--noobot-control-height-xl);
+  font-weight: var(--noobot-font-weight-bold);
+  line-height: var(--noobot-line-height-none);
 }
 
 @media (max-width: 960px) {
@@ -823,7 +814,7 @@ defineExpose({
     position: fixed;
     inset: 0;
     background: var(--noobot-mask-bg);
-    z-index: 18;
+    z-index: var(--noobot-layer-mobile-mask);
   }
 }
 </style>
