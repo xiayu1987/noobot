@@ -6,7 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createCommittedTurnLifecycleEnvelope } from "@noobot/authoritative-state/application";
-import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
+import {
+  AUTHORITY_EVENT_CONSUMER,
+  createAuthorityEventDispatcher,
+} from "../../ws/chat-websocket/authority-event-dispatcher.js";
 
 test("authority outbox publishes child lifecycle under the persisted child session identity", async () => {
   const envelope = createCommittedTurnLifecycleEnvelope({
@@ -59,6 +62,7 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   };
   const events = [];
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (event, data) => {
       events.push({ event, data });
@@ -113,6 +117,7 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: () => {
       calls.sends += 1;

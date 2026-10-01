@@ -20,6 +20,8 @@ import {
 } from "@noobot/event-protocol";
 import {
   AGENT_COMMAND,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
   EXECUTION_QUERY_COMMAND_TYPES,
   createExecutionQueryCommand,
   createInteractionResponseCommand,
@@ -134,25 +136,8 @@ export function createProtocolTestCommand(payload = {}) {
   });
 }
 
-export async function startServerWithWs({
-  runSession = async () => ({}),
-  bot = null,
-  initialTurnLifecycle = {},
-  sessionLogConfig = undefined,
-  resolveAuthByApiKey = () => ({ userId: "primary-user" }),
-  isForbiddenUserScope = () => false,
-} = {}) {
-  const server = createServer((_req, res) => {
-    res.statusCode = 404;
-    res.end("not-found");
-  });
-
-  const suppliedBot = bot || { runSession };
-  let turnLifecycle = structuredClone(initialTurnLifecycle);
-  let authorityEventOutbox = [];
-  let authorityEventSequence = 0;
-  const terminalSummaryVersions = new Map();
-  const testBot = {
+export function withTestBotAuthorities(suppliedBot = {}) {
+  return {
     ...suppliedBot,
     session: {
       ...(suppliedBot.session || {}),
@@ -172,6 +157,29 @@ export async function startServerWithWs({
           stage: "",
         };
       }),
+  };
+}
+
+export async function startServerWithWs({
+  runSession = async () => ({}),
+  bot = null,
+  initialTurnLifecycle = {},
+  sessionLogConfig = undefined,
+  resolveAuthByApiKey = () => ({ userId: "primary-user" }),
+  isForbiddenUserScope = () => false,
+} = {}) {
+  const server = createServer((_req, res) => {
+    res.statusCode = 404;
+    res.end("not-found");
+  });
+
+  const suppliedBot = bot || { runSession };
+  let turnLifecycle = structuredClone(initialTurnLifecycle);
+  let authorityEventOutbox = [];
+  let authorityEventSequence = 0;
+  const terminalSummaryVersions = new Map();
+  const testBot = {
+    ...withTestBotAuthorities(suppliedBot),
     applyTurnLifecycleEvent:
       suppliedBot.applyTurnLifecycleEvent ||
       (async (event = {}) => {
@@ -216,16 +224,19 @@ export async function startServerWithWs({
       }),
     getPendingAuthorityEvents:
       suppliedBot.getPendingAuthorityEvents ||
-      (async () => ({
+      (async ({ consumerId } = {}) => ({
         found: true,
-        events: listPendingAuthorityEvents(authorityEventOutbox),
+        events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
       })),
     recordAuthorityEventAttempts:
       suppliedBot.recordAuthorityEventAttempts ||
-      (async ({ eventIds = [] } = {}) => {
+      (async ({ consumerId, eventIds = [] } = {}) => {
         let recorded = 0;
         for (const eventId of eventIds) {
-          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
+          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
+            eventId,
+            consumerId,
+          });
           if (!result.found) return { recorded: false, reason: result.reason, attempted: recorded };
           authorityEventOutbox = result.outbox;
           recorded += 1;
@@ -401,7 +412,14 @@ export async function callChatWs({ port, payload = {}, timeoutMs = 2000 } = {}) 
     ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand(payload))));
     ws.on("message", (raw) => {
       try {
-        messages.push(JSON.parse(String(raw || "{}")));
+        const parsed = JSON.parse(String(raw || "{}"));
+        messages.push(parsed);
+        if (
+          parsed?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+          parsed?.data?.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED
+        ) {
+          ws.close();
+        }
       } catch (error) {
         ws.terminate();
         settle(reject, error);

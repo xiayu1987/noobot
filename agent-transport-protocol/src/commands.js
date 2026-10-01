@@ -10,6 +10,7 @@ import {
   EXECUTION_QUERY_COMMAND_TYPES,
   RUN_COMMAND_TYPES,
 } from "./constants.js";
+import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 import { createRunPreferences, validateRunPreferences } from "./run-preferences.js";
 
 const COMMAND_TYPE_SET = new Set(AGENT_COMMAND_TYPES);
@@ -347,7 +348,7 @@ export function validateAgentCommand(command) {
   } else if (EXECUTION_QUERY_SET.has(commandType)) {
     if (!isObject(command.query)) errors.push("query_not_object");
     else rejectUnknownFields(command.query, QUERY_KEYS, "query", errors);
-    const requiresExecutionId = commandType !== AGENT_COMMAND.EXECUTION_TREE_GET;
+    const { requiresExecutionId } = EXECUTION_QUERY_CONTRACT[commandType];
     if (requiresExecutionId && !clean(command.query?.executionId))
       errors.push("missing_execution_id");
     if (

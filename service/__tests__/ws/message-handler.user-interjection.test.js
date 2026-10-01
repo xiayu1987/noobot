@@ -71,7 +71,6 @@ function createFixture() {
       }
       return { dispatched: true, delivered: pending.length };
     },
-    pendingInteractionRequests: new Map(),
   });
   const command = (commandId, message) =>
     createTurnInterjectionCommand({

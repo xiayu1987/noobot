@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { MODEL_SAMPLING_FIELDS_KEY } from "@noobot/model-protocol";
 import {
   CONFIG_FORM_NODE_KIND,
   USER_CONFIG_SECTIONS,
@@ -78,7 +79,9 @@ export function configChildGroups(node, value) {
 
 export function configLeafFields(node) {
   if (node?.kind !== CONFIG_FORM_NODE_KIND.OBJECT) return [];
-  return (node.children || []).filter((child) => !isConfigGroupNode(child));
+  return (node.children || []).filter(
+    (child) => !isConfigGroupNode(child) && child.key !== MODEL_SAMPLING_FIELDS_KEY,
+  );
 }
 
 function buildNavNode({ node, key, container, parentPath }) {

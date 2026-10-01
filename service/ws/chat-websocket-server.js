@@ -9,7 +9,11 @@ import {
   recordServiceWebSocketSendFailure,
 } from "./chat-websocket/runtime-events.js";
 import { registerWebSocketUpgrade } from "./chat-websocket/connection-upgrade.js";
-import { createChatConnectionHandler } from "./chat-websocket/connection-handler.js";
+import {
+  CONNECTION_CLOSE_POLICY,
+  createChatConnectionHandler,
+} from "./chat-websocket/connection-handler.js";
+import { AUTHORITY_EVENT_CONSUMER } from "./chat-websocket/authority-event-dispatcher.js";
 
 export { recordServiceWebSocketSendFailure, recordServiceWebSocketRuntimeError };
 
@@ -46,6 +50,8 @@ export function registerChatWebSocketServer(
   webSocketServer.on(
     "connection",
     createChatConnectionHandler({
+      consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
+      closePolicy: CONNECTION_CLOSE_POLICY.DETACH_RUN,
       resolveBot,
       normalizeLocale,
       defaultLocale,

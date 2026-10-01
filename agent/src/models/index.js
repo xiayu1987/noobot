@@ -36,5 +36,3 @@ export {
   buildToolCompatibilityLogLine,
   appendToolCompatibilityLog,
 } from "./tool/compatibility-log.js";
-
-export { isSameModelSpec } from "./utils/model-compare.js";

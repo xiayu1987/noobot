@@ -42,8 +42,7 @@ export function createMessageHandler({
   connectorAccessPort,
   resolveBot,
   sessionLogConfig,
-  pendingInteractionRequests,
-  rejectAllPendingInteractions,
+  rejectTurnInteractions,
   userInteractionBridge,
   buildRunStateSnapshot,
   finalizeTimeout,
@@ -66,7 +65,7 @@ export function createMessageHandler({
       sendEvent,
       translateText,
       resolveBot,
-      pendingInteractionRequests,
+      canonicalRunOwnerId,
       recoverTurnFinalize,
       recoverSnapshotOrphan,
     });
@@ -77,7 +76,7 @@ export function createMessageHandler({
     translateText,
     resolveBot,
     sessionLogConfig,
-    rejectAllPendingInteractions,
+    rejectTurnInteractions,
     commitTurnLifecycle,
   });
   const { handleRun, commitCurrentFailure } = createMessageRunHandler({
@@ -269,6 +268,7 @@ export function createMessageHandler({
             ).trim(),
             message: error?.message || translateText("ws.unknownError", state.currentLocale),
           });
+          return;
         }
         webSocket.close(1008, "invalid request");
         return;

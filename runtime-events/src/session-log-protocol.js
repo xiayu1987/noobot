@@ -52,6 +52,13 @@ export function normalizeSessionLogText(value = "", { fallback = "", maxLength =
   return maxLength > 0 ? text.slice(0, maxLength) : text;
 }
 
+export function normalizeSessionLogTime(value) {
+  const parsed = value ? new Date(value) : null;
+  return parsed && Number.isFinite(parsed.getTime())
+    ? parsed.toISOString()
+    : new Date().toISOString();
+}
+
 export function normalizeSessionLogCategory(category, fallback = SESSION_LOG_DEFAULT_CATEGORY) {
   const fallbackValue = SESSION_LOG_CATEGORY_SET.has(
     String(fallback || "")
@@ -113,6 +120,12 @@ export function getSessionLogDebugControlKey(event = {}) {
     : "";
 }
 
+export function isSessionLogDebugTypeEnabled(debugType, options = {}) {
+  const controlKey = getSessionLogDebugControlKey({ debugType });
+  if (!controlKey) return false;
+  return resolveSessionLogControlConfig(options).debug[controlKey] === true;
+}
+
 export function shouldRecordSessionLog(event = {}, options = {}) {
   const level = String(event?.level || "")
     .trim()
@@ -138,8 +151,8 @@ export function buildSessionLogRecord(event = {}, options = {}) {
   }
   const fallbackCategory = options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY;
   const category = normalizeSessionLogCategory(event.category || event.type, fallbackCategory);
-  const includeTimestamp = options.includeTimestamp !== false;
   const record = {
+    time: normalizeSessionLogTime(event.time),
     source: normalizeSessionLogText(event.source || options.source || "unknown", {
       fallback: "unknown",
       maxLength: 120,
@@ -177,6 +190,5 @@ export function buildSessionLogRecord(event = {}, options = {}) {
     const value = normalizeOptionalSessionId(event[key]) || normalizeOptionalSessionId(data[key]);
     if (value) record[key] = value;
   }
-  if (includeTimestamp) record.ts = event.ts || new Date().toISOString();
   return record;
 }

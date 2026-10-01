@@ -7,6 +7,8 @@ import {
   MODEL_FAMILY_ID,
   MODEL_PROMPT_CACHE_FIELD,
   MODEL_PROVIDER_ID,
+  MODEL_SAMPLING_FIELD,
+  MODEL_SAMPLING_FIELDS,
   buildModelReasoningEffortTransport,
   normalizeModelPromptCacheFields,
   requireModelFamilyId,
@@ -181,17 +183,9 @@ export function compileProviderModelKwargs(
   if (spec.reasoning_effort !== undefined) {
     Object.assign(out, buildModelReasoningEffortTransport(spec, spec.reasoning_effort));
   }
-  for (const key of ["frequency_penalty", "presence_penalty", "top_k", "min_p"]) {
+  for (const key of MODEL_SAMPLING_FIELDS) {
+    if (key === MODEL_SAMPLING_FIELD.TEMPERATURE) continue;
     if (spec[key] !== undefined) out[key] = spec[key];
-  }
-  if (
-    spec.top_p !== undefined &&
-    !(
-      modelFamily(spec) === MODEL_FAMILY_ID.GPT &&
-      String(spec.model).toLowerCase().includes("gpt-5")
-    )
-  ) {
-    out.top_p = spec.top_p;
   }
   return out;
 }

@@ -419,6 +419,7 @@ describe("6. 配置获取完整性测试", () => {
 
     it("skill 的温度/ tokens 等参数应能覆盖 spec", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
+      globalConfig.providers.openai.sampling_fields = ["temperature"];
       const userConfig = createBaseUserConfig({});
       const skillConfig = {
         provider: "openai",
@@ -434,6 +435,17 @@ describe("6. 配置获取完整性测试", () => {
       assert.ok(spec !== null, "应能解析到 spec");
       assert.equal(spec.temperature, 0.5, "temperature 应被 skill 覆盖");
       assert.equal(spec.max_tokens, 2048, "max_tokens 应被 skill 覆盖");
+    });
+
+    it("skill 只覆盖取值，不隐式勾选 provider 未允许传输的采样参数", () => {
+      const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
+      const userConfig = createBaseUserConfig({});
+      const skillConfig = { provider: "openai", temperature: 0.5, topP: 0.9 };
+
+      const spec = resolveSkillModelSpec({ skillConfig, globalConfig, userConfig });
+      assert.deepEqual(spec.sampling_fields, []);
+      assert.equal("temperature" in spec, false, "未勾选的 temperature 不传输");
+      assert.equal("top_p" in spec, false, "未勾选的 top_p 不传输");
     });
 
     it("skill 配置为空时应使用默认模型", () => {
@@ -514,6 +526,7 @@ describe("7. 模型切换测试", () => {
 
     it("skill 的 temperature/maxTokens 应能临时覆盖", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
+      globalConfig.providers.openai.sampling_fields = ["temperature"];
       const userConfig = createBaseUserConfig({});
       const skillConfig = { provider: "openai", temperature: 0.2, maxTokens: 1024 };
 

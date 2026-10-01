@@ -314,8 +314,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.getSessionThinkingDetail(payload);
     },
 
-    async getAllSessionsData({ userId }) {
-      return sessionCrudService.getAllSessionsData({ userId });
+    async getAllSessionsData({ userId, failures = null }) {
+      return sessionCrudService.getAllSessionsData({ userId, failures });
     },
 
     async getAllSessionSummaries({ userId }) {

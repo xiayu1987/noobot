@@ -436,7 +436,7 @@ export class SessionCrudService {
     return { userId, migratedSessionIds, rebuiltSessionIds, failures };
   }
 
-  async getAllSessionsData({ userId }) {
+  async getAllSessionsData({ userId, failures = null }) {
     const sessionTree = this.sessionTreeService
       ? await this.sessionTreeService.getSessionTree({ userId })
       : await this.treeRepo.getTree(userId);
@@ -447,11 +447,23 @@ export class SessionCrudService {
       await Promise.all(
         sessionIds.map(async (sessionId) => {
           const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "");
-          const sessionBundle = await this.getSessionBundle({
-            userId,
-            sessionId,
-            parentSessionId,
-          });
+          let sessionBundle;
+          try {
+            sessionBundle = await this.getSessionBundle({
+              userId,
+              sessionId,
+              parentSessionId,
+            });
+          } catch (error) {
+            if (Array.isArray(failures)) {
+              failures.push({
+                sessionId,
+                code: String(error?.code || error?.errorCode || ""),
+                message: String(error?.message || error || ""),
+              });
+            }
+            return null;
+          }
           if (!sessionBundle?.exists || !sessionBundle?.session) return null;
           return {
             ...sessionBundle.session,

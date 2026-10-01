@@ -77,7 +77,7 @@ export function installSessionLifecycleHydration({
     return { applied: false, reason: "authoritative_snapshot_missing" };
   }
 
-  for (const sessionItem of sessions.value) {
+  function reconcileSession(sessionItem) {
     hydrateSessionLifecycle(sessionItem);
     chatStore.pruneTerminalTurns({
       sessionId: sessionRuntimeId(sessionItem),
@@ -87,19 +87,24 @@ export function installSessionLifecycleHydration({
     });
   }
 
+  for (const sessionItem of sessions.value) reconcileSession(sessionItem);
+
   watch(
-    [sessions, activeSessionId],
-    ([sessionItems]) => {
-      for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
-        hydrateSessionLifecycle(sessionItem);
-        chatStore.pruneTerminalTurns({
-          sessionId: sessionRuntimeId(sessionItem),
-          referencedTurnScopeIds: (sessionItem?.messages || [])
-            .map(getMessageTurnScopeId)
-            .filter(Boolean),
-        });
-      }
+    () => {
+      activeSessionId.value;
+      const sessionItems = Array.isArray(sessions.value) ? sessions.value : [];
+      return sessionItems.map((sessionItem) => ({
+        sessionItem,
+        runtimeSessionId: sessionRuntimeId(sessionItem),
+        turnLifecycleSnapshot: sessionItem?.turnLifecycleSnapshot,
+        turnTimings: sessionItem?.turnTimings,
+        turnScopeIdsSignature: (sessionItem?.messages || [])
+          .map(getMessageTurnScopeId)
+          .join("\u0000"),
+      }));
     },
-    { deep: true },
+    (entries) => {
+      for (const entry of entries) reconcileSession(entry.sessionItem);
+    },
   );
 }

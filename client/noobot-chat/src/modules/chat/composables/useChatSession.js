@@ -61,6 +61,7 @@ import { setStreamDeltaDebugLogSink } from "../../debug/loggers/streamDeltaDebug
 import { setPluginRuntimeDiagnosticsLogSink } from "../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
 import { setTurnRuntimeDiagnosticsLogSink } from "../../debug/loggers/turnRuntimeDiagnosticsLogger.js";
 import { setMessageMutationDiagnosticsLogSink } from "../../debug/loggers/messageMutationDiagnosticsLogger.js";
+import { setEventProcessingTimingLogSink } from "../../debug/loggers/eventProcessingTimingLogger.js";
 import {
   resolveSessionTurnRuntime,
   resolveLatestContinuableStoppedTurn,
@@ -341,6 +342,7 @@ export function useChatSession({
   setPluginRuntimeDiagnosticsLogSink(sessionLogWebSocketClient);
   setTurnRuntimeDiagnosticsLogSink(sessionLogWebSocketClient);
   setMessageMutationDiagnosticsLogSink(sessionLogWebSocketClient);
+  setEventProcessingTimingLogSink(sessionLogWebSocketClient);
 
   let lastComposerRenderSignature = "";
   watch(

@@ -53,6 +53,22 @@ export function createExecutionEventListener({
   let deliveryTail = Promise.resolve();
   const persistenceFailures = [];
   const deliveryFailures = [];
+  const deliveryTiming =
+    typeof upstream?.onDeliveryTiming === "function" ? { queueWaitMs: [], runMs: [] } : null;
+
+  const summarizeTiming = (values = []) => {
+    if (!values.length) return { n: 0 };
+    const sorted = [...values].sort((a, b) => a - b);
+    const pick = (ratio) =>
+      Number(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))].toFixed(2));
+    return {
+      n: sorted.length,
+      p50: pick(0.5),
+      p90: pick(0.9),
+      max: Number(sorted[sorted.length - 1].toFixed(2)),
+      totalMs: Number(sorted.reduce((sum, value) => sum + value, 0).toFixed(1)),
+    };
+  };
 
   const appendExecutionLog = (record) => {
     const data = projectExecutionRouteIdentity(record?.data, defaults);
@@ -105,7 +121,10 @@ export function createExecutionEventListener({
     const transportData = projectExecutionTransportPayload({ event, data, route: defaults });
     const diagnostic = summarizeDelivery(event, transportData);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.messageId);
+    const enqueuedAt = deliveryTiming ? performance.now() : 0;
     const task = deliveryTail.then(async () => {
+      const startedAt = deliveryTiming ? performance.now() : 0;
+      deliveryTiming?.queueWaitMs.push(startedAt - enqueuedAt);
       try {
         const result = await upstream?.onEvent?.({ event, data: transportData, ts });
         if (result === false) {
@@ -131,6 +150,8 @@ export function createExecutionEventListener({
           });
         }
         return false;
+      } finally {
+        deliveryTiming?.runMs.push(performance.now() - startedAt);
       }
     });
     deliveryTail = task;
@@ -154,6 +175,23 @@ export function createExecutionEventListener({
         persistence = persistenceTail;
         await persistence;
       } while (delivery !== deliveryTail || persistence !== persistenceTail);
+
+      if (deliveryTiming && deliveryTiming.queueWaitMs.length > 0) {
+        const summary = {
+          sessionId,
+          turnScopeId,
+          dialogProcessId,
+          queueWaitMs: summarizeTiming(deliveryTiming.queueWaitMs),
+          runMs: summarizeTiming(deliveryTiming.runMs),
+        };
+        deliveryTiming.queueWaitMs = [];
+        deliveryTiming.runMs = [];
+        try {
+          upstream.onDeliveryTiming(summary);
+        } catch {
+          void 0;
+        }
+      }
 
       const errors = [];
       if (deliveryFailures.length > 0) {

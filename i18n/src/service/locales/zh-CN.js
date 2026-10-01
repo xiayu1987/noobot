@@ -28,6 +28,7 @@ export default {
   "attach.countExceedsLimit": "附件数量超出限制",
   "attach.extensionNotAllowed": "附件扩展名不允许",
   "attach.fileTooLarge": "附件文件过大",
+  "cli.attachmentOnlyMessage": "解析附件内容",
   "attach.hintAddExtensionToAllowedExtensions": "扩展名不在内置附件策略允许范围内",
   "attach.hintIncreaseMaxFileCountOrReduceFiles": "请减少上传文件",
   "attach.hintIncreaseMaxFileSizeOrUploadSmaller": "请上传更小文件",

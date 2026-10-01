@@ -14,8 +14,12 @@
     "#agent/application": "./deps/agent-application.js"
   },
   "main": "app.js",
+  "bin": {
+    "noobot": "./bin/noobot.js"
+  },
   "scripts": {
     "start": "node app.js",
+    "cli": "node bin/noobot.js",
     "dev": "node --watch app.js",
     "test:bot-manage": "npm --prefix ../agent run test:bot-manage",
     "check:tool-schema:live:gemini:admin": "npm --prefix ../agent run check:tool-schema:live:gemini:admin",

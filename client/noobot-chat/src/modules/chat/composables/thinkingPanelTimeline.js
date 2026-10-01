@@ -80,18 +80,22 @@ export function useThinkingTimeline(
   const roundThinkingContentTimeline = computed(() =>
     projectThinkingDetailContentTimeline(roundMessages.value, roundActivityTimeline.value),
   );
-  const roundTimelineView = computed(() => {
-    if (roundMessages.value.length <= 1) return null;
-    return {
-      toolTimeline: roundToolTimeline.value,
-      activityTimeline: roundActivityTimeline.value,
-      thinkingContentTimeline: roundThinkingContentTimeline.value,
-    };
+  const roundTimelineFacets = Object.freeze({
+    get toolTimeline() {
+      return roundToolTimeline.value;
+    },
+    get activityTimeline() {
+      return roundActivityTimeline.value;
+    },
+    get thinkingContentTimeline() {
+      return roundThinkingContentTimeline.value;
+    },
   });
+  const isMultiMessageRound = computed(() => roundMessages.value.length > 1);
 
   function timelineMessage(messageItem = {}) {
     if (messageItem !== props.messageItem) return messageItem;
-    return roundTimelineView.value || messageItem;
+    return isMultiMessageRound.value ? roundTimelineFacets : messageItem;
   }
   const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);

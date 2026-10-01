@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_COMMAND } from "@noobot/session-protocol";
-import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
+import {
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_QUERY_CONTRACT,
+} from "@noobot/session-protocol/execution-lifecycle";
 
 export const AGENT_TRANSPORT_PROTOCOL_VERSION = 2;
 
@@ -28,11 +31,7 @@ export const RUN_COMMAND_TYPES = Object.freeze([
   AGENT_COMMAND.CONTINUE,
 ]);
 
-export const EXECUTION_QUERY_COMMAND_TYPES = Object.freeze([
-  AGENT_COMMAND.EXECUTION_SNAPSHOT_GET,
-  AGENT_COMMAND.EXECUTION_CHILDREN_GET,
-  AGENT_COMMAND.EXECUTION_TREE_GET,
-]);
+export const EXECUTION_QUERY_COMMAND_TYPES = Object.freeze(Object.keys(EXECUTION_QUERY_CONTRACT));
 
 export const AGENT_COMMAND_TYPES = Object.freeze([
   ...RUN_COMMAND_TYPES,

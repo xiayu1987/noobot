@@ -60,7 +60,6 @@ function buildSessionChannelRecord(event = {}, options = {}) {
     defaultCategory: options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY,
     defaultEvent: options.defaultEvent,
     defaultSessionId: options.defaultSessionId || "unknown-session",
-    includeTimestamp: options.includeTimestamp !== false,
     source: options.source,
   });
   if (options.channel || event.channel)
@@ -181,7 +180,6 @@ export function createSessionChannelWebSocketClient({
       defaultCategory,
       defaultEvent,
       defaultSessionId,
-      includeTimestamp: false,
       channel,
     });
     const queue = getQueue(key);

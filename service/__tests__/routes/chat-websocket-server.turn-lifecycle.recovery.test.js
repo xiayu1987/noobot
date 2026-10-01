@@ -24,13 +24,38 @@ import {
   requestTurnSnapshot,
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
 
-test("socket close terminates an accepted turn and releases the session mutex", async () => {
+test("socket close detaches an accepted turn which still completes and releases the session mutex", async () => {
   const authoritative = createAuthoritativeBot();
-  authoritative.bot.runSession = async ({ abortSignal }) => {
-    await new Promise((resolve) => abortSignal.addEventListener("abort", resolve, { once: true }));
-    const error = new Error("socket closed");
-    error.name = "AbortError";
-    throw error;
+  let aborted = false;
+  let releaseRun = null;
+  authoritative.bot.runSession = async ({ sessionId, runConfig, abortSignal, eventListener }) => {
+    abortSignal.addEventListener(
+      "abort",
+      () => {
+        aborted = true;
+      },
+      { once: true },
+    );
+    eventListener.onEvent({
+      event: "agent_lifecycle_state_changed",
+      data: {
+        state: "running",
+        sessionId,
+        turnScopeId: runConfig.turnScopeId,
+        dialogProcessId: "dp-socket-close",
+      },
+    });
+    await new Promise((resolve) => {
+      releaseRun = resolve;
+    });
+    return {
+      sessionId,
+      dialogProcessId: "dp-socket-close",
+      answer: "done after disconnect",
+      messages: [],
+      traces: [],
+      executionLogs: [],
+    };
   };
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
@@ -69,13 +94,18 @@ test("socket close terminates an accepted turn and releases the session mutex", 
       });
     });
 
+    assert.equal(authoritative.lifecycle().activeTurnScopeId, scopedPayload.turnScopeId);
+    assert.equal(aborted, false);
+    releaseRun();
     const deadline = Date.now() + 1000;
     while (authoritative.lifecycle().activeTurnScopeId && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.deepEqual(authoritative.committed(), [TURN_EVENT.ACTION_ACCEPTED, TURN_EVENT.FAILED]);
+    assert.equal(aborted, false);
+    assert.equal(authoritative.committed()[0], TURN_EVENT.ACTION_ACCEPTED);
+    assert.equal(authoritative.committed().includes(TURN_EVENT.FAILED), false);
+    assert.equal(authoritative.committed().includes(TURN_EVENT.PROCESSING_COMPLETED), true);
     assert.equal(authoritative.lifecycle().activeTurnScopeId, "");
-    assert.equal(authoritative.lifecycle().turns[scopedPayload.turnScopeId].state, "action_failed");
   } finally {
     await closeServer(server);
   }

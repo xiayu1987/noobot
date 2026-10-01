@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed, ref, watch } from "vue";
+import { MODEL_SAMPLING_FIELDS, MODEL_SAMPLING_FIELDS_KEY } from "@noobot/model-protocol";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { CONFIG_FORM_NODE_KIND } from "../state/configStructureContract.js";
 import {
@@ -60,6 +61,24 @@ function writeValue(next) {
 function writeScalar(next) {
   if (next === undefined || next === null || next === "") delete props.container[props.node.key];
   else writeValue(next);
+}
+
+const isSamplingField = computed(
+  () => !Array.isArray(props.container) && MODEL_SAMPLING_FIELDS.includes(String(props.node.key)),
+);
+const samplingSelected = computed(() => {
+  const list = props.container?.[MODEL_SAMPLING_FIELDS_KEY];
+  return Array.isArray(list) && list.includes(props.node.key);
+});
+
+function writeSamplingSelected(checked) {
+  const current = props.container?.[MODEL_SAMPLING_FIELDS_KEY];
+  const selected = new Set(Array.isArray(current) ? current : []);
+  if (checked) selected.add(props.node.key);
+  else selected.delete(props.node.key);
+  props.container[MODEL_SAMPLING_FIELDS_KEY] = MODEL_SAMPLING_FIELDS.filter((field) =>
+    selected.has(field),
+  );
 }
 
 watch(
@@ -119,17 +138,27 @@ function syncRawDraft(text) {
         :model-value="value === true"
         @update:model-value="writeValue($event)"
       />
-      <el-input-number
-        v-else-if="isKind(KIND.INTEGER) || isKind(KIND.NUMBER)"
-        :model-value="typeof value === 'number' ? value : undefined"
-        :min="node.minimum ?? undefined"
-        :max="node.maximum ?? undefined"
-        :step="isKind(KIND.INTEGER) ? 1 : 0.1"
-        :precision="isKind(KIND.INTEGER) ? 0 : 2"
-        controls-position="right"
-        class="field-input"
-        @update:model-value="writeScalar($event)"
-      />
+      <div v-else-if="isKind(KIND.INTEGER) || isKind(KIND.NUMBER)" class="field-number">
+        <el-checkbox
+          v-if="isSamplingField"
+          :model-value="samplingSelected"
+          :aria-label="translate('settings.configSamplingTransmitLabel', { field: label })"
+          class="field-sampling-toggle"
+          @update:model-value="writeSamplingSelected($event)"
+        >
+          {{ translate("settings.configSamplingTransmit") }}
+        </el-checkbox>
+        <el-input-number
+          :model-value="typeof value === 'number' ? value : undefined"
+          :min="node.minimum ?? undefined"
+          :max="node.maximum ?? undefined"
+          :step="isKind(KIND.INTEGER) ? 1 : 0.1"
+          :precision="isKind(KIND.INTEGER) ? 0 : 2"
+          controls-position="right"
+          class="field-input"
+          @update:model-value="writeScalar($event)"
+        />
+      </div>
       <el-select
         v-else-if="isKind(KIND.ENUM)"
         :model-value="value ?? ''"
@@ -270,6 +299,17 @@ function syncRawDraft(text) {
 .field-input {
   width: 100%;
   max-width: none;
+}
+
+.field-number {
+  display: flex;
+  align-items: center;
+  gap: var(--noobot-space-sm);
+  min-width: 0;
+}
+
+.field-sampling-toggle {
+  flex: none;
 }
 
 .field-raw {

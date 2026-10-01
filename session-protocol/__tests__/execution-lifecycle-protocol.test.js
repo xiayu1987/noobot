@@ -6,10 +6,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  EXECUTION_CHILDREN_WIRE_EVENT,
   EXECUTION_KIND,
+  EXECUTION_QUERY_COMMAND,
+  EXECUTION_QUERY_CONTRACT,
+  EXECUTION_SNAPSHOT_WIRE_EVENT,
+  EXECUTION_TREE_WIRE_EVENT,
   buildExecutionTree,
   createExecutionLifecycleEnvelope,
   deriveAgentExecutionId,
+  isExecutionQueryTargetValid,
   validateExecutionIdentity,
 } from "@noobot/session-protocol/execution-lifecycle";
 import {
@@ -27,6 +33,34 @@ test("agent execution identity is a stable compatibility projection of turn scop
   assert.equal(result.valid, true);
   assert.equal(result.identity.executionId, "agent:turn-1");
   assert.equal(result.identity.rootExecutionId, "agent:turn-1");
+});
+
+test("execution query contract covers every query command with one response wire event", () => {
+  assert.deepEqual(
+    Object.keys(EXECUTION_QUERY_CONTRACT).sort(),
+    Object.values(EXECUTION_QUERY_COMMAND).sort(),
+  );
+  assert.deepEqual(
+    Object.values(EXECUTION_QUERY_CONTRACT)
+      .map((contract) => contract.wireEvent)
+      .sort(),
+    [
+      EXECUTION_CHILDREN_WIRE_EVENT,
+      EXECUTION_SNAPSHOT_WIRE_EVENT,
+      EXECUTION_TREE_WIRE_EVENT,
+    ].sort(),
+  );
+  assert.equal(Object.isFrozen(EXECUTION_QUERY_CONTRACT), true);
+});
+
+test("execution query target validity is derived from the contract", () => {
+  const { SNAPSHOT_GET, CHILDREN_GET, TREE_GET } = EXECUTION_QUERY_COMMAND;
+  assert.equal(isExecutionQueryTargetValid(SNAPSHOT_GET, { executionId: "e1" }), true);
+  assert.equal(isExecutionQueryTargetValid(SNAPSHOT_GET, { rootExecutionId: "r1" }), false);
+  assert.equal(isExecutionQueryTargetValid(CHILDREN_GET, {}), false);
+  assert.equal(isExecutionQueryTargetValid(TREE_GET, { rootExecutionId: "r1" }), true);
+  assert.equal(isExecutionQueryTargetValid(TREE_GET, {}), false);
+  assert.equal(isExecutionQueryTargetValid("execution.unknown", { executionId: "e1" }), false);
 });
 
 test("execution envelope retains lifecycle coordinates and parent identity", () => {
@@ -74,11 +108,13 @@ test("execution tree supports arbitrary child agent depth", () => {
 
 test("structured signal reason is authoritative over a generic SDK abort error", () => {
   const controller = new AbortController();
-  controller.abort(createExecutionAbortReason({
-    type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT,
-    reason: "run timeout after 18000000ms",
-    timeoutMs: 18000000,
-  }));
+  controller.abort(
+    createExecutionAbortReason({
+      type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT,
+      reason: "run timeout after 18000000ms",
+      timeoutMs: 18000000,
+    }),
+  );
   const error = new Error("Request was aborted.");
   error.name = "AbortError";
 

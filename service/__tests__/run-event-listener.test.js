@@ -121,9 +121,7 @@ test("run-event-listener dispatches a canonical authority commit without rebuild
     data: { envelope, persistenceScope: { kind: "session" } },
   });
   assert.equal(result, true);
-  assert.deepEqual(dispatched, [
-    { envelope, options: { persistenceScope: { kind: "session" } } },
-  ]);
+  assert.deepEqual(dispatched, [{ envelope, options: { persistenceScope: { kind: "session" } } }]);
   assert.deepEqual(frames, []);
 });
 
@@ -169,4 +167,15 @@ test("run-event-listener rejects every event outside the private run contract", 
     );
   }
   assert.deepEqual(frames, []);
+});
+
+test("run event listener exposes onDeliveryTiming only when delivery-timing debug passes a callback", () => {
+  const { listener: disabled } = createListener({ onDeliveryTiming: null });
+  assert.equal(Object.prototype.hasOwnProperty.call(disabled, "onDeliveryTiming"), false);
+  const received = [];
+  const callback = (summary) => received.push(summary);
+  const { listener: enabled } = createListener({ onDeliveryTiming: callback });
+  assert.equal(enabled.onDeliveryTiming, callback);
+  enabled.onDeliveryTiming({ queueWaitMs: { n: 1 } });
+  assert.deepEqual(received, [{ queueWaitMs: { n: 1 } }]);
 });

@@ -138,11 +138,13 @@ export function createRunEventListener({
   onCommittedTurnLifecycle = null,
   onAuthorityEventCommitted = null,
   onEventReceived = null,
+  onDeliveryTiming = null,
 } = {}) {
   const resolveTurnScopeId = () =>
     getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
 
   return {
+    ...(typeof onDeliveryTiming === "function" ? { onDeliveryTiming } : {}),
     onEvent: (eventPayload) => {
       const eventName = String(eventPayload?.event || "").trim();
       if (!AGENT_RUN_EVENTS.has(eventName)) {

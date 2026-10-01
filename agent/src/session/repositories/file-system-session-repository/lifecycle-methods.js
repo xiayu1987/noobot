@@ -63,6 +63,29 @@ class SessionLifecycleMethods {
     });
   }
 
+  _createPreviousRepairFailureError(lifecycle = null, currentError = null) {
+    const repair = lifecycle?.repair || {};
+    const error = new Error(String(repair.message || "Session repair previously failed"));
+    error.code = String(repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
+    error.repairSkipped = true;
+    if (repair.trigger) error.repairTrigger = repair.trigger;
+    if (currentError) error.cause = currentError;
+    return error;
+  }
+
+  async _clearSessionRepairFailure(userId = "", sessionId = "") {
+    return this.withSessionLifecycleMutation(userId, sessionId, async () => {
+      const current = await this._readSessionLifecycleRecord(userId, sessionId);
+      if (current?.repair?.status !== "failed") return false;
+      const { repair: _clearedRepair, ...rest } = current;
+      await this._writeSessionLifecycleRecord(userId, sessionId, {
+        ...rest,
+        updatedAt: this.now(),
+      });
+      return true;
+    });
+  }
+
   async withSessionLifecycleMutation(userId, sessionId, operation) {
     return this._withMutationLock(this._sessionLifecycleLockDir(userId, sessionId), operation);
   }

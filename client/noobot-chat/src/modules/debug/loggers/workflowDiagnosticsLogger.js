@@ -4,33 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-let sessionLogSink = null;
+import { createDiagnosticsLogger } from "./createDiagnosticsLogger.js";
 
-export function setWorkflowDiagnosticsLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
-}
-
-export function isWorkflowDiagnosticsEnabled() {
-  return sessionLogSink?.isEnabled?.("workflow-diagnostics") === true;
-}
-
-export function logWorkflowDiagnostics(event, payload = {}) {
-  try {
-    if (!sessionLogSink?.isEnabled?.("workflow-diagnostics")) return false;
-    return sessionLogSink.debug?.("workflow-diagnostics", () => {
-      const resolvedPayload = typeof payload === "function" ? payload() : payload;
-      return {
-      category: "debug",
-      level: "debug",
-      debugType: "workflow-diagnostics",
-      event,
-      sessionId: resolvedPayload?.sessionId || "",
-      dialogProcessId: resolvedPayload?.dialogProcessId || "",
-      turnScopeId: resolvedPayload?.turnScopeId || "",
-      data: { event, at: new Date().toISOString(), ...resolvedPayload },
-    }; });
-  } catch { return false; }
-}
+const logger = createDiagnosticsLogger("workflow-diagnostics");
+export const setWorkflowDiagnosticsLogSink = logger.setSink;
+export const isWorkflowDiagnosticsEnabled = logger.isEnabled;
+export const logWorkflowDiagnostics = logger.log;
 
 export function summarizeWorkflowMessage(message = {}, index = -1) {
   const payload = message?.pluginMeta?.payload || {};
@@ -44,7 +23,9 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
     pluginKind: String(message?.pluginMeta?.kind || ""),
     pluginPhase: String(message?.pluginMeta?.phase || ""),
     sessionId: String(message?.sessionId || payload?.planningDialog?.sessionId || ""),
-    dialogProcessId: String(message?.dialogProcessId || payload?.planningDialog?.dialogProcessId || ""),
+    dialogProcessId: String(
+      message?.dialogProcessId || payload?.planningDialog?.dialogProcessId || "",
+    ),
     turnScopeId: String(message?.turnScopeId || ""),
     workflowRunId: String(
       payload?.workflowRunId ||
@@ -66,18 +47,18 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
 export function summarizeWorkflowMessages(messages = [], limit = 20) {
   const source = Array.isArray(messages) ? messages : [];
   const start = Math.max(0, source.length - Math.max(1, Number(limit) || 20));
-  return source.slice(start)
+  return source
+    .slice(start)
     .map((message, index) => summarizeWorkflowMessage(message, start + index))
-    .filter((message) =>
-      message.type === "workflow" ||
-      message.pluginSource === "workflow-plugin" ||
-      Boolean(message.workflowRunId) ||
-      message.tagKeys.includes("message") ||
-      (
-        message.role.toLowerCase() === "assistant" &&
-        message.type === "message" &&
-        message.contentLength === 0 &&
-        Boolean(message.turnScopeId || message.dialogProcessId)
-      ),
+    .filter(
+      (message) =>
+        message.type === "workflow" ||
+        message.pluginSource === "workflow-plugin" ||
+        Boolean(message.workflowRunId) ||
+        message.tagKeys.includes("message") ||
+        (message.role.toLowerCase() === "assistant" &&
+          message.type === "message" &&
+          message.contentLength === 0 &&
+          Boolean(message.turnScopeId || message.dialogProcessId)),
     );
 }

@@ -184,12 +184,12 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
           : {}),
       };
     },
-    async getPendingAuthorityEvents() {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    async getPendingAuthorityEvents({ consumerId } = {}) {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
     },
-    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
       for (const eventId of eventIds) {
-        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
+        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
         if (!result.found) return { recorded: false, reason: result.reason };
         eventOutbox = result.outbox;
       }

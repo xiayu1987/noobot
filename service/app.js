@@ -7,21 +7,10 @@ import "dotenv/config";
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
-import { createGlobalConfigBuilder } from "#agent/config";
-import { ConnectorRuntime } from "@noobot/connector-runtime";
-import { registerBuiltinConnectorInstances } from "@noobot/connector-instances";
-import { createAppDependencies } from "./bootstrap/create-app-dependencies.js";
+import { createHeadlessRuntime } from "./bootstrap/create-headless-runtime.js";
 import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewares.js";
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
-import { createServiceGlobalConfigSource } from "./services/global-config-source.js";
-import { ConnectorSecretVault } from "./security/connector-secret-vault.js";
-import {
-  applyStartupRuntimeEnv,
-  loadStartupContext,
-  safeStartupContextForLog,
-} from "./services/startup-context-service.js";
-import { buildWorkspaceTree } from "./services/workspace-tree-service.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -30,18 +19,13 @@ import {
 } from "@noobot/runtime-events";
 
 const app = express();
-const startupContext = await loadStartupContext({ argv: process.argv, cwd: process.cwd() });
-applyStartupRuntimeEnv(startupContext);
-void writeRoutedRuntimeEvent({
-  scope: "startup",
-  source: "service",
-  channel: RUNTIME_EVENT_CHANNELS.STARTUP,
-  category: RUNTIME_EVENT_CATEGORIES.CONFIG,
-  level: "info",
-  event: "service.startup.context.loaded",
-  workspaceRoot: startupContext?.workspaceRoot,
-  data: safeStartupContextForLog(startupContext),
-});
+const {
+  startupContext,
+  appDependencies,
+  connectorRuntime,
+  connectorAccessPort,
+  releaseConnectors,
+} = await createHeadlessRuntime({ argv: process.argv, cwd: process.cwd() });
 
 const desktopFrontendRoot = String(
   startupContext?.paths?.frontendRoot ||
@@ -51,23 +35,6 @@ const desktopFrontendRoot = String(
 const shouldServeDesktopFrontend =
   process.env.NOOBOT_DESKTOP === "1" && fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
 
-const globalConfigSource = createServiceGlobalConfigSource();
-const globalConfigBuilder = createGlobalConfigBuilder({
-  source: globalConfigSource,
-  sourceName: globalConfigSource.name,
-});
-let connectorRuntime = null;
-const connectorSecretVault = new ConnectorSecretVault();
-const connectorAccessPort = Object.freeze({
-  access: (payload) => connectorRuntime.access(payload),
-  listUserConnectors: (userId) => connectorRuntime.listUserConnectors(userId),
-});
-const appDependencies = await createAppDependencies({
-  startupContext,
-  globalConfigBuilder,
-  buildWorkspaceTree,
-  connectorAccessPort,
-});
 const {
   resolveRequestLocale,
   translateText,
@@ -90,23 +57,6 @@ registerGlobalMiddlewares(app, {
 if (shouldServeDesktopFrontend) {
   app.use("/api", (req, _res, next) => next());
 }
-
-connectorRuntime = new ConnectorRuntime({
-  repository: {
-    list: (userId) => getBot().session.listConnectorInstances({ userId }),
-    get: (payload) => getBot().session.getConnectorInstance(payload),
-    create: (payload) => getBot().session.createConnectorInstance(payload),
-    update: (payload) => getBot().session.updateConnectorInstance(payload),
-    delete: (payload) => getBot().session.deleteConnectorInstance(payload),
-    readLegacy: (userId) => getBot().session.readLegacyConnectorInstances({ userId }),
-    migrateLegacy: (payload) => getBot().session.migrateLegacyConnectorInstances(payload),
-  },
-  secretStore: connectorSecretVault,
-  workspaceRoot: workspaceRootPath(),
-  resolveUserWorkspacePath: (userId) => getBot().getWorkspacePath(userId),
-});
-connectorSecretVault.setWorkspaceRoot(workspaceRootPath());
-registerBuiltinConnectorInstances(connectorRuntime);
 
 await registerHttpModules(app, { ...buildHttpModuleDependencies(), connectorRuntime });
 
@@ -132,7 +82,7 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   stopManagedOpenVSCodeInstances();
-  for (const userId of await readSessionUserIds()) await connectorRuntime.releaseUser(userId);
+  await releaseConnectors();
   if (httpServer?.listening) {
     await new Promise((resolve) => httpServer.close(() => resolve()));
   }

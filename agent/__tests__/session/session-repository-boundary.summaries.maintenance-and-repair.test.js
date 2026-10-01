@@ -195,13 +195,61 @@ test("failed Session repair is marked and skipped on subsequent reads", async ()
     );
     const lifecycle = JSON.parse(await readFile(lifecycleFile, "utf8"));
     assert.equal(lifecycle.repair.status, "failed");
+    assert.equal(typeof lifecycle.repair.trigger?.code, "string");
+    assert.ok(lifecycle.repair.trigger.message);
 
     await assert.rejects(
       repository.findById(userId, sessionId, ""),
-      (error) => error.code === firstErrorCode,
+      (error) =>
+        error.code === firstErrorCode && error.repairSkipped === true && Boolean(error.cause),
     );
     const unchanged = JSON.parse(await readFile(lifecycleFile, "utf8"));
     assert.equal(unchanged.repair.failedAt, lifecycle.repair.failedAt);
+  });
+});
+
+test("stale Session repair failure marker is cleared once the artifact validates", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-repair-heal";
+    const sessionId = "healed";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    const sessionFile = path.join(
+      workspaceRoot,
+      userId,
+      "runtime",
+      "session",
+      sessionId,
+      "session.json",
+    );
+    const original = await readFile(sessionFile, "utf8");
+    await writeFile(sessionFile, "{invalid-json", "utf8");
+    const repository = runtime.repositories.sessionRepository;
+    await assert.rejects(repository.findById(userId, sessionId, ""));
+    const lifecycleFile = path.join(
+      workspaceRoot,
+      userId,
+      "runtime",
+      "session",
+      ".lifecycle",
+      "records",
+      `${encodeURIComponent(sessionId)}.json`,
+    );
+    assert.equal(JSON.parse(await readFile(lifecycleFile, "utf8")).repair.status, "failed");
+
+    await writeFile(sessionFile, original, "utf8");
+    const session = await repository.findById(userId, sessionId, "");
+    assert.equal(session.sessionId, sessionId);
+    const healed = JSON.parse(await readFile(lifecycleFile, "utf8"));
+    assert.equal(healed.repair, undefined);
+    assert.equal(healed.state, "active");
+
+    await writeFile(sessionFile, "{invalid-json", "utf8");
+    await assert.rejects(
+      repository.findById(userId, sessionId, ""),
+      (error) => error.repairSkipped !== true,
+    );
   });
 });
 

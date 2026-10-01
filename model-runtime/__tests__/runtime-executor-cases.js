@@ -93,8 +93,18 @@ test("streaming mode retries once in the opposite direction and caches the succe
     registry: { resolve: () => adapter },
     credentialPort: { resolve: () => "secret" },
   });
-  const first = await port.invoke({ invocation, model, messages: [], options: { streaming: true } });
-  const second = await port.invoke({ invocation, model, messages: [], options: { streaming: true } });
+  const first = await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    options: { streaming: true },
+  });
+  const second = await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    options: { streaming: true },
+  });
   assert.equal(first.output.text, "ok");
   assert.equal(second.output.text, "ok");
   assert.deepEqual(requestedModes, [true, false, false]);
@@ -135,7 +145,11 @@ test("explicit model errors do not trigger an opposite streaming mode", async ()
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.AUTHENTICATION }),
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
-      return { invoke: async () => { throw new Error("provider rejected request"); } };
+      return {
+        invoke: async () => {
+          throw new Error("provider rejected request");
+        },
+      };
     },
   };
   const port = createModelRequestExecutor({
@@ -178,6 +192,49 @@ test("streaming mode is not retried after output has started", async () => {
     /stream ended unexpectedly/,
   );
   assert.deepEqual(requestedModes, [true]);
+});
+
+test("caller abort rethrows the frozen abort reason unchanged without any retry", async () => {
+  const requestedModes = [];
+  const observed = [];
+  const controller = new AbortController();
+  const reason = Object.freeze({ kind: "execution_abort", type: "user_stop" });
+  const adapter = {
+    id: "openai-compatible",
+    classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    createClient: ({ streaming }) => {
+      requestedModes.push(streaming);
+      return {
+        invoke: async () => {
+          controller.abort(reason);
+          throw controller.signal.reason;
+        },
+      };
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+    observationPort: { emit: (type) => observed.push(type) },
+    clock: { now: () => 0, sleep: async () => {} },
+  });
+  let thrown;
+  try {
+    await port.invoke({
+      invocation,
+      model,
+      messages: [],
+      options: { streaming: true, signal: controller.signal },
+      policies: { retry: { transport: { maxAttempts: 3, baseDelayMs: 0 } } },
+    });
+  } catch (error) {
+    thrown = error;
+  }
+  assert.equal(thrown, reason);
+  assert.deepEqual(Object.keys(thrown), ["kind", "type"]);
+  assert.deepEqual(requestedModes, [true]);
+  assert.equal(observed.includes("model.invocation.streaming_mode_retry"), false);
+  assert.equal(observed.includes("model.invocation.retry_scheduled"), false);
 });
 
 test("executor is the single attempt and retry authority", async () => {

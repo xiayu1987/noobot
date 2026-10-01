@@ -14,6 +14,11 @@ import {
   validateInteractionAuthority,
   validateInteractionRequestPayload,
 } from "@noobot/event-protocol";
+import {
+  registerPendingInteraction,
+  rejectPendingInteractionsForTurn,
+  unregisterPendingInteraction,
+} from "./pending-interaction-registry.js";
 
 const USER_INTERACTION_TIMEOUT_MS = resolveUserInteractionTimeoutMs();
 
@@ -44,7 +49,6 @@ async function handleInteractionTimeout({
   interactionIdentityKey,
   interactionAuthority,
   effectiveTimeoutMs,
-  pendingInteractionRequests,
   interactionRequestsByIdentity,
   translateText,
   getCurrentLocale,
@@ -52,7 +56,7 @@ async function handleInteractionTimeout({
   commitInteractionRequest,
   rejectInteraction,
 }) {
-  pendingInteractionRequests.delete(requestId);
+  unregisterPendingInteraction(requestItem);
   if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
   requestItem.state = "rejected";
   const error = new Error(translateText("ws.userInteractionTimeout", getCurrentLocale()));
@@ -152,15 +156,15 @@ function createInteractionPayload(input, authority, requestId, effectiveTimeoutM
 }
 
 export function createUserInteractionBridge({
-  sendEvent,
+  ownerUserId,
   commitInteractionRequest,
   translateText,
   getCurrentLocale = () => "",
-  getCurrentRunMeta = () => null,
-  pendingInteractionRequests,
   sessionLogConfig,
   interactionTimeoutMs = USER_INTERACTION_TIMEOUT_MS,
 } = {}) {
+  const interactionOwnerUserId = String(ownerUserId || "").trim();
+  if (!interactionOwnerUserId) throw new TypeError("ownerUserId is required");
   if (typeof commitInteractionRequest !== "function") {
     throw new TypeError("commitInteractionRequest is required");
   }
@@ -181,33 +185,11 @@ export function createUserInteractionBridge({
       sessionLogConfig,
     );
   };
-  const rejectAllPendingInteractions = (error) => {
-    const currentRunMeta = getCurrentRunMeta();
-    for (const [, requestItem] of pendingInteractionRequests.entries()) {
-      try {
-        requestItem?.reject?.(error);
-      } catch (rejectError) {
-        void writeRoutedRuntimeEvent(
-          {
-            source: "service",
-            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-            category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
-            level: "warn",
-            event: "service.websocket.pendingInteraction.reject.failed",
-            userId: currentRunMeta?.userId || "",
-            sessionId: currentRunMeta?.sessionId || "",
-            dialogProcessId: currentRunMeta?.dialogProcessId || "",
-            turnScopeId: currentRunMeta?.turnScopeId || "",
-            error: rejectError,
-          },
-          sessionLogConfig,
-        );
-      }
-      clearTimeout(requestItem?.timer);
-    }
-    pendingInteractionRequests.clear();
-    interactionRequestsByIdentity.clear();
-  };
+  const rejectTurnInteractions = ({ sessionId = "", turnScopeId = "" } = {}, error) =>
+    rejectPendingInteractionsForTurn(
+      { ownerUserId: interactionOwnerUserId, sessionId, turnScopeId },
+      error,
+    );
 
   const userInteractionBridge = {
     requestUserInteraction: (input = {}) => {
@@ -250,6 +232,9 @@ export function createUserInteractionBridge({
         reject: null,
         timer: null,
         payload: null,
+        ownerUserId: interactionOwnerUserId,
+        sessionId: normalizedSessionId,
+        turnScopeId: interactionAuthority.turn.turnScopeId,
       };
       const effectiveTimeoutMs = normalizeInteractionTimeoutMs(timeoutMs, interactionTimeoutMs);
       requestItem.promise = new Promise((resolveInteraction, rejectInteraction) => {
@@ -262,7 +247,6 @@ export function createUserInteractionBridge({
               interactionIdentityKey,
               interactionAuthority,
               effectiveTimeoutMs,
-              pendingInteractionRequests,
               interactionRequestsByIdentity,
               translateText,
               getCurrentLocale,
@@ -285,7 +269,7 @@ export function createUserInteractionBridge({
         );
         requestItem.resolve = (response) => {
           clearTimeout(requestItem.timer);
-          pendingInteractionRequests.delete(requestId);
+          unregisterPendingInteraction(requestItem);
           requestItem.state = "resolved";
           requestItem.result = response;
           writeInteractionLifecycle(
@@ -297,12 +281,12 @@ export function createUserInteractionBridge({
         };
         requestItem.reject = (error) => {
           clearTimeout(requestItem.timer);
-          pendingInteractionRequests.delete(requestId);
+          unregisterPendingInteraction(requestItem);
           requestItem.state = "rejected";
           if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
           rejectInteraction(error);
         };
-        pendingInteractionRequests.set(requestId, requestItem);
+        registerPendingInteraction(requestItem);
         if (interactionIdentityKey) {
           interactionRequestsByIdentity.set(interactionIdentityKey, requestItem);
         }
@@ -315,7 +299,7 @@ export function createUserInteractionBridge({
         );
         const validation = validateInteractionRequestPayload(requestItem.payload);
         if (!validation.valid) {
-          pendingInteractionRequests.delete(requestId);
+          unregisterPendingInteraction(requestItem);
           if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
           clearTimeout(requestItem.timer);
           requestItem.state = "rejected";
@@ -328,7 +312,7 @@ export function createUserInteractionBridge({
           persistenceScope: interactionAuthority.persistenceScope,
           payload: requestItem.payload,
         }).catch((error) => {
-          pendingInteractionRequests.delete(requestId);
+          unregisterPendingInteraction(requestItem);
           if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
           clearTimeout(requestItem.timer);
           requestItem.state = "rejected";
@@ -342,19 +326,7 @@ export function createUserInteractionBridge({
       });
       return requestItem.promise;
     },
-    emitNotification: ({ eventName = "notification", data = {} } = {}) => {
-      const normalizedEventName =
-        String(eventName || "")
-          .trim()
-          .toLowerCase() || "notification";
-      const payload = data && typeof data === "object" ? data : {};
-      sendEvent(normalizedEventName, payload);
-      return Promise.resolve({
-        ok: true,
-        event: normalizedEventName,
-      });
-    },
   };
 
-  return { userInteractionBridge, rejectAllPendingInteractions };
+  return { userInteractionBridge, rejectTurnInteractions };
 }

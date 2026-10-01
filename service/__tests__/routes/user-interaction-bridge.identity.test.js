@@ -7,6 +7,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createUserInteractionBridge } from "../../ws/chat-websocket/user-interaction-bridge.js";
+import { findPendingInteraction } from "../../ws/chat-websocket/pending-interaction-registry.js";
+
+const bridgePorts = { ownerUserId: "user-1" };
+
+function pendingRequest(committedRequest) {
+  return findPendingInteraction({
+    requestId: committedRequest?.payload?.requestId,
+    ownerUserId: bridgePorts.ownerUserId,
+  });
+}
 
 function interactionAuthority(overrides = {}) {
   return {
@@ -28,7 +38,7 @@ function interactionAuthority(overrides = {}) {
 
 test("requires the interaction authority commit port at composition time", () => {
   assert.throws(
-    () => createUserInteractionBridge({ pendingInteractionRequests: new Map() }),
+    () => createUserInteractionBridge({ ...bridgePorts }),
     /commitInteractionRequest is required/,
   );
 });
@@ -39,13 +49,7 @@ test("rejects legacy flat identity instead of inferring authority from root run 
     async commitInteractionRequest() {
       commitCount += 1;
     },
-    getCurrentRunMeta: () => ({
-      userId: "user-1",
-      sessionId: "root-session",
-      dialogProcessId: "root-dialog",
-      turnScopeId: "root-turn",
-    }),
-    pendingInteractionRequests: new Map(),
+    ...bridgePorts,
   });
 
   assert.throws(
@@ -66,14 +70,13 @@ test("rejects legacy flat identity instead of inferring authority from root run 
 
 test("same canonical interaction identity reuses one authority commit before and after resolution", async () => {
   const committedRequests = [];
-  const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
     async commitInteractionRequest(request) {
       committedRequests.push(request);
       return { identity: { eventId: `event-${committedRequests.length}` } };
     },
     translateText: (key) => key,
-    pendingInteractionRequests,
+    ...bridgePorts,
   });
   const payload = {
     authority: interactionAuthority(),
@@ -87,12 +90,11 @@ test("same canonical interaction identity reuses one authority commit before and
   assert.equal(first, duplicatePending);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(committedRequests.length, 1);
-  assert.equal(pendingInteractionRequests.size, 1);
-
-  const [requestId, requestItem] = pendingInteractionRequests.entries().next().value;
-  clearTimeout(requestItem.timer);
-  pendingInteractionRequests.delete(requestId);
+  const requestItem = pendingRequest(committedRequests[0]);
+  assert.ok(requestItem);
+  const requestId = requestItem.requestId;
   requestItem.resolve({ confirmed: true });
+  assert.equal(pendingRequest(committedRequests[0]), null);
   assert.deepEqual(await first, { confirmed: true });
 
   const duplicateResolved = userInteractionBridge.requestUserInteraction(payload);
@@ -105,14 +107,13 @@ test("same canonical interaction identity reuses one authority commit before and
 
 test("timeout publishes the canonical failed interaction lifecycle and rejects the request", async () => {
   const committedRequests = [];
-  const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
     async commitInteractionRequest(request) {
       committedRequests.push(request);
       return { identity: { eventId: `event-${committedRequests.length}` } };
     },
     translateText: () => "interaction timed out",
-    pendingInteractionRequests,
+    ...bridgePorts,
     interactionTimeoutMs: 1,
   });
 
@@ -125,7 +126,7 @@ test("timeout publishes the canonical failed interaction lifecycle and rejects t
     toolName: "user_interaction",
   });
   await assert.rejects(request, /interaction timed out/);
-  assert.equal(pendingInteractionRequests.size, 0);
+  assert.equal(pendingRequest(committedRequests[0]), null);
   assert.equal(committedRequests.length, 2);
   assert.equal(committedRequests[1].payload.lifecycle, "failed");
   assert.equal(committedRequests[1].payload.resolvedBy, "system");
@@ -134,14 +135,13 @@ test("timeout publishes the canonical failed interaction lifecycle and rejects t
 
 test("explicit per-request timeoutMs overrides the bridge default when shorter", async () => {
   const committedRequests = [];
-  const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
     async commitInteractionRequest(request) {
       committedRequests.push(request);
       return { identity: { eventId: `event-${committedRequests.length}` } };
     },
     translateText: () => "interaction timed out",
-    pendingInteractionRequests,
+    ...bridgePorts,
     interactionTimeoutMs: 60000,
   });
 
@@ -168,21 +168,13 @@ test("child interaction commits with its explicit scoped authority instead of ro
     relativeDir: "runtime/agent/session/child-session",
     allowedRoot: "runtime/agent/session",
   });
-  const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
     async commitInteractionRequest(request) {
       committedRequests.push(request);
       return { identity: { eventId: "event-child" } };
     },
-    getCurrentRunMeta: () => ({
-      userId: "user-1",
-      sessionId: "root-session",
-      parentSessionId: "",
-      turnScopeId: "root-turn",
-      persistenceScope: null,
-    }),
     translateText: (key) => key,
-    pendingInteractionRequests,
+    ...bridgePorts,
   });
 
   const request = userInteractionBridge.requestUserInteraction({
@@ -204,9 +196,10 @@ test("child interaction commits with its explicit scoped authority instead of ro
   assert.equal(committedRequests[0].payload.sessionId, "child-session");
   assert.equal(committedRequests[0].payload.turnScopeId, "child-turn");
 
-  const [requestId, requestItem] = pendingInteractionRequests.entries().next().value;
-  clearTimeout(requestItem.timer);
-  pendingInteractionRequests.delete(requestId);
+  const requestItem = pendingRequest(committedRequests[0]);
+  assert.equal(requestItem.ownerUserId, "user-1");
+  assert.equal(requestItem.sessionId, "child-session");
+  assert.equal(requestItem.turnScopeId, "child-turn");
   requestItem.resolve({ confirmed: true });
   assert.deepEqual(await request, { confirmed: true });
 });

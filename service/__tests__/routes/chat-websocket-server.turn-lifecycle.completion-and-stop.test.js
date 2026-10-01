@@ -135,8 +135,7 @@ test("rejected stop has no abort or interaction side effects", async () => {
     translateText: (key) => key,
     normalizeLocale: (value) => value,
     resolveBot: () => ({}),
-    pendingInteractionRequests: new Map(),
-    rejectAllPendingInteractions: () => {
+    rejectTurnInteractions: () => {
       rejectCount += 1;
     },
     commitTurnLifecycle: async () => ({

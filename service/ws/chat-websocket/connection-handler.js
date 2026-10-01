@@ -20,6 +20,13 @@ import { createMessageHandler } from "./message-handler.js";
 import { detachRunTransport, findActiveRun, isRunTransportAttached } from "./run-registry.js";
 import { EXECUTION_ABORT_TYPE, createExecutionAbortReason } from "@noobot/session-protocol";
 
+export const CONNECTION_CLOSE_POLICY = Object.freeze({
+  DETACH_RUN: "detach_run",
+  ABORT_RUN: "abort_run",
+});
+
+const CONNECTION_CLOSE_POLICIES = new Set(Object.values(CONNECTION_CLOSE_POLICY));
+
 function text(value) {
   return String(value || "").trim();
 }
@@ -56,7 +63,7 @@ function registerConnectionDiagnostics(webSocket, authInfo, logConnection) {
 }
 
 function createTurnStatusRejection({ webSocket, state, sessionLogConfig }) {
-  return ({ runMeta = {}, status = "" } = {}) => {
+  return ({ runMeta = {}, status = "", result = null } = {}) => {
     const errorCode = "turn_status_persistence_failed";
     const errorMessage = `failed to persist terminal turn status: ${text(status || "unknown")}`;
     void recordServiceWebSocketRuntimeError({
@@ -67,7 +74,12 @@ function createTurnStatusRejection({ webSocket, state, sessionLogConfig }) {
       sessionId: runMeta?.sessionId,
       dialogProcessId: runMeta?.dialogProcessId,
       turnScopeId: runMeta?.turnScopeId || state.currentTurnScopeId,
-      data: { errorCode, status },
+      data: {
+        errorCode,
+        status,
+        reason: text(result?.reason),
+        currentRevision: result?.currentRevision ?? null,
+      },
     });
     webSocket.close(1011, errorCode);
   };
@@ -133,12 +145,19 @@ function decodeCloseReason(reason) {
   return Buffer.isBuffer(reason) ? reason.toString("utf8") : "";
 }
 
-function registerCloseListener({ webSocket, state, rejectAllPendingInteractions, translateText }) {
+function registerCloseListener({
+  webSocket,
+  state,
+  closePolicy,
+  rejectTurnInteractions,
+  translateText,
+}) {
   webSocket.on("close", (code, reasonBuffer) => {
     const transportStillOwned =
       !state.currentRunHandle ||
       isRunTransportAttached(state.currentRunHandle, state.currentRunTransportBinding);
-    if (state.currentAbortController && transportStillOwned) {
+    const abortRun = closePolicy === CONNECTION_CLOSE_POLICY.ABORT_RUN;
+    if (abortRun && state.currentAbortController && transportStillOwned) {
       const reasonText = decodeCloseReason(reasonBuffer);
       state.currentAbortController.abort(
         createExecutionAbortReason({
@@ -151,11 +170,16 @@ function registerCloseListener({ webSocket, state, rejectAllPendingInteractions,
     if (transportStillOwned && state.currentRunHandle) {
       detachRunTransport(state.currentRunHandle, state.currentRunTransportBinding);
     }
-    if (state.currentRunTimeoutTimer) {
+    if (abortRun && state.currentRunTimeoutTimer) {
       clearTimeout(state.currentRunTimeoutTimer);
       state.currentRunTimeoutTimer = null;
     }
-    rejectAllPendingInteractions(new Error(translateText("ws.socketClosed", state.currentLocale)));
+    if (abortRun && state.currentRunMeta) {
+      rejectTurnInteractions(
+        state.currentRunMeta,
+        new Error(translateText("ws.socketClosed", state.currentLocale)),
+      );
+    }
   });
 }
 
@@ -163,6 +187,7 @@ function createConnectionMessageRuntime(context) {
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
     resolveBot: context.resolveBot,
     sendEvent: context.sendEvent,
+    consumerId: context.consumerId,
   });
   const commitInteractionRequest = createInteractionAuthorityBridge({
     resolveBot: context.resolveBot,
@@ -186,12 +211,10 @@ function createConnectionMessageRuntime(context) {
     commitTurnLifecycle,
   });
   const interaction = createUserInteractionBridge({
-    sendEvent: context.sendEvent,
+    ownerUserId: context.authInfo?.userId,
     commitInteractionRequest,
     translateText: context.translateText,
     getCurrentLocale: () => context.state.currentLocale,
-    getCurrentRunMeta: () => context.state.currentRunMeta,
-    pendingInteractionRequests: context.pendingInteractionRequests,
     sessionLogConfig: context.sessionLogConfig,
   });
   return {
@@ -220,8 +243,7 @@ function createConnectionMessageHandler(context, runtime) {
     connectorAccessPort: context.connectorAccessPort,
     resolveBot: context.resolveBot,
     sessionLogConfig: context.sessionLogConfig,
-    pendingInteractionRequests: context.pendingInteractionRequests,
-    rejectAllPendingInteractions: runtime.rejectAllPendingInteractions,
+    rejectTurnInteractions: runtime.rejectTurnInteractions,
     userInteractionBridge: runtime.userInteractionBridge,
     buildRunStateSnapshot: createRunStateSnapshot(context.state),
     finalizeTimeout: runtime.finalizeTimeout,
@@ -238,6 +260,9 @@ function createConnectionMessageHandler(context, runtime) {
 }
 
 export function createChatConnectionHandler(options) {
+  if (!CONNECTION_CLOSE_POLICIES.has(options?.closePolicy)) {
+    throw new Error("createChatConnectionHandler requires an explicit closePolicy");
+  }
   return (webSocket, request) => {
     const authInfo = request?.auth || null;
     const state = createConnectionState({
@@ -251,7 +276,6 @@ export function createChatConnectionHandler(options) {
       authInfo,
       state,
       logConnection,
-      pendingInteractionRequests: new Map(),
     };
     context.sendEvent = createOutboundEventSender(context);
     const runtime = createConnectionMessageRuntime(context);
@@ -265,7 +289,8 @@ export function createChatConnectionHandler(options) {
     registerCloseListener({
       webSocket,
       state,
-      rejectAllPendingInteractions: runtime.rejectAllPendingInteractions,
+      closePolicy: options.closePolicy,
+      rejectTurnInteractions: runtime.rejectTurnInteractions,
       translateText: options.translateText,
     });
   };

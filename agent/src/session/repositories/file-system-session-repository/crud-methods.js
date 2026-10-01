@@ -154,20 +154,15 @@ class SessionCrudMethods {
     );
     if (!(await this.storageService.exists(sessionFile))) return null;
 
-    const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
-    if (lifecycle?.repair?.status === "failed") {
-      const error = new Error(
-        String(lifecycle.repair.message || "Session repair previously failed"),
-      );
-      error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
-      error.repairSkipped = true;
-      throw error;
-    }
-
     const scope = { resolvedParentSessionId, sessionFile, sessionDir };
+    const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
+    const repairPreviouslyFailed = lifecycle?.repair?.status === "failed";
     try {
-      return await this._readNormalizedSession(scope, sessionId, resolvedParentSessionId);
+      const session = await this._readNormalizedSession(scope, sessionId, resolvedParentSessionId);
+      if (repairPreviouslyFailed) await this._clearSessionRepairFailure(userId, sessionId);
+      return session;
     } catch (error) {
+      if (repairPreviouslyFailed) throw this._createPreviousRepairFailureError(lifecycle, error);
       try {
         await this._repairSessionToCurrentProtocol(
           userId,

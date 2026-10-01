@@ -8,6 +8,7 @@ import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { publishRunEvent, registerActiveRun } from "../run-registry.js";
 import { createRunEventListener } from "../run-event-listener.js";
+import { isSessionLogDebugTypeEnabled } from "@noobot/runtime-events/session-log-protocol";
 import {
   recordServiceAgentTransportDebug,
   recordServiceWebSocketLifecycle,
@@ -217,6 +218,23 @@ function createRootRunningHandler(context, run, accepted, lifecycle) {
   };
 }
 
+const DELIVERY_TIMING_DEBUG_TYPE = "delivery-timing";
+
+function recordDeliveryTiming(context, run, active, summary) {
+  void recordServiceWebSocketLifecycle({
+    sessionLogConfig: context.sessionLogConfig,
+    category: "debug",
+    level: "debug",
+    debugType: DELIVERY_TIMING_DEBUG_TYPE,
+    event: "service.websocket.upstreamDelivery.timing",
+    userId: run.userId,
+    sessionId: summary.sessionId || run.sessionId,
+    dialogProcessId: summary.dialogProcessId || active.runMeta?.dialogProcessId || "",
+    turnScopeId: summary.turnScopeId || active.runMeta?.turnScopeId || "",
+    data: { queueWaitMs: summary.queueWaitMs, runMs: summary.runMs },
+  });
+}
+
 export function createMessageRunEventListener(context, command, run, accepted, active) {
   const lifecycle = { processingStarted: null };
   const eventListener = createRunEventListener({
@@ -227,6 +245,12 @@ export function createMessageRunEventListener(context, command, run, accepted, a
     getCurrentRunHandle: () => active.runHandle,
     getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
     onEventReceived: (eventData) => onEventReceived(context, command, run, eventData),
+    onDeliveryTiming: isSessionLogDebugTypeEnabled(
+      DELIVERY_TIMING_DEBUG_TYPE,
+      context.sessionLogConfig,
+    )
+      ? (summary = {}) => recordDeliveryTiming(context, run, active, summary)
+      : null,
     onCommittedTurnLifecycle: (envelope, dispatchContext) =>
       dispatchCommittedTurn(context, run, envelope, dispatchContext),
     onAuthorityEventCommitted: (envelope, dispatchContext) =>

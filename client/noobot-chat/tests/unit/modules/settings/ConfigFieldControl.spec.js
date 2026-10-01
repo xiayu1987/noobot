@@ -49,6 +49,15 @@ const EmptyControlStub = defineComponent({
   template: '<span class="empty-control-stub" />',
 });
 
+const ElCheckboxStub = defineComponent({
+  name: "ElCheckbox",
+  inheritAttrs: false,
+  props: { modelValue: { type: Boolean, default: false } },
+  emits: ["update:modelValue"],
+  template:
+    '<input type="checkbox" class="checkbox-stub" :checked="modelValue" v-bind="$attrs" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
+});
+
 const mountControl = ({ declarationContainer, container, node }) =>
   mount(ConfigFieldControl, {
     props: {
@@ -72,6 +81,8 @@ const mountControl = ({ declarationContainer, container, node }) =>
         "el-switch": EmptyControlStub,
         ElInputNumber: EmptyControlStub,
         "el-input-number": EmptyControlStub,
+        ElCheckbox: ElCheckboxStub,
+        "el-checkbox": ElCheckboxStub,
       },
     },
   });
@@ -144,5 +155,43 @@ describe("ConfigFieldControl cache field options", () => {
     expect(wrapper.findAll("option").map((option) => option.attributes("value"))).toEqual([
       "cache_control",
     ]);
+  });
+});
+
+describe("ConfigFieldControl sampling transmit toggle", () => {
+  const numberNode = (key) => ({ key, kind: CONFIG_FORM_NODE_KIND.NUMBER });
+
+  it("writes checked fields into sampling_fields in contract order", async () => {
+    const container = reactive({ sampling_fields: ["presence_penalty"] });
+    const wrapper = mountControl({ container, node: numberNode("temperature") });
+
+    const checkbox = wrapper.find(".checkbox-stub");
+    expect(checkbox.exists()).toBe(true);
+    expect(checkbox.attributes("aria-label")).toBe("settings.configSamplingTransmitLabel");
+    expect(checkbox.element.checked).toBe(false);
+
+    await checkbox.setValue(true);
+    expect(container.sampling_fields).toEqual(["temperature", "presence_penalty"]);
+    expect(container.temperature).toBeUndefined();
+  });
+
+  it("keeps an empty array when the last checked field is unchecked", async () => {
+    const container = reactive({ sampling_fields: ["top_p"], top_p: 0.9 });
+    const wrapper = mountControl({ container, node: numberNode("top_p") });
+
+    const checkbox = wrapper.find(".checkbox-stub");
+    expect(checkbox.element.checked).toBe(true);
+    await checkbox.setValue(false);
+    expect(container.sampling_fields).toEqual([]);
+    expect(container.top_p).toBe(0.9);
+  });
+
+  it("does not render the toggle for non-sampling numeric fields", () => {
+    const wrapper = mountControl({
+      container: reactive({ max_tokens: 1024 }),
+      node: { key: "max_tokens", kind: CONFIG_FORM_NODE_KIND.INTEGER },
+    });
+    expect(wrapper.find(".checkbox-stub").exists()).toBe(false);
+    expect(wrapper.find(".empty-control-stub").exists()).toBe(true);
   });
 });
