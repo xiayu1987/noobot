@@ -169,6 +169,25 @@ Optional system deps:
 
 Run `npm run test:model-access` for a local visual tester that reuses existing model configuration and the model runtime. Toggle and edit request parameters, import model-proxy logs, and inspect actual requests and raw responses. See the [usage guide](./agent/scripts/model-access-test/README.md).
 
+## CLI
+
+The `noobot` command runs a turn in-process against the same workspace and configuration as the service. Run it with `npm run cli -- <args>` inside `service/`, or install the command with `npm link` in `service/`. `noobot --help` prints the authoritative option list.
+
+```bash
+noobot -p "Summarize README.md" -f README.md        # new session, attach a file
+echo "continue" | noobot -c                         # message from stdin, most recent session
+noobot -r <sessionId> "next step"                   # existing session
+noobot resume-turn -r <sessionId> --dialog <dialogProcessId> --turn <turnScopeId>
+noobot sessions                                     # list sessions
+noobot -o json -p "hi"                              # text | json | stream-json
+```
+
+- `-r/--resume <sessionId>` is the only session selector; `-c/--continue` picks the most recent session. They are mutually exclusive, and `--connector` is only allowed for new sessions.
+- `resume-turn` continues a specific turn and requires `-r`, `--dialog` and `--turn`.
+- Attachment MIME types are resolved from the file extension; unknown extensions are sent as `application/octet-stream`.
+- Exit codes: `0` done, `1` failed, `2` usage or protocol error, `3` interaction unavailable, `130` stopped.
+- The CLI runs its own runtime. While the service is running, the UI cannot stop or resume CLI-started turns.
+
 ## Desktop Packaging
 
 Install dependencies first from the repository root:

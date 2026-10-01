@@ -32,7 +32,6 @@ const OPTIONS = Object.freeze({
   "task-check-loop": { type: "string" },
   dialog: { type: "string" },
   turn: { type: "string" },
-  session: { type: "string" },
   help: { type: "boolean", short: "h" },
 });
 
@@ -74,12 +73,12 @@ function parsePluginModelConfig(entries = []) {
 
 export const CLI_ACTION = Object.freeze({
   SEND: "send",
-  CONTINUE: "continue",
+  RESUME_TURN: "resume-turn",
   SESSIONS: "sessions",
   HELP: "help",
 });
 
-const SUBCOMMANDS = new Set([CLI_ACTION.CONTINUE, CLI_ACTION.SESSIONS]);
+const SUBCOMMANDS = new Set([CLI_ACTION.RESUME_TURN, CLI_ACTION.SESSIONS]);
 
 function resolveAction(values, positionals) {
   if (values.help) return { action: CLI_ACTION.HELP, rest: positionals };
@@ -127,10 +126,12 @@ function validateCombination(action, values) {
   if (!OUTPUT_FORMATS.includes(values["output-format"])) {
     throw new CliUsageError(`--output-format must be one of ${OUTPUT_FORMATS.join("|")}`);
   }
-  if (action === CLI_ACTION.CONTINUE) {
-    if (!values.session) throw new CliUsageError("continue requires --session");
-    if (!values.dialog) throw new CliUsageError("continue requires --dialog");
-    if (!values.turn) throw new CliUsageError("continue requires --turn");
+  if (action === CLI_ACTION.RESUME_TURN) {
+    if (!values.resume) throw new CliUsageError("resume-turn requires --resume");
+    if (!values.dialog) throw new CliUsageError("resume-turn requires --dialog");
+    if (!values.turn) throw new CliUsageError("resume-turn requires --turn");
+  } else if (values.dialog || values.turn) {
+    throw new CliUsageError("--dialog and --turn are only allowed with resume-turn");
   }
 }
 
@@ -157,7 +158,7 @@ export function parseCliArgs(argv = [], { interactive = false } = {}) {
     userId: values.user || "",
     outputFormat: values["output-format"],
     outputLastMessage: values["output-last-message"] || "",
-    sessionId: values.session || values.resume || "",
+    sessionId: values.resume || "",
     continueLatest: values.continue === true,
     dialogProcessId: values.dialog || "",
     turnScopeId: values.turn || "",
@@ -168,7 +169,7 @@ export function parseCliArgs(argv = [], { interactive = false } = {}) {
 }
 
 export const CLI_USAGE = `Usage: noobot [options] [message]
-       noobot continue --session <id> --dialog <dialogProcessId> --turn <turnScopeId> [message]
+       noobot resume-turn -r <sessionId> --dialog <dialogProcessId> --turn <turnScopeId> [message]
        noobot sessions [--user <id>]
 
 Message is read from -p, positional args, or stdin when piped.

@@ -7,7 +7,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
-import { MIME_TYPE } from "../../shared/constants/index.js";
+import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { persistSnapshotJsonFiles } from "./session-execution-engine-utils.js";
 
 const assertInsideWorkspace = (resolvedWorkspacePath, resolvedDir) => {

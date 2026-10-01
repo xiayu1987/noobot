@@ -7,7 +7,7 @@ import { logger } from "../../observability/index.js";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../../runtime/i18n-adapter.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../shared/utils/mime-utils.js";
-import { MIME_TYPE } from "../../shared/constants/index.js";
+import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { isModelOutputArtifactContentBlock } from "@noobot/model-protocol";

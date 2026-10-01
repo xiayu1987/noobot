@@ -43,7 +43,7 @@ import {
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import { persistTransferArtifacts } from "../../transfer-adapter/index.js";
-import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
+import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { parse } from "acorn";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
@@ -461,8 +461,7 @@ export function createNativeScriptTool({ agentContext }) {
           const artifacts = await Promise.all(
             outputFiles.map(async (relative) => ({
               name: relative.split(path.sep).join("__"),
-              mimeType:
-                EXTENSION_TO_MIME[path.extname(relative).toLowerCase()] || DEFAULT_MIME_TYPE,
+              mimeType: resolveMimeTypeFromFileName(relative),
               contentBase64: (await readFile(path.join(outputRoot, relative))).toString("base64"),
               meta: { virtualPath: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative }) },
             })),

@@ -31,7 +31,6 @@ export {
   isMimeTypeAllowed,
   isExtensionAllowed,
 } from "./policy/policy-validator.js";
-export { getMimeTypeFromExtension, isValidMimeType } from "./policy/mime-utils.js";
 export {
   DEFAULT_MIME_TYPE,
   MIME_TO_EXTENSION,

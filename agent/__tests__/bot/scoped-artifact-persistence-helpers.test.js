@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ScopedArtifactPersistenceHelpers } from "../../src/bot/session/scoped-artifact-persistence-helpers.js";
-import { MIME_TYPE } from "../../src/shared/constants/index.js";
+import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 
 async function createTempRoot() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-plugin-persistence-"));

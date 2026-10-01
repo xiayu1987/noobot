@@ -164,6 +164,25 @@ npm run build
 
 运行 `npm run test:model-access` 打开本地可视化测试程序，复用现有模型配置和调用运行时。支持逐项勾选、修改请求参数，导入 model-proxy 日志，查看实际发送体和原始响应。详见[使用说明](./agent/scripts/model-access-test/README.md)。
 
+## 命令行（CLI）
+
+`noobot` 命令在本进程内执行一轮对话，使用与 service 相同的工作区和配置。在 `service/` 目录下用 `npm run cli -- <参数>` 运行，或在 `service/` 目录执行 `npm link` 安装命令。完整参数以 `noobot --help` 输出为准。
+
+```bash
+noobot -p "总结 README.md" -f README.md             # 新建会话并附带文件
+echo "继续" | noobot -c                              # 从 stdin 读消息，续接最近一个会话
+noobot -r <sessionId> "下一步"                       # 续接指定会话
+noobot resume-turn -r <sessionId> --dialog <dialogProcessId> --turn <turnScopeId>
+noobot sessions                                      # 列出会话
+noobot -o json -p "hi"                               # text | json | stream-json
+```
+
+- `-r/--resume <sessionId>` 是唯一的会话选择参数；`-c/--continue` 选最近一个会话。两者互斥，`--connector` 只能在新建会话时使用。
+- `resume-turn` 续跑指定轮次，必须同时提供 `-r`、`--dialog` 和 `--turn`。
+- 附件类型按扩展名推断，未知扩展名按 `application/octet-stream` 发送。
+- 退出码：`0` 完成，`1` 失败，`2` 用法或协议错误，`3` 无法交互，`130` 已停止。
+- CLI 使用独立的运行时。service 同时运行时，界面无法停止或恢复 CLI 发起的轮次。
+
 ## 桌面端打包
 
 先在仓库根目录安装依赖：

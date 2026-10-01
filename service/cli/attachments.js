@@ -5,10 +5,9 @@
  */
 import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
+import { resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { CliUsageError } from "./cli-args.js";
-
-const DEFAULT_MIME_TYPE = "application/octet-stream";
 
 export async function readCliAttachments(filePaths = [], { cwd = process.cwd() } = {}) {
   const { maxFileSizeBytes, maxTotalSizeBytes } = LENGTH_THRESHOLDS.attachments;
@@ -38,7 +37,7 @@ export async function readCliAttachments(filePaths = [], { cwd = process.cwd() }
   for (const absolutePath of resolved) {
     attachments.push({
       name: path.basename(absolutePath),
-      mimeType: DEFAULT_MIME_TYPE,
+      mimeType: resolveMimeTypeFromFileName(absolutePath),
       contentBase64: (await readFile(absolutePath)).toString("base64"),
     });
   }
