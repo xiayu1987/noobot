@@ -186,6 +186,7 @@ export function createModelRequestExecutor({
                 streaming: false,
                 error: {
                   message: String(error?.message || error || "model operation failed"),
+                  code: String(error?.code || ""),
                   retryable: classification?.retryable === true,
                   kind: String(classification?.kind || MODEL_ERROR_KIND.UNKNOWN),
                 },
@@ -308,6 +309,7 @@ export function createModelRequestExecutor({
                   streaming,
                   error: {
                     message: String(error?.message || error || "model attempt failed"),
+                    code: String(error?.code || ""),
                     retryable: classification?.retryable === true,
                     kind: String(classification?.kind || MODEL_ERROR_KIND.UNKNOWN),
                   },
@@ -329,6 +331,7 @@ export function createModelRequestExecutor({
               attempt: totalAttempts,
               nextStreaming: streaming,
               reason: "request_failed_before_output",
+              error: attempts.at(-1)?.error,
             });
             continue;
           }

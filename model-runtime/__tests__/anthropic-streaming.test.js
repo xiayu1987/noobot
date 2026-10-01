@@ -336,8 +336,9 @@ const invocation = {
   contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
 };
 
-function executorWithFetch(fetch) {
+function executorWithFetch(fetch, observationPort) {
   return createModelRequestExecutor({
+    ...(observationPort ? { observationPort } : {}),
     registry: createProviderAdapterRegistry([
       {
         ...anthropicMessagesAdapter,
@@ -372,6 +373,52 @@ test("Anthropic obeys the existing alternate-mode retry and successful-mode cach
     assert.equal(result.output.text, "done");
   }
   assert.deepEqual(modes, [true, false, false]);
+});
+
+test("Anthropic duplicate message_start reports the stream error on the alternate-mode retry", async () => {
+  const modes = [];
+  const events = [];
+  const executor = executorWithFetch(
+    async (_url, init) => {
+      const payload = JSON.parse(init.body);
+      modes.push(payload.stream);
+      if (!payload.stream) {
+        return Response.json({
+          ...start.message,
+          content: [{ type: "text", text: "done" }],
+          stop_reason: "end_turn",
+        });
+      }
+      return sseResponse([
+        start,
+        blockStart(0, { type: "thinking", thinking: "" }),
+        delta(0, { type: "signature_delta", signature: "sig" }),
+        blockStop(0),
+        { type: "ping" },
+        { ...start, message: { ...start.message, id: "msg_second" } },
+        blockStart(0, { type: "text", text: "" }),
+        delta(0, { type: "text_delta", text: "done" }),
+        blockStop(0),
+        ...finish(),
+      ]);
+    },
+    { emit: (type, data) => events.push({ type, data }) },
+  );
+  const result = await executor.invoke({
+    invocation,
+    model: modelSpec,
+    messages,
+    tools,
+    options: { streaming: true },
+  });
+  assert.equal(result.output.text, "done");
+  assert.deepEqual(modes, [true, false]);
+  const retry = events.filter((event) => event.type === "model.invocation.streaming_mode_retry");
+  assert.equal(retry.length, 1);
+  assert.equal(retry[0].data.nextStreaming, false);
+  assert.equal(retry[0].data.error.code, "ANTHROPIC_STREAM_INVALID");
+  assert.match(retry[0].data.error.message, /unexpected message_start/);
+  assert.equal(result.execution.attempts[0].error.code, "ANTHROPIC_STREAM_INVALID");
 });
 
 test("Anthropic streamed tokens prevent the existing executor from replaying a failed response", async () => {
