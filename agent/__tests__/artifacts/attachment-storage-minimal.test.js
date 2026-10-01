@@ -20,10 +20,6 @@ import {
   validateAttachmentPolicy,
 } from "../../src/artifacts/policy/policy-validator.js";
 import {
-  getMimeTypeFromExtension,
-  isValidMimeType,
-} from "../../src/artifacts/policy/mime-utils.js";
-import {
   readSessionArtifact,
   writeSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
@@ -788,6 +784,4 @@ test("policy + mime minimal compatibility", () => {
   assert.equal(isExtensionAllowed("a.png", policy.allowedExtensions), true);
   assert.equal(isExtensionAllowed("archive.unknown-format", policy.allowedExtensions), true);
   assert.equal(isExtensionAllowed("extensionless", policy.allowedExtensions), true);
-  assert.equal(getMimeTypeFromExtension("photo.png"), "image/png");
-  assert.equal(isValidMimeType("text/plain"), true);
 });

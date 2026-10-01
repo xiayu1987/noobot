@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
-import { DEFAULT_MIME_TYPE, MIME_TO_EXTENSION } from "../shared/constants/index.js";
+import { DEFAULT_MIME_TYPE, MIME_TO_EXTENSION } from "@noobot/attachment-protocol/mime";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 export { DEFAULT_MIME_TYPE, MIME_TO_EXTENSION };
 

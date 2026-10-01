@@ -16,7 +16,7 @@ import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
+import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 
 const registries = new WeakMap();
 
@@ -108,7 +108,7 @@ export async function registerResource({
     logical,
     attachment,
     size: info.size,
-    mimeType: EXTENSION_TO_MIME[path.extname(absolutePath).toLowerCase()] || DEFAULT_MIME_TYPE,
+    mimeType: resolveMimeTypeFromFileName(absolutePath),
     capabilities,
     executionPath: absolutePath,
   });

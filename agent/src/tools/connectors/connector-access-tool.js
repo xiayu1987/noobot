@@ -13,7 +13,7 @@ import { mergeConfig } from "../../config/index.js";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/meta-ops.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
-import { MIME_TYPE } from "../../shared/constants/index.js";
+import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";

@@ -27,6 +27,7 @@ import {
   reduceAttachmentLifecycle,
   parseRuntimeAttachmentRef,
 } from "../src/index.js";
+import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "../src/mime.js";
 
 const identity = {
   attachmentId: "att-1",
@@ -296,4 +297,17 @@ test("identity merge requires an explicit conflict policy", () => {
     }),
     [{ ...identity, name: "new" }],
   );
+});
+
+test("mime type is resolved from the file name extension table", () => {
+  assert.equal(resolveMimeTypeFromFileName("photo.png"), "image/png");
+  assert.equal(resolveMimeTypeFromFileName("photo.JPEG"), "image/jpeg");
+  assert.equal(resolveMimeTypeFromFileName("notes.md"), "text/markdown");
+  assert.equal(resolveMimeTypeFromFileName("clip.webm"), "video/webm");
+  assert.equal(resolveMimeTypeFromFileName("/tmp/a.b/report.pdf"), "application/pdf");
+  assert.equal(resolveMimeTypeFromFileName("C:\\dir.v1\\song.flac"), "audio/flac");
+  assert.equal(resolveMimeTypeFromFileName("/tmp/a.b/README"), DEFAULT_MIME_TYPE);
+  assert.equal(resolveMimeTypeFromFileName(".png"), DEFAULT_MIME_TYPE);
+  assert.equal(resolveMimeTypeFromFileName("archive.unknown"), DEFAULT_MIME_TYPE);
+  assert.equal(resolveMimeTypeFromFileName(""), DEFAULT_MIME_TYPE);
 });

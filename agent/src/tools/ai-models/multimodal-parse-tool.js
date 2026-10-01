@@ -24,7 +24,7 @@ import {
   formatAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE, MIME_TYPE } from "../../shared/constants/index.js";
+import { MIME_TYPE, resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
 import { HAS_SHARP, getSharp } from "../../shared/utils/web/web2img/web2img-config.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
@@ -49,11 +49,7 @@ import {
 const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
 
 function resolveMimeType(filePath = "", sourceAttachment = null) {
-  return (
-    String(sourceAttachment?.mimeType || "").trim() ||
-    EXTENSION_TO_MIME[path.extname(String(filePath || "")).toLowerCase()] ||
-    DEFAULT_MIME_TYPE
-  );
+  return String(sourceAttachment?.mimeType || "").trim() || resolveMimeTypeFromFileName(filePath);
 }
 
 function resolveModelFileName(filePath = "", sourceAttachment = null, mimeType = "") {

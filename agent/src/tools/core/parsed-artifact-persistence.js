@@ -23,7 +23,7 @@ import {
   materializeTextForToolResult,
 } from "../../transfer-adapter/index.js";
 import { TRANSFER_SOURCE, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
-import { MIME_TYPE } from "../../shared/constants/index.js";
+import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { AGENT_RUN_EVENT, emitEvent } from "../../events/index.js";
 import { queueUserMetaBackwrite } from "../../context/assembly/message-builder/user-meta-backwrite.js";

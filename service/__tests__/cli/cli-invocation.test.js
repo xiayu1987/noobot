@@ -55,14 +55,17 @@ test("invalid combinations are usage errors", () => {
   assert.throws(() => parseCliArgs(["-r", "s1", "--connector", "c", "x"]), CliUsageError);
   assert.throws(() => parseCliArgs(["-o", "yaml", "x"]), CliUsageError);
   assert.throws(() => parseCliArgs(["--confirm-level", "max", "x"]), CliUsageError);
-  assert.throws(() => parseCliArgs(["continue", "--session", "s1"]), /--dialog/);
+  assert.throws(() => parseCliArgs(["resume-turn", "--resume", "s1"]), /--dialog/);
+  assert.throws(() => parseCliArgs(["--session", "s1", "x"]), CliUsageError);
+  assert.throws(() => parseCliArgs(["--dialog", "d1", "x"]), /only allowed with resume-turn/);
+  assert.throws(() => parseCliArgs(["continue", "-r", "s1", "--turn", "t1", "x"]), /resume-turn/);
   assert.throws(() => parseCliArgs(["--bogus"]), CliUsageError);
 });
 
-test("continue subcommand carries continuation identity", () => {
+test("resume-turn subcommand carries continuation identity", () => {
   const invocation = parseCliArgs([
-    "continue",
-    "--session",
+    "resume-turn",
+    "--resume",
     "s1",
     "--dialog",
     "d1",
@@ -70,7 +73,7 @@ test("continue subcommand carries continuation identity", () => {
     "t1",
     "go",
   ]);
-  assert.equal(invocation.action, CLI_ACTION.CONTINUE);
+  assert.equal(invocation.action, CLI_ACTION.RESUME_TURN);
   assert.equal(invocation.sessionId, "s1");
   assert.equal(invocation.dialogProcessId, "d1");
   assert.equal(invocation.turnScopeId, "t1");
@@ -148,7 +151,13 @@ test("attachments are serialized and size-checked against shared thresholds", as
     await writeFile(path.join(dir, "a.txt"), "hello");
     const [item] = await readCliAttachments(["a.txt"], { cwd: dir });
     assert.equal(item.name, "a.txt");
+    assert.equal(item.mimeType, "text/plain");
     assert.equal(Buffer.from(item.contentBase64, "base64").toString(), "hello");
+    await writeFile(path.join(dir, "Shot.PNG"), "png");
+    await writeFile(path.join(dir, "blob"), "raw");
+    const [image, blob] = await readCliAttachments(["Shot.PNG", "blob"], { cwd: dir });
+    assert.equal(image.mimeType, "image/png");
+    assert.equal(blob.mimeType, "application/octet-stream");
     await assert.rejects(readCliAttachments(["nope.txt"], { cwd: dir }), /not found/);
     const big = path.join(dir, "big.bin");
     await writeFile(big, Buffer.alloc(LENGTH_THRESHOLDS.attachments.maxFileSizeBytes + 1));

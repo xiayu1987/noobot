@@ -7,7 +7,7 @@ import {
   DEFAULT_MIME_TYPE,
   MIME_PREFIX_FALLBACK_EXTENSION,
   MIME_TO_EXTENSION,
-} from "../constants/index.js";
+} from "@noobot/attachment-protocol/mime";
 
 const MIME_EXTENSION_MAP = MIME_TO_EXTENSION;
 
@@ -18,7 +18,9 @@ export function getMimeExtensionMap() {
 }
 
 export function getExtensionFromMime(mimeType = "") {
-  const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
+  const normalizedMimeType = String(mimeType || "")
+    .trim()
+    .toLowerCase();
   if (!normalizedMimeType) return "";
 
   if (MIME_EXTENSION_MAP[normalizedMimeType]) {

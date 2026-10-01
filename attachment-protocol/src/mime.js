@@ -105,3 +105,11 @@ export const MIME_PREFIX_FALLBACK_EXTENSION = Object.freeze({
   "video/": ".mp4",
   "audio/": ".mp3",
 });
+
+export function resolveMimeTypeFromFileName(fileName = "") {
+  const name = String(fileName || "").toLowerCase();
+  const dotIndex = name.lastIndexOf(".");
+  const slashIndex = Math.max(name.lastIndexOf("/"), name.lastIndexOf("\\"));
+  if (dotIndex <= slashIndex + 1) return DEFAULT_MIME_TYPE;
+  return EXTENSION_TO_MIME[name.slice(dotIndex)] || DEFAULT_MIME_TYPE;
+}

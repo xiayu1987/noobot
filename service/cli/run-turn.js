@@ -46,7 +46,7 @@ export function buildRunCommand({
   aggregateVersion,
   createSession,
 }) {
-  const isContinue = invocation.action === CLI_ACTION.CONTINUE;
+  const isContinue = invocation.action === CLI_ACTION.RESUME_TURN;
   return createTurnRunCommand({
     commandType: isContinue ? AGENT_COMMAND.CONTINUE : AGENT_COMMAND.SEND,
     commandId: identity.turnScopeId,

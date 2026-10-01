@@ -8,17 +8,14 @@ import {
   getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
-import { MIME_TYPE } from "../../shared/constants/index.js";
+import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-message-snapshot-store.js";
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
 import {
   projectSnapshotIncrementalToContinuation,
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
 } from "@noobot/context-protocol/policy/snapshot";
-import {
-  applySystemRuntimeTurnProgress,
-  resolveToolBindings,
-} from "@noobot/agent-config-protocol";
+import { applySystemRuntimeTurnProgress, resolveToolBindings } from "@noobot/agent-config-protocol";
 
 async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, messageBlocks = {}) {
   if (typeof engine?.session?.getSessionContextSource !== "function") {

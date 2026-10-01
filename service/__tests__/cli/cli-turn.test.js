@@ -82,8 +82,8 @@ test("run command passes the shared protocol validation for send and continue", 
   assert.equal(parseAgentCommand(send).commandType, AGENT_COMMAND.SEND);
   assert.equal(send.session.createIfAbsent, true);
   const invocation = parseCliArgs([
-    "continue",
-    "--session",
+    "resume-turn",
+    "--resume",
     "s",
     "--dialog",
     "d",
@@ -91,7 +91,7 @@ test("run command passes the shared protocol validation for send and continue", 
     "t",
     "go",
   ]);
-  assert.equal(invocation.action, CLI_ACTION.CONTINUE);
+  assert.equal(invocation.action, CLI_ACTION.RESUME_TURN);
   const cont = buildRunCommand({
     invocation,
     identity: createCliTurnIdentity({ sessionId: "s" }),
