@@ -95,6 +95,25 @@ describe("thinking panel round timeline reactivity", () => {
     expect(timeline.currentExecutionLogs.value).toBe(before);
   });
 
+  it("keeps the round tool projection stable while only analysis activity streams", async () => {
+    const { live, timeline } = mountRound();
+    const before = timeline.currentExecutionLogs.value;
+
+    for (let index = 1; index <= 3; index += 1) {
+      live.activityTimeline = [
+        {
+          eventId: "activity-live",
+          activityId: "activity-live",
+          activityKind: "main_model_analysis",
+          text: "a".repeat(index),
+          sequence: 100 + index,
+        },
+      ];
+      await nextTick();
+      expect(timeline.currentExecutionLogs.value).toBe(before);
+    }
+  });
+
   it("reprojects the round when a sibling tool timeline changes", async () => {
     const { allMessages, timeline } = mountRound();
     const before = timeline.currentExecutionLogs.value;

@@ -21,7 +21,7 @@ export function createMessageStopHandler({
   translateText,
   resolveBot,
   sessionLogConfig,
-  rejectAllPendingInteractions,
+  rejectTurnInteractions,
   commitTurnLifecycle,
 }) {
   const handleStop = async (command) => {
@@ -56,7 +56,8 @@ export function createMessageStopHandler({
     }
     state.stopRequested = true;
     state.currentTurnScopeId = targetTurnScopeId;
-    rejectAllPendingInteractions(
+    rejectTurnInteractions(
+      { sessionId: targetSessionId, turnScopeId: targetTurnScopeId },
       new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)),
     );
     state.currentStopPayload = {

@@ -79,7 +79,8 @@ test("chat-websocket-server: stop persists and emits authoritative stop completi
     );
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
     assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-new");
@@ -162,8 +163,8 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
           resolve(parsed);
         }
         if (
-          (parsed?.event === "turn_lifecycle" &&
-            parsed?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED)
+          parsed?.event === "turn_lifecycle" &&
+          parsed?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED
         ) {
           reject(new Error(`unexpected terminal event before run settled: ${parsed.event}`));
         }
@@ -240,7 +241,8 @@ test("chat-websocket-server: stop request emits authoritative stop completion wh
     );
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
     assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-normal-after-stop");
@@ -299,7 +301,8 @@ test("chat-websocket-server: authoritative stop completion and persistence backf
 
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
     assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-backfill");
     assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-result-backfill");
@@ -328,7 +331,8 @@ test("chat-websocket-server: authoritative stop completion and persistence backf
     );
     const authoritativeTerminal = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
     assert.equal(authoritativeTerminal?.data?.payload?.state, "stop_completed");
     assert.equal(authoritativeTerminal?.data?.payload?.summaryVersion, 1);
@@ -415,13 +419,16 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
         }
         return result;
       },
-      getPendingAuthorityEvents: async () => ({
+      getPendingAuthorityEvents: async ({ consumerId } = {}) => ({
         found: true,
-        events: listPendingAuthorityEvents(authorityEventOutbox),
+        events: listPendingAuthorityEvents(authorityEventOutbox, { consumerId }),
       }),
-      recordAuthorityEventAttempts: async ({ eventIds = [] } = {}) => {
+      recordAuthorityEventAttempts: async ({ consumerId, eventIds = [] } = {}) => {
         for (const eventId of eventIds) {
-          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
+          const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, {
+            eventId,
+            consumerId,
+          });
           if (!result.found) return { recorded: false, reason: result.reason };
           authorityEventOutbox = result.outbox;
         }

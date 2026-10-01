@@ -187,6 +187,7 @@ export async function createAppDependencies({
     isForbiddenUserScope,
     workspaceRootPath,
     getBot: () => bot,
+    getGlobalConfig: () => globalConfig,
     readSessionUserIds,
     openVSCodeService,
     buildHttpModuleDependencies: () => ({

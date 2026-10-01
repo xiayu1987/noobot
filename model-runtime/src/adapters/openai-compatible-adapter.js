@@ -97,9 +97,7 @@ export function createOpenAiCompatibleClient({
     ...(transportFetch ? { fetch: transportFetch } : {}),
     ...(maxRetries !== undefined ? { maxRetries } : {}),
   };
-  const sampling = {};
-  if (spec.temperature !== undefined && spec.top_p === undefined)
-    sampling.temperature = Number(spec.temperature);
+  const sampling = spec.temperature !== undefined ? { temperature: spec.temperature } : {};
   const client = new ChatOpenAI({
     model: spec.model,
     ...sampling,

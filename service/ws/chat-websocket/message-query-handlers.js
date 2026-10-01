@@ -3,24 +3,57 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { TURN_SNAPSHOT_WIRE_EVENT, validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createTurnSnapshotEnvelope } from "@noobot/event-protocol/turn-snapshot";
 import {
   EXECUTION_QUERY_COMMAND,
-  EXECUTION_CHILDREN_WIRE_EVENT,
-  EXECUTION_SNAPSHOT_WIRE_EVENT,
-  EXECUTION_TREE_WIRE_EVENT,
+  EXECUTION_QUERY_CONTRACT,
+  isExecutionQueryTargetValid,
   validateExecutionIdentity,
 } from "@noobot/session-protocol/execution-lifecycle";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
+import { findPendingInteraction } from "./pending-interaction-registry.js";
+
+const EXECUTION_QUERY_READERS = Object.freeze({
+  [EXECUTION_QUERY_COMMAND.SNAPSHOT_GET]: Object.freeze({
+    method: "getExecution",
+    candidates: (result) => [result.execution],
+  }),
+  [EXECUTION_QUERY_COMMAND.CHILDREN_GET]: Object.freeze({
+    method: "getExecutionChildren",
+    candidates: (result) => [result.execution, ...(result.children || [])],
+  }),
+  [EXECUTION_QUERY_COMMAND.TREE_GET]: Object.freeze({
+    method: "getExecutionTree",
+    candidates: (result) => Object.values(result.tree?.executions || {}),
+  }),
+});
+
+function sendAuthoritativeTurnSnapshot(sendEvent, command, snapshot) {
+  const validation = validateTurnLifecycleSnapshot(snapshot);
+  if (!validation.valid) {
+    sendFailedCommandReceipt(sendEvent, command, {
+      code: "invalid_authoritative_snapshot",
+      message: validation.errors.join(","),
+    });
+    return;
+  }
+  sendEvent(TURN_SNAPSHOT_WIRE_EVENT, createTurnSnapshotEnvelope(snapshot));
+}
 
 export function createMessageQueryHandlers({
-  state, authInfo, sendEvent, translateText, resolveBot,
-  pendingInteractionRequests, recoverTurnFinalize, recoverSnapshotOrphan,
+  state,
+  authInfo,
+  sendEvent,
+  translateText,
+  resolveBot,
+  canonicalRunOwnerId,
+  recoverTurnFinalize,
+  recoverSnapshotOrphan,
 }) {
   const handleInteractionResponse = (command) => {
     const requestId = String(command.interaction?.requestId || "").trim();
-    const requestItem = pendingInteractionRequests.get(requestId);
+    const requestItem = findPendingInteraction({ requestId, ownerUserId: canonicalRunOwnerId });
     if (!requestItem) {
       sendFailedCommandReceipt(sendEvent, command, {
         code: "interaction_not_found",
@@ -28,8 +61,6 @@ export function createMessageQueryHandlers({
       });
       return;
     }
-    pendingInteractionRequests.delete(requestId);
-    clearTimeout(requestItem.timer);
     requestItem.resolve(command.interaction?.response ?? {});
   };
 
@@ -48,7 +79,11 @@ export function createMessageQueryHandlers({
       commandId: `${commandId}:recovery`,
       terminalLimit: command.options?.terminalLimit,
     });
-    if (!recovered?.recovered && recovered?.reason && recovered.reason !== "no_recoverable_finalize") {
+    if (
+      !recovered?.recovered &&
+      recovered?.reason &&
+      recovered.reason !== "no_recoverable_finalize"
+    ) {
       sendFailedCommandReceipt(sendEvent, command, { code: recovered.reason });
       return;
     }
@@ -66,22 +101,20 @@ export function createMessageQueryHandlers({
       return;
     }
     const result = await reader.call(bot, {
-      userId, sessionId, parentSessionId: String(command.identity?.parentSessionId || "").trim(),
-      commandId, knownSequence: command.options?.knownSequence, terminalLimit: command.options?.terminalLimit,
+      userId,
+      sessionId,
+      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
+      commandId,
+      knownSequence: command.options?.knownSequence,
+      terminalLimit: command.options?.terminalLimit,
     });
     if (!result?.found) {
-      sendFailedCommandReceipt(sendEvent, command, { code: result?.reason || "snapshot_not_found" });
-      return;
-    }
-    const validation = validateTurnLifecycleSnapshot(result.snapshot);
-    if (!validation.valid) {
       sendFailedCommandReceipt(sendEvent, command, {
-        code: "invalid_authoritative_snapshot",
-        message: validation.errors.join(","),
+        code: result?.reason || "snapshot_not_found",
       });
       return;
     }
-    sendEvent("turn_snapshot", createTurnSnapshotEnvelope(result.snapshot));
+    sendAuthoritativeTurnSnapshot(sendEvent, command, result.snapshot);
   };
 
   const handleExecutionQuery = async (command, commandType) => {
@@ -89,37 +122,37 @@ export function createMessageQueryHandlers({
     const executionId = String(command.query?.executionId || "").trim();
     const rootExecutionId = String(command.query?.rootExecutionId || "").trim();
     const commandId = String(command.commandId || "").trim();
-    const query = commandType === EXECUTION_QUERY_COMMAND.SNAPSHOT_GET
-      ? { method: "getExecution", event: EXECUTION_SNAPSHOT_WIRE_EVENT, requiresExecutionId: true }
-      : commandType === EXECUTION_QUERY_COMMAND.CHILDREN_GET
-        ? { method: "getExecutionChildren", event: EXECUTION_CHILDREN_WIRE_EVENT, requiresExecutionId: true }
-        : { method: "getExecutionTree", event: EXECUTION_TREE_WIRE_EVENT, requiresExecutionId: false };
-    if (!userId || !commandId || (query.requiresExecutionId ? !executionId : (!executionId && !rootExecutionId))) {
+    const contract = EXECUTION_QUERY_CONTRACT[commandType];
+    const readerSpec = EXECUTION_QUERY_READERS[commandType];
+    if (
+      !userId ||
+      !commandId ||
+      !readerSpec ||
+      !isExecutionQueryTargetValid(commandType, { executionId, rootExecutionId })
+    ) {
       sendFailedCommandReceipt(sendEvent, command, { code: "invalid_execution_query" });
       return;
     }
     const bot = resolveBot();
-    const reader = bot?.[query.method];
+    const reader = bot?.[readerSpec.method];
     if (typeof reader !== "function") {
       sendFailedCommandReceipt(sendEvent, command, { code: "execution_query_unavailable" });
       return;
     }
     const result = await reader.call(bot, { userId, executionId, rootExecutionId });
     if (!result?.found) {
-      sendFailedCommandReceipt(sendEvent, command, { code: result?.reason || "execution_not_found" });
+      sendFailedCommandReceipt(sendEvent, command, {
+        code: result?.reason || "execution_not_found",
+      });
       return;
     }
-    const candidates = query.method === "getExecution"
-      ? [result.execution]
-      : query.method === "getExecutionChildren"
-        ? [result.execution, ...(result.children || [])]
-        : Object.values(result.tree?.executions || {});
+    const candidates = readerSpec.candidates(result);
     const invalid = candidates.find((item) => !validateExecutionIdentity(item).valid);
     if (invalid) {
       sendFailedCommandReceipt(sendEvent, command, { code: "invalid_authoritative_execution" });
       return;
     }
-    sendEvent(query.event, { ...result, commandId });
+    sendEvent(contract.wireEvent, { ...result, commandId });
   };
 
   const handleFinalize = async (command) => {
@@ -143,16 +176,7 @@ export function createMessageQueryHandlers({
       });
       return;
     }
-    const snapshot = result?.result?.snapshot;
-    const validation = validateTurnLifecycleSnapshot(snapshot);
-    if (!validation.valid) {
-      sendFailedCommandReceipt(sendEvent, command, {
-        code: "invalid_authoritative_snapshot",
-        message: validation.errors.join(","),
-      });
-      return;
-    }
-    sendEvent("turn_snapshot", createTurnSnapshotEnvelope(snapshot));
+    sendAuthoritativeTurnSnapshot(sendEvent, command, result?.result?.snapshot);
   };
 
   return { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize };

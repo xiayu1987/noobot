@@ -160,9 +160,18 @@ async function promptRenameSession(sessionItem = {}) {
 }
 
 watch(
-  () => props.sessions,
+  () =>
+    props.sessions
+      .map((sessionItem) =>
+        [
+          sessionItem?.sessionId,
+          sessionItem?.title,
+          sessionItem?.updatedAt,
+          sessionItem?.createdAt,
+        ].join("\u0000"),
+      )
+      .join("\u0001"),
   () => restoreSessionListScrollTop(),
-  { deep: true },
 );
 </script>
 

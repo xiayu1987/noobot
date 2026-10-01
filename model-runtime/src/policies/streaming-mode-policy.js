@@ -64,7 +64,7 @@ export function mayRetryWithAlternateStreaming(
     .trim()
     .toLowerCase();
   return (
-    Number(streamedTokens || error?.streamedTokens || 0) === 0 &&
+    Number(streamedTokens || 0) === 0 &&
     !isExplicitModelError(error) &&
     !EXPLICIT_ERROR_CODES.has(classifiedKind)
   );

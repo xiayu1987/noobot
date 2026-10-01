@@ -328,11 +328,14 @@ export function selectTurnPresentations({
   const projectedSourceMessages = sourceMessages.map((message) => {
     if (getMessageRole(message) !== "assistant") return message;
     const messageKey = messageTurnKey(message, activeSessionId);
-    const envelopes = envelopesByTurn.get(messageKey) || [];
-    if (!envelopes.length) return message;
+    const turnEnvelopes = envelopesByTurn.get(messageKey) || [];
+    if (!turnEnvelopes.length) return message;
+    const ownEnvelopes = getMessageTransferEnvelopes(message);
+    const mergedEnvelopes = mergeTransferEnvelopes(ownEnvelopes, turnEnvelopes);
+    if (mergedEnvelopes.length === ownEnvelopes.length) return message;
     return {
       ...message,
-      transferEnvelopes: mergeTransferEnvelopes(getMessageTransferEnvelopes(message), envelopes),
+      transferEnvelopes: mergedEnvelopes,
     };
   });
   const terminalStatuses = terminalStatusesFromRuntime(turnRuntimeRegistry, activeSessionId).filter(

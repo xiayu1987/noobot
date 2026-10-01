@@ -22,6 +22,32 @@ export const EXECUTION_QUERY_COMMAND = Object.freeze({
   TREE_GET: "execution.tree.get",
 });
 
+export const EXECUTION_QUERY_CONTRACT = Object.freeze({
+  [EXECUTION_QUERY_COMMAND.SNAPSHOT_GET]: Object.freeze({
+    wireEvent: EXECUTION_SNAPSHOT_WIRE_EVENT,
+    requiresExecutionId: true,
+  }),
+  [EXECUTION_QUERY_COMMAND.CHILDREN_GET]: Object.freeze({
+    wireEvent: EXECUTION_CHILDREN_WIRE_EVENT,
+    requiresExecutionId: true,
+  }),
+  [EXECUTION_QUERY_COMMAND.TREE_GET]: Object.freeze({
+    wireEvent: EXECUTION_TREE_WIRE_EVENT,
+    requiresExecutionId: false,
+  }),
+});
+
+export function isExecutionQueryTargetValid(
+  commandType,
+  { executionId = "", rootExecutionId = "" } = {},
+) {
+  const contract = EXECUTION_QUERY_CONTRACT[commandType];
+  if (!contract) return false;
+  return contract.requiresExecutionId
+    ? Boolean(executionId)
+    : Boolean(executionId || rootExecutionId);
+}
+
 export function deriveAgentExecutionId({ executionId = "", turnScopeId = "" } = {}) {
   const canonicalTurnScopeId = canonicalizeTurnScopeId(turnScopeId);
   return clean(executionId) || (canonicalTurnScopeId ? `agent:${canonicalTurnScopeId}` : "");

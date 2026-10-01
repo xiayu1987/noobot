@@ -153,6 +153,7 @@ export function createModelRequestExecutor({
           clock,
           classify: adapter.classifyError,
           observe,
+          signal: requestBase.options.signal,
           run: async () => {
             totalAttempts += 1;
             const attempt = totalAttempts;
@@ -241,6 +242,8 @@ export function createModelRequestExecutor({
           typeof clientDecorator === "function"
             ? clientDecorator(baseClient, { request })
             : baseClient;
+        const signal = request.options.signal;
+        let attemptState = { streamedTokens: 0 };
         let result;
         try {
           result = await executeTransportRetry({
@@ -248,10 +251,12 @@ export function createModelRequestExecutor({
             clock,
             classify: adapter.classifyError,
             observe,
+            signal,
+            streamedTokens: () => attemptState.streamedTokens,
             run: async () => {
               totalAttempts += 1;
               const attempt = totalAttempts;
-              const attemptState = { streamedTokens: 0 };
+              attemptState = { streamedTokens: 0 };
               modelObservationState.sequence += 1;
               observationPort.emit("model_context_trace", {
                 stage: "llm_invoke_messages",
@@ -289,14 +294,13 @@ export function createModelRequestExecutor({
                   tools: request.tools,
                   toolOptions: request.options.toolBinding || {},
                   invokeOptions: {
-                    signal: request.options.signal,
+                    signal,
                     callbacks: wrapStreamingCallbacks(request.options.callbacks, attemptState),
                     ...request.options.invoke,
                   },
                 });
               } catch (error) {
                 const classification = adapter.classifyError(error);
-                error.streamedTokens = attemptState.streamedTokens;
                 attempts.push({
                   attempt,
                   status: MODEL_ATTEMPT_STATUS.FAILED,
@@ -313,10 +317,11 @@ export function createModelRequestExecutor({
             },
           });
         } catch (error) {
+          if (signal?.aborted) throw error;
           const classification = adapter.classifyError(error);
           if (
             !alternateStreamingAttempted &&
-            mayRetryWithAlternateStreaming(error, error?.streamedTokens, classification)
+            mayRetryWithAlternateStreaming(error, attemptState.streamedTokens, classification)
           ) {
             alternateStreamingAttempted = true;
             streaming = alternateStreamingMode(streaming);

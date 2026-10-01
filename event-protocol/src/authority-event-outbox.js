@@ -10,37 +10,54 @@ function validateAuthorityEnvelope(envelope = {}) {
   return validateEventEnvelope(envelope).valid;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export const AUTHORITY_EVENT_DELIVERY_STATUS = Object.freeze({
   PENDING: "pending",
   DELIVERED: "delivered",
 });
 
-function normalizeDelivery(item = {}) {
-  const deliveredAt = text(item.deliveredAt || item.delivery?.deliveredAt);
+function normalizeConsumerDelivery(value = {}) {
+  const deliveredAt = text(value.deliveredAt);
   return {
     status: deliveredAt
       ? AUTHORITY_EVENT_DELIVERY_STATUS.DELIVERED
       : AUTHORITY_EVENT_DELIVERY_STATUS.PENDING,
-    attempts: Math.max(0, Number(item.deliveryAttempts ?? item.delivery?.attempts) || 0),
-    lastAttemptAt: text(item.lastAttemptAt || item.delivery?.lastAttemptAt),
+    attempts: Math.max(0, Number(value.attempts) || 0),
+    lastAttemptAt: text(value.lastAttemptAt),
     deliveredAt,
-    consumerId: text(item.consumerId || item.delivery?.consumerId),
-    orderingDomain: text(item.orderingDomain || item.delivery?.orderingDomain),
-    orderingScopeId: text(item.orderingScopeId || item.delivery?.orderingScopeId),
-    sequence: Number(item.sequence ?? item.delivery?.sequence) || 0,
+    orderingDomain: text(value.orderingDomain),
+    orderingScopeId: text(value.orderingScopeId),
+    sequence: Number(value.sequence) || 0,
   };
+}
+
+function normalizeDeliveries(source = {}) {
+  const deliveries = {};
+  if (!isPlainObject(source)) return deliveries;
+  for (const [consumerId, value] of Object.entries(source)) {
+    const normalizedConsumerId = text(consumerId);
+    if (!normalizedConsumerId || !isPlainObject(value)) continue;
+    deliveries[normalizedConsumerId] = normalizeConsumerDelivery(value);
+  }
+  return deliveries;
+}
+
+export function authorityEventConsumerDelivery(item = {}, consumerId = "") {
+  const normalizedConsumerId = text(consumerId);
+  const delivery = normalizedConsumerId ? item?.deliveries?.[normalizedConsumerId] : null;
+  return delivery ? normalizeConsumerDelivery(delivery) : normalizeConsumerDelivery({});
 }
 
 export function normalizeAuthorityEventOutbox(source = []) {
   const normalized = [];
   const eventIds = new Set();
   for (const item of Array.isArray(source) ? source : []) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    if (!isPlainObject(item)) continue;
     const eventId = text(item.eventId);
-    const envelope =
-      item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
-        ? item.envelope
-        : null;
+    const envelope = isPlainObject(item.envelope) ? item.envelope : null;
     if (
       !eventId ||
       eventId !== text(envelope?.identity?.eventId) ||
@@ -53,16 +70,45 @@ export function normalizeAuthorityEventOutbox(source = []) {
       eventId,
       envelope,
       committedAt: text(item.committedAt || envelope.occurredAt),
-      delivery: normalizeDelivery(item),
+      deliveries: normalizeDeliveries(item.deliveries),
     });
   }
   return normalized;
 }
 
-export function listPendingAuthorityEvents(source = [], { limit = 100 } = {}) {
+export function migrateLegacyAuthorityEventOutbox(source = []) {
+  return normalizeAuthorityEventOutbox(
+    (Array.isArray(source) ? source : []).map((item) => {
+      if (!isPlainObject(item)) return item;
+      const legacy = isPlainObject(item.delivery) ? item.delivery : item;
+      const consumerId = text(legacy.consumerId);
+      const deliveries = {};
+      if (consumerId) {
+        deliveries[consumerId] = {
+          attempts: legacy.attempts ?? item.deliveryAttempts,
+          lastAttemptAt: legacy.lastAttemptAt,
+          deliveredAt: legacy.deliveredAt,
+          orderingDomain: legacy.orderingDomain,
+          orderingScopeId: legacy.orderingScopeId,
+          sequence: legacy.sequence,
+        };
+      }
+      return {
+        eventId: item.eventId,
+        envelope: item.envelope,
+        committedAt: item.committedAt,
+        deliveries,
+      };
+    }),
+  );
+}
+
+export function listPendingAuthorityEvents(source = [], { consumerId = "", limit = 100 } = {}) {
+  const normalizedConsumerId = text(consumerId);
+  if (!normalizedConsumerId) return [];
   const normalizedLimit = Math.max(0, Math.min(1000, Number(limit) || 100));
   return normalizeAuthorityEventOutbox(source)
-    .filter((item) => item.delivery.status === AUTHORITY_EVENT_DELIVERY_STATUS.PENDING)
+    .filter((item) => !item.deliveries[normalizedConsumerId]?.deliveredAt)
     .slice(0, normalizedLimit);
 }
 
@@ -73,10 +119,21 @@ export const AUTHORITY_OUTBOX_JOURNAL_OP = Object.freeze({
   REMOVE: "remove",
 });
 
+function withConsumerDelivery(item, consumerId, patch) {
+  const current = authorityEventConsumerDelivery(item, consumerId);
+  return {
+    ...item,
+    deliveries: {
+      ...item.deliveries,
+      [consumerId]: normalizeConsumerDelivery({ ...current, ...patch }),
+    },
+  };
+}
+
 export function projectAuthorityOutboxJournal(records = []) {
   const byEventId = new Map();
   for (const record of Array.isArray(records) ? records : []) {
-    if (!record || typeof record !== "object" || Array.isArray(record)) continue;
+    if (!isPlainObject(record)) continue;
     const eventId = text(record.eventId);
     if (!eventId) continue;
     if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) {
@@ -85,7 +142,7 @@ export function projectAuthorityOutboxJournal(records = []) {
         eventId,
         envelope: record.envelope,
         committedAt: text(record.committedAt),
-        delivery: normalizeDelivery({}),
+        deliveries: {},
       });
       continue;
     }
@@ -94,25 +151,30 @@ export function projectAuthorityOutboxJournal(records = []) {
       continue;
     }
     const entry = byEventId.get(eventId);
-    if (!entry || entry.delivery.deliveredAt) continue;
+    const consumerId = text(record.consumerId);
+    if (!entry || !consumerId) continue;
+    const current = authorityEventConsumerDelivery(entry, consumerId);
+    if (current.deliveredAt) continue;
     if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT) {
-      entry.delivery = {
-        ...entry.delivery,
-        attempts: entry.delivery.attempts + 1,
-        lastAttemptAt: text(record.attemptedAt),
-      };
+      byEventId.set(
+        eventId,
+        withConsumerDelivery(entry, consumerId, {
+          attempts: current.attempts + 1,
+          lastAttemptAt: text(record.attemptedAt),
+        }),
+      );
       continue;
     }
     if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.ACK) {
-      entry.delivery = {
-        ...entry.delivery,
-        status: AUTHORITY_EVENT_DELIVERY_STATUS.DELIVERED,
-        deliveredAt: text(record.deliveredAt),
-        consumerId: text(record.consumerId),
-        orderingDomain: text(record.orderingDomain),
-        orderingScopeId: text(record.orderingScopeId),
-        sequence: Number(record.sequence) || 0,
-      };
+      byEventId.set(
+        eventId,
+        withConsumerDelivery(entry, consumerId, {
+          deliveredAt: text(record.deliveredAt),
+          orderingDomain: text(record.orderingDomain),
+          orderingScopeId: text(record.orderingScopeId),
+          sequence: Number(record.sequence) || 0,
+        }),
+      );
     }
   }
   return normalizeAuthorityEventOutbox([...byEventId.values()]);
@@ -120,21 +182,27 @@ export function projectAuthorityOutboxJournal(records = []) {
 
 export function recordAuthorityEventDeliveryAttempt(
   source = [],
-  { eventId = "", attemptedAt = "" } = {},
+  { eventId = "", consumerId = "", attemptedAt = "" } = {},
 ) {
   const normalizedEventId = text(eventId);
+  const normalizedConsumerId = text(consumerId);
+  if (!normalizedConsumerId) {
+    return {
+      found: false,
+      reason: "missing_delivery_consumer",
+      outbox: normalizeAuthorityEventOutbox(source),
+    };
+  }
   let found = false;
   const outbox = normalizeAuthorityEventOutbox(source).map((item) => {
-    if (item.eventId !== normalizedEventId || item.delivery.deliveredAt) return item;
+    if (item.eventId !== normalizedEventId) return item;
+    const current = authorityEventConsumerDelivery(item, normalizedConsumerId);
+    if (current.deliveredAt) return item;
     found = true;
-    return {
-      ...item,
-      delivery: {
-        ...item.delivery,
-        attempts: item.delivery.attempts + 1,
-        lastAttemptAt: text(attemptedAt),
-      },
-    };
+    return withConsumerDelivery(item, normalizedConsumerId, {
+      attempts: current.attempts + 1,
+      lastAttemptAt: text(attemptedAt),
+    });
   });
   return { found, outbox };
 }
@@ -180,37 +248,24 @@ export function acknowledgeAuthorityEventDelivery(
       Number(item.envelope.ordering.sequence) !== normalizedSequence
     )
       return item;
-    if (item.delivery.deliveredAt) return item;
+    if (authorityEventConsumerDelivery(item, normalizedConsumerId).deliveredAt) return item;
     changed = true;
-    return {
-      ...item,
-      delivery: {
-        ...item.delivery,
-        status: AUTHORITY_EVENT_DELIVERY_STATUS.DELIVERED,
-        deliveredAt: text(deliveredAt),
-        consumerId: normalizedConsumerId,
-        orderingDomain: normalizedDomain,
-        orderingScopeId: normalizedScopeId,
-        sequence: normalizedSequence,
-      },
-    };
+    return withConsumerDelivery(item, normalizedConsumerId, {
+      deliveredAt: text(deliveredAt),
+      orderingDomain: normalizedDomain,
+      orderingScopeId: normalizedScopeId,
+      sequence: normalizedSequence,
+    });
   });
   return { found, changed, outbox };
 }
 
-export function compactAuthorityEventOutbox(
-  source = [],
-  { consumerId = "", retainDeliveredAfter = "" } = {},
-) {
-  const normalizedConsumerId = text(consumerId);
-  if (!normalizedConsumerId) {
-    return {
-      compacted: false,
-      reason: "missing_compaction_consumer",
-      removed: 0,
-      outbox: normalizeAuthorityEventOutbox(source),
-    };
-  }
+function isReclaimableDelivery(delivery, cutoff) {
+  const deliveredAt = Date.parse(delivery.deliveredAt);
+  return Number.isFinite(deliveredAt) && deliveredAt < cutoff;
+}
+
+export function compactAuthorityEventOutbox(source = [], { retainDeliveredAfter = "" } = {}) {
   const cutoff = Date.parse(text(retainDeliveredAfter));
   if (!Number.isFinite(cutoff)) {
     return {
@@ -221,12 +276,12 @@ export function compactAuthorityEventOutbox(
     };
   }
   const outbox = normalizeAuthorityEventOutbox(source);
-  const retained = outbox.filter(
-    (item) =>
-      !item.delivery.deliveredAt ||
-      item.delivery.consumerId !== normalizedConsumerId ||
-      Date.parse(item.delivery.deliveredAt) >= cutoff,
-  );
+  const retained = outbox.filter((item) => {
+    const deliveries = Object.values(item.deliveries);
+    return (
+      !deliveries.length || !deliveries.every((delivery) => isReclaimableDelivery(delivery, cutoff))
+    );
+  });
   return {
     compacted: retained.length !== outbox.length,
     removed: outbox.length - retained.length,

@@ -4,14 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  MODEL_PROVIDER_CONFIG_CONTRACT,
+  MODEL_PROVIDER_CONFIG_VALUE_TYPE,
+  MODEL_SAMPLING_FIELDS,
   normalizeModelReasoningConfiguration,
+  normalizeModelSamplingFields,
   resolveModelAdapterId,
   resolveModelFamilyId,
   resolveModelOperatorId,
 } from "@noobot/model-protocol";
 
-const TRANSPORT_DEFAULT_FIELDS = Object.freeze({
+const SAMPLING_NEUTRAL_DEFAULT_FIELDS = Object.freeze({
   temperature: 0.7,
+  top_p: 1,
+  min_p: 0,
+  frequency_penalty: 0,
+  presence_penalty: 0,
+});
+
+const TRANSPORT_DEFAULT_FIELDS = Object.freeze({
   max_tokens: 10000,
 });
 
@@ -56,6 +67,21 @@ function resolveConcreteModelDefaults(model = "") {
   return CONCRETE_MODEL_RULES.find(({ match }) => match.test(normalized))?.defaults || {};
 }
 
+function assertContractValue(key, value) {
+  const contract = MODEL_PROVIDER_CONFIG_CONTRACT.properties[key];
+  const integer = contract.type === MODEL_PROVIDER_CONFIG_VALUE_TYPE.INTEGER;
+  const valid =
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    (!integer || Number.isInteger(value)) &&
+    (contract.minimum === undefined || value >= contract.minimum) &&
+    (contract.maximum === undefined || value <= contract.maximum);
+  if (valid) return;
+  const kind = integer ? "an integer" : "a number";
+  const range = [contract.minimum, contract.maximum].map((bound) => bound ?? "∞").join(" and ");
+  throw new TypeError(`model spec.${key} must be ${kind} between ${range}`);
+}
+
 export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   const out = { ...input };
   delete out.providerId;
@@ -71,31 +97,28 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   out.modelFamily = resolveModelFamilyId(out);
   out.adapterId = resolveModelAdapterId({ modelFamily: out.modelFamily });
   Object.assign(out, normalizeModelReasoningConfiguration(out, reasoningFallback));
-  const defaults = { ...TRANSPORT_DEFAULT_FIELDS };
+  out.sampling_fields = normalizeModelSamplingFields(out.sampling_fields);
+  const defaults = { ...SAMPLING_NEUTRAL_DEFAULT_FIELDS, ...TRANSPORT_DEFAULT_FIELDS };
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});
   Object.assign(defaults, MODEL_FAMILY_DEFAULT_FIELDS[out.modelFamily] || {});
   Object.assign(defaults, resolveConcreteModelDefaults(out.model));
 
-  if (hasOwn(out, "top_p") && !hasOwn(out, "temperature")) {
-    delete defaults.temperature;
-  }
-  for (const [key, value] of Object.entries(defaults)) {
-    if (!hasOwn(out, key)) out[key] = value;
-  }
-  for (const [key, min, max] of [
-    ["temperature", 0, 2],
-    ["top_p", 0.01, 1],
-    ["frequency_penalty", -2, 2],
-    ["presence_penalty", -2, 2],
-    ["top_k", 1, 100],
-    ["min_p", 0, 1],
-  ]) {
-    if (out[key] === undefined) continue;
-    const value = out[key];
-    if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
-      throw new TypeError(`model spec.${key} must be a number between ${min} and ${max}`);
+  const selected = new Set(out.sampling_fields);
+  for (const key of MODEL_SAMPLING_FIELDS) {
+    const configured = out[key] !== undefined && out[key] !== null;
+    if (configured) assertContractValue(key, out[key]);
+    if (!selected.has(key)) {
+      delete out[key];
+      continue;
     }
+    if (configured) continue;
+    if (defaults[key] === undefined) {
+      delete out[key];
+      continue;
+    }
+    out[key] = defaults[key];
   }
+  if (!hasOwn(out, "max_tokens")) out.max_tokens = defaults.max_tokens;
   if (out.max_tokens !== undefined) {
     if (!Number.isInteger(out.max_tokens) || out.max_tokens <= 0) {
       throw new TypeError("model spec.max_tokens must be a positive integer");

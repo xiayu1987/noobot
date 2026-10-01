@@ -127,7 +127,6 @@ test("execution queries expose authoritative snapshot, children and tree envelop
     sendEvent: (event, data) => sent.push({ event, data }),
     resolveBot: () => bot,
     isForbiddenUserScope: () => false,
-    pendingInteractionRequests: new Map(),
   });
   await handler(
     JSON.stringify(
@@ -179,7 +178,6 @@ test("execution query rejects malformed and unavailable requests", async () => {
       webSocket: { close() {} },
       sendEvent: (event, data) => sent.push({ event, data }),
       resolveBot: () => bot,
-      pendingInteractionRequests: new Map(),
     });
   await create()(
     JSON.stringify(

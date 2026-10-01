@@ -30,20 +30,21 @@ export function createTurnFinalizer({
   webSocket,
   commitTurnLifecycle,
 } = {}) {
-  const sendCommandReceipt = (state, outcome, error = null) => sendEvent(
-    AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-    createAgentCommandReceipt({
-      commandId: state.runMeta?.commandId,
-      commandType: state.runMeta?.commandType,
-      outcome,
-      identity: {
-        sessionId: state.runMeta?.sessionId,
-        turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId,
-        dialogProcessId: state.runMeta?.dialogProcessId,
-      },
-      error,
-    }),
-  );
+  const sendCommandReceipt = (state, outcome, error = null) =>
+    sendEvent(
+      AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+      createAgentCommandReceipt({
+        commandId: state.runMeta?.commandId,
+        commandType: state.runMeta?.commandType,
+        outcome,
+        identity: {
+          sessionId: state.runMeta?.sessionId,
+          turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId,
+          dialogProcessId: state.runMeta?.dialogProcessId,
+        },
+        error,
+      }),
+    );
   const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
     const failed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
@@ -67,7 +68,7 @@ export function createTurnFinalizer({
       terminalStatus: { command: "timeout", description, error: errorObject },
     });
     if (!failed?.applied && !failed?.deduplicated) {
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "timeout" });
+      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "timeout", result: failed });
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
@@ -108,7 +109,11 @@ export function createTurnFinalizer({
       finalizePayload: { assistantMessage: stoppedPartialAssistant },
     });
     if (!processed?.applied && !processed?.deduplicated) {
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_processing_completed" });
+      rejectUnpersistedTurnStatus({
+        runMeta: state.runMeta,
+        status: "stop_processing_completed",
+        result: processed,
+      });
       return;
     }
     const completionCommitId = createTurnLifecycleCommandId({
@@ -135,7 +140,11 @@ export function createTurnFinalizer({
       },
     });
     if (!completed?.applied && !completed?.deduplicated) {
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_completed" });
+      rejectUnpersistedTurnStatus({
+        runMeta: state.runMeta,
+        status: "stop_completed",
+        result: completed,
+      });
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.STOPPED);
@@ -189,7 +198,11 @@ export function createTurnFinalizer({
           retryable: true,
         },
       });
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "completed" });
+      rejectUnpersistedTurnStatus({
+        runMeta: state.runMeta,
+        status: "completed",
+        result: completed,
+      });
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED);
@@ -220,7 +233,7 @@ export function createTurnFinalizer({
       },
     });
     if (!committed?.applied && !committed?.deduplicated) {
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error" });
+      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error", result: committed });
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
@@ -243,7 +256,7 @@ export function createTurnFinalizer({
     });
     const errorMessage = error?.message || translateText("ws.unknownError", state.locale);
     if (!committed?.applied && !committed?.deduplicated) {
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error" });
+      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error", result: committed });
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {

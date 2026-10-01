@@ -25,12 +25,14 @@ describe("resendDebugLogger", () => {
     logResendDebug("resend.disabled", { sessionId: "s-1" });
 
     expect(sink.debug).toHaveBeenCalledWith("resend", expect.any(Function));
-    expect(sink.debug.mock.results[0].value).toEqual(expect.objectContaining({
-      category: "debug",
-      debugType: "resend",
-      event: "resend.disabled",
-      sessionId: "s-1",
-    }));
+    expect(sink.debug.mock.results[0].value).toEqual(
+      expect.objectContaining({
+        category: "debug",
+        debugType: "resend",
+        event: "resend.disabled",
+        sessionId: "s-1",
+      }),
+    );
   });
 
   it("constructs lazy resend details only when the authoritative policy enables them", () => {
@@ -45,21 +47,22 @@ describe("resendDebugLogger", () => {
     });
 
     expect(sink.debug).toHaveBeenCalledTimes(1);
-    expect(sink.debug.mock.results[0].value).toEqual(expect.objectContaining({
-      category: "debug",
-      event: "resend.trace",
-      sessionId: "s-1",
-      dialogProcessId: "dp-1",
-      turnScopeId: "ts-1",
-      data: expect.objectContaining({
+    expect(sink.debug.mock.results[0].value).toEqual(
+      expect.objectContaining({
+        category: "debug",
         event: "resend.trace",
         sessionId: "s-1",
         dialogProcessId: "dp-1",
         turnScopeId: "ts-1",
-        detail: "payload",
-        at: expect.any(String),
+        data: expect.objectContaining({
+          event: "resend.trace",
+          sessionId: "s-1",
+          dialogProcessId: "dp-1",
+          turnScopeId: "ts-1",
+          detail: "payload",
+        }),
       }),
-    }));
+    );
   });
 
   it("does not construct a lazy payload when resend diagnostics are disabled", () => {

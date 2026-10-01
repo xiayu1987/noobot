@@ -540,3 +540,54 @@ test("execution listener includes events enqueued during a flush", async () => {
   assert.deepEqual(persisted, [1, 2]);
   assert.deepEqual(forwarded, [1, 2]);
 });
+
+test("execution listener reports delivery timing once at flush without writing execution logs", async () => {
+  const persisted = [];
+  const timings = [];
+  const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    userId: "user-a",
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: {
+      dialogProcessId: "dialog-a",
+      onEvent: async () => ({ delivered: 1 }),
+      onDeliveryTiming: (summary) => timings.push(summary),
+    },
+  });
+  listener.forwardEvent({ event: "turn_lifecycle_committed", data: {} });
+  listener.forwardEvent({ event: "turn_lifecycle_committed", data: {} });
+  await listener.flush();
+  await listener.flush();
+  assert.equal(persisted.length, 0);
+  assert.equal(timings.length, 1);
+  assert.equal(timings[0].sessionId, "session-a");
+  assert.equal(timings[0].turnScopeId, "turn-a");
+  assert.equal(timings[0].queueWaitMs.n, 2);
+  assert.equal(timings[0].runMs.n, 2);
+});
+
+test("execution listener does not collect delivery timing without onDeliveryTiming", async () => {
+  const forwarded = [];
+  const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async () => {} },
+    userId: "user-a",
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: { onEvent: async () => forwarded.push(1) },
+  });
+  const originalNow = performance.now;
+  let nowCalls = 0;
+  performance.now = () => {
+    nowCalls += 1;
+    return originalNow.call(performance);
+  };
+  try {
+    listener.forwardEvent({ event: "turn_lifecycle_committed", data: {} });
+    await listener.flush();
+  } finally {
+    performance.now = originalNow;
+  }
+  assert.equal(forwarded.length, 1);
+  assert.equal(nowCalls, 0);
+});

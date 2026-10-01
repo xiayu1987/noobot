@@ -6,7 +6,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { startServerWithWs, closeServer, callChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
+import {
+  startServerWithWs,
+  closeServer,
+  callChatWs,
+  createProtocolTestCommand,
+} from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
@@ -38,8 +43,7 @@ test("chat-websocket-server: non-user abort emits only authoritative failure and
 
     const failedLifecycle = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" &&
-        item?.data?.payload?.eventType === TURN_EVENT.FAILED,
+        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.FAILED,
     );
     assert.equal(failedLifecycle?.data?.identity?.turnScopeId, "turn-non-user-abort");
     const failedReceipt = events.find(
@@ -47,29 +51,37 @@ test("chat-websocket-server: non-user abort emits only authoritative failure and
         item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
         item?.data?.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
     );
-    assert.match(String(failedReceipt?.data?.error?.message || ""), /upstream aborted unexpectedly/);
+    assert.match(
+      String(failedReceipt?.data?.error?.message || ""),
+      /upstream aborted unexpectedly/,
+    );
   } finally {
     await closeServer(server);
   }
 });
 
-test("chat-websocket-server: client disconnect aborts execution without persisting run_aborted", async () => {
+test("chat-websocket-server: client disconnect detaches the transport without aborting execution", async () => {
   let terminalStatusWrites = 0;
   let runAborted = false;
+  let releaseRun = null;
   const server = await startServerWithWs({
     bot: {
       upsertTurnStatus: async () => {
         terminalStatusWrites += 1;
         return null;
       },
-      runSession: async ({ abortSignal }) => new Promise((resolve, reject) => {
-        abortSignal.addEventListener("abort", () => {
-          runAborted = true;
-          const error = new Error("execution aborted after socket close");
-          error.name = "AbortError";
-          reject(error);
-        }, { once: true });
-      }),
+      runSession: async ({ abortSignal }) =>
+        new Promise((resolve) => {
+          abortSignal.addEventListener(
+            "abort",
+            () => {
+              runAborted = true;
+            },
+            { once: true },
+          );
+          releaseRun = () =>
+            resolve({ answer: "done", messages: [], traces: [], executionLogs: [] });
+        }),
     },
   });
   try {
@@ -79,12 +91,16 @@ test("chat-websocket-server: client disconnect aborts execution without persisti
     });
     await new Promise((resolve, reject) => {
       ws.on("open", () => {
-        ws.send(JSON.stringify(createProtocolTestCommand({
-          userId: "u1",
-          sessionId: "s-client-disconnect",
-          message: "hello",
-          turnScopeId: "turn-client-disconnect",
-        })));
+        ws.send(
+          JSON.stringify(
+            createProtocolTestCommand({
+              userId: "u1",
+              sessionId: "s-client-disconnect",
+              message: "hello",
+              turnScopeId: "turn-client-disconnect",
+            }),
+          ),
+        );
         setTimeout(() => ws.close(1000, "dispose"), 10);
       });
       ws.on("close", resolve);
@@ -92,8 +108,11 @@ test("chat-websocket-server: client disconnect aborts execution without persisti
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    assert.equal(runAborted, true);
+    assert.equal(runAborted, false);
     assert.equal(terminalStatusWrites, 0);
+    releaseRun?.();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(runAborted, false);
   } finally {
     await closeServer(server);
   }

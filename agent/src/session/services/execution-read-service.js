@@ -12,6 +12,12 @@ import {
 
 const clean = (value) => String(value || "").trim();
 
+function withReadDiagnostics(readModel, result) {
+  return readModel.unreadableSessions
+    ? { ...result, unreadableSessions: readModel.unreadableSessions }
+    : result;
+}
+
 export class ExecutionReadService {
   constructor({ sessionCrudService, now = () => new Date().toISOString() } = {}) {
     this.sessionCrudService = sessionCrudService;
@@ -20,14 +26,16 @@ export class ExecutionReadService {
   }
 
   _summaryFingerprint(summaries = []) {
-    return JSON.stringify((Array.isArray(summaries) ? summaries : [])
-      .map((item = {}) => ({
-        sessionId: clean(item.sessionId),
-        parentSessionId: clean(item.parentSessionId),
-        updatedAt: clean(item.updatedAt),
-      }))
-      .filter((item) => item.sessionId)
-      .sort((left, right) => left.sessionId.localeCompare(right.sessionId)));
+    return JSON.stringify(
+      (Array.isArray(summaries) ? summaries : [])
+        .map((item = {}) => ({
+          sessionId: clean(item.sessionId),
+          parentSessionId: clean(item.parentSessionId),
+          updatedAt: clean(item.updatedAt),
+        }))
+        .filter((item) => item.sessionId)
+        .sort((left, right) => left.sessionId.localeCompare(right.sessionId)),
+    );
   }
 
   async _readIndexFingerprint(userId) {
@@ -43,8 +51,10 @@ export class ExecutionReadService {
   }
 
   async _scanAuthoritative(userId) {
-    const sessions = await this.sessionCrudService.getAllSessionsData({ userId });
-    return buildAuthoritativeExecutionReadModel(sessions);
+    const failures = [];
+    const sessions = await this.sessionCrudService.getAllSessionsData({ userId, failures });
+    const readModel = buildAuthoritativeExecutionReadModel(sessions);
+    return failures.length ? { ...readModel, unreadableSessions: failures } : readModel;
   }
 
   async _readAll(userId) {
@@ -59,29 +69,37 @@ export class ExecutionReadService {
       fingerprint = null;
     }
     const readModel = await this._scanAuthoritative(normalizedUserId);
-    if (fingerprint !== null) this.readIndexByUser.set(normalizedUserId, { fingerprint, readModel });
+    if (fingerprint !== null)
+      this.readIndexByUser.set(normalizedUserId, { fingerprint, readModel });
     return readModel;
   }
 
   async getExecution({ userId, executionId } = {}) {
     if (!userId) return { found: false, reason: "missing_execution" };
     const readModel = await this._readAll(userId);
-    return queryAuthoritativeExecution(readModel, { executionId, generatedAt: this.now() });
+    return withReadDiagnostics(
+      readModel,
+      queryAuthoritativeExecution(readModel, { executionId, generatedAt: this.now() }),
+    );
   }
 
   async getExecutionChildren({ userId, executionId } = {}) {
     if (!userId) return { found: false, reason: "missing_user" };
     const readModel = await this._readAll(userId);
-    return queryAuthoritativeExecutionChildren(readModel, { executionId, generatedAt: this.now() });
+    return withReadDiagnostics(
+      readModel,
+      queryAuthoritativeExecutionChildren(readModel, { executionId, generatedAt: this.now() }),
+    );
   }
 
   async getExecutionTree({ userId, executionId = "", rootExecutionId = "" } = {}) {
     if (!userId) return { found: false, reason: "missing_user" };
     const readModel = await this._readAll(userId);
-    return queryAuthoritativeExecutionTree(readModel, {
+    const result = queryAuthoritativeExecutionTree(readModel, {
       executionId,
       rootExecutionId,
       generatedAt: this.now(),
     });
+    return withReadDiagnostics(readModel, result);
   }
 }

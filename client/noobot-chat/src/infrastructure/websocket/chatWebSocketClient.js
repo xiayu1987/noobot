@@ -8,6 +8,11 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor.js";
 import { closeWebSocket } from "./closeWebSocket.js";
 import { logTransportDiagnostics } from "../../modules/debug/loggers/transportDiagnosticsLogger.js";
+import { isEventProcessingTimingEnabled } from "../../modules/debug/loggers/eventProcessingTimingLogger.js";
+import {
+  createEventProcessingTimingRecorder,
+  summarizeReceivedEventData,
+} from "./chatWebSocketEventObservation.js";
 import {
   createTurnLifecycleReceipt,
   TURN_EVENT,
@@ -152,30 +157,36 @@ export function createChatWebSocketClient({
     return transport.current();
   }
 
+  function logLifecycleReceipt(ws, data = {}, outcome = {}) {
+    logTransportDiagnostics("frontend.websocket.lifecycleReceipt", () => ({
+      sessionId: normalizeTrimmedString(data?.sessionId),
+      dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
+      turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+      eventId: normalizeTrimmedString(data?.eventId),
+      eventType: normalizeTrimmedString(data?.eventType),
+      readyState: Number.isInteger(ws?.readyState) ? ws.readyState : null,
+      bufferedAmount: Number.isFinite(ws?.bufferedAmount) ? ws.bufferedAmount : null,
+      isCurrentTransport: Boolean(ws) && ws === transport.current(),
+      ...outcome,
+    }));
+  }
+
   function acknowledgeTurnLifecycleReceipt(ws, event, data = {}) {
     if (event !== TURN_LIFECYCLE_WIRE_EVENT) return;
     const validation = validateTurnLifecycleEnvelope(data);
     if (!validation.valid) {
-      logTransportDiagnostics("frontend.websocket.lifecycleReceiptRejected", () => ({
-        sessionId: normalizeTrimmedString(data?.sessionId),
-        dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
-        turnScopeId: normalizeTrimmedString(data?.turnScopeId),
-        eventId: normalizeTrimmedString(data?.eventId),
-        reasons: validation.errors,
-      }));
+      logLifecycleReceipt(ws, data, { result: "rejected", reasons: validation.errors });
       return;
     }
     try {
       ws.send(JSON.stringify(createTurnLifecycleReceipt(data)));
+      logLifecycleReceipt(ws, data, { result: "sent" });
     } catch (error) {
-      logTransportDiagnostics("frontend.websocket.lifecycleReceiptSendFailed", () => ({
-        sessionId: normalizeTrimmedString(data?.sessionId),
-        dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
-        turnScopeId: normalizeTrimmedString(data?.turnScopeId),
-        eventId: normalizeTrimmedString(data?.eventId),
+      logLifecycleReceipt(ws, data, {
+        result: "send_failed",
         errorType: normalizeTrimmedString(error?.name || "Error"),
         errorMessage: normalizeTrimmedString(error?.message),
-      }));
+      });
     }
   }
 
@@ -183,43 +194,14 @@ export function createChatWebSocketClient({
     return Number(data?.ordering?.sequence) || null;
   }
 
-  function countArray(value) {
-    return Array.isArray(value) ? value.length : 0;
-  }
-
-  function summarizeReceivedEventIdentity(identity = {}) {
-    return {
-      sessionId: normalizeTrimmedString(identity.sessionId),
-      turnScopeId: normalizeTrimmedString(identity.turnScopeId),
-      eventId: normalizeTrimmedString(identity.eventId),
-      messageId: normalizeTrimmedString(identity.messageId),
-    };
-  }
-
-  function summarizeReceivedEventPayload(payload = {}) {
-    return {
-      dialogProcessId: normalizeTrimmedString(payload.dialogProcessId),
-      eventType: normalizeTrimmedString(payload.eventType),
-      parentSessionId: normalizeTrimmedString(payload.parentSessionId),
-      presentationMessageId: normalizeTrimmedString(payload.presentationMessageId),
-      contentLength: String(payload.content ?? payload.text ?? "").length,
-      attachmentCount: countArray(payload.attachments),
-      transferEnvelopeCount: countArray(payload.transferEnvelopes),
-    };
-  }
-
-  function summarizeReceivedEventData(data) {
-    return {
-      ...summarizeReceivedEventIdentity(data?.identity || {}),
-      ...summarizeReceivedEventPayload(data?.payload || {}),
-    };
-  }
+  const recordEventProcessingTiming = createEventProcessingTimingRecorder();
 
   function attachTransportHandlers(ws) {
     if (!ws) return null;
     registerSocketHandlers(ws, "transport", {
       open: () => transport.markOpen(ws),
       message: (messageEvent) => {
+        const timingStartedAt = isEventProcessingTimingEnabled() ? performance.now() : null;
         let parsedEvent = "";
         let parsedData = {};
         try {
@@ -321,6 +303,17 @@ export function createChatWebSocketClient({
             activeStreamContext.handleProtocolEvent(transportEvent);
           } else if (owner === "transport_live_subscriber") {
             liveEventSubscriber(transportEvent);
+          }
+          if (timingStartedAt !== null) {
+            recordEventProcessingTiming({
+              messageEvent,
+              timingStartedAt,
+              dispatchEndedAt: performance.now(),
+              event,
+              data,
+              lifecycleData,
+              owner,
+            });
           }
           logTransportDiagnostics("frontend.websocket.protocolEventDispatched", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),

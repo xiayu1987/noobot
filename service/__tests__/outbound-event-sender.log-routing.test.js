@@ -91,3 +91,73 @@ test("persistent message event eventSent keeps the default backend-websocket rou
   assert.equal(await sendEvent(MESSAGE_EVENT_WIRE_EVENT, finalContent), true);
   assert.equal(eventSentRouting(logs, "evt-final"), undefined);
 });
+
+function createSlowSender(sessionLogConfig) {
+  const logs = [];
+  const sendEvent = createOutboundEventSender({
+    webSocket: {
+      readyState: 1,
+      bufferedAmount: 0,
+      send: (_packet, callback) => setTimeout(() => callback(), 30),
+    },
+    state: {},
+    logConnection: (event, data, routing) => logs.push({ event, data, routing }),
+    sessionLogConfig,
+  });
+  return { sendEvent, logs };
+}
+
+function slowFinalContent() {
+  return messageEnvelope({
+    eventId: "evt-slow",
+    sequence: 1,
+    payload: {
+      eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
+      presentationMessageId: "presentation-1",
+      text: "body",
+    },
+  });
+}
+
+test("slow websocket send callback is logged to delivery-timing debug when enabled", async () => {
+  const { sendEvent, logs } = createSlowSender({
+    sessionLogControls: { debug: { backendDeliveryTiming: true } },
+  });
+  assert.equal(await sendEvent(MESSAGE_EVENT_WIRE_EVENT, slowFinalContent()), true);
+  const slow = logs.filter((item) => item.event === "service.websocket.sendCallback.slow");
+  assert.equal(slow.length, 1);
+  assert.ok(slow[0].data.callbackMs >= 20);
+  assert.equal(slow[0].data.failed, false);
+  assert.deepEqual(slow[0].routing, {
+    category: "debug",
+    level: "debug",
+    debugType: "delivery-timing",
+  });
+});
+
+test("slow websocket send callback is not timed when delivery-timing debug is off", async () => {
+  const { sendEvent, logs } = createSlowSender({});
+  assert.equal(await sendEvent(MESSAGE_EVENT_WIRE_EVENT, slowFinalContent()), true);
+  assert.equal(
+    logs.some((item) => item.event === "service.websocket.sendCallback.slow"),
+    false,
+  );
+});
+
+test("fast websocket send callback is not logged as slow", async () => {
+  const { sendEvent, logs } = createSender();
+  const finalContent = messageEnvelope({
+    eventId: "evt-fast",
+    sequence: 1,
+    payload: {
+      eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
+      presentationMessageId: "presentation-1",
+      text: "body",
+    },
+  });
+  assert.equal(await sendEvent(MESSAGE_EVENT_WIRE_EVENT, finalContent), true);
+  assert.equal(
+    logs.some((item) => item.event === "service.websocket.sendCallback.slow"),
+    false,
+  );
+});

@@ -10,6 +10,7 @@ import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 
 import { createSessionFacade, createSessionServices } from "noobot-agent/session";
+import { AUTHORITY_EVENT_CONSUMER } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createInteractionAuthorityBridge } from "../../ws/chat-websocket/interaction-authority-bridge.js";
 
 async function withTempWorkspace(operation) {
@@ -89,6 +90,7 @@ test("child interaction authority commits through the protocol persistence scope
       sessionId: "child-session",
       parentSessionId: "root-session",
       persistenceScope,
+      consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     });
     assert.equal(pending.found, true);
     assert.equal(pending.events.length, 1);

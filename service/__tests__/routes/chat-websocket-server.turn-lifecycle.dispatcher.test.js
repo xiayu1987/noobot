@@ -16,7 +16,10 @@ import {
 } from "@noobot/event-protocol";
 import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
+import {
+  AUTHORITY_EVENT_CONSUMER,
+  createAuthorityEventDispatcher,
+} from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createOutboundEventSender } from "../../ws/chat-websocket/outbound-event-sender.js";
 import { createRunEventListener } from "../../ws/chat-websocket/run-event-listener.js";
 import {
@@ -75,6 +78,7 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
   });
   attachRunTransport(runHandle, sendEvent);
   const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (...args) => publishRunEvent(runHandle, ...args),
   });
@@ -122,13 +126,14 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   const sent = [];
   let socketAvailable = false;
   const bot = {
-    async getPendingAuthorityEvents() {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    async getPendingAuthorityEvents({ consumerId } = {}) {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
     },
-    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
       for (const eventId of eventIds) {
         const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
           eventId,
+          consumerId,
           attemptedAt: new Date().toISOString(),
         });
         if (!result.found) return { recorded: false, reason: result.reason };
@@ -154,6 +159,7 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   };
   const createDispatcher = () =>
     createAuthorityEventDispatcher({
+      consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
       resolveBot: () => bot,
       sendEvent: (_eventName, envelope) => {
         if (!socketAvailable) return false;
@@ -168,8 +174,12 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
     reason: "authority_event_send_failed",
     delivered: 0,
   });
-  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 1);
-  assert.equal(eventOutbox[0].delivery.attempts, 1);
+  assert.equal(
+    listPendingAuthorityEvents(eventOutbox, { consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET })
+      .length,
+    1,
+  );
+  assert.equal(eventOutbox[0].deliveries[AUTHORITY_EVENT_CONSUMER.WEBSOCKET].attempts, 1);
 
   socketAvailable = true;
   const retried = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
@@ -177,7 +187,11 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   assert.equal(sent.length, 1);
   assert.equal(sent[0].identity.eventId, "authority-event-send-retry");
   assert.deepEqual(sent[0], committed.envelope);
-  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
+  assert.equal(
+    listPendingAuthorityEvents(eventOutbox, { consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET })
+      .length,
+    0,
+  );
 
   const afterAcknowledgement = await createDispatcher()({
     userId: "u1",
@@ -226,6 +240,7 @@ test("authority dispatcher preserves the child persistence scope across every ou
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: () => true,
   });
@@ -249,12 +264,16 @@ test("authority dispatcher preserves the child persistence scope across every ou
     assert.equal(input.parentSessionId, "root-session");
   }
   assert.equal(calls[0].input.limit, 25);
+  assert.equal(calls[0].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
+  assert.equal(calls[1].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
   assert.deepEqual(calls[1].input.eventIds, [envelope.identity.eventId]);
   assert.deepEqual(
     calls[2].input.acknowledgements.map((receipt) => receipt.eventId),
     [envelope.identity.eventId],
   );
-  assert.equal(calls[4].input.consumerId, "service.websocket");
+  assert.equal(calls[2].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
+  assert.equal(calls[3].input.consumerId, AUTHORITY_EVENT_CONSUMER.WEBSOCKET);
+  assert.equal("consumerId" in calls[4].input, false);
   assert.equal("deliveredThroughSequence" in calls[4].input, false);
   assert.equal(
     Date.now() - Date.parse(calls[4].input.retainDeliveredAfter) >=
@@ -308,6 +327,7 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (event, envelope) => {
       sent.push({ event, envelope });
@@ -388,6 +408,7 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: async () => {
       calls.send += 1;
@@ -456,6 +477,7 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (_eventName, envelope) => {
       sent.push(envelope.identity.eventId);
@@ -516,13 +538,14 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   let acknowledgementAvailable = false;
   const sentEventIds = [];
   const bot = {
-    async getPendingAuthorityEvents() {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    async getPendingAuthorityEvents({ consumerId } = {}) {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
     },
-    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
       for (const eventId of eventIds) {
         const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
           eventId,
+          consumerId,
           attemptedAt: new Date().toISOString(),
         });
         if (!result.found) return { recorded: false, reason: result.reason };
@@ -549,6 +572,7 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
     },
   };
   const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (_eventName, envelope) => {
       sentEventIds.push(envelope.identity.eventId);
@@ -562,16 +586,86 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
     reason: "session_save_failed",
     delivered: 0,
   });
-  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 1);
-  assert.equal(eventOutbox[0].delivery.attempts, 1);
+  assert.equal(
+    listPendingAuthorityEvents(eventOutbox, { consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET })
+      .length,
+    1,
+  );
+  assert.equal(eventOutbox[0].deliveries[AUTHORITY_EVENT_CONSUMER.WEBSOCKET].attempts, 1);
 
   acknowledgementAvailable = true;
   const retry = await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
   assert.deepEqual(retry, { dispatched: true, delivered: 1 });
   assert.deepEqual(sentEventIds, ["authority-event-ack-retry", "authority-event-ack-retry"]);
-  assert.equal(eventOutbox[0].delivery.attempts, 2);
-  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
+  assert.equal(eventOutbox[0].deliveries[AUTHORITY_EVENT_CONSUMER.WEBSOCKET].attempts, 2);
+  assert.equal(
+    listPendingAuthorityEvents(eventOutbox, { consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET })
+      .length,
+    0,
+  );
 
   await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
   assert.equal(sentEventIds.length, 2);
+});
+
+test("dispatcher requires a known authority event consumer", () => {
+  for (const consumerId of [undefined, "", "  ", "service.unknown"]) {
+    assert.throws(
+      () =>
+        createAuthorityEventDispatcher({
+          resolveBot: () => ({}),
+          sendEvent: () => true,
+          consumerId,
+        }),
+      /authority event consumerId is required/,
+    );
+  }
+});
+
+test("CLI dispatcher acknowledges and compacts as the CLI consumer", async () => {
+  const envelope = createTestLifecycleEnvelope({
+    eventId: "authority-event-cli-consumer",
+    sequence: 1,
+    sessionId: "s-cli-consumer",
+  });
+  const calls = [];
+  let pending = true;
+  const bot = {
+    async getPendingAuthorityEvents(input) {
+      calls.push({ method: "get", input });
+      return {
+        found: true,
+        events: pending ? [{ eventId: envelope.identity.eventId, envelope }] : [],
+      };
+    },
+    async recordAuthorityEventAttempts(input) {
+      calls.push({ method: "attempt", input });
+      return { recorded: true };
+    },
+    async acknowledgeAuthorityEvents(input) {
+      calls.push({ method: "acknowledge", input });
+      pending = false;
+      return { acknowledged: true };
+    },
+    async compactAuthorityEvents(input) {
+      calls.push({ method: "compact", input });
+      return { compacted: true };
+    },
+  };
+  const dispatch = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.CLI,
+    resolveBot: () => bot,
+    sendEvent: () => true,
+  });
+
+  const result = await dispatch({ userId: "u1", sessionId: "s-cli-consumer" });
+
+  assert.deepEqual(result, { dispatched: true, delivered: 1 });
+  const consumerIdsByMethod = Object.fromEntries(
+    calls.map(({ method, input }) => [method, input.consumerId]),
+  );
+  assert.equal(consumerIdsByMethod.acknowledge, AUTHORITY_EVENT_CONSUMER.CLI);
+  assert.equal(Object.hasOwn(consumerIdsByMethod, "compact"), true);
+  assert.equal(consumerIdsByMethod.compact, undefined);
+  assert.equal(AUTHORITY_EVENT_CONSUMER.CLI, "service.cli");
 });

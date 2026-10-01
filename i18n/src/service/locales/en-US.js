@@ -28,6 +28,7 @@ export default {
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",
   "attach.fileTooLarge": "attachment too large",
+  "cli.attachmentOnlyMessage": "Parse attachment content.",
   "attach.hintAddExtensionToAllowedExtensions":
     "extension is not allowed by built-in attachment policy",
   "attach.hintIncreaseMaxFileCountOrReduceFiles": "reduce uploaded files",

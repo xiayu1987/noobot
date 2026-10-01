@@ -19,7 +19,10 @@ import {
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
-import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
+import {
+  AUTHORITY_EVENT_CONSUMER,
+  createAuthorityEventDispatcher,
+} from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { attachRunTransport, publishRunEvent } from "../../ws/chat-websocket/run-registry.js";
 import {
   startServerWithWs,
@@ -251,12 +254,12 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
       }
       return result;
     },
-    async getPendingAuthorityEvents() {
-      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    async getPendingAuthorityEvents({ consumerId } = {}) {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox, { consumerId }) };
     },
-    async recordAuthorityEventAttempts({ eventIds = [] } = {}) {
+    async recordAuthorityEventAttempts({ consumerId, eventIds = [] } = {}) {
       for (const eventId of eventIds) {
-        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
+        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId, consumerId });
         if (!result.found) return { recorded: false, reason: result.reason };
         eventOutbox = result.outbox;
       }
@@ -284,6 +287,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
     },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET,
     resolveBot: () => bot,
     sendEvent: (eventName, data) => {
       sent.push({ event: eventName, data });
@@ -315,5 +319,9 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   assert.equal(sent[0]?.event, TURN_LIFECYCLE_WIRE_EVENT);
   assert.equal(sent[0]?.data?.causality?.commandId, event.commandId);
   assert.equal(sent[0]?.data?.identity?.eventId, first.envelope.identity.eventId);
-  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
+  assert.equal(
+    listPendingAuthorityEvents(eventOutbox, { consumerId: AUTHORITY_EVENT_CONSUMER.WEBSOCKET })
+      .length,
+    0,
+  );
 });

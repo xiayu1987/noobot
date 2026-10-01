@@ -139,6 +139,8 @@ describe("configNavigation", () => {
     expect(keys).not.toContain("prompt_cache_retention");
     expect(keys).not.toContain("cache_control");
     expect(keys).not.toContain("use_responses_api");
+    expect(keys).toContain("temperature");
+    expect(keys).not.toContain("sampling_fields");
 
     const cacheFields = configLeafFields(providerEntry.node).find(
       (field) => field.key === "prompt_cache_fields",

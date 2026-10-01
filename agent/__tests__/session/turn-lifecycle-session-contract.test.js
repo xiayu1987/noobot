@@ -582,3 +582,47 @@ test("retryable stop finalize failure keeps intent and can recover once", async 
   assert.equal(completed.turn.executionState, "user_stopped");
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "");
 });
+
+test("stop completed materializes partial assistant with authoritative identity", async () => {
+  const h = harness();
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "a-partial", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "p-partial", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.STOP_ACCEPTED, "s-partial", 2, { phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-partial", 3, { phase: TURN_PHASE.STOP }),
+  );
+  const stopCompleted = event(TURN_EVENT.STOP_COMPLETED, "finalize-partial:t1", 4, {
+    phase: TURN_PHASE.STOP,
+    completionCommitId: "finalize-partial:t1",
+    terminalStatus: {
+      command: "user_stopped",
+      description: "stopped",
+      assistantMessage: { content: "partial answer", sessionId: "s1", turnScopeId: "t1" },
+    },
+  });
+  const completed = await h.service.applyTurnLifecycleEvent(stopCompleted);
+  assert.equal(completed.applied, true);
+  assert.equal(completed.turn.state, TURN_STATE.STOP_COMPLETED);
+  const assistants = () =>
+    h
+      .reload()
+      .messages.filter((message) => message.role === "assistant" && message.turnScopeId === "t1");
+  assert.equal(assistants().length, 1);
+  const [assistant] = assistants();
+  assert.equal(assistant.content, "partial answer");
+  assert.equal(Boolean(assistant.messageUid), true);
+  assert.equal(assistant.presentationMessageId, "presentation-t1");
+  const replay = await h.service.applyTurnLifecycleEvent(stopCompleted);
+  assert.equal(replay.applied, false);
+  assert.equal(assistants().length, 1);
+  assert.equal(assistants()[0].messageUid, assistant.messageUid);
+});

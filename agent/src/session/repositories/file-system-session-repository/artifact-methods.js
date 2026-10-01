@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { migrateLegacyAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import { isSessionDisplaySummaryCurrent } from "../../session-summary-builders.js";
@@ -311,21 +312,20 @@ class SessionArtifactMethods {
           persistenceContext,
         );
         const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
-        if (lifecycle?.repair?.status === "failed") {
-          const error = new Error(
-            String(lifecycle.repair.message || "Session repair previously failed"),
-          );
-          error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
-          error.repairSkipped = true;
-          throw error;
-        }
-        let requiresRepair = false;
+        const repairPreviouslyFailed = lifecycle?.repair?.status === "failed";
+        let repairTrigger = null;
         try {
           await this._readNormalizedSession(scope, sessionId, parentSessionId);
-        } catch {
-          requiresRepair = true;
+        } catch (validationError) {
+          repairTrigger = validationError;
         }
-        if (!requiresRepair) return { migrated: false, migrations: [], repaired: [] };
+        if (!repairTrigger) {
+          if (repairPreviouslyFailed) await this._clearSessionRepairFailure(userId, sessionId);
+          return { migrated: false, migrations: [], repaired: [] };
+        }
+        if (repairPreviouslyFailed) {
+          throw this._createPreviousRepairFailureError(lifecycle, repairTrigger);
+        }
         try {
           return await runAtomicSessionRepair({
             sessionDir: scope.sessionDir,
@@ -352,7 +352,9 @@ class SessionArtifactMethods {
               if (migration.legacyAuthorityEventOutbox?.length) {
                 await replaceAuthorityOutboxRecords(
                   stagingDir,
-                  authorityOutboxRecordsFromOutbox(migration.legacyAuthorityEventOutbox),
+                  authorityOutboxRecordsFromOutbox(
+                    migrateLegacyAuthorityEventOutbox(migration.legacyAuthorityEventOutbox),
+                  ),
                 );
               }
               await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
@@ -392,6 +394,10 @@ class SessionArtifactMethods {
               errorCode: String(error?.code || error?.errorCode || "SESSION_REPAIR_FAILED"),
               message: String(error?.message || "Session repair failed"),
               failedAt: this.now(),
+              trigger: {
+                code: String(repairTrigger?.code || repairTrigger?.errorCode || ""),
+                message: String(repairTrigger?.message || ""),
+              },
             },
             updatedAt: this.now(),
           });

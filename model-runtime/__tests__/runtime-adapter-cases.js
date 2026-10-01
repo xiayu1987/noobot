@@ -519,6 +519,7 @@ test("Anthropic Messages adapter sends native endpoint and exposes cache usage",
         reasoning_effort_options: ["none", "low", "medium", "high"],
         reasoning_effort_parameter: "reasoning_effort",
         prompt_cache_fields: ["cache_control"],
+        sampling_fields: ["temperature"],
       },
     });
     const boundClient = anthropicMessagesAdapter.bindTools({

@@ -54,6 +54,39 @@ export const MODEL_PROMPT_CACHE_FIELD = Object.freeze({
 
 export const MODEL_PROMPT_CACHE_FIELDS = Object.freeze(Object.values(MODEL_PROMPT_CACHE_FIELD));
 
+export const MODEL_SAMPLING_FIELD = Object.freeze({
+  TEMPERATURE: "temperature",
+  TOP_P: "top_p",
+  TOP_K: "top_k",
+  MIN_P: "min_p",
+  FREQUENCY_PENALTY: "frequency_penalty",
+  PRESENCE_PENALTY: "presence_penalty",
+});
+
+export const MODEL_SAMPLING_FIELDS = Object.freeze(Object.values(MODEL_SAMPLING_FIELD));
+
+export const MODEL_SAMPLING_FIELDS_KEY = "sampling_fields";
+
+const MODEL_SAMPLING_FIELD_SET = new Set(MODEL_SAMPLING_FIELDS);
+
+export function normalizeModelSamplingFields(input) {
+  if (input === undefined) return Object.freeze([]);
+  if (!Array.isArray(input)) {
+    throw new TypeError("model spec.sampling_fields must be an array");
+  }
+  const selected = new Set();
+  for (const field of input) {
+    if (!MODEL_SAMPLING_FIELD_SET.has(field)) {
+      throw new TypeError(`unsupported model spec.sampling_fields value: ${String(field)}`);
+    }
+    if (selected.has(field)) {
+      throw new TypeError(`duplicate model spec.sampling_fields value: ${field}`);
+    }
+    selected.add(field);
+  }
+  return Object.freeze(MODEL_SAMPLING_FIELDS.filter((field) => selected.has(field)));
+}
+
 const MODEL_PROMPT_CACHE_VALUE = Object.freeze({
   OPTIONS: Object.freeze({ ttl: "30m" }),
   KIMI_OPTIONS: Object.freeze({ mode: "implicit", ttl: "5m" }),
@@ -299,7 +332,7 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
     }),
     top_p: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
-      minimum: 0,
+      minimum: 0.01,
       maximum: 1,
     }),
     top_k: samplingField({
@@ -325,6 +358,13 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
     max_tokens: samplingField({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.INTEGER,
       minimum: 1,
+    }),
+    [MODEL_SAMPLING_FIELDS_KEY]: samplingField({
+      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.ARRAY,
+      items: Object.freeze({
+        type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
+        values: MODEL_SAMPLING_FIELDS,
+      }),
     }),
     reasoning_effort: reasoningField(nonEmptyStringField, {
       optionsField: "reasoning_effort_options",

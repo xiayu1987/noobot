@@ -158,6 +158,9 @@ export const TIME_THRESHOLDS = deepFreeze({
     sessionLogCleanupIntervalMs: TIME_TIERS.oneHourMs,
     sessionLogMinIntervalMs: TIME_TIERS.startupMs,
   },
+  cli: {
+    healthProbeMs: TIME_TIERS.fastProbeMs,
+  },
 });
 
 export function resolveUserInteractionTimeoutMs(env = process.env) {

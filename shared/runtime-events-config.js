@@ -57,6 +57,8 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
         "NOOBOT_RUNTIME_EVENT_FRONTEND_PLUGIN_RUNTIME_DIAGNOSTICS_DEBUG",
       frontendMessageMutationDiagnostics:
         "NOOBOT_RUNTIME_EVENT_FRONTEND_MESSAGE_MUTATION_DIAGNOSTICS_DEBUG",
+      frontendEventProcessingTiming: "NOOBOT_RUNTIME_EVENT_FRONTEND_EVENT_PROCESSING_TIMING_DEBUG",
+      backendDeliveryTiming: "NOOBOT_RUNTIME_EVENT_BACKEND_DELIVERY_TIMING_DEBUG",
     },
   },
   hookRuntimeEvents: {
@@ -116,6 +118,8 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
       frontendTurnRuntimeDiagnostics: false,
       frontendPluginRuntimeDiagnostics: false,
       frontendMessageMutationDiagnostics: false,
+      frontendEventProcessingTiming: false,
+      backendDeliveryTiming: false,
     },
   },
   hookRuntimeEvents: {
@@ -222,6 +226,14 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   "message-mutation-diagnostics": {
     controlKey: "frontendMessageMutationDiagnostics",
     exposeToClient: true,
+  },
+  "event-processing-timing": {
+    controlKey: "frontendEventProcessingTiming",
+    exposeToClient: true,
+  },
+  "delivery-timing": {
+    controlKey: "backendDeliveryTiming",
+    exposeToClient: false,
   },
 });
 

@@ -226,9 +226,11 @@ export async function getPendingAuthorityEvents({
   sessionId,
   parentSessionId = "",
   persistenceContext = null,
+  consumerId = "",
   limit = 100,
 } = {}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session", events: [] };
+  if (!text(consumerId)) return { found: false, reason: "missing_consumer", events: [] };
   const sessionDir = await readOutboxSessionDir(
     this,
     userId,
@@ -240,7 +242,7 @@ export async function getPendingAuthorityEvents({
   const outbox = await readAuthorityOutbox(sessionDir);
   return {
     found: true,
-    events: listPendingAuthorityEvents(outbox, { limit }),
+    events: listPendingAuthorityEvents(outbox, { consumerId, limit }),
   };
 }
 
@@ -249,10 +251,12 @@ export async function recordAuthorityEventAttempts({
   sessionId,
   parentSessionId = "",
   persistenceContext = null,
+  consumerId = "",
   eventIds = [],
 } = {}) {
   const requested = (Array.isArray(eventIds) ? eventIds : []).map(text).filter(Boolean);
-  if (!userId || !sessionId || !requested.length) {
+  const normalizedConsumerId = text(consumerId);
+  if (!userId || !sessionId || !normalizedConsumerId || !requested.length) {
     return { recorded: false, reason: "missing_identity", events: [] };
   }
   const sessionDir = await readOutboxSessionDir(
@@ -268,10 +272,19 @@ export async function recordAuthorityEventAttempts({
     let outbox = await readAuthorityOutbox(sessionDir);
     const records = [];
     for (const eventId of requested) {
-      const result = recordAuthorityEventDeliveryAttempt(outbox, { eventId, attemptedAt });
+      const result = recordAuthorityEventDeliveryAttempt(outbox, {
+        eventId,
+        consumerId: normalizedConsumerId,
+        attemptedAt,
+      });
       if (!result.found) return { recorded: false, reason: "event_not_found", events: [] };
       outbox = result.outbox;
-      records.push({ op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT, eventId, attemptedAt });
+      records.push({
+        op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
+        eventId,
+        consumerId: normalizedConsumerId,
+        attemptedAt,
+      });
     }
     await appendAuthorityOutboxRecords(sessionDir, records);
     const attempted = new Set(requested);
@@ -355,10 +368,9 @@ export async function compactAuthorityEvents({
   sessionId,
   parentSessionId = "",
   persistenceContext = null,
-  consumerId = "",
   retainDeliveredAfter = "",
 } = {}) {
-  if (!userId || !sessionId || !consumerId) {
+  if (!userId || !sessionId) {
     return { compacted: false, reason: "missing_compaction_identity" };
   }
   const sessionDir = await readOutboxSessionDir(
@@ -371,7 +383,7 @@ export async function compactAuthorityEvents({
   if (!sessionDir) return { compacted: false, reason: "session_not_found" };
   return withAuthorityOutboxMutation(sessionDir, async () => {
     const outbox = await readAuthorityOutbox(sessionDir);
-    const result = compactAuthorityEventOutbox(outbox, { consumerId, retainDeliveredAfter });
+    const result = compactAuthorityEventOutbox(outbox, { retainDeliveredAfter });
     if (result.reason || !result.compacted) return result;
     const checkpoint = await readAuthorityOutboxCheckpoint(sessionDir);
     await writeAuthorityOutboxCheckpoint(sessionDir, {

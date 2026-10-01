@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { authorityEventConsumerDelivery } from "@noobot/event-protocol/outbox";
 import {
   deliveryReceiptOf,
   event,
@@ -25,22 +26,33 @@ test("authority outbox delivery is read, attempted, and acknowledged through the
   const receipt = deliveryReceiptOf(accepted.envelope);
   const { eventId } = receipt;
 
-  const pending = await h.service.getPendingAuthorityEvents({ userId: "u1", sessionId: "s1" });
+  const pending = await h.service.getPendingAuthorityEvents({
+    userId: "u1",
+    sessionId: "s1",
+    consumerId: receipt.consumerId,
+  });
   assert.equal(pending.found, true);
   assert.deepEqual(
     pending.events.map((item) => item.eventId),
     [eventId],
   );
-  assert.equal(pending.events[0].delivery.attempts, 0);
+  assert.equal(authorityEventConsumerDelivery(pending.events[0], receipt.consumerId).attempts, 0);
 
   const attempted = await h.service.recordAuthorityEventAttempts({
     userId: "u1",
     sessionId: "s1",
+    consumerId: receipt.consumerId,
     eventIds: [eventId],
   });
   assert.equal(attempted.recorded, true);
-  assert.equal((await h.outboxEntry(eventId)).delivery.attempts, 1);
-  assert.equal((await h.outboxEntry(eventId)).delivery.lastAttemptAt, now());
+  assert.equal(
+    authorityEventConsumerDelivery(await h.outboxEntry(eventId), receipt.consumerId).attempts,
+    1,
+  );
+  assert.equal(
+    authorityEventConsumerDelivery(await h.outboxEntry(eventId), receipt.consumerId).lastAttemptAt,
+    now(),
+  );
 
   const acknowledged = await h.service.acknowledgeAuthorityEvents({
     userId: "u1",
@@ -52,10 +64,19 @@ test("authority outbox delivery is read, attempted, and acknowledged through the
   assert.equal(acknowledged.delivered, 1);
   assert.equal(acknowledged.deduplicated, 0);
   assert.equal(
-    (await h.service.getPendingAuthorityEvents({ userId: "u1", sessionId: "s1" })).events.length,
+    (
+      await h.service.getPendingAuthorityEvents({
+        userId: "u1",
+        sessionId: "s1",
+        consumerId: receipt.consumerId,
+      })
+    ).events.length,
     0,
   );
-  assert.equal((await h.outboxEntry(eventId)).delivery.deliveredAt, now());
+  assert.equal(
+    authorityEventConsumerDelivery(await h.outboxEntry(eventId), receipt.consumerId).deliveredAt,
+    now(),
+  );
 
   const replay = await h.service.acknowledgeAuthorityEvents({
     userId: "u1",
@@ -81,10 +102,18 @@ test("authority outbox delivery mutations remain atomic when session persistence
 
   let restore = h.failOutboxJournal();
   await assert.rejects(() =>
-    h.service.recordAuthorityEventAttempts({ userId: "u1", sessionId: "s1", eventIds: [eventId] }),
+    h.service.recordAuthorityEventAttempts({
+      userId: "u1",
+      sessionId: "s1",
+      consumerId: receipt.consumerId,
+      eventIds: [eventId],
+    }),
   );
   restore();
-  assert.equal((await h.outboxEntry(eventId)).delivery.attempts, 0);
+  assert.equal(
+    authorityEventConsumerDelivery(await h.outboxEntry(eventId), receipt.consumerId).attempts,
+    0,
+  );
 
   restore = h.failOutboxJournal();
   await assert.rejects(() =>
@@ -96,7 +125,10 @@ test("authority outbox delivery mutations remain atomic when session persistence
     }),
   );
   restore();
-  assert.equal((await h.outboxEntry(eventId)).delivery.deliveredAt, "");
+  assert.equal(
+    authorityEventConsumerDelivery(await h.outboxEntry(eventId), receipt.consumerId).deliveredAt,
+    "",
+  );
 });
 
 test("authority outbox compaction is explicit, receipt-safe, and atomic on persistence failure", async () => {

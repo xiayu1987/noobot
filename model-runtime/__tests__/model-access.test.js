@@ -179,7 +179,7 @@ for (const protocol of ["responses", "chat", "messages"]) {
 
 test("preview captures SDK defaults without any network request", async () => {
   const result = await testModelAccess({
-    modelSpec,
+    modelSpec: { ...modelSpec, sampling_fields: ["temperature"] },
     preview: true,
     fetch: () => assert.fail("preview accessed upstream"),
   });
@@ -188,6 +188,19 @@ test("preview captures SDK defaults without any network request", async () => {
   assert.equal(result.traces[0].request.body.temperature, 0.7);
   assert.equal(result.traces[0].request.body.model, modelSpec.model);
   assert.equal(result.traces[0].response, undefined);
+});
+
+test("preview omits sampling parameters that are not selected", async () => {
+  const result = await testModelAccess({
+    modelSpec: { ...modelSpec, temperature: 0.4, sampling_fields: [] },
+    preview: true,
+    fetch: () => assert.fail("preview accessed upstream"),
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.error));
+  const body = result.traces[0].request.body;
+  for (const key of ["temperature", "top_p", "top_k", "min_p", "sampling_fields"]) {
+    assert.equal(key in body, false, key);
+  }
 });
 
 test("upstream failure keeps status and raw body without retries or credential leaks", async () => {

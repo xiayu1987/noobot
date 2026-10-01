@@ -110,19 +110,18 @@ test("session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(getSessionLogDebugControlKey({ debugType: "agent-context" }), "agentContext");
   assert.equal(getSessionLogDebugControlKey({ debugType: "agent-transport" }), "agentTransport");
 
-  const record = buildSessionLogRecord(
-    {
-      source: "frontend",
-      category: "message",
-      event: "chat.message",
-      sessionId: "session-1",
-      message: "hello",
-      data: { turnScopeId: "turn-1" },
-    },
-    { includeTimestamp: false },
-  );
+  const record = buildSessionLogRecord({
+    source: "frontend",
+    category: "message",
+    event: "chat.message",
+    sessionId: "session-1",
+    message: "hello",
+    data: { turnScopeId: "turn-1" },
+    time: "2026-10-01T00:00:00.000Z",
+  });
 
   assert.deepEqual(record, {
+    time: "2026-10-01T00:00:00.000Z",
     source: "frontend",
     category: "message",
     level: "info",
@@ -272,18 +271,15 @@ test("workflow diagnostics debug follows explicit disabled and enabled controls"
 });
 
 test("session log record carries debug type only at top level", () => {
-  const record = buildSessionLogRecord(
-    {
-      source: "frontend",
-      category: "debug",
-      level: "debug",
-      debugType: "stop-continue",
-      event: "frontend.stopContinue.stopButtonEvaluated",
-      sessionId: "session-1",
-      data: { changed: true },
-    },
-    { includeTimestamp: false },
-  );
+  const record = buildSessionLogRecord({
+    source: "frontend",
+    category: "debug",
+    level: "debug",
+    debugType: "stop-continue",
+    event: "frontend.stopContinue.stopButtonEvaluated",
+    sessionId: "session-1",
+    data: { changed: true },
+  });
 
   assert.equal(record.debugType, "stop-continue");
   assert.equal(record.data.debugType, undefined);
@@ -310,4 +306,23 @@ test("normalizeRuntimeEvent builds a sanitized structured record", () => {
   assert.equal(record.data.token, "[Redacted]");
   assert.equal(record.data.reason, "bad-token");
   assert.equal(record.error.name, "Error");
+});
+
+test("isSessionLogDebugTypeEnabled gates delivery-timing before collection", async () => {
+  const { isSessionLogDebugTypeEnabled } = await import("../src/session-log-protocol.js");
+  assert.equal(isSessionLogDebugTypeEnabled("delivery-timing", { env: {} }), false);
+  assert.equal(
+    isSessionLogDebugTypeEnabled("delivery-timing", {
+      env: {},
+      sessionLogControls: { debug: { backendDeliveryTiming: true } },
+    }),
+    true,
+  );
+  assert.equal(
+    isSessionLogDebugTypeEnabled("delivery-timing", {
+      env: { NOOBOT_RUNTIME_EVENT_BACKEND_DELIVERY_TIMING_DEBUG: "true" },
+    }),
+    true,
+  );
+  assert.equal(isSessionLogDebugTypeEnabled("not-registered", { env: {} }), false);
 });

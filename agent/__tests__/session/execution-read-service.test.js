@@ -327,3 +327,24 @@ test("summary/index failure falls back to authoritative scan without caching sta
   );
   assert.equal(scans, 2);
 });
+
+test("unreadable sessions are skipped and surfaced as read diagnostics", async () => {
+  const reader = new ExecutionReadService({
+    sessionCrudService: {
+      async getAllSessionsData({ failures }) {
+        failures.push({ sessionId: "broken", code: "SESSION_REPAIR_FAILED", message: "bad" });
+        return [
+          { sessionId: "ok", parentSessionId: "", turnLifecycle: { turns: { root: turn() } } },
+        ];
+      },
+    },
+    now,
+  });
+  const tree = await reader.getExecutionTree({ userId: "u1", rootExecutionId: "agent:root" });
+  assert.equal(tree.found, true);
+  assert.deepEqual(tree.unreadableSessions, [
+    { sessionId: "broken", code: "SESSION_REPAIR_FAILED", message: "bad" },
+  ]);
+  const snapshot = await reader.getExecution({ userId: "u1", executionId: "agent:root" });
+  assert.equal(snapshot.unreadableSessions.length, 1);
+});

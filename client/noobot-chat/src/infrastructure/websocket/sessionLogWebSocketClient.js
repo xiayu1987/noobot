@@ -248,7 +248,6 @@ export function createSessionLogWebSocketClient({
     const record = buildSessionLogRecord(resolvedEvent, {
       source,
       defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
-      includeTimestamp: false,
     });
     if (isSessionLogDebugEvent(record)) {
       if (

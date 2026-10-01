@@ -7,6 +7,7 @@ import { asEventProtocolEnvelope, validateProtocolEvent } from "@noobot/event-pr
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { RUNTIME_EVENT_CATEGORIES } from "@noobot/runtime-events";
 import { STREAM_DELTA_DEBUG_TYPE } from "@noobot/shared/runtime-events-config";
+import { isSessionLogDebugTypeEnabled } from "@noobot/runtime-events/session-log-protocol";
 import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
 import { isTerminalTurnEvent, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
@@ -196,9 +197,38 @@ function recordSendFailure({ sessionLogConfig, state, eventName, enrichedData, e
   });
 }
 
+const SLOW_SEND_CALLBACK_MS = 20;
+const DELIVERY_TIMING_LOG_ROUTING = Object.freeze({
+  category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+  level: "debug",
+  debugType: "delivery-timing",
+});
+
+function logSlowSendCallback(context, packet, eventContext, sendStartedAt, error) {
+  const callbackMs = performance.now() - sendStartedAt;
+  if (callbackMs <= SLOW_SEND_CALLBACK_MS) return;
+  context.logConnection?.(
+    "service.websocket.sendCallback.slow",
+    {
+      eventName: eventContext.eventName,
+      eventType: eventContext.eventType,
+      sequence: eventContext.sequence,
+      callbackMs: Number(callbackMs.toFixed(2)),
+      packetBytes: packet.length,
+      bufferedAmount: context.webSocket.bufferedAmount,
+      failed: Boolean(error),
+    },
+    DELIVERY_TIMING_LOG_ROUTING,
+  );
+}
+
 function sendPacket(context, packet, eventContext) {
   return new Promise((resolve) => {
+    const sendStartedAt = context.deliveryTimingEnabled ? performance.now() : 0;
     context.webSocket.send(packet, (error) => {
+      if (context.deliveryTimingEnabled) {
+        logSlowSendCallback(context, packet, eventContext, sendStartedAt, error);
+      }
       if (error) {
         recordSendFailure({ ...context, ...eventContext, error });
         resolve(false);
@@ -216,6 +246,7 @@ function sendPacket(context, packet, eventContext) {
 
 export function createOutboundEventSender({ webSocket, state, logConnection, sessionLogConfig }) {
   let sequence = 0;
+  const deliveryTimingEnabled = isSessionLogDebugTypeEnabled("delivery-timing", sessionLogConfig);
   return function sendEvent(eventName, data = {}, transportContext = {}) {
     const protocolEnvelope = getProtocolEnvelope(data);
     if (!validateOutboundProtocolEnvelope(protocolEnvelope, eventName, logConnection)) return false;
@@ -256,7 +287,7 @@ export function createOutboundEventSender({ webSocket, state, logConnection, ses
     };
     try {
       return sendPacket(
-        { webSocket, state, logConnection, sessionLogConfig },
+        { webSocket, state, logConnection, sessionLogConfig, deliveryTimingEnabled },
         JSON.stringify({ event: eventName, data: enrichedData }),
         eventContext,
       );

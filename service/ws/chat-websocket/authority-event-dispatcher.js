@@ -8,7 +8,18 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const clean = (value) => String(value || "").trim();
 
-export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
+export const AUTHORITY_EVENT_CONSUMER = Object.freeze({
+  WEBSOCKET: "service.websocket",
+  CLI: "service.cli",
+});
+
+const KNOWN_CONSUMERS = new Set(Object.values(AUTHORITY_EVENT_CONSUMER));
+
+export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumerId } = {}) {
+  const normalizedConsumerId = clean(consumerId);
+  if (!KNOWN_CONSUMERS.has(normalizedConsumerId)) {
+    throw new Error(`authority event consumerId is required: ${normalizedConsumerId || "<empty>"}`);
+  }
   const inFlightByScope = new Map();
   const lastCompactAtBySession = new Map();
 
@@ -34,9 +45,9 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       throw new Error("authority event outbox API is required");
     }
     let delivered = 0;
-    const consumerId = "service.websocket";
+    const consumerId = normalizedConsumerId;
     while (true) {
-      const pending = await bot.getPendingAuthorityEvents({ ...identity, limit });
+      const pending = await bot.getPendingAuthorityEvents({ ...identity, consumerId, limit });
       if (!pending?.found) {
         return {
           dispatched: false,
@@ -63,6 +74,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       }
       const attempt = await bot.recordAuthorityEventAttempts({
         ...identity,
+        consumerId,
         eventIds: events.map((item) => clean(item.eventId)),
       });
       if (!attempt?.recorded) {
@@ -118,7 +130,6 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       ) {
         await bot.compactAuthorityEvents({
           ...identity,
-          consumerId,
           retainDeliveredAfter: new Date(
             now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
           ).toISOString(),

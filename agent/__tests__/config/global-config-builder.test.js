@@ -194,6 +194,13 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
           reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "openai",
           adapterId: "openai-compatible",
+          sampling_fields: ["temperature"],
+        },
+        unselected: {
+          model: "gpt-5.5",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
+          temperature: 0.3,
         },
       },
     }),
@@ -203,6 +210,8 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
   assert.equal(built.rawConfig.providers.main.alias, "main");
   assert.equal(built.rawConfig.providers.main.temperature, 0.7);
   assert.equal(built.rawConfig.providers.main.top_p, undefined);
+  assert.deepEqual(built.rawConfig.providers.unselected.sampling_fields, []);
+  assert.equal("temperature" in built.rawConfig.providers.unselected, false);
 });
 
 test("createGlobalConfigBuilder: provider 无需 format 也通过唯一 ModelSpec 入口规范化", async () => {

@@ -232,25 +232,29 @@ export function authorityOutboxRecordsFromOutbox(outbox = []) {
     const eventId = String(item?.eventId || "").trim();
     if (!eventId) continue;
     records.push(authorityOutboxCommitRecord(item));
-    const delivery = item?.delivery || {};
-    const attempts = Math.max(0, Number(delivery.attempts) || 0);
-    for (let index = 0; index < attempts; index += 1) {
-      records.push({
-        op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
-        eventId,
-        attemptedAt: String(delivery.lastAttemptAt || "").trim(),
-      });
-    }
-    if (String(delivery.deliveredAt || "").trim()) {
-      records.push({
-        op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,
-        eventId,
-        consumerId: String(delivery.consumerId || "").trim(),
-        orderingDomain: String(delivery.orderingDomain || "").trim(),
-        orderingScopeId: String(delivery.orderingScopeId || "").trim(),
-        sequence: Number(delivery.sequence) || 0,
-        deliveredAt: String(delivery.deliveredAt || "").trim(),
-      });
+    const deliveries =
+      item?.deliveries && typeof item.deliveries === "object" ? item.deliveries : {};
+    for (const [consumerId, delivery] of Object.entries(deliveries)) {
+      const attempts = Math.max(0, Number(delivery?.attempts) || 0);
+      for (let index = 0; index < attempts; index += 1) {
+        records.push({
+          op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
+          eventId,
+          consumerId,
+          attemptedAt: String(delivery.lastAttemptAt || "").trim(),
+        });
+      }
+      if (String(delivery?.deliveredAt || "").trim()) {
+        records.push({
+          op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,
+          eventId,
+          consumerId,
+          orderingDomain: String(delivery.orderingDomain || "").trim(),
+          orderingScopeId: String(delivery.orderingScopeId || "").trim(),
+          sequence: Number(delivery.sequence) || 0,
+          deliveredAt: String(delivery.deliveredAt || "").trim(),
+        });
+      }
     }
   }
   return records;

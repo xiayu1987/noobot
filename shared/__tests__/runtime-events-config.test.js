@@ -200,6 +200,8 @@ test("high-frequency diagnostics default off", () => {
     "modelContextTrace",
     "frontendStreamDelta",
     "frontendThinkingReplay",
+    "frontendEventProcessingTiming",
+    "backendDeliveryTiming",
   ]) {
     assert.equal(defaults.debug[controlKey], false, controlKey);
   }

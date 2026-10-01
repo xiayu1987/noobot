@@ -33,6 +33,19 @@ import {
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir } from "./outbox-scope.js";
 
+function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
+  if (!assistantMessage || typeof assistantMessage !== "object" || Array.isArray(assistantMessage))
+    return assistantMessage;
+  const clean = (value) => String(value || "").trim();
+  const turn = session?.turnLifecycle?.turns?.[clean(turnScopeId)] || {};
+  return {
+    ...assistantMessage,
+    messageUid: clean(assistantMessage.messageUid) || createSessionMessageUid(),
+    presentationMessageId:
+      clean(assistantMessage.presentationMessageId) || clean(turn.presentationMessageId),
+  };
+}
+
 async function appendCommittedTurnLifecycleEvent(sessionDir, committedEvent) {
   const eventId = String(committedEvent?.eventId || "").trim();
   if (!sessionDir || !eventId) return;
@@ -267,6 +280,11 @@ export async function applyTurnLifecycleEvent({
         expectedAggregateVersion,
       );
       if (conflict) return conflict;
+      const terminalAssistantMessage = bindTerminalAssistantIdentity(
+        session,
+        lifecycleEvent.turnScopeId,
+        lifecycleEvent.terminalStatus?.assistantMessage,
+      );
       const { outboxSessionDir, result } = await commitTurnLifecycleWithOutbox({
         service: this,
         userId,
@@ -279,7 +297,7 @@ export async function applyTurnLifecycleEvent({
           materializeTurnTerminalMessages({
             messages: session.messages,
             terminalStatus,
-            assistantMessage: lifecycleEvent.terminalStatus?.assistantMessage,
+            assistantMessage: terminalAssistantMessage,
             previousSummaryVersion,
           }),
       });
