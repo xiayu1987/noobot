@@ -428,7 +428,7 @@ export async function readFileMutationRecords(userId, sessionId, { rootSessionId
   if (!scopeId) return [];
   const roots = [
     sessionRoot(userId, scopeId),
-    path.join(workspaceRoot(), userId, "runtime/workflow/session", scopeId),
+    path.join(workspaceRoot(), userId, "runtime/plugin-data/workflow/session", scopeId),
   ];
   const records = (await Promise.all(roots.map((root) => findFileMutationRecords(root)))).flat();
   return records;
@@ -475,7 +475,12 @@ export async function waitForPluginExecutionEvents(
 }
 
 export async function readHarnessRun(userId, dialogProcessId) {
-  const root = path.join(workspaceRoot(), userId, "runtime/harness/runs", dialogProcessId);
+  const root = path.join(
+    workspaceRoot(),
+    userId,
+    "runtime/plugin-data/harness/runs",
+    dialogProcessId,
+  );
   return {
     run: await readJson(path.join(root, "harness-run.json")),
     context: await readJson(path.join(root, "context-snapshot.json")),

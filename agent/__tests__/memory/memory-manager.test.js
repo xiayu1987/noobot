@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experience/default-model";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 import { MemoryManager } from "../../src/memory/index.js";
@@ -59,9 +59,6 @@ async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
 }
 
 const EMPTY_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n";
-const TEMPLATE_EXPERIENCE_MODEL_PATH = fileURLToPath(
-  new URL("../../../user-template/default-user/memory/experience-model.md", import.meta.url),
-);
 
 async function createLongMemoryUserRoot() {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
@@ -71,7 +68,7 @@ async function createLongMemoryUserRoot() {
   await writeFile(path.join(userRoot, "memory/long-memory.md"), EMPTY_LONG_MEMORY_DOCUMENT);
   await writeFile(
     path.join(userRoot, "memory/experience-model.md"),
-    await readFile(TEMPLATE_EXPERIENCE_MODEL_PATH, "utf8"),
+    renderDefaultExperienceModelText(),
   );
   return { workspaceRoot, userId, userRoot };
 }

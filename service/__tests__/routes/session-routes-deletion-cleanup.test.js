@@ -14,7 +14,7 @@ import { createPluginServicePorts } from "../../services/plugin-service-ports.js
 
 test("session-routes: 删除 session 时清理 harness 运行记录", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-route-harness-"));
-  const runsDir = path.join(basePath, "runtime", "harness", "runs");
+  const runsDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs");
   const runDelete = path.join(runsDir, "run-delete");
   const runKeep = path.join(runsDir, "run-keep");
   await fs.mkdir(runDelete, { recursive: true });

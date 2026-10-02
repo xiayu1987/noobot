@@ -16,15 +16,17 @@ import {
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 function buildSemantic() {
-  return parseWorkflowDslText([
-    "WORKFLOW_DSL/1",
-    'NODE id=start type=state stateType=start name="Start"',
-    'NODE id=a type=action name="A" task="A"',
-    'NODE id=end type=state stateType=end name="End"',
-    "EDGE from=start to=a",
-    "EDGE from=a to=end",
-    "END",
-  ].join("\n"));
+  return parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="Start"',
+      'NODE id=a type=action name="A" task="A"',
+      'NODE id=end type=state stateType=end name="End"',
+      "EDGE from=start to=a",
+      "EDGE from=a to=end",
+      "END",
+    ].join("\n"),
+  );
 }
 
 function buildCtx() {
@@ -60,15 +62,17 @@ function buildOptions({ subSessionRunner } = {}) {
   return {
     maxAutoTransitions: 3,
     workflowNodeStateRepository: createInMemoryWorkflowNodeStateRepository(),
-    subSessionRunner: subSessionRunner || (async ({ strategy, runConfigPatch, metadata }) => ({
-      sessionId: "child-a",
-      dialogProcessId: strategy.dialogProcessId,
-      strategy,
-      runConfigPatch,
-      metadata,
-      persisted: { outputDir: "runtime/workflow/session/s1/child-a" },
-      result: { messages: [{ role: "assistant", content: "done" }] },
-    })),
+    subSessionRunner:
+      subSessionRunner ||
+      (async ({ strategy, runConfigPatch, metadata }) => ({
+        sessionId: "child-a",
+        dialogProcessId: strategy.dialogProcessId,
+        strategy,
+        runConfigPatch,
+        metadata,
+        persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child-a" },
+        result: { messages: [{ role: "assistant", content: "done" }] },
+      })),
   };
 }
 
@@ -79,17 +83,23 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   const { ctx, events: realtimeEvents } = buildCtx();
   const subSessionCalls = [];
   const options = buildOptions({
-      subSessionRunner: async (call) => {
-        subSessionCalls.push(call);
-        return {
-          lifecycle: { executionId: call?.strategy?.executionId || call?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
-          sessionId: "child-a",
-          dialogProcessId: "actual-child-dialog-a",
-          persisted: { outputDir: "runtime/workflow/session/s1/child-a" },
-          result: { messages: [{ role: "assistant", content: "done" }] },
-        };
-      },
-    });
+    subSessionRunner: async (call) => {
+      subSessionCalls.push(call);
+      return {
+        lifecycle: {
+          executionId: call?.strategy?.executionId || call?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
+        sessionId: "child-a",
+        dialogProcessId: "actual-child-dialog-a",
+        persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child-a" },
+        result: { messages: [{ role: "assistant", content: "done" }] },
+      };
+    },
+  });
   const result = await runWorkflowExecution({
     hookManager: { emit: async () => ({ outcomes: [] }) },
     options,
@@ -155,8 +165,10 @@ test("runWorkflowExecution rejects duplicate planning identities for the same no
 test("runWorkflowExecution rejects missing planning identity in new protocol path", async () => {
   const semantic = buildSemantic();
   const workflowRunId = "wf_run_d1";
-  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic })
-    .filter((item) => item.nodeId !== "a");
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({
+    workflowRunId,
+    semantic,
+  }).filter((item) => item.nodeId !== "a");
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
@@ -175,7 +187,9 @@ test("runWorkflowExecution rejects incomplete planning identity", async () => {
   const semantic = buildSemantic();
   const workflowRunId = "wf_run_d1";
   const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
-  const broken = planningNodeSessions.map((item) => item.nodeId === "a" ? { ...item, commandId: "" } : item);
+  const broken = planningNodeSessions.map((item) =>
+    item.nodeId === "a" ? { ...item, commandId: "" } : item,
+  );
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({

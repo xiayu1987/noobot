@@ -5,9 +5,9 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import {
-  ensureUserWorkspaceInitialized,
-  resetUserWorkspaceKeepRuntimeInitialized,
-  syncUserWorkspaceFromTemplate,
+  ensureUserWorkspace,
+  resetUserWorkspace,
+  syncUserWorkspace,
 } from "../../workspace-lifecycle/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
@@ -25,33 +25,27 @@ export class WorkspaceService {
     return path.resolve(this.globalConfig.workspaceRoot, normalizedUserId);
   }
 
-  async ensureUserWorkspace(userId) {
-    return ensureUserWorkspaceInitialized({
+  lifecycleOptions(userId) {
+    return {
       workspaceRoot: this.globalConfig.workspaceRoot,
-      workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
+      assetPackagePath: this.globalConfig.workspaceTemplatePath,
       userId,
-      baseValues: this.globalConfigRaw,
-      globalConfig: this.globalConfig,
-    });
+      baseValues: this.globalConfigRaw ?? {},
+    };
+  }
+
+  async ensureUserWorkspace(userId) {
+    return ensureUserWorkspace(this.lifecycleOptions(userId));
   }
 
   async resetUserWorkspace(userId, options = {}) {
-    return resetUserWorkspaceKeepRuntimeInitialized({
-      workspaceRoot: this.globalConfig.workspaceRoot,
-      workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
-      userId,
-      resetSections: Array.isArray(options?.sections) ? options.sections : [],
-      globalConfig: this.globalConfig,
+    return resetUserWorkspace({
+      ...this.lifecycleOptions(userId),
+      sections: Array.isArray(options?.sections) ? options.sections : [],
     });
   }
 
   async syncUserWorkspace(userId) {
-    return syncUserWorkspaceFromTemplate({
-      workspaceRoot: this.globalConfig.workspaceRoot,
-      workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
-      userId,
-      baseValues: this.globalConfigRaw,
-      globalConfig: this.globalConfig,
-    });
+    return syncUserWorkspace(this.lifecycleOptions(userId));
   }
 }

@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
+import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
 import {
   MEMORY_REPAIR_STATUS,
   migrateMemoryDocument,
@@ -42,7 +43,6 @@ test("legacy experience model title migrates into the canonical header", () => {
   const result = migrateMemoryDocument({
     kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
     text: "【经验教训字段模型】\n\nDOMAIN: career_wealth\nCATEGORY: career_development\n- career_planning\n",
-    resetText: EXPERIENCE_MODEL,
   });
   assert.equal(result.status, MEMORY_REPAIR_STATUS.MIGRATED);
   assert.equal(result.text, EXPERIENCE_MODEL);
@@ -82,21 +82,11 @@ test("documents without a deterministic rule are reset", () => {
     migrateMemoryDocument({
       kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
       text: "unknown\n",
-      resetText: EXPERIENCE_MODEL,
     }),
-    { status: MEMORY_REPAIR_STATUS.RESET, text: EXPERIENCE_MODEL },
-  );
-});
-
-test("a non-canonical reset text is a programming error", () => {
-  assert.throws(
-    () =>
-      migrateMemoryDocument({
-        kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
-        text: "unknown\n",
-        resetText: "not canonical\n",
-      }),
-    TypeError,
+    {
+      status: MEMORY_REPAIR_STATUS.RESET,
+      text: renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL),
+    },
   );
 });
 
@@ -118,9 +108,9 @@ function createMemoryIo(files) {
 }
 
 const LAYOUT = Object.freeze({
+  shortMemory: "memory/short-memory.json",
   longMemory: "memory/long-memory.md",
   experienceModel: "memory/experience-model.md",
-  experienceModelTemplate: EXPERIENCE_MODEL,
   experienceMetadata: "memory/experience/metadata.md",
   dailySummaryDir: "memory/daily_summary",
   weeklySummaryDir: "memory/weekly_summary",
@@ -132,6 +122,7 @@ const LAYOUT = Object.freeze({
 test("workspace repair backs up every rewritten or removed document", async () => {
   const { files, backups, io } = createMemoryIo(
     new Map([
+      ["memory/short-memory.json", '{"items":[]}\n'],
       ["memory/long-memory.md", "1. legacy numbered memory\n"],
       ["memory/experience-model.md", EXPERIENCE_MODEL],
       ["memory/experience/metadata.md", LEGACY_METADATA],
@@ -155,6 +146,37 @@ test("workspace repair backs up every rewritten or removed document", async () =
   assert.equal(backups.get("memory/experience/metadata.md"), LEGACY_METADATA);
   assert.equal(backups.has("memory/experience-model.md"), false);
   assert.deepEqual(await repairMemoryWorkspace({ layout: LAYOUT, io }), []);
+});
+
+test("workspace repair creates missing required documents from the protocol", async () => {
+  const { files, backups, io } = createMemoryIo(new Map());
+  const report = await repairMemoryWorkspace({ layout: LAYOUT, io });
+  assert.deepEqual(
+    report.map((entry) => [entry.relativePath, entry.status]),
+    [
+      ["memory/short-memory.json", "created"],
+      ["memory/long-memory.md", "created"],
+      ["memory/experience-model.md", "created"],
+    ],
+  );
+  assert.deepEqual(JSON.parse(files.get("memory/short-memory.json")), { items: [] });
+  assert.equal(
+    files.get("memory/experience-model.md"),
+    renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL),
+  );
+  assert.equal(files.has("memory/experience/metadata.md"), false);
+  assert.equal(backups.size, 0);
+  assert.deepEqual(await repairMemoryWorkspace({ layout: LAYOUT, io }), []);
+});
+
+test("workspace repair requires a complete layout", async () => {
+  await assert.rejects(
+    repairMemoryWorkspace({
+      layout: { longMemory: "memory/long-memory.md" },
+      io: createMemoryIo(new Map()).io,
+    }),
+    TypeError,
+  );
 });
 
 test("workspace repair requires a complete io port", async () => {

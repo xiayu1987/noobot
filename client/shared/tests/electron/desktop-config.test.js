@@ -84,80 +84,17 @@ export async function createFixture() {
         character: {
           enabled: true,
           mode: "on",
-          characterAssets: [],
           selectedCharacterAssetIds: [],
         },
       },
     }),
   );
-  await writeFile(
-    path.join(packagedBackendRoot, "user-template", "default-user", "config.example.json"),
-    JSON.stringify({
-      default_provider: "openai",
-      providers: {
-        openai: {
-          model: "gpt",
-          reasoning_effort_options: ["low", "medium", "high"],
-          reasoning_effort_parameter: "reasoning_effort",
-          enabled: true,
-          used_for_conversation: true,
-          multimodal_parsing: {
-            enabled: true,
-            input_modalities: ["audio", "image"],
-          },
-          multimodal_generation: {
-            support_generation: {
-              enabled: true,
-              support_scope: ["image"],
-              api_type: "openai_responses",
-            },
-          },
-        },
-        selected: {
-          model: "selected-model",
-          reasoning_effort_options: ["low", "medium", "high"],
-          reasoning_effort_parameter: "reasoning_effort",
-          enabled: false,
-          used_for_conversation: false,
-          reasoning_effort: "high",
-          tool_reasoning_effort: "high",
-        },
-      },
-      tools: {
-        access_connector: { enabled: true },
-        execute_script: { enabled: true },
-        read_file: { enabled: true },
-      },
-      multimodal: {
-        parsing: { default_models: { audio: "openai", image: "openai" } },
-        generation: { default_models: { image: "openai" } },
-      },
-      plugins: {
-        character: {
-          enabled: true,
-          mode: "on",
-          characterAssets: [],
-          selectedCharacterAssetIds: [],
-        },
-      },
-    }),
-  );
-  await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "memory"), {
-    recursive: true,
-  });
-  await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "runtime"), {
-    recursive: true,
-  });
   await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "services"), {
     recursive: true,
   });
   await mkdir(path.join(packagedBackendRoot, "user-template", "default-user", "skills"), {
     recursive: true,
   });
-  await writeFile(
-    path.join(packagedBackendRoot, "user-template", "default-user", "memory", "short-memory.json"),
-    "{}",
-  );
   await writeFile(
     path.join(
       packagedBackendRoot,
@@ -220,12 +157,8 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
       image: "openai",
     });
     const userConfig = JSON.parse(await readFile(path.join(legacyUserDir, "config.json"), "utf8"));
-    assert.deepEqual(userConfig.plugins.character, {
-      enabled: true,
-      mode: "on",
-      characterAssets: [],
-      selectedCharacterAssetIds: [],
-    });
+    assert.deepEqual(userConfig.plugins.character, { enabled: true, mode: "on" });
+    assert.equal(fs.existsSync(path.join(legacyUserDir, "config.example.json")), false);
   } finally {
     await fixture.restore();
   }
@@ -322,115 +255,7 @@ test("packaged desktop defaults to host once and never overrides a later isolati
   }
 });
 
-test("packaged desktop config restores missing userData template example before saving super admin", async () => {
-  const fixture = await createFixture();
-  const logs = [];
-  try {
-    const manager = createDesktopConfigManager({
-      repoRoot: fixture.repoRoot,
-      packagedBackendRoot: fixture.packagedBackendRoot,
-      appendDesktopLog: (line) => logs.push(line),
-    });
-
-    const state = manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-    const templateExample = path.join(
-      fixture.userDataPath,
-      "user-template",
-      "default-user",
-      "config.example.json",
-    );
-    assert.equal(state.workspaceTemplatePath, path.dirname(templateExample));
-    assert.equal(state.templateConfigPath, path.join(path.dirname(templateExample), "config.json"));
-    assert.equal(JSON.parse(await readFile(templateExample, "utf8")).default_provider, "openai");
-
-    await rm(templateExample, { force: true });
-    const restoredState = manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-    assert.equal(JSON.parse(await readFile(templateExample, "utf8")).default_provider, "openai");
-    manager.saveSuperAdminConfig({
-      globalConfigPath: restoredState.globalConfigPath,
-      userConfigPath: restoredState.templateConfigPath,
-      userId: "owner",
-      connectCode: "secret",
-      language: "en-US",
-      model: "selected",
-    });
-
-    const globalConfig = JSON.parse(await readFile(restoredState.globalConfigPath, "utf8"));
-    const templateConfig = JSON.parse(await readFile(restoredState.templateConfigPath, "utf8"));
-    assert.equal(globalConfig.super_admin.user_id, "owner");
-    assert.equal(globalConfig.super_admin.connect_code, "secret");
-    assert.equal(globalConfig.security.execution_isolation.mode, "host");
-    assert.equal(templateConfig.default_provider, "selected");
-    assert.deepEqual(globalConfig.multimodal.parsing.default_models, {
-      audio: "selected",
-      image: "selected",
-    });
-    assert.equal(globalConfig.multimodal.generation.default_models.image, "selected");
-    assert.equal(templateConfig.multimodal.parsing.default_models.audio, "selected");
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("packaged desktop startup refreshes the workspace template from the bundled source", async () => {
-  const fixture = await createFixture();
-  try {
-    const manager = createDesktopConfigManager({
-      repoRoot: fixture.repoRoot,
-      packagedBackendRoot: fixture.packagedBackendRoot,
-    });
-    const state = manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-    const bundledExamplePath = path.join(
-      fixture.packagedBackendRoot,
-      "user-template",
-      "default-user",
-      "config.example.json",
-    );
-    const bundledExample = JSON.parse(await readFile(bundledExamplePath, "utf8"));
-    bundledExample.tools.access_connector.enabled = false;
-    bundledExample.tools.new_tool = { enabled: true };
-    await writeFile(bundledExamplePath, JSON.stringify(bundledExample));
-
-    manager.saveSuperAdminConfig({
-      globalConfigPath: state.globalConfigPath,
-      userConfigPath: state.templateConfigPath,
-      userId: "owner",
-      connectCode: "secret",
-      language: "en-US",
-      model: "openai",
-    });
-    const configuredTemplate = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
-    configuredTemplate.tools.access_connector.enabled = true;
-    await writeFile(state.templateConfigPath, JSON.stringify(configuredTemplate));
-
-    manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-
-    const refreshedExample = JSON.parse(await readFile(bundledExamplePath, "utf8"));
-    const workspaceExample = JSON.parse(
-      await readFile(path.join(state.workspaceTemplatePath, "config.example.json"), "utf8"),
-    );
-    const refreshedTemplate = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
-    assert.deepEqual(workspaceExample, refreshedExample);
-    assert.equal(refreshedTemplate.tools.new_tool, undefined);
-    assert.equal(refreshedTemplate.tools.access_connector.enabled, true);
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("packaged desktop setup selects library models and inserts missing providers into both configs", async () => {
+test("packaged desktop setup selects library models and new users inherit them from the global config", async () => {
   const fixture = await createFixture();
   try {
     const manager = createDesktopConfigManager({
@@ -452,19 +277,21 @@ test("packaged desktop setup selects library models and inserts missing provider
 
     manager.saveSuperAdminConfig({
       globalConfigPath: state.globalConfigPath,
-      userConfigPath: state.templateConfigPath,
       userId: "owner",
       connectCode: "secret",
       language: "en-US",
       model: "gemini_3_7_flash",
     });
+    const newUserConfigPath = path.join(state.workspaceRootPath, "owner", "config.json");
+    await mkdir(path.dirname(newUserConfigPath), { recursive: true });
+    await writeFile(newUserConfigPath, "{}");
 
     const nextState = manager.ensureDesktopGlobalConfig({
       isPackaged: true,
       userDataPath: fixture.userDataPath,
     });
     const globalConfig = JSON.parse(await readFile(state.globalConfigPath, "utf8"));
-    const defaultUserConfig = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
+    const defaultUserConfig = JSON.parse(await readFile(newUserConfigPath, "utf8"));
     for (const config of [globalConfig, defaultUserConfig]) {
       assert.equal(config.default_provider, "gemini_3_7_flash");
       assert.equal(config.providers["gemini_3_7_flash"].model, "gemini-3.7-flash");
@@ -513,7 +340,11 @@ test("packaged desktop model selection preserves explicit provider reasoning set
       isPackaged: true,
       userDataPath: fixture.userDataPath,
     });
-    for (const filePath of [state.globalConfigPath, state.templateConfigPath]) {
+    const userConfigPath = path.join(state.workspaceRootPath, "owner", "config.json");
+    await mkdir(path.dirname(userConfigPath), { recursive: true });
+    await writeFile(userConfigPath, "{}");
+    manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
+    for (const filePath of [state.globalConfigPath, userConfigPath]) {
       const config = JSON.parse(await readFile(filePath, "utf8"));
       config.providers.selected.reasoning_effort = "medium";
       config.providers.selected.tool_reasoning_effort = "medium";
@@ -522,14 +353,14 @@ test("packaged desktop model selection preserves explicit provider reasoning set
 
     manager.saveSuperAdminConfig({
       globalConfigPath: state.globalConfigPath,
-      userConfigPath: state.templateConfigPath,
       userId: "owner",
       connectCode: "secret",
       language: "en-US",
       model: "selected",
     });
+    manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
 
-    for (const filePath of [state.globalConfigPath, state.templateConfigPath]) {
+    for (const filePath of [state.globalConfigPath, userConfigPath]) {
       const config = JSON.parse(await readFile(filePath, "utf8"));
       assert.equal(config.providers.selected.reasoning_effort, "medium");
       assert.equal(config.providers.selected.tool_reasoning_effort, "medium");
@@ -583,10 +414,6 @@ test("packaged desktop startup removes retired nodes from existing user configs"
       },
     };
     await writeFile(path.join(existingUserPath, "config.json"), JSON.stringify(retiredConfig));
-    await writeFile(
-      path.join(existingUserPath, "config.example.json"),
-      JSON.stringify(retiredConfig),
-    );
 
     const manager = createDesktopConfigManager({
       repoRoot: fixture.repoRoot,
@@ -597,15 +424,13 @@ test("packaged desktop startup removes retired nodes from existing user configs"
       userDataPath: fixture.userDataPath,
     });
 
-    for (const fileName of ["config.json", "config.example.json"]) {
-      const config = JSON.parse(await readFile(path.join(existingUserPath, fileName), "utf8"));
-      assert.equal(Object.hasOwn(config, "attachments"), false);
-      assert.equal(Object.hasOwn(config, "session"), false);
-      assert.deepEqual(config.tools, {
-        access_connector: { enabled: true },
-        read_file: { enabled: true },
-      });
-    }
+    const config = JSON.parse(await readFile(path.join(existingUserPath, "config.json"), "utf8"));
+    assert.equal(Object.hasOwn(config, "attachments"), false);
+    assert.equal(Object.hasOwn(config, "session"), false);
+    assert.deepEqual(config.tools, {
+      access_connector: { enabled: true },
+      read_file: { enabled: true },
+    });
   } finally {
     await fixture.restore();
   }
@@ -621,7 +446,10 @@ test("packaged desktop startup preserves config params absent from current templ
       "global.config.example.json",
     );
     const globalExample = JSON.parse(await readFile(globalExamplePath, "utf8"));
-    globalExample.providers.openai.api_key = "${ACTIVE_API_KEY}";
+    for (const provider of Object.values(globalExample.providers)) {
+      provider.api_key = "${ACTIVE_API_KEY}";
+      provider.base_url = "https://models.example.invalid/v1";
+    }
     await writeFile(globalExamplePath, JSON.stringify(globalExample));
 
     const configParamsPath = path.join(fixture.userDataPath, "workspace", "config-params.json");
@@ -688,143 +516,23 @@ test("packaged desktop startup preserves config params absent from current templ
   }
 });
 
-test("packaged desktop config fails fast when bundled default user template is missing", async () => {
+test("packaged desktop points the workspace asset package at the bundled template without copying it", async () => {
   const fixture = await createFixture();
   try {
     const manager = createDesktopConfigManager({
       repoRoot: fixture.repoRoot,
       packagedBackendRoot: fixture.packagedBackendRoot,
     });
-    await rm(path.join(fixture.packagedBackendRoot, "user-template"), {
-      recursive: true,
-      force: true,
-    });
-
-    assert.throws(
-      () =>
-        manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath }),
-      /desktop bundled default user config example is missing or invalid:/,
-    );
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("packaged desktop config replaces corrupted userData template example from bundled runtime", async () => {
-  const fixture = await createFixture();
-  try {
-    const manager = createDesktopConfigManager({
-      repoRoot: fixture.repoRoot,
-      packagedBackendRoot: fixture.packagedBackendRoot,
-    });
-    const templateDir = path.join(fixture.userDataPath, "user-template", "default-user");
-    const templateExample = path.join(templateDir, "config.example.json");
-    await mkdir(templateDir, { recursive: true });
-    await writeFile(templateExample, "{broken", "utf8");
-
     const state = manager.ensureDesktopGlobalConfig({
       isPackaged: true,
       userDataPath: fixture.userDataPath,
     });
-    assert.equal(state.workspaceTemplatePath, templateDir);
-    assert.equal(JSON.parse(await readFile(templateExample, "utf8")).default_provider, "openai");
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("packaged desktop config restores core template even when directory sync fails", async () => {
-  const fixture = await createFixture();
-  const originalCpSync = fs.cpSync;
-  try {
-    const logs = [];
-    const manager = createDesktopConfigManager({
-      repoRoot: fixture.repoRoot,
-      packagedBackendRoot: fixture.packagedBackendRoot,
-      appendDesktopLog: (line) => logs.push(line),
-    });
-    fs.cpSync = () => {
-      throw new Error("directory copy blocked");
-    };
-
-    const state = manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-    const templateExample = path.join(
-      fixture.userDataPath,
-      "user-template",
-      "default-user",
-      "config.example.json",
-    );
-    assert.equal(state.workspaceTemplatePath, path.dirname(templateExample));
-    assert.equal(JSON.parse(await readFile(templateExample, "utf8")).default_provider, "openai");
     assert.equal(
-      await readFile(
-        path.join(
-          fixture.userDataPath,
-          "user-template",
-          "default-user",
-          "memory",
-          "short-memory.json",
-        ),
-        "utf8",
-      ),
-      "{}",
+      state.workspaceTemplatePath,
+      path.join(fixture.packagedBackendRoot, "user-template", "default-user"),
     );
-    assert.match(
-      await readFile(
-        path.join(
-          fixture.userDataPath,
-          "user-template",
-          "default-user",
-          "services",
-          "weather-service-handler.js",
-        ),
-        "utf8",
-      ),
-      /export default/,
-    );
-    assert.match(
-      await readFile(
-        path.join(fixture.userDataPath, "user-template", "default-user", "skills", "SKILL.md"),
-        "utf8",
-      ),
-      /Skill/,
-    );
-    assert.ok(logs.some((line) => line.includes("desktop template directory sync failed")));
-    assert.ok(logs.some((line) => line.includes("manual fallback")));
-  } finally {
-    fs.cpSync = originalCpSync;
-    await fixture.restore();
-  }
-});
-
-test("packaged desktop startup removes stale files from the managed workspace template", async () => {
-  const fixture = await createFixture();
-  try {
-    const manager = createDesktopConfigManager({
-      repoRoot: fixture.repoRoot,
-      packagedBackendRoot: fixture.packagedBackendRoot,
-    });
-    const stalePath = path.join(
-      fixture.userDataPath,
-      "user-template/default-user/services/retired-handler.js",
-    );
-    await manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-    await writeFile(stalePath, "export default 'retired';\n");
-    await rm(path.join(fixture.packagedBackendRoot, "user-template/default-user/services"), {
-      recursive: true,
-      force: true,
-    });
-    await manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-    await assert.rejects(readFile(stalePath, "utf8"), { code: "ENOENT" });
+    assert.equal(fs.existsSync(path.join(fixture.userDataPath, "user-template")), false);
+    assert.equal(Object.hasOwn(state, "templateConfigPath"), false);
   } finally {
     await fixture.restore();
   }

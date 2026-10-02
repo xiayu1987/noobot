@@ -4,380 +4,321 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { filePath as path } from "@noobot/path-resolver";
+import { renderDefaultShortMemoryText } from "@noobot/memory-protocol/defaults";
+import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experience/default-model";
+import { WORKSPACE_LAYOUT, WORKSPACE_RUNTIME_DIRECTORIES } from "@noobot/workspace-protocol";
 import {
-  ensureUserWorkspaceInitialized,
-  syncUserWorkspaceFromTemplate,
+  ensureUserWorkspace,
+  resetUserWorkspace,
+  syncUserWorkspace,
 } from "../src/workspace-lifecycle/index.js";
 
-const TEMPLATE_MEMORY_DIR = fileURLToPath(
-  new URL("../../user-template/default-user/memory/", import.meta.url),
-);
 const EMPTY_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n";
 const USER_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n";
+const BASE_VALUES = { preferences: { language: "zh-CN" } };
+const USER_CONFIG = { preferences: { language: "en-US" } };
 
 async function createFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-workspace-lifecycle-"));
   const workspaceRoot = path.join(root, "workspace");
-  const workspaceTemplatePath = path.join(root, "template");
+  const assetPackagePath = path.join(root, "assets");
   const userPath = path.join(workspaceRoot, "user-1");
-  await mkdir(path.join(workspaceTemplatePath, "services"), { recursive: true });
-  await mkdir(path.join(workspaceTemplatePath, "memory"), { recursive: true });
-  await writeFile(
-    path.join(workspaceTemplatePath, "config.json"),
-    `${JSON.stringify({ preferences: { added: true, preserved: "template" } })}\n`,
-  );
-  await writeFile(
-    path.join(workspaceTemplatePath, "services", "built-in.js"),
-    "export default 'current';\n",
-  );
-  await writeFile(
-    path.join(workspaceTemplatePath, "services", "package.json"),
-    '{"type":"module"}\n',
-  );
-  for (const name of ["long-memory.md", "experience-model.md", "short-memory.json"]) {
-    await writeFile(
-      path.join(workspaceTemplatePath, "memory", name),
-      await readFile(path.join(TEMPLATE_MEMORY_DIR, name), "utf8"),
-    );
-  }
+  await mkdir(path.join(assetPackagePath, "services"), { recursive: true });
+  await mkdir(path.join(assetPackagePath, "skills", "demo"), { recursive: true });
+  await writeFile(path.join(assetPackagePath, "services", "built-in.js"), "export default 'v1';\n");
+  await writeFile(path.join(assetPackagePath, "skills", "demo", "SKILL.md"), "# demo v1\n");
+  const options = { workspaceRoot, assetPackagePath, userId: "user-1", baseValues: BASE_VALUES };
   return {
     root,
-    workspaceRoot,
-    workspaceTemplatePath,
     userPath,
-    restore: () => rm(root, { recursive: true, force: true }),
+    assetPackagePath,
+    options,
+    read: (relativePath) => readFile(path.join(userPath, relativePath), "utf8"),
+    write: async (relativePath, content) => {
+      await mkdir(path.dirname(path.join(userPath, relativePath)), { recursive: true });
+      await writeFile(path.join(userPath, relativePath), content);
+    },
+    restore: async () => {
+      await rm(root, { recursive: true, force: true });
+    },
   };
 }
 
-test("runtime workspace initialization does not synchronize existing user state", async () => {
+async function listBackupFiles(userPath) {
+  const backupRoot = path.join(userPath, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR);
+  const [stamp] = await readdir(backupRoot);
+  return { stampDir: path.join(backupRoot, stamp), stamps: await readdir(backupRoot) };
+}
+
+test("ensure creates a new workspace from the protocols and the asset package", async () => {
   const fixture = await createFixture();
   try {
-    await mkdir(path.join(fixture.userPath, "services"), { recursive: true });
-    await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
-    await writeFile(
-      path.join(fixture.userPath, "config.json"),
-      `${JSON.stringify({ preferences: { preserved: "user" }, userOnly: true })}\n`,
-    );
-    await writeFile(
-      path.join(fixture.userPath, "services", "built-in.js"),
-      "export default 'stale';\n",
-    );
-    await writeFile(
-      path.join(fixture.userPath, "services", "user-defined.js"),
-      "export default 'user';\n",
-    );
-    await writeFile(
-      path.join(fixture.userPath, "memory", "long-memory.md"),
-      USER_LONG_MEMORY_DOCUMENT,
-    );
-
-    await ensureUserWorkspaceInitialized({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-    });
-
-    const config = JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8"));
-    assert.deepEqual(config, { preferences: { preserved: "user" }, userOnly: true });
+    assert.equal(await ensureUserWorkspace(fixture.options), fixture.userPath);
+    for (const dir of WORKSPACE_RUNTIME_DIRECTORIES) {
+      assert.ok((await stat(path.join(fixture.userPath, dir))).isDirectory(), dir);
+    }
+    assert.equal(await fixture.read("memory/short-memory.json"), renderDefaultShortMemoryText());
+    assert.equal(await fixture.read("memory/long-memory.md"), EMPTY_LONG_MEMORY_DOCUMENT);
     assert.equal(
-      await readFile(path.join(fixture.userPath, "services", "built-in.js"), "utf8"),
-      "export default 'stale';\n",
+      await fixture.read("memory/experience-model.md"),
+      renderDefaultExperienceModelText(),
     );
-    await assert.rejects(
-      readFile(path.join(fixture.userPath, "services", "package.json"), "utf8"),
-      { code: "ENOENT" },
-    );
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "services", "user-defined.js"), "utf8"),
-      "export default 'user';\n",
-    );
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
-      USER_LONG_MEMORY_DOCUMENT,
-    );
+    assert.deepEqual(JSON.parse(await fixture.read("config.json")), BASE_VALUES);
+    assert.equal(await fixture.read("services/built-in.js"), "export default 'v1';\n");
+    assert.equal(await fixture.read("skills/demo/SKILL.md"), "# demo v1\n");
+    const state = JSON.parse(await fixture.read(WORKSPACE_LAYOUT.ASSET_STATE_FILE));
+    assert.deepEqual(Object.keys(state.files), ["services/built-in.js", "skills/demo/SKILL.md"]);
   } finally {
     await fixture.restore();
   }
 });
 
-test("concurrent workspace initialization preserves existing user state", async () => {
+test("ensure on an existing workspace keeps user config, memory and edited assets", async () => {
   const fixture = await createFixture();
   try {
-    await mkdir(fixture.userPath, { recursive: true });
-    await writeFile(path.join(fixture.workspaceTemplatePath, "config.example.json"), "{}\n");
-    await writeFile(path.join(fixture.userPath, "config.example.json"), '{"stale":true}\n');
+    const userConfig = `${JSON.stringify(USER_CONFIG)}\n`;
+    await fixture.write("config.json", userConfig);
+    await fixture.write("memory/long-memory.md", USER_LONG_MEMORY_DOCUMENT);
+    await fixture.write("services/built-in.js", "export default 'edited';\n");
+    await fixture.write("services/user-defined.js", "export default 'user';\n");
 
-    const initialized = await Promise.all(
-      Array.from({ length: 20 }, () =>
-        ensureUserWorkspaceInitialized({
-          workspaceRoot: fixture.workspaceRoot,
-          workspaceTemplatePath: fixture.workspaceTemplatePath,
-          userId: "user-1",
-        }),
-      ),
-    );
+    await ensureUserWorkspace(fixture.options);
 
-    assert.deepEqual(new Set(initialized), new Set([fixture.userPath]));
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "config.example.json"), "utf8"),
-      '{"stale":true}\n',
-    );
+    assert.equal(await fixture.read("config.json"), userConfig);
+    assert.equal(await fixture.read("memory/long-memory.md"), USER_LONG_MEMORY_DOCUMENT);
+    assert.equal(await fixture.read("services/built-in.js"), "export default 'edited';\n");
+    assert.equal(await fixture.read("services/user-defined.js"), "export default 'user';\n");
+    assert.equal(await fixture.read("skills/demo/SKILL.md"), "# demo v1\n");
   } finally {
     await fixture.restore();
   }
 });
 
-test("workspace mutation locks stay outside the workspace content tree", async () => {
+test("concurrent ensure calls resolve to the same workspace", async () => {
   const fixture = await createFixture();
-  const mutationLockRoot = `${path.resolve(fixture.workspaceRoot)}.mutation-locks`;
+  const lockRoot = `${path.resolve(fixture.options.workspaceRoot)}.mutation-locks`;
   try {
-    await ensureUserWorkspaceInitialized({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-    });
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => ensureUserWorkspace(fixture.options)),
+    );
+    assert.deepEqual(new Set(results), new Set([fixture.userPath]));
+    assert.deepEqual(await readdir(lockRoot), []);
+  } finally {
+    await fixture.restore();
+    await rm(lockRoot, { recursive: true, force: true });
+  }
+});
 
-    const workspaceEntries = await readdir(fixture.workspaceRoot);
+test("ensure backs up and removes the retired user config example once", async () => {
+  const fixture = await createFixture();
+  try {
+    await ensureUserWorkspace(fixture.options);
+    await fixture.write("config.example.json", '{"legacy":true}\n');
+    await ensureUserWorkspace(fixture.options);
+    const names = await readdir(fixture.userPath);
+    assert.equal(names.includes("config.example.json"), false);
+    const { stampDir, stamps } = await listBackupFiles(fixture.userPath);
     assert.equal(
-      workspaceEntries.some((entry) => entry.endsWith(".mutation-lock")),
+      await readFile(path.join(stampDir, "config.example.json"), "utf8"),
+      '{"legacy":true}\n',
+    );
+    await ensureUserWorkspace(fixture.options);
+    assert.deepEqual((await listBackupFiles(fixture.userPath)).stamps, stamps);
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("ensure backs up invalid config JSON and rebuilds it through the config protocol", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write("config.json", "{broken");
+    await ensureUserWorkspace(fixture.options);
+    assert.deepEqual(JSON.parse(await fixture.read("config.json")), BASE_VALUES);
+    const { stampDir } = await listBackupFiles(fixture.userPath);
+    assert.equal(await readFile(path.join(stampDir, "config.json"), "utf8"), "{broken");
+    const names = await readdir(fixture.userPath);
+    assert.equal(
+      names.some((name) => name.startsWith("config.json.invalid-")),
       false,
     );
-    assert.deepEqual(await readdir(mutationLockRoot), []);
-  } finally {
-    await fixture.restore();
-    await rm(mutationLockRoot, { recursive: true, force: true });
-  }
-});
-
-test("workspace initialization preserves an existing empty short-memory document", async () => {
-  const fixture = await createFixture();
-  try {
-    await mkdir(fixture.userPath, { recursive: true });
-    await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
-    await writeFile(path.join(fixture.userPath, "memory", "short-memory.json"), "\n");
-
-    await ensureUserWorkspaceInitialized({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-    });
-
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
-      "\n",
-    );
   } finally {
     await fixture.restore();
   }
 });
 
-test("workspace initialization repairs missing canonical memory files from the template", async () => {
+test("ensure backs up and repairs legacy memory documents", async () => {
   const fixture = await createFixture();
   try {
-    await mkdir(fixture.userPath, { recursive: true });
-    await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
+    await fixture.write("memory/long-memory.md", "1. legacy numbered memory\n");
+    await fixture.write("memory/long-memory-model.md", "NOOBOT_LONG_MEMORY_MODEL/1\n");
+    await fixture.write("memory/daily_summary/2026-09-01/域.md", "经验：旧\n");
 
-    await ensureUserWorkspaceInitialized({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-    });
+    await ensureUserWorkspace(fixture.options);
 
+    assert.equal(await fixture.read("memory/long-memory.md"), EMPTY_LONG_MEMORY_DOCUMENT);
     assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "experience-model.md"), "utf8"),
-      await readFile(path.join(TEMPLATE_MEMORY_DIR, "experience-model.md"), "utf8"),
-    );
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
-      await readFile(path.join(TEMPLATE_MEMORY_DIR, "short-memory.json"), "utf8"),
-    );
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("workspace initialization repairs a missing long-memory document from the template", async () => {
-  const fixture = await createFixture();
-  try {
-    await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
-    await ensureUserWorkspaceInitialized({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-    });
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
-      EMPTY_LONG_MEMORY_DOCUMENT,
-    );
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("workspace initialization backs up and repairs legacy memory documents", async () => {
-  const fixture = await createFixture();
-  try {
-    const memoryDir = path.join(fixture.userPath, "memory");
-    await mkdir(path.join(memoryDir, "daily_summary", "2026-09-01"), { recursive: true });
-    await writeFile(path.join(memoryDir, "long-memory.md"), "1. legacy numbered memory\n");
-    await writeFile(path.join(memoryDir, "long-memory-model.md"), "NOOBOT_LONG_MEMORY_MODEL/1\n");
-    await writeFile(path.join(memoryDir, "daily_summary", "2026-09-01", "域.md"), "经验：旧\n");
-
-    await ensureUserWorkspaceInitialized({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-    });
-
-    assert.equal(
-      await readFile(path.join(memoryDir, "long-memory.md"), "utf8"),
-      EMPTY_LONG_MEMORY_DOCUMENT,
-    );
-    assert.equal(
-      await readFile(path.join(memoryDir, "daily_summary", "2026-09-01", "域.md"), "utf8"),
+      await fixture.read("memory/daily_summary/2026-09-01/域.md"),
       "NOOBOT_EXPERIENCE_DAILY_SUMMARY/1\n\n经验：旧\n",
     );
-    await assert.rejects(readFile(path.join(memoryDir, "long-memory-model.md"), "utf8"), {
-      code: "ENOENT",
-    });
-    const backupRoot = path.join(fixture.userPath, "runtime", "memory-repair-backups");
+    await assert.rejects(fixture.read("memory/long-memory-model.md"), { code: "ENOENT" });
+    const backupRoot = path.join(fixture.userPath, WORKSPACE_LAYOUT.MEMORY_REPAIR_BACKUPS_DIR);
     const [stamp] = await readdir(backupRoot);
-    const backupMemoryDir = path.join(backupRoot, stamp, "memory");
     assert.equal(
-      await readFile(path.join(backupMemoryDir, "long-memory.md"), "utf8"),
+      await readFile(path.join(backupRoot, stamp, "memory", "long-memory.md"), "utf8"),
       "1. legacy numbered memory\n",
     );
-    assert.equal(
-      await readFile(path.join(backupMemoryDir, "long-memory-model.md"), "utf8"),
-      "NOOBOT_LONG_MEMORY_MODEL/1\n",
-    );
-    assert.equal(
-      await readFile(path.join(backupMemoryDir, "daily_summary", "2026-09-01", "域.md"), "utf8"),
-      "经验：旧\n",
-    );
   } finally {
     await fixture.restore();
   }
 });
 
-test("explicit workspace sync adds every nested config node through the config protocol", async () => {
+test("repair does not restore deleted assets while sync restores them", async () => {
   const fixture = await createFixture();
   try {
-    await writeFile(
-      path.join(fixture.workspaceTemplatePath, "config.json"),
-      `${JSON.stringify({
-        providers: {
-          primary: {
-            reasoning_effort: "medium",
-            tool_reasoning_effort: "medium",
-            capabilities: { web_search: true },
-          },
-          added: { enabled: true },
-        },
-        tools: {
-          execute_script: { enabled: true, sandbox_mode: true },
-          read_file: { enabled: true },
-        },
-      })}\n`,
-    );
-    await mkdir(fixture.userPath, { recursive: true });
-    await writeFile(
-      path.join(fixture.userPath, "config.json"),
-      `${JSON.stringify({
-        providers: { primary: { reasoning_effort: "high" } },
-        tools: { set_skill_task: { enabled: true } },
-      })}\n`,
-    );
-
-    await syncUserWorkspaceFromTemplate({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-      baseValues: {
-        providers: {
-          primary: {
-            reasoning_effort: "medium",
-            tool_reasoning_effort: "medium",
-            capabilities: { web_search: true },
-          },
-          added: { enabled: true },
-        },
-        tools: {
-          execute_script: { enabled: true, sandbox_mode: true },
-          read_file: { enabled: true },
-        },
-      },
-    });
-
-    const config = JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8"));
-    assert.deepEqual(config, {
-      providers: {
-        primary: {
-          enabled: true,
-          used_for_conversation: true,
-          api_key: "${OPENAI_API_KEY}",
-          base_url: "${OPENAI_API_ADDRESS}",
-          model: "default-model",
-          description: "Generic OpenAI-compatible fallback model",
-          prompt_cache_fields: [],
-          reasoning_effort: "high",
-          tool_reasoning_effort: "medium",
-        },
-        added: {
-          enabled: true,
-          used_for_conversation: true,
-          api_key: "${OPENAI_API_KEY}",
-          base_url: "${OPENAI_API_ADDRESS}",
-          model: "default-model",
-          description: "Generic OpenAI-compatible fallback model",
-          prompt_cache_fields: [],
-          reasoning_effort: "medium",
-          tool_reasoning_effort: "medium",
-          reasoning_effort_options: ["low", "medium", "high"],
-          reasoning_effort_parameter: "reasoning_effort",
-          multimodal_parsing: { enabled: false, input_modalities: [] },
-          multimodal_generation: {
-            support_generation: { enabled: false, support_scope: [] },
-          },
-        },
-      },
-      tools: {
-        execute_script: { enabled: true },
-        read_file: { enabled: true },
-      },
-    });
+    await ensureUserWorkspace(fixture.options);
+    await rm(path.join(fixture.userPath, "skills", "demo", "SKILL.md"));
+    await ensureUserWorkspace(fixture.options);
+    await assert.rejects(fixture.read("skills/demo/SKILL.md"), { code: "ENOENT" });
+    await syncUserWorkspace(fixture.options);
+    assert.equal(await fixture.read("skills/demo/SKILL.md"), "# demo v1\n");
   } finally {
     await fixture.restore();
   }
 });
 
-test("workspace synchronization preserves invalid config JSON and repairs from the template", async () => {
+test("sync upgrades pristine assets, keeps edited ones and removes retired pristine ones", async () => {
   const fixture = await createFixture();
   try {
-    await mkdir(fixture.userPath, { recursive: true });
-    await writeFile(path.join(fixture.userPath, "config.json"), "{broken");
+    await writeFile(path.join(fixture.assetPackagePath, "services", "retired.js"), "old\n");
+    await ensureUserWorkspace(fixture.options);
+    await fixture.write("skills/demo/SKILL.md", "# demo edited\n");
+    await writeFile(
+      path.join(fixture.assetPackagePath, "services", "built-in.js"),
+      "export default 'v2';\n",
+    );
+    await writeFile(path.join(fixture.assetPackagePath, "skills", "demo", "SKILL.md"), "# v2\n");
+    await rm(path.join(fixture.assetPackagePath, "services", "retired.js"));
 
-    await syncUserWorkspaceFromTemplate({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-      baseValues: { preferences: { added: true, preserved: "template" } },
-    });
+    await syncUserWorkspace(fixture.options);
 
+    assert.equal(await fixture.read("services/built-in.js"), "export default 'v2';\n");
+    assert.equal(await fixture.read("skills/demo/SKILL.md"), "# demo edited\n");
+    await assert.rejects(fixture.read("services/retired.js"), { code: "ENOENT" });
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("sync repairs an existing valid config through the config protocol", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write(
+      "config.json",
+      `${JSON.stringify({ preferences: { language: "xx", undeclared: true } })}\n`,
+    );
+    await syncUserWorkspace(fixture.options);
+    assert.deepEqual(JSON.parse(await fixture.read("config.json")), BASE_VALUES);
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("reset backs up memory and config before regenerating them from the protocols", async () => {
+  const fixture = await createFixture();
+  try {
+    await ensureUserWorkspace(fixture.options);
+    await fixture.write("memory/long-memory.md", USER_LONG_MEMORY_DOCUMENT);
+    await fixture.write("config.json", `${JSON.stringify(USER_CONFIG)}\n`);
+    await fixture.write("services/built-in.js", "export default 'edited';\n");
+
+    await resetUserWorkspace({ ...fixture.options, sections: ["memory", "config"] });
+
+    assert.equal(await fixture.read("memory/long-memory.md"), EMPTY_LONG_MEMORY_DOCUMENT);
+    assert.deepEqual(JSON.parse(await fixture.read("config.json")), BASE_VALUES);
+    assert.equal(await fixture.read("services/built-in.js"), "export default 'edited';\n");
+    const { stampDir } = await listBackupFiles(fixture.userPath);
+    assert.equal(
+      await readFile(path.join(stampDir, "memory", "long-memory.md"), "utf8"),
+      USER_LONG_MEMORY_DOCUMENT,
+    );
     assert.deepEqual(
-      JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8")),
-      { preferences: { added: true, preserved: "template" } },
+      JSON.parse(await readFile(path.join(stampDir, "config.json"), "utf8")),
+      USER_CONFIG,
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("reset of asset and runtime sections backs up assets and keeps backup roots", async () => {
+  const fixture = await createFixture();
+  try {
+    await ensureUserWorkspace(fixture.options);
+    await fixture.write("services/built-in.js", "export default 'edited';\n");
+    await fixture.write("runtime/session/s1/meta.json", "{}\n");
+
+    await resetUserWorkspace({ ...fixture.options, sections: ["service", "runtime"] });
+
+    assert.equal(await fixture.read("services/built-in.js"), "export default 'v1';\n");
+    await assert.rejects(fixture.read("runtime/session/s1/meta.json"), { code: "ENOENT" });
+    const { stampDir } = await listBackupFiles(fixture.userPath);
+    assert.equal(
+      await readFile(path.join(stampDir, "services", "built-in.js"), "utf8"),
+      "export default 'edited';\n",
+    );
+    await assert.rejects(resetUserWorkspace({ ...fixture.options, sections: ["template"] }), {
+      code: "FATAL_INVALID_RESET_SECTIONS",
+    });
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("ensure migrates legacy plugin data into the plugin data root", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write("runtime/workflow/session/s1/d1/plan.json", "{}\n");
+    await fixture.write("runtime/harness/runs/d1/harness-run.json", "{}\n");
+    await ensureUserWorkspace(fixture.options);
+    const backupsRoot = path.join(fixture.userPath, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR);
+    const [stamp] = await readdir(backupsRoot);
+    assert.equal(
+      await readFile(
+        path.join(backupsRoot, stamp, "runtime/workflow/session/s1/d1/plan.json"),
+        "utf8",
+      ),
+      "{}\n",
     );
     assert.equal(
-      (await readdir(fixture.userPath)).filter((name) => name.startsWith("config.json.invalid-"))
-        .length,
-      1,
+      await fixture.read("runtime/plugin-data/workflow/session/s1/d1/plan.json"),
+      "{}\n",
     );
+    assert.equal(
+      await readFile(
+        path.join(backupsRoot, stamp, "runtime/harness/runs/d1/harness-run.json"),
+        "utf8",
+      ),
+      "{}\n",
+    );
+    assert.equal(
+      await fixture.read("runtime/plugin-data/harness/runs/d1/harness-run.json"),
+      "{}\n",
+    );
+    await assert.rejects(stat(path.join(fixture.userPath, "runtime", "harness")), {
+      code: "ENOENT",
+    });
+    await assert.rejects(stat(path.join(fixture.userPath, "runtime", "workflow")), {
+      code: "ENOENT",
+    });
+    await fixture.write("runtime/workflow/planning/x.json", "{}\n");
+    await assert.rejects(ensureUserWorkspace(fixture.options), {
+      code: "WORKSPACE_LAYOUT_MIGRATION_CONFLICT",
+    });
   } finally {
     await fixture.restore();
   }

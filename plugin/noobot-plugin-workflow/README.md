@@ -110,16 +110,16 @@ END
 
 - 插件会在当轮追加一条 `workflowMessage=true` 的消息，`workflowMeta` 内含规划模型输出与节点会话索引。
 - 规划阶段对话会落盘到：
-  - `runtime/workflow/planning/<sessionId>/<dialogProcessId>/planning.json`
-  - `runtime/workflow/planning/<sessionId>/<dialogProcessId>/events.jsonl`（规划与编排事件流）
+  - `runtime/plugin-data/workflow/planning/<sessionId>/<dialogProcessId>/planning.json`
+  - `runtime/plugin-data/workflow/planning/<sessionId>/<dialogProcessId>/events.jsonl`（规划与编排事件流）
 - 每个工作流节点 agent 子会话由 agent 统一入口执行（插件只传策略），并落盘到：
-  - `runtime/workflow/session/<sessionId>/<nodeDialogProcessId>/session.json`
-  - `runtime/workflow/session/<sessionId>/<nodeDialogProcessId>/session-summary.json`
-  - `runtime/workflow/session/<sessionId>/<nodeDialogProcessId>/task.json`
-  - `runtime/workflow/session/<sessionId>/<nodeDialogProcessId>/execution.json`
-  - `runtime/workflow/session/<sessionId>/<nodeDialogProcessId>/execution.jsonl`
-  - `runtime/workflow/session/<sessionId>/<nodeDialogProcessId>/meta.json`
-  - `runtime/workflow/session/<sessionId>/<nodeDialogProcessId>/events.jsonl`（节点事件流）
+  - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/session.json`
+  - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/session-summary.json`
+  - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/task.json`
+  - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/execution.json`
+  - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/execution.jsonl`
+  - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/meta.json`
+  - `runtime/plugin-data/workflow/session/<sessionId>/<nodeDialogProcessId>/events.jsonl`（节点事件流）
 - 节点子会话采用 detached 执行与 scoped 落盘，不写入 `runtime/session` 主树；文件结构与主流程 session 落盘保持同构，路径由插件提供。
 - 节点子会话会自动禁用 `workflow` 插件（`mode=off`）避免递归触发。
 

@@ -6,7 +6,7 @@
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
 import { applyPrimaryModelReferencesToConfigFile } from "@noobot/agent-config-protocol";
 import { resolveModelLibraryProvider } from "@noobot/model-protocol";
-import { deepClone, fileExists, isPlainObject, readJsonStrict, writeJson } from "./utils.js";
+import { deepClone, isPlainObject } from "./utils.js";
 
 export function normalizeProviderAlias(modelName = "") {
   const normalized = String(modelName || "")
@@ -152,21 +152,4 @@ export function alignInitialModelReferences({ globalConfig = {}, providerAlias =
     programmingModel: alias,
   });
   return applyPrimaryModelReferencesToConfigFile(globalConfig, alias);
-}
-
-export async function alignInitialModelReferencesForFile({
-  filePath = "",
-  providerAlias = "",
-} = {}) {
-  if (!filePath || !providerAlias) return;
-  if (!(await fileExists(filePath))) return;
-  const payload = await readJsonStrict(filePath, "config");
-  if (!isPlainObject(payload)) return;
-  const nextPayload = alignInitialModelReferences({
-    globalConfig: deepClone(payload),
-    providerAlias,
-  });
-  if (JSON.stringify(nextPayload) !== JSON.stringify(payload)) {
-    await writeJson(filePath, nextPayload);
-  }
 }

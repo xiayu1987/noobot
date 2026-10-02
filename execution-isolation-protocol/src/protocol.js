@@ -6,6 +6,7 @@
 
 import path from "node:path";
 import { SHELL, resolveHostShell } from "@noobot/platform-compatibility/platform";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import {
   TOOL_EXECUTION_VIEW,
   isRestrictedHostExecutionView,
@@ -58,7 +59,7 @@ export const EXECUTION_ISOLATION_DEFAULTS = Object.freeze({
 
 export const WORKSPACE_SANDBOX_PATHS = Object.freeze({
   ROOT: "/workspace",
-  OPS_WORKDIR_RELATIVE: "runtime/ops_workdir",
+  OPS_WORKDIR_RELATIVE: WORKSPACE_LAYOUT.OPS_WORKDIR,
 });
 
 export { SHELL as COMMAND_SHELL } from "@noobot/platform-compatibility/platform";

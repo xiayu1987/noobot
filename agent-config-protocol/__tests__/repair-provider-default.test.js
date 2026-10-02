@@ -45,7 +45,6 @@ test("config repair adds the character plugin to legacy configuration", () => {
         character: {
           enabled: true,
           mode: "off",
-          characterAssets: [],
           selectedCharacterAssetIds: [],
         },
       },
@@ -56,7 +55,6 @@ test("config repair adds the character plugin to legacy configuration", () => {
   assert.deepEqual(repaired.document.plugins.character, {
     enabled: true,
     mode: "off",
-    characterAssets: [],
     selectedCharacterAssetIds: [],
   });
   assert.equal(repaired.report.changed, true);
@@ -68,7 +66,6 @@ test("config repair adds the character plugin to legacy configuration", () => {
         character: {
           enabled: true,
           mode: "off",
-          characterAssets: [],
           selectedCharacterAssetIds: [],
         },
       },
@@ -85,9 +82,16 @@ test("config repair adds the character plugin to legacy configuration", () => {
     },
   });
   assert.equal(customized.document.plugins.character.mode, "off");
-  assert.deepEqual(customized.document.plugins.character.characterAssets, [
-    { assetId: "owned.asset" },
+  assert.deepEqual(customized.document.plugins.character.selectedCharacterAssetIds, [
+    "owned.asset",
   ]);
+  assert.equal(customized.document.plugins.character.characterAssets, undefined);
+  assert.ok(
+    customized.report.changes.some(
+      (change) =>
+        change.path === "plugins.character.characterAssets" && change.reason === "unsupported_node",
+    ),
+  );
 
   const unsupportedPlugin = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,

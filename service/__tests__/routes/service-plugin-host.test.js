@@ -51,7 +51,16 @@ test("service plugin host binds declared routes without exposing Express", async
       registrations.push({ handler });
     },
   };
-  const ports = Object.freeze({ sessions: Object.freeze({ readSnapshot() {} }) });
+  const scopedSessions = Object.freeze({ readSnapshot() {} });
+  const sessionScopes = [];
+  const ports = Object.freeze({
+    sessions: Object.freeze({
+      forPlugin(pluginId) {
+        sessionScopes.push(pluginId);
+        return scopedSessions;
+      },
+    }),
+  });
   const host = createServicePluginHost({
     loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
   });
@@ -59,7 +68,8 @@ test("service plugin host binds declared routes without exposing Express", async
   const result = await host.registerServiceRoutes(app, { ports, translateText: () => "" });
 
   assert.equal(result.length, 1);
-  assert.equal(receivedHost.ports.sessions, ports.sessions);
+  assert.equal(receivedHost.ports.sessions, scopedSessions);
+  assert.deepEqual(sessionScopes, ["demo"]);
   assert.equal(receivedHost.ports.http, undefined);
   assert.deepEqual(Object.keys(receivedHost).sort(), ["hooks", "ports", "routes"]);
   assert.equal(registrations.length, 1);

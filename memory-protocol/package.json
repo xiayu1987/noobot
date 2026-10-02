@@ -6,6 +6,7 @@
   "description": "Canonical Noobot short memory, long memory and experience text protocols",
   "exports": {
     "./document": "./src/document.js",
+    "./defaults": "./src/defaults.js",
     "./text": "./src/text.js",
     "./short-memory": "./src/short-memory.js",
     "./long-memory": "./src/long-memory.js",
@@ -13,6 +14,7 @@
     "./experience/patch-items": "./src/experience/patch-items.js",
     "./experience/summary-output": "./src/experience/summary-output.js",
     "./experience/model-text": "./src/experience/model-text.js",
+    "./experience/default-model": "./src/experience/default-model.js",
     "./experience/metadata": "./src/experience/metadata.js",
     "./package.json": "./package.json"
   },

@@ -50,12 +50,6 @@ export function ensureObjectAt(container, key) {
   return container[key];
 }
 
-export function ensureArrayAt(container, key) {
-  if (!isPlainObject(container)) return [];
-  if (!Array.isArray(container[key])) container[key] = [];
-  return container[key];
-}
-
 export function isEmptyNodeValue(node, value) {
   if (value === undefined || value === null) return true;
   if (
@@ -69,7 +63,7 @@ export function isEmptyNodeValue(node, value) {
 }
 
 function assertNode(node, container, trail) {
-  if (!isPlainObject(container) && !Array.isArray(container)) return;
+  if (!isPlainObject(container)) return;
   const value = container[node.key];
   if (value === undefined) {
     if (!node.required) return;
@@ -95,14 +89,6 @@ function assertNode(node, container, trail) {
       }
       assertNode({ ...node.entry, key: entryKey }, value, `${trail}.${entryKey}`);
     }
-    return;
-  }
-
-  if (node.kind === CONFIG_FORM_NODE_KIND.ARRAY) {
-    if (!Array.isArray(value)) return;
-    value.forEach((_, index) => {
-      assertNode({ ...node.item, key: index }, value, `${trail}[${index}]`);
-    });
     return;
   }
 
@@ -150,10 +136,6 @@ function pruneNode(node, container, baselineContainer) {
       pruneNode({ ...node.entry, key: entryKey }, value, baselineValue);
     }
     if (!baselineKept && !Object.keys(value).length) delete container[node.key];
-    return;
-  }
-  if (node.kind === CONFIG_FORM_NODE_KIND.ARRAY) {
-    if (!baselineKept && Array.isArray(value) && !value.length) delete container[node.key];
     return;
   }
   if (node.kind === CONFIG_FORM_NODE_KIND.RAW) return;

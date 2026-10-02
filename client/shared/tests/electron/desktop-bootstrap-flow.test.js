@@ -76,7 +76,6 @@ test("desktop boot flow reaches system after startup setup, config params, servi
         globalConfigPath: path.join(fixture.userDataPath, "config", "global.config.json"),
         workspaceRootPath: path.join(fixture.userDataPath, "workspace"),
         workspaceTemplatePath: path.join(fixture.userDataPath, "template"),
-        templateConfigPath: path.join(fixture.userDataPath, "template", "config.json"),
         configParamsPath: path.join(fixture.userDataPath, "workspace", "config-params.json"),
       };
       if (configStep === 0) {

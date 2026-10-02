@@ -5,7 +5,10 @@
  */
 import { cp, rm, stat } from "node:fs/promises";
 import { clientFilePath as path } from "../path-resolver.js";
+import { WORKSPACE_ASSET_SECTIONS, WORKSPACE_SECTIONS } from "@noobot/workspace-protocol";
 import { assertPreparedBackendRuntimeWorkspaces } from "./backend-runtime-workspaces.js";
+
+const ASSET_PACKAGE_RELATIVE_DIR = "user-template/default-user";
 
 const requiredBackendRuntimeFiles = [
   "service/app.js",
@@ -17,7 +20,11 @@ const requiredBackendRuntimeFiles = [
   "plugin/noobot-plugin-workflow/manifest.json",
   "plugin/noobot-plugin-character/manifest.json",
   "service/config/global.config.example.json",
-  "user-template/default-user/config.example.json",
+  ...WORKSPACE_ASSET_SECTIONS.flatMap((section) =>
+    WORKSPACE_SECTIONS[section].paths.map(
+      (assetPath) => `${ASSET_PACKAGE_RELATIVE_DIR}/${assetPath}`,
+    ),
+  ),
 ];
 
 async function assertRequiredBackendRuntimeFiles(rootDir, label) {

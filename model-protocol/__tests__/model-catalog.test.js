@@ -22,21 +22,17 @@ const additions = {
   gpt_image_2_5_sunburst: "gpt-image-2.5-sunburst",
 };
 
-test("released catalog additions use exact API IDs and project to both configuration templates", () => {
-  for (const path of [
-    "../../service/config/global.config.example.json",
-    "../../user-template/default-user/config.example.json",
-  ]) {
-    const config = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
-    for (const [alias, model] of Object.entries(additions)) {
-      const provider = resolveModelLibraryProvider(alias);
-      assert.equal(provider.model, model);
-      assert.deepEqual(config.providers[alias], provider, `${path}: ${alias}`);
-    }
-    assert.ok(config.providers[config.default_provider]);
-    assert.equal(config.providers.gpt_5_4, undefined);
-    assert.equal(config.providers.deepseek_v4_flash, undefined);
+test("released catalog additions use exact API IDs and project to the global configuration", () => {
+  const path = "../../service/config/global.config.example.json";
+  const config = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+  for (const [alias, model] of Object.entries(additions)) {
+    const provider = resolveModelLibraryProvider(alias);
+    assert.equal(provider.model, model);
+    assert.deepEqual(config.providers[alias], provider, `${path}: ${alias}`);
   }
+  assert.ok(config.providers[config.default_provider]);
+  assert.equal(config.providers.gpt_5_4, undefined);
+  assert.equal(config.providers.deepseek_v4_flash, undefined);
 });
 
 test("retirement and generation cleanup preserves independent active product lines", () => {

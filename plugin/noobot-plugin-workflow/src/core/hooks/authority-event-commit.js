@@ -5,6 +5,7 @@
  */
 
 import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
+import { PLUGIN_ID } from "../constants.js";
 
 function resolveWorkflowCommitScope({ ctx, runtime, payload }) {
   return {
@@ -115,7 +116,7 @@ export async function commitWorkflowRuntimeEvent({
       revision,
       payload,
     }),
-    producer: { type: "plugin", id: "workflow" },
+    producer: { type: "plugin", id: PLUGIN_ID },
     payload,
     persistenceScope,
   });

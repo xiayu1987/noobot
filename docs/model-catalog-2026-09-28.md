@@ -1,5 +1,7 @@
 # 模型目录更新：2026-09-28
 
+> 2026-10-02 起，`user-template/default-user/config.example.json` 和 `config.json` 已下线。用户配置改由 `@noobot/agent-config-protocol` 按协议结构、全局 `baseValues` 和模型库生成。下文保留当时的原始记录。
+
 模型声明的唯一来源是 `model-protocol/model-library.json`。本次将新增声明复制到全局配置示例、默认用户配置示例及本机实际配置，没有增加运行时型号兼容分支。保留现有默认模型选择、用户自定义连接参数和其他配置。
 
 ## 新增型号与官方依据

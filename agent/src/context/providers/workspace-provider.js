@@ -5,6 +5,7 @@
  */
 import { access, readdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { isMissingPersistencePathError } from "../../shared/storage/json-file-reader.js";
 
 export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
@@ -28,7 +29,7 @@ export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     directories.add(entry.name);
   }
-  const runtimeDirPath = path.join(basePath, "runtime");
+  const runtimeDirPath = path.join(basePath, WORKSPACE_LAYOUT.RUNTIME_DIR);
   try {
     await access(runtimeDirPath);
     let runtimeLevel1Entries = [];
@@ -39,7 +40,7 @@ export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
     }
     for (const entry of runtimeLevel1Entries) {
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-      directories.add(["runtime", entry.name].join("/"));
+      directories.add([WORKSPACE_LAYOUT.RUNTIME_DIR, entry.name].join("/"));
     }
   } catch (error) {
     if (!isMissingPersistencePathError(error)) throw error;

@@ -16,6 +16,7 @@ import {
   CHARACTER_ANIMATION_TOOL_ID,
   CHARACTER_ANIMATION_UPDATE_TOOL_ID,
   CHARACTER_CAMERA_PRESET_LIST_TOOL_ID,
+  CHARACTER_PLUGIN_ID,
 } from "../contract.js";
 
 export function activate(host = {}, config = {}) {
@@ -59,7 +60,7 @@ export function activate(host = {}, config = {}) {
     }),
   );
   return createPluginActivationResult({
-    pluginId: "character",
+    pluginId: CHARACTER_PLUGIN_ID,
     surface: PLUGIN_SURFACE.AGENT,
     dispose: () => {
       unregister?.();

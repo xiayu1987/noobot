@@ -31,7 +31,7 @@ test("harness plugin rejects illegal FSM transitions and audits state commits", 
     error: new Error("forced"),
   });
 
-  const runDir = path.join(basePath, "runtime", "harness", "runs", "dp-fsm");
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", "dp-fsm");
   await waitForFile(path.join(runDir, "events.jsonl"));
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(manifest.fsmStatus, "failed");
@@ -51,7 +51,7 @@ test("harness plugin rejects illegal FSM transitions and audits state commits", 
 
 test("harness plugin can resume FSM from manifest checkpoint", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const runDir = path.join(basePath, "runtime", "harness", "runs", "dp-resume");
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", "dp-resume");
   await fs.mkdir(runDir, { recursive: true });
   await fs.writeFile(
     path.join(runDir, "harness-run.json"),
@@ -116,7 +116,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
       jsonlFlushIntervalMs: 0,
     },
   );
-  const runDir = path.join(basePath, "runtime", "harness", "runs", runId);
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", runId);
   const manifestPath = path.join(runDir, "harness-run.json");
   const eventsPath = path.join(runDir, "events.jsonl");
 
@@ -221,7 +221,7 @@ test("harness FSM remains planning when checklist is absent", async () => {
     },
   );
   const runId = "dp-fsm-stay";
-  const runDir = path.join(basePath, "runtime", "harness", "runs", runId);
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", runId);
 
   await hookManager.emit("agent.before_turn", {
     userId: "u-fsm-stay",

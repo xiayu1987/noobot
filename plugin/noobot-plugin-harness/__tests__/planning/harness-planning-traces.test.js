@@ -46,7 +46,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
   };
   await hookManager.emit("agent.before_llm_call", ctx);
 
-  const runDir = path.join(basePath, "runtime", "harness", "runs", "dp7");
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", "dp7");
   const traceFile = path.join(runDir, "capability-traces.jsonl");
   assert.equal(await waitForFile(traceFile), true);
   const [line] = (await fs.readFile(traceFile, "utf8")).trim().split("\n");

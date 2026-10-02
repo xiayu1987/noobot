@@ -210,7 +210,7 @@ export function createServicePluginHost({
               },
               [PLUGIN_HOST_PORT.SERVICE_SESSIONS_READ]: {
                 path: ["ports", "sessions"],
-                value: context?.ports?.sessions,
+                value: context?.ports?.sessions?.forPlugin?.(entry.pluginId),
               },
               [PLUGIN_HOST_PORT.SERVICE_WORKSPACE_ASSETS]: {
                 path: ["ports", "workspaceAssets"],

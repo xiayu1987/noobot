@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_DATA_SCOPE } from "../core/constants.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -87,8 +88,8 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
   const badRequestStatus = context?.ports?.http?.status?.BAD_REQUEST || 400;
   if (
     !sessions ||
-    typeof sessions.readWorkflowSnapshot !== "function" ||
-    typeof sessions.readWorkflowThinkingDetail !== "function"
+    typeof sessions.readSnapshot !== "function" ||
+    typeof sessions.readThinkingDetail !== "function"
   ) {
     throw new Error("workflow service session ports are required");
   }
@@ -124,10 +125,10 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     const executionPage = parseExecutionPage(req.query);
     let snapshot;
     try {
-      snapshot = await sessions.readWorkflowSnapshot({
+      snapshot = await sessions.readSnapshot({
         userId,
-        sessionId,
-        dialogProcessId,
+        rootSessionId: sessionId,
+        segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, dialogProcessId],
         locale: req.locale,
         executionPage,
       });
@@ -232,10 +233,9 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       error.statusCode = badRequestStatus;
       throw error;
     }
-    const detail = await sessions.readWorkflowThinkingDetail({
+    const detail = await sessions.readThinkingDetail({
       userId,
-      sessionId,
-      routeDialogProcessId,
+      segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
       dialogProcessId,
       turnScopeId,
       locale: req.locale,

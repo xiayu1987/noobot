@@ -517,10 +517,16 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
   assert.ok(cleanupHook?.handler);
 
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-plugin-cleanup-"));
-  const planningDir = path.join(tempRoot, "runtime/workflow/planning/s-delete/dialog-1");
-  const sessionDir = path.join(tempRoot, "runtime/workflow/session/s-delete/wf_node_1");
-  const retainedSessionDir = path.join(tempRoot, "runtime/workflow/session/s-keep/wf_node_2");
-  const untouchedDir = path.join(tempRoot, "runtime/workflow/planning/s-keep/dialog-2");
+  const planningDir = path.join(
+    tempRoot,
+    "runtime/plugin-data/workflow/planning/s-delete/dialog-1",
+  );
+  const sessionDir = path.join(tempRoot, "runtime/plugin-data/workflow/session/s-delete/wf_node_1");
+  const retainedSessionDir = path.join(
+    tempRoot,
+    "runtime/plugin-data/workflow/session/s-keep/wf_node_2",
+  );
+  const untouchedDir = path.join(tempRoot, "runtime/plugin-data/workflow/planning/s-keep/dialog-2");
   await fs.mkdir(planningDir, { recursive: true });
   await fs.mkdir(sessionDir, { recursive: true });
   await fs.mkdir(retainedSessionDir, { recursive: true });
@@ -549,9 +555,13 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
 
     assert.deepEqual(cleanupResult.deletedRelatedSessionIds, ["workflow-node-session"]);
     assert.deepEqual(cleanupResult.retainedRelatedSessionIds, ["retained-workflow-node-session"]);
-    await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-delete")));
-    await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/session/s-delete")));
-    await fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-keep"));
+    await assert.rejects(
+      fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/planning/s-delete")),
+    );
+    await assert.rejects(
+      fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/session/s-delete")),
+    );
+    await fs.stat(path.join(tempRoot, "runtime/plugin-data/workflow/planning/s-keep"));
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }

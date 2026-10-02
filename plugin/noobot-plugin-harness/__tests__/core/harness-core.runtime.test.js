@@ -80,7 +80,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
     ),
   );
 
-  const runDir = path.join(basePath, "runtime", "harness", "runs", "dp1");
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", "dp1");
   assert.equal(await exists(path.join(runDir, "harness-run.json")), true);
   assert.equal(await exists(path.join(runDir, "events.jsonl")), true);
   assert.equal(await exists(path.join(runDir, "context-snapshot.json")), true);
@@ -164,7 +164,7 @@ test("harness plugin keeps hook start/end via client emitter in verbose mode", a
 
 test("harness plugin deletes related run records on after_session_delete", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-cleanup-"));
-  const runsDir = path.join(basePath, "runtime", "harness", "runs");
+  const runsDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs");
   const runA = path.join(runsDir, "run-a");
   const runB = path.join(runsDir, "run-b");
   await fs.mkdir(runA, { recursive: true });
@@ -195,7 +195,7 @@ test("harness plugin deletes related run records on after_session_delete", async
 
 test("harness plugin deletes workflow child run records by manifest.parentSessionId on after_session_delete", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-cleanup-parent-"));
-  const runsDir = path.join(basePath, "runtime", "harness", "runs");
+  const runsDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs");
   const runChild = path.join(runsDir, "wf_node_demo_1");
   const runKeep = path.join(runsDir, "wf_node_demo_2");
   await fs.mkdir(runChild, { recursive: true });

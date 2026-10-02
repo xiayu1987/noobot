@@ -55,8 +55,8 @@ test("detached sub-session delegates execution and persistence to the main runne
       parentExecutionId: "workflow:root",
       rootExecutionId: "workflow:root",
       disabledPlugins: ["workflow"],
-      relativeDir: "runtime/workflow/session/root/node-a",
-      allowedRoot: "runtime/workflow/session",
+      relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
+      allowedRoot: "runtime/plugin-data/workflow/session",
     },
     metadata: { scope: "workflow_node", nodeId: "n1" },
   });
@@ -95,8 +95,8 @@ test("detached sub-session delegates execution and persistence to the main runne
     sessionId: "sub1",
     parentSessionId: "parent1",
     scopeId: "agent:turn-1",
-    relativeDir: "runtime/workflow/session/root/node-a",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
+    allowedRoot: "runtime/plugin-data/workflow/session",
     metadataContributor: calls.persistencePayloads[0].metadataContributor,
   });
   const metadata = calls.persistencePayloads[0].metadataContributor();
@@ -131,8 +131,8 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.deepEqual(completedLifecycle.persistenceScope, {
     scopeId: "agent:turn-1",
     parentSessionId: "parent1",
-    relativeDir: "runtime/workflow/session/root/node-a",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   });
   assert.equal(completedLifecycle.completionCommitId, "turn-1:completed");
   assert.deepEqual(completedLifecycle.terminalStatus, {

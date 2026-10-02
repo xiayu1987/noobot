@@ -9,9 +9,7 @@ import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-confi
 import { resolveInitializationAnswers } from "./answers.js";
 import {
   parseCliOptions,
-  resolveConfiguredSuperAdminUserId,
   resolveConfiguredWorkspaceRoot,
-  resolveConfiguredWorkspaceTemplatePath,
   resolveLauncherGlobalConfigPath,
 } from "./cli.js";
 import {
@@ -20,9 +18,7 @@ import {
   ensureWorkspaceConfigParamsCatalog,
   logConfigRepairReport,
   logInvalidConfigBackup,
-  syncInitialModelReferencesAcrossTemplateAndUsers,
-  syncLanguageAcrossTemplateAndUsers,
-  syncTemplateAndUserConfigs,
+  syncUserConfigs,
 } from "./config-sync.js";
 import {
   localizeConfigTextTree,
@@ -100,35 +96,18 @@ async function initializeGlobalConfigWhenMissing({
   await writeJson(globalConfigPath, globalConfig);
 
   const workspaceRootAbsolutePath = path.resolve(serviceRoot, answers.workspaceRoot);
-  const workspaceTemplateAbsolutePath = path.resolve(serviceRoot, answers.workspaceTemplatePath);
 
-  await syncTemplateAndUserConfigs({
+  await syncUserConfigs({
     workspaceRootAbsolutePath,
-    workspaceTemplateAbsolutePath,
-    superAdminUserId: answers.superAdminUserId,
-    baseValues: globalExampleConfig,
-    locale: answers.setupLocale,
-  });
-
-  await syncInitialModelReferencesAcrossTemplateAndUsers({
-    workspaceRootAbsolutePath,
-    workspaceTemplateAbsolutePath,
-    superAdminUserId: answers.superAdminUserId,
-    providerAlias,
-  });
-
-  await syncLanguageAcrossTemplateAndUsers({
-    workspaceRootAbsolutePath,
-    workspaceTemplateAbsolutePath,
-    superAdminUserId: answers.superAdminUserId,
+    baseValues: globalConfig,
     language: answers.configLanguage,
+    providerAlias,
     locale: answers.setupLocale,
   });
 
   await ensureWorkspaceConfigParamsCatalog({
     workspaceRootAbsolutePath,
     globalConfigPath,
-    workspaceTemplateAbsolutePath,
     explicitEntries: {
       [apiKeyEnv]: answers.apiKey,
       [baseUrlEnv]: answers.baseUrl,
@@ -176,27 +155,12 @@ async function syncWhenGlobalConfigExists({
   }
 
   const workspaceRootRelative = resolveConfiguredWorkspaceRoot(mergedGlobalLocalized);
-  const workspaceTemplateRelative = resolveConfiguredWorkspaceTemplatePath(mergedGlobalLocalized);
-  const superAdminUserId = resolveConfiguredSuperAdminUserId(mergedGlobalLocalized);
 
   const workspaceRootAbsolutePath = path.resolve(serviceRoot, workspaceRootRelative);
-  const workspaceTemplateAbsolutePath = path.resolve(serviceRoot, workspaceTemplateRelative);
 
-  await syncTemplateAndUserConfigs({
+  await syncUserConfigs({
     workspaceRootAbsolutePath,
-    workspaceTemplateAbsolutePath,
-    superAdminUserId,
-    baseValues: globalExampleConfig,
-    locale: normalizeSetupLocale(
-      process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG,
-      "zh",
-    ),
-  });
-
-  await syncLanguageAcrossTemplateAndUsers({
-    workspaceRootAbsolutePath,
-    workspaceTemplateAbsolutePath,
-    superAdminUserId,
+    baseValues: mergedGlobalLocalized,
     language: String(mergedGlobalLocalized?.preferences?.language || "").trim(),
     locale: normalizeSetupLocale(
       process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG,
@@ -207,7 +171,6 @@ async function syncWhenGlobalConfigExists({
   await ensureWorkspaceConfigParamsCatalog({
     workspaceRootAbsolutePath,
     globalConfigPath,
-    workspaceTemplateAbsolutePath,
   });
 }
 

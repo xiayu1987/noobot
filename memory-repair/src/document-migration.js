@@ -8,6 +8,7 @@ import {
   hasMemoryDocumentHeader,
   renderMemoryDocument,
 } from "@noobot/memory-protocol/document";
+import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
 import { LONG_MEMORY_MODEL, parseLongMemoryDocument } from "@noobot/memory-protocol/long-memory";
 import { parseExperienceModelText } from "@noobot/memory-protocol/experience/model-text";
 import { parseExperienceMetadataText } from "@noobot/memory-protocol/experience/metadata";
@@ -16,6 +17,7 @@ export const MEMORY_REPAIR_STATUS = Object.freeze({
   CANONICAL: "canonical",
   MIGRATED: "migrated",
   RESET: "reset",
+  CREATED: "created",
 });
 
 const SUMMARY_KINDS = new Set([
@@ -68,15 +70,11 @@ function migrateLegacyBody(kind, text) {
   return renderMemoryDocument(kind, rest.join("\n"));
 }
 
-export function migrateMemoryDocument({ kind, text = "", resetText } = {}) {
+export function migrateMemoryDocument({ kind, text = "" } = {}) {
   if (isValid(kind, text)) return { status: MEMORY_REPAIR_STATUS.CANONICAL, text };
   const migrated = migrateLegacyBody(kind, text);
   if (migrated && isValid(kind, migrated)) {
     return { status: MEMORY_REPAIR_STATUS.MIGRATED, text: migrated };
   }
-  const replacement = resetText === undefined ? renderMemoryDocument(kind, "") : resetText;
-  if (!isValid(kind, replacement)) {
-    throw new TypeError(`reset text for ${kind} is not canonical`);
-  }
-  return { status: MEMORY_REPAIR_STATUS.RESET, text: replacement };
+  return { status: MEMORY_REPAIR_STATUS.RESET, text: renderDefaultMemoryDocument(kind) };
 }

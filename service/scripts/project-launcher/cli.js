@@ -5,7 +5,7 @@
  */
 import process from "node:process";
 import { resolveServiceGlobalConfigPath } from "../../services/global-config-source.js";
-import { DEFAULT_TEMPLATE_PATH, DEFAULT_WORKSPACE_ROOT } from "./constants.js";
+import { DEFAULT_WORKSPACE_ROOT } from "./constants.js";
 import { firstNonEmptyString } from "./utils.js";
 
 export function parseCliOptions(argv = []) {
@@ -41,14 +41,6 @@ export function parseCliOptions(argv = []) {
 
 export function resolveConfiguredWorkspaceRoot(config = {}) {
   return firstNonEmptyString(config?.workspace_root, DEFAULT_WORKSPACE_ROOT);
-}
-
-export function resolveConfiguredWorkspaceTemplatePath(config = {}) {
-  return firstNonEmptyString(config?.workspace_template_path, DEFAULT_TEMPLATE_PATH);
-}
-
-export function resolveConfiguredSuperAdminUserId(config = {}) {
-  return firstNonEmptyString(config?.super_admin?.user_id);
 }
 
 export function resolveLauncherGlobalConfigPath({

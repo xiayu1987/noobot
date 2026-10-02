@@ -32,7 +32,7 @@ test("startup retry loads the app through the window manager", async () => {
   assert.deepEqual(calls, ["ready", url]);
 });
 
-test("save super admin refreshes desktop config before writing user template config", async () => {
+test("save super admin refreshes desktop config before writing the global config", async () => {
   const ipcMain = createIpcMainMock();
   const calls = [];
   const userDataPath = path.join("C:", "Users", "Noobot", "AppData", "Roaming", "Noobot");
@@ -40,12 +40,6 @@ test("save super admin refreshes desktop config before writing user template con
     globalConfigPath: path.join(userDataPath, "config", "stale-global.config.json"),
     workspaceRootPath: path.join(userDataPath, "stale-workspace"),
     workspaceTemplatePath: path.join(userDataPath, "stale-user-template", "default-user"),
-    templateConfigPath: path.join(
-      userDataPath,
-      "stale-user-template",
-      "default-user",
-      "config.json",
-    ),
     superAdmin: { missing: true },
     missingParams: [],
   };
@@ -53,7 +47,6 @@ test("save super admin refreshes desktop config before writing user template con
     globalConfigPath: path.join(userDataPath, "config", "global.config.json"),
     workspaceRootPath: path.join(userDataPath, "workspace"),
     workspaceTemplatePath: path.join(userDataPath, "user-template", "default-user"),
-    templateConfigPath: path.join(userDataPath, "user-template", "default-user", "config.json"),
     superAdmin: { missing: false, userId: "owner", connectCode: "secret" },
     missingParams: [],
   };
@@ -70,7 +63,7 @@ test("save super admin refreshes desktop config before writing user template con
     ipcMain,
     getDesktopConfigState: () => desktopConfigState,
     setDesktopConfigState: (state) => {
-      calls.push(["setDesktopConfigState", state.templateConfigPath]);
+      calls.push(["setDesktopConfigState", state.globalConfigPath]);
       desktopConfigState = state;
     },
     ensureDesktopGlobalConfig: ({ isPackaged, userDataPath: requestedUserDataPath }) => {
@@ -80,11 +73,8 @@ test("save super admin refreshes desktop config before writing user template con
       ]);
       return refreshedState;
     },
-    saveSuperAdminConfig: ({ globalConfigPath, userConfigPath, userId, connectCode }) => {
-      calls.push([
-        "saveSuperAdminConfig",
-        { globalConfigPath, userConfigPath, userId, connectCode },
-      ]);
+    saveSuperAdminConfig: (input) => {
+      calls.push(["saveSuperAdminConfig", input]);
     },
     ensureSelectedDependencies: async () => {
       calls.push(["ensureSelectedDependencies"]);
@@ -106,12 +96,14 @@ test("save super admin refreshes desktop config before writing user template con
     "saveSuperAdminConfig",
     {
       globalConfigPath: refreshedState.globalConfigPath,
-      userConfigPath: refreshedState.templateConfigPath,
       userId: "owner",
       connectCode: "secret",
+      language: "en-US",
+      model: "openai",
+      dependencyProxyUrl: "",
     },
   ]);
-  assert.notEqual(calls[2][1].userConfigPath, staleState.templateConfigPath);
+  assert.notEqual(calls[2][1].globalConfigPath, staleState.globalConfigPath);
 });
 
 test("dependency setup can install selected dependencies or skip the current startup", async () => {

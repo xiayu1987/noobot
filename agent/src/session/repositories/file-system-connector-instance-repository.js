@@ -6,6 +6,7 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { normalizeConnectorSecretEnvelope } from "@noobot/connector-protocol";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../../shared/storage/atomic-file-write.js";
 
 const REGISTRY_FILE_NAME = "connector-instances.json";
@@ -61,8 +62,7 @@ export class FileSystemConnectorInstanceRepository {
     return path.join(
       this.workspaceRoot,
       requiredText(userId, "connector owner userId"),
-      "runtime",
-      "connectors",
+      WORKSPACE_LAYOUT.CONNECTORS_DIR,
       REGISTRY_FILE_NAME,
     );
   }

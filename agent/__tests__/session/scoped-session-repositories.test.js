@@ -171,8 +171,8 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       sessionId: "child-a",
       parentSessionId: "parent-a",
       scopeId: "agent:child-a",
-      allowedRoot: "runtime/workflow/session",
-      relativeDir: "runtime/workflow/session/run-a/node-a",
+      allowedRoot: "runtime/plugin-data/workflow/session",
+      relativeDir: "runtime/plugin-data/workflow/session/run-a/node-a",
     });
     const context = createPersistenceContext({
       locationResolver: resolver,
@@ -221,7 +221,10 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     );
 
     const scope = await resolver.resolveSessionScope("alice", "child-a", "parent-a");
-    assert.equal(scope.sessionDir, path.join(root, "alice/runtime/workflow/session/run-a/node-a"));
+    assert.equal(
+      scope.sessionDir,
+      path.join(root, "alice/runtime/plugin-data/workflow/session/run-a/node-a"),
+    );
     assert.deepEqual(await readJson(scope.metadataFile), {
       plugin: "workflow-test",
       sessionId: "child-a",
@@ -266,8 +269,8 @@ test("session facade execution reads do not create a default shadow session for 
       sessionId: "child-facade",
       parentSessionId: "parent-facade",
       scopeId: "workflow:child-facade",
-      allowedRoot: "runtime/workflow/session",
-      relativeDir: "runtime/workflow/session/run-facade/node-facade",
+      allowedRoot: "runtime/plugin-data/workflow/session",
+      relativeDir: "runtime/plugin-data/workflow/session/run-facade/node-facade",
     });
     const persistenceContext = createPersistenceContext({ locationResolver: resolver });
     const executionLogService = new ExecutionLogService({
@@ -325,8 +328,8 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       sessionId: "child-agent",
       parentSessionId: "root-agent",
       scopeId: "agent:child-agent",
-      allowedRoot: "runtime/workflow/session",
-      relativeDir: "runtime/workflow/session/root-agent/node-agent",
+      allowedRoot: "runtime/plugin-data/workflow/session",
+      relativeDir: "runtime/plugin-data/workflow/session/root-agent/node-agent",
     });
     const context = createPersistenceContext({ locationResolver: resolver });
     await sessionRepo.ensureSession({
@@ -415,8 +418,8 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
         sessionId: `child-${index}`,
         parentSessionId: "parent",
         scopeId: `agent:${name}`,
-        allowedRoot: "runtime/workflow/session",
-        relativeDir: `runtime/workflow/session/run/${name}`,
+        allowedRoot: "runtime/plugin-data/workflow/session",
+        relativeDir: `runtime/plugin-data/workflow/session/run/${name}`,
       });
       return {
         resolver,
@@ -486,8 +489,8 @@ test("scoped metadata contributor failures abort the locked mutation", async () 
       sessionId: "child",
       parentSessionId: "parent",
       scopeId: "agent:child",
-      allowedRoot: "runtime/workflow/session",
-      relativeDir: "runtime/workflow/session/run-fail/node",
+      allowedRoot: "runtime/plugin-data/workflow/session",
+      relativeDir: "runtime/plugin-data/workflow/session/run-fail/node",
     });
     const context = createPersistenceContext({
       locationResolver: resolver,

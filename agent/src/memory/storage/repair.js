@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { repairMemoryWorkspace } from "@noobot/memory-repair";
 import { MEMORY_RELATIVE_PATHS } from "./paths.js";
 import {
@@ -16,7 +16,7 @@ import {
   writeText,
 } from "./file-ops.js";
 
-const MEMORY_REPAIR_BACKUP_DIR = "runtime/memory-repair-backups";
+const MEMORY_REPAIR_BACKUP_DIR = WORKSPACE_LAYOUT.MEMORY_REPAIR_BACKUPS_DIR;
 
 const OBSOLETE_MEMORY_FILES = Object.freeze(["memory/long-memory-model.md"]);
 
@@ -42,19 +42,15 @@ function createRepairIo(base, backupBase) {
   };
 }
 
-export async function repairWorkspaceMemoryDocuments({ base, templateBase, now = new Date() }) {
+export async function repairWorkspaceMemoryDocuments({ base, now = new Date() }) {
   const stamp = now.toISOString().replace(/[:.]/g, "-");
   const backupBase = path.join(base, MEMORY_REPAIR_BACKUP_DIR, stamp);
-  const experienceModelTemplate = await readFile(
-    path.join(templateBase, MEMORY_RELATIVE_PATHS.EXPERIENCE_MODEL),
-    "utf8",
-  );
   return repairMemoryWorkspace({
     io: createRepairIo(base, backupBase),
     layout: {
+      shortMemory: MEMORY_RELATIVE_PATHS.SHORT_MEMORY,
       longMemory: MEMORY_RELATIVE_PATHS.LONG_MEMORY,
       experienceModel: MEMORY_RELATIVE_PATHS.EXPERIENCE_MODEL,
-      experienceModelTemplate,
       experienceMetadata: MEMORY_RELATIVE_PATHS.EXPERIENCE_METADATA,
       dailySummaryDir: MEMORY_RELATIVE_PATHS.DAILY_SUMMARY_DIR,
       weeklySummaryDir: MEMORY_RELATIVE_PATHS.WEEKLY_SUMMARY_DIR,

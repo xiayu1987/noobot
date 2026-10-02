@@ -146,11 +146,21 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
   assert.equal(resolvedBlocks.system[0], resolvedMessages[0]);
   assert.equal(resolvedBlocks.incremental[0], resolvedMessages[1]);
 
-  const eventsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "events.jsonl");
+  const eventsPath = path.join(
+    tempRoot,
+    "u1",
+    "runtime",
+    "plugin-data",
+    "harness",
+    "runs",
+    "d1",
+    "events.jsonl",
+  );
   const promptsPath = path.join(
     tempRoot,
     "u1",
     "runtime",
+    "plugin-data",
     "harness",
     "runs",
     "d1",
@@ -465,7 +475,15 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     ),
   );
 
-  const runDir = path.join(tempRoot, "u1", "runtime", "harness", "runs", result.dialogProcessId);
+  const runDir = path.join(
+    tempRoot,
+    "u1",
+    "runtime",
+    "plugin-data",
+    "harness",
+    "runs",
+    result.dialogProcessId,
+  );
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   const events = await fs.readFile(path.join(runDir, "events.jsonl"), "utf8");
   const snapshot = JSON.parse(
@@ -573,7 +591,15 @@ test("harness records tool call and state commit hook artifacts", async () => {
     toolResultText: successResult.toolResultText,
   });
 
-  const runDir = path.join(tempRoot, "u1", "runtime", "harness", "runs", dialogProcessId);
+  const runDir = path.join(
+    tempRoot,
+    "u1",
+    "runtime",
+    "plugin-data",
+    "harness",
+    "runs",
+    dialogProcessId,
+  );
   const events = await fs.readFile(path.join(runDir, "events.jsonl"), "utf8");
   const eventRecords = events
     .trim()

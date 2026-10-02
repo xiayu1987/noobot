@@ -159,7 +159,7 @@ describe("configDocumentState baseline-aware prune", () => {
             endpoints: { current: { url: "/current" } },
           },
         },
-        plugins: { character: { characterAssets: [] } },
+        plugins: { character: { selectedCharacterAssetIds: [] } },
       }),
     );
     const baseline = JSON.parse(JSON.stringify(loaded));
@@ -173,7 +173,7 @@ describe("configDocumentState baseline-aware prune", () => {
           endpoints: { current: { url: "/current" } },
         },
       },
-      plugins: { character: { characterAssets: [] } },
+      plugins: { character: { selectedCharacterAssetIds: [] } },
     });
   });
 

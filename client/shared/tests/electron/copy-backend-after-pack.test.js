@@ -75,7 +75,8 @@ async function createFixture() {
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-workflow/manifest.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-character/manifest.json", "{}");
   await writeRuntimeFile(backendSource, "service/config/global.config.example.json", "{}");
-  await writeRuntimeFile(backendSource, "user-template/default-user/config.example.json", "{}");
+  await writeRuntimeFile(backendSource, "user-template/default-user/services/handler.js", "");
+  await writeRuntimeFile(backendSource, "user-template/default-user/skills/demo/SKILL.md", "");
   await writeRuntimeFile(frontendSource, "index.html", "<html></html>");
 
   const context = {
@@ -415,7 +416,7 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing defaul
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: user-template\/default-user\/config\.example\.json/,
+      /Missing required backend runtime file after prepare: user-template\/default-user\/services/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });

@@ -6,6 +6,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../core/constants.js";
 
 function normalizeSessionIds(input = []) {
   if (Array.isArray(input)) {
@@ -44,7 +45,7 @@ async function readJson(filePath = "") {
 
 async function collectWorkflowNodeSessionIds(workflowRoot = "", rootSessionId = "") {
   const relatedSessionIds = new Set();
-  const workflowSessionDir = path.resolve(workflowRoot, "session", rootSessionId);
+  const workflowSessionDir = path.resolve(workflowRoot, WORKFLOW_DATA_SCOPE.SESSION, rootSessionId);
   if (!isSafePathInside(workflowRoot, workflowSessionDir)) return [];
   let entries = [];
   try {
@@ -64,7 +65,11 @@ async function collectWorkflowNodeSessionIds(workflowRoot = "", rootSessionId = 
 
 async function collectPlannedNodeSessionIds(workflowRoot = "", rootSessionId = "") {
   const relatedSessionIds = new Set();
-  const planningSessionDir = path.resolve(workflowRoot, "planning", rootSessionId);
+  const planningSessionDir = path.resolve(
+    workflowRoot,
+    WORKFLOW_DATA_SCOPE.PLANNING,
+    rootSessionId,
+  );
   if (!isSafePathInside(workflowRoot, planningSessionDir)) return [];
   let entries = [];
   try {
@@ -86,7 +91,7 @@ export async function collectWorkflowRelatedSessionIds(basePath = "", rootSessio
   const rootBasePath = String(basePath || "").trim();
   const normalizedRootSessionIds = normalizeSessionIds(rootSessionIds);
   if (!rootBasePath || !normalizedRootSessionIds.length) return [];
-  const workflowRoot = path.resolve(rootBasePath, "runtime", "workflow");
+  const workflowRoot = path.resolve(rootBasePath, resolveWorkflowDataRelativePath());
   const relatedSessionIds = new Set();
   for (const rootSessionId of normalizedRootSessionIds) {
     if (!rootSessionId || hasPathSeparator(rootSessionId)) continue;
@@ -110,7 +115,7 @@ export async function cleanupWorkflowBySessionIds(basePath = "", sessionIds = []
     return { deleted: 0, errors: 0, matchedDirs: 0, relatedSessionIds: [] };
   }
 
-  const workflowRoot = path.resolve(rootBasePath, "runtime", "workflow");
+  const workflowRoot = path.resolve(rootBasePath, resolveWorkflowDataRelativePath());
   let deleted = 0;
   let errors = 0;
   let matchedDirs = 0;
@@ -118,12 +123,14 @@ export async function cleanupWorkflowBySessionIds(basePath = "", sessionIds = []
 
   for (const sessionId of normalizedSessionIds) {
     if (!sessionId || hasPathSeparator(sessionId)) continue;
-    for (const relatedSessionId of await collectWorkflowRelatedSessionIds(rootBasePath, [sessionId])) {
+    for (const relatedSessionId of await collectWorkflowRelatedSessionIds(rootBasePath, [
+      sessionId,
+    ])) {
       relatedSessionIds.add(relatedSessionId);
     }
     const targets = [
-      path.resolve(workflowRoot, "planning", sessionId),
-      path.resolve(workflowRoot, "session", sessionId),
+      path.resolve(workflowRoot, WORKFLOW_DATA_SCOPE.PLANNING, sessionId),
+      path.resolve(workflowRoot, WORKFLOW_DATA_SCOPE.SESSION, sessionId),
     ];
 
     for (const targetPath of targets) {

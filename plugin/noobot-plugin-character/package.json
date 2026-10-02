@@ -20,7 +20,8 @@
     "@noobot/hook-protocol": "file:../../hook-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "three": "^0.186.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@noobot/workspace-protocol": "file:../../workspace-protocol"
   },
   "peerDependencies": {
     "noobot-chat": "^4.1.3"

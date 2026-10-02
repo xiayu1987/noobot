@@ -290,7 +290,18 @@ function repairContractNode({
   if (target === undefined) {
     if (valueTemplate === undefined) return REMOVE_NODE;
     recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
-    return clone(valueTemplate);
+    if (contract.type !== "object" || !isPlainObject(valueTemplate)) return clone(valueTemplate);
+    return repairContractNode({
+      contract,
+      template,
+      valueTemplate,
+      target: {},
+      path,
+      changes,
+      normalizationFallback,
+      scope,
+      enforceValueConstraints,
+    });
   }
   if (Array.isArray(contract.oneOf)) {
     const variant = contract.oneOf.find((item) =>
@@ -374,11 +385,15 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
 
   if (node.delegatedContract) {
     const providerValues = values.resolveProviderValues(path.at(-1));
+    const declared = target === undefined && values.has(path) ? values.resolve(path) : undefined;
+    if (declared !== undefined) {
+      recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
+    }
     return repairContractNode({
       contract: node.delegatedContract,
       template: providerValues.template,
       valueTemplate: providerValues.template,
-      target,
+      target: declared === undefined ? target : clone(declared),
       path,
       changes,
       scope,
@@ -390,11 +405,13 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
     if (optional) return REMOVE_NODE;
     if (!values.has(path)) return REMOVE_NODE;
     recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
-    return clone(values.resolve(path));
+    return materializeFromValues({ node, path, values, scope, changes });
   }
 
   if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION) {
-    if (!isPlainObject(target)) return resetFromValues({ path, values, changes, optional });
+    if (!isPlainObject(target)) {
+      return resetFromValues({ node, path, values, scope, changes, optional });
+    }
     const output = {};
     for (const [key, entryTarget] of Object.entries(target)) {
       const repaired = repairStructureNode({
@@ -424,7 +441,9 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
   }
 
   if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT) {
-    if (!isPlainObject(target)) return resetFromValues({ path, values, changes, optional });
+    if (!isPlainObject(target)) {
+      return resetFromValues({ node, path, values, scope, changes, optional });
+    }
     if (node.open) return clone(target);
     const output = {};
     for (const [key, child] of Object.entries(node.fields)) {
@@ -456,8 +475,10 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
 
   if (!validatesStructureLeaf(target, node)) {
     return resetFromValues({
+      node,
       path,
       values,
+      scope,
       changes,
       optional,
       reason: validatesStructureLeafType(target, node) ? "invalid_node_value" : "invalid_node_type",
@@ -466,13 +487,31 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
   return clone(target);
 }
 
-function resetFromValues({ path, values, changes, optional, reason = "invalid_node_value" }) {
+function isStructuredNode(node) {
+  if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION) return true;
+  return node.kind === CONFIG_STRUCTURE_KIND.OBJECT && !node.open;
+}
+
+function materializeFromValues({ node, path, values, scope, changes }) {
+  if (!isStructuredNode(node)) return clone(values.resolve(path));
+  return repairStructureNode({ node, target: {}, path, values, scope, changes });
+}
+
+function resetFromValues({
+  node,
+  path,
+  values,
+  scope,
+  changes,
+  optional,
+  reason = "invalid_node_value",
+}) {
   if (!values.has(path)) {
     recordChange(changes, path, CONFIG_REPAIR_ACTION.REMOVE_INVALID_OPTIONAL, reason);
     return REMOVE_NODE;
   }
   recordChange(changes, path, CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, reason);
-  return clone(values.resolve(path));
+  return materializeFromValues({ node, path, values, scope, changes });
 }
 
 function collectionValueKeys({ node, path, values }) {

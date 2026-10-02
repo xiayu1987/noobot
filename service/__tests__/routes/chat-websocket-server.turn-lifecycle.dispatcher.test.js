@@ -205,8 +205,8 @@ test("authority dispatcher preserves the child persistence scope across every ou
   const persistenceScope = Object.freeze({
     scopeId: "agent:child-turn",
     parentSessionId: "root-session",
-    relativeDir: "runtime/workflow/session/root-session/child-turn",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/root-session/child-turn",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   });
   const calls = [];
   let pending = true;
@@ -286,8 +286,8 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   const persistenceScope = Object.freeze({
     scopeId: "agent:workflow-node:child-turn",
     parentSessionId: "root-session",
-    relativeDir: "runtime/workflow/session/root-session/child-turn",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/root-session/child-turn",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   });
   const eventTypes = [
     TURN_EVENT.ACTION_ACCEPTED,

@@ -6,6 +6,7 @@
 
 import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
 import { normalizeString } from "./runtime.js";
+import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../constants.js";
 
 export function buildWorkflowDialogRelativeDir({
   ctx = {},
@@ -18,16 +19,14 @@ export function buildWorkflowDialogRelativeDir({
   const normalizedScope = String(scope || "auto")
     .trim()
     .toLowerCase();
-  if (normalizedScope === "planning") {
-    return `runtime/workflow/planning/${sessionId}/${resolvedDialogProcessId}`;
-  }
-  if (normalizedScope === "node") {
-    return `runtime/workflow/session/${sessionId}/${resolvedDialogProcessId}`;
-  }
-  const isNodeDialog = isWorkflowNodeDialogProcessId(resolvedDialogProcessId);
-  return isNodeDialog
-    ? `runtime/workflow/session/${sessionId}/${resolvedDialogProcessId}`
-    : `runtime/workflow/planning/${sessionId}/${resolvedDialogProcessId}`;
+  const isNodeDialog =
+    normalizedScope === "node" ||
+    (normalizedScope !== "planning" && isWorkflowNodeDialogProcessId(resolvedDialogProcessId));
+  return resolveWorkflowDataRelativePath(
+    isNodeDialog ? WORKFLOW_DATA_SCOPE.SESSION : WORKFLOW_DATA_SCOPE.PLANNING,
+    sessionId,
+    resolvedDialogProcessId,
+  );
 }
 
 function projectPlanningSemanticResolution(semanticResolution) {

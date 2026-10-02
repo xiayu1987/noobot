@@ -39,7 +39,10 @@ test("workflow service reads persisted segmented child execution events after re
     ),
   ]);
 
-  const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
+  const workflowDir = path.join(
+    workspaceRoot,
+    "runtime/plugin-data/workflow/session/root-s/wf_node_1",
+  );
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
     sessionPayload: { sessionId: "child-s", aggregateVersion: 0, messages: [] },
@@ -47,10 +50,10 @@ test("workflow service reads persisted segmented child execution events after re
     executionPayload: { sessionId: "child-s", logs: [] },
   });
   const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => workspaceRoot } });
-  const { executionLogs: logs } = await ports.sessions.readWorkflowSnapshot({
+  const { executionLogs: logs } = await ports.sessions.forPlugin("workflow").readSnapshot({
     userId: "u1",
-    sessionId: "root-s",
-    dialogProcessId: "wf_node_1",
+    rootSessionId: "root-s",
+    segments: ["session", "root-s", "wf_node_1"],
   });
 
   assert.deepEqual(
@@ -61,7 +64,10 @@ test("workflow service reads persisted segmented child execution events after re
 
 test("session-routes: workflow session returns summary and execution jsonl from scoped path", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-session-route-"));
-  const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
+  const workflowDir = path.join(
+    workspaceRoot,
+    "runtime/plugin-data/workflow/session/root-s/wf_node_1",
+  );
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
     sessionPayload: {
@@ -129,7 +135,10 @@ test("session-routes: workflow session returns summary and execution jsonl from 
 });
 test("session-routes: workflow thinking-detail reads scoped session artifact by turnScopeId", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-thinking-route-"));
-  const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
+  const workflowDir = path.join(
+    workspaceRoot,
+    "runtime/plugin-data/workflow/session/root-s/wf_node_1",
+  );
   const turnScopeId = "workflow-node:wf_node_1";
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,

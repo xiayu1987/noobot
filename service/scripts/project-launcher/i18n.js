@@ -80,11 +80,8 @@ const TEXT = {
     errSuperAdminConnectCodeRequired: "super_admin.connect_code 不能为空",
     errMissingEnvHint:
       "当前为非交互模式，请设置环境变量：NOOBOT_MODEL_NAME NOOBOT_MODEL_API_KEY NOOBOT_MODEL_BASE_URL（可选: NOOBOT_WORKSPACE_ROOT NOOBOT_WORKSPACE_TEMPLATE_PATH NOOBOT_SUPER_ADMIN_USER_ID NOOBOT_SUPER_ADMIN_CONNECT_CODE NOOBOT_SETUP_LANG）",
-    warnTemplateMissing:
-      "[project-launcher] 警告: 模板目录缺少 config.json/config.example.json，已跳过模板与用户配置同步: {path}",
     logLanguageSynced: "[project-launcher] 已按语言同步配置: {language}",
-    logInitDone: "[project-launcher] 初始化完成，已生成 global.config.json 并同步模板配置。",
-    labelTemplateConfig: "模板配置",
+    logInitDone: "[project-launcher] 初始化完成，已生成 global.config.json 并同步用户配置。",
     labelTargetConfig: "目标配置",
     labelGlobalExample: "global.config.example.json",
     labelGlobalConfig: "global.config.json",
@@ -112,12 +109,9 @@ const TEXT = {
     errSuperAdminConnectCodeRequired: "super_admin.connect_code is required",
     errMissingEnvHint:
       "Non-interactive mode detected. Please set env vars: NOOBOT_MODEL_NAME NOOBOT_MODEL_API_KEY NOOBOT_MODEL_BASE_URL (optional: NOOBOT_WORKSPACE_ROOT NOOBOT_WORKSPACE_TEMPLATE_PATH NOOBOT_SUPER_ADMIN_USER_ID NOOBOT_SUPER_ADMIN_CONNECT_CODE NOOBOT_SETUP_LANG)",
-    warnTemplateMissing:
-      "[project-launcher] Warning: template path missing config.json/config.example.json, skipped template/user sync: {path}",
     logLanguageSynced: "[project-launcher] Language synchronized to configs: {language}",
     logInitDone:
-      "[project-launcher] Initialization completed: global.config.json created and template sync done.",
-    labelTemplateConfig: "Template config",
+      "[project-launcher] Initialization completed: global.config.json created and user configs synchronized.",
     labelTargetConfig: "Target config",
     labelGlobalExample: "global.config.example.json",
     labelGlobalConfig: "global.config.json",
