@@ -22,6 +22,7 @@ import { ERROR_CODE } from "../shared/errors/constants.js";
 import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { MEMORY_RELATIVE_PATHS } from "../memory/storage/paths.js";
+import { repairWorkspaceMemoryDocuments } from "../memory/storage/repair.js";
 
 const RESET_SECTION_PATHS = {
   memory: [MEMORY_RELATIVE_PATHS.MEMORY_DIR],
@@ -35,7 +36,6 @@ const SYNC_PRESERVE_EXISTING_ROOTS = new Set([MEMORY_RELATIVE_PATHS.MEMORY_DIR])
 const CANONICAL_MEMORY_TEMPLATE_FILES = Object.freeze([
   MEMORY_RELATIVE_PATHS.SHORT_MEMORY,
   MEMORY_RELATIVE_PATHS.LONG_MEMORY,
-  MEMORY_RELATIVE_PATHS.LONG_MEMORY_MODEL,
   MEMORY_RELATIVE_PATHS.EXPERIENCE_MODEL,
 ]);
 const workspaceMutationCoordinator = new FileMutationCoordinator({
@@ -158,10 +158,10 @@ async function ensureCanonicalMemoryFiles(templateBase, base) {
     const sourcePath = path.join(templateBase, relativePath);
     const targetPath = path.join(base, relativePath);
     if (await pathExists(targetPath)) continue;
-    if (!(await pathExists(sourcePath))) continue;
     await mkdir(path.dirname(targetPath), { recursive: true });
     await cp(sourcePath, targetPath, { force: false, errorOnExist: false });
   }
+  return repairWorkspaceMemoryDocuments({ base, templateBase });
 }
 
 export async function ensureUserWorkspaceInitialized({
@@ -294,54 +294,6 @@ export async function syncUserWorkspaceFromTemplate({
   return withWorkspaceMutation(mutationLockDir, async () => {
     await mkdir(base, { recursive: true });
     await syncDirectoryIncremental(templateBase, base, "", baseValues);
-    return base;
-  });
-}
-
-export async function ensureUserWorkspaceMissingFilesFromTemplate({
-  workspaceRoot,
-  workspaceTemplatePath = "",
-  userId,
-  relativePaths = [],
-}) {
-  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
-    workspaceRoot,
-    workspaceTemplatePath,
-    userId,
-  });
-
-  const normalizedRelativePaths = Array.from(
-    new Set(
-      (Array.isArray(relativePaths) ? relativePaths : [])
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
-    ),
-  );
-
-  return withWorkspaceMutation(mutationLockDir, async () => {
-    if (!normalizedRelativePaths.length) {
-      await mkdir(base, { recursive: true });
-      await cp(templateBase, base, {
-        recursive: true,
-        force: false,
-        errorOnExist: false,
-      });
-      return base;
-    }
-
-    await mkdir(base, { recursive: true });
-    for (const relPath of normalizedRelativePaths) {
-      const srcPath = path.join(templateBase, relPath);
-      const dstPath = path.join(base, relPath);
-      if (await pathExists(dstPath)) continue;
-      if (!(await pathExists(srcPath))) continue;
-      await mkdir(path.dirname(dstPath), { recursive: true });
-      await cp(srcPath, dstPath, {
-        recursive: true,
-        force: false,
-        errorOnExist: false,
-      });
-    }
     return base;
   });
 }

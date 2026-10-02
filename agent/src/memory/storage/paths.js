@@ -12,7 +12,6 @@ export const MEMORY_RELATIVE_PATHS = Object.freeze({
   MEMORY_DIR: MEMORY_DIR_RELATIVE_PATH,
   SHORT_MEMORY: "memory/short-memory.json",
   LONG_MEMORY: "memory/long-memory.md",
-  LONG_MEMORY_MODEL: "memory/long-memory-model.md",
   EXPERIENCE_DIR: "memory/experience",
   EXPERIENCE_METADATA: "memory/experience/metadata.md",
   EXPERIENCE_MODEL: "memory/experience-model.md",
@@ -78,8 +77,4 @@ export function sessionFile(basePath, sessionId, parentSessionId = "") {
   return parentSessionId
     ? path.join(basePath, SESSION_DIR_RELATIVE_PATH, parentSessionId, sessionId, "session.json")
     : path.join(basePath, SESSION_DIR_RELATIVE_PATH, sessionId, "session.json");
-}
-
-export function longMemoryModelPath(basePath) {
-  return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.LONG_MEMORY_MODEL);
 }

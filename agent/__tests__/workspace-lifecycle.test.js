@@ -7,11 +7,18 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { filePath as path } from "@noobot/path-resolver";
 import {
   ensureUserWorkspaceInitialized,
   syncUserWorkspaceFromTemplate,
 } from "../src/workspace-lifecycle/index.js";
+
+const TEMPLATE_MEMORY_DIR = fileURLToPath(
+  new URL("../../user-template/default-user/memory/", import.meta.url),
+);
+const EMPTY_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n";
+const USER_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n";
 
 async function createFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-workspace-lifecycle-"));
@@ -32,7 +39,12 @@ async function createFixture() {
     path.join(workspaceTemplatePath, "services", "package.json"),
     '{"type":"module"}\n',
   );
-  await writeFile(path.join(workspaceTemplatePath, "memory", "long-memory.md"), "template\n");
+  for (const name of ["long-memory.md", "experience-model.md", "short-memory.json"]) {
+    await writeFile(
+      path.join(workspaceTemplatePath, "memory", name),
+      await readFile(path.join(TEMPLATE_MEMORY_DIR, name), "utf8"),
+    );
+  }
   return {
     root,
     workspaceRoot,
@@ -59,7 +71,10 @@ test("runtime workspace initialization does not synchronize existing user state"
       path.join(fixture.userPath, "services", "user-defined.js"),
       "export default 'user';\n",
     );
-    await writeFile(path.join(fixture.userPath, "memory", "long-memory.md"), "user memory\n");
+    await writeFile(
+      path.join(fixture.userPath, "memory", "long-memory.md"),
+      USER_LONG_MEMORY_DOCUMENT,
+    );
 
     await ensureUserWorkspaceInitialized({
       workspaceRoot: fixture.workspaceRoot,
@@ -83,7 +98,7 @@ test("runtime workspace initialization does not synchronize existing user state"
     );
     assert.equal(
       await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
-      "user memory\n",
+      USER_LONG_MEMORY_DOCUMENT,
     );
   } finally {
     await fixture.restore();
@@ -164,18 +179,6 @@ test("workspace initialization preserves an existing empty short-memory document
 test("workspace initialization repairs missing canonical memory files from the template", async () => {
   const fixture = await createFixture();
   try {
-    await writeFile(
-      path.join(fixture.workspaceTemplatePath, "memory", "long-memory-model.md"),
-      "canonical model\n",
-    );
-    await writeFile(
-      path.join(fixture.workspaceTemplatePath, "memory", "experience-model.md"),
-      "canonical experience\n",
-    );
-    await writeFile(
-      path.join(fixture.workspaceTemplatePath, "memory", "short-memory.json"),
-      '{"items":[]}\n',
-    );
     await mkdir(fixture.userPath, { recursive: true });
     await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
 
@@ -185,18 +188,13 @@ test("workspace initialization repairs missing canonical memory files from the t
       userId: "user-1",
     });
 
-    const model = await readFile(
-      path.join(fixture.userPath, "memory", "long-memory-model.md"),
-      "utf8",
-    );
-    assert.equal(model, "canonical model\n");
     assert.equal(
       await readFile(path.join(fixture.userPath, "memory", "experience-model.md"), "utf8"),
-      "canonical experience\n",
+      await readFile(path.join(TEMPLATE_MEMORY_DIR, "experience-model.md"), "utf8"),
     );
     assert.equal(
       await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
-      '{"items":[]}\n',
+      await readFile(path.join(TEMPLATE_MEMORY_DIR, "short-memory.json"), "utf8"),
     );
   } finally {
     await fixture.restore();
@@ -214,7 +212,53 @@ test("workspace initialization repairs a missing long-memory document from the t
     });
     assert.equal(
       await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
-      "template\n",
+      EMPTY_LONG_MEMORY_DOCUMENT,
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("workspace initialization backs up and repairs legacy memory documents", async () => {
+  const fixture = await createFixture();
+  try {
+    const memoryDir = path.join(fixture.userPath, "memory");
+    await mkdir(path.join(memoryDir, "daily_summary", "2026-09-01"), { recursive: true });
+    await writeFile(path.join(memoryDir, "long-memory.md"), "1. legacy numbered memory\n");
+    await writeFile(path.join(memoryDir, "long-memory-model.md"), "NOOBOT_LONG_MEMORY_MODEL/1\n");
+    await writeFile(path.join(memoryDir, "daily_summary", "2026-09-01", "域.md"), "经验：旧\n");
+
+    await ensureUserWorkspaceInitialized({
+      workspaceRoot: fixture.workspaceRoot,
+      workspaceTemplatePath: fixture.workspaceTemplatePath,
+      userId: "user-1",
+    });
+
+    assert.equal(
+      await readFile(path.join(memoryDir, "long-memory.md"), "utf8"),
+      EMPTY_LONG_MEMORY_DOCUMENT,
+    );
+    assert.equal(
+      await readFile(path.join(memoryDir, "daily_summary", "2026-09-01", "域.md"), "utf8"),
+      "NOOBOT_EXPERIENCE_DAILY_SUMMARY/1\n\n经验：旧\n",
+    );
+    await assert.rejects(readFile(path.join(memoryDir, "long-memory-model.md"), "utf8"), {
+      code: "ENOENT",
+    });
+    const backupRoot = path.join(fixture.userPath, "runtime", "memory-repair-backups");
+    const [stamp] = await readdir(backupRoot);
+    const backupMemoryDir = path.join(backupRoot, stamp, "memory");
+    assert.equal(
+      await readFile(path.join(backupMemoryDir, "long-memory.md"), "utf8"),
+      "1. legacy numbered memory\n",
+    );
+    assert.equal(
+      await readFile(path.join(backupMemoryDir, "long-memory-model.md"), "utf8"),
+      "NOOBOT_LONG_MEMORY_MODEL/1\n",
+    );
+    assert.equal(
+      await readFile(path.join(backupMemoryDir, "daily_summary", "2026-09-01", "域.md"), "utf8"),
+      "经验：旧\n",
     );
   } finally {
     await fixture.restore();

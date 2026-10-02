@@ -1,118 +1,118 @@
-【经验教训字段模型】
+NOOBOT_EXPERIENCE_MODEL/1
 
 DOMAIN: career_wealth
 CATEGORY: career_development
 
 - career_planning
-- skill_development
 - leadership
+- skill_development
 - team_management
 
 CATEGORY: entrepreneurship_business
 
-- startup_strategy
 - business_model
 - market_analysis
+- startup_strategy
 
 CATEGORY: financial_planning
 
-- investment_wealth_management
 - asset_allocation
+- investment_wealth_management
 - spending_review
 
 DOMAIN: creativity_arts
 CATEGORY: aesthetics_appreciation
 
-- art_appreciation
 - aesthetic_theory
+- art_appreciation
 - cultural_experience
 
 CATEGORY: artistic_creation
 
-- painting_design
-- music_performance
 - creative_writing
+- music_performance
+- painting_design
 
 CATEGORY: creative_expression
 
-- photography
 - crafts_handwork
 - innovation_projects
+- photography
 
 DOMAIN: lifestyle_interests
 CATEGORY: hobbies_interests
 
-- sports_competition
 - gaming
 - hobby_skills
+- sports_competition
 
 CATEGORY: lifestyle
 
 - home_organization
-- styling_personal_image
 - life_rituals
+- styling_personal_image
 
 CATEGORY: travel_exploration
 
-- travel_planning
-- nature_exploration
 - cultural_experience
+- nature_exploration
+- travel_planning
 
 DOMAIN: mindset_cognition
 CATEGORY: decision_judgment
 
-- risk_assessment
-- priority_analysis
 - long_term_planning
+- priority_analysis
+- risk_assessment
 
 CATEGORY: emotion_psychology
 
 - emotion_regulation
-- stress_relief
 - self_motivation
+- stress_relief
 
 CATEGORY: mental_models
 
+- cognitive_biases
 - decision_frameworks
 - problem_solving
-- cognitive_biases
 
 DOMAIN: personal_health
 CATEGORY: energy_management
 
+- efficiency_improvement
 - recovery_relaxation
 - time_management
-- efficiency_improvement
 
 CATEGORY: habits_growth
 
-- habit_building
 - focus_training
+- habit_building
 - self_discipline_methods
 
 CATEGORY: physical_mental_health
 
-- exercise_training
 - diet_sleep
+- exercise_training
 - mental_wellbeing
 
 DOMAIN: society_relationships
 CATEGORY: communication_influence
 
+- cross_cultural_communication
 - negotiation
 - public_speaking
-- cross_cultural_communication
 
 CATEGORY: interpersonal_relationships
 
 - family_relationships
-- workplace_relationships
 - friendship_socializing
+- workplace_relationships
 
 CATEGORY: social_observation
 
-- laws_policies
 - history_humanities
+- laws_policies
 - social_phenomena
 
 DOMAIN: technology_knowledge
@@ -125,8 +125,8 @@ CATEGORY: digital_technology
 
 CATEGORY: learning_education
 
-- learning_methods
 - knowledge_management
+- learning_methods
 - teaching_training
 
 CATEGORY: rnd_engineering
@@ -138,6 +138,6 @@ CATEGORY: rnd_engineering
 
 CATEGORY: scientific_thinking
 
-- logical_reasoning
-- experimentation_validation
 - data_analysis
+- experimentation_validation
+- logical_reasoning

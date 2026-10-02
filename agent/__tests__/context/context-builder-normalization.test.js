@@ -557,7 +557,15 @@ test("buildSystemRuntime does not allow systemRuntimePatch to grant super user",
   assert.equal(runtime.userId, "super-root-user");
 });
 
-function createBuilderForLongMemoryTest(readLongMemoryCalls) {
+function createBuilderForLongMemoryTest(
+  readLongMemoryCalls,
+  {
+    readLongMemory = async () => "remembered-long-memory",
+    errorLogs = [],
+    events = [],
+    abortSignal = null,
+  } = {},
+) {
   return new ContextBuilder({
     config: {
       globalConfig: { workspaceRoot: "/tmp/noobot-test-workspace" },
@@ -568,7 +576,12 @@ function createBuilderForLongMemoryTest(readLongMemoryCalls) {
       memoryService: {
         async readLongMemory(payload = {}) {
           readLongMemoryCalls.push(payload);
-          return "remembered-long-memory";
+          return readLongMemory(payload);
+        },
+      },
+      errorLogger: {
+        async log(entry) {
+          errorLogs.push(entry);
         },
       },
       attachmentService: {
@@ -577,7 +590,7 @@ function createBuilderForLongMemoryTest(readLongMemoryCalls) {
         },
       },
       skillService: null,
-      eventListener: null,
+      eventListener: { onEvent: (event) => events.push(event) },
       botManager: null,
       userInteractionBridge: null,
     },
@@ -590,7 +603,7 @@ function createBuilderForLongMemoryTest(readLongMemoryCalls) {
       runConfig: executionRunConfig("client-turn:long-memory", {
         contextPolicy: { promptSections: ["base_prompt", "long_memory"] },
       }),
-      abortSignal: null,
+      abortSignal,
       parentAsyncResultContainer: null,
     },
   });
@@ -625,5 +638,60 @@ test("buildExistingSessionContext resolves the same long memory as a new session
   assert.deepEqual(
     existingSessionContext.context.modelContext.messageBlocks.system,
     newSessionContext.context.modelContext.messageBlocks.system,
+  );
+});
+
+test("a long memory read failure is recorded and the turn continues without long memory", async () => {
+  const errorLogs = [];
+  const events = [];
+  const failure = Object.assign(new Error("memory document must start with NOOBOT_LONG_MEMORY/1"), {
+    code: "MEMORY_DOCUMENT_HEADER_INVALID",
+  });
+  const context = await createBuilderForLongMemoryTest([], {
+    readLongMemory: async () => {
+      throw failure;
+    },
+    errorLogs,
+    events,
+  }).buildNewSessionContext({ dialogProcessId: "dp-memory-failure" });
+
+  assert.deepEqual(
+    errorLogs.map((entry) => [entry.event, entry.error, entry.extra.stage]),
+    [["memory_injection_failed", failure, "long_memory"]],
+  );
+  assert.equal(
+    context.context.modelContext.messageBlocks.system.some((item) =>
+      String(item || "").includes("remembered-long-memory"),
+    ),
+    false,
+  );
+});
+
+test("an aborted long memory read is rethrown and not recorded", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const errorLogs = [];
+  await assert.rejects(
+    createBuilderForLongMemoryTest([], {
+      readLongMemory: async () => {
+        throw Object.assign(new Error("aborted"), { name: "AbortError" });
+      },
+      errorLogs,
+      abortSignal: controller.signal,
+    }).buildNewSessionContext({ dialogProcessId: "dp-memory-abort" }),
+    { name: "AbortError" },
+  );
+  assert.deepEqual(errorLogs, []);
+});
+
+test("a builder with memoryService requires an error logger", () => {
+  assert.throws(
+    () =>
+      new ContextBuilder({
+        config: { globalConfig: {}, userConfig: {} },
+        serviceContainer: { memoryService: { readLongMemory: async () => "" } },
+        sessionContext: { userId: "u1", runConfig: executionRunConfig("client-turn:no-logger") },
+      }),
+    TypeError,
   );
 });

@@ -47,6 +47,15 @@ export function isInjectedMessage(message = {}) {
   return resolveContextMessageFlags(message).injected;
 }
 
+export function isPluginMessage(message = {}) {
+  return resolveContextMessageFlags(message).plugin;
+}
+
+export function isInjectedOrPluginMessage(message = {}) {
+  const flags = resolveContextMessageFlags(message);
+  return flags.injected || flags.plugin;
+}
+
 export function resolveInjectedMessageType(message = {}) {
   if (!isInjectedMessage(message)) return "";
   const explicit =

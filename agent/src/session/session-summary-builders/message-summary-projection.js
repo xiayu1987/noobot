@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import {
@@ -158,7 +159,7 @@ export function buildThinkingDetailCountByMessage(messages = []) {
 export function buildDisplayMessageSummary(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) return null;
   const role = String(message?.role || "").trim();
-  if (!role || message?.injectedMessage === true) return null;
+  if (!role || isInjectedMessage(message)) return null;
   const type = String(message?.type || "").trim();
   if (!["user", "assistant"].includes(role)) return null;
   const hasCanonicalActivity =

@@ -21,7 +21,7 @@ export class LongMemoryManager {
     return readLongMemoryState(this.storage, basePath);
   }
 
-  async update(basePath, state, patchText, options) {
-    return updateLongMemory(this.storage, basePath, state, patchText, options);
+  async update(basePath, state, patchText) {
+    return updateLongMemory(this.storage, basePath, state, patchText);
   }
 }

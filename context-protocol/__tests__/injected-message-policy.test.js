@@ -48,3 +48,17 @@ test("only checkpoint control messages participate in summary checkpoint policy"
     CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION,
   ]);
 });
+
+test("injected and plugin message flags resolve through the context protocol", async () => {
+  const { isInjectedMessage, isPluginMessage, isInjectedOrPluginMessage } =
+    await import("../src/policy/message.js");
+  assert.equal(isInjectedMessage({ injectedMessage: true }), true);
+  assert.equal(isInjectedMessage({ injectedBy: "harness-plugin" }), true);
+  assert.equal(isInjectedMessage({ additional_kwargs: { injectedMessage: true } }), true);
+  assert.equal(isPluginMessage({ pluginMessage: true }), true);
+  assert.equal(isPluginMessage({ additional_kwargs: { pluginMessage: true } }), true);
+  assert.equal(isInjectedOrPluginMessage({ pluginMessage: true }), true);
+  assert.equal(isInjectedOrPluginMessage({ injectedMessage: true }), true);
+  assert.equal(isInjectedOrPluginMessage({ role: "user", content: "hi" }), false);
+  assert.equal(isPluginMessage({ pluginMessage: false }), false);
+});

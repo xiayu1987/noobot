@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { randomUUID } from "node:crypto";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
@@ -544,7 +545,7 @@ export async function assertReusedUserTurnIdentity({
       const messageItem = messages[index];
       if (String(messageItem?.role || "").trim() !== "user") continue;
       if (String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId) continue;
-      if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
+      if (isInjectedOrPluginMessage(messageItem)) continue;
       return index;
     }
     return -1;

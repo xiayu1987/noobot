@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { sanitizeFileName } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
+import { EXPERIENCE_PATCH_SCHEMA } from "@noobot/memory-protocol/experience/schema";
 
 export async function saveWeeklyDomainSummary({
   storage,
@@ -36,7 +37,11 @@ export async function saveWeeklyDomainSummary({
         lessons: category?.lessons,
       }),
     ].join("\n");
-    await storage.appendText(filePath, block);
+    await storage.appendMemoryDocument(
+      EXPERIENCE_PATCH_SCHEMA.weekly.documentKind,
+      filePath,
+      block,
+    );
     writtenCount += 1;
   }
   return writtenCount > 0;

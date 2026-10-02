@@ -1,0 +1,162 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
+import {
+  MEMORY_REPAIR_STATUS,
+  migrateMemoryDocument,
+  repairMemoryWorkspace,
+} from "../src/index.js";
+
+const EXPERIENCE_MODEL = [
+  "NOOBOT_EXPERIENCE_MODEL/1",
+  "",
+  "DOMAIN: career_wealth",
+  "CATEGORY: career_development",
+  "- career_planning",
+  "",
+].join("\n");
+
+const LEGACY_METADATA = [
+  "# experience metadata (text protocol)",
+  "DOMAIN: technology_knowledge",
+  "WEEKLY: week=2026-W35 dates=2026-08-17|2026-08-18 domains=2 created_at=2026-08-25T13:25:16.694Z",
+  "WEEKLY: week=2026-W35 dates=2026-08-17|2026-08-18 domains=2 created_at=2026-08-25T13:25:58.254Z",
+  "UPDATED_AT: 2026-10-01T12:32:46.527Z",
+  "",
+].join("\n");
+
+test("canonical documents are left untouched", () => {
+  const text = "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n";
+  assert.deepEqual(migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, text }), {
+    status: MEMORY_REPAIR_STATUS.CANONICAL,
+    text,
+  });
+});
+
+test("legacy experience model title migrates into the canonical header", () => {
+  const result = migrateMemoryDocument({
+    kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
+    text: "【经验教训字段模型】\n\nDOMAIN: career_wealth\nCATEGORY: career_development\n- career_planning\n",
+    resetText: EXPERIENCE_MODEL,
+  });
+  assert.equal(result.status, MEMORY_REPAIR_STATUS.MIGRATED);
+  assert.equal(result.text, EXPERIENCE_MODEL);
+});
+
+test("legacy metadata migrates and keeps repeated weekly batches as history", () => {
+  const result = migrateMemoryDocument({
+    kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_METADATA,
+    text: LEGACY_METADATA,
+  });
+  assert.equal(result.status, MEMORY_REPAIR_STATUS.MIGRATED);
+  assert.match(result.text, /^NOOBOT_EXPERIENCE_METADATA\/1\n\nDOMAIN: technology_knowledge\n/);
+  assert.equal(result.text.match(/week=2026-W35/g).length, 2);
+});
+
+test("headerless summaries gain the header of their kind", () => {
+  const result = migrateMemoryDocument({
+    kind: MEMORY_DOCUMENT_KIND.WEEKLY_SUMMARY,
+    text: "[2026-09-29T16:33:58.863Z]\n经验：\n- 旧内容\n",
+  });
+  assert.equal(result.status, MEMORY_REPAIR_STATUS.MIGRATED);
+  assert.equal(
+    result.text,
+    "NOOBOT_EXPERIENCE_WEEKLY_SUMMARY/1\n\n[2026-09-29T16:33:58.863Z]\n经验：\n- 旧内容\n",
+  );
+});
+
+test("documents without a deterministic rule are reset", () => {
+  assert.deepEqual(
+    migrateMemoryDocument({
+      kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY,
+      text: "1. legacy numbered memory\n",
+    }),
+    { status: MEMORY_REPAIR_STATUS.RESET, text: "NOOBOT_LONG_MEMORY/1\n" },
+  );
+  assert.deepEqual(
+    migrateMemoryDocument({
+      kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
+      text: "unknown\n",
+      resetText: EXPERIENCE_MODEL,
+    }),
+    { status: MEMORY_REPAIR_STATUS.RESET, text: EXPERIENCE_MODEL },
+  );
+});
+
+test("a non-canonical reset text is a programming error", () => {
+  assert.throws(
+    () =>
+      migrateMemoryDocument({
+        kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
+        text: "unknown\n",
+        resetText: "not canonical\n",
+      }),
+    TypeError,
+  );
+});
+
+function createMemoryIo(files) {
+  const backups = new Map();
+  return {
+    files,
+    backups,
+    io: {
+      exists: async (relativePath) => files.has(relativePath),
+      readText: async (relativePath) => files.get(relativePath),
+      writeText: async (relativePath, text) => void files.set(relativePath, text),
+      writeBackup: async (relativePath, text) => void backups.set(relativePath, text),
+      removeFile: async (relativePath) => void files.delete(relativePath),
+      listMarkdownFiles: async (relativeDir) =>
+        [...files.keys()].filter((relativePath) => relativePath.startsWith(`${relativeDir}/`)),
+    },
+  };
+}
+
+const LAYOUT = Object.freeze({
+  longMemory: "memory/long-memory.md",
+  experienceModel: "memory/experience-model.md",
+  experienceModelTemplate: EXPERIENCE_MODEL,
+  experienceMetadata: "memory/experience/metadata.md",
+  dailySummaryDir: "memory/daily_summary",
+  weeklySummaryDir: "memory/weekly_summary",
+  monthlySummaryDir: "memory/monthly_summary",
+  yearlySummaryDir: "memory/yearly_summary",
+  obsoleteFiles: ["memory/long-memory-model.md"],
+});
+
+test("workspace repair backs up every rewritten or removed document", async () => {
+  const { files, backups, io } = createMemoryIo(
+    new Map([
+      ["memory/long-memory.md", "1. legacy numbered memory\n"],
+      ["memory/experience-model.md", EXPERIENCE_MODEL],
+      ["memory/experience/metadata.md", LEGACY_METADATA],
+      ["memory/daily_summary/2026-09-29/域.md", "经验：\n- 旧内容\n"],
+      ["memory/long-memory-model.md", "NOOBOT_LONG_MEMORY_MODEL/1\n"],
+    ]),
+  );
+  const report = await repairMemoryWorkspace({ layout: LAYOUT, io });
+  assert.deepEqual(
+    report.map((entry) => [entry.relativePath, entry.status]),
+    [
+      ["memory/long-memory.md", "reset"],
+      ["memory/experience/metadata.md", "migrated"],
+      ["memory/daily_summary/2026-09-29/域.md", "migrated"],
+      ["memory/long-memory-model.md", "removed"],
+    ],
+  );
+  assert.equal(files.get("memory/long-memory.md"), "NOOBOT_LONG_MEMORY/1\n");
+  assert.equal(files.has("memory/long-memory-model.md"), false);
+  assert.equal(backups.get("memory/long-memory.md"), "1. legacy numbered memory\n");
+  assert.equal(backups.get("memory/experience/metadata.md"), LEGACY_METADATA);
+  assert.equal(backups.has("memory/experience-model.md"), false);
+  assert.deepEqual(await repairMemoryWorkspace({ layout: LAYOUT, io }), []);
+});
+
+test("workspace repair requires a complete io port", async () => {
+  await assert.rejects(repairMemoryWorkspace({ layout: LAYOUT, io: {} }), TypeError);
+});

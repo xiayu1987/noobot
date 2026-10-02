@@ -4,6 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 import { dedupeTextList, sanitizeFileName } from "../text.js";
+import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
+
+export const EXPERIENCE_MODEL_ERROR_CODE = "EXPERIENCE_MODEL_DOCUMENT_INVALID";
+
+function modelError(message) {
+  const error = new Error(message);
+  error.code = EXPERIENCE_MODEL_ERROR_CODE;
+  return error;
+}
+
+function requireName(raw, line) {
+  const name = sanitizeFileName(raw, "");
+  if (!name) throw modelError(`empty experience model name: ${line}`);
+  return name;
+}
 
 export function normalizeExperienceModelTree(raw = {}) {
   const out = {};
@@ -29,46 +44,42 @@ export function normalizeExperienceModelTree(raw = {}) {
 }
 
 export function parseExperienceModelText(raw = "") {
-  const lines = String(raw || "")
-    .replace(/\r\n?/g, "\n")
-    .split("\n");
+  const lines = readMemoryDocumentBody(MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL, raw).split("\n");
   const out = {};
   let currentDomain = "";
   let currentCategory = "";
   for (const rawLine of lines) {
-    const line = String(rawLine || "").trim();
-    if (!line || line.startsWith("#")) continue;
-    const domainMatched = /^DOMAIN:\s*(.+)$/i.exec(line);
+    const line = rawLine.trim();
+    if (!line) continue;
+    const domainMatched = /^DOMAIN:\s*(\S.*)$/.exec(line);
     if (domainMatched) {
-      currentDomain = sanitizeFileName(domainMatched[1], "");
-      if (!currentDomain) continue;
-      if (!out[currentDomain]) out[currentDomain] = {};
+      currentDomain = requireName(domainMatched[1], line);
+      if (out[currentDomain]) throw modelError(`experience domain repeated: ${currentDomain}`);
+      out[currentDomain] = {};
       currentCategory = "";
       continue;
     }
-    const categoryMatched = /^CATEGORY:\s*(.+)$/i.exec(line);
+    const categoryMatched = /^CATEGORY:\s*(\S.*)$/.exec(line);
     if (categoryMatched) {
-      if (!currentDomain) continue;
-      currentCategory = sanitizeFileName(categoryMatched[1], "");
-      if (!currentCategory) continue;
-      if (!Array.isArray(out[currentDomain][currentCategory])) {
-        out[currentDomain][currentCategory] = [];
+      if (!currentDomain) throw modelError(`category without domain: ${line}`);
+      currentCategory = requireName(categoryMatched[1], line);
+      if (out[currentDomain][currentCategory]) {
+        throw modelError(`experience category repeated: ${currentDomain}.${currentCategory}`);
       }
+      out[currentDomain][currentCategory] = [];
       continue;
     }
-    const subMatched = /^-\s*(.+)$/.exec(line);
-    if (!subMatched || !currentDomain || !currentCategory) continue;
-    const subcategory = sanitizeFileName(subMatched[1], "");
-    if (subcategory && !out[currentDomain][currentCategory].includes(subcategory)) {
-      out[currentDomain][currentCategory].push(subcategory);
-    }
+    const subMatched = /^-\s+(\S.*)$/.exec(line);
+    if (!subMatched) throw modelError(`unknown experience model line: ${line}`);
+    if (!currentCategory) throw modelError(`subcategory without category: ${line}`);
+    out[currentDomain][currentCategory].push(requireName(subMatched[1], line));
   }
   return normalizeExperienceModelTree(out);
 }
 
 export function renderExperienceModelText(modelTree = {}) {
   const tree = normalizeExperienceModelTree(modelTree);
-  const lines = ["【经验教训字段模型】"];
+  const lines = [];
   for (const domain of Object.keys(tree).sort()) {
     lines.push(`DOMAIN: ${domain}`);
     const categories = tree[domain] && typeof tree[domain] === "object" ? tree[domain] : {};
@@ -80,5 +91,5 @@ export function renderExperienceModelText(modelTree = {}) {
       lines.push("");
     }
   }
-  return `${lines.join("\n").trim()}\n`;
+  return renderMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL, lines.join("\n"));
 }

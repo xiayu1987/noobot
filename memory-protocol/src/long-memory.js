@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { stripMarkdownFence } from "./text.js";
+import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "./document.js";
 
-export const LONG_MEMORY_MODEL_HEADER = "NOOBOT_LONG_MEMORY_MODEL/1";
-export const LONG_MEMORY_DOCUMENT_HEADER = "NOOBOT_LONG_MEMORY/1";
 export const LONG_MEMORY_VALUE_SEPARATOR = "：";
 
 export const LONG_MEMORY_FIELD_KIND = Object.freeze({
@@ -21,13 +20,11 @@ export const LONG_MEMORY_PATCH_ACTION = Object.freeze({
 });
 
 export const LONG_MEMORY_ERROR_CODE = Object.freeze({
-  MODEL_INVALID: "LONG_MEMORY_MODEL_INVALID",
   DOCUMENT_INVALID: "LONG_MEMORY_DOCUMENT_INVALID",
   PATCH_INVALID: "LONG_MEMORY_PATCH_INVALID",
 });
 
 const FIELD_KEY_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
-const LIST_KIND_RE = /^list:(\d+)$/;
 const LIST_ITEM_RE = /^(\d+)\.\s+(\S.*)$/;
 const PATCH_LINE_RE = new RegExp(
   `^(ADD|UPDATE|DELETE)\\s+([a-z0-9_.]+)(?:\\s+(\\d+))?\\s*(?:${LONG_MEMORY_VALUE_SEPARATOR}\\s*(\\S.*))?$`,
@@ -46,63 +43,101 @@ function splitLines(text = "") {
     .map((line) => line.trim());
 }
 
-function parseFieldKind(rawKind, lineNumber) {
-  if (rawKind === LONG_MEMORY_FIELD_KIND.SINGLE) {
-    return { kind: LONG_MEMORY_FIELD_KIND.SINGLE };
-  }
-  const matched = LIST_KIND_RE.exec(rawKind);
-  const maxItems = matched ? Number(matched[1]) : 0;
-  if (!Number.isSafeInteger(maxItems) || maxItems < 1) {
-    throw longMemoryError(
-      LONG_MEMORY_ERROR_CODE.MODEL_INVALID,
-      `long memory model line ${lineNumber}: kind must be "single" or "list:<max>"`,
-    );
-  }
-  return { kind: LONG_MEMORY_FIELD_KIND.LIST, maxItems };
-}
-
-function parseModelFieldLine(line, lineNumber) {
-  const parts = line.split("|").map((part) => part.trim());
-  if (parts.length !== 3 || !FIELD_KEY_RE.test(parts[0]) || !parts[2]) {
-    throw longMemoryError(
-      LONG_MEMORY_ERROR_CODE.MODEL_INVALID,
-      `long memory model line ${lineNumber}: expected "<field.key> | <kind> | <description>"`,
-    );
-  }
-  return { key: parts[0], ...parseFieldKind(parts[1], lineNumber), description: parts[2] };
-}
-
-export function parseLongMemoryModel(text = "") {
-  const lines = splitLines(text);
-  const headerIndex = lines.findIndex(Boolean);
-  if (headerIndex < 0 || lines[headerIndex] !== LONG_MEMORY_MODEL_HEADER) {
-    throw longMemoryError(
-      LONG_MEMORY_ERROR_CODE.MODEL_INVALID,
-      `long memory model must start with ${LONG_MEMORY_MODEL_HEADER}`,
-    );
-  }
-  const fields = [];
-  const seen = new Set();
-  lines.slice(headerIndex + 1).forEach((line, offset) => {
-    if (!line || line.startsWith("#")) return;
-    const field = parseModelFieldLine(line, headerIndex + offset + 2);
-    if (seen.has(field.key)) {
-      throw longMemoryError(
-        LONG_MEMORY_ERROR_CODE.MODEL_INVALID,
-        `long memory model declares field twice: ${field.key}`,
-      );
+export function createLongMemoryModel(fields) {
+  const byKey = new Map();
+  for (const field of fields) {
+    const validKind =
+      field.kind === LONG_MEMORY_FIELD_KIND.SINGLE
+        ? field.maxItems === undefined
+        : field.kind === LONG_MEMORY_FIELD_KIND.LIST &&
+          Number.isSafeInteger(field.maxItems) &&
+          field.maxItems > 0;
+    if (!FIELD_KEY_RE.test(field.key) || !validKind || !field.description) {
+      throw new TypeError(`invalid long memory field: ${field.key}`);
     }
-    seen.add(field.key);
-    fields.push(Object.freeze(field));
-  });
-  if (!fields.length) {
-    throw longMemoryError(LONG_MEMORY_ERROR_CODE.MODEL_INVALID, "long memory model has no fields");
+    if (byKey.has(field.key)) throw new TypeError(`long memory field declared twice: ${field.key}`);
+    byKey.set(field.key, Object.freeze({ ...field }));
   }
-  return Object.freeze({
-    fields: Object.freeze(fields),
-    byKey: new Map(fields.map((f) => [f.key, f])),
-  });
+  return Object.freeze({ fields: Object.freeze([...byKey.values()]), byKey });
 }
+
+export const LONG_MEMORY_MODEL = createLongMemoryModel([
+  { key: "personal_info.age", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "年龄" },
+  { key: "personal_info.gender", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "性别" },
+  { key: "personal_info.occupation", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "职业" },
+  { key: "personal_info.education", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "教育背景" },
+  { key: "personal_info.location", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "城市或地区" },
+  {
+    key: "interests.hobbies",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "兴趣爱好",
+  },
+  {
+    key: "interests.favorite_books",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "喜欢的书籍",
+  },
+  {
+    key: "interests.favorite_movies",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "喜欢的电影",
+  },
+  {
+    key: "interests.favorite_music",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 3,
+    description: "喜欢的音乐类型",
+  },
+  {
+    key: "interests.preferred_activities",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 3,
+    description: "偏好的活动方式",
+  },
+  {
+    key: "personality.traits",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "性格特征",
+  },
+  {
+    key: "personality.emotional_tendencies",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 3,
+    description: "情绪倾向",
+  },
+  {
+    key: "personality.decision_style",
+    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+    description: "决策风格",
+  },
+  { key: "social.social_preference", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "社交偏好" },
+  {
+    key: "social.important_relationships",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "重要关系信息",
+  },
+  {
+    key: "social.communication_style",
+    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+    description: "沟通方式",
+  },
+  {
+    key: "history_preferences.preferred_conversation_style",
+    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+    description: "偏好的对话风格",
+  },
+  {
+    key: "history_preferences.common_topics",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 8,
+    description: "常关注的话题",
+  },
+]);
 
 const DOCUMENT_FIELD_RE = new RegExp(`^([a-z0-9_.]+)${LONG_MEMORY_VALUE_SEPARATOR}(.*)$`);
 
@@ -159,15 +194,10 @@ function appendListItem(current, line) {
 }
 
 export function parseLongMemoryDocument(model, text = "") {
-  const lines = splitLines(text);
+  const lines = splitLines(readMemoryDocumentBody(MEMORY_DOCUMENT_KIND.LONG_MEMORY, text));
   const values = new Map();
-  const headerIndex = lines.findIndex(Boolean);
-  if (headerIndex < 0) return values;
-  if (lines[headerIndex] !== LONG_MEMORY_DOCUMENT_HEADER) {
-    throw documentError(`long memory document must start with ${LONG_MEMORY_DOCUMENT_HEADER}`);
-  }
   let current = null;
-  for (const line of lines.slice(headerIndex + 1)) {
+  for (const line of lines) {
     if (!line || appendListItem(current, line)) continue;
     closeField(values, current);
     current = openField(model, values, line);
@@ -192,8 +222,10 @@ export function renderLongMemoryBody(model, values) {
 }
 
 export function renderLongMemoryDocument(model, values) {
-  const body = renderLongMemoryBody(model, values);
-  return `${LONG_MEMORY_DOCUMENT_HEADER}\n${body ? `\n${body}\n` : ""}`;
+  return renderMemoryDocument(
+    MEMORY_DOCUMENT_KIND.LONG_MEMORY,
+    renderLongMemoryBody(model, values),
+  );
 }
 
 export function renderLongMemoryFieldsForPrompt(model, values) {

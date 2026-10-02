@@ -75,8 +75,16 @@ const forbiddenAgentProtocolDefinitions = [
   [/function\s+resolveMessageToolCalls\s*\(/, "message tool-call resolver"],
   [/function\s+resolveMessageToolCallId\s*\(/, "message tool-call id resolver"],
   [/function\s+resolveParentSessionId(?:WithMeta)?\s*\(/, "parent session resolver"],
+  [
+    /(?:if\s*\(|\|\||&&|=>|return)\s*!?[\w$?.]*\.(?:injectedMessage|pluginMessage)\s*===\s*true(?!\)\s*target\.)/,
+    "hand-written injected/plugin message check",
+  ],
+  [
+    /readContextMessageField\([^)]*["'](?:injectedMessage|pluginMessage)["']\)/,
+    "injected/plugin flag read",
+  ],
 ];
-for (const file of await sourceFiles("agent/src")) {
+for (const file of runtimeConsumers) {
   const text = await readFile(path.join(ROOT, file), "utf8");
   for (const [pattern, label] of forbiddenAgentProtocolDefinitions) {
     if (pattern.test(text)) violations.push(`${file}: forbidden duplicate ${label}`);
