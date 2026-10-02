@@ -17,7 +17,6 @@ import {
   dailySummaryDateDir,
   sessionFile,
   longMemoryModelPath,
-  longMemoryMetadataPath,
 } from "./paths.js";
 import {
   fileExists,
@@ -96,10 +95,6 @@ export class StorageManager {
 
   longMemoryModelPath(basePath) {
     return longMemoryModelPath(basePath);
-  }
-
-  longMemoryMetadataPath(basePath) {
-    return longMemoryMetadataPath(basePath);
   }
 
   async fileExists(filePath = "") {

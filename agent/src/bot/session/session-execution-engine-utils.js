@@ -18,6 +18,7 @@ import {
   getMessageId,
   isInjectedMessage,
   readMessageField,
+  resolveContextInternalMessageType,
   resolveInjectedMessageType,
 } from "@noobot/context-protocol";
 
@@ -57,13 +58,7 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
   if (toolCalls.length) normalized.tool_calls = toolCalls;
   const toolCallId = resolveContextToolCallId(messageItem);
   if (toolCallId) normalized.tool_call_id = toolCallId;
-  const internalType = String(
-    messageItem?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      messageItem?.metadata?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
-      "",
-  ).trim();
+  const internalType = resolveContextInternalMessageType(messageItem);
   if (internalType) {
     normalized.additional_kwargs = {
       ...(normalized.additional_kwargs || {}),

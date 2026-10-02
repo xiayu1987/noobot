@@ -3,20 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { dedupeTextList } from "../utils/text.js";
+import { dedupeTextList } from "@noobot/memory-protocol/text";
 import { buildDailyExperiencePrompt } from "../prompts/builders.js";
 import { appendParseErrorLog } from "../parsers/error-logger.js";
-import { parseDailyExperienceOutput } from "./daily/parser.js";
+import {
+  normalizeDomainSummaryOutput,
+  parseDailyExperienceOutput,
+} from "@noobot/memory-protocol/experience/summary-output";
 import { appendDailyDomainResults } from "./daily/appender.js";
-import { normalizeWeeklySummaryOutput } from "./weekly/parser.js";
 import { mergeDomainTextForDates } from "./weekly/merger.js";
 import { saveWeeklyDomainSummary } from "./weekly/saver.js";
 import { runWeeklySummaryIfNeeded } from "./weekly/runner.js";
-import { normalizeMonthlySummaryOutput } from "./monthly/parser.js";
 import { mergeDomainTextForWeeks } from "./monthly/merger.js";
 import { saveMonthlyDomainSummary } from "./monthly/saver.js";
 import { runMonthlySummaryIfNeeded } from "./monthly/runner.js";
-import { normalizeYearlySummaryOutput } from "./yearly/parser.js";
 import { mergeDomainTextForMonths } from "./yearly/merger.js";
 import { saveYearlyDomainSummary } from "./yearly/saver.js";
 import { runYearlySummaryIfNeeded } from "./yearly/runner.js";
@@ -25,12 +25,11 @@ import {
   writeExperienceModel as writeExperienceModelFile,
   upsertExperienceModelEntries as upsertExperienceModelEntriesInMemory,
 } from "./model/index.js";
-import { isAbortLikeError } from "./abort-control.js";
 import {
   normalizeExperienceMetadata,
   parseExperienceMetadataText,
   renderExperienceMetadataText,
-} from "./metadata-store.js";
+} from "@noobot/memory-protocol/experience/metadata";
 
 export class ExperienceManager {
   constructor(storage) {
@@ -72,20 +71,11 @@ export class ExperienceManager {
     });
   }
 
-  normalizeWeekly(rawContent, fallbackDomainName = "", { basePath = "" } = {}) {
-    return normalizeWeeklySummaryOutput(rawContent, fallbackDomainName, {
-      onParseError: (payload) => void this.appendParseErrorLog({ basePath, ...payload }),
-    });
-  }
-
-  normalizeMonthly(rawContent, fallbackDomainName = "", { basePath = "" } = {}) {
-    return normalizeMonthlySummaryOutput(rawContent, fallbackDomainName, {
-      onParseError: (payload) => void this.appendParseErrorLog({ basePath, ...payload }),
-    });
-  }
-
-  normalizeYearly(rawContent, fallbackDomainName = "", { basePath = "" } = {}) {
-    return normalizeYearlySummaryOutput(rawContent, fallbackDomainName, {
+  normalizeDomainSummary(schemaKey, rawContent, fallbackDomainName = "", { basePath = "" } = {}) {
+    return normalizeDomainSummaryOutput({
+      schemaKey,
+      rawContent,
+      fallbackDomainName,
       onParseError: (payload) => void this.appendParseErrorLog({ basePath, ...payload }),
     });
   }
@@ -179,7 +169,7 @@ export class ExperienceManager {
       listDateDirs: (bp) => this.listDateDirs(bp),
       mergeDomainText: (bp, dateKeys) => this.mergeDomainTextForDates(bp, dateKeys),
       normalizeWeeklySummary: (raw, fallback, options) =>
-        this.normalizeWeekly(raw, fallback, options),
+        this.normalizeDomainSummary("weekly", raw, fallback, options),
       saveWeeklySummary: (params) => this.saveWeeklyDomainSummary(params),
       readMetadata: (bp) => this.readMetadata(bp),
       writeMetadata: (bp, metadata) => this.writeMetadata(bp, metadata),
@@ -218,7 +208,7 @@ export class ExperienceManager {
       listWeekDirs: (bp) => this.listWeekDirs(bp),
       mergeDomainText: (bp, weekKeys) => this.mergeDomainTextForWeeks(bp, weekKeys),
       normalizeMonthlySummary: (raw, fallback, options) =>
-        this.normalizeMonthly(raw, fallback, options),
+        this.normalizeDomainSummary("monthly", raw, fallback, options),
       saveMonthlySummary: (params) => this.saveMonthlyDomainSummary(params),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
       upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
@@ -255,7 +245,7 @@ export class ExperienceManager {
       listMonthDirs: (bp) => this.listMonthDirs(bp),
       mergeDomainText: (bp, monthKeys) => this.mergeDomainTextForMonths(bp, monthKeys),
       normalizeYearlySummary: (raw, fallback, options) =>
-        this.normalizeYearly(raw, fallback, options),
+        this.normalizeDomainSummary("yearly", raw, fallback, options),
       saveYearlySummary: (params) => this.saveYearlyDomainSummary(params),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
       upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
@@ -268,36 +258,30 @@ export class ExperienceManager {
     promptI18n = {},
     promptPayload = [],
     createdAt = "",
-    abortSignal = null,
   } = {}) {
     if (typeof invokeModel !== "function") return false;
-    try {
-      const knownDomainNames = await this.collectKnownDomainNames(basePath);
-      const lessonPrompt = buildDailyExperiencePrompt({
-        promptI18n,
-        knownDomainText: dedupeTextList(knownDomainNames).join(", "),
-        shortMemoryItems: promptPayload,
-      });
-      const output = await invokeModel({
-        prompt: lessonPrompt,
-        flow: "memory.experience.daily",
-        purpose: "memory_experience_daily",
-      });
-      const normalizedResults = this.parseDaily(output.text, { basePath });
-      const modelEntries = normalizedResults.map((item) => ({
-        domain_name: item?.domain_name,
-      }));
-      if (modelEntries.length) {
-        await this.upsertExperienceModelEntries(basePath, modelEntries);
-      }
-      return this.appendDailyDomainResults({
-        basePath,
-        results: normalizedResults,
-        createdAt,
-      });
-    } catch (error) {
-      if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
-      return false;
+    const knownDomainNames = await this.collectKnownDomainNames(basePath);
+    const lessonPrompt = buildDailyExperiencePrompt({
+      promptI18n,
+      knownDomainText: dedupeTextList(knownDomainNames).join(", "),
+      shortMemoryItems: promptPayload,
+    });
+    const output = await invokeModel({
+      prompt: lessonPrompt,
+      flow: "memory.experience.daily",
+      purpose: "memory_experience_daily",
+    });
+    const normalizedResults = this.parseDaily(output.text, { basePath });
+    const modelEntries = normalizedResults.map((item) => ({
+      domain_name: item?.domain_name,
+    }));
+    if (modelEntries.length) {
+      await this.upsertExperienceModelEntries(basePath, modelEntries);
     }
+    return this.appendDailyDomainResults({
+      basePath,
+      results: normalizedResults,
+      createdAt,
+    });
   }
 }

@@ -3,8 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readLongMemory, readLongMemoryMetadata, readLongMemoryModel } from "./reader.js";
+import { readLongMemoryState } from "./reader.js";
 import { updateLongMemory } from "./updater.js";
+import { renderLongMemoryBody } from "@noobot/memory-protocol/long-memory";
 
 export class LongMemoryManager {
   constructor(storage) {
@@ -12,18 +13,15 @@ export class LongMemoryManager {
   }
 
   async read(basePath) {
-    return readLongMemory(this.storage, basePath);
+    const { model, values } = await readLongMemoryState(this.storage, basePath);
+    return renderLongMemoryBody(model, values);
   }
 
-  async readModel(basePath) {
-    return readLongMemoryModel(this.storage, basePath);
+  async readState(basePath) {
+    return readLongMemoryState(this.storage, basePath);
   }
 
-  async readMetadata(basePath) {
-    return readLongMemoryMetadata(this.storage, basePath);
-  }
-
-  async update(basePath, content) {
-    return updateLongMemory(this.storage, basePath, content);
+  async update(basePath, state, patchText, options) {
+    return updateLongMemory(this.storage, basePath, state, patchText, options);
   }
 }

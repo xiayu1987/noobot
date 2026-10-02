@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { dedupeTextList } from "../../utils/text.js";
+import { dedupeTextList } from "@noobot/memory-protocol/text";
 
 export async function collectKnownDomainNames({
   storage,

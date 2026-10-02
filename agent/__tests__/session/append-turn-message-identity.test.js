@@ -176,6 +176,7 @@ test("appendTurns persists the canonical internal control message type", async (
         messageUid: "sm_control",
         role: "user",
         type: "context_control",
+        chatPresentation: false,
         content: "checkpoint",
         dialogProcessId: "dp",
         turnScopeId: "t",

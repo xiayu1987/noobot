@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { stripMarkdownFence } from "../utils/text.js";
+import { stripMarkdownFence } from "./text.js";
 
 export const LONG_MEMORY_MODEL_HEADER = "NOOBOT_LONG_MEMORY_MODEL/1";
 export const LONG_MEMORY_DOCUMENT_HEADER = "NOOBOT_LONG_MEMORY/1";
@@ -29,7 +29,9 @@ export const LONG_MEMORY_ERROR_CODE = Object.freeze({
 const FIELD_KEY_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 const LIST_KIND_RE = /^list:(\d+)$/;
 const LIST_ITEM_RE = /^(\d+)\.\s+(\S.*)$/;
-const PATCH_LINE_RE = /^(ADD|UPDATE|DELETE)\s+([a-z0-9_.]+)(?:\s+(\d+))?\s*(?:：\s*(\S.*))?$/;
+const PATCH_LINE_RE = new RegExp(
+  `^(ADD|UPDATE|DELETE)\\s+([a-z0-9_.]+)(?:\\s+(\\d+))?\\s*(?:${LONG_MEMORY_VALUE_SEPARATOR}\\s*(\\S.*))?$`,
+);
 
 function longMemoryError(code, message) {
   const error = new Error(message);
@@ -102,7 +104,7 @@ export function parseLongMemoryModel(text = "") {
   });
 }
 
-const DOCUMENT_FIELD_RE = /^([a-z0-9_.]+)：(.*)$/;
+const DOCUMENT_FIELD_RE = new RegExp(`^([a-z0-9_.]+)${LONG_MEMORY_VALUE_SEPARATOR}(.*)$`);
 
 function documentError(message) {
   return longMemoryError(LONG_MEMORY_ERROR_CODE.DOCUMENT_INVALID, message);

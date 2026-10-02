@@ -1,0 +1,24 @@
+{
+  "name": "@noobot/memory-protocol",
+  "version": "4.3.7",
+  "private": true,
+  "type": "module",
+  "description": "Canonical Noobot short memory, long memory and experience text protocols",
+  "exports": {
+    "./text": "./src/text.js",
+    "./short-memory": "./src/short-memory.js",
+    "./long-memory": "./src/long-memory.js",
+    "./experience/schema": "./src/experience/schema.js",
+    "./experience/patch-items": "./src/experience/patch-items.js",
+    "./experience/summary-output": "./src/experience/summary-output.js",
+    "./experience/model-text": "./src/experience/model-text.js",
+    "./experience/metadata": "./src/experience/metadata.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test \"__tests__/**/*.test.js\""
+  },
+  "dependencies": {
+    "@noobot/context-protocol": "file:../context-protocol"
+  }
+}

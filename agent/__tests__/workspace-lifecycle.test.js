@@ -139,38 +139,6 @@ test("workspace mutation locks stay outside the workspace content tree", async (
   }
 });
 
-test("workspace initialization ignores legacy memory files", async () => {
-  const fixture = await createFixture();
-  try {
-    await mkdir(path.join(fixture.userPath, "memory", "long-memory"), { recursive: true });
-    await writeFile(
-      path.join(fixture.userPath, "memory", "long-memory.json"),
-      JSON.stringify({ staticMemory: "1. migrated memory" }),
-    );
-    await writeFile(
-      path.join(fixture.userPath, "memory", "long-memory", "metadata.json"),
-      JSON.stringify({ items: [{ id: 1, key: "style", value: "concise" }] }),
-    );
-
-    await ensureUserWorkspaceInitialized({
-      workspaceRoot: fixture.workspaceRoot,
-      workspaceTemplatePath: fixture.workspaceTemplatePath,
-      userId: "user-1",
-    });
-
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
-      "template\n",
-    );
-    await assert.rejects(
-      readFile(path.join(fixture.userPath, "memory", "long-memory", "metadata.md"), "utf8"),
-      { code: "ENOENT" },
-    );
-  } finally {
-    await fixture.restore();
-  }
-});
-
 test("workspace initialization preserves an existing empty short-memory document", async () => {
   const fixture = await createFixture();
   try {
@@ -210,7 +178,6 @@ test("workspace initialization repairs missing canonical memory files from the t
     );
     await mkdir(fixture.userPath, { recursive: true });
     await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
-    await writeFile(path.join(fixture.userPath, "memory", "long-memory.json"), "{broken");
 
     await ensureUserWorkspaceInitialized({
       workspaceRoot: fixture.workspaceRoot,
@@ -230,10 +197,6 @@ test("workspace initialization repairs missing canonical memory files from the t
     assert.equal(
       await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
       '{"items":[]}\n',
-    );
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "long-memory.json"), "utf8"),
-      "{broken",
     );
   } finally {
     await fixture.restore();

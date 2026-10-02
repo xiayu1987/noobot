@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function toTs(value) {
-  const timestamp = new Date(value || 0).getTime();
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-}
-
 export function toDateKey(value = "") {
   const dateObj = new Date(value || Date.now());
   if (Number.isNaN(dateObj.getTime())) return new Date().toISOString().slice(0, 10);
@@ -27,7 +22,7 @@ export function toIsoWeekInfo(value = "") {
   utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
   const weekYear = utcDate.getUTCFullYear();
   const yearStart = new Date(Date.UTC(weekYear, 0, 1));
-  const weekNumber = Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+  const weekNumber = Math.ceil(((utcDate - yearStart) / 86400000 + 1) / 7);
   return {
     weekYear,
     weekNumber,

@@ -10,11 +10,11 @@ import {
   collectDialogScopedMessagesToSummarize,
   collectLatestCheckpointEvidenceMessageIndexes,
   collectScopedMessagesToSummarize,
-  isSummaryCheckpointControlMessage,
   resolveSummaryScope,
   markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
 } from "../src/policy/summary.js";
+import { isContextControlMessage } from "../src/policy/injected-message.js";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/message/injected-types.js";
 import { FLOW_CONTROL_ROLE, createFlowControlContextPolicy } from "../src/tool/context-policy.js";
 
@@ -361,7 +361,7 @@ test("user interjection is a retained injection category, not a checkpoint contr
     },
   ];
 
-  assert.equal(isSummaryCheckpointControlMessage(messages[0]), false);
+  assert.equal(isContextControlMessage(messages[0]), false);
   assert.deepEqual(
     markCurrentTurnArraySummarized(messages).map((message) => message.summarized),
     [undefined, undefined],

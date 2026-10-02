@@ -5,7 +5,7 @@
  */
 import { toIsoWeekInfo } from "../../utils/date.js";
 import { buildWeeklySummaryPrompt } from "../../prompts/builders.js";
-import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
+import { assertNotAborted } from "../../../shared/utils/error-utils.js";
 
 export async function runWeeklySummaryIfNeeded({
   storage,
@@ -28,7 +28,7 @@ export async function runWeeklySummaryIfNeeded({
     const dateDirs = await listDateDirs(basePath);
     if (dateDirs.length < 7) break;
 
-    throwIfAborted(abortSignal);
+    assertNotAborted(abortSignal);
     const targetDates = dateDirs.slice(0, 7);
     const weekInfo = toIsoWeekInfo(targetDates[targetDates.length - 1]);
     const weekLabel = weekInfo.weekKey || weekInfo.weekLabel;
@@ -37,7 +37,7 @@ export async function runWeeklySummaryIfNeeded({
 
     const savedDomains = [];
     for (const [domainName, mergedText] of mergedDomainMap.entries()) {
-      throwIfAborted(abortSignal);
+      assertNotAborted(abortSignal);
       const modelTree = await readExperienceModel(basePath);
       const knownCategoryText = Object.keys(modelTree?.[domainName] || {}).join(", ");
       const prompt = buildWeeklySummaryPrompt({
@@ -46,18 +46,12 @@ export async function runWeeklySummaryIfNeeded({
         knownCategoryText,
         mergedText,
       });
-      let parsedSummary = { domain_name: domainName, categories: [] };
-      try {
-        const output = await invokeModel({
-          prompt,
-          flow: "memory.experience.weekly",
-          purpose: "memory_experience_weekly",
-        });
-        parsedSummary = normalizeWeeklySummary(output.text, domainName, { basePath });
-      } catch (error) {
-        if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
-        parsedSummary = { domain_name: domainName, categories: [] };
-      }
+      const output = await invokeModel({
+        prompt,
+        flow: "memory.experience.weekly",
+        purpose: "memory_experience_weekly",
+      });
+      const parsedSummary = normalizeWeeklySummary(output.text, domainName, { basePath });
       const saved = await saveWeeklySummary({
         basePath,
         weekLabel,

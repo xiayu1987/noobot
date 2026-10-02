@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getExperiencePatchPromptMeta } from "../experience/schema-config.js";
+import { getExperiencePatchPromptMeta } from "@noobot/memory-protocol/experience/schema";
 
 function resolveExperiencePatchPromptMeta(promptI18n = {}, key = "") {
   const fallback = getExperiencePatchPromptMeta(key);

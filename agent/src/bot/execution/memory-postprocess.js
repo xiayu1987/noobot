@@ -9,21 +9,10 @@ import { runBestEffort } from "@noobot/shared/best-effort";
 import { mergeConfig, normalizeTimeMs, resolveTimeMs } from "../../config/index.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { isAbortError } from "../../shared/utils/error-utils.js";
 
 const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = TIME_THRESHOLDS.memory.summaryTimeoutMs;
 const DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS = TIME_THRESHOLDS.memory.executionBundleTimeoutMs;
-
-function isAbortLikeError(error = {}) {
-  const name = String(error?.name || "").toLowerCase();
-  const code = String(error?.code || "").toLowerCase();
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    name.includes("abort") ||
-    code === "abort_err" ||
-    code === "aborted" ||
-    message.includes("abort")
-  );
-}
 
 export class MemoryPostProcessService {
   constructor({ globalConfig = {}, memory = null, errorLogger = null } = {}) {
@@ -87,6 +76,32 @@ export class MemoryPostProcessService {
     });
   }
 
+  async recordMemorySummaryFailure({
+    userId,
+    sessionId,
+    mode,
+    stage,
+    error,
+    runtimeEventListener,
+  }) {
+    emitEvent(runtimeEventListener, "memory_summary_failed", {
+      sessionId,
+      mode,
+      stage,
+      error: error?.message || String(error),
+    });
+    if (this.errorLogger?.log) {
+      await this.errorLogger.log({
+        userId,
+        sessionId,
+        source: BOT_MANAGE_LOG_SOURCE.MEMORY_SUMMARIZE,
+        event: BOT_MANAGE_LOG_EVENT.MEMORY_SUMMARY_FAILED,
+        error,
+        extra: { stage },
+      });
+    }
+  }
+
   async runMemorySummarizeFlow({
     userId,
     sessionId,
@@ -108,23 +123,26 @@ export class MemoryPostProcessService {
         userConfig,
         abortSignal: memorySummaryAbortController.signal,
         eventListener: runtimeEventListener,
-      });
-    } catch (error) {
-      if (!isAbortLikeError(error) || !memorySummaryTimedOut) {
-        emitEvent(runtimeEventListener, "memory_summary_failed", {
-          sessionId,
-          mode,
-          error: error?.message || String(error),
-        });
-        if (this.errorLogger?.log) {
-          await this.errorLogger.log({
+        onStageError: ({ stage, error }) =>
+          this.recordMemorySummaryFailure({
             userId,
             sessionId,
-            source: BOT_MANAGE_LOG_SOURCE.MEMORY_SUMMARIZE,
-            event: BOT_MANAGE_LOG_EVENT.MEMORY_SUMMARY_FAILED,
+            mode,
+            stage,
             error,
-          });
-        }
+            runtimeEventListener,
+          }),
+      });
+    } catch (error) {
+      if (!isAbortError(error) || !memorySummaryTimedOut) {
+        await this.recordMemorySummaryFailure({
+          userId,
+          sessionId,
+          mode,
+          stage: "",
+          error,
+          runtimeEventListener,
+        });
         throw error;
       }
     } finally {

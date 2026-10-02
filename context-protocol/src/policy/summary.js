@@ -17,18 +17,11 @@ import {
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message.js";
 import { markContextMessageSummarized, resolveContextMessageSummarized } from "../message/codec.js";
-import {
-  SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES,
-  SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES,
-} from "../message/injected-types.js";
+import { SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES } from "../message/injected-types.js";
+import { isContextControlMessage } from "./injected-message.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
 
-const summaryCheckpointControlTypes = new Set(SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES);
 const summaryAlwaysRetainedInjectedTypes = new Set(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES);
-
-export function isSummaryCheckpointControlMessage(message = {}) {
-  return summaryCheckpointControlTypes.has(readMessageField(message, "noobotInternalMessageType"));
-}
 
 function collectRetainedInjectedMessageIndexes(messages = []) {
   const latest = new Map();
@@ -163,7 +156,7 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
   } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
-  if (isSummaryCheckpointControlMessage(message)) return true;
+  if (isContextControlMessage(message)) return true;
   const injected = isInjectedMessage(message, policyOptions);
   const retainedInjected =
     retainedInjectedIndexes instanceof Set
@@ -423,7 +416,7 @@ export function collectScopedMessagesToSummarize(
   const selectedMessages = [];
   for (let index = 0; index < limit; index += 1) {
     const message = source[index];
-    if (isSummaryCheckpointControlMessage(message)) {
+    if (isContextControlMessage(message)) {
       if (!resolveContextMessageSummarized(message)) {
         selectedMessages.push(message);
       }

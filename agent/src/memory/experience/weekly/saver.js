@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { sanitizeFileName } from "../../utils/text.js";
+import { sanitizeFileName } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
 
 export async function saveWeeklyDomainSummary({

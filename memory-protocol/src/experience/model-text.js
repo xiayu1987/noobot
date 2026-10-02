@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { dedupeTextList, sanitizeFileName } from "../../utils/text.js";
+import { dedupeTextList, sanitizeFileName } from "../text.js";
 
 export function normalizeExperienceModelTree(raw = {}) {
   const out = {};

@@ -15,9 +15,7 @@ export function sanitizeFileName(input = "", fallback = "untitled") {
 export function dedupeTextList(items = []) {
   return Array.from(
     new Set(
-      (Array.isArray(items) ? items : [])
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
+      (Array.isArray(items) ? items : []).map((item) => String(item || "").trim()).filter(Boolean),
     ),
   );
 }
@@ -27,4 +25,3 @@ export function stripMarkdownFence(input = "") {
   const matched = /^```[a-zA-Z0-9_-]*\s*([\s\S]*?)\s*```$/.exec(text);
   return matched ? String(matched[1] || "").trim() : text;
 }
-

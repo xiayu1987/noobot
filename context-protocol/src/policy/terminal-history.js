@@ -11,6 +11,7 @@ import {
   resolveMessageDialogProcessId,
   resolveMessageRole,
 } from "./message.js";
+import { isContextControlMessage } from "./injected-message.js";
 import { resolveContextMessageOrigin } from "../message/codec.js";
 
 export const TERMINAL_HISTORY_STATUS = Object.freeze({
@@ -69,7 +70,7 @@ function isOriginalUserMessage(message = {}) {
 function latestInjectedMessages(messages = []) {
   const latestByType = new Map();
   (Array.isArray(messages) ? messages : []).forEach((message, index) => {
-    if (!isInjectedMessage(message)) return;
+    if (!isInjectedMessage(message) || isContextControlMessage(message)) return;
     const type = resolveInjectedMessageType(message);
     if (!type) return;
     const owner = readMessageField(message, "injectedBy") || "injected";

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { sanitizeFileName } from "../utils/text.js";
-import { EXPERIENCE_PATCH_SCHEMA } from "./schema-config.js";
+import { sanitizeFileName } from "@noobot/memory-protocol/text";
+import { EXPERIENCE_PATCH_SCHEMA } from "@noobot/memory-protocol/experience/schema";
 
 function renderSectionLines(subcategory = {}, sections = []) {
   const lines = [];
