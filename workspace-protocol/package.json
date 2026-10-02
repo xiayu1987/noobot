@@ -1,0 +1,19 @@
+{
+  "name": "@noobot/workspace-protocol",
+  "version": "4.3.7",
+  "private": true,
+  "type": "module",
+  "description": "Canonical Noobot user workspace layout, sections, asset sync plan and layout migrations",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./layout": "./src/layout.js",
+    "./sections": "./src/sections.js",
+    "./asset-sync": "./src/asset-sync.js",
+    "./layout-migration": "./src/layout-migration.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test \"__tests__/**/*.test.js\""
+  }
+}

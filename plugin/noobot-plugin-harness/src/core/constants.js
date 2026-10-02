@@ -6,9 +6,19 @@
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { HOOK_PHASE_STATUS } from "@noobot/hook-protocol/phase-status";
+import { resolvePluginDataRelativePath } from "@noobot/workspace-protocol";
 
+export const PLUGIN_ID = "harness";
 export const PLUGIN_NAME = "noobot-plugin-harness";
 export const PLUGIN_VERSION = "4.3.7";
+
+export const HARNESS_DATA_SCOPE = Object.freeze({
+  RUNS: "runs",
+});
+
+export function resolveHarnessRunsRelativePath() {
+  return resolvePluginDataRelativePath(PLUGIN_ID, HARNESS_DATA_SCOPE.RUNS);
+}
 
 export const HARNESS_RUN_STATUS = Object.freeze({
   RUNNING: HOOK_PHASE_STATUS.RUNNING,

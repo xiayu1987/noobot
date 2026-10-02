@@ -5,8 +5,9 @@
  */
 import { randomUUID } from "node:crypto";
 import { deriveAgentExecutionId, normalizeParentSessionId } from "@noobot/session-protocol";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 
-export const AGENT_DETACHED_SESSION_ROOT = "runtime/agent/session";
+export const AGENT_DETACHED_SESSION_ROOT = WORKSPACE_LAYOUT.AGENT_SESSION_DIR;
 
 export function createAgentDetachedSubSessionStrategy({
   userId = "",

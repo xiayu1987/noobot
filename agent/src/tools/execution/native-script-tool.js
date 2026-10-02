@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import {
   TASK_PATH_KINDS,
@@ -387,7 +388,7 @@ export function createNativeScriptTool({ agentContext }) {
         operation: "execute native capability script",
         reason: "The script can invoke browser, LibreOffice, and FFmpeg capabilities.",
       });
-      const taskRoot = path.join(runtime.basePath, "runtime", "native_tasks", randomUUID());
+      const taskRoot = path.join(runtime.basePath, WORKSPACE_LAYOUT.NATIVE_TASKS_DIR, randomUUID());
       const inputRoot = path.join(taskRoot, "input");
       const outputRoot = path.join(taskRoot, "output");
       const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-native-"));
@@ -439,7 +440,7 @@ export function createNativeScriptTool({ agentContext }) {
             browserExecutablePath,
             browserProfileRoot:
               resolveBrowserProfileRoot() ||
-              path.join(runtime.basePath, "runtime", "browser-profiles"),
+              path.join(runtime.basePath, WORKSPACE_LAYOUT.BROWSER_PROFILES_DIR),
             interactionId: String(
               toolConfig?.configurable?.noobotHookContext?.call?.id ||
                 toolConfig?.configurable?.noobotHookContext?.call?.tool_call_id ||

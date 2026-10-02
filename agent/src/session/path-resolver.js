@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
@@ -26,7 +27,7 @@ export class PathResolver {
   }
 
   sessionRoot(basePath = "") {
-    return path.join(String(basePath || ""), "runtime/session");
+    return path.join(String(basePath || ""), WORKSPACE_LAYOUT.SESSION_DIR);
   }
 
   sessionTreeFile(basePath = "") {

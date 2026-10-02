@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
+import {
+  renderDefaultMemoryDocument,
+  renderDefaultShortMemoryText,
+} from "@noobot/memory-protocol/defaults";
 import { MEMORY_REPAIR_STATUS, migrateMemoryDocument } from "./document-migration.js";
 
 function requireIo(io) {
@@ -23,11 +27,11 @@ function requireIo(io) {
 
 async function collectDocuments(layout, io) {
   const documents = [
-    { kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, relativePath: layout.longMemory },
+    { kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, relativePath: layout.longMemory, required: true },
     {
       kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
       relativePath: layout.experienceModel,
-      resetText: layout.experienceModelTemplate,
+      required: true,
     },
     { kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_METADATA, relativePath: layout.experienceMetadata },
   ];
@@ -46,17 +50,32 @@ async function collectDocuments(layout, io) {
 
 export async function repairMemoryWorkspace({ layout, io } = {}) {
   requireIo(io);
-  if (!layout) throw new TypeError("memory workspace repair requires layout");
+  if (!layout?.shortMemory || !layout?.longMemory || !layout?.experienceModel) {
+    throw new TypeError("memory workspace repair requires a complete layout");
+  }
   const report = [];
   const backup = (relativePath, text) => io.writeBackup(relativePath, text);
-  for (const document of await collectDocuments(layout, io)) {
-    if (!(await io.exists(document.relativePath))) continue;
-    const original = await io.readText(document.relativePath);
-    const result = migrateMemoryDocument({
-      kind: document.kind,
-      text: original,
-      resetText: document.resetText,
+  if (!(await io.exists(layout.shortMemory))) {
+    await io.writeText(layout.shortMemory, renderDefaultShortMemoryText());
+    report.push({
+      kind: "short_memory",
+      relativePath: layout.shortMemory,
+      status: MEMORY_REPAIR_STATUS.CREATED,
     });
+  }
+  for (const document of await collectDocuments(layout, io)) {
+    if (!(await io.exists(document.relativePath))) {
+      if (!document.required) continue;
+      await io.writeText(document.relativePath, renderDefaultMemoryDocument(document.kind));
+      report.push({
+        kind: document.kind,
+        relativePath: document.relativePath,
+        status: MEMORY_REPAIR_STATUS.CREATED,
+      });
+      continue;
+    }
+    const original = await io.readText(document.relativePath);
+    const result = migrateMemoryDocument({ kind: document.kind, text: original });
     if (result.status === MEMORY_REPAIR_STATUS.CANONICAL) continue;
     await backup(document.relativePath, original);
     await io.writeText(document.relativePath, result.text);

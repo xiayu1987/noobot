@@ -40,7 +40,7 @@ The plugin is non-invasive: it is attached through Noobot hooks, and hook errors
 
 ## Capabilities
 
-- Writes run manifest: `runtime/harness/runs/{dialogProcessId}/harness-run.json`
+- Writes run manifest: `runtime/plugin-data/harness/runs/{dialogProcessId}/harness-run.json`
 - Writes lifecycle event stream: `events.jsonl`
 - Writes context snapshot: `context-snapshot.json`
 - Writes prompt injection records: `prompts.jsonl`
@@ -57,7 +57,7 @@ Harness listens to `after_session_delete`.
 When this hook is emitted with `deletedSessionIds` (or fallback `sessionId`), harness will:
 
 1. flush in-memory manifest/jsonl buffers
-2. delete matching `runtime/harness/runs/*` records by run-id or manifest `sessionId`
+2. delete matching `runtime/plugin-data/harness/runs/*` records by run-id or manifest `sessionId`
 
 `service/routes/session-routes.js` emits this hook after `deleteSessionBranch` succeeds.
 
@@ -150,8 +150,6 @@ if (api?.policy?.patch && Array.isArray(options?.denyToolNames)) {
 | `finalResponseGuard`                                              | `true`                               | Reserved option for final response guard behavior.                                                                                                                                                                                                                                                                                           |
 | `writeContextSnapshot`                                            | `true`                               | Writes `context-snapshot.json` after context build.                                                                                                                                                                                                                                                                                          |
 | `writePrompts`                                                    | `true`                               | Writes prompt injection records to `prompts.jsonl`.                                                                                                                                                                                                                                                                                          |
-| `runtimeDirName`                                                  | `runtime`                            | Runtime directory name below `basePath`.                                                                                                                                                                                                                                                                                                     |
-| `harnessDirName`                                                  | `harness`                            | Harness directory name below runtime directory.                                                                                                                                                                                                                                                                                              |
 | `promptPriority`                                                  | `80`                                 | Hook priority for prompt injection handlers.                                                                                                                                                                                                                                                                                                 |
 | `tracePriority`                                                   | `20`                                 | Hook priority for trace handlers.                                                                                                                                                                                                                                                                                                            |
 | `timeoutMs`                                                       | `300000`                             | Hook handler deadline. It must remain later than the separate-model deadline so Harness can record a capability failure and complete the hook.                                                                                                                                                                                               |
@@ -445,13 +443,13 @@ registerHarnessCore(
 Default output path:
 
 ```text
-workspace/{userId}/runtime/harness/runs/{dialogProcessId}/
+workspace/{userId}/runtime/plugin-data/harness/runs/{dialogProcessId}/
 ```
 
 If `basePath` is provided, output path becomes:
 
 ```text
-{basePath}/runtime/harness/runs/{dialogProcessId}/
+{basePath}/runtime/plugin-data/harness/runs/{dialogProcessId}/
 ```
 
 ## Output files

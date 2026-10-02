@@ -12,6 +12,7 @@ import {
   CONFIG_NODE_POLICY,
   CONFIG_PATH_REPRESENTATION,
   CONFIG_REPAIR_ACTION,
+  CONFIG_STRUCTURE_PLACEHOLDER,
   listConfigNodePathsByPolicy,
   mergeConfig,
   normalizeKnownConfigKeys,
@@ -51,10 +52,21 @@ function collectObjectOnlyPaths(source, reference, prefix = "") {
   return paths;
 }
 
-test("default user template is the user-scope source of truth for system-owned nodes", () => {
+test("user config generated from the global config is idempotent and omits system-owned nodes", () => {
   const globalTemplate = readJsonFixture("../../service/config/global.config.example.json");
-  const userTemplate = readJsonFixture("../../user-template/default-user/config.example.json");
-  const globalOnlyPaths = collectObjectOnlyPaths(globalTemplate, userTemplate).sort();
+  const generated = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    baseValues: globalTemplate,
+    target: {},
+  }).document;
+  const regenerated = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    baseValues: globalTemplate,
+    target: generated,
+  });
+  assert.deepEqual(regenerated.document, generated);
+  assert.deepEqual(regenerated.report.changes, []);
+  const globalOnlyPaths = collectObjectOnlyPaths(globalTemplate, generated).sort();
   const systemOwnedPaths = [
     ...listConfigNodePathsByPolicy({
       policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
@@ -67,15 +79,24 @@ test("default user template is the user-scope source of truth for system-owned n
       representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
     }),
   ].sort();
+  const coversPath = (ownedPath, path) => {
+    const owned = ownedPath.split(".");
+    const actual = path.split(".");
+    if (owned.length < actual.length) return false;
+    return actual.every(
+      (key, index) => owned[index] === key || owned[index] === CONFIG_STRUCTURE_PLACEHOLDER,
+    );
+  };
   for (const path of globalOnlyPaths)
     assert.ok(
-      systemOwnedPaths.some((ownedPath) => ownedPath === path || ownedPath.startsWith(`${path}.`)),
+      systemOwnedPaths.some((ownedPath) => coversPath(ownedPath, path)),
+      `${path} is dropped from user scope without a protocol declaration`,
     );
   const legacyUserConfig = structuredClone(globalTemplate);
   legacyUserConfig.tools.execute_native_script = { enabled: false };
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    baseValues: userTemplate,
+    baseValues: globalTemplate,
     target: legacyUserConfig,
   });
   for (const path of systemOwnedPaths)
@@ -98,10 +119,14 @@ test("default user template is the user-scope source of truth for system-owned n
   }
 });
 
-test("global and default-user providers project model-library cache defaults", () => {
+test("global and generated user providers project model-library cache defaults", () => {
   const globalTemplate = readJsonFixture("../../service/config/global.config.example.json");
-  const userTemplate = readJsonFixture("../../user-template/default-user/config.example.json");
-  for (const template of [globalTemplate, userTemplate]) {
+  const generatedUser = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    baseValues: globalTemplate,
+    target: {},
+  }).document;
+  for (const template of [globalTemplate, generatedUser]) {
     for (const [alias, provider] of Object.entries(template.providers)) {
       const libraryProvider = resolveModelLibraryProvider(alias);
       assert.ok(libraryProvider, `missing model-library provider ${alias}`);
@@ -376,4 +401,27 @@ test("config repair keeps every declared web_search mode value", () => {
     });
     assert.equal(repaired.document.tools.web_search.mode, mode);
   }
+});
+
+test("config repair seeds missing providers from declared base values and repairs them by contract", () => {
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    baseValues: {
+      providers: {
+        example_openai: { enabled: "invalid-type", model: "example-openai", api_key: "k" },
+      },
+    },
+    target: {},
+  });
+
+  const provider = repaired.document.providers.example_openai;
+  assert.equal(provider.model, "example-openai");
+  assert.equal(provider.api_key, "k");
+  assert.equal(provider.enabled, true);
+  assert.ok(
+    repaired.report.changes.some(
+      ({ path, reason }) =>
+        path === "providers.example_openai" && reason === "missing_defaulted_node",
+    ),
+  );
 });

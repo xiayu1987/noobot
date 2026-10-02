@@ -73,8 +73,7 @@ const previewAssets = computed(() => {
   return selected.length ? selected : fallback ? [fallback] : [];
 });
 function writeConfig(next) {
-  const { characterAssets: _removedCatalog, ...current } = props.pluginModelConfig || {};
-  props.updatePluginModelConfig?.({ ...current, ...next });
+  props.updatePluginModelConfig?.({ ...(props.pluginModelConfig || {}), ...next });
 }
 function toggle(asset) {
   const current = new Set(selectedIds.value);
@@ -147,10 +146,7 @@ async function hydrateCatalog() {
     const assets = await refreshCharacterAssetCatalog();
     const available = new Set(assets.map((asset) => asset.assetId));
     const selectedCharacterAssetIds = [...selectedIds.value].filter((id) => available.has(id));
-    if (
-      selectedCharacterAssetIds.length !== selectedIds.value.size ||
-      Object.hasOwn(props.pluginModelConfig || {}, "characterAssets")
-    ) {
+    if (selectedCharacterAssetIds.length !== selectedIds.value.size) {
       writeConfig({ selectedCharacterAssetIds });
     }
   } catch (cause) {

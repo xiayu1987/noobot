@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { isWorkspaceSessionDeleted } from "@noobot/runtime-events";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { projectSystemRuntimeTurnProgress } from "@noobot/agent-config-protocol";
 import {
   createModelContextSnapshot,
@@ -30,8 +31,7 @@ function snapshotDir({
   return path.resolve(
     root,
     cleanId(userId),
-    "runtime",
-    "session",
+    WORKSPACE_LAYOUT.SESSION_DIR,
     storageSessionId,
     "model-message-snapshots",
   );

@@ -17,7 +17,6 @@ export { CONFIG_STRUCTURE_KIND };
 export const CONFIG_FORM_NODE_KIND = Object.freeze({
   OBJECT: "object",
   COLLECTION: "collection",
-  ARRAY: "array",
   RAW: "raw",
   STRING: "string",
   ENUM: "enum",
@@ -175,17 +174,10 @@ function buildArrayNode(node, context, base) {
       options: itemOptions,
     };
   }
-  const item = buildNode({
-    rawNode: itemRaw,
-    path: [...context.path, "#"],
-    key: "#",
-    scope: context.scope,
-    required: false,
-    delegated: node.delegated === true,
-  });
-  return item
-    ? { ...base, kind: CONFIG_FORM_NODE_KIND.ARRAY, item }
-    : { ...base, kind: CONFIG_FORM_NODE_KIND.RAW };
+  const error = new Error(`Unsupported config array item kind at ${context.path.join(".")}`);
+  error.code = "UNSUPPORTED_CONFIG_ARRAY_ITEM";
+  error.field = context.path.join(".");
+  throw error;
 }
 
 function buildScalarNode(node, base) {

@@ -27,8 +27,6 @@ export const DEFAULT_OPTIONS = Object.freeze({
   writeContextSnapshot: true,
   writePrompts: true,
   policyMode: "warn",
-  runtimeDirName: "runtime",
-  harnessDirName: "harness",
   promptPriority: 80,
   tracePriority: 20,
   timeoutMs: TIME_THRESHOLDS.harness.hookTimeoutMs,

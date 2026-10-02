@@ -45,11 +45,11 @@ test("scoped resolver confines a run to its allowed user-relative root", async (
     sessionId: "child",
     parentSessionId: "parent",
     scopeId: "agent:child",
-    allowedRoot: "runtime/workflow/session",
-    relativeDir: "runtime/workflow/session/run/node",
+    allowedRoot: "runtime/plugin-data/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/run/node",
   });
   const scope = await resolver.resolveSessionScope("alice", "child", "parent");
-  assert.equal(scope.sessionDir, "/workspace/alice/runtime/workflow/session/run/node");
+  assert.equal(scope.sessionDir, "/workspace/alice/runtime/plugin-data/workflow/session/run/node");
   assert.equal(scope.mutationLockDir, `${scope.sessionDir}.mutation-lock`);
   await assert.rejects(() => resolver.resolveSessionScope("bob", "child"), /user does not match/);
   await assert.rejects(() => resolver.resolveSessionScope("alice", ""), /requires a sessionId/);
@@ -66,7 +66,7 @@ test("scoped resolver rejects absolute, escaping, similar-prefix, and default-se
     userId: "alice",
     sessionId: "child",
     scopeId: "agent:child",
-    allowedRoot: "runtime/workflow/session",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   };
   assert.throws(
     () => new ScopedSessionLocationResolver({ ...options, relativeDir: "/tmp/node" }),
@@ -76,24 +76,31 @@ test("scoped resolver rejects absolute, escaping, similar-prefix, and default-se
     () =>
       new ScopedSessionLocationResolver({
         ...options,
-        relativeDir: "runtime/workflow/session/../other",
+        relativeDir: "runtime/plugin-data/workflow/session/../other",
       }),
-    /escapes/,
-  );
-  assert.throws(
-    () =>
-      new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/session" }),
-    /child/,
-  );
-  assert.throws(
-    () => new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/other" }),
     /escapes/,
   );
   assert.throws(
     () =>
       new ScopedSessionLocationResolver({
         ...options,
-        relativeDir: "runtime/workflow/session-other/node",
+        relativeDir: "runtime/plugin-data/workflow/session",
+      }),
+    /child/,
+  );
+  assert.throws(
+    () =>
+      new ScopedSessionLocationResolver({
+        ...options,
+        relativeDir: "runtime/plugin-data/workflow/other",
+      }),
+    /escapes/,
+  );
+  assert.throws(
+    () =>
+      new ScopedSessionLocationResolver({
+        ...options,
+        relativeDir: "runtime/plugin-data/workflow/session-other/node",
       }),
     /escapes/,
   );

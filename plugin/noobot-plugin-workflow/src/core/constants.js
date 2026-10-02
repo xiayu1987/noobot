@@ -6,8 +6,20 @@
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
+import { resolvePluginDataRelativePath } from "@noobot/workspace-protocol";
+
+export const PLUGIN_ID = "workflow";
 export const PLUGIN_NAME = "noobot-plugin-workflow";
 export const PLUGIN_VERSION = "4.3.7";
+
+export const WORKFLOW_DATA_SCOPE = Object.freeze({
+  PLANNING: "planning",
+  SESSION: "session",
+});
+
+export function resolveWorkflowDataRelativePath(...segments) {
+  return resolvePluginDataRelativePath(PLUGIN_ID, ...segments);
+}
 
 export const WORKFLOW_HOOKS = Object.freeze({
   AFTER_AGENT_DISPATCH_LISTENER_ID: "workflow_after_agent_dispatch",

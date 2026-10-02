@@ -23,7 +23,7 @@ const DEFAULT_I18N_KEYS = {
   downloadFailed: "common.downloadWorkspaceFileFailed",
 };
 
-const JSON_DOCUMENT_NAMES = new Set(["config.json", "config.example.json", "config-params.json"]);
+const JSON_DOCUMENT_NAMES = new Set(["config.json", "config-params.json"]);
 const UNSAFE_TEXT_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
 
 function validateWorkspaceText(content) {

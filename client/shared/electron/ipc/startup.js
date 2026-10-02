@@ -170,7 +170,6 @@ export function registerStartupIpcHandlers({
     }
     saveSuperAdminConfig({
       globalConfigPath: state.globalConfigPath,
-      userConfigPath: state.templateConfigPath,
       userId: values.userId,
       connectCode: values.connectCode,
       language: values.language,

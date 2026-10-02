@@ -5,7 +5,6 @@
 本文档基于最新示例：
 
 - `service/config/global.config.example.json`
-- `user-template/default-user/config.example.json`
 - `service/.env.example`
 
 ---
@@ -16,7 +15,6 @@
 | ------------ | ------------------------------------------- | ------------------------------------ |
 | 全局配置     | `service/config/global.config.json`         | 系统级运行配置                       |
 | 全局示例     | `service/config/global.config.example.json` | 最新参考模板                         |
-| 用户模板     | `user-template/default-user/config.json`    | 默认用户配置模板                     |
 | 用户运行配置 | `workspace/<userId>/config.json`            | 单用户生效配置                       |
 | 系统参数     | `workspace/config-params.json`              | 全局占位符参数                       |
 | 用户参数     | `workspace/<userId>/config-params.json`     | 用户占位符参数                       |
@@ -91,15 +89,15 @@ Session 日志 WebSocket：
 
 ### 3.1 核心字段
 
-| 键名                      | 类型         | 说明                               |
-| ------------------------- | ------------ | ---------------------------------- |
-| `workspace_root`          | string(path) | 工作区根目录                       |
-| `workspace_template_path` | string(path) | 用户初始化模板目录                 |
-| `default_provider`        | string       | 默认模型别名                       |
-| `memory_max_items`        | number       | 短期记忆条目上限                   |
-| `max_tool_loop_turns`     | number       | 单轮工具调用循环上限               |
-| `streaming`               | boolean      | 是否启用流式输出                   |
-| `run_timeout_ms`          | number       | 单次运行超时（毫秒），如 `7200000` |
+| 键名                      | 类型         | 说明                                 |
+| ------------------------- | ------------ | ------------------------------------ |
+| `workspace_root`          | string(path) | 工作区根目录                         |
+| `workspace_template_path` | string(path) | 工作区资产包目录（services、skills） |
+| `default_provider`        | string       | 默认模型别名                         |
+| `memory_max_items`        | number       | 短期记忆条目上限                     |
+| `max_tool_loop_turns`     | number       | 单轮工具调用循环上限                 |
+| `streaming`               | boolean      | 是否启用流式输出                     |
+| `run_timeout_ms`          | number       | 单次运行超时（毫秒），如 `7200000`   |
 
 ### 3.2 会话策略
 
@@ -357,8 +355,8 @@ Session 日志 WebSocket：
 `@noobot/agent-config-protocol` 是全局配置、默认用户配置和用户配置的唯一修复契约。
 
 - 服务启动时修复三个作用域；桌面端启动时先修复打包及运行配置再使用。
-- 缺少的默认节点从对应模板补入。
-- 合法用户值保持不变；非法值在存在模板默认值时重置为默认值，非法可选值直接移除。
+- 缺少的默认节点按协议结构、全局配置 `baseValues` 和模型库生成；用户配置从空文档经同一修复生成。
+- 合法用户值保持不变；非法值在存在协议默认值时重置为默认值，非法可选值直接移除。
 - 不支持的节点以及用户文档中的系统所有节点会被移除。
 - 已有 provider 别名不会被删除；其子字段按 provider 协议校验，不支持的字段会被移除。
 - JSON 无效时，原文件先移动为 `.invalid-<timestamp>.json` 备份，再写入修复后的文档。

@@ -15,7 +15,6 @@ function translateOrEmpty(translate, messageKey) {
 export function resolveConfigFieldLabel(translate, key) {
   const rawKey = String(key ?? "");
   if (!rawKey) return "";
-  if (rawKey.trim() !== "" && !Number.isNaN(Number(rawKey))) return `#${Number(rawKey) + 1}`;
   const messageKey = `${CONFIG_FIELD_LABEL_NAMESPACE}.${rawKey}`;
   const text = translate(messageKey);
   return text === messageKey ? rawKey : text;

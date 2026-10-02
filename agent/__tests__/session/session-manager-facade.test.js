@@ -155,8 +155,8 @@ test("createSessionFacade resolves authority outbox access from the protocol per
   const persistenceScope = {
     scopeId: "agent:workflow-node-1",
     parentSessionId: "root-session",
-    relativeDir: "runtime/workflow/session/root-session/workflow-node-1",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/root-session/workflow-node-1",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   };
   const runtime = {
     sessionTreeService: {},
@@ -211,8 +211,8 @@ test("createSessionFacade resolves authority outbox access from the protocol per
     sessionId: "child-session",
     parentSessionId: "root-session",
     scopeId: "agent:workflow-node-1",
-    relativeDir: "runtime/workflow/session/root-session/workflow-node-1",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/root-session/workflow-node-1",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   });
   await expectAuthorityScopeConflict(session, persistenceScope);
 });

@@ -151,7 +151,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     true,
   );
   assert.equal(planningPersistCalls.length, 1);
-  assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/workflow/planning/s1/d1");
+  assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/plugin-data/workflow/planning/s1/d1");
   assert.equal(planningPersistCalls[0]?.fileName, "planning.json");
 
   const subCall = subSessionCalls[0] || {};
@@ -172,7 +172,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(typeof subCall?.eventListener?.onEvent, "function");
   assert.match(
     String(subCall?.strategy?.relativeDir || ""),
-    /^runtime\/workflow\/session\/s1\/wf_node_/,
+    /^runtime\/plugin-data\/workflow\/session\/s1\/wf_node_/,
   );
 
   assert.ok(agentResult.workflow);

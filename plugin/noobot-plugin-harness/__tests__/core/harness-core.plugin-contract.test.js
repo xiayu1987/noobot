@@ -67,7 +67,7 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
   });
 
   assert.equal(calls.includes("agent.before_turn"), true);
-  const runDir = path.join(basePath, "runtime", "harness", "runs", "dp3");
+  const runDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs", "dp3");
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(Array.isArray(manifest?.capabilities?.domains), true);
   assert.equal(typeof manifest?.capabilities?.hookMap, "object");

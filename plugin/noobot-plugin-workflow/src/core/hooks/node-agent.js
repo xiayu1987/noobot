@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_ACTION, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
+import {
+  PLUGIN_ID,
+  WORKFLOW_ACTION,
+  WORKFLOW_DATA_SCOPE,
+  WORKFLOW_PLUGIN_DEFAULTS,
+  resolveWorkflowDataRelativePath,
+} from "../constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
@@ -348,9 +354,9 @@ function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
     executionId: identity.childExecutionId,
     parentExecutionId: identity.workflowExecutionId,
     rootExecutionId: String(ctx?.rootExecutionId || identity.workflowExecutionId).trim(),
-    disabledPlugins: ["workflow"],
+    disabledPlugins: [PLUGIN_ID],
     relativeDir,
-    allowedRoot: "runtime/workflow/session",
+    allowedRoot: resolveWorkflowDataRelativePath(WORKFLOW_DATA_SCOPE.SESSION),
   };
 }
 

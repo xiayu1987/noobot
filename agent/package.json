@@ -81,7 +81,8 @@
     "@noobot/plugin-runtime": "file:../plugin-runtime",
     "@noobot/plugin-protocol": "file:../plugin-protocol",
     "@noobot/path-resolver": "file:../path-resolver",
-    "@noobot/file-mutation-protocol": "file:../file-mutation-protocol"
+    "@noobot/file-mutation-protocol": "file:../file-mutation-protocol",
+    "@noobot/workspace-protocol": "file:../workspace-protocol"
   },
   "optionalDependencies": {
     "@mozilla/readability": "^0.6.0",

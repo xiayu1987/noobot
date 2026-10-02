@@ -6,7 +6,6 @@
 
 export const CONFIG_DOCUMENT_SCOPE = Object.freeze({
   GLOBAL: "global",
-  USER_DEFAULT: "user_default",
   USER: "user",
 });
 

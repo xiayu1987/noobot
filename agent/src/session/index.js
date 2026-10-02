@@ -26,6 +26,7 @@ import {
   createPersistenceContext,
 } from "./session-location-resolver.js";
 import { randomUUID } from "node:crypto";
+import { isWorkspaceRuntimeRelativePath } from "@noobot/workspace-protocol";
 import { AttachmentService } from "../artifacts/index.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
 export {
@@ -242,7 +243,7 @@ export function createSessionFacade(runtime = {}) {
     const scopeId = String(persistenceScope.scopeId || "").trim();
     const scopeParentSessionId = String(persistenceScope.parentSessionId || "").trim();
     const requestedParentSessionId = String(payload.parentSessionId || "").trim();
-    if (!allowedRoot.startsWith("runtime/") || !scopeId.startsWith("agent:")) {
+    if (!isWorkspaceRuntimeRelativePath(allowedRoot) || !scopeId.startsWith("agent:")) {
       throw new Error("scoped session access requires an Agent-owned runtime persistence scope");
     }
     if (requestedParentSessionId && requestedParentSessionId !== scopeParentSessionId) {

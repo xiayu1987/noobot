@@ -11,8 +11,8 @@ import { resolveHookClientEmitter } from "@noobot/context-protocol/assembly/hook
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { safeId } from "../data/record-builders.js";
-import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";
-import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
+import { normalizeOptions } from "./options.js";
+import { PLUGIN_NAME, PLUGIN_VERSION, resolveHarnessRunsRelativePath } from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 
 export function normalizePlanningGuidance(options = {}) {
@@ -38,13 +38,7 @@ export function createRunPaths(ctx = {}, options = {}) {
   const basePath = extractBasePath(ctx, options);
   if (!basePath) return null;
   const runId = extractRunId(ctx);
-  const runDir = path.join(
-    basePath,
-    options.runtimeDirName || DEFAULT_OPTIONS.runtimeDirName,
-    options.harnessDirName || DEFAULT_OPTIONS.harnessDirName,
-    "runs",
-    runId,
-  );
+  const runDir = path.join(basePath, resolveHarnessRunsRelativePath(), runId);
   return {
     basePath,
     runId,

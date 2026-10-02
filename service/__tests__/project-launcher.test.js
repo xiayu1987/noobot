@@ -138,11 +138,6 @@ test("project launcher uses NOOBOT_GLOBAL_CONFIG_PATH when resolving global conf
       language: "en-US",
     },
   });
-  await writeJson(path.join(serviceRoot, "custom-template", "config.example.json"), {
-    preferences: {
-      language: "en-US",
-    },
-  });
 
   await runLauncher(serviceRoot, {
     env: {
@@ -183,7 +178,6 @@ test("project launcher preserves explicit provider reasoning settings during inc
   const serviceRoot = await makeServiceRoot();
   t.after(() => rm(serviceRoot, { recursive: true, force: true }));
   const globalConfigPath = path.join(serviceRoot, "config", "global.config.json");
-  const templatePath = path.join(serviceRoot, "workspace-template", "config.example.json");
   await writeJson(globalConfigPath, {
     workspace_root: "./workspace",
     workspace_template_path: "./workspace-template",
@@ -200,7 +194,6 @@ test("project launcher preserves explicit provider reasoning settings during inc
       },
     },
   });
-  await writeJson(templatePath, { preferences: { language: "zh-CN" } });
 
   await runLauncher(serviceRoot);
 
@@ -218,11 +211,6 @@ test("project launcher resolves canonical snake_case workspace config keys for e
     super_admin: {
       user_id: "root-admin",
     },
-    preferences: {
-      language: "zh-CN",
-    },
-  });
-  await writeJson(path.join(serviceRoot, "canonical-template", "config.example.json"), {
     preferences: {
       language: "zh-CN",
     },
@@ -271,7 +259,6 @@ test("project launcher recursively adds new global nodes without replacing confi
     generation: { default_models: { image: "example_openai" } },
   };
   await writeJson(examplePath, example);
-  await writeJson(path.join(serviceRoot, "default-template", "config.example.json"), {});
   await writeJson(path.join(serviceRoot, "config", "global.config.json"), {
     workspace_root: "./workspace",
     workspace_template_path: "./default-template",
@@ -339,7 +326,6 @@ test("project launcher preserves malformed global JSON before restoring the temp
   example.workspace_root = "./workspace";
   example.workspace_template_path = "./default-template";
   await writeJson(examplePath, example);
-  await writeJson(path.join(serviceRoot, "default-template", "config.example.json"), {});
   const globalConfigPath = path.join(serviceRoot, "config", "global.config.json");
   await writeFile(globalConfigPath, '{"api_key":"must-not-appear-in-log" trailing', "utf8");
 
@@ -358,4 +344,31 @@ test("project launcher preserves malformed global JSON before restoring the temp
   );
   assert.match(result.stderr, /invalid JSON preserved/);
   assert.equal(result.stderr.includes("must-not-appear-in-log"), false);
+});
+
+test("project launcher repairs user configs from the global config without template files", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  await writeJson(path.join(serviceRoot, "config", "global.config.json"), {
+    ...minimalGlobalExample,
+    workspace_root: "./workspace",
+    preferences: { language: "en-US" },
+  });
+  const userRoot = path.join(serviceRoot, "workspace", "alice");
+  await writeJson(path.join(userRoot, "config.json"), {
+    preferences: { language: "zh-CN" },
+    unknown_legacy_node: { value: true },
+  });
+
+  await runLauncher(serviceRoot);
+
+  const userConfig = await readJson(path.join(userRoot, "config.json"));
+  assert.equal(userConfig.preferences.language, "en-US");
+  assert.equal(Object.hasOwn(userConfig, "unknown_legacy_node"), false);
+  assert.equal(Object.hasOwn(userConfig, "workspace_root"), false);
+  assert.equal(await exists(path.join(userRoot, "config.example.json")), false);
+  assert.equal(await exists(path.join(userRoot, "config-params.json")), true);
+
+  await runLauncher(serviceRoot);
+  assert.deepEqual(await readJson(path.join(userRoot, "config.json")), userConfig);
 });

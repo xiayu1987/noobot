@@ -5,7 +5,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { HARNESS_FILES } from "../core/constants.js";
+import { HARNESS_FILES, resolveHarnessRunsRelativePath } from "../core/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function isMissingPathError(error) {
@@ -67,8 +67,6 @@ async function isRunWriteLocked(runDirPath = "", options = {}) {
 
 export async function cleanupOldRuns(basePath, options = {}) {
   if (!basePath) return { deleted: 0, errors: 0, skippedLocked: 0 };
-  const runtimeDirName = options.runtimeDirName || "runtime";
-  const harnessDirName = options.harnessDirName || "harness";
   const maxRuns = Number.isFinite(Number(options.maxRuns)) ? Number(options.maxRuns) : 100;
   const maxRunAgeDays = Number.isFinite(Number(options.maxRunAgeDays))
     ? Number(options.maxRunAgeDays)
@@ -78,7 +76,7 @@ export async function cleanupOldRuns(basePath, options = {}) {
       ? Number(options.cleanupGraceMs)
       : TIME_THRESHOLDS.harness.cleanupGraceMs;
 
-  const harnessRunsDir = path.join(basePath, runtimeDirName, harnessDirName, "runs");
+  const harnessRunsDir = path.join(basePath, resolveHarnessRunsRelativePath());
   let deleted = 0;
   let errors = 0;
   let skippedLocked = 0;
@@ -159,9 +157,7 @@ export async function cleanupRunsBySessionIds(basePath, sessionIds = [], options
   const normalizedIds = new Set(normalizeSessionIds(sessionIds));
   if (!normalizedIds.size) return { deleted: 0, errors: 0, matchedRuns: 0, skippedLocked: 0 };
 
-  const runtimeDirName = options.runtimeDirName || "runtime";
-  const harnessDirName = options.harnessDirName || "harness";
-  const harnessRunsDir = path.join(basePath, runtimeDirName, harnessDirName, "runs");
+  const harnessRunsDir = path.join(basePath, resolveHarnessRunsRelativePath());
   let deleted = 0;
   let errors = 0;
   let matchedRuns = 0;

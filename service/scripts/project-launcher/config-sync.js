@@ -16,14 +16,13 @@ import {
   summarizeConfigRepairReport,
 } from "@noobot/agent-config-protocol";
 import { localizeConfigTextTree, resolveTextLocaleFromConfigLanguage, t } from "./i18n.js";
-import { alignInitialModelReferencesForFile } from "./provider.js";
+import { alignInitialModelReferences } from "./provider.js";
 import {
   deepClone,
   fileExists,
   hasOwnProperty,
   isPlainObject,
   readJsonRelaxed,
-  readJsonStrict,
   readJsonWithInvalidBackup,
   writeJson,
 } from "./utils.js";
@@ -84,24 +83,21 @@ export async function upsertConfigParams({
   await writeJson(filePath, normalizeConfigParamsDocument({ values, descriptions }));
 }
 
-export async function syncJsonFileIncremental({
-  templateFilePath,
+export async function repairUserConfigFile({
   targetFilePath,
   baseValues = {},
-  locale = "zh",
-  scope = CONFIG_DOCUMENT_SCOPE.USER,
+  transform = null,
 } = {}) {
-  await readJsonStrict(templateFilePath, t(locale, "labelTemplateConfig"));
-
   const targetExists = await fileExists(targetFilePath);
   const targetRead = targetExists
     ? await readJsonWithInvalidBackup(targetFilePath)
     : { document: {}, invalidBackupPath: "" };
   const targetJson = targetRead.document;
+  const seeded = typeof transform === "function" ? transform(deepClone(targetJson)) : targetJson;
   const repair = repairConfigDocument({
-    scope,
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
     baseValues,
-    target: targetJson,
+    target: seeded,
   });
   const merged = repair.document;
 
@@ -145,258 +141,63 @@ async function readWorkspaceDirectoryEntries(workspaceRootAbsolutePath) {
   }
 }
 
-export async function collectWorkspaceUserIds({
-  workspaceRootAbsolutePath,
-  superAdminUserId = "",
-} = {}) {
-  const userIds = new Set();
-  const workspaceDirUserIds = new Set();
-
+export async function collectWorkspaceUserIds({ workspaceRootAbsolutePath } = {}) {
   const entries = await readWorkspaceDirectoryEntries(workspaceRootAbsolutePath);
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const userId = String(entry.name || "").trim();
-    if (!userId) continue;
-    workspaceDirUserIds.add(userId);
-  }
-
-  for (const userId of workspaceDirUserIds) {
-    userIds.add(userId);
-  }
-
-  const normalizedSuperAdminUserId = String(superAdminUserId || "").trim();
-  if (normalizedSuperAdminUserId && workspaceDirUserIds.has(normalizedSuperAdminUserId)) {
-    userIds.add(normalizedSuperAdminUserId);
-  }
-
-  const usersFilePath = path.join(workspaceRootAbsolutePath, "user.json");
-  const usersPayload = await readJsonRelaxed(usersFilePath, {});
-  const users = Array.isArray(usersPayload?.users) ? usersPayload.users : [];
-  for (const userItem of users) {
-    const userId = String(userItem?.userId || "").trim();
-    if (userId && workspaceDirUserIds.has(userId)) {
-      userIds.add(userId);
-    }
-  }
-
-  return Array.from(userIds).sort((leftUserId, rightUserId) =>
-    leftUserId.localeCompare(rightUserId),
-  );
+  return entries
+    .filter((entry) => entry.isDirectory() && String(entry.name || "").trim())
+    .map((entry) => String(entry.name).trim())
+    .sort((leftUserId, rightUserId) => leftUserId.localeCompare(rightUserId));
 }
 
-export async function syncTemplateAndUserConfigs({
-  workspaceRootAbsolutePath,
-  workspaceTemplateAbsolutePath,
-  superAdminUserId,
-  baseValues = {},
-  locale = "zh",
-} = {}) {
-  await mkdir(workspaceTemplateAbsolutePath, { recursive: true });
-  await mkdir(workspaceRootAbsolutePath, { recursive: true });
-
-  const templateExamplePath = path.join(workspaceTemplateAbsolutePath, "config.example.json");
-  const templateConfigPath = path.join(workspaceTemplateAbsolutePath, "config.json");
-  const templateExampleExists = await fileExists(templateExamplePath);
-  const templateConfigExists = await fileExists(templateConfigPath);
-  const templateSeedPath = templateExampleExists
-    ? templateExamplePath
-    : templateConfigExists
-      ? templateConfigPath
-      : "";
-
-  if (!templateSeedPath) {
-    console.warn(t(locale, "warnTemplateMissing", { path: workspaceTemplateAbsolutePath }));
-    return;
-  }
-
-  if (templateExampleExists) {
-    await syncJsonFileIncremental({
-      templateFilePath: templateExamplePath,
-      targetFilePath: templateConfigPath,
-      baseValues,
-      locale,
-      scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
-    });
-  } else if (templateConfigExists) {
-    await syncJsonFileIncremental({
-      templateFilePath: templateConfigPath,
-      targetFilePath: templateExamplePath,
-      baseValues,
-      locale,
-      scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
-    });
-  }
-
-  const finalTemplateConfigExists = await fileExists(templateConfigPath);
-  const finalTemplateExampleExists = await fileExists(templateExamplePath);
-  const finalTemplateSeedPath = finalTemplateConfigExists
-    ? templateConfigPath
-    : finalTemplateExampleExists
-      ? templateExamplePath
-      : "";
-
-  const userIds = await collectWorkspaceUserIds({
-    workspaceRootAbsolutePath,
-    superAdminUserId,
-  });
-
-  for (const userId of userIds) {
-    const userBasePath = path.join(workspaceRootAbsolutePath, userId);
-    await mkdir(userBasePath, { recursive: true });
-    if (finalTemplateConfigExists) {
-      await syncJsonFileIncremental({
-        templateFilePath: templateConfigPath,
-        targetFilePath: path.join(userBasePath, "config.json"),
-        baseValues,
-        locale,
-        scope: CONFIG_DOCUMENT_SCOPE.USER,
-      });
-    } else if (finalTemplateSeedPath) {
-      await syncJsonFileIncremental({
-        templateFilePath: finalTemplateSeedPath,
-        targetFilePath: path.join(userBasePath, "config.json"),
-        baseValues,
-        locale,
-        scope: CONFIG_DOCUMENT_SCOPE.USER,
-      });
-    }
-    if (finalTemplateExampleExists) {
-      await syncJsonFileIncremental({
-        templateFilePath: templateExamplePath,
-        targetFilePath: path.join(userBasePath, "config.example.json"),
-        baseValues,
-        locale,
-        scope: CONFIG_DOCUMENT_SCOPE.USER,
-      });
-    } else if (finalTemplateSeedPath) {
-      await syncJsonFileIncremental({
-        templateFilePath: finalTemplateSeedPath,
-        targetFilePath: path.join(userBasePath, "config.example.json"),
-        baseValues,
-        locale,
-        scope: CONFIG_DOCUMENT_SCOPE.USER,
-      });
-    }
-  }
-}
-
-async function syncLanguageForFile(filePath = "", language = "", textLocale = "zh") {
-  if (!filePath || !language) return;
-  if (!(await fileExists(filePath))) return;
-  const payload = await readJsonStrict(filePath, "config");
-  if (!isPlainObject(payload)) return;
-  const nextPayload = localizeConfigTextTree(deepClone(payload), textLocale);
-  const preferences = isPlainObject(nextPayload.preferences) ? { ...nextPayload.preferences } : {};
+function applyLanguage(document, language) {
+  if (!language || !isPlainObject(document)) return document;
+  const localized = localizeConfigTextTree(document, resolveTextLocaleFromConfigLanguage(language));
+  const preferences = isPlainObject(localized.preferences) ? { ...localized.preferences } : {};
   preferences.language = language;
-  nextPayload.preferences = preferences;
-  if (JSON.stringify(nextPayload) !== JSON.stringify(payload)) {
-    await writeJson(filePath, nextPayload);
-  }
+  localized.preferences = preferences;
+  return localized;
 }
 
-export async function syncLanguageAcrossTemplateAndUsers({
+export async function syncUserConfigs({
   workspaceRootAbsolutePath,
-  workspaceTemplateAbsolutePath,
-  superAdminUserId,
-  language,
+  baseValues = {},
+  language = "",
+  providerAlias = "",
   locale = "zh",
 } = {}) {
-  if (!language) return;
-  const textLocale = resolveTextLocaleFromConfigLanguage(language);
-  const templateTargets = [
-    path.join(workspaceTemplateAbsolutePath, "config.json"),
-    path.join(workspaceTemplateAbsolutePath, "config.example.json"),
-  ];
-  for (const targetPath of templateTargets) {
-    await syncLanguageForFile(targetPath, language, textLocale);
-  }
-
-  const userIds = await collectWorkspaceUserIds({
-    workspaceRootAbsolutePath,
-    superAdminUserId,
-  });
-  for (const userId of userIds) {
-    await syncLanguageForFile(
-      path.join(workspaceRootAbsolutePath, userId, "config.json"),
-      language,
-      textLocale,
-    );
-    await syncLanguageForFile(
-      path.join(workspaceRootAbsolutePath, userId, "config.example.json"),
-      language,
-      textLocale,
-    );
-  }
-
-  console.log(t(locale, "logLanguageSynced", { language }));
-}
-
-export async function syncInitialModelReferencesAcrossTemplateAndUsers({
-  workspaceRootAbsolutePath,
-  workspaceTemplateAbsolutePath,
-  superAdminUserId,
-  providerAlias,
-} = {}) {
+  await mkdir(workspaceRootAbsolutePath, { recursive: true });
+  const normalizedLanguage = String(language || "").trim();
   const normalizedProviderAlias = String(providerAlias || "").trim();
-  if (!normalizedProviderAlias) return;
-
-  const templateTargets = [
-    path.join(workspaceTemplateAbsolutePath, "config.json"),
-    path.join(workspaceTemplateAbsolutePath, "config.example.json"),
-  ];
-  for (const targetPath of templateTargets) {
-    await alignInitialModelReferencesForFile({
-      filePath: targetPath,
-      providerAlias: normalizedProviderAlias,
+  const transform = (document) => {
+    const aligned = normalizedProviderAlias
+      ? alignInitialModelReferences({
+          globalConfig: document,
+          providerAlias: normalizedProviderAlias,
+        })
+      : document;
+    return applyLanguage(aligned, normalizedLanguage);
+  };
+  for (const userId of await collectWorkspaceUserIds({ workspaceRootAbsolutePath })) {
+    await repairUserConfigFile({
+      targetFilePath: path.join(workspaceRootAbsolutePath, userId, "config.json"),
+      baseValues,
+      transform,
     });
   }
-
-  const userIds = await collectWorkspaceUserIds({
-    workspaceRootAbsolutePath,
-    superAdminUserId,
-  });
-  for (const userId of userIds) {
-    await alignInitialModelReferencesForFile({
-      filePath: path.join(workspaceRootAbsolutePath, userId, "config.json"),
-      providerAlias: normalizedProviderAlias,
-    });
-    await alignInitialModelReferencesForFile({
-      filePath: path.join(workspaceRootAbsolutePath, userId, "config.example.json"),
-      providerAlias: normalizedProviderAlias,
-    });
+  if (normalizedLanguage) {
+    console.log(t(locale, "logLanguageSynced", { language: normalizedLanguage }));
   }
-}
-
-async function collectTemplateParamKeys({ globalConfigPath, workspaceTemplateAbsolutePath } = {}) {
-  const documents = [];
-  if (await fileExists(globalConfigPath)) {
-    documents.push(await readJsonRelaxed(globalConfigPath, {}));
-  }
-  const templateConfigPath = path.join(workspaceTemplateAbsolutePath, "config.json");
-  const templateExamplePath = path.join(workspaceTemplateAbsolutePath, "config.example.json");
-  if (await fileExists(templateConfigPath)) {
-    documents.push(await readJsonRelaxed(templateConfigPath, {}));
-  }
-  if (await fileExists(templateExamplePath)) {
-    documents.push(await readJsonRelaxed(templateExamplePath, {}));
-  }
-  return collectConfigTemplateKeys(...documents);
 }
 
 export async function ensureWorkspaceConfigParamsCatalog({
   workspaceRootAbsolutePath,
   globalConfigPath,
-  workspaceTemplateAbsolutePath,
   explicitEntries = {},
 } = {}) {
-  const templateKeys = await collectTemplateParamKeys({
-    globalConfigPath,
-    workspaceTemplateAbsolutePath,
-  });
-  const entries = {};
-  for (const key of templateKeys) {
-    entries[key] = "";
-  }
+  const globalDocument = await readJsonRelaxed(globalConfigPath, {});
+  const entries = Object.fromEntries(
+    collectConfigTemplateKeys(globalDocument).map((key) => [key, ""]),
+  );
   for (const [key, value] of Object.entries(explicitEntries || {})) {
     const normalizedKey = String(key || "").trim();
     if (!normalizedKey) continue;
@@ -410,16 +211,10 @@ export async function ensureWorkspaceConfigParamsCatalog({
 
   for (const userId of await collectWorkspaceUserIds({ workspaceRootAbsolutePath })) {
     const userConfigPath = path.join(workspaceRootAbsolutePath, userId, "config.json");
-    const userExamplePath = path.join(workspaceRootAbsolutePath, userId, "config.example.json");
-    const userDocuments = [
-      await readJsonRelaxed(globalConfigPath, {}),
-      await readJsonRelaxed(path.join(workspaceTemplateAbsolutePath, "config.json"), {}),
-      await readJsonRelaxed(path.join(workspaceTemplateAbsolutePath, "config.example.json"), {}),
-      await readJsonRelaxed(userConfigPath, {}),
-      await readJsonRelaxed(userExamplePath, {}),
-    ];
     const userEntries = Object.fromEntries(
-      collectConfigTemplateKeys(...userDocuments).map((key) => [key, ""]),
+      collectConfigTemplateKeys(globalDocument, await readJsonRelaxed(userConfigPath, {})).map(
+        (key) => [key, ""],
+      ),
     );
     await upsertConfigParams({
       workspaceRootAbsolutePath,

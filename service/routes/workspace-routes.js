@@ -18,14 +18,15 @@ import {
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
 import { projectUserVisibleConfigDeclarations } from "@noobot/agent-config-protocol";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 
 const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
-  "memory",
-  "runtime",
+  WORKSPACE_LAYOUT.MEMORY_DIR,
+  WORKSPACE_LAYOUT.RUNTIME_DIR,
   "service",
-  "services",
+  WORKSPACE_LAYOUT.SERVICES_DIR,
   "skill",
-  "skills",
+  WORKSPACE_LAYOUT.SKILLS_DIR,
 ]);
 
 async function listWorkspaceUserDirs(root = "", globalConfig = {}) {

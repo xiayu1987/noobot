@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 
-const MEMORY_DIR_RELATIVE_PATH = "memory";
-const SESSION_DIR_RELATIVE_PATH = "runtime/session";
+const MEMORY_DIR_RELATIVE_PATH = WORKSPACE_LAYOUT.MEMORY_DIR;
+const SESSION_DIR_RELATIVE_PATH = WORKSPACE_LAYOUT.SESSION_DIR;
 
 export const MEMORY_RELATIVE_PATHS = Object.freeze({
   MEMORY_DIR: MEMORY_DIR_RELATIVE_PATH,

@@ -134,8 +134,8 @@ describe("terminalResolutionCoordinator", () => {
     const persistenceScope = {
       scopeId: "agent:workflow-node:node-1",
       parentSessionId: "root-session",
-      relativeDir: "runtime/workflow/session/root-session/node-1",
-      allowedRoot: "runtime/workflow/session",
+      relativeDir: "runtime/plugin-data/workflow/session/root-session/node-1",
+      allowedRoot: "runtime/plugin-data/workflow/session",
     };
 
     await coordinator.observe({

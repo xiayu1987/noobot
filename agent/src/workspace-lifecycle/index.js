@@ -3,41 +3,28 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  access,
-  cp,
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { access, mkdir, stat } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
+import {
+  WORKSPACE_ASSET_SECTIONS,
+  WORKSPACE_OPERATION,
+  WORKSPACE_SECTION,
+  normalizeWorkspaceSections,
+} from "@noobot/workspace-protocol";
 import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
 import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
-import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
-import { MEMORY_RELATIVE_PATHS } from "../memory/storage/paths.js";
-import { repairWorkspaceMemoryDocuments } from "../memory/storage/repair.js";
+import { applyWorkspaceAssets } from "./assets.js";
+import {
+  clearSection,
+  createSectionBackup,
+  ensureRuntimeDirectories,
+  migrateWorkspaceLayout,
+  repairConfigSection,
+  repairMemorySection,
+} from "./sections.js";
 
-const RESET_SECTION_PATHS = {
-  memory: [MEMORY_RELATIVE_PATHS.MEMORY_DIR],
-  runtime: ["runtime"],
-  service: ["services"],
-  skill: ["skills"],
-  config: ["config.json", "config.example.json"],
-};
-
-const SYNC_PRESERVE_EXISTING_ROOTS = new Set([MEMORY_RELATIVE_PATHS.MEMORY_DIR]);
-const CANONICAL_MEMORY_TEMPLATE_FILES = Object.freeze([
-  MEMORY_RELATIVE_PATHS.SHORT_MEMORY,
-  MEMORY_RELATIVE_PATHS.LONG_MEMORY,
-  MEMORY_RELATIVE_PATHS.EXPERIENCE_MODEL,
-]);
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
   timeoutErrorCode: "WORKSPACE_MUTATION_BUSY",
@@ -45,30 +32,10 @@ const workspaceMutationCoordinator = new FileMutationCoordinator({
 });
 
 function resolveWorkspaceMutationLockDir(workspaceRoot, userId) {
-  const normalizedRoot = path.resolve(String(workspaceRoot || "").trim());
-  const normalizedUserId = String(userId || "").trim();
-  if (!normalizedRoot || !normalizedUserId) {
-    throw new TypeError("workspace mutation lock requires workspaceRoot and userId");
-  }
-  const lockRoot = `${normalizedRoot}.mutation-locks`;
-  return path.join(lockRoot, encodeURIComponent(normalizedUserId));
+  return path.join(`${path.resolve(workspaceRoot)}.mutation-locks`, encodeURIComponent(userId));
 }
 
-function withWorkspaceMutation(lockDir, operation) {
-  return workspaceMutationCoordinator.run(lockDir, operation);
-}
-
-function resolveTemplateBase(workspaceTemplatePath = "") {
-  const configuredTemplatePath = String(workspaceTemplatePath || "").trim();
-  if (!configuredTemplatePath) {
-    throw fatalSystemError(tSystem("init.workspaceTemplatePathRequired"), {
-      code: ERROR_CODE.FATAL_WORKSPACE_TEMPLATE_PATH_REQUIRED,
-    });
-  }
-  return path.resolve(configuredTemplatePath);
-}
-
-async function resolveWorkspaceInitPaths({ workspaceRoot, workspaceTemplatePath = "", userId }) {
+async function resolveWorkspacePaths({ workspaceRoot, assetPackagePath, userId }) {
   const normalizedUserId = String(userId || "").trim();
   const normalizedWorkspaceRoot = String(workspaceRoot || "").trim();
   if (!normalizedUserId || !normalizedWorkspaceRoot) {
@@ -77,223 +44,113 @@ async function resolveWorkspaceInitPaths({ workspaceRoot, workspaceTemplatePath 
       details: { userId: normalizedUserId, workspaceRoot: normalizedWorkspaceRoot },
     });
   }
-  const base = path.resolve(normalizedWorkspaceRoot, normalizedUserId);
-  const templateBase = resolveTemplateBase(workspaceTemplatePath);
-  try {
-    await access(templateBase);
-  } catch {
-    throw fatalSystemError(`${tSystem("init.workspaceTemplateMissing")}: ${templateBase}`, {
-      code: ERROR_CODE.FATAL_WORKSPACE_TEMPLATE_MISSING,
-      details: { templateBase },
+  const configuredAssetPath = String(assetPackagePath || "").trim();
+  if (!configuredAssetPath) {
+    throw fatalSystemError(tSystem("init.workspaceTemplatePathRequired"), {
+      code: ERROR_CODE.FATAL_WORKSPACE_TEMPLATE_PATH_REQUIRED,
     });
   }
+  const assetPackageBase = path.resolve(configuredAssetPath);
+  try {
+    await access(assetPackageBase);
+  } catch {
+    throw fatalSystemError(`${tSystem("init.workspaceTemplateMissing")}: ${assetPackageBase}`, {
+      code: ERROR_CODE.FATAL_WORKSPACE_TEMPLATE_MISSING,
+      details: { templateBase: assetPackageBase },
+    });
+  }
+  const base = path.resolve(normalizedWorkspaceRoot, normalizedUserId);
   await mkdir(path.resolve(normalizedWorkspaceRoot), { recursive: true });
   return {
     base,
-    templateBase,
+    assetPackageBase,
     mutationLockDir: resolveWorkspaceMutationLockDir(normalizedWorkspaceRoot, normalizedUserId),
   };
 }
 
-function normalizeResetSections(inputSections) {
-  const all = Object.keys(RESET_SECTION_PATHS);
-  if (!Array.isArray(inputSections) || !inputSections.length) return all;
-  const normalized = Array.from(
-    new Set(
-      inputSections
-        .map((item) =>
-          String(item || "")
-            .trim()
-            .toLowerCase(),
-        )
-        .filter(Boolean),
-    ),
-  );
-  const invalid = normalized.filter((item) => !all.includes(item));
-  if (invalid.length) {
-    throw fatalSystemError(`${tSystem("init.invalidResetSections")}: ${invalid.join(", ")}`, {
-      code: ERROR_CODE.FATAL_INVALID_RESET_SECTIONS,
-      details: { invalid, allowed: all },
-    });
-  }
-  return normalized;
-}
-
-async function pathExists(filePath = "") {
+async function requireWorkspaceDirectory(base) {
+  let baseStat;
   try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function readConfigDocumentForRepair(filePath) {
-  try {
-    const raw = await readFile(filePath, "utf8");
-    try {
-      return JSON.parse(raw);
-    } catch {
-      await rename(filePath, `${filePath}.invalid-${Date.now()}.json`);
-      return {};
-    }
+    baseStat = await stat(base);
   } catch (error) {
-    if (error?.code === "ENOENT") return {};
+    if (error?.code === "ENOENT") return false;
     throw error;
   }
-}
-
-function writeConfigDocument(filePath, document) {
-  return writeFileAtomic({
-    filePath,
-    content: `${JSON.stringify(document, null, 2)}\n`,
-    writeFile,
-    rename,
-    remove: rm,
-  });
-}
-
-async function ensureCanonicalMemoryFiles(templateBase, base) {
-  for (const relativePath of CANONICAL_MEMORY_TEMPLATE_FILES) {
-    const sourcePath = path.join(templateBase, relativePath);
-    const targetPath = path.join(base, relativePath);
-    if (await pathExists(targetPath)) continue;
-    await mkdir(path.dirname(targetPath), { recursive: true });
-    await cp(sourcePath, targetPath, { force: false, errorOnExist: false });
+  if (!baseStat.isDirectory()) {
+    throw fatalSystemError(`${tSystem("init.userWorkspacePathNotDirectory")}: ${base}`, {
+      code: ERROR_CODE.FATAL_WORKSPACE_PATH_NOT_DIRECTORY,
+      details: { base },
+    });
   }
-  return repairWorkspaceMemoryDocuments({ base, templateBase });
+  return true;
 }
 
-export async function ensureUserWorkspaceInitialized({
-  workspaceRoot,
-  workspaceTemplatePath = "",
-  userId,
-  globalConfig = {},
-}) {
-  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
-    workspaceRoot,
-    workspaceTemplatePath,
-    userId,
-  });
-
-  return withWorkspaceMutation(mutationLockDir, async () => {
-    let baseExists = true;
-    try {
-      await access(base);
-    } catch {
-      baseExists = false;
-    }
-
-    if (baseExists) {
-      const baseStat = await stat(base);
-      if (!baseStat.isDirectory()) {
-        throw fatalSystemError(`${tSystem("init.userWorkspacePathNotDirectory")}: ${base}`, {
-          code: ERROR_CODE.FATAL_WORKSPACE_PATH_NOT_DIRECTORY,
-          details: { base },
-        });
-      }
-      await ensureCanonicalMemoryFiles(templateBase, base);
-
-      return base;
-    }
-
-    await cp(templateBase, base, { recursive: true, force: false });
-    return base;
-  });
-}
-
-export async function resetUserWorkspaceInitialized({
-  workspaceRoot,
-  workspaceTemplatePath = "",
-  userId,
-}) {
-  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
-    workspaceRoot,
-    workspaceTemplatePath,
-    userId,
-  });
-  return withWorkspaceMutation(mutationLockDir, async () => {
-    await rm(base, { recursive: true, force: true });
-    await cp(templateBase, base, { recursive: true, force: true });
-    return base;
-  });
-}
-
-export async function resetUserWorkspaceKeepRuntimeInitialized({
-  workspaceRoot,
-  workspaceTemplatePath = "",
-  userId,
-  resetSections = [],
-}) {
-  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
-    workspaceRoot,
-    workspaceTemplatePath,
-    userId,
-  });
-  return withWorkspaceMutation(mutationLockDir, async () => {
-    const sections = normalizeResetSections(resetSections);
-    await mkdir(base, { recursive: true });
-    const relativePaths = Array.from(
-      new Set(sections.flatMap((section) => RESET_SECTION_PATHS[section] || [])),
-    );
-    for (const relPath of relativePaths) {
-      const srcPath = path.join(templateBase, relPath);
-      const dstPath = path.join(base, relPath);
-      await rm(dstPath, { recursive: true, force: true });
-      if (!(await pathExists(srcPath))) continue;
-      await mkdir(path.dirname(dstPath), { recursive: true });
-      await cp(srcPath, dstPath, { recursive: true, force: true });
-    }
-    return base;
-  });
-}
-
-async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "", baseValues = {}) {
-  await mkdir(userDir, { recursive: true });
-  const entries = await readdir(templateDir, { withFileTypes: true });
-  for (const entry of entries) {
-    const src = path.join(templateDir, entry.name);
-    const dst = path.join(userDir, entry.name);
-    const relativePath = path.join(relativeRoot, entry.name);
-    const rootName = String(relativePath || "").split(path.sep)[0] || "";
-    const preserveExisting = SYNC_PRESERVE_EXISTING_ROOTS.has(rootName);
-    if (entry.isDirectory()) {
-      await syncDirectoryIncremental(src, dst, relativePath, baseValues);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (["config.json", "config.example.json"].includes(entry.name)) {
-      const [templateRaw, userJson] = await Promise.all([
-        readFile(src, "utf8"),
-        readConfigDocumentForRepair(dst),
-      ]);
-      JSON.parse(templateRaw);
-      const merged = repairConfigDocument({
-        scope: CONFIG_DOCUMENT_SCOPE.USER,
-        baseValues,
-        target: userJson,
-      }).document;
-      await writeConfigDocument(dst, merged);
-      continue;
-    }
-    await cp(src, dst, { force: !preserveExisting, errorOnExist: false });
+function normalizeSections(sections) {
+  try {
+    return normalizeWorkspaceSections(sections);
+  } catch (error) {
+    if (error?.code !== "WORKSPACE_SECTIONS_INVALID") throw error;
+    throw fatalSystemError(`${tSystem("init.invalidResetSections")}: ${error.details.invalid}`, {
+      code: ERROR_CODE.FATAL_INVALID_RESET_SECTIONS,
+      details: error.details,
+    });
   }
 }
 
-export async function syncUserWorkspaceFromTemplate({
-  workspaceRoot,
-  workspaceTemplatePath = "",
-  userId,
-  baseValues = {},
-}) {
-  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
-    workspaceRoot,
-    workspaceTemplatePath,
-    userId,
+async function runWorkspaceOperation({ base, assetPackageBase, operation, baseValues, sections }) {
+  const backup = createSectionBackup(base);
+  const selected = new Set(sections);
+  await mkdir(base, { recursive: true });
+  if (operation === WORKSPACE_OPERATION.RESET) {
+    for (const section of sections) await clearSection({ base, section, backup });
+  }
+  const report = { operation, layoutMigrations: await migrateWorkspaceLayout({ base, backup }) };
+  await ensureRuntimeDirectories(base);
+  report.memory = await repairMemorySection(base);
+  if (operation !== WORKSPACE_OPERATION.RESET || selected.has(WORKSPACE_SECTION.CONFIG)) {
+    report.config = await repairConfigSection({
+      base,
+      baseValues,
+      backup,
+      onlyInvalid: operation === WORKSPACE_OPERATION.REPAIR,
+    });
+  }
+  const assetSections = WORKSPACE_ASSET_SECTIONS.filter((name) => selected.has(name));
+  report.assets = await applyWorkspaceAssets({
+    base,
+    assetPackageBase,
+    operation,
+    sections: assetSections,
   });
-  return withWorkspaceMutation(mutationLockDir, async () => {
-    await mkdir(base, { recursive: true });
-    await syncDirectoryIncremental(templateBase, base, "", baseValues);
-    return base;
+  return report;
+}
+
+async function withWorkspace(options, operation, sections) {
+  const { base, assetPackageBase, mutationLockDir } = await resolveWorkspacePaths(options);
+  return workspaceMutationCoordinator.run(mutationLockDir, async () => {
+    const existed = await requireWorkspaceDirectory(base);
+    const effectiveOperation =
+      !existed && operation === WORKSPACE_OPERATION.REPAIR ? WORKSPACE_OPERATION.CREATE : operation;
+    const report = await runWorkspaceOperation({
+      base,
+      assetPackageBase,
+      operation: effectiveOperation,
+      baseValues: options.baseValues ?? {},
+      sections,
+    });
+    return { base, report };
   });
+}
+
+export async function ensureUserWorkspace(options) {
+  return (await withWorkspace(options, WORKSPACE_OPERATION.REPAIR, normalizeSections())).base;
+}
+
+export async function syncUserWorkspace(options) {
+  return (await withWorkspace(options, WORKSPACE_OPERATION.SYNC, normalizeSections())).base;
+}
+
+export async function resetUserWorkspace({ sections = [], ...options }) {
+  return (await withWorkspace(options, WORKSPACE_OPERATION.RESET, normalizeSections(sections)))
+    .base;
 }

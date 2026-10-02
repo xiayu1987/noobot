@@ -306,7 +306,15 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
     messages: [{ role: "user", content: "hello" }],
   });
 
-  const eventsFile = path.join(basePath, "runtime", "harness", "runs", "dp15", "events.jsonl");
+  const eventsFile = path.join(
+    basePath,
+    "runtime",
+    "plugin-data",
+    "harness",
+    "runs",
+    "dp15",
+    "events.jsonl",
+  );
   assert.equal(await waitForFile(eventsFile), true);
   const events = (await fs.readFile(eventsFile, "utf8"))
     .trim()

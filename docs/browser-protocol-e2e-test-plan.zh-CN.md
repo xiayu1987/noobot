@@ -263,7 +263,7 @@ workspace/<userId>/runtime/session/<sessionId>/model-message-snapshots/
 运行目录：
 
 ```text
-workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
+workspace/<userId>/runtime/plugin-data/harness/runs/<dialogProcessId>/
 ├── harness-run.json
 ├── context-snapshot.json
 ├── events.jsonl

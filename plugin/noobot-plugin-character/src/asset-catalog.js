@@ -5,13 +5,18 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePluginAssetsRelativePath } from "@noobot/workspace-protocol";
+import { CHARACTER_PLUGIN_ID } from "./contract.js";
 import { AnimationAssetSchema } from "./animation-protocol.js";
 import { migrateLegacyAssetDescriptor } from "./asset-metadata-migration.js";
 
 export async function readCharacterAssetCatalog(basePath) {
   const workspacePath = String(basePath || "").trim();
   if (!workspacePath) throw new Error("character asset workspace path is required");
-  const catalogPath = path.resolve(workspacePath, "runtime/plugin-assets/character/catalog.json");
+  const catalogPath = path.resolve(
+    workspacePath,
+    resolvePluginAssetsRelativePath(CHARACTER_PLUGIN_ID, "catalog.json"),
+  );
   let catalog;
   try {
     catalog = JSON.parse(await fs.readFile(catalogPath, "utf8"));

@@ -10,24 +10,18 @@ import {
   USER_CONFIG_SECTIONS,
   isPlainObject,
 } from "./configStructureContract.js";
-import { ensureArrayAt, ensureObjectAt } from "./configDocumentState.js";
+import { ensureObjectAt } from "./configDocumentState.js";
 
 export const CONFIG_NAV_SEPARATOR = "/";
 
-const GROUP_KINDS = Object.freeze([
-  CONFIG_FORM_NODE_KIND.OBJECT,
-  CONFIG_FORM_NODE_KIND.COLLECTION,
-  CONFIG_FORM_NODE_KIND.ARRAY,
-]);
+const GROUP_KINDS = Object.freeze([CONFIG_FORM_NODE_KIND.OBJECT, CONFIG_FORM_NODE_KIND.COLLECTION]);
 
 export function isConfigGroupNode(node) {
   return GROUP_KINDS.includes(node?.kind);
 }
 
 export function isConfigContainerNode(node) {
-  return (
-    node?.kind === CONFIG_FORM_NODE_KIND.COLLECTION || node?.kind === CONFIG_FORM_NODE_KIND.ARRAY
-  );
+  return node?.kind === CONFIG_FORM_NODE_KIND.COLLECTION;
 }
 
 export function defaultValueForConfigNode(node) {
@@ -36,7 +30,6 @@ export function defaultValueForConfigNode(node) {
     case CONFIG_FORM_NODE_KIND.COLLECTION:
     case CONFIG_FORM_NODE_KIND.RAW:
       return {};
-    case CONFIG_FORM_NODE_KIND.ARRAY:
     case CONFIG_FORM_NODE_KIND.STRING_LIST:
     case CONFIG_FORM_NODE_KIND.ENUM_LIST:
       return [];
@@ -48,7 +41,6 @@ export function defaultValueForConfigNode(node) {
 }
 
 function readValue(container, key) {
-  if (Array.isArray(container)) return container[Number(key)];
   if (isPlainObject(container)) return container[key];
   return undefined;
 }
@@ -60,10 +52,6 @@ export function configEntryNodes(node, value) {
       node: { ...node.entry, key: entryKey },
       key: entryKey,
     }));
-  }
-  if (node?.kind === CONFIG_FORM_NODE_KIND.ARRAY) {
-    if (!Array.isArray(value)) return [];
-    return value.map((_, index) => ({ node: { ...node.item, key: index }, key: index }));
   }
   return [];
 }
@@ -133,15 +121,8 @@ export function ensureConfigNavContainer(document, trail = []) {
   let container = document;
   for (const [index, navNode] of trail.entries()) {
     if (index === trail.length - 1 && !isConfigGroupNode(navNode.node)) return container;
-    if (Array.isArray(container)) {
-      container = container[Number(navNode.key)];
-      continue;
-    }
     if (!isPlainObject(container)) return undefined;
-    container =
-      navNode.node.kind === CONFIG_FORM_NODE_KIND.ARRAY
-        ? ensureArrayAt(container, navNode.key)
-        : ensureObjectAt(container, navNode.key);
+    container = ensureObjectAt(container, navNode.key);
   }
   return container;
 }

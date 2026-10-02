@@ -130,8 +130,8 @@ export function createCompleteStrategy(overrides = {}) {
     dialogProcessId: "sub-dialog",
     turnScopeId,
     executionId: `agent:${turnScopeId}`,
-    relativeDir: "runtime/workflow/session/root/node-a",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
+    allowedRoot: "runtime/plugin-data/workflow/session",
     ...overrides,
   };
 }

@@ -5,6 +5,7 @@
  */
 
 import { filePath as path } from "@noobot/path-resolver";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
 function encodeAttachmentScopeSegment(value, fieldName) {
@@ -14,7 +15,7 @@ function encodeAttachmentScopeSegment(value, fieldName) {
 }
 
 export function attachScopedRoot(basePath) {
-  return path.join(basePath, "runtime/attach/scoped");
+  return path.join(basePath, WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR);
 }
 
 export function attachScopeRoot(basePath, scope) {

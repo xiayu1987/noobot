@@ -23,6 +23,7 @@
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/shared": "file:../../shared",
+    "@noobot/workspace-protocol": "file:../../workspace-protocol",
     "@langchain/core": "^1.2.11",
     "zod": "^4.6.5"
   },

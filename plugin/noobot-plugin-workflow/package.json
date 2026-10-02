@@ -22,7 +22,8 @@
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/session-protocol": "file:../../session-protocol",
     "@noobot/shared": "file:../../shared",
-    "workflow": "file:../../workflow"
+    "workflow": "file:../../workflow",
+    "@noobot/workspace-protocol": "file:../../workspace-protocol"
   },
   "peerDependencies": {
     "noobot-chat": "^4.1.3"

@@ -14,8 +14,8 @@ test("workflow authority commit uses the protocol persistence scope", async () =
   const persistenceScope = Object.freeze({
     scopeId: "agent:workflow-node-1",
     parentSessionId: "root-session",
-    relativeDir: "runtime/workflow/session/child-session/node-1",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/child-session/node-1",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   });
   const envelope = { identity: { eventId: "workflow-event-1" } };
   const ctx = {

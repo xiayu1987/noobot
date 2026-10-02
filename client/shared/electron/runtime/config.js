@@ -69,115 +69,6 @@ export function createDesktopConfigManager({
     );
   }
 
-  function assertFileExists(filePath, label) {
-    try {
-      const fileStat = fs.statSync(filePath);
-      if (fileStat.isFile()) return;
-    } catch (error) {
-      throw new Error(`${label} missing: ${filePath}`, { cause: error });
-    }
-    throw new Error(`${label} is not a file: ${filePath}`);
-  }
-
-  function isJsonObjectFile(filePath) {
-    return isPlainObject(readJsonFile(filePath, null));
-  }
-
-  function describePath(filePath) {
-    try {
-      const fileStat = fs.statSync(filePath);
-      return {
-        exists: true,
-        isFile: fileStat.isFile(),
-        isDirectory: fileStat.isDirectory(),
-        size: fileStat.size,
-      };
-    } catch (error) {
-      return {
-        exists: false,
-        error: error?.code || error?.message || String(error),
-      };
-    }
-  }
-
-  function replaceFileFromBundledTemplate({ from, to, label }) {
-    assertFileExists(from, `desktop bundled ${label}`);
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    try {
-      fs.rmSync(to, { recursive: true, force: true });
-      fs.copyFileSync(from, to);
-    } catch (error) {
-      throw new Error(`failed to restore desktop ${label}: ${from} -> ${to}`, { cause: error });
-    }
-    assertFileExists(to, `desktop restored ${label}`);
-    appendDesktopLog(`[main:config] restored desktop ${label}: ${from} -> ${to}`);
-  }
-
-  function shouldCopyTemplatePath(src) {
-    return !["config.json", "global.config.json"].includes(path.basename(src));
-  }
-
-  function copyDirectoryContentsManually({ from, to }) {
-    const sourceStat = fs.statSync(from);
-    if (!sourceStat.isDirectory()) {
-      if (!shouldCopyTemplatePath(from)) return;
-      fs.mkdirSync(path.dirname(to), { recursive: true });
-      fs.copyFileSync(from, to);
-      return;
-    }
-
-    fs.mkdirSync(to, { recursive: true });
-    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
-      const srcPath = path.join(from, entry.name);
-      const dstPath = path.join(to, entry.name);
-      if (!shouldCopyTemplatePath(srcPath)) continue;
-      if (entry.isDirectory()) {
-        copyDirectoryContentsManually({ from: srcPath, to: dstPath });
-      } else if (entry.isFile()) {
-        fs.mkdirSync(path.dirname(dstPath), { recursive: true });
-        fs.copyFileSync(srcPath, dstPath);
-      }
-    }
-  }
-
-  function removeStaleTemplateEntries({ from, to }) {
-    if (!fs.existsSync(to)) return;
-    for (const entry of fs.readdirSync(to, { withFileTypes: true })) {
-      if (["config.json", "global.config.json"].includes(entry.name)) continue;
-      const sourcePath = path.join(from, entry.name);
-      const targetPath = path.join(to, entry.name);
-      if (!fs.existsSync(sourcePath)) {
-        fs.rmSync(targetPath, { recursive: true, force: true });
-        continue;
-      }
-      const sourceStat = fs.statSync(sourcePath);
-      const targetStat = fs.statSync(targetPath);
-      if (sourceStat.isDirectory() !== targetStat.isDirectory()) {
-        fs.rmSync(targetPath, { recursive: true, force: true });
-        continue;
-      }
-      if (sourceStat.isDirectory())
-        removeStaleTemplateEntries({ from: sourcePath, to: targetPath });
-    }
-  }
-
-  function logTemplateDirectoryStatus({ bundledTemplatePath, workspaceTemplatePath }) {
-    const relativePaths = [
-      ".",
-      "config.example.json",
-      "memory",
-      path.join("memory", "short-memory.json"),
-      "runtime",
-      "services",
-      "skills",
-    ];
-    for (const relativePath of relativePaths) {
-      appendDesktopLog(
-        `[main:config] template path status; relative=${relativePath}; bundled=${JSON.stringify(describePath(path.join(bundledTemplatePath, relativePath)))}; workspace=${JSON.stringify(describePath(path.join(workspaceTemplatePath, relativePath)))}`,
-      );
-    }
-  }
-
   function getNestedString(root, segments) {
     let node = root;
     for (const segment of segments) node = isPlainObject(node) ? node[segment] : undefined;
@@ -236,66 +127,6 @@ export function createDesktopConfigManager({
 
   function applySelectedModelToConfig(payload = {}, selectedModel = "") {
     return applyPrimaryModelReferencesToConfigFile(payload, selectedModel);
-  }
-
-  function copyDirectoryContents({ from, to }) {
-    if (!fs.existsSync(from)) {
-      appendDesktopLog(
-        `[main:config] bundled template directory missing; skipped directory sync: ${from}`,
-      );
-      return false;
-    }
-    try {
-      fs.mkdirSync(to, { recursive: true });
-      fs.cpSync(from, to, {
-        recursive: true,
-        filter: (src) => !["config.json", "global.config.json"].includes(path.basename(src)),
-      });
-      removeStaleTemplateEntries({ from, to });
-      appendDesktopLog(`[main:config] synced desktop template directory: ${from} -> ${to}`);
-      return true;
-    } catch (error) {
-      appendDesktopLog(
-        `[main:config] desktop template directory sync failed: ${from} -> ${to}; error=${error?.stack || error?.message || String(error)}`,
-      );
-      try {
-        copyDirectoryContentsManually({ from, to });
-        removeStaleTemplateEntries({ from, to });
-        appendDesktopLog(
-          `[main:config] synced desktop template directory with manual fallback: ${from} -> ${to}`,
-        );
-        return true;
-      } catch (fallbackError) {
-        throw new Error(`failed to sync desktop template directory: ${from} -> ${to}`, {
-          cause: fallbackError,
-        });
-      }
-    }
-  }
-
-  function ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath }) {
-    const bundledExamplePath = path.join(bundledTemplatePath, "config.example.json");
-    const workspaceExamplePath = path.join(workspaceTemplatePath, "config.example.json");
-    appendDesktopLog(
-      `[main:config] checking desktop default user template example; bundled=${bundledExamplePath}; bundledStatus=${JSON.stringify(describePath(bundledExamplePath))}; workspace=${workspaceExamplePath}; workspaceStatus=${JSON.stringify(describePath(workspaceExamplePath))}`,
-    );
-    if (!isJsonObjectFile(bundledExamplePath)) {
-      throw new Error(
-        `desktop bundled default user config example is missing or invalid: ${bundledExamplePath}`,
-      );
-    }
-    if (
-      !isJsonObjectFile(workspaceExamplePath) ||
-      JSON.stringify(readJsonFile(workspaceExamplePath, null)) !==
-        JSON.stringify(readJsonFile(bundledExamplePath, null))
-    ) {
-      replaceFileFromBundledTemplate({
-        from: bundledExamplePath,
-        to: workspaceExamplePath,
-        label: "default user config example",
-      });
-    }
-    return workspaceExamplePath;
   }
 
   function ensureConfigParamsCatalog({ workspaceRootPath, configFiles = [] } = {}) {
@@ -381,7 +212,6 @@ export function createDesktopConfigManager({
 
   function saveSuperAdminConfig({
     globalConfigPath,
-    userConfigPath,
     userId,
     connectCode,
     language,
@@ -409,17 +239,6 @@ export function createDesktopConfigManager({
       applySelectedModelToConfig(payload, normalizedModel);
     }
     writeJsonFile(globalConfigPath, payload);
-
-    if (userConfigPath) {
-      const userPayload = readJsonFile(userConfigPath, null);
-      if (isPlainObject(userPayload) && normalizedModel) {
-        ensureModelProviderInConfigFile(userPayload, normalizedModel, {
-          providerTemplate: payload.providers[normalizedModel],
-        });
-        applySelectedModelToConfig(userPayload, normalizedModel);
-        writeJsonFile(userConfigPath, userPayload);
-      }
-    }
   }
 
   function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
@@ -435,59 +254,27 @@ export function createDesktopConfigManager({
     writeJsonFile(filePath, next);
   }
 
-  function syncJsonFileIncremental({
-    templateFilePath,
-    targetFilePath,
-    baseValues = {},
-    scope = CONFIG_DOCUMENT_SCOPE.USER,
-  } = {}) {
-    const templateJson = readJsonFile(templateFilePath, null);
-    if (!isPlainObject(templateJson)) return false;
-    const targetExists = fs.existsSync(targetFilePath);
-    const targetJson = targetExists ? readJsonFileForRepair(targetFilePath) : {};
-    const repair = repairConfigDocument({
-      scope,
-      baseValues,
-      target: targetJson,
-    });
-    const merged = repair.document;
-    if (
-      !targetExists ||
-      !fs.existsSync(targetFilePath) ||
-      JSON.stringify(targetJson) !== JSON.stringify(merged)
-    ) {
-      writeJsonFile(targetFilePath, merged);
-      logConfigRepairReport(targetFilePath, repair.report);
-      return true;
-    }
-    return false;
+  function listUserConfigPaths(workspaceRootPath) {
+    if (!fs.existsSync(workspaceRootPath)) return [];
+    return fs
+      .readdirSync(workspaceRootPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(workspaceRootPath, entry.name, "config.json"))
+      .filter((filePath) => fs.existsSync(filePath));
   }
 
-  function synchronizeExistingUserConfigs({
-    workspaceRootPath,
-    templateConfigPath,
-    baseValues = {},
-  } = {}) {
-    if (!fs.existsSync(workspaceRootPath)) return;
-    const template = readJsonFile(templateConfigPath, null);
-    if (!isPlainObject(template))
-      throw new Error(`invalid user config template: ${templateConfigPath}`);
-    for (const entry of fs.readdirSync(workspaceRootPath, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      for (const fileName of ["config.json", "config.example.json"]) {
-        const filePath = path.join(workspaceRootPath, entry.name, fileName);
-        if (!fs.existsSync(filePath)) continue;
-        const payload = readJsonFileForRepair(filePath);
-        const repair = repairConfigDocument({
-          scope: CONFIG_DOCUMENT_SCOPE.USER,
-          baseValues,
-          target: payload,
-        });
-        const synchronized = repair.document;
-        if (!fs.existsSync(filePath) || JSON.stringify(payload) !== JSON.stringify(synchronized)) {
-          writeJsonFile(filePath, synchronized);
-          logConfigRepairReport(filePath, repair.report);
-        }
+  function synchronizeExistingUserConfigs({ workspaceRootPath, baseValues = {} } = {}) {
+    for (const filePath of listUserConfigPaths(workspaceRootPath)) {
+      const payload = readJsonFileForRepair(filePath);
+      const repair = repairConfigDocument({
+        scope: CONFIG_DOCUMENT_SCOPE.USER,
+        baseValues,
+        target: payload,
+      });
+      const synchronized = repair.document;
+      if (!fs.existsSync(filePath) || JSON.stringify(payload) !== JSON.stringify(synchronized)) {
+        writeJsonFile(filePath, synchronized);
+        logConfigRepairReport(filePath, repair.report);
       }
     }
   }
@@ -499,14 +286,13 @@ export function createDesktopConfigManager({
     const examplePath = isPackaged
       ? path.join(packagedBackendRoot, "service", "config", "global.config.example.json")
       : path.join(repoRoot, "service", "config", "global.config.example.json");
-    const bundledTemplatePath = isPackaged
-      ? path.join(packagedBackendRoot, "user-template", "default-user")
-      : path.join(repoRoot, "user-template", "default-user");
     const workspaceRootPath =
       process.env.NOOBOT_WORKSPACE_ROOT || path.join(userDataPath, "workspace");
     const workspaceTemplatePath =
       process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH ||
-      path.join(userDataPath, "user-template", "default-user");
+      (isPackaged
+        ? path.join(packagedBackendRoot, "user-template", "default-user")
+        : path.join(repoRoot, "user-template", "default-user"));
 
     const exampleConfig = readJsonFile(examplePath, null);
     if (!isPlainObject(exampleConfig))
@@ -537,44 +323,16 @@ export function createDesktopConfigManager({
       );
     }
 
-    const templateExamplePath = ensureWorkspaceTemplateExample({
-      bundledTemplatePath,
-      workspaceTemplatePath,
-    });
-    copyDirectoryContents({ from: bundledTemplatePath, to: workspaceTemplatePath });
-    logTemplateDirectoryStatus({ bundledTemplatePath, workspaceTemplatePath });
-    const templateConfigPath = path.join(workspaceTemplatePath, "config.json");
-    if (fs.existsSync(templateExamplePath)) {
-      syncJsonFileIncremental({
-        templateFilePath: templateExamplePath,
-        targetFilePath: templateConfigPath,
-        baseValues: exampleConfig,
-        scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
-      });
-    }
-    if (!isJsonObjectFile(templateExamplePath))
-      throw new Error(
-        `desktop workspace default user config example is missing or invalid: ${templateExamplePath}`,
-      );
-    if (!isJsonObjectFile(templateConfigPath))
-      throw new Error(
-        `desktop workspace default user config is missing or invalid: ${templateConfigPath}`,
-      );
     fs.mkdirSync(workspaceRootPath, { recursive: true });
-    synchronizeExistingUserConfigs({
-      workspaceRootPath,
-      templateConfigPath,
-      baseValues: exampleConfig,
-    });
+    synchronizeExistingUserConfigs({ workspaceRootPath, baseValues: mergedConfig });
     const configParamsPath = ensureConfigParamsCatalog({
       workspaceRootPath,
-      configFiles: [targetPath, templateConfigPath, templateExamplePath],
+      configFiles: [targetPath, ...listUserConfigPaths(workspaceRootPath)],
     });
     return {
       globalConfigPath: targetPath,
       workspaceRootPath,
       workspaceTemplatePath,
-      templateConfigPath,
       configParamsPath,
       superAdmin: getSuperAdminRequirement(targetPath),
       missingParams: getMissingRequiredConfigParams(configParamsPath, targetPath),

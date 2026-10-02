@@ -30,11 +30,6 @@ describe("configLabels", () => {
     expect(resolveConfigFieldLabel(translate, "unmapped_field")).toBe("unmapped_field");
   });
 
-  it("renders numeric array keys as one-based positions", () => {
-    expect(resolveConfigFieldLabel(translate, 0)).toBe("#1");
-    expect(resolveConfigFieldLabel(translate, "2")).toBe("#3");
-  });
-
   it("treats blank keys as absent rather than numeric", () => {
     expect(resolveConfigFieldLabel(translate, "")).toBe("");
     expect(resolveConfigFieldLabel(translate, null)).toBe("");

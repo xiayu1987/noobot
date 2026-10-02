@@ -28,7 +28,7 @@ function documentFixture() {
       p1: { model: "m1", temperature: 0.5 },
       p2: { model: "m2" },
     },
-    plugins: { character: { characterAssets: [{ id: "a1", path: "p" }] } },
+    plugins: { character: { selectedCharacterAssetIds: ["a1"] } },
   };
 }
 
@@ -53,15 +53,15 @@ describe("configNavigation", () => {
     expect(configLeafFields(providerEntry.node).map((field) => field.key)).toContain("model");
   });
 
-  it("resolves a trail across nested collections and arrays", () => {
+  it("resolves a trail across nested objects and keeps list fields as leaves", () => {
     const tree = buildConfigNavTree(documentFixture());
-    const trail = findConfigNavTrail(tree, "plugins/character/characterAssets/0");
-    expect(trail.map((navNode) => navNode.key)).toEqual([
-      "plugins",
-      "character",
-      "characterAssets",
-      0,
-    ]);
+    const trail = findConfigNavTrail(tree, "plugins/character");
+    expect(trail.map((navNode) => navNode.key)).toEqual(["plugins", "character"]);
+    const character = trail[trail.length - 1];
+    expect(character.children.map((child) => child.key)).not.toContain("selectedCharacterAssetIds");
+    expect(configLeafFields(character.node).map((field) => field.key)).toContain(
+      "selectedCharacterAssetIds",
+    );
     expect(firstConfigNavPath(tree)).toBe(tree[0].path);
     expect(findConfigNavTrail(tree, "")).toEqual([]);
     expect(findConfigNavNode(tree, "providers/missing")).toBeNull();
@@ -86,20 +86,20 @@ describe("configNavigation", () => {
     expect(document.default_provider).toBe("p1");
   });
 
-  it("materialises missing object containers but reads array slots as-is", () => {
+  it("materialises missing object containers along a trail", () => {
     const document = {};
     const tree = buildConfigNavTree(document);
     const providersTrail = findConfigNavTrail(tree, "providers");
     expect(ensureConfigNavContainer(document, providersTrail)).toEqual({});
     expect(document.providers).toEqual({});
 
-    const arrayDocument = { plugins: { character: {} } };
-    const arrayTrail = findConfigNavTrail(
-      buildConfigNavTree({ plugins: { character: { characterAssets: [] } } }),
-      "plugins/character/characterAssets",
+    const pluginDocument = {};
+    const characterTrail = findConfigNavTrail(
+      buildConfigNavTree(pluginDocument),
+      "plugins/character",
     );
-    expect(ensureConfigNavContainer(arrayDocument, arrayTrail)).toEqual([]);
-    expect(arrayDocument.plugins.character.characterAssets).toEqual([]);
+    expect(ensureConfigNavContainer(pluginDocument, characterTrail)).toEqual({});
+    expect(pluginDocument).toEqual({ plugins: { character: {} } });
   });
 
   it("classifies node kinds and their default values", () => {
@@ -107,7 +107,7 @@ describe("configNavigation", () => {
     expect(isConfigGroupNode({ kind: CONFIG_FORM_NODE_KIND.BOOLEAN })).toBe(false);
     expect(isConfigContainerNode({ kind: CONFIG_FORM_NODE_KIND.COLLECTION })).toBe(true);
     expect(isConfigContainerNode({ kind: CONFIG_FORM_NODE_KIND.OBJECT })).toBe(false);
-    expect(defaultValueForConfigNode({ kind: CONFIG_FORM_NODE_KIND.ARRAY })).toEqual([]);
+    expect(defaultValueForConfigNode({ kind: CONFIG_FORM_NODE_KIND.STRING_LIST })).toEqual([]);
     expect(defaultValueForConfigNode({ kind: CONFIG_FORM_NODE_KIND.RAW })).toEqual({});
     expect(defaultValueForConfigNode({ kind: CONFIG_FORM_NODE_KIND.BOOLEAN })).toBe(false);
     expect(defaultValueForConfigNode({ kind: CONFIG_FORM_NODE_KIND.STRING })).toBe("");
@@ -115,7 +115,7 @@ describe("configNavigation", () => {
 
   it("returns no entry nodes when the stored value shape does not match the node kind", () => {
     expect(configEntryNodes({ kind: CONFIG_FORM_NODE_KIND.COLLECTION, entry: {} }, [])).toEqual([]);
-    expect(configEntryNodes({ kind: CONFIG_FORM_NODE_KIND.ARRAY, item: {} }, {})).toEqual([]);
+    expect(configEntryNodes({ kind: CONFIG_FORM_NODE_KIND.OBJECT, children: [] }, {})).toEqual([]);
     expect(configLeafFields({ kind: CONFIG_FORM_NODE_KIND.COLLECTION })).toEqual([]);
   });
 

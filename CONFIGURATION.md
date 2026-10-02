@@ -5,7 +5,6 @@
 Based on latest examples:
 
 - `service/config/global.config.example.json`
-- `user-template/default-user/config.example.json`
 - `service/.env.example`
 
 ---
@@ -16,7 +15,6 @@ Based on latest examples:
 | ------------------- | ------------------------------------------- | ------------------------------------------ |
 | Global config       | `service/config/global.config.json`         | System-wide runtime config                 |
 | Global example      | `service/config/global.config.example.json` | Latest reference template                  |
-| User template       | `user-template/default-user/config.json`    | Default user config template               |
 | User runtime config | `workspace/<userId>/config.json`            | Per-user effective config                  |
 | System params       | `workspace/config-params.json`              | Placeholder values for all users           |
 | User params         | `workspace/<userId>/config-params.json`     | Placeholder values for one user            |
@@ -91,15 +89,15 @@ Session log WebSocket:
 
 ### 3.1 Core
 
-| Key                       | Type         | Description                             |
-| ------------------------- | ------------ | --------------------------------------- |
-| `workspace_root`          | string(path) | Workspace root directory                |
-| `workspace_template_path` | string(path) | Default user template path              |
-| `default_provider`        | string       | Default model provider alias            |
-| `memory_max_items`        | number       | Short-memory item limit                 |
-| `max_tool_loop_turns`     | number       | Max tool loop turns per request         |
-| `streaming`               | boolean      | Enable SSE streaming output             |
-| `run_timeout_ms`          | number       | Single run timeout (ms), e.g. `7200000` |
+| Key                       | Type         | Description                                     |
+| ------------------------- | ------------ | ----------------------------------------------- |
+| `workspace_root`          | string(path) | Workspace root directory                        |
+| `workspace_template_path` | string(path) | Workspace asset package path (services, skills) |
+| `default_provider`        | string       | Default model provider alias                    |
+| `memory_max_items`        | number       | Short-memory item limit                         |
+| `max_tool_loop_turns`     | number       | Max tool loop turns per request                 |
+| `streaming`               | boolean      | Enable SSE streaming output                     |
+| `run_timeout_ms`          | number       | Single run timeout (ms), e.g. `7200000`         |
 
 ### 3.2 Session
 
@@ -355,8 +353,8 @@ Example:
 `@noobot/agent-config-protocol` is the single repair contract for global config, the default-user config, and user configs.
 
 - Server startup repairs all three scopes; desktop startup repairs bundled/runtime config before use.
-- Missing defaulted nodes are added from the matching template.
-- Valid user values are preserved. Invalid values reset to a template default when one exists; invalid optional values are removed.
+- Missing defaulted nodes are generated from the protocol structure, global `baseValues`, and the model catalog. User configs are created from an empty document through the same repair.
+- Valid user values are preserved. Invalid values reset to the protocol default when one exists; invalid optional values are removed.
 - Unsupported nodes and system-owned nodes in user documents are removed.
 - Existing provider aliases are preserved. Their child fields are validated against the provider contract, and unsupported provider fields are removed.
 - Invalid JSON is moved to an `.invalid-<timestamp>.json` backup before a repaired document is written.

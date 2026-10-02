@@ -33,10 +33,7 @@ const { USER_OPTIONAL, GLOBAL_ONLY } = CONFIG_NODE_POLICY;
 const { BUILTIN, EXPLICIT } = CONFIG_ITEM_TYPE;
 const { USER, SYSTEM } = CONFIG_NODE_ACCESS;
 
-const SYSTEM_CONFIG_SCOPES = Object.freeze([
-  CONFIG_DOCUMENT_SCOPE.GLOBAL,
-  CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
-]);
+const SYSTEM_CONFIG_SCOPES = Object.freeze([CONFIG_DOCUMENT_SCOPE.GLOBAL]);
 
 const builtin = (options = {}) => ({
   itemType: BUILTIN,
@@ -227,14 +224,9 @@ const PLUGINS_STRUCTURE = object({
   character: object({
     enabled: boolean(),
     mode: pluginMode(),
-
-    characterAssets: array({
-      item: object({ id: string({ nonEmpty: true }), name: string(), path: string() }),
-      scopes: Object.freeze([CONFIG_DOCUMENT_SCOPE.USER_DEFAULT, CONFIG_DOCUMENT_SCOPE.USER]),
-    }),
     selectedCharacterAssetIds: array({
       item: string({ nonEmpty: true }),
-      scopes: Object.freeze([CONFIG_DOCUMENT_SCOPE.USER_DEFAULT, CONFIG_DOCUMENT_SCOPE.USER]),
+      scopes: Object.freeze([CONFIG_DOCUMENT_SCOPE.USER]),
     }),
   }),
 });
@@ -469,6 +461,12 @@ function collectScopeForbiddenPaths(node, path, scope, paths) {
   if (path.length && !structureAllowsScope(node, scope)) {
     paths.push([...path]);
     return;
+  }
+  const delegatedProperties = node.delegatedContract?.properties || node.properties;
+  if (delegatedProperties && typeof delegatedProperties === "object") {
+    for (const [key, child] of Object.entries(delegatedProperties)) {
+      collectScopeForbiddenPaths(child, [...path, key], scope, paths);
+    }
   }
   if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT && node.fields) {
     for (const [key, child] of Object.entries(node.fields)) {

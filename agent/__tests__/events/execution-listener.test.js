@@ -21,8 +21,8 @@ test("execution listener forwards the authoritative persistence scope and its de
   const persistenceScope = {
     scopeId: "agent:child-turn",
     parentSessionId: "parent-session",
-    relativeDir: "runtime/workflow/session/parent-session/child-turn",
-    allowedRoot: "runtime/workflow/session",
+    relativeDir: "runtime/plugin-data/workflow/session/parent-session/child-turn",
+    allowedRoot: "runtime/plugin-data/workflow/session",
   };
   const delivered = { dispatched: true, delivered: 1 };
   const listener = createExecutionEventListener({

@@ -16,8 +16,14 @@ import {
 } from "noobot-agent/session";
 import { HTTP_STATUS } from "noobot-agent/constants";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import {
+  WORKSPACE_LAYOUT,
+  WORKSPACE_PATH_SEGMENT_PATTERN,
+  resolvePluginAssetsRelativePath,
+  resolvePluginDataRelativePath,
+} from "@noobot/workspace-protocol";
 
-const assetIdPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/;
+const assetIdPattern = WORKSPACE_PATH_SEGMENT_PATTERN;
 const assetVersionPattern = /^[a-f0-9]{64}$/;
 
 function requireAssetToken(value, pattern, label) {
@@ -100,7 +106,7 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
   const resolveRoot = (userId) => {
     const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
     if (!workspacePath) throw new Error("workspace path not found");
-    return path.resolve(workspacePath, "runtime/plugin-assets", normalizedPluginId);
+    return path.resolve(workspacePath, resolvePluginAssetsRelativePath(normalizedPluginId));
   };
   const resolveVersionPath = (userId, assetId, version) =>
     path.resolve(
@@ -196,7 +202,7 @@ async function readSegmentedExecutionLogs({
   skip = 0,
   limit = Infinity,
 }) {
-  const sessionsRoot = path.resolve(workspacePath, "runtime/session");
+  const sessionsRoot = path.resolve(workspacePath, WORKSPACE_LAYOUT.SESSION_DIR);
   const eventsDir = path.resolve(sessionsRoot, rootSessionId, childSessionId, "execution-events");
   const relative = path.relative(sessionsRoot, eventsDir);
   if (
@@ -233,23 +239,89 @@ async function readSegmentedExecutionLogs({
   return logs;
 }
 
-export function createPluginServicePorts({ bot = null, translateText = null } = {}) {
-  function resolveWorkflowDir({ userId, sessionId, dialogProcessId, locale = "" }) {
+function createPluginSessionPort({ bot, pluginId, translateText }) {
+  const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
+  function resolveSessionDir({ userId, segments, locale = "" }) {
+    const notFound = () => new Error(translateText?.("common.notFound", locale) || "not found");
     const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
-    if (!workspacePath) throw new Error(translateText?.("common.notFound", locale) || "not found");
-    const outputDir = path.resolve(
-      workspacePath,
-      "runtime/workflow/session",
-      String(sessionId || "").trim(),
-      String(dialogProcessId || "").trim(),
-    );
-    const relative = path.relative(path.resolve(workspacePath), outputDir);
-    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-      throw new Error(translateText?.("common.notFound", locale) || "not found");
+    if (!workspacePath) throw notFound();
+    let relativeDir;
+    try {
+      relativeDir = resolvePluginDataRelativePath(
+        normalizedPluginId,
+        ...(Array.isArray(segments) ? segments : []).map((item) => String(item ?? "").trim()),
+      );
+    } catch {
+      throw notFound();
     }
-    return { workspacePath, outputDir };
+    return { workspacePath, outputDir: path.resolve(workspacePath, relativeDir) };
   }
+  return Object.freeze({
+    async readSnapshot({ userId, rootSessionId, segments, locale, executionPage = null }) {
+      const { workspacePath, outputDir } = resolveSessionDir({ userId, segments, locale });
+      let entries = [];
+      try {
+        entries = await fs.readdir(outputDir);
+      } catch (error) {
+        if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+      }
+      const snapshot = await readSessionArtifactSnapshot({
+        outputDir,
+        executionLogOptions: executionPage
+          ? { skip: executionPage.cursor, limit: executionPage.limit + 1 }
+          : {},
+      });
+      const childSessionId = String(
+        snapshot.sessionSummary?.sessionId || snapshot.session?.sessionId || "",
+      ).trim();
+      const scopedLogs = Array.isArray(snapshot.executionLogs) ? snapshot.executionLogs : [];
+      const hasScopedArtifacts =
+        entries.includes("execution-events") || entries.includes("execution-events.jsonl");
+      const executionLogs =
+        scopedLogs.length || (executionPage && hasScopedArtifacts)
+          ? scopedLogs
+          : await readSegmentedExecutionLogs({
+              workspacePath,
+              rootSessionId,
+              childSessionId,
+              skip: executionPage?.cursor || 0,
+              limit: executionPage ? executionPage.limit + 1 : Infinity,
+            });
+      return { ...snapshot, executionLogs, childSessionId, artifactNames: entries };
+    },
+    async readThinkingDetail({ userId, segments, dialogProcessId, turnScopeId, locale }) {
+      const { outputDir } = resolveSessionDir({ userId, segments, locale });
+      const { session, sessionSummary } = await readSessionArtifactSnapshot({
+        outputDir,
+        includeExecutionLogs: false,
+      });
+      const summaryMessage = (
+        Array.isArray(sessionSummary?.messages) ? sessionSummary.messages : []
+      ).find(
+        (message = {}) =>
+          String(message?.turnScopeId || "").trim() === String(turnScopeId || "").trim() &&
+          (!dialogProcessId ||
+            String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim()),
+      );
+      return buildThinkingDetailPayload(
+        {
+          exists: Boolean(session?.sessionId),
+          sessionId: String(session?.sessionId || "").trim(),
+          revision: String(summaryMessage?.thinkingDetailRef?.contentHash || "").trim(),
+          sessions: [
+            {
+              sessionId: String(session?.sessionId || "").trim(),
+              rawMessages: Array.isArray(session?.messages) ? session.messages : [],
+            },
+          ],
+        },
+        { dialogProcessId, turnScopeId },
+      );
+    },
+  });
+}
 
+export function createPluginServicePorts({ bot = null, translateText = null } = {}) {
   return Object.freeze({
     http: Object.freeze({ status: HTTP_STATUS }),
     workspaceAssets: Object.freeze({
@@ -258,89 +330,8 @@ export function createPluginServicePorts({ bot = null, translateText = null } = 
       },
     }),
     sessions: Object.freeze({
-      async readWorkflowSnapshot({
-        userId,
-        sessionId,
-        dialogProcessId,
-        locale,
-        executionPage = null,
-      }) {
-        const { workspacePath, outputDir } = resolveWorkflowDir({
-          userId,
-          sessionId,
-          dialogProcessId,
-          locale,
-        });
-        let entries = [];
-        try {
-          entries = await fs.readdir(outputDir);
-        } catch (error) {
-          if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
-        }
-        const snapshot = await readSessionArtifactSnapshot({
-          outputDir,
-          executionLogOptions: executionPage
-            ? { skip: executionPage.cursor, limit: executionPage.limit + 1 }
-            : {},
-        });
-        const childSessionId = String(
-          snapshot.sessionSummary?.sessionId || snapshot.session?.sessionId || "",
-        ).trim();
-        const scopedLogs = Array.isArray(snapshot.executionLogs) ? snapshot.executionLogs : [];
-        const hasScopedArtifacts =
-          entries.includes("execution-events") || entries.includes("execution-events.jsonl");
-        const executionLogs =
-          scopedLogs.length || (executionPage && hasScopedArtifacts)
-            ? scopedLogs
-            : await readSegmentedExecutionLogs({
-                workspacePath,
-                rootSessionId: sessionId,
-                childSessionId,
-                skip: executionPage?.cursor || 0,
-                limit: executionPage ? executionPage.limit + 1 : Infinity,
-              });
-        return { ...snapshot, executionLogs, childSessionId, artifactNames: entries };
-      },
-      async readWorkflowThinkingDetail({
-        userId,
-        sessionId,
-        routeDialogProcessId,
-        dialogProcessId,
-        turnScopeId,
-        locale,
-      }) {
-        const { outputDir } = resolveWorkflowDir({
-          userId,
-          sessionId,
-          dialogProcessId: routeDialogProcessId,
-          locale,
-        });
-        const { session, sessionSummary } = await readSessionArtifactSnapshot({
-          outputDir,
-          includeExecutionLogs: false,
-        });
-        const summaryMessage = (
-          Array.isArray(sessionSummary?.messages) ? sessionSummary.messages : []
-        ).find(
-          (message = {}) =>
-            String(message?.turnScopeId || "").trim() === String(turnScopeId || "").trim() &&
-            (!dialogProcessId ||
-              String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim()),
-        );
-        return buildThinkingDetailPayload(
-          {
-            exists: Boolean(session?.sessionId),
-            sessionId: String(session?.sessionId || "").trim(),
-            revision: String(summaryMessage?.thinkingDetailRef?.contentHash || "").trim(),
-            sessions: [
-              {
-                sessionId: String(session?.sessionId || "").trim(),
-                rawMessages: Array.isArray(session?.messages) ? session.messages : [],
-              },
-            ],
-          },
-          { dialogProcessId, turnScopeId },
-        );
+      forPlugin(pluginId) {
+        return createPluginSessionPort({ bot, pluginId, translateText });
       },
     }),
   });

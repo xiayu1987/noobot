@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { WORKSPACE_ASSET_SECTIONS, WORKSPACE_SECTIONS } from "../workspace-protocol/src/index.js";
 import { createRelativeSourceCollector } from "./lib/guard-scan.mjs";
 import { createGuardViolations } from "./lib/guard-violations.mjs";
 
@@ -62,7 +63,6 @@ for (const relativePath of [
   "agent/src/memory/short-memory/reader.js",
   "agent/src/memory/short-memory/writer.js",
   "agent/src/memory/short-memory/compactor.js",
-  "user-template/default-user/memory/long-memory-model.md",
 ]) {
   await assertAbsent(relativePath);
 }
@@ -78,6 +78,18 @@ for (const file of await sourceFiles("agent/src")) {
   const text = await readFile(path.join(ROOT, file), "utf8");
   for (const [pattern, label] of forbiddenAgentDefinitions) {
     if (pattern.test(text)) violations.push(`${file}: forbidden duplicate ${label}`);
+  }
+}
+
+const ASSET_PACKAGE_DIR = "user-template/default-user";
+const allowedAssetRoots = new Set(
+  WORKSPACE_ASSET_SECTIONS.flatMap((section) => WORKSPACE_SECTIONS[section].paths),
+);
+for (const name of await readdir(path.join(ROOT, ASSET_PACKAGE_DIR))) {
+  if (!allowedAssetRoots.has(name)) {
+    violations.push(
+      `${ASSET_PACKAGE_DIR}/${name}: asset package only carries workspace asset sections`,
+    );
   }
 }
 
