@@ -7,6 +7,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { toDateKey } from "../../utils/date.js";
 import { sanitizeFileName, dedupeTextList } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
+import { EXPERIENCE_PATCH_SCHEMA } from "@noobot/memory-protocol/experience/schema";
 
 export async function appendDailyDomainResults({
   storage,
@@ -33,7 +34,7 @@ export async function appendDailyDomainResults({
       experiences: item?.experiences,
       lessons: item?.lessons,
     });
-    await storage.appendText(filePath, block);
+    await storage.appendMemoryDocument(EXPERIENCE_PATCH_SCHEMA.daily.documentKind, filePath, block);
     appendedCount += 1;
     domainNames.push(domainName);
   }

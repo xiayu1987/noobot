@@ -38,8 +38,8 @@ export class ExperienceManager {
 
   async readMetadata(basePath) {
     const metadataPath = this.storage.experienceMetadataPath(basePath);
-    const text = String((await this.storage.readText(metadataPath, "")) || "").trim();
-    return text ? parseExperienceMetadataText(text) : normalizeExperienceMetadata(null);
+    if (!(await this.storage.fileExists(metadataPath))) return normalizeExperienceMetadata(null);
+    return parseExperienceMetadataText(await this.storage.readText(metadataPath, ""));
   }
 
   async writeMetadata(basePath, metadata = null) {

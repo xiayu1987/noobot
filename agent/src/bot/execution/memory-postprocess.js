@@ -84,7 +84,7 @@ export class MemoryPostProcessService {
     error,
     runtimeEventListener,
   }) {
-    emitEvent(runtimeEventListener, "memory_summary_failed", {
+    emitEvent(runtimeEventListener, BOT_MANAGE_LOG_EVENT.MEMORY_SUMMARY_FAILED, {
       sessionId,
       mode,
       stage,

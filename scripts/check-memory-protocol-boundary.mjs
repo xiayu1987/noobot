@@ -11,6 +11,7 @@ import { createGuardViolations } from "./lib/guard-violations.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PROTOCOL_DIR = "memory-protocol";
+const REPAIR_DIR = "memory-repair";
 const guard = createGuardViolations({ root: ROOT, label: "memory-protocol-boundary" });
 const { violations } = guard;
 const sourceFiles = createRelativeSourceCollector({
@@ -18,20 +19,25 @@ const sourceFiles = createRelativeSourceCollector({
   extensions: new Set([".js", ".mjs"]),
 });
 
-const ALLOWED_PACKAGE_IMPORTS = ["@noobot/context-protocol/"];
+const PACKAGE_IMPORT_ALLOWLIST = Object.freeze({
+  [PROTOCOL_DIR]: ["@noobot/context-protocol/"],
+  [REPAIR_DIR]: ["@noobot/memory-protocol/"],
+});
 
-for (const file of await sourceFiles(`${PROTOCOL_DIR}/src`)) {
-  const text = await readFile(path.join(ROOT, file), "utf8");
-  const imports = Array.from(text.matchAll(/from\s+["']([^"']+)["']/g), (match) => match[1]);
-  for (const specifier of imports) {
-    const escapesPackage =
-      specifier.startsWith(".") &&
-      !path.resolve(ROOT, path.dirname(file), specifier).startsWith(path.join(ROOT, PROTOCOL_DIR));
-    const isForeignPackage =
-      !specifier.startsWith(".") &&
-      !ALLOWED_PACKAGE_IMPORTS.some((prefix) => specifier.startsWith(prefix));
-    if (escapesPackage || isForeignPackage) {
-      violations.push(`${file}: memory-protocol must stay pure, forbidden import ${specifier}`);
+for (const [packageDir, allowedImports] of Object.entries(PACKAGE_IMPORT_ALLOWLIST)) {
+  for (const file of await sourceFiles(`${packageDir}/src`)) {
+    const text = await readFile(path.join(ROOT, file), "utf8");
+    const imports = Array.from(text.matchAll(/from\s+["']([^"']+)["']/g), (match) => match[1]);
+    for (const specifier of imports) {
+      const escapesPackage =
+        specifier.startsWith(".") &&
+        !path.resolve(ROOT, path.dirname(file), specifier).startsWith(path.join(ROOT, packageDir));
+      const isForeignPackage =
+        !specifier.startsWith(".") &&
+        !allowedImports.some((prefix) => specifier.startsWith(prefix));
+      if (escapesPackage || isForeignPackage) {
+        violations.push(`${file}: ${packageDir} must stay pure, forbidden import ${specifier}`);
+      }
     }
   }
 }
@@ -56,17 +62,19 @@ for (const relativePath of [
   "agent/src/memory/short-memory/reader.js",
   "agent/src/memory/short-memory/writer.js",
   "agent/src/memory/short-memory/compactor.js",
+  "user-template/default-user/memory/long-memory-model.md",
 ]) {
   await assertAbsent(relativePath);
 }
 
 const forbiddenAgentDefinitions = [
   [/LONG_MEMORY_METADATA/, "long memory metadata store"],
-  [/NOOBOT_LONG_MEMORY(?:_MODEL)?\/\d/, "long memory protocol header literal"],
+  [/NOOBOT_(?:LONG_MEMORY|EXPERIENCE)[A-Z_]*\/\d/, "memory document header literal"],
+  [/【经验教训字段模型】|# experience metadata \(text protocol\)/, "legacy memory title literal"],
+  [/function\s+ensureExperienceModelIfMissing\s*\(/, "read-time template fallback"],
   [/function\s+parseIdPatchCommands\s*\(/, "experience id patch parser"],
-  [/messageItem\??\.injectedMessage\s*===/, "hand-written injected message check"],
 ];
-for (const file of await sourceFiles("agent/src/memory")) {
+for (const file of await sourceFiles("agent/src")) {
   const text = await readFile(path.join(ROOT, file), "utf8");
   for (const [pattern, label] of forbiddenAgentDefinitions) {
     if (pattern.test(text)) violations.push(`${file}: forbidden duplicate ${label}`);

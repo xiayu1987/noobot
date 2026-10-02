@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Canonical Noobot short memory, long memory and experience text protocols",
   "exports": {
+    "./document": "./src/document.js",
     "./text": "./src/text.js",
     "./short-memory": "./src/short-memory.js",
     "./long-memory": "./src/long-memory.js",

@@ -134,6 +134,7 @@ export class SessionExecutionEngine {
       attach: this.attach,
       skill: this.skill,
       botManager: this.botManager,
+      errorLogger: this.errorLogger,
     });
   }
 

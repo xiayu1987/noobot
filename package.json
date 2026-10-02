@@ -48,6 +48,7 @@
     "runtime-events",
     "context-protocol",
     "memory-protocol",
+    "memory-repair",
     "agent-config-protocol",
     "execution-isolation-protocol",
     "security-assessment-protocol",

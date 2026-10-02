@@ -150,6 +150,7 @@ export function resolveContextMessageFlags(message = {}) {
     injected:
       readContextMessageField(message, "injectedMessage").toLowerCase() === "true" ||
       Boolean(readContextMessageField(message, "injectedBy")),
+    plugin: readContextMessageField(message, "pluginMessage").toLowerCase() === "true",
   };
 }
 

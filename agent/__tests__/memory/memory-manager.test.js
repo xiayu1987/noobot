@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 import { MemoryManager } from "../../src/memory/index.js";
@@ -57,9 +58,9 @@ async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
   throw lastError || new Error("waitFor failed");
 }
 
-const LONG_MEMORY_TEMPLATE_PATH = path.resolve(
-  import.meta.dirname,
-  "../../../user-template/default-user/memory/long-memory-model.md",
+const EMPTY_LONG_MEMORY_DOCUMENT = "NOOBOT_LONG_MEMORY/1\n";
+const TEMPLATE_EXPERIENCE_MODEL_PATH = fileURLToPath(
+  new URL("../../../user-template/default-user/memory/experience-model.md", import.meta.url),
 );
 
 async function createLongMemoryUserRoot() {
@@ -67,9 +68,10 @@ async function createLongMemoryUserRoot() {
   const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
+  await writeFile(path.join(userRoot, "memory/long-memory.md"), EMPTY_LONG_MEMORY_DOCUMENT);
   await writeFile(
-    path.join(userRoot, "memory/long-memory-model.md"),
-    await readFile(LONG_MEMORY_TEMPLATE_PATH, "utf8"),
+    path.join(userRoot, "memory/experience-model.md"),
+    await readFile(TEMPLATE_EXPERIENCE_MODEL_PATH, "utf8"),
   );
   return { workspaceRoot, userId, userRoot };
 }
@@ -99,11 +101,13 @@ test("readLongMemory renders the field protocol body without the document header
   assert.equal(await service.readLongMemory({ userId }), "personal_info.occupation：工程师");
 });
 
-test("readLongMemory ignores a document whose protocol header does not match", async () => {
+test("readLongMemory rejects a document whose protocol header does not match", async () => {
   const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
   await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. legacy numbered memory\n");
   const service = new MemoryManager({ workspaceRoot });
-  assert.equal(await service.readLongMemory({ userId }), "");
+  await assert.rejects(service.readLongMemory({ userId }), {
+    code: "MEMORY_DOCUMENT_HEADER_INVALID",
+  });
 });
 
 test("long memory update overwrites single fields and edits list fields by snapshot index", async () => {
@@ -134,7 +138,7 @@ test("long memory update overwrites single fields and edits list fields by snaps
       "DELETE interests.hobbies 1",
     ].join("\n"),
   );
-  assert.deepEqual(result, { changed: true, backupPath: "" });
+  assert.deepEqual(result, { changed: true });
   assert.equal(
     await readLongMemoryDoc(userRoot),
     [
@@ -161,7 +165,7 @@ test("long memory update rejects the whole batch when a list exceeds its limit",
   await assert.rejects(service.longMemory.update(userRoot, state, patch), {
     code: "LONG_MEMORY_PATCH_INVALID",
   });
-  await assert.rejects(readLongMemoryDoc(userRoot));
+  assert.equal(await readLongMemoryDoc(userRoot), EMPTY_LONG_MEMORY_DOCUMENT);
 });
 
 test("long memory update rejects commands that do not match the field kind", async () => {
@@ -192,29 +196,8 @@ test("long memory update treats an equivalent patch as unchanged", async () => {
     state,
     "UPDATE personal_info.occupation：工程师",
   );
-  assert.deepEqual(result, { changed: false, backupPath: "" });
+  assert.deepEqual(result, { changed: false });
   assert.equal(await readLongMemoryDoc(userRoot), document);
-});
-
-test("long memory update backs up a header-mismatched document and regenerates it", async () => {
-  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
-  await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. legacy numbered memory\n");
-  const service = new MemoryManager({ workspaceRoot });
-  const state = await service.longMemory.readState(userRoot);
-  assert.equal(state.valid, false);
-  const result = await service.longMemory.update(
-    userRoot,
-    state,
-    "UPDATE personal_info.occupation：工程师",
-    { now: new Date("2026-10-01T00:00:00.000Z") },
-  );
-  assert.equal(result.changed, true);
-  assert.equal(path.basename(result.backupPath), "long-memory.backup-2026-10-01T00-00-00-000Z.md");
-  assert.equal(await readFile(result.backupPath, "utf8"), "1. legacy numbered memory\n");
-  assert.equal(
-    await readLongMemoryDoc(userRoot),
-    "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n",
-  );
 });
 
 test("maybeSummarize applies the field patch from ModelPort text output", async () => {
@@ -331,7 +314,7 @@ test("maybeSummarize records an invalid long memory patch, continues later stage
     await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
   );
   assert.equal(shortDoc.items.length, 0);
-  await assert.rejects(readLongMemoryDoc(userRoot));
+  assert.equal(await readLongMemoryDoc(userRoot), EMPTY_LONG_MEMORY_DOCUMENT);
 });
 
 test("maybeSummarize rethrows abort errors from a stage", async () => {

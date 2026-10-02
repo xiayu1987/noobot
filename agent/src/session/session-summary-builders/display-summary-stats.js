@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   dedupeAttachmentRefs,
@@ -35,7 +36,7 @@ export function buildSessionDisplayStats({
   return {
     messageCount: messages.length,
     displayMessageCount: displayMessages.length,
-    injectedMessageCount: messages.filter((message) => message?.injectedMessage === true).length,
+    injectedMessageCount: messages.filter((message) => isInjectedMessage(message)).length,
     thinkingMessageCount: displayMessages.filter((message) => message?.hasThinkingDetails === true)
       .length,
     toolLogCount,

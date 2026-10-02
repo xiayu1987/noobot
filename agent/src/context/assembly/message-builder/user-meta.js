@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { HumanMessage } from "@langchain/core/messages";
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
@@ -131,12 +132,10 @@ export function buildHumanMessagesForUser(
 export function shouldBuildUserMetaForHistoryMessage(msg = {}, runtime = {}) {
   if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
   const messageOrigin = resolveContextMessageOrigin(msg);
-  const injectedMessage = readContextMessageField(msg, "injectedMessage").toLowerCase() === "true";
-  const pluginMessage = readContextMessageField(msg, "pluginMessage").toLowerCase() === "true";
   const injectedMessageType = readContextMessageField(msg, "injectedMessageType");
   if (messageOrigin === "internal") return false;
   if (msg?.phaseSummaryMemory === true) return false;
-  if (injectedMessage || pluginMessage) return false;
+  if (isInjectedOrPluginMessage(msg)) return false;
   if (injectedMessageType) return false;
   return messageOrigin === "natural" && resolveContextUserMetaMaterialized(msg);
 }

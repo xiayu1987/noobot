@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { readAttachIndex } from "../../artifacts/index.js";
 import { ATTACHMENT_SOURCE, findAttachmentByIdentity } from "@noobot/attachment-protocol";
 
@@ -22,7 +23,7 @@ export async function resolveExistingUserMessageAttachments(
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index];
     if (String(messageItem?.role || "").trim() !== "user") continue;
-    if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
+    if (isInjectedOrPluginMessage(messageItem)) continue;
     const sameTurn = turnScopeId && String(messageItem?.turnScopeId || "").trim() === turnScopeId;
     const sameDialog =
       dialogProcessId && String(messageItem?.dialogProcessId || "").trim() === dialogProcessId;

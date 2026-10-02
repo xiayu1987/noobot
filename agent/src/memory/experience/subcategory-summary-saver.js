@@ -53,7 +53,7 @@ export async function saveSubcategoryDomainSummary({
         "",
         ...renderSectionLines(subcategory, schema.sections),
       ].join("\n");
-      await storage.appendText(filePath, block);
+      await storage.appendMemoryDocument(schema.documentKind, filePath, block);
       writtenCount += 1;
     }
   }

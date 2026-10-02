@@ -8,14 +8,15 @@ import {
   resolveContextMessageRole,
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
+import { isInjectedMessage, readMessageField } from "@noobot/context-protocol/policy/message";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
   const expectedRole = String(role || "").trim();
   const expectedType = String(type || "").trim();
   return (
-    message?.injectedMessage === true &&
-    String(message?.injectedBy || "").trim() === "harness-plugin" &&
+    isInjectedMessage(message) &&
+    readMessageField(message, "injectedBy") === "harness-plugin" &&
     (!expectedRole || String(message?.role || "").trim() === expectedRole) &&
     (!expectedType || String(message?.injectedMessageType || "").trim() === expectedType)
   );

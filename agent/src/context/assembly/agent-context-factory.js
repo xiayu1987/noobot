@@ -21,6 +21,7 @@ export class AgentContextFactory {
     attach = null,
     skill = null,
     botManager = null,
+    errorLogger = null,
   } = {}) {
     this.globalConfig = globalConfig;
     this.session = session;
@@ -28,6 +29,7 @@ export class AgentContextFactory {
     this.attach = attach;
     this.skill = skill;
     this.botManager = botManager;
+    this.errorLogger = errorLogger;
   }
 
   buildContextBuilder({
@@ -59,6 +61,7 @@ export class AgentContextFactory {
         attachmentService: this.attach,
         skillService: this.skill,
         botManager: this.botManager,
+        errorLogger: this.errorLogger,
         userInteractionBridge,
       },
       sessionContext: {

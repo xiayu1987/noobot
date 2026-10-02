@@ -52,6 +52,7 @@ export const BOT_MANAGE_LOG_SOURCE = {
   ASYNC_RUN_SESSION: "AsyncSessionRunner.runAsyncSession",
   MEMORY_SUMMARIZE: "SessionExecutionEngine._runMemorySummarizeFlow",
   MEMORY_POSTPROCESS: "SessionExecutionEngine._runMemoryPostProcessFlow",
+  MEMORY_INJECTION: "ContextBuilder._resolveLongMemoryForInjection",
 };
 
 export const BOT_MANAGE_LOG_EVENT = {
@@ -59,6 +60,7 @@ export const BOT_MANAGE_LOG_EVENT = {
   RUN_ASYNC_SESSION_FAILED: "run_async_session_failed",
   MEMORY_SUMMARY_FAILED: "memory_summary_failed",
   MEMORY_POSTPROCESS_FAILED: "memory_postprocess_failed",
+  MEMORY_INJECTION_FAILED: "memory_injection_failed",
 };
 
 export const CALLER_ROLE = {

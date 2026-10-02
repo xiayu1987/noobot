@@ -6,27 +6,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LONG_MEMORY_DOCUMENT_HEADER,
   LONG_MEMORY_ERROR_CODE,
-  LONG_MEMORY_MODEL_HEADER,
+  LONG_MEMORY_FIELD_KIND,
+  LONG_MEMORY_MODEL,
   applyLongMemoryPatch,
+  createLongMemoryModel,
   isSameLongMemory,
   parseLongMemoryDocument,
-  parseLongMemoryModel,
   parseLongMemoryPatch,
   renderLongMemoryDocument,
   renderLongMemoryFieldsForPrompt,
 } from "../src/long-memory.js";
+import {
+  MEMORY_DOCUMENT_ERROR_CODE,
+  MEMORY_DOCUMENT_HEADER,
+  MEMORY_DOCUMENT_KIND,
+} from "../src/document.js";
 
-const MODEL_TEXT = [
-  LONG_MEMORY_MODEL_HEADER,
-  "# comment",
-  "",
-  "personal.city | single | 城市",
-  "interests.hobbies | list:2 | 爱好",
-].join("\n");
+const LONG_MEMORY_DOCUMENT_HEADER = MEMORY_DOCUMENT_HEADER[MEMORY_DOCUMENT_KIND.LONG_MEMORY];
 
-const model = parseLongMemoryModel(MODEL_TEXT);
+const model = createLongMemoryModel([
+  { key: "personal.city", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "城市" },
+  { key: "interests.hobbies", kind: LONG_MEMORY_FIELD_KIND.LIST, maxItems: 2, description: "爱好" },
+]);
 
 function rejectsWith(code, fn) {
   assert.throws(fn, (error) => error.code === code);
@@ -36,7 +38,7 @@ function applyText(values, text) {
   return applyLongMemoryPatch(model, values, parseLongMemoryPatch(model, text));
 }
 
-test("model requires header and unique valid fields", () => {
+test("model requires unique valid fields", () => {
   assert.deepEqual(
     model.fields.map((f) => [f.key, f.kind, f.maxItems]),
     [
@@ -44,15 +46,20 @@ test("model requires header and unique valid fields", () => {
       ["interests.hobbies", "list", 2],
     ],
   );
-  rejectsWith(LONG_MEMORY_ERROR_CODE.MODEL_INVALID, () =>
-    parseLongMemoryModel("personal.city | single | 城市"),
+  const single = { key: "a.b", kind: LONG_MEMORY_FIELD_KIND.SINGLE, description: "x" };
+  assert.throws(() => createLongMemoryModel([single, single]), TypeError);
+  assert.throws(
+    () => createLongMemoryModel([{ ...single, kind: LONG_MEMORY_FIELD_KIND.LIST, maxItems: 0 }]),
+    TypeError,
   );
-  rejectsWith(LONG_MEMORY_ERROR_CODE.MODEL_INVALID, () =>
-    parseLongMemoryModel(`${LONG_MEMORY_MODEL_HEADER}\na.b | single | x\na.b | single | y`),
-  );
-  rejectsWith(LONG_MEMORY_ERROR_CODE.MODEL_INVALID, () =>
-    parseLongMemoryModel(`${LONG_MEMORY_MODEL_HEADER}\na.b | list:0 | x`),
-  );
+  assert.throws(() => createLongMemoryModel([{ ...single, maxItems: 3 }]), TypeError);
+  assert.throws(() => createLongMemoryModel([{ ...single, key: "ab" }]), TypeError);
+});
+
+test("canonical model declares the built-in long memory fields", () => {
+  assert.equal(LONG_MEMORY_MODEL.fields.length, 18);
+  assert.equal(LONG_MEMORY_MODEL.byKey.get("history_preferences.common_topics").maxItems, 8);
+  assert.equal(LONG_MEMORY_MODEL.byKey.get("personal_info.location").kind, "single");
 });
 
 test("document round-trips and rejects malformed content", () => {
@@ -74,10 +81,11 @@ test("document round-trips and rejects malformed content", () => {
       parseLongMemoryDocument(model, renderLongMemoryDocument(model, values)),
     ),
   );
-  assert.equal(parseLongMemoryDocument(model, "").size, 0);
   assert.equal(parseLongMemoryDocument(model, LONG_MEMORY_DOCUMENT_HEADER).size, 0);
+  for (const doc of ["", "1. legacy item"]) {
+    rejectsWith(MEMORY_DOCUMENT_ERROR_CODE, () => parseLongMemoryDocument(model, doc));
+  }
   const invalid = [
-    "1. legacy item",
     `${LONG_MEMORY_DOCUMENT_HEADER}\nunknown.key：x`,
     `${LONG_MEMORY_DOCUMENT_HEADER}\ninterests.hobbies：\n2. 跑步`,
     `${LONG_MEMORY_DOCUMENT_HEADER}\ninterests.hobbies：\n1. a\n2. b\n3. c`,

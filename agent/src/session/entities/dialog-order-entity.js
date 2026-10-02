@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 
 function normalizeText(value) {
@@ -12,7 +13,7 @@ function normalizeText(value) {
 
 function isDialogAnchor(message = {}) {
   if (normalizeText(message?.role) !== "user") return false;
-  if (message?.injectedMessage === true || message?.pluginMessage === true) return false;
+  if (isInjectedOrPluginMessage(message)) return false;
   if (normalizeText(message?.injectedMessageType)) return false;
   return normalizeText(message?.messageOrigin).toLowerCase() !== "internal";
 }

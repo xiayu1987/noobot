@@ -1,0 +1,17 @@
+{
+  "name": "@noobot/memory-repair",
+  "version": "4.3.7",
+  "private": true,
+  "type": "module",
+  "description": "Explicit migrations of historical memory documents into the canonical Noobot memory protocol",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test \"__tests__/**/*.test.js\""
+  },
+  "dependencies": {
+    "@noobot/memory-protocol": "file:../memory-protocol"
+  }
+}

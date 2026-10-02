@@ -5,45 +5,17 @@
  */
 import { sanitizeFileName } from "@noobot/memory-protocol/text";
 import { filePath as path } from "@noobot/path-resolver";
-import { ensureUserWorkspaceMissingFilesFromTemplate } from "../../../workspace-lifecycle/index.js";
 import {
   normalizeExperienceModelTree,
   parseExperienceModelText,
   renderExperienceModelText,
 } from "@noobot/memory-protocol/experience/model-text";
 
-function resolveUserIdFromBasePath(storage, basePath = "") {
-  const workspaceRoot = path.resolve(String(storage?.globalConfig?.workspaceRoot || "").trim());
-  const normalizedBasePath = path.resolve(String(basePath || "").trim());
-  if (!workspaceRoot || !normalizedBasePath) return "";
-  const relative = path.relative(workspaceRoot, normalizedBasePath);
-  if (!relative || relative.startsWith("..")) return "";
-  const userId = String(relative || "").split(path.sep)[0] || "";
-  return String(userId || "").trim();
-}
-
-async function ensureExperienceModelIfMissing(storage, basePath = "") {
-  const modelPath = storage.experienceModelPath(basePath);
-  if (await storage.fileExists(modelPath)) return true;
-  const workspaceRoot = String(storage?.globalConfig?.workspaceRoot || "").trim();
-  const workspaceTemplatePath = String(storage?.globalConfig?.workspaceTemplatePath || "").trim();
-  const userId = resolveUserIdFromBasePath(storage, basePath);
-  if (!workspaceRoot || !workspaceTemplatePath || !userId) return false;
-  await ensureUserWorkspaceMissingFilesFromTemplate({
-    workspaceRoot,
-    workspaceTemplatePath,
-    userId,
-    relativePaths: ["memory/experience-model.md"],
-  });
-  return storage.fileExists(modelPath);
-}
-
 export async function readExperienceModel(storage, basePath = "") {
   if (!basePath) return {};
-  const modelPath = storage.experienceModelPath(basePath);
-  await ensureExperienceModelIfMissing(storage, basePath);
-  const rawText = await storage.readText(modelPath, "");
-  return String(rawText || "").trim() ? parseExperienceModelText(rawText) : {};
+  return parseExperienceModelText(
+    await storage.readText(storage.experienceModelPath(basePath), ""),
+  );
 }
 
 export async function writeExperienceModel(storage, basePath = "", payload = {}) {

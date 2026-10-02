@@ -23,6 +23,10 @@ import {
 } from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/assembly/diagnostics";
+import { emitEvent } from "../events/index.js";
+import { isAbortError } from "../shared/utils/error-utils.js";
+import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/constants.js";
+import { MEMORY_SUMMARY_STAGE } from "../memory/stage-runner.js";
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
@@ -59,6 +63,7 @@ export class ContextBuilder {
       attachmentService,
       skillService,
       botManager = null,
+      errorLogger = null,
       userInteractionBridge = null,
       runConfig = {},
       systemMessages = [],
@@ -82,6 +87,10 @@ export class ContextBuilder {
     this.attachmentService = attachmentService;
     this.skillService = skillService;
     this.botManager = botManager;
+    if (memoryService && typeof errorLogger?.log !== "function") {
+      throw new TypeError("ContextBuilder with memoryService requires errorLogger.log");
+    }
+    this.errorLogger = errorLogger;
     this.userInteractionBridge = userInteractionBridge;
     this.runConfig = runConfig;
     this.contextPolicy = normalizeContextPolicy(runConfig?.contextPolicy);
@@ -289,6 +298,32 @@ export class ContextBuilder {
     });
   }
 
+  async _resolveLongMemoryForInjection() {
+    try {
+      return await resolveLongMemory({
+        memoryService: this.memoryService,
+        runtimeBasePath: this._resolveRuntimeBasePath(),
+        userId: this.userId,
+      });
+    } catch (error) {
+      if (isAbortError(error, this.abortSignal)) throw error;
+      emitEvent(this.eventListener, BOT_MANAGE_LOG_EVENT.MEMORY_INJECTION_FAILED, {
+        sessionId: this.sessionId || "",
+        stage: MEMORY_SUMMARY_STAGE.LONG_MEMORY,
+        error: error?.message || String(error),
+      });
+      await this.errorLogger.log({
+        userId: this.userId,
+        sessionId: this.sessionId || "",
+        source: BOT_MANAGE_LOG_SOURCE.MEMORY_INJECTION,
+        event: BOT_MANAGE_LOG_EVENT.MEMORY_INJECTION_FAILED,
+        error,
+        extra: { stage: MEMORY_SUMMARY_STAGE.LONG_MEMORY },
+      });
+      return "";
+    }
+  }
+
   async _buildSessionContext({ dialogProcessId = "", mode = "" } = {}) {
     const sessionProjection = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
@@ -306,11 +341,7 @@ export class ContextBuilder {
         records: summarizeDiagnosticMessages(sessionRecords),
       },
     );
-    const longMemory = await resolveLongMemory({
-      memoryService: this.memoryService,
-      runtimeBasePath: this._resolveRuntimeBasePath(),
-      userId: this.userId,
-    });
+    const longMemory = await this._resolveLongMemoryForInjection();
     const { systemContext, runtimeBasePath, sessionTree, rootSessionId, attachments } =
       await this._buildSystemContext({ dialogProcessId, longMemory });
     return this.buildAgentContext(

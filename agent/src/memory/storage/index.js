@@ -16,7 +16,6 @@ import {
   yearlySummaryDir,
   dailySummaryDateDir,
   sessionFile,
-  longMemoryModelPath,
 } from "./paths.js";
 import {
   fileExists,
@@ -29,6 +28,7 @@ import {
   safeReadDirEntries,
   removeDir,
 } from "./file-ops.js";
+import { appendMemoryDocumentBlock } from "@noobot/memory-protocol/document";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -93,10 +93,6 @@ export class StorageManager {
     return sessionFile(basePath, sessionId, parentSessionId);
   }
 
-  longMemoryModelPath(basePath) {
-    return longMemoryModelPath(basePath);
-  }
-
   async fileExists(filePath = "") {
     return fileExists(filePath);
   }
@@ -115,6 +111,11 @@ export class StorageManager {
 
   async appendText(filePath, content = "") {
     await appendText(filePath, content);
+  }
+
+  async appendMemoryDocument(kind, filePath, block = "") {
+    const existing = await readText(filePath, "");
+    await writeText(filePath, appendMemoryDocumentBlock(kind, existing, block));
   }
 
   async writeText(filePath, content = "") {

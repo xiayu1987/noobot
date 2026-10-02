@@ -3,9 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { MEMORY_DOCUMENT_KIND } from "../document.js";
 
 export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
   daily: Object.freeze({
+    documentKind: MEMORY_DOCUMENT_KIND.DAILY_SUMMARY,
     idPrefix: "D",
     parseErrorCode: "daily_patch_command_not_found",
     promptProtocol:
@@ -33,6 +35,7 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     requiredFields: Object.freeze(["domain_name"]),
   }),
   weekly: Object.freeze({
+    documentKind: MEMORY_DOCUMENT_KIND.WEEKLY_SUMMARY,
     idPrefix: "W",
     parseErrorCode: "weekly_patch_command_not_found",
     promptProtocol:
@@ -56,6 +59,7 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     requiredFields: Object.freeze(["category_name"]),
   }),
   monthly: Object.freeze({
+    documentKind: MEMORY_DOCUMENT_KIND.MONTHLY_SUMMARY,
     idPrefix: "M",
     parseErrorCode: "monthly_patch_command_not_found",
     promptProtocol:
@@ -89,6 +93,7 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     ]),
   }),
   yearly: Object.freeze({
+    documentKind: MEMORY_DOCUMENT_KIND.YEARLY_SUMMARY,
     idPrefix: "Y",
     parseErrorCode: "yearly_patch_command_not_found",
     promptProtocol:
