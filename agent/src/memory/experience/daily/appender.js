@@ -5,7 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { toDateKey } from "../../utils/date.js";
-import { sanitizeFileName, dedupeTextList } from "../../utils/text.js";
+import { sanitizeFileName, dedupeTextList } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
 
 export async function appendDailyDomainResults({

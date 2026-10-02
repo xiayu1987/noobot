@@ -48,12 +48,8 @@ function resolveUserName(input) {
 function buildTurnEntity(service, session, resolvedParentSessionId, input) {
   const task = resolveTaskFields(session, input);
   const contextPolicy = resolveToolContextPolicy(input);
-  const hasPresentation = typeof input.chatPresentation === "boolean";
-  const chatPresentation = hasPresentation
-    ? input.chatPresentation
-    : input.type === "context_control"
-      ? false
-      : undefined;
+  const chatPresentation =
+    typeof input.chatPresentation === "boolean" ? input.chatPresentation : undefined;
   return normalizeMessageEntity(
     {
       role: input.role,

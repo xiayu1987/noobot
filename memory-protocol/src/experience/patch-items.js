@@ -3,12 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  parseIdPatchCommands,
-  parseKvPayload,
-  parseListField,
-} from "../parsers/id-patch-parser.js";
-import { dedupeTextList, sanitizeFileName } from "../utils/text.js";
+import { parseIdPatchCommands, parseKvPayload, parseListField } from "./id-patch.js";
+import { dedupeTextList, sanitizeFileName } from "../text.js";
 
 function reportPatchParseError({
   rawContent = "",

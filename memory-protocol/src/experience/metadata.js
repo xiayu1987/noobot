@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { dedupeTextList } from "../utils/text.js";
+import { dedupeTextList } from "../text.js";
 
 function normalizeWeeklyBatches(batches = []) {
   return (Array.isArray(batches) ? batches : [])
@@ -48,9 +48,7 @@ export function parseExperienceMetadataText(raw = "") {
       continue;
     }
     const weekMatched =
-      /^WEEKLY:\s*week=([^\s]+)\s+dates=([^\s]*)\s+domains=(\d+)\s+created_at=(.+)$/i.exec(
-        line,
-      );
+      /^WEEKLY:\s*week=([^\s]+)\s+dates=([^\s]*)\s+domains=(\d+)\s+created_at=(.+)$/i.exec(line);
     if (weekMatched) {
       out.weeklyBatches.push({
         weekLabel: weekMatched[1],

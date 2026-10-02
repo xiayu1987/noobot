@@ -9,11 +9,9 @@ import assert from "node:assert/strict";
 import {
   EXPERIENCE_PATCH_SCHEMA,
   getExperiencePatchPromptMeta,
-} from "../../src/memory/experience/schema-config.js";
-import { collectPatchItemsByFieldMap } from "../../src/memory/experience/patch-utils.js";
-import { normalizeWeeklySummaryOutput } from "../../src/memory/experience/weekly/parser.js";
-import { normalizeMonthlySummaryOutput } from "../../src/memory/experience/monthly/parser.js";
-import { normalizeYearlySummaryOutput } from "../../src/memory/experience/yearly/parser.js";
+} from "@noobot/memory-protocol/experience/schema";
+import { collectPatchItemsByFieldMap } from "@noobot/memory-protocol/experience/patch-items";
+import { normalizeDomainSummaryOutput } from "@noobot/memory-protocol/experience/summary-output";
 import { buildDailyExperiencePrompt } from "../../src/memory/prompts/builders.js";
 import { SYSTEM_PROMPT_FORMATTER_I18N as EN_AGENT_PROMPT_I18N } from "../../../i18n/src/agent/locales/en-US/system-prompt.js";
 
@@ -54,14 +52,15 @@ test("collectPatchItemsByFieldMap maps aliases/types and required fields", () =>
 
 test("weekly parser handles patch commands and error callback", () => {
   const errors = [];
-  const weekly = normalizeWeeklySummaryOutput(
-    [
+  const weekly = normalizeDomainSummaryOutput({
+    schemaKey: "weekly",
+    rawContent: [
       'ADD W[1] category="工程/质量" experiences="经验A || 经验B" lessons="教训A"',
       'UPDATE W[1] category="工程/质量" experiences="经验C" lessons="教训B"',
     ].join("\n"),
-    "技术域",
-    { onParseError: (payload) => errors.push(payload) },
-  );
+    fallbackDomainName: "技术域",
+    onParseError: (payload) => errors.push(payload),
+  });
   assert.equal(errors.length, 0);
   assert.equal(weekly.domain_name, "技术域");
   assert.deepEqual(weekly.categories, [
@@ -72,7 +71,10 @@ test("weekly parser handles patch commands and error callback", () => {
     },
   ]);
 
-  const failed = normalizeWeeklySummaryOutput("invalid output", "技术域", {
+  const failed = normalizeDomainSummaryOutput({
+    schemaKey: "weekly",
+    rawContent: "invalid output",
+    fallbackDomainName: "技术域",
     onParseError: (payload) => errors.push(payload),
   });
   assert.equal(failed.categories.length, 0);
@@ -80,13 +82,14 @@ test("weekly parser handles patch commands and error callback", () => {
 });
 
 test("monthly/yearly parser groups category sub-items by schema", () => {
-  const monthly = normalizeMonthlySummaryOutput(
-    [
+  const monthly = normalizeDomainSummaryOutput({
+    schemaKey: "monthly",
+    rawContent: [
       'ADD M[1] category="研发效能" subcategory="测试" patterns="回归频繁" methodologies="自动化优先"',
       'ADD M[2] category="研发效能" subcategory="发布" patterns="窗口固定" methodologies="灰度发布"',
     ].join("\n"),
-    "技术域",
-  );
+    fallbackDomainName: "技术域",
+  });
   assert.equal(monthly.categories.length, 1);
   assert.equal(monthly.categories[0].category_name, "研发效能");
   assert.deepEqual(
@@ -94,10 +97,12 @@ test("monthly/yearly parser groups category sub-items by schema", () => {
     ["测试", "发布"],
   );
 
-  const yearly = normalizeYearlySummaryOutput(
-    'ADD Y[1] category="系统设计" subcategory="稳定性" principles="先观测" reflections="容量前置"',
-    "技术域",
-  );
+  const yearly = normalizeDomainSummaryOutput({
+    schemaKey: "yearly",
+    rawContent:
+      'ADD Y[1] category="系统设计" subcategory="稳定性" principles="先观测" reflections="容量前置"',
+    fallbackDomainName: "技术域",
+  });
   assert.deepEqual(yearly.categories, [
     {
       category_name: "系统设计",

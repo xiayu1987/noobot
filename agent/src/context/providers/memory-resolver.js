@@ -8,6 +8,6 @@ export async function resolveLongMemory({
   runtimeBasePath = "",
   userId = "",
 } = {}) {
-  if (!memoryService || !runtimeBasePath) return [];
+  if (!memoryService || !runtimeBasePath) return "";
   return memoryService.readLongMemory({ userId });
 }

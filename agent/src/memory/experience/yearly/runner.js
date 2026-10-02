@@ -6,7 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { buildYearlySummaryPrompt } from "../../prompts/builders.js";
 import { buildSubcategoryModelEntries } from "../model-entry-builder.js";
-import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
+import { assertNotAborted } from "../../../shared/utils/error-utils.js";
 
 export async function runYearlySummaryIfNeeded({
   storage,
@@ -35,7 +35,7 @@ export async function runYearlySummaryIfNeeded({
 
     const savedDomains = [];
     for (const [domainName, mergedText] of mergedDomainMap.entries()) {
-      throwIfAborted(abortSignal);
+      assertNotAborted(abortSignal);
       const modelTree = await readExperienceModel(basePath);
       const knownDomainTree = modelTree?.[domainName] || {};
       const prompt = buildYearlySummaryPrompt({
@@ -44,18 +44,12 @@ export async function runYearlySummaryIfNeeded({
         knownTreeText: JSON.stringify(knownDomainTree, null, 2),
         mergedText,
       });
-      let parsedSummary = { domain_name: domainName, categories: [] };
-      try {
-        const output = await invokeModel({
-          prompt,
-          flow: "memory.experience.yearly",
-          purpose: "memory_experience_yearly",
-        });
-        parsedSummary = normalizeYearlySummary(output.text, domainName, { basePath });
-      } catch (error) {
-        if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
-        parsedSummary = { domain_name: domainName, categories: [] };
-      }
+      const output = await invokeModel({
+        prompt,
+        flow: "memory.experience.yearly",
+        purpose: "memory_experience_yearly",
+      });
+      const parsedSummary = normalizeYearlySummary(output.text, domainName, { basePath });
       const saved = await saveYearlySummary({
         basePath,
         yearKey,

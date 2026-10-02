@@ -130,8 +130,6 @@ function applyPresentationIdentity(target, message) {
 function applyChatPresentation(target, message) {
   if (typeof message?.chatPresentation === "boolean") {
     target.chatPresentation = message.chatPresentation;
-  } else if (target.type === "context_control") {
-    target.chatPresentation = false;
   }
 }
 

@@ -6,7 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { buildMonthlySummaryPrompt } from "../../prompts/builders.js";
 import { buildSubcategoryModelEntries } from "../model-entry-builder.js";
-import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
+import { assertNotAborted } from "../../../shared/utils/error-utils.js";
 
 function toMonthKey(weekKeys = []) {
   const firstWeek = String((Array.isArray(weekKeys) ? weekKeys[0] : "") || "").trim();
@@ -49,7 +49,7 @@ export async function runMonthlySummaryIfNeeded({
 
     const savedDomains = [];
     for (const [domainName, mergedText] of mergedDomainMap.entries()) {
-      throwIfAborted(abortSignal);
+      assertNotAborted(abortSignal);
       const modelTree = await readExperienceModel(basePath);
       const knownDomainTree = modelTree?.[domainName] || {};
       const prompt = buildMonthlySummaryPrompt({
@@ -58,18 +58,12 @@ export async function runMonthlySummaryIfNeeded({
         knownTreeText: JSON.stringify(knownDomainTree, null, 2),
         mergedText,
       });
-      let parsedSummary = { domain_name: domainName, categories: [] };
-      try {
-        const output = await invokeModel({
-          prompt,
-          flow: "memory.experience.monthly",
-          purpose: "memory_experience_monthly",
-        });
-        parsedSummary = normalizeMonthlySummary(output.text, domainName, { basePath });
-      } catch (error) {
-        if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
-        parsedSummary = { domain_name: domainName, categories: [] };
-      }
+      const output = await invokeModel({
+        prompt,
+        flow: "memory.experience.monthly",
+        purpose: "memory_experience_monthly",
+      });
+      const parsedSummary = normalizeMonthlySummary(output.text, domainName, { basePath });
       const saved = await saveMonthlySummary({
         basePath,
         monthKey,

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 import { MemoryManager } from "../../src/memory/index.js";
 import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
@@ -56,16 +57,312 @@ async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
   throw lastError || new Error("waitFor failed");
 }
 
-test("readLongMemory only returns static long memory content", async () => {
+const LONG_MEMORY_TEMPLATE_PATH = path.resolve(
+  import.meta.dirname,
+  "../../../user-template/default-user/memory/long-memory-model.md",
+);
+
+async function createLongMemoryUserRoot() {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
-  await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. static long memory\n");
+  await writeFile(
+    path.join(userRoot, "memory/long-memory-model.md"),
+    await readFile(LONG_MEMORY_TEMPLATE_PATH, "utf8"),
+  );
+  return { workspaceRoot, userId, userRoot };
+}
 
+function readLongMemoryDoc(userRoot) {
+  return readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
+}
+
+async function writeShortMemoryItems(userRoot, count = 30) {
+  const shortItems = Array.from({ length: count }, (_, index) => ({
+    records: [{ role: "user", content: `用户消息 ${index + 1}` }],
+    createdAt: new Date(2026, 0, index + 1).toISOString(),
+  }));
+  await writeFile(
+    path.join(userRoot, "memory/short-memory.json"),
+    JSON.stringify({ items: shortItems }, null, 2),
+  );
+}
+
+test("readLongMemory renders the field protocol body without the document header", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeFile(
+    path.join(userRoot, "memory/long-memory.md"),
+    "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n",
+  );
   const service = new MemoryManager({ workspaceRoot });
-  const content = await service.readLongMemory({ userId });
-  assert.equal(content, "1. static long memory");
+  assert.equal(await service.readLongMemory({ userId }), "personal_info.occupation：工程师");
+});
+
+test("readLongMemory ignores a document whose protocol header does not match", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. legacy numbered memory\n");
+  const service = new MemoryManager({ workspaceRoot });
+  assert.equal(await service.readLongMemory({ userId }), "");
+});
+
+test("long memory update overwrites single fields and edits list fields by snapshot index", async () => {
+  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
+  await writeFile(
+    path.join(userRoot, "memory/long-memory.md"),
+    [
+      "NOOBOT_LONG_MEMORY/1",
+      "",
+      "personality.decision_style：先调研",
+      "",
+      "interests.hobbies：",
+      "1. 跑步",
+      "2. 阅读",
+      "3. 摄影",
+      "",
+    ].join("\n"),
+  );
+  const service = new MemoryManager({ workspaceRoot });
+  const state = await service.longMemory.readState(userRoot);
+  const result = await service.longMemory.update(
+    userRoot,
+    state,
+    [
+      "UPDATE personality.decision_style：先验证再决定",
+      "ADD interests.hobbies：围棋",
+      "UPDATE interests.hobbies 3：风光摄影",
+      "DELETE interests.hobbies 1",
+    ].join("\n"),
+  );
+  assert.deepEqual(result, { changed: true, backupPath: "" });
+  assert.equal(
+    await readLongMemoryDoc(userRoot),
+    [
+      "NOOBOT_LONG_MEMORY/1",
+      "",
+      "interests.hobbies：",
+      "1. 阅读",
+      "2. 风光摄影",
+      "3. 围棋",
+      "",
+      "personality.decision_style：先验证再决定",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("long memory update rejects the whole batch when a list exceeds its limit", async () => {
+  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
+  const service = new MemoryManager({ workspaceRoot });
+  const state = await service.longMemory.readState(userRoot);
+  const patch = ["UPDATE personal_info.occupation：工程师"]
+    .concat(Array.from({ length: 6 }, (_, index) => `ADD interests.hobbies：爱好${index + 1}`))
+    .join("\n");
+  await assert.rejects(service.longMemory.update(userRoot, state, patch), {
+    code: "LONG_MEMORY_PATCH_INVALID",
+  });
+  await assert.rejects(readLongMemoryDoc(userRoot));
+});
+
+test("long memory update rejects commands that do not match the field kind", async () => {
+  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
+  const service = new MemoryManager({ workspaceRoot });
+  const state = await service.longMemory.readState(userRoot);
+  for (const line of [
+    "ADD personal_info.occupation：工程师",
+    "UPDATE interests.hobbies：跑步",
+    "DELETE personal_info.occupation 1",
+    "UPDATE unknown.field：值",
+    "UPDATE L[1] 旧协议",
+  ]) {
+    await assert.rejects(service.longMemory.update(userRoot, state, line), {
+      code: "LONG_MEMORY_PATCH_INVALID",
+    });
+  }
+});
+
+test("long memory update treats an equivalent patch as unchanged", async () => {
+  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
+  const document = "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n";
+  await writeFile(path.join(userRoot, "memory/long-memory.md"), document);
+  const service = new MemoryManager({ workspaceRoot });
+  const state = await service.longMemory.readState(userRoot);
+  const result = await service.longMemory.update(
+    userRoot,
+    state,
+    "UPDATE personal_info.occupation：工程师",
+  );
+  assert.deepEqual(result, { changed: false, backupPath: "" });
+  assert.equal(await readLongMemoryDoc(userRoot), document);
+});
+
+test("long memory update backs up a header-mismatched document and regenerates it", async () => {
+  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
+  await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. legacy numbered memory\n");
+  const service = new MemoryManager({ workspaceRoot });
+  const state = await service.longMemory.readState(userRoot);
+  assert.equal(state.valid, false);
+  const result = await service.longMemory.update(
+    userRoot,
+    state,
+    "UPDATE personal_info.occupation：工程师",
+    { now: new Date("2026-10-01T00:00:00.000Z") },
+  );
+  assert.equal(result.changed, true);
+  assert.equal(path.basename(result.backupPath), "long-memory.backup-2026-10-01T00-00-00-000Z.md");
+  assert.equal(await readFile(result.backupPath, "utf8"), "1. legacy numbered memory\n");
+  assert.equal(
+    await readLongMemoryDoc(userRoot),
+    "NOOBOT_LONG_MEMORY/1\n\npersonal_info.occupation：工程师\n",
+  );
+});
+
+test("maybeSummarize applies the field patch from ModelPort text output", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot);
+  const calls = [];
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
+    createModelPort: createModelPortFactory(
+      ["UPDATE history_preferences.preferred_conversation_style：简洁直接", ""],
+      calls,
+    ),
+  });
+  const stageErrors = [];
+  await service.maybeSummarize({
+    userId,
+    userConfig: {},
+    onStageError: (e) => stageErrors.push(e),
+  });
+  assert.deepEqual(stageErrors, []);
+  const prompt = calls[0].request.messages[1].content;
+  assert.match(prompt, /interests\.hobbies \| list:5 \(0\/5\)/);
+  assert.match(prompt, /UPDATE <single\.field>：<value>/);
+  assert.match(
+    await readLongMemoryDoc(userRoot),
+    /history_preferences\.preferred_conversation_style：简洁直接/,
+  );
+});
+
+test("maybeSummarize uses configured memoryModel for long memory and experience processing", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot);
+  const calls = [];
+  const globalConfig = createMemoryConfig(workspaceRoot, "default-memory-model");
+  globalConfig.providers["selected-memory-model"] = {
+    alias: "selected-memory-model",
+    model: "selected-memory-model",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high"],
+    providerId: "selected-memory-model",
+    adapterId: "openai-compatible",
+    api_key: "test-key",
+  };
+  const service = new MemoryManager(globalConfig, {
+    createModelPort: createModelPortFactory(
+      [
+        "ADD history_preferences.common_topics：专用记忆模型",
+        'ADD D[1] domain="模型选择" new=true experiences="记忆处理使用专用模型" lessons="不要复用主流程模型假设"',
+      ],
+      calls,
+    ),
+  });
+  await service.maybeSummarize({
+    userId,
+    userConfig: { memoryModel: "selected-memory-model" },
+    onStageError: ({ error }) => {
+      throw error;
+    },
+  });
+
+  assert.equal(calls.length >= 2, true);
+  assert.equal(
+    calls.every((call) => call.modelSpec.alias === "selected-memory-model"),
+    true,
+  );
+  assert.deepEqual(
+    calls.slice(0, 2).map((call) => call.request.invocation.flow),
+    ["memory.summary", "memory.experience.daily"],
+  );
+  for (const call of calls) {
+    assert.deepEqual(
+      call.request.messages.map((message) => message.role),
+      ["system", "user"],
+    );
+    assert.match(call.request.messages[0].content, /memory processor|记忆处理器/i);
+  }
+  assert.match(await readLongMemoryDoc(userRoot), /1\. 专用记忆模型/);
+  const summaryRoot = path.join(userRoot, "memory/daily_summary");
+  const dateDirs = await readdir(summaryRoot);
+  assert.equal(dateDirs.length, 1);
+  const files = await readdir(path.join(summaryRoot, dateDirs[0]));
+  assert.deepEqual(files, ["模型选择.md"]);
+});
+
+test("maybeSummarize records an invalid long memory patch, continues later stages and clears short memory", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot);
+  const calls = [];
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
+    createModelPort: createModelPortFactory(
+      [
+        "这是不符合字段补丁协议的文本",
+        'ADD D[1] domain="记忆容错" new=true experiences="长期记忆失败不中断" lessons="失败要记录"',
+      ],
+      calls,
+    ),
+  });
+  const stageErrors = [];
+  await service.maybeSummarize({
+    userId,
+    userConfig: {},
+    onStageError: (entry) => stageErrors.push(entry),
+  });
+  assert.deepEqual(
+    stageErrors.map((entry) => [entry.stage, entry.error?.code]),
+    [["long_memory", "LONG_MEMORY_PATCH_INVALID"]],
+  );
+  assert.deepEqual(
+    calls.slice(0, 2).map((call) => call.request.invocation.flow),
+    ["memory.summary", "memory.experience.daily"],
+  );
+  const dateDirs = await readdir(path.join(userRoot, "memory/daily_summary"));
+  assert.equal(dateDirs.length, 1);
+  const shortDoc = JSON.parse(
+    await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
+  );
+  assert.equal(shortDoc.items.length, 0);
+  await assert.rejects(readLongMemoryDoc(userRoot));
+});
+
+test("maybeSummarize rethrows abort errors from a stage", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot);
+  const controller = new AbortController();
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
+    createModelPort: () => ({
+      async invoke() {
+        controller.abort();
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        throw error;
+      },
+    }),
+  });
+  const stageErrors = [];
+  await assert.rejects(
+    service.maybeSummarize({
+      userId,
+      userConfig: {},
+      abortSignal: controller.signal,
+      onStageError: (entry) => stageErrors.push(entry),
+    }),
+    { name: "AbortError" },
+  );
+  assert.deepEqual(stageErrors, []);
+  const shortDoc = JSON.parse(
+    await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
+  );
+  assert.equal(shortDoc.items.length, 30);
 });
 
 test("append daily domain results writes per-domain md and metadata", async () => {
@@ -130,221 +427,6 @@ test("logs raw model output when daily patch parse fails", async () => {
   assert.match(logContent, /raw:/);
 });
 
-test("long memory update applies L/M patch commands", async () => {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "primary-user";
-  const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "memory"), { recursive: true });
-  await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. 旧偏好\n");
-
-  const service = new MemoryManager({ workspaceRoot });
-  const changed = await service.longMemory.update(
-    userRoot,
-    [
-      "UPDATE L[1] 喜欢结构化输出",
-      "ADD L[2] 倾向先验证再实现",
-      'ADD M[1] key="communication_style" value="concise"',
-    ].join("\n"),
-  );
-  assert.equal(changed, true);
-
-  const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
-  assert.match(String(longMemoryDoc || ""), /1\. 喜欢结构化输出/);
-  assert.match(String(longMemoryDoc || ""), /2\. 倾向先验证再实现/);
-
-  const metadataDoc = await readFile(path.join(userRoot, "memory/long-memory/metadata.md"), "utf8");
-  assert.match(metadataDoc, /M1 key="communication_style" value="concise"/);
-});
-
-test("long memory update materializes metadata-only patches into long-memory.md", async () => {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "primary-user";
-  const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "memory"), { recursive: true });
-
-  const service = new MemoryManager({ workspaceRoot });
-  const changed = await service.longMemory.update(
-    userRoot,
-    [
-      'ADD M[1] key="interests" value="工具测试与验证"',
-      'ADD M[2] key="personality" value="偏好先复现再修复"',
-    ].join("\n"),
-  );
-  assert.equal(changed, true);
-
-  const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
-  assert.match(String(longMemoryDoc || ""), /1\. interests: 工具测试与验证/);
-  assert.match(String(longMemoryDoc || ""), /2\. personality: 偏好先复现再修复/);
-
-  const metadataDoc = await readFile(path.join(userRoot, "memory/long-memory/metadata.md"), "utf8");
-  assert.match(metadataDoc, /M1 key="interests" value="工具测试与验证"/);
-  assert.match(metadataDoc, /M2 key="personality" value="偏好先复现再修复"/);
-});
-
-test("maybeSummarize consumes normalized ModelPort text output", async () => {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "primary-user";
-  const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "memory"), { recursive: true });
-
-  const shortItems = Array.from({ length: 30 }, (_, index) => ({
-    records: [
-      { role: "user", content: `用户消息 ${index + 1}` },
-      { role: "assistant", content: `助手回复 ${index + 1}` },
-    ],
-    createdAt: new Date(2026, 0, index + 1).toISOString(),
-  }));
-  await writeFile(
-    path.join(userRoot, "memory/short-memory.json"),
-    JSON.stringify({ items: shortItems }, null, 2),
-  );
-
-  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
-    createModelPort: createModelPortFactory([
-      [
-        "UPDATE L[1] 喜欢结构化输出",
-        "ADD L[2] 倾向先验证再实现",
-        'ADD M[1] key="communication_style" value="concise"',
-      ].join("\n"),
-      "",
-    ]),
-  });
-  await service.maybeSummarize({ userId, userConfig: {} });
-
-  const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
-  assert.match(String(longMemoryDoc || ""), /1\. 喜欢结构化输出/);
-  assert.match(String(longMemoryDoc || ""), /2\. 倾向先验证再实现/);
-
-  const metadataDoc = await readFile(path.join(userRoot, "memory/long-memory/metadata.md"), "utf8");
-  assert.match(metadataDoc, /M1 key="communication_style" value="concise"/);
-});
-
-test("maybeSummarize uses configured memoryModel for long memory and experience processing", async () => {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "primary-user";
-  const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "memory"), { recursive: true });
-  const shortItems = Array.from({ length: 30 }, (_, index) => ({
-    records: [{ role: "user", content: `用户消息 ${index + 1}` }],
-    createdAt: new Date(2026, 0, index + 1).toISOString(),
-  }));
-  await writeFile(
-    path.join(userRoot, "memory/short-memory.json"),
-    JSON.stringify({ items: shortItems }, null, 2),
-  );
-
-  const calls = [];
-  const globalConfig = createMemoryConfig(workspaceRoot, "default-memory-model");
-  globalConfig.providers["selected-memory-model"] = {
-    alias: "selected-memory-model",
-    model: "selected-memory-model",
-    reasoning_effort_parameter: "reasoning_effort",
-    reasoning_effort_options: ["none", "low", "medium", "high"],
-    providerId: "selected-memory-model",
-    adapterId: "openai-compatible",
-    api_key: "test-key",
-  };
-  const service = new MemoryManager(globalConfig, {
-    createModelPort: createModelPortFactory(
-      [
-        "ADD L[1] 使用专用记忆模型",
-        'ADD D[1] domain="模型选择" new=true experiences="记忆处理使用专用模型" lessons="不要复用主流程模型假设"',
-      ],
-      calls,
-    ),
-  });
-  await service.maybeSummarize({
-    userId,
-    userConfig: { memoryModel: "selected-memory-model" },
-  });
-
-  assert.equal(calls.length >= 2, true);
-  assert.equal(
-    calls.every((call) => call.modelSpec.alias === "selected-memory-model"),
-    true,
-  );
-  assert.deepEqual(
-    calls.slice(0, 2).map((call) => call.request.invocation.flow),
-    ["memory.summary", "memory.experience.daily"],
-  );
-  for (const call of calls) {
-    assert.deepEqual(
-      call.request.messages.map((message) => message.role),
-      ["system", "user"],
-    );
-    assert.match(call.request.messages[0].content, /memory processor|记忆处理器/i);
-  }
-  const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
-  assert.match(longMemoryDoc, /使用专用记忆模型/);
-  const summaryRoot = path.join(userRoot, "memory/daily_summary");
-  const dateDirs = await readdir(summaryRoot);
-  assert.equal(dateDirs.length, 1);
-  const files = await readdir(path.join(summaryRoot, dateDirs[0]));
-  assert.deepEqual(files, ["模型选择.md"]);
-});
-
-test("maybeSummarize does not clear short memory for unreadable long memory patch", async () => {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "primary-user";
-  const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "memory"), { recursive: true });
-  const shortItems = Array.from({ length: 30 }, (_, index) => ({
-    records: [{ role: "user", content: `用户消息 ${index + 1}` }],
-    createdAt: new Date(2026, 0, index + 1).toISOString(),
-  }));
-  await writeFile(
-    path.join(userRoot, "memory/short-memory.json"),
-    JSON.stringify({ items: shortItems }, null, 2),
-  );
-  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
-    createModelPort: createModelPortFactory([
-      "这是稳定但不符合 ID+PATCH 协议的文本",
-      "这是稳定但不符合 ID+PATCH 协议的文本",
-    ]),
-  });
-  await service.maybeSummarize({ userId, userConfig: {} });
-  const shortDoc = JSON.parse(
-    await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
-  );
-  assert.equal(shortDoc.items.length, 30);
-  await assert.rejects(readFile(path.join(userRoot, "memory/long-memory.md"), "utf8"));
-});
-
-test("long memory update treats equivalent legal patch as unchanged", async () => {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "primary-user";
-  const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "memory/long-memory"), { recursive: true });
-  await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. 喜欢结构化输出\n");
-  await writeFile(
-    path.join(userRoot, "memory/long-memory/metadata.md"),
-    'M1 key="communication_style" value="concise"\n',
-  );
-  const service = new MemoryManager({ workspaceRoot });
-  const changed = await service.longMemory.update(
-    userRoot,
-    ["UPDATE L[1] 喜欢结构化输出", 'UPDATE M[1] key="communication_style" value="concise"'].join(
-      "\n",
-    ),
-  );
-  assert.equal(changed, false);
-});
-
-test("long memory update accepts colon separator in stable text protocol", async () => {
-  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
-  const userId = "primary-user";
-  const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "memory"), { recursive: true });
-  const service = new MemoryManager({ workspaceRoot });
-  const changed = await service.longMemory.update(
-    userRoot,
-    ["ADD L[1]: 喜欢先复现再修复", 'ADD M[1]： key="workflow" value="先复现再修复"'].join("\n"),
-  );
-  assert.equal(changed, true);
-  const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
-  assert.match(longMemoryDoc, /1\. 喜欢先复现再修复/);
-});
-
 test("captureSessionToShortMemory skips injected messages", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "primary-user";
@@ -376,6 +458,21 @@ test("captureSessionToShortMemory skips injected messages", async () => {
           injectedMessage: true,
           injectedBy: "agentPlugin",
         },
+        ...[
+          CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
+          CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+          CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
+        ].map((internalType, index) => ({
+          messageUid: `sm_memory_control_${index}`,
+          role: "user",
+          type: "context_control",
+          content: "已达到周期任务检查阈值。",
+          dialogProcessId: "d1",
+          turnScopeId: "t1",
+          injectedMessage: true,
+          injectedMessageType: internalType,
+          noobotInternalMessageType: internalType,
+        })),
       ],
     },
   });

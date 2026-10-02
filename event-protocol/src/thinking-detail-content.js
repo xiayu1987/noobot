@@ -6,7 +6,11 @@
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { text } from "./normalize.js";
-import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
+import {
+  CONTEXT_INJECTED_MESSAGE_TYPE,
+  resolveContextInternalMessageType,
+} from "@noobot/context-protocol/policy/injected-message";
+import { isInjectedMessage } from "@noobot/context-protocol/policy/message";
 import {
   THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
@@ -27,34 +31,19 @@ function messageContent(message = {}) {
   return typeof message?.content === "string" ? message.content.trim() : "";
 }
 
-function internalMessageType(message = {}) {
-  return text(
-    message?.noobotInternalMessageType ||
-      message?.additional_kwargs?.noobotInternalMessageType ||
-      message?.metadata?.noobotInternalMessageType ||
-      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      message?.lc_kwargs?.metadata?.noobotInternalMessageType,
-  );
-}
-
 export function isThinkingDetailUserInterjection(message = {}) {
-  return internalMessageType(message) === CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION;
+  return (
+    resolveContextInternalMessageType(message) === CONTEXT_INJECTED_MESSAGE_TYPE.USER_INTERJECTION
+  );
 }
 
 export function isThinkingDetailControlMessage(message = {}) {
   if (isThinkingDetailUserInterjection(message)) return false;
-  return (
-    text(message?.type) === "context_control" ||
-    Boolean(text(message?.noobotInternalMessageType)) ||
-    Boolean(text(message?.additional_kwargs?.noobotInternalMessageType)) ||
-    Boolean(text(message?.metadata?.noobotInternalMessageType)) ||
-    Boolean(text(message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType)) ||
-    Boolean(text(message?.lc_kwargs?.metadata?.noobotInternalMessageType))
-  );
+  return Boolean(resolveContextInternalMessageType(message));
 }
 
 export function isThinkingDetailInjectedMessage(message = {}) {
-  return message?.injectedMessage === true && !isThinkingDetailControlMessage(message);
+  return isInjectedMessage(message) && !isThinkingDetailControlMessage(message);
 }
 
 function compareContentFacts(left = {}, right = {}) {

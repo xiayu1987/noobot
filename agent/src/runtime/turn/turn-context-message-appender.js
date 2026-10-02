@@ -7,7 +7,10 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
-import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
+import {
+  CONTEXT_CONTROL_MESSAGE_TYPES,
+  CONTEXT_INJECTED_MESSAGE_TYPE,
+} from "@noobot/context-protocol/policy/injected-message";
 
 function requireTurnContextStores({
   turnMessageStore,
@@ -22,7 +25,7 @@ function requireTurnContextStores({
     );
   }
   if (!internalType) {
-    throw new TypeError("Turn context control message internalType is required");
+    throw new TypeError("Turn context message internalType is required");
   }
 }
 
@@ -37,6 +40,11 @@ export function appendTurnContextControlMessage({
   const dialogProcessId = String(loopState?.dialogProcessId || "").trim();
   const turnScopeId = String(modelContext?.activeTurnIdentity?.turnScopeId || "").trim();
   const normalizedInternalType = String(internalType || "").trim();
+  if (!CONTEXT_CONTROL_MESSAGE_TYPES.includes(normalizedInternalType)) {
+    throw new TypeError(
+      `Turn context control message internalType must be a context control type: ${normalizedInternalType}`,
+    );
+  }
   requireTurnContextStores({
     turnMessageStore,
     modelContext,
@@ -48,6 +56,8 @@ export function appendTurnContextControlMessage({
   const additionalKwargs = {
     noobotMessageId: messageUid,
     noobotInternalMessageType: normalizedInternalType,
+    injectedMessage: true,
+    injectedMessageType: normalizedInternalType,
     chatPresentation: false,
   };
   const persistedMessage = turnMessageStore.push({
@@ -55,6 +65,8 @@ export function appendTurnContextControlMessage({
     role: "user",
     type: "context_control",
     chatPresentation: false,
+    injectedMessage: true,
+    injectedMessageType: normalizedInternalType,
     noobotInternalMessageType: normalizedInternalType,
     content: String(content || ""),
     dialogProcessId,

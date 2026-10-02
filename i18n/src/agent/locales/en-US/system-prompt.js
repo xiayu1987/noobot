@@ -90,36 +90,20 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "You are Noobot's memory processor. Apply the requested consolidation protocol only to the memory material in the current request. Do not add facts that were not provided or output content outside the protocol.",
     experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
     prompt: (params = {}) => {
-      const longMemoryModel = String(params.longMemoryModel || "").trim();
-      const longMemoryMetadata = String(params.longMemoryMetadata || "").trim();
-      const existingLongMemory =
-        typeof params.existingLongMemory === "string"
-          ? params.existingLongMemory
-          : JSON.stringify(params.existingLongMemory ?? "", null, 2);
+      const fieldModel = String(params.fieldModel || "").trim();
+      const existingLongMemory = String(params.existingLongMemory || "").trim();
+      const patchGrammar = (params.patchGrammar || []).join("\n");
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
-      const fieldModelText = longMemoryModel
-        ? `[Long-memory field model from long-memory-model.md]\n${longMemoryModel}`
-        : "[Long-memory field model] If no field model is provided, prioritize stable preferences and long-term constraints.";
       return [
-        "You are a long-term memory refiner.",
-        fieldModelText,
-        "[Long-memory ID+PATCH Protocol]",
-        "Output one command per line. Output commands only; no markdown, JSON, or explanations.",
-        "ADD L[memoryId] [stable long-term memory]",
-        "UPDATE L[memoryId] [updated stable long-term memory]",
-        "DELETE L[memoryId]",
-        'ADD M[metadataId] key="field" value="value"',
-        'UPDATE M[metadataId] key="field" value="value"',
-        "DELETE M[metadataId]",
-        "Hard constraint: L/M IDs must be positive integers; UPDATE/DELETE must reuse existing IDs; ADD must use an unused ID.",
-        "Hard constraint: long-memory body content must be written through L commands; M commands are only auxiliary retrieval/classification metadata, so do not output M commands without corresponding L memories.",
-        "Memory rules: record only stable, long-term, reusable information; long-term memory should focus on user-profile-level preferences, personality traits, behavioral patterns, communication style, decision habits, work style, and long-term constraints.",
-        "Abstraction level: do not make long-term memories overly detailed; prefer high-level, transferable preferences/patterns over specific tasks, specific bugs, specific files, implementation steps, one-off UI details, or temporary project facts.",
-        "Selection rule: store a detail only when it appears repeatedly or clearly reflects a stable user preference/behavior pattern; otherwise ignore it or leave it to experience/short-term memory.",
-        "Update rules: use UPDATE when new information corrects old information, DELETE when old information expires or is denied, and do not duplicate near-equivalent memories.",
-        'Based on "existing long-term memory", "long-memory metadata", and "new short-term memory chunks", output ID+PATCH updates.',
-        `Existing long-term preferences:\n${existingLongMemory}`,
-        `Existing long-memory metadata:\n${longMemoryMetadata || "(empty)"}`,
+        "You are a long-term memory refiner. Long-term memory records only the user's personal information and preference facts.",
+        `[Field model] One field per line: field | kind (used/max) | description\n${fieldModel}`,
+        "Kind rules: single holds one value, UPDATE overwrites it and DELETE clears it; list:N is an array edited by item number and must never exceed N items.",
+        `[Patch protocol] One command per line. Output commands only; no markdown, JSON, or explanations. Separate field and value with the full-width colon "：":\n${patchGrammar}`,
+        'Numbering rule: <n> always refers to the item\'s current number in "Existing long-term memory"; each number of a list may appear once per batch; never use ADD or item numbers on single fields.',
+        "Capacity rule: when a list is full, merge near-duplicates with UPDATE or DELETE the least valuable item before ADD; a batch whose result exceeds the limit is rejected as a whole.",
+        "Selection rule: keep only stable, long-term, recurring, or explicitly stated personal information and preferences; do not record specific tasks, bugs, files, implementation steps, or temporary project facts; ignore anything outside the field model.",
+        "Update rule: UPDATE when new information corrects old information, DELETE when old information expires or is denied, never ADD near-duplicates; output nothing when no change is needed.",
+        `Existing long-term memory:\n${existingLongMemory || "(empty)"}`,
         `New short-term memory chunks:\n${promptPayload}`,
       ].join("\n\n");
     },

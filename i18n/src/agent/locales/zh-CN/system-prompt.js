@@ -88,36 +88,20 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "你是 Noobot 的记忆处理器。只根据当前请求提供的记忆材料执行指定的整理协议；不得补充未提供的事实，也不得输出协议之外的内容。",
     experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
     prompt: (params = {}) => {
-      const longMemoryModel = String(params.longMemoryModel || "").trim();
-      const longMemoryMetadata = String(params.longMemoryMetadata || "").trim();
-      const existingLongMemory =
-        typeof params.existingLongMemory === "string"
-          ? params.existingLongMemory
-          : JSON.stringify(params.existingLongMemory ?? "", null, 2);
+      const fieldModel = String(params.fieldModel || "").trim();
+      const existingLongMemory = String(params.existingLongMemory || "").trim();
+      const patchGrammar = (params.patchGrammar || []).join("\n");
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
-      const fieldModelText = longMemoryModel
-        ? `【长期记忆字段模型（来自 long-memory-model.md）】\n${longMemoryModel}`
-        : "【长期记忆字段模型】未提供字段模型时，优先保留稳定偏好与长期约束。";
       return [
-        "你是长期记忆整理助手。",
-        fieldModelText,
-        "【长期记忆 ID+PATCH 协议】",
-        "每行输出一条命令；只输出命令，不要 markdown、JSON 或解释。",
-        "ADD L[记忆ID] [稳定长期记忆]",
-        "UPDATE L[记忆ID] [修改后的稳定长期记忆]",
-        "DELETE L[记忆ID]",
-        'ADD M[元数据ID] key="字段" value="值"',
-        'UPDATE M[元数据ID] key="字段" value="值"',
-        "DELETE M[元数据ID]",
-        "硬性约束：L/M ID 必须使用正整数；更新或删除必须复用已有 ID；新增使用未占用 ID。",
-        "硬性约束：长期记忆正文必须落入 L 命令；M 命令只是辅助检索/分类元数据，不能只输出 M 而不输出对应的 L 记忆。",
-        "记忆规则：只记录稳定、长期、可复用的信息；长期记忆应偏向用户画像层面的偏好、性格特征、行为模式、沟通风格、决策习惯、工作方式和长期约束。",
-        "抽象层级：不要把长期记忆写得过细；优先总结成高层、可迁移的偏好/模式，而不是记录具体任务、具体 bug、具体文件、具体实现步骤、一次性 UI 细节或临时项目事实。",
-        "取舍规则：只有当某个细节反复出现，或明确体现用户稳定偏好/行为模式时，才抽象后写入长期记忆；否则应忽略或交给经验/短期记忆。",
-        "更新规则：新信息修正旧信息用 UPDATE，旧信息过期或被否定用 DELETE，不要重复 ADD 近义记忆。",
-        "请基于“已有长期记忆”“长期记忆元数据”和“新的短期记忆片段”产出 ID+PATCH 更新指令。",
-        `已有长期偏好：\n${existingLongMemory}`,
-        `已有长期记忆元数据：\n${longMemoryMetadata || "（空）"}`,
+        "你是长期记忆整理助手。长期记忆只记录用户的个人信息与偏好事实。",
+        `【字段模型】每行：字段 | 类型 (已用/上限) | 说明\n${fieldModel}`,
+        "类型规则：single 为单值，UPDATE 整体覆盖旧值，DELETE 清空；list:N 为数组，按序号增删改，任何时候不得超过 N 项。",
+        `【补丁协议】每行一条命令，只输出命令，不要 markdown、JSON 或解释；字段与值之间必须使用全角冒号“：”：\n${patchGrammar}`,
+        "序号规则：<n> 一律指“已有长期记忆”中该数组当前的序号；同一数组的同一序号只能出现一次；不要对 single 字段使用 ADD 或序号。",
+        "容量规则：数组已满时，先用 UPDATE 合并近义项或 DELETE 价值最低的项，再 ADD；不得输出超过上限的结果，否则整批补丁会被拒绝。",
+        "取舍规则：只记录稳定、长期、反复出现或用户明确表达的个人信息与偏好；不要记录具体任务、bug、文件、实现步骤或临时项目事实；字段模型之外的信息直接忽略。",
+        "更新规则：新信息修正旧信息用 UPDATE，旧信息过期或被否定用 DELETE，近义内容不要重复 ADD；没有需要变更的内容时输出空。",
+        `已有长期记忆：\n${existingLongMemory || "（空）"}`,
         `新的短期记忆片段：\n${promptPayload}`,
       ].join("\n\n");
     },

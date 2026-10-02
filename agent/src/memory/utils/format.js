@@ -3,16 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { dedupeTextList, stripMarkdownFence } from "./text.js";
-
-export function isBlankLongMemoryContent(value) {
-  if (value === null || value === undefined) return true;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === "object") return Object.keys(value).length === 0;
-  const normalized = stripMarkdownFence(value).trim();
-  if (!normalized) return true;
-  return ["null", "undefined", "{}", "[]"].includes(normalized.toLowerCase());
-}
+import { dedupeTextList } from "@noobot/memory-protocol/text";
 
 export function formatDomainBlock({ createdAt = "", experiences = [], lessons = [] } = {}) {
   const normalizedExperiences = dedupeTextList(experiences);

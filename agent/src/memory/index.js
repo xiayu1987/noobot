@@ -12,9 +12,15 @@ import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptI18n } from "noobot-i18n/
 import { StorageManager } from "./storage/index.js";
 import { ShortMemoryManager } from "./short-memory/index.js";
 import { LongMemoryManager } from "./long-memory/index.js";
+import {
+  LONG_MEMORY_PATCH_GRAMMAR,
+  renderLongMemoryBody,
+  renderLongMemoryFieldsForPrompt,
+} from "@noobot/memory-protocol/long-memory";
 import { ExperienceManager } from "./experience/index.js";
 import { trimPromptPayloadByCharLimit } from "./utils/payload-trimmer.js";
-import { isAbortLikeError, throwIfAborted } from "./experience/abort-control.js";
+import { assertNotAborted } from "../shared/utils/error-utils.js";
+import { MEMORY_SUMMARY_STAGE, runMemorySummaryStage } from "./stage-runner.js";
 import {
   MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
   MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
@@ -88,23 +94,45 @@ export class MemoryManager {
     return this.shortMemory.removeBySessionIds(basePath, sessionIds);
   }
 
+  async consolidateLongMemory({ basePath, promptI18n, promptPayload, invokeModel, abortSignal }) {
+    const state = await this.longMemory.readState(basePath);
+    assertNotAborted(abortSignal);
+    const prompt = String(
+      promptI18n?.prompt?.({
+        fieldModel: renderLongMemoryFieldsForPrompt(state.model, state.values),
+        existingLongMemory: renderLongMemoryBody(state.model, state.values),
+        patchGrammar: LONG_MEMORY_PATCH_GRAMMAR,
+        promptPayload,
+      }) || "",
+    ).trim();
+    if (!prompt) throw new Error("long memory prompt is not configured");
+    const output = await invokeModel({
+      prompt,
+      flow: "memory.summary",
+      purpose: "memory_consolidation",
+    });
+    assertNotAborted(abortSignal);
+    const { changed } = await this.longMemory.update(basePath, state, output.text);
+    return changed;
+  }
+
   async maybeSummarize({
     userId,
     sessionId = "",
     userConfig,
     abortSignal = null,
     eventListener = null,
+    onStageError,
   }) {
-    throwIfAborted(abortSignal);
+    assertNotAborted(abortSignal);
     const basePath = this.storage.resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
     const promptI18n = resolveMemoryPromptI18n(
       effectiveConfig?.locale || this.globalConfig?.locale || "zh-CN",
     );
 
-    const short = await this.shortMemory.read(basePath);
-    throwIfAborted(abortSignal);
-    const unextracted = this.shortMemory.sorted(short);
+    const unextracted = await this.shortMemory.readItems(basePath);
+    assertNotAborted(abortSignal);
     const memoryMaxItems = BUILTIN_THRESHOLDS.memoryMaxItems;
     const shouldUpdateLongMemory = unextracted.length >= memoryMaxItems;
     const promptPayload = unextracted.map((item) => ({ records: item.records }));
@@ -112,10 +140,6 @@ export class MemoryManager {
       maxChars: MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
       shrinkRatio: MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
     });
-
-    const existingLongMemoryText = await this.longMemory.read(basePath);
-    throwIfAborted(abortSignal);
-    const existingLongMemory = String(existingLongMemoryText || "").trim();
 
     const modelSpec = resolveMemoryModelSpec({
       globalConfig: this.globalConfig,
@@ -160,75 +184,56 @@ export class MemoryManager {
       return response.output;
     };
 
-    let nextLongMemory = existingLongMemory;
     const summaryCreatedAt = new Date().toISOString();
+    const stageOptions = { abortSignal, onStageError };
     if (shouldUpdateLongMemory) {
-      const longMemoryModel = await this.longMemory.readModel(basePath);
-      const longMemoryMetadata = await this.longMemory.readMetadata(basePath);
-      throwIfAborted(abortSignal);
-      const prompt = String(
-        promptI18n?.prompt?.({
-          longMemoryModel,
-          longMemoryMetadata,
-          existingLongMemory,
-          promptPayload: longMemoryPromptPayload,
-        }) || "",
-      ).trim();
-      if (!prompt) return;
-      try {
-        const output = await invokeModel({
-          prompt,
-          flow: "memory.summary",
-          purpose: "memory_consolidation",
-        });
-        nextLongMemory = output.text;
-      } catch (error) {
-        if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
-        nextLongMemory = existingLongMemory;
-      }
+      await runMemorySummaryStage(
+        MEMORY_SUMMARY_STAGE.LONG_MEMORY,
+        () =>
+          this.consolidateLongMemory({
+            basePath,
+            promptI18n,
+            promptPayload: longMemoryPromptPayload,
+            invokeModel,
+            abortSignal,
+          }),
+        stageOptions,
+      );
     }
 
-    throwIfAborted(abortSignal);
-
-    let hasUpdatedLongMemory = false;
-    if (shouldUpdateLongMemory) {
-      hasUpdatedLongMemory = await this.longMemory.update(basePath, nextLongMemory);
-    }
-
-    let hasAppendedExperienceLessons = false;
     if (shouldUpdateLongMemory && promptPayload.length) {
-      hasAppendedExperienceLessons = await this.experience.runDaily({
-        basePath,
-        invokeModel,
-        promptI18n,
-        promptPayload,
-        createdAt: summaryCreatedAt,
-        abortSignal,
-      });
+      await runMemorySummaryStage(
+        MEMORY_SUMMARY_STAGE.EXPERIENCE_DAILY,
+        () =>
+          this.experience.runDaily({
+            basePath,
+            invokeModel,
+            promptI18n,
+            promptPayload,
+            createdAt: summaryCreatedAt,
+          }),
+        stageOptions,
+      );
     }
 
-    await this.experience.runWeeklySummaryIfNeeded({
-      basePath,
-      invokeModel,
-      promptI18n,
-      abortSignal,
-    });
+    const periodicOptions = { basePath, invokeModel, promptI18n, abortSignal };
+    await runMemorySummaryStage(
+      MEMORY_SUMMARY_STAGE.EXPERIENCE_WEEKLY,
+      () => this.experience.runWeeklySummaryIfNeeded(periodicOptions),
+      stageOptions,
+    );
+    await runMemorySummaryStage(
+      MEMORY_SUMMARY_STAGE.EXPERIENCE_MONTHLY,
+      () => this.experience.runMonthlySummaryIfNeeded(periodicOptions),
+      stageOptions,
+    );
+    await runMemorySummaryStage(
+      MEMORY_SUMMARY_STAGE.EXPERIENCE_YEARLY,
+      () => this.experience.runYearlySummaryIfNeeded(periodicOptions),
+      stageOptions,
+    );
 
-    await this.experience.runMonthlySummaryIfNeeded({
-      basePath,
-      invokeModel,
-      promptI18n,
-      abortSignal,
-    });
-
-    await this.experience.runYearlySummaryIfNeeded({
-      basePath,
-      invokeModel,
-      promptI18n,
-      abortSignal,
-    });
-
-    if (!hasUpdatedLongMemory && !hasAppendedExperienceLessons) return;
+    if (!shouldUpdateLongMemory) return;
     await this.shortMemory.clear(basePath);
   }
 }

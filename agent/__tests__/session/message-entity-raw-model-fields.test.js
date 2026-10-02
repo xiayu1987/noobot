@@ -12,6 +12,7 @@ test("normalizeMessageEntity preserves the canonical internal control message ty
   const normalized = normalizeMessageEntity({
     role: "user",
     type: "context_control",
+    chatPresentation: false,
     content: "checkpoint",
     additional_kwargs: { noobotInternalMessageType: "noobot.phase_summary_prompt" },
   });

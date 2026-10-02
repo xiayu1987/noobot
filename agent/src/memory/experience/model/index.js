@@ -3,14 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { sanitizeFileName } from "../../utils/text.js";
+import { sanitizeFileName } from "@noobot/memory-protocol/text";
 import { filePath as path } from "@noobot/path-resolver";
 import { ensureUserWorkspaceMissingFilesFromTemplate } from "../../../workspace-lifecycle/index.js";
 import {
   normalizeExperienceModelTree,
   parseExperienceModelText,
   renderExperienceModelText,
-} from "./text-protocol.js";
+} from "@noobot/memory-protocol/experience/model-text";
 
 function resolveUserIdFromBasePath(storage, basePath = "") {
   const workspaceRoot = path.resolve(String(storage?.globalConfig?.workspaceRoot || "").trim());

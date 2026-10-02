@@ -136,6 +136,7 @@ test("excludes explicitly marked context-control and internal injected messages"
   const contextControl = message({
     injectedMessage: true,
     type: "context_control",
+    noobotInternalMessageType: "noobot.phase_summary_prompt",
   });
   const internalControl = message({
     injectedMessage: true,
