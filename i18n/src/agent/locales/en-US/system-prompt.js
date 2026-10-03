@@ -4,37 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-const DAILY_EXPERIENCE_PATCH_EXAMPLE =
-  'ADD D[1] domain="Domain" new=true experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
-
-const WEEKLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD W[1] category="Category" experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
-const MONTHLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD M[1] category="Category" subcategory="Subcategory" patterns="Pattern 1 || Pattern 2" methodologies="Method 1 || Method 2"';
-const YEARLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD Y[1] category="Category" subcategory="Subcategory" principles="Principle 1 || Principle 2" reflections="Reflection 1 || Reflection 2"';
-
-const EXPERIENCE_PATCH_PROTOCOLS = Object.freeze({
-  daily: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE D[integer] domain="Domain" new=true|false experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"',
-    example: DAILY_EXPERIENCE_PATCH_EXAMPLE,
+const EXPERIENCE_PATCH_LABELS = Object.freeze({
+  id: "integer",
+  domain: "Domain",
+  category: "Category",
+  subcategory: "Subcategory",
+  fieldPlaceholders: Object.freeze({
+    experiences: "Experience",
+    lessons: "Lesson",
+    patterns: "Pattern",
+    methodologies: "Method",
+    principles: "Principle",
+    reflections: "Reflection",
   }),
-  weekly: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE W[integer] category="Category" experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"',
-    example: WEEKLY_SUMMARY_PATCH_EXAMPLE,
-  }),
-  monthly: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE M[integer] category="Category" subcategory="Subcategory" patterns="Pattern 1 || Pattern 2" methodologies="Method 1 || Method 2"',
-    example: MONTHLY_SUMMARY_PATCH_EXAMPLE,
-  }),
-  yearly: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE Y[integer] category="Category" subcategory="Subcategory" principles="Principle 1 || Principle 2" reflections="Reflection 1 || Reflection 2"',
-    example: YEARLY_SUMMARY_PATCH_EXAMPLE,
-  }),
+  itemPlaceholder: (label, index) => `${label} ${index}`,
 });
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
@@ -88,7 +71,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
   memoryPrompt: {
     system:
       "You are Noobot's memory processor. Apply the requested consolidation protocol only to the memory material in the current request. Do not add facts that were not provided or output content outside the protocol.",
-    experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
+    experiencePatchLabels: EXPERIENCE_PATCH_LABELS,
     prompt: (params = {}) => {
       const fieldModel = String(params.fieldModel || "").trim();
       const existingLongMemory = String(params.existingLongMemory || "").trim();
@@ -110,22 +93,23 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     dailyExperiencePrompt: (params = {}) => {
       const knownDomainText = String(params.knownDomainText || "").trim();
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE D[integer] domain="domain" new=true|false experiences="exp1 || exp2" lessons="lesson1 || lesson2"';
-      const patchExample =
-        String(params.patchExample || "").trim() || DAILY_EXPERIENCE_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "System Instruction:",
         "Analyze the following short-term memories, classify them into known domains, or create new domains.",
         `Known domains: ${knownDomainText || "None"}`,
         "",
+        "Output fields (key | name | description):",
+        fieldGuide,
+        "",
         "Task Requirements:",
-        "1. Extract experiences and lessons for each involved domain (1-3 each, prioritize quality; leave empty if none).",
+        "1. Extract the output fields for each involved domain (1-3 each, prioritize quality; leave empty if none).",
         "2. Abstraction level: experiences and lessons must not be overly detailed; prefer reusable methods, preferences, judgment criteria, collaboration style, risk signals, and decision patterns over specific bugs, files, implementation steps, one-off UI details, or temporary project facts.",
         "3. Selection rule: keep a detail only when it can be abstracted into a reusable experience/lesson for future work; otherwise ignore it.",
         "4. Use high-level domains only; avoid over-fragmented domain names (e.g., Programming, ProjectMgmt, Testing, Product).",
-        "5. Keep domain_name concise (prefer <= 4 Chinese characters when using Chinese domains), and reuse known domains whenever possible.",
+        "5. Keep domain concise (prefer <= 4 Chinese characters when using Chinese domains), and reuse known domains whenever possible.",
         "6. Output ID+PATCH only. No markdown or explanations.",
         `7. Protocol: ${patchProtocol}`,
         "8. Example:",
@@ -139,19 +123,21 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownCategoryText = String(params.knownCategoryText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE W[integer] category="category" experiences="exp1 || exp2" lessons="lesson1 || lesson2"';
-      const patchExample = String(params.patchExample || "").trim() || WEEKLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "System Instruction:",
         `Create a structured weekly synthesis for the past 7 days of records in domain [${domainName}].`,
         `Known categories: ${knownCategoryText || "None"}`,
         "",
+        "Output fields (key | name | description):",
+        fieldGuide,
+        "",
         "Task Requirements:",
         "1. Prefer known categories first; create a new category only when no match exists.",
         "2. Group by semantic relevance and merge near-duplicates to avoid fragmentation.",
-        "3. Synthesize: merge duplicates and extract the most essential experiences and lessons for each category (1-3 each).",
+        "3. Synthesize: merge duplicates and extract the most essential output-field items for each category (1-3 each).",
         "4. Abstraction level: experiences and lessons should be high-level, transferable, and reusable; do not list specific tasks, bugs, files, implementation steps, one-off UI details, or temporary project facts.",
         "5. Selection rule: prioritize lessons that recur or reveal stable work style/decision patterns; isolated details should be merged, abstracted, or discarded.",
         "6. Output ID+PATCH only. No markdown or explanations.",
@@ -167,19 +153,20 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE M[integer] category="category" subcategory="subcategory" patterns="pattern1 || pattern2" methodologies="method1 || method2"';
-      const patchExample =
-        String(params.patchExample || "").trim() || MONTHLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "System Instruction:",
         `Analyze monthly summaries for domain [${domainName}] and focus on pattern recognition.`,
         `Known category/subcategory tree: ${knownTreeText || "None"}`,
         "",
+        "Output fields (key | name | description):",
+        fieldGuide,
+        "",
         "Task Requirements:",
         "1. Map findings to known categories/subcategories first; add new subcategories only when needed.",
-        "2. For each subcategory, extract core Patterns and Methodologies.",
+        "2. For each subcategory, extract the core output-field items.",
         "3. Abstraction level: patterns and methodologies must rise above details into reusable modes; do not store specific tasks, bugs, files, implementation steps, one-off UI details, or temporary project facts.",
         "4. Selection rule: keep only patterns that hold across multiple records and can guide future action; ignore isolated details.",
         "5. Output ID+PATCH only. No markdown or explanations.",
@@ -195,17 +182,19 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE Y[integer] category="category" subcategory="subcategory" principles="principle1 || principle2" reflections="reflection1 || reflection2"';
-      const patchExample = String(params.patchExample || "").trim() || YEARLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "System Instruction:",
         `Review one year of retrospectives for domain [${domainName}] at a high strategic level.`,
         `Known taxonomy tree: ${knownTreeText || "None"}`,
         "",
+        "Output fields (key | name | description):",
+        fieldGuide,
+        "",
         "Task Requirements:",
-        "1. Ignore short-term noise and extract enduring Principles and strategic reflections.",
+        "1. Ignore short-term noise and extract enduring high-level conclusions for the output fields.",
         "2. Abstraction level: yearly lessons must be high-level principles, long-term tendencies, and strategic reflections; do not store specific tasks, bugs, files, implementation steps, one-off UI details, or temporary project facts.",
         "3. Anchor outputs to specific categories and subcategories.",
         "4. Output ID+PATCH only. No markdown or explanations.",

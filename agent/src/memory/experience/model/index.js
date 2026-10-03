@@ -30,19 +30,19 @@ export function upsertExperienceModelEntries(modelTree = {}, entries = []) {
   const tree = normalizeExperienceModelTree(modelTree);
   let changed = false;
   for (const entry of Array.isArray(entries) ? entries : []) {
-    const domainName = sanitizeFileName(entry?.domain_name, "");
+    const domainName = sanitizeFileName(entry?.domain, "");
     if (!domainName) continue;
     if (!tree[domainName]) {
       tree[domainName] = {};
       changed = true;
     }
-    const categoryName = sanitizeFileName(entry?.category_name, "");
+    const categoryName = sanitizeFileName(entry?.category, "");
     if (!categoryName) continue;
     if (!Array.isArray(tree[domainName][categoryName])) {
       tree[domainName][categoryName] = [];
       changed = true;
     }
-    const subcategoryName = sanitizeFileName(entry?.subcategory_name, "");
+    const subcategoryName = sanitizeFileName(entry?.subcategory, "");
     if (!subcategoryName) continue;
     if (!tree[domainName][categoryName].includes(subcategoryName)) {
       tree[domainName][categoryName].push(subcategoryName);

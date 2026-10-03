@@ -4,37 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-const DAILY_EXPERIENCE_PATCH_EXAMPLE =
-  'ADD D[1] domain="领域" new=true experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
-
-const WEEKLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD W[1] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
-const MONTHLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD M[1] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"';
-const YEARLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD Y[1] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
-
-const EXPERIENCE_PATCH_PROTOCOLS = Object.freeze({
-  daily: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE D[整数ID] domain="领域" new=true|false experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
-    example: DAILY_EXPERIENCE_PATCH_EXAMPLE,
+const EXPERIENCE_PATCH_LABELS = Object.freeze({
+  id: "整数ID",
+  domain: "领域",
+  category: "大类",
+  subcategory: "小类",
+  fieldPlaceholders: Object.freeze({
+    experiences: "经验",
+    lessons: "教训",
+    patterns: "规律",
+    methodologies: "方法",
+    principles: "原则",
+    reflections: "反思",
   }),
-  weekly: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE W[整数ID] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
-    example: WEEKLY_SUMMARY_PATCH_EXAMPLE,
-  }),
-  monthly: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE M[整数ID] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"',
-    example: MONTHLY_SUMMARY_PATCH_EXAMPLE,
-  }),
-  yearly: Object.freeze({
-    protocol:
-      'ADD/UPDATE/DELETE Y[整数ID] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"',
-    example: YEARLY_SUMMARY_PATCH_EXAMPLE,
-  }),
+  itemPlaceholder: (label, index) => `${label}${index}`,
 });
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
@@ -86,7 +69,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
   memoryPrompt: {
     system:
       "你是 Noobot 的记忆处理器。只根据当前请求提供的记忆材料执行指定的整理协议；不得补充未提供的事实，也不得输出协议之外的内容。",
-    experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
+    experiencePatchLabels: EXPERIENCE_PATCH_LABELS,
     prompt: (params = {}) => {
       const fieldModel = String(params.fieldModel || "").trim();
       const existingLongMemory = String(params.existingLongMemory || "").trim();
@@ -108,22 +91,23 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     dailyExperiencePrompt: (params = {}) => {
       const knownDomainText = String(params.knownDomainText || "").trim();
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE D[整数ID] domain="领域" new=true|false experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
-      const patchExample =
-        String(params.patchExample || "").trim() || DAILY_EXPERIENCE_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "系统指令：",
         "请分析以下短期记忆，归类到已知领域，或在必要时创建新领域。",
         `已知领域：${knownDomainText || "无"}`,
         "",
+        "输出字段（key | 名称 | 说明）：",
+        fieldGuide,
+        "",
         "任务要求：",
-        "1. 为每个涉及领域提炼 experiences 与 lessons（各 1-3 条，优先质量；无则留空）。",
+        "1. 为每个涉及领域提炼输出字段（各 1-3 条，优先质量；无则留空）。",
         "2. 抽象层级：经验教训不要细节化；优先提炼可复用的方法、偏好、判断标准、协作方式、风险信号和决策模式，不要记录具体 bug、具体文件、具体实现步骤、一次性 UI 细节或临时项目事实。",
         "3. 取舍规则：只有当细节能抽象成后续可复用的经验/教训时才保留；否则忽略。",
         "4. 领域应保持高层抽象，避免过细碎（如：编程、项目管理、测试、产品）。",
-        "5. domain_name 保持简洁，尽量复用已知领域。",
+        "5. domain 保持简洁，尽量复用已知领域。",
         "6. 仅输出 ID+PATCH，不要输出 markdown 或解释。",
         `7. 协议：${patchProtocol}`,
         "8. 示例：",
@@ -137,19 +121,21 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownCategoryText = String(params.knownCategoryText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE W[整数ID] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
-      const patchExample = String(params.patchExample || "").trim() || WEEKLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "系统指令：",
         `请对领域 [${domainName}] 最近 7 天的记录进行结构化周总结。`,
         `已知大类列表：${knownCategoryText || "无"}`,
         "",
+        "输出字段（key | 名称 | 说明）：",
+        fieldGuide,
+        "",
         "任务要求：",
         "1. 优先归入已知大类；若完全不匹配可新增大类。",
         "2. 分类归组：按语义相关性拆分，并尽量合并近义项，避免碎片化。",
-        "3. 归纳提炼：去重合并后，提炼每类最关键的 experiences 与 lessons（各 1-3 条）。",
+        "3. 归纳提炼：去重合并后，提炼每类最关键的输出字段内容（各 1-3 条）。",
         "4. 抽象层级：经验教训应是高层、可迁移、可复用的总结；不要堆砌具体任务、具体 bug、具体文件、具体实现步骤、一次性 UI 细节或临时项目事实。",
         "5. 取舍规则：优先保留反复出现或能反映稳定工作方式/决策模式的经验教训；孤立细节应合并、抽象或丢弃。",
         "6. 仅输出 ID+PATCH，不要输出 markdown 或解释。",
@@ -165,19 +151,20 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE M[整数ID] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"';
-      const patchExample =
-        String(params.patchExample || "").trim() || MONTHLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "系统指令：",
         `分析以下【${domainName}】领域过去一个月的总结，目标是模式识别。`,
         `已知大类与小类结构：${knownTreeText || "无"}`,
         "",
+        "输出字段（key | 名称 | 说明）：",
+        fieldGuide,
+        "",
         "任务要求：",
         "1. 将规律归入已知大类和小类；若有全新发现，可输出新的小类名称。",
-        "2. 为每个小类提炼本月核心规律（Patterns）和改进方法论（Methodologies）。",
+        "2. 为每个小类按输出字段提炼本月核心内容。",
         "3. 抽象层级：规律和方法论必须从细节上升到可复用模式；不要记录具体任务、具体 bug、具体文件、具体实现步骤、一次性 UI 细节或临时项目事实。",
         "4. 取舍规则：只保留跨多条记录成立、能指导后续行动的模式；孤立细节应忽略。",
         "5. 仅输出 ID+PATCH，不要输出 markdown 或解释。",
@@ -193,17 +180,19 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol =
-        String(params.patchProtocol || "").trim() ||
-        'ADD/UPDATE/DELETE Y[整数ID] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
-      const patchExample = String(params.patchExample || "").trim() || YEARLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol = String(params.patchProtocol || "").trim();
+      const fieldGuide = String(params.fieldGuide || "").trim();
+      const patchExample = String(params.patchExample || "").trim();
       return [
         "系统指令：",
         `站在高维视角审视【${domainName}】领域过去一年的全部复盘。`,
         `已知分类树：${knownTreeText || "无"}`,
         "",
+        "输出字段（key | 名称 | 说明）：",
+        fieldGuide,
+        "",
         "任务要求：",
-        "1. 忽略短期波动，提炼跨时间的底层原则（Principles）与年度战略反思。",
+        "1. 忽略短期波动，按输出字段提炼跨时间的高层结论。",
         "2. 抽象层级：年度经验教训必须是高层原则、长期倾向和战略反思；不要记录具体任务、具体 bug、具体文件、具体实现步骤、一次性 UI 细节或临时项目事实。",
         "3. 必须将输出落实到具体的大类和小类。",
         "4. 仅输出 ID+PATCH，不要输出 markdown 或解释。",

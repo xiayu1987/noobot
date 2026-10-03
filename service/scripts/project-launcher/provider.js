@@ -5,102 +5,43 @@
  */
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
 import { applyPrimaryModelReferencesToConfigFile } from "@noobot/agent-config-protocol";
-import { resolveModelLibraryProvider } from "@noobot/model-protocol";
+import { listModelLibraryOptions, resolveModelLibraryProvider } from "@noobot/model-protocol";
 import { deepClone, isPlainObject } from "./utils.js";
 
-export function normalizeProviderAlias(modelName = "") {
-  const normalized = String(modelName || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .replace(/_+/g, "_");
-  if (!normalized) return "custom_model";
-  return /^[0-9]/.test(normalized) ? `model_${normalized}` : normalized;
+const TEMPLATE_VARIABLE_PATTERN = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
+
+export function listConversationModelOptions() {
+  return listModelLibraryOptions().filter(
+    (option) => resolveModelLibraryProvider(option.key)?.used_for_conversation !== false,
+  );
 }
 
-export function resolveProviderEnvNames(modelName = "") {
-  const model = String(modelName || "")
-    .trim()
-    .toLowerCase();
-  if (/\bclaude\b|\banthropic\b/.test(model)) {
-    return {
-      apiKeyEnv: "ANTHROPIC_API_KEY",
-      baseUrlEnv: "ANTHROPIC_API_ADDRESS",
-    };
-  }
-  if (/\bqwen|qianwen\b/.test(model)) {
-    return {
-      apiKeyEnv: "DASHSCOPE_API_KEY",
-      baseUrlEnv: "DASHSCOPE_API_ADDRESS",
-    };
-  }
-  if (/\bkimi\b|\bmoonshot\b/.test(model)) {
-    return {
-      apiKeyEnv: "MOONSHOT_API_KEY",
-      baseUrlEnv: "MOONSHOT_API_ADDRESS",
-    };
-  }
-  if (/\bglm\b|\bzhipu\b|\bz\.ai\b/.test(model)) {
-    return {
-      apiKeyEnv: "ZAI_API_KEY",
-      baseUrlEnv: "ZAI_API_ADDRESS",
-    };
-  }
-  if (/\bgemini\b|\bgoogle\b/.test(model)) {
-    return {
-      apiKeyEnv: "GEMINI_API_KEY",
-      baseUrlEnv: "GEMINI_API_ADDRESS",
-    };
-  }
-  if (/\bdeepseek\b/.test(model)) {
-    return {
-      apiKeyEnv: "DEEPSEEK_API_KEY",
-      baseUrlEnv: "DEEPSEEK_API_ADDRESS",
-    };
-  }
-  if (/\bgrok\b|\bxai\b|\bx\.ai\b/.test(model)) {
-    return {
-      apiKeyEnv: "XAI_API_KEY",
-      baseUrlEnv: "XAI_API_ADDRESS",
-    };
-  }
-  return {
-    apiKeyEnv: "OPENAI_API_KEY",
-    baseUrlEnv: "OPENAI_API_ADDRESS",
-  };
+export function resolveLibraryModelKey(input = "") {
+  const value = String(input || "").trim();
+  if (!value) return "";
+  const options = listConversationModelOptions();
+  const byKey = options.find((option) => option.key === value);
+  if (byKey) return byKey.key;
+  const lowered = value.toLowerCase();
+  const byModel = options.find((option) => String(option.model).toLowerCase() === lowered);
+  return byModel ? byModel.key : "";
+}
+
+export function parseTemplateVariableName(templateValue = "") {
+  const match = TEMPLATE_VARIABLE_PATTERN.exec(String(templateValue || "").trim());
+  return match ? match[1] : "";
 }
 
 export function buildProviderFromTemplate({
   providerTemplate,
-  modelName,
-  apiKeyVar,
-  baseUrlVar,
   forceConversationDefaults = false,
 } = {}) {
-  const baseProvider = isPlainObject(providerTemplate)
-    ? deepClone(providerTemplate)
-    : {
-        enabled: true,
-        used_for_conversation: true,
-        temperature: 0.7,
-        max_tokens: 10000,
-        multimodal_parsing: {
-          enabled: false,
-        },
-        multimodal_generation: {
-          support_generation: {
-            enabled: false,
-            support_scope: [],
-          },
-        },
-      };
-
+  if (!isPlainObject(providerTemplate)) {
+    throw new Error("provider template is required");
+  }
+  const baseProvider = deepClone(providerTemplate);
   baseProvider.enabled = true;
   baseProvider.used_for_conversation = true;
-  baseProvider.api_key = apiKeyVar;
-  baseProvider.base_url = baseUrlVar;
-  baseProvider.model = modelName;
 
   if (forceConversationDefaults) {
     baseProvider.multimodal_parsing = {

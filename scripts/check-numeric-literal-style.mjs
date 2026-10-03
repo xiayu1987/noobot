@@ -6,6 +6,7 @@
  */
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   collectSourceFiles,
   ignorePathParts,
@@ -56,7 +57,15 @@ function isTokenChar(char = "") {
   return /[\w.]/.test(char);
 }
 
-function scanCodeTokens(filePath, text) {
+function isIdentifierStart(char = "") {
+  return /[A-Za-z_$]/.test(char);
+}
+
+function isIdentifierChar(char = "") {
+  return /[\w$]/.test(char);
+}
+
+export function scanCodeTokens(filePath, text) {
   const violations = [];
   let state = "code";
   let quote = "";
@@ -131,6 +140,14 @@ function scanCodeTokens(filePath, text) {
       continue;
     }
 
+    if (isIdentifierStart(char)) {
+      let end = index + 1;
+      while (end < text.length && isIdentifierChar(text[end])) end += 1;
+      column += end - index - 1;
+      index = end - 1;
+      continue;
+    }
+
     if (!isDigit(char)) continue;
 
     const tokenLine = line;
@@ -154,35 +171,39 @@ function scanCodeTokens(filePath, text) {
   return violations;
 }
 
-const files = collectSourceFiles(
-  TARGET_DIRS.map((dir) => path.join(ROOT, dir)),
-  {
-    extensions: CODE_EXT,
-    ignoredPathParts: IGNORE_PATH_PARTS,
-    missingDirectory: MISSING_DIRECTORY_POLICY.SKIP_UNREADABLE,
-  },
-);
-if (!files.length) {
-  console.error("[check-numeric-literal-style] failed");
-  console.error("no source files matched the scan targets; check TARGET_DIRS");
-  process.exit(1);
-}
-
-const violations = [];
-for (const file of files) {
-  const text = readFileSync(file, "utf8");
-  violations.push(...scanCodeTokens(file, text));
-}
-
-if (violations.length) {
-  console.error(
-    "[check-numeric-literal-style] numeric separators are not allowed in code literals:",
+function main() {
+  const files = collectSourceFiles(
+    TARGET_DIRS.map((dir) => path.join(ROOT, dir)),
+    {
+      extensions: CODE_EXT,
+      ignoredPathParts: IGNORE_PATH_PARTS,
+      missingDirectory: MISSING_DIRECTORY_POLICY.SKIP_UNREADABLE,
+    },
   );
-  for (const item of violations) {
-    console.error(`- ${item.file}:${item.line}:${item.column} ${item.token}`);
+  if (!files.length) {
+    console.error("[check-numeric-literal-style] failed");
+    console.error("no source files matched the scan targets; check TARGET_DIRS");
+    process.exit(1);
   }
-  console.error("\nUse plain digits instead, for example 18000000 rather than 18_000_000.");
-  process.exit(1);
+
+  const violations = [];
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    violations.push(...scanCodeTokens(file, text));
+  }
+
+  if (violations.length) {
+    console.error(
+      "[check-numeric-literal-style] numeric separators are not allowed in code literals:",
+    );
+    for (const item of violations) {
+      console.error(`- ${item.file}:${item.line}:${item.column} ${item.token}`);
+    }
+    console.error("\nUse plain digits instead, for example 18000000 rather than 18_000_000.");
+    process.exit(1);
+  }
+
+  console.log("[check-numeric-literal-style] ok");
 }
 
-console.log("[check-numeric-literal-style] ok");
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

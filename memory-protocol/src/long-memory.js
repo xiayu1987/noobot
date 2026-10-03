@@ -21,6 +21,7 @@ export const LONG_MEMORY_PATCH_ACTION = Object.freeze({
 
 export const LONG_MEMORY_ERROR_CODE = Object.freeze({
   DOCUMENT_INVALID: "LONG_MEMORY_DOCUMENT_INVALID",
+  MODEL_INVALID: "LONG_MEMORY_MODEL_INVALID",
   PATCH_INVALID: "LONG_MEMORY_PATCH_INVALID",
 });
 
@@ -149,83 +150,131 @@ function patchError(message) {
   return longMemoryError(LONG_MEMORY_ERROR_CODE.PATCH_INVALID, message);
 }
 
-function assertListItems(field, items) {
-  if (!items.length) throw documentError(`list field has no items: ${field.key}`);
-  if (items.length > field.maxItems) {
-    throw documentError(`list field exceeds ${field.maxItems} items: ${field.key}`);
-  }
-}
-
-function closeField(values, current) {
+function closeEntry(entries, current) {
   if (!current) return;
-  if (current.field.kind === LONG_MEMORY_FIELD_KIND.LIST)
-    assertListItems(current.field, current.items);
-  values.set(
-    current.field.key,
-    current.field.kind === LONG_MEMORY_FIELD_KIND.LIST ? current.items : current.value,
-  );
+  if (current.items.length && current.value) {
+    throw documentError(`field mixes inline value and numbered items: ${current.key}`);
+  }
+  if (!current.items.length && !current.value) {
+    throw documentError(`field has no value: ${current.key}`);
+  }
+  entries.set(current.key, current.items.length ? current.items : current.value);
 }
 
-function openField(model, values, line) {
+function openEntry(entries, line) {
   const matched = DOCUMENT_FIELD_RE.exec(line);
-  const field = matched ? model.byKey.get(matched[1]) : null;
-  if (!field) throw documentError(`unknown long memory line: ${line}`);
-  if (values.has(field.key)) throw documentError(`long memory field repeated: ${field.key}`);
-  const value = matched[2].trim();
-  if (field.kind === LONG_MEMORY_FIELD_KIND.SINGLE && !value) {
-    throw documentError(`single field has no value: ${field.key}`);
+  if (!matched || !FIELD_KEY_RE.test(matched[1])) {
+    throw documentError(`invalid long memory line: ${line}`);
   }
-  if (field.kind === LONG_MEMORY_FIELD_KIND.LIST && value) {
-    throw documentError(`list field value must be numbered lines: ${field.key}`);
-  }
-  return { field, value, items: [] };
+  if (entries.has(matched[1])) throw documentError(`long memory field repeated: ${matched[1]}`);
+  return { key: matched[1], value: matched[2].trim(), items: [] };
 }
 
 function appendListItem(current, line) {
   const matched = LIST_ITEM_RE.exec(line);
-  if (!current || current.field.kind !== LONG_MEMORY_FIELD_KIND.LIST || !matched) {
-    return false;
-  }
+  if (!current || !matched) return false;
   if (Number(matched[1]) !== current.items.length + 1) {
-    throw documentError(`list items must be numbered from 1 in order: ${current.field.key}`);
+    throw documentError(`list items must be numbered from 1 in order: ${current.key}`);
   }
   current.items.push(matched[2].trim());
   return true;
 }
 
-export function parseLongMemoryDocument(model, text = "") {
+function alignToField(field, raw) {
+  if (field.kind === LONG_MEMORY_FIELD_KIND.LIST) return Array.isArray(raw) ? raw : [raw];
+  return Array.isArray(raw) ? raw.join("；") : raw;
+}
+
+export function parseLongMemoryDocumentState(model, text = "") {
   const lines = splitLines(readMemoryDocumentBody(MEMORY_DOCUMENT_KIND.LONG_MEMORY, text));
-  const values = new Map();
+  const entries = new Map();
   let current = null;
   for (const line of lines) {
     if (!line || appendListItem(current, line)) continue;
-    closeField(values, current);
-    current = openField(model, values, line);
+    closeEntry(entries, current);
+    current = openEntry(entries, line);
   }
-  closeField(values, current);
-  return values;
+  closeEntry(entries, current);
+  const values = new Map();
+  const orphans = new Map();
+  for (const [key, raw] of entries) {
+    const field = model.byKey.get(key);
+    if (field) values.set(key, alignToField(field, raw));
+    else orphans.set(key, raw);
+  }
+  return { values, orphans };
 }
 
-export function renderLongMemoryBody(model, values) {
+export function parseLongMemoryDocument(model, text = "") {
+  return parseLongMemoryDocumentState(model, text).values;
+}
+
+function renderEntry(key, value) {
+  if (!Array.isArray(value)) return `${key}${LONG_MEMORY_VALUE_SEPARATOR}${value}`;
+  const items = value.map((item, index) => `${index + 1}. ${item}`);
+  return [`${key}${LONG_MEMORY_VALUE_SEPARATOR}`, ...items].join("\n");
+}
+
+export function renderLongMemoryBody(model, values, orphans = new Map()) {
   const blocks = [];
   for (const field of model.fields) {
     const value = values.get(field.key);
-    if (value === undefined) continue;
-    if (field.kind === LONG_MEMORY_FIELD_KIND.SINGLE) {
-      blocks.push(`${field.key}${LONG_MEMORY_VALUE_SEPARATOR}${value}`);
-      continue;
-    }
-    const items = value.map((item, index) => `${index + 1}. ${item}`);
-    blocks.push([`${field.key}${LONG_MEMORY_VALUE_SEPARATOR}`, ...items].join("\n"));
+    if (value !== undefined) blocks.push(renderEntry(field.key, value));
+  }
+  for (const [key, value] of orphans) {
+    if (!model.byKey.has(key)) blocks.push(renderEntry(key, value));
   }
   return blocks.join("\n\n");
 }
 
-export function renderLongMemoryDocument(model, values) {
+export function renderLongMemoryDocument(model, values, orphans = new Map()) {
   return renderMemoryDocument(
     MEMORY_DOCUMENT_KIND.LONG_MEMORY,
-    renderLongMemoryBody(model, values),
+    renderLongMemoryBody(model, values, orphans),
   );
+}
+
+const MODEL_LINE_RE = /^([^|]+)\|([^|]+)\|(.+)$/;
+const MODEL_KIND_RE = /^(single|list:(\d+))$/;
+
+function modelError(message) {
+  return longMemoryError(LONG_MEMORY_ERROR_CODE.MODEL_INVALID, message);
+}
+
+function parseModelLine(line) {
+  const matched = MODEL_LINE_RE.exec(line);
+  if (!matched) throw modelError(`invalid long memory model line: ${line}`);
+  const key = matched[1].trim();
+  const kindMatched = MODEL_KIND_RE.exec(matched[2].trim());
+  if (!kindMatched) throw modelError(`invalid long memory field kind: ${line}`);
+  const description = matched[3].trim();
+  return kindMatched[2] === undefined
+    ? { key, kind: LONG_MEMORY_FIELD_KIND.SINGLE, description }
+    : { key, kind: LONG_MEMORY_FIELD_KIND.LIST, maxItems: Number(kindMatched[2]), description };
+}
+
+export function parseLongMemoryModelText(text = "") {
+  const body = readMemoryDocumentBody(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL, text);
+  const fields = splitLines(body)
+    .filter((line) => line && !line.startsWith("#"))
+    .map(parseModelLine);
+  if (!fields.length) throw modelError("long memory model declares no fields");
+  try {
+    return createLongMemoryModel(fields);
+  } catch (error) {
+    throw modelError(error.message);
+  }
+}
+
+function renderFieldKind(field) {
+  return field.kind === LONG_MEMORY_FIELD_KIND.LIST ? `list:${field.maxItems}` : "single";
+}
+
+export function renderLongMemoryModelText(model = LONG_MEMORY_MODEL) {
+  const lines = model.fields.map(
+    (field) => `${field.key} | ${renderFieldKind(field)} | ${field.description}`,
+  );
+  return renderMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL, lines.join("\n"));
 }
 
 export function renderLongMemoryFieldsForPrompt(model, values) {
@@ -295,7 +344,7 @@ function applyListCommands(next, field, commands) {
     .map((c) => c.value);
   const result = [...items.filter((_, i) => !deleted.has(i + 1)), ...added];
   if (new Set(result).size !== result.length) throw patchError(`duplicate items in ${field.key}`);
-  if (result.length > field.maxItems) {
+  if (result.length > field.maxItems && result.length >= items.length) {
     throw patchError(`${field.key} allows at most ${field.maxItems} items, got ${result.length}`);
   }
   if (result.length) next.set(field.key, result);

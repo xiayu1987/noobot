@@ -7,7 +7,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { toDateKey } from "../../utils/date.js";
 import { sanitizeFileName, dedupeTextList } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
-import { EXPERIENCE_PATCH_SCHEMA } from "@noobot/memory-protocol/experience/schema";
+import { buildExperiencePatchSchema } from "@noobot/memory-protocol/experience/schema";
 
 export async function appendDailyDomainResults({
   storage,
@@ -16,9 +16,11 @@ export async function appendDailyDomainResults({
   basePath = "",
   results = [],
   createdAt = "",
+  fields,
 } = {}) {
   const normalizedResults = Array.isArray(results) ? results : [];
   if (!basePath || !normalizedResults.length) return false;
+  const schema = buildExperiencePatchSchema("daily", fields);
   const dateKey = toDateKey(createdAt);
   const dayDir = storage.dailySummaryDateDir(basePath, dateKey);
   await storage.ensureDir(dayDir);
@@ -26,15 +28,11 @@ export async function appendDailyDomainResults({
   let appendedCount = 0;
   const domainNames = [];
   for (const item of normalizedResults) {
-    const domainName = sanitizeFileName(item?.domain_name, "");
+    const domainName = sanitizeFileName(item?.domain, "");
     if (!domainName) continue;
     const filePath = path.join(dayDir, `${domainName}.md`);
-    const block = formatDomainBlock({
-      createdAt,
-      experiences: item?.experiences,
-      lessons: item?.lessons,
-    });
-    await storage.appendMemoryDocument(EXPERIENCE_PATCH_SCHEMA.daily.documentKind, filePath, block);
+    const block = formatDomainBlock({ createdAt, item, sections: schema.sections });
+    await storage.appendMemoryDocument(schema.documentKind, filePath, block);
     appendedCount += 1;
     domainNames.push(domainName);
   }

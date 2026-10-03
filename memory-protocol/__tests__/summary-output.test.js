@@ -16,8 +16,8 @@ test("daily output parses domain patches", () => {
   );
   assert.deepEqual(items, [
     {
-      domain_name: "coding",
-      is_new_domain: true,
+      domain: "coding",
+      new: true,
       experiences: ["先读代码"],
       lessons: ["别猜"],
     },
@@ -42,11 +42,11 @@ test("monthly output groups subcategories under categories", () => {
       'ADD M[2] category="debug" subcategory="test" patterns="先复现" methodologies="最小用例"',
     ].join("\n"),
   });
-  assert.equal(summary.domain_name, "coding");
+  assert.equal(summary.domain, "coding");
   assert.equal(summary.categories.length, 1);
-  assert.equal(summary.categories[0].category_name, "debug");
+  assert.equal(summary.categories[0].category, "debug");
   assert.deepEqual(
-    summary.categories[0].subcategories.map((item) => item.subcategory_name),
+    summary.categories[0].subcategories.map((item) => item.subcategory),
     ["trace", "test"],
   );
 });

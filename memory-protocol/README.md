@@ -17,21 +17,32 @@
 
 每个持久化的记忆文本文件第一行都是唯一的协议头，协议头是文件格式的唯一事实源：
 
-| 文件                             | kind                  | 协议头                                |
-| -------------------------------- | --------------------- | ------------------------------------- |
-| `long-memory.md`                 | `long_memory`         | `NOOBOT_LONG_MEMORY/1`                |
-| `experience/experience-model.md` | `experience_model`    | `NOOBOT_EXPERIENCE_MODEL/1`           |
-| `experience/metadata.md`         | `experience_metadata` | `NOOBOT_EXPERIENCE_METADATA/1`        |
-| 日小结                           | `daily_summary`       | `NOOBOT_EXPERIENCE_DAILY_SUMMARY/1`   |
-| 周小结                           | `weekly_summary`      | `NOOBOT_EXPERIENCE_WEEKLY_SUMMARY/1`  |
-| 月小结                           | `monthly_summary`     | `NOOBOT_EXPERIENCE_MONTHLY_SUMMARY/1` |
-| 年小结                           | `yearly_summary`      | `NOOBOT_EXPERIENCE_YEARLY_SUMMARY/1`  |
+| 文件（相对 `memory/`）   | kind                  | 协议头                                |
+| ------------------------ | --------------------- | ------------------------------------- |
+| `long-memory.md`         | `long_memory`         | `NOOBOT_LONG_MEMORY/1`                |
+| `long-memory-model.md`   | `long_memory_model`   | `NOOBOT_LONG_MEMORY_MODEL/1`          |
+| `experience-model.md`    | `experience_model`    | `NOOBOT_EXPERIENCE_MODEL/1`           |
+| `experience-fields.md`   | `experience_fields`   | `NOOBOT_EXPERIENCE_FIELDS/1`          |
+| `experience/metadata.md` | `experience_metadata` | `NOOBOT_EXPERIENCE_METADATA/1`        |
+| 日小结                   | `daily_summary`       | `NOOBOT_EXPERIENCE_DAILY_SUMMARY/1`   |
+| 周小结                   | `weekly_summary`      | `NOOBOT_EXPERIENCE_WEEKLY_SUMMARY/1`  |
+| 月小结                   | `monthly_summary`     | `NOOBOT_EXPERIENCE_MONTHLY_SUMMARY/1` |
+| 年小结                   | `yearly_summary`      | `NOOBOT_EXPERIENCE_YEARLY_SUMMARY/1`  |
 
 读取方只认当前协议头，不匹配时抛 `MEMORY_DOCUMENT_HEADER_INVALID`，运行时不解析任何旧格式。旧文件的迁移只由 `@noobot/memory-repair` 负责。
 
 ## 长期记忆协议
 
-字段模型是本包内置常量 `LONG_MEMORY_MODEL`，它是字段的唯一事实源，不再有模板文件副本：
+内置常量 `LONG_MEMORY_MODEL` 是字段的唯一代码定义，只用于首次生成和兜底。工作区的 `long-memory-model.md` 由它渲染，用户可以增删改字段，运行时只读这份文件；解析失败时回落内置字段：
+
+```
+NOOBOT_LONG_MEMORY_MODEL/1
+
+personal_info.location | single | 城市
+work.tech_stack | list:8 | 常用技术栈
+```
+
+值文档中协议已删除的字段作为孤儿保留，写回时原样写出，不会因字段变更而重置。类型：
 
 - `single`：单值，更新时整体覆盖。
 - `list:N`：数组，最多 N 项。
@@ -66,6 +77,24 @@ DELETE <list.field> <n>
 - 结果中出现重复项；
 - 数组超过上限；
 - 同一个单值字段被修改两次。
+
+## 经验教训字段协议
+
+结构字段（domain、category、subcategory、new）和 ID 前缀固定在 `experience/schema.js`。内容字段由 `experience/fields.js` 的 `BUILTIN_EXPERIENCE_FIELDS` 渲染为 `experience-fields.md`，用户可按阶段增删改：
+
+```
+NOOBOT_EXPERIENCE_FIELDS/1
+
+STAGE: daily
+- experiences | 经验 | 做成了什么、有效做法
+- tools | 工具 | 用到的关键工具
+STAGE: weekly
+...
+```
+
+- 每个阶段（daily/weekly/monthly/yearly）至少一个字段；key 为小写字母、数字和下划线，不能占用结构字段名。
+- 字段只有一个名字：协议 key 即补丁 key、内部字段名和落盘标题的来源，不提供别名。结构字段（`domain`、`new`、`category`、`subcategory`）由 `experience/structure.js` 唯一定义。
+- 补丁协议、示例和字段说明都由 `renderExperiencePatchProtocol(stage, { fields, labels })` 生成，i18n 只提供占位词（`experiencePatchLabels`）。
 
 长期记忆读取失败时（包括协议头不匹配），Agent 只记录 `memory_injection_failed` 事件和错误日志，按空记忆继续这一轮，不中断对话。
 

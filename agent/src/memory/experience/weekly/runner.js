@@ -11,6 +11,7 @@ export async function runWeeklySummaryIfNeeded({
   storage,
   invokeModel = null,
   promptI18n = {},
+  fields,
   abortSignal = null,
   basePath = "",
   listDateDirs,
@@ -42,6 +43,7 @@ export async function runWeeklySummaryIfNeeded({
       const knownCategoryText = Object.keys(modelTree?.[domainName] || {}).join(", ");
       const prompt = buildWeeklySummaryPrompt({
         promptI18n,
+        fields,
         domainName,
         knownCategoryText,
         mergedText,
@@ -55,7 +57,7 @@ export async function runWeeklySummaryIfNeeded({
       const saved = await saveWeeklySummary({
         basePath,
         weekLabel,
-        domainName: parsedSummary.domain_name || domainName,
+        domainName: parsedSummary.domain || domainName,
         categories: parsedSummary.categories,
         createdAt: new Date().toISOString(),
         sourceDates: targetDates,
@@ -64,8 +66,8 @@ export async function runWeeklySummaryIfNeeded({
       const modelEntries = (
         Array.isArray(parsedSummary?.categories) ? parsedSummary.categories : []
       ).map((item) => ({
-        domain_name: parsedSummary.domain_name || domainName,
-        category_name: item?.category_name,
+        domain: parsedSummary.domain || domainName,
+        category: item?.category,
       }));
       if (modelEntries.length) {
         await upsertModelEntries(basePath, modelEntries);

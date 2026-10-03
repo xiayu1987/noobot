@@ -8,4 +8,6 @@ export const DEFAULT_WORKSPACE_ROOT = "../workspace";
 export const DEFAULT_TEMPLATE_PATH = "../user-template/default-user";
 export const DEFAULT_SUPER_ADMIN_USER_ID = "admin";
 export const DEFAULT_SUPER_ADMIN_CONNECT_CODE = "change-your-connect-code";
+export const EXECUTION_ISOLATION_MODES = Object.freeze(["sandbox", "host"]);
+export const DEFAULT_EXECUTION_ISOLATION_MODE = "sandbox";
 export const BUILTIN_SCENARIO_KEYS = new Set(["full", "programming", "text"]);

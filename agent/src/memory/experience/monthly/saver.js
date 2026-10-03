@@ -13,6 +13,7 @@ export async function saveMonthlyDomainSummary({
   categories = [],
   createdAt = "",
   sourceWeeks = [],
+  fields,
 } = {}) {
   return saveSubcategoryDomainSummary({
     schemaKey: "monthly",
@@ -24,5 +25,6 @@ export async function saveMonthlyDomainSummary({
     categories,
     createdAt,
     sourceKeys: sourceWeeks,
+    fields,
   });
 }

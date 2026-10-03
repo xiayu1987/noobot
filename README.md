@@ -99,15 +99,18 @@ Notes:
 
 - `start.sh` runs the project launcher first (`scripts/project-launcher.mjs`).
 - If `service/config/global.config.json` does not exist, an interactive setup wizard will create it.
+- The wizard lets you pick the model from the built-in model library. `api_key` and `base_url` are optional; when left empty, the model library's `${ENV}` references are kept so you can fill them in later via `config-params.json`. It also asks for the execution isolation mode (`sandbox` runs commands in Docker, `host` runs them directly on this machine).
 - For non-interactive environments, initialize with env vars (example):
 
 ```bash
-NOOBOT_MODEL_FORMAT=openai_compatible \
-NOOBOT_MODEL_NAME=gemini-3-flash \
+NOOBOT_MODEL_NAME=gemini_3_7_flash \
 NOOBOT_MODEL_API_KEY=xxx \
 NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
+NOOBOT_EXECUTION_ISOLATION_MODE=sandbox \
 ./start.sh
 ```
+
+`NOOBOT_MODEL_NAME` accepts a model library key or model name. `NOOBOT_MODEL_API_KEY` and `NOOBOT_MODEL_BASE_URL` are optional. `NOOBOT_EXECUTION_ISOLATION_MODE` is `sandbox` (default) or `host`.
 
 Optional: `NOOBOT_SETUP_LANG=zh|en` (controls setup wizard language and synchronizes `preferences.language` plus built-in config copy text localization).
 

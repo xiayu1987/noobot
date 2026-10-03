@@ -13,9 +13,11 @@ export const MEMORY_RELATIVE_PATHS = Object.freeze({
   MEMORY_DIR: MEMORY_DIR_RELATIVE_PATH,
   SHORT_MEMORY: "memory/short-memory.json",
   LONG_MEMORY: "memory/long-memory.md",
+  LONG_MEMORY_MODEL: "memory/long-memory-model.md",
   EXPERIENCE_DIR: "memory/experience",
   EXPERIENCE_METADATA: "memory/experience/metadata.md",
   EXPERIENCE_MODEL: "memory/experience-model.md",
+  EXPERIENCE_FIELDS: "memory/experience-fields.md",
   DAILY_SUMMARY_DIR: "memory/daily_summary",
   WEEKLY_SUMMARY_DIR: "memory/weekly_summary",
   MONTHLY_SUMMARY_DIR: "memory/monthly_summary",
@@ -42,6 +44,10 @@ export function longPath(basePath) {
   return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.LONG_MEMORY);
 }
 
+export function longMemoryModelPath(basePath) {
+  return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.LONG_MEMORY_MODEL);
+}
+
 export function experienceDir(basePath) {
   return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.EXPERIENCE_DIR);
 }
@@ -52,6 +58,10 @@ export function experienceMetadataPath(basePath) {
 
 export function experienceModelPath(basePath) {
   return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.EXPERIENCE_MODEL);
+}
+
+export function experienceFieldsPath(basePath) {
+  return joinBasePath(basePath, MEMORY_RELATIVE_PATHS.EXPERIENCE_FIELDS);
 }
 
 export function dailySummaryDir(basePath) {

@@ -96,6 +96,14 @@ export class MemoryManager {
 
   async consolidateLongMemory({ basePath, promptI18n, promptPayload, invokeModel, abortSignal }) {
     const state = await this.longMemory.readState(basePath);
+    if (state.modelError) {
+      await this.experience.appendParseErrorLog({
+        basePath,
+        stage: "long_memory_model",
+        rawContent: await this.storage.readText(this.storage.longMemoryModelPath(basePath), ""),
+        error: state.modelError.message,
+      });
+    }
     assertNotAborted(abortSignal);
     const prompt = String(
       promptI18n?.prompt?.({

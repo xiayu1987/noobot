@@ -9,8 +9,13 @@ import {
   renderMemoryDocument,
 } from "@noobot/memory-protocol/document";
 import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
-import { LONG_MEMORY_MODEL, parseLongMemoryDocument } from "@noobot/memory-protocol/long-memory";
+import {
+  LONG_MEMORY_MODEL,
+  parseLongMemoryDocument,
+  parseLongMemoryModelText,
+} from "@noobot/memory-protocol/long-memory";
 import { parseExperienceModelText } from "@noobot/memory-protocol/experience/model-text";
+import { parseExperienceFieldsText } from "@noobot/memory-protocol/experience/fields";
 import { parseExperienceMetadataText } from "@noobot/memory-protocol/experience/metadata";
 
 export const MEMORY_REPAIR_STATUS = Object.freeze({
@@ -28,8 +33,11 @@ const SUMMARY_KINDS = new Set([
 ]);
 
 const VALIDATE = Object.freeze({
-  [MEMORY_DOCUMENT_KIND.LONG_MEMORY]: (text) => parseLongMemoryDocument(LONG_MEMORY_MODEL, text),
+  [MEMORY_DOCUMENT_KIND.LONG_MEMORY]: (text, { longMemoryModel }) =>
+    parseLongMemoryDocument(longMemoryModel, text),
+  [MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL]: (text) => parseLongMemoryModelText(text),
   [MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL]: (text) => parseExperienceModelText(text),
+  [MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS]: (text) => parseExperienceFieldsText(text),
   [MEMORY_DOCUMENT_KIND.EXPERIENCE_METADATA]: (text) => parseExperienceMetadataText(text),
 });
 
@@ -38,19 +46,19 @@ const LEGACY_TITLE = Object.freeze({
   [MEMORY_DOCUMENT_KIND.EXPERIENCE_METADATA]: "# experience metadata (text protocol)",
 });
 
-function validate(kind, text) {
+function validate(kind, text, context) {
   if (SUMMARY_KINDS.has(kind)) {
     if (!hasMemoryDocumentHeader(kind, text)) throw new Error(`missing ${kind} header`);
     return;
   }
   const validator = VALIDATE[kind];
   if (!validator) throw new TypeError(`unknown memory document kind: ${kind}`);
-  validator(text);
+  validator(text, context);
 }
 
-function isValid(kind, text) {
+function isValid(kind, text, context) {
   try {
-    validate(kind, text);
+    validate(kind, text, context);
     return true;
   } catch (error) {
     if (error instanceof TypeError) throw error;
@@ -70,10 +78,15 @@ function migrateLegacyBody(kind, text) {
   return renderMemoryDocument(kind, rest.join("\n"));
 }
 
-export function migrateMemoryDocument({ kind, text = "" } = {}) {
-  if (isValid(kind, text)) return { status: MEMORY_REPAIR_STATUS.CANONICAL, text };
+export function migrateMemoryDocument({
+  kind,
+  text = "",
+  longMemoryModel = LONG_MEMORY_MODEL,
+} = {}) {
+  const context = { longMemoryModel };
+  if (isValid(kind, text, context)) return { status: MEMORY_REPAIR_STATUS.CANONICAL, text };
   const migrated = migrateLegacyBody(kind, text);
-  if (migrated && isValid(kind, migrated)) {
+  if (migrated && isValid(kind, migrated, context)) {
     return { status: MEMORY_REPAIR_STATUS.MIGRATED, text: migrated };
   }
   return { status: MEMORY_REPAIR_STATUS.RESET, text: renderDefaultMemoryDocument(kind) };

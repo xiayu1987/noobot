@@ -60,11 +60,6 @@ export async function appendText(filePath, content = "") {
   await writeText(filePath, `${existing}${String(content || "")}`);
 }
 
-export async function removeText(filePath = "") {
-  for (const entry of await listSplitPartEntries(filePath)) await rm(entry.path, { force: true });
-  await rm(filePath, { force: true });
-}
-
 export async function listTextFilesRecursive(dirPath = "", extension = ".md") {
   const out = [];
   for (const entry of await safeReadDirEntries(dirPath)) {
