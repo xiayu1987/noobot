@@ -8,7 +8,11 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/
 import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
-import { renderDefaultShortMemoryText } from "@noobot/memory-protocol/defaults";
+import {
+  renderDefaultMemoryDocument,
+  renderDefaultShortMemoryText,
+} from "@noobot/memory-protocol/defaults";
+import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
 import { renderDefaultExperienceModelText } from "@noobot/memory-protocol/experience/default-model";
 import { WORKSPACE_LAYOUT, WORKSPACE_RUNTIME_DIRECTORIES } from "@noobot/workspace-protocol";
 import {
@@ -64,8 +68,16 @@ test("ensure creates a new workspace from the protocols and the asset package", 
     assert.equal(await fixture.read("memory/short-memory.json"), renderDefaultShortMemoryText());
     assert.equal(await fixture.read("memory/long-memory.md"), EMPTY_LONG_MEMORY_DOCUMENT);
     assert.equal(
+      await fixture.read("memory/long-memory-model.md"),
+      renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL),
+    );
+    assert.equal(
       await fixture.read("memory/experience-model.md"),
       renderDefaultExperienceModelText(),
+    );
+    assert.equal(
+      await fixture.read("memory/experience-fields.md"),
+      renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS),
     );
     assert.deepEqual(JSON.parse(await fixture.read("config.json")), BASE_VALUES);
     assert.equal(await fixture.read("services/built-in.js"), "export default 'v1';\n");
@@ -165,7 +177,10 @@ test("ensure backs up and repairs legacy memory documents", async () => {
       await fixture.read("memory/daily_summary/2026-09-01/域.md"),
       "NOOBOT_EXPERIENCE_DAILY_SUMMARY/1\n\n经验：旧\n",
     );
-    await assert.rejects(fixture.read("memory/long-memory-model.md"), { code: "ENOENT" });
+    assert.equal(
+      await fixture.read("memory/long-memory-model.md"),
+      renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL),
+    );
     const backupRoot = path.join(fixture.userPath, WORKSPACE_LAYOUT.MEMORY_REPAIR_BACKUPS_DIR);
     const [stamp] = await readdir(backupRoot);
     assert.equal(

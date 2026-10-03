@@ -27,6 +27,7 @@ export async function runMonthlySummaryIfNeeded({
   storage,
   invokeModel = null,
   promptI18n = {},
+  fields,
   abortSignal = null,
   basePath = "",
   listWeekDirs,
@@ -54,6 +55,7 @@ export async function runMonthlySummaryIfNeeded({
       const knownDomainTree = modelTree?.[domainName] || {};
       const prompt = buildMonthlySummaryPrompt({
         promptI18n,
+        fields,
         domainName,
         knownTreeText: JSON.stringify(knownDomainTree, null, 2),
         mergedText,
@@ -67,7 +69,7 @@ export async function runMonthlySummaryIfNeeded({
       const saved = await saveMonthlySummary({
         basePath,
         monthKey,
-        domainName: parsedSummary.domain_name || domainName,
+        domainName: parsedSummary.domain || domainName,
         categories: parsedSummary.categories,
         createdAt: new Date().toISOString(),
         sourceWeeks: targetWeeks,

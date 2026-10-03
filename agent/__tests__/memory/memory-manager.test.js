@@ -197,6 +197,53 @@ test("long memory update treats an equivalent patch as unchanged", async () => {
   assert.equal(await readLongMemoryDoc(userRoot), document);
 });
 
+test("long memory follows the user field protocol and keeps removed fields", async () => {
+  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
+  await writeFile(
+    path.join(userRoot, "memory/long-memory-model.md"),
+    [
+      "NOOBOT_LONG_MEMORY_MODEL/1",
+      "",
+      "personal_info.occupation | single | 职业",
+      "work.tech_stack | list:3 | 常用技术栈",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(userRoot, "memory/long-memory.md"),
+    "NOOBOT_LONG_MEMORY/1\n\ninterests.hobbies：\n1. 跑步\n",
+  );
+  const service = new MemoryManager({ workspaceRoot });
+  const state = await service.longMemory.readState(userRoot);
+  assert.equal(state.modelError, null);
+  assert.deepEqual(
+    state.model.fields.map((field) => field.key),
+    ["personal_info.occupation", "work.tech_stack"],
+  );
+  assert.deepEqual([...state.orphans], [["interests.hobbies", ["跑步"]]]);
+  await assert.rejects(service.longMemory.update(userRoot, state, "ADD interests.hobbies：围棋"), {
+    code: "LONG_MEMORY_PATCH_INVALID",
+  });
+  const result = await service.longMemory.update(userRoot, state, "ADD work.tech_stack：Node.js");
+  assert.deepEqual(result, { changed: true });
+  assert.equal(
+    await readLongMemoryDoc(userRoot),
+    "NOOBOT_LONG_MEMORY/1\n\nwork.tech_stack：\n1. Node.js\n\ninterests.hobbies：\n1. 跑步\n",
+  );
+});
+
+test("an invalid user field protocol falls back to the built-in fields", async () => {
+  const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
+  await writeFile(
+    path.join(userRoot, "memory/long-memory-model.md"),
+    "NOOBOT_LONG_MEMORY_MODEL/1\n\nbroken line\n",
+  );
+  const service = new MemoryManager({ workspaceRoot });
+  const state = await service.longMemory.readState(userRoot);
+  assert.equal(state.modelError?.code, "LONG_MEMORY_MODEL_INVALID");
+  assert.ok(state.model.byKey.has("interests.hobbies"));
+});
+
 test("maybeSummarize applies the field patch from ModelPort text output", async () => {
   const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
   await writeShortMemoryItems(userRoot);
@@ -356,8 +403,8 @@ test("append daily domain results writes per-domain md and metadata", async () =
     basePath: userRoot,
     results: [
       {
-        domain_name: "前端/开发:基础",
-        is_new_domain: true,
+        domain: "前端/开发:基础",
+        new: true,
         experiences: ["切换模型后需验证下一轮 provider 生效。"],
         lessons: ["避免把系统保留字符写入文件名。"],
       },
@@ -378,13 +425,63 @@ test("append daily domain results writes per-domain md and metadata", async () =
   assert.match(metadata, /DOMAIN:\s*前端_开发_基础/);
 });
 
+test("custom experience fields from the user protocol drive daily parsing and rendering", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userRoot = path.join(workspaceRoot, "primary-user");
+  await mkdir(path.join(userRoot, "memory"), { recursive: true });
+  await writeFile(
+    path.join(userRoot, "memory/experience-fields.md"),
+    [
+      "NOOBOT_EXPERIENCE_FIELDS/1",
+      "",
+      "STAGE: daily",
+      "- experiences | 经验 | 做成了什么",
+      "- tools | 工具 | 用到的关键工具",
+      "",
+      "STAGE: weekly",
+      "- experiences | 经验 | 本周有效做法",
+      "",
+      "STAGE: monthly",
+      "- patterns | 规律 | 规律",
+      "",
+      "STAGE: yearly",
+      "- principles | 原则 | 原则",
+      "",
+    ].join("\n"),
+  );
+
+  const service = new MemoryManager({ workspaceRoot });
+  const fields = await service.experience.readExperienceFields(userRoot);
+  const results = service.experience.parseDaily(
+    'ADD D[1] domain="工程/调试" new=true experiences="先复现再修" tools="node --test"',
+    { basePath: userRoot, fields },
+  );
+  assert.equal(results.length, 1);
+  assert.deepEqual(results[0].tools, ["node --test"]);
+
+  const ok = await service.experience.appendDailyDomainResults({
+    basePath: userRoot,
+    results,
+    createdAt: "2026-05-13T10:00:00.000Z",
+    fields,
+  });
+  assert.equal(ok, true);
+  const content = await readFile(
+    path.join(userRoot, "memory/daily_summary/2026-05-13/工程_调试.md"),
+    "utf8",
+  );
+  assert.match(content, /工具：/);
+  assert.match(content, /node --test/);
+  assert.doesNotMatch(content, /教训：/);
+});
+
 test("parse daily experience output supports ID+PATCH protocol", () => {
   const service = new MemoryManager({ workspaceRoot: "/tmp/workspace" });
   const items = service.experience.parseDaily(
     ['ADD D[1] domain="测试/域" new=true experiences="经验1 || 经验1" lessons="教训1"'].join("\n"),
   );
   assert.equal(items.length, 1);
-  assert.equal(items[0].domain_name, "测试_域");
+  assert.equal(items[0].domain, "测试_域");
   assert.deepEqual(items[0].experiences, ["经验1"]);
   assert.deepEqual(items[0].lessons, ["教训1"]);
 });

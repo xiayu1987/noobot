@@ -7,9 +7,11 @@ import {
   resolveBasePath,
   shortPath,
   longPath,
+  longMemoryModelPath,
   experienceDir,
   experienceMetadataPath,
   experienceModelPath,
+  experienceFieldsPath,
   dailySummaryDir,
   weeklySummaryDir,
   monthlySummaryDir,
@@ -57,6 +59,10 @@ export class StorageManager {
     return longPath(basePath);
   }
 
+  longMemoryModelPath(basePath) {
+    return longMemoryModelPath(basePath);
+  }
+
   experienceDir(basePath) {
     return experienceDir(basePath);
   }
@@ -67,6 +73,10 @@ export class StorageManager {
 
   experienceModelPath(basePath) {
     return experienceModelPath(basePath);
+  }
+
+  experienceFieldsPath(basePath) {
+    return experienceFieldsPath(basePath);
   }
 
   dailySummaryDir(basePath) {

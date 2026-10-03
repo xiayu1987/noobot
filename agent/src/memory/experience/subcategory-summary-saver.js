@@ -5,18 +5,8 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { sanitizeFileName } from "@noobot/memory-protocol/text";
-import { EXPERIENCE_PATCH_SCHEMA } from "@noobot/memory-protocol/experience/schema";
-
-function renderSectionLines(subcategory = {}, sections = []) {
-  const lines = [];
-  for (const { heading, field } of sections) {
-    const values = Array.isArray(subcategory?.[field]) ? subcategory[field] : [];
-    lines.push(heading);
-    lines.push(...(values.length ? values.map((item) => `- ${item}`) : ["- （无）"]));
-    lines.push("");
-  }
-  return lines;
-}
+import { buildExperiencePatchSchema } from "@noobot/memory-protocol/experience/schema";
+import { renderSectionLines } from "../utils/format.js";
 
 export async function saveSubcategoryDomainSummary({
   schemaKey = "",
@@ -28,21 +18,19 @@ export async function saveSubcategoryDomainSummary({
   categories = [],
   createdAt = "",
   sourceKeys = [],
+  fields,
 } = {}) {
-  const schema = EXPERIENCE_PATCH_SCHEMA[schemaKey];
-  if (!schema) {
-    throw new Error(`unknown experience patch schema: ${schemaKey}`);
-  }
+  const schema = buildExperiencePatchSchema(schemaKey, fields);
   const safeDomainName = sanitizeFileName(domainName, "");
   if (!safeDomainName || !Array.isArray(categories) || !categories.length) return false;
 
   let writtenCount = 0;
   for (const category of categories) {
-    const safeCategoryName = sanitizeFileName(category?.category_name, "");
+    const safeCategoryName = sanitizeFileName(category?.category, "");
     if (!safeCategoryName) continue;
     const subcategories = Array.isArray(category?.subcategories) ? category.subcategories : [];
     for (const subcategory of subcategories) {
-      const safeSubcategoryName = sanitizeFileName(subcategory?.subcategory_name, "");
+      const safeSubcategoryName = sanitizeFileName(subcategory?.subcategory, "");
       if (!safeSubcategoryName) continue;
       const dirPath = path.join(periodDir, periodKey, safeDomainName, safeCategoryName);
       await storage.ensureDir(dirPath);
@@ -51,7 +39,10 @@ export async function saveSubcategoryDomainSummary({
         `时间：${createdAt || new Date().toISOString()}`,
         `${schema.sourceLabel}：${(Array.isArray(sourceKeys) ? sourceKeys : []).join(", ")}`,
         "",
-        ...renderSectionLines(subcategory, schema.sections),
+        ...schema.sections.flatMap((section) => [
+          ...renderSectionLines(subcategory, [section]),
+          "",
+        ]),
       ].join("\n");
       await storage.appendMemoryDocument(schema.documentKind, filePath, block);
       writtenCount += 1;

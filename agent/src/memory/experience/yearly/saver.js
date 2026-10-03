@@ -13,6 +13,7 @@ export async function saveYearlyDomainSummary({
   categories = [],
   createdAt = "",
   sourceMonths = [],
+  fields,
 } = {}) {
   return saveSubcategoryDomainSummary({
     schemaKey: "yearly",
@@ -24,5 +25,6 @@ export async function saveYearlyDomainSummary({
     categories,
     createdAt,
     sourceKeys: sourceMonths,
+    fields,
   });
 }

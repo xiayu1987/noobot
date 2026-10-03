@@ -29,8 +29,7 @@ import {
 import {
   alignInitialModelReferences,
   buildProviderFromTemplate,
-  normalizeProviderAlias,
-  resolveProviderEnvNames,
+  parseTemplateVariableName,
   resolveProviderTemplate,
 } from "./provider.js";
 import {
@@ -57,11 +56,6 @@ async function initializeGlobalConfigWhenMissing({
     throw new Error(`invalid global config example: ${globalExamplePath}`);
   }
 
-  const providerAlias = normalizeProviderAlias(answers.modelName);
-  const { apiKeyEnv, baseUrlEnv } = resolveProviderEnvNames(answers.modelName);
-  const apiKeyTemplateValue = `\${${apiKeyEnv}}`;
-  const baseUrlTemplateValue = `\${${baseUrlEnv}}`;
-
   const globalConfig = localizeConfigTextTree(deepClone(globalExampleConfig), answers.setupLocale);
   globalConfig.workspace_root = answers.workspaceRoot;
   globalConfig.workspace_template_path = answers.workspaceTemplatePath;
@@ -75,16 +69,26 @@ async function initializeGlobalConfigWhenMissing({
   preferences.language = answers.configLanguage;
   globalConfig.preferences = preferences;
 
+  const security = isPlainObject(globalConfig.security) ? { ...globalConfig.security } : {};
+  security.execution_isolation = {
+    ...(isPlainObject(security.execution_isolation) ? security.execution_isolation : {}),
+    mode: answers.executionIsolationMode,
+  };
+  globalConfig.security = security;
+
+  const providerAlias = answers.modelKey;
   const providers = isPlainObject(globalConfig.providers) ? { ...globalConfig.providers } : {};
   const aliasExists = isPlainObject(providers[providerAlias]);
-  const providerSeed = resolveProviderTemplate(providers, providerAlias);
   providers[providerAlias] = buildProviderFromTemplate({
-    providerTemplate: providerSeed,
-    modelName: answers.modelName,
-    apiKeyVar: apiKeyTemplateValue,
-    baseUrlVar: baseUrlTemplateValue,
+    providerTemplate: resolveProviderTemplate(providers, providerAlias),
     forceConversationDefaults: !aliasExists,
   });
+
+  const explicitEntries = {};
+  const apiKeyEnv = parseTemplateVariableName(providers[providerAlias].api_key);
+  const baseUrlEnv = parseTemplateVariableName(providers[providerAlias].base_url);
+  if (answers.apiKey && apiKeyEnv) explicitEntries[apiKeyEnv] = answers.apiKey;
+  if (answers.baseUrl && baseUrlEnv) explicitEntries[baseUrlEnv] = answers.baseUrl;
 
   globalConfig.providers = providers;
   globalConfig.default_provider = providerAlias;
@@ -108,10 +112,7 @@ async function initializeGlobalConfigWhenMissing({
   await ensureWorkspaceConfigParamsCatalog({
     workspaceRootAbsolutePath,
     globalConfigPath,
-    explicitEntries: {
-      [apiKeyEnv]: answers.apiKey,
-      [baseUrlEnv]: answers.baseUrl,
-    },
+    explicitEntries,
   });
 
   console.log(t(answers.setupLocale, "logInitDone"));

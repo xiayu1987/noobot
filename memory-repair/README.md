@@ -4,15 +4,16 @@
 
 ## 入口
 
-- `migrateMemoryDocument({ kind, text })`：迁移单个文档，返回 `{ status, text }`。
+- `migrateMemoryDocument({ kind, text, longMemoryModel })`：迁移单个文档，返回 `{ status, text }`。`longMemoryModel` 是校验长期记忆值文档用的字段协议，省略时使用内置字段。
   - `canonical`：已符合当前协议，不需要写入。
   - `migrated`：命中确定性的旧格式规则。经验模型和元数据去掉旧标题行后补协议头；日/周/月/年小结直接补协议头。
-  - `reset`：没有确定性规则（例如旧格式长期记忆），返回 `@noobot/memory-protocol/defaults` 生成的默认文档。
+  - `reset`：没有确定性规则（例如旧格式长期记忆、无法解析的字段协议），返回 `@noobot/memory-protocol/defaults` 生成的默认文档。
 - `repairMemoryWorkspace({ layout, io })`：修复一个工作区的全部记忆文档，返回修复报告。
   - 缺失的文件按协议默认值生成，状态为 `created`。默认内容只来自 memory-protocol，不读取任何模板文件。
   - 符合协议的文件从不写入，修复是幂等的。
-  - 任何改写或删除之前，原文先经 `io.writeBackup` 备份。
-  - `layout.obsoleteFiles` 列出的废弃文件（如 `long-memory-model.md`）备份后删除。
+  - 任何改写之前，原文先经 `io.writeBackup` 备份。
+  - 先修复用户字段协议 `long-memory-model.md`，再用修复后的协议校验 `long-memory.md`。用户删除或改名的字段在值文档中原样保留，不会触发重置。
+  - `experience-fields.md` 同样是必需文件：缺失时按内置字段生成，用户修改的内容只要能解析就原样保留，无法解析时备份后重置为内置字段。
 
 本包只依赖 `@noobot/memory-protocol`，不做任何 IO；`io` 由调用方注入。
 

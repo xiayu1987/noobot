@@ -6,7 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { sanitizeFileName } from "@noobot/memory-protocol/text";
 import { formatDomainBlock } from "../../utils/format.js";
-import { EXPERIENCE_PATCH_SCHEMA } from "@noobot/memory-protocol/experience/schema";
+import { buildExperiencePatchSchema } from "@noobot/memory-protocol/experience/schema";
 
 export async function saveWeeklyDomainSummary({
   storage,
@@ -16,32 +16,26 @@ export async function saveWeeklyDomainSummary({
   categories = [],
   createdAt = "",
   sourceDates = [],
+  fields,
 } = {}) {
   const safeDomainName = sanitizeFileName(domainName, "");
   if (!safeDomainName || !Array.isArray(categories) || !categories.length) return false;
+  const schema = buildExperiencePatchSchema("weekly", fields);
   const domainDir = path.join(storage.weeklySummaryDir(basePath), weekLabel, safeDomainName);
   await storage.ensureDir(domainDir);
 
   let writtenCount = 0;
   for (const category of categories) {
-    const categoryName = sanitizeFileName(category?.category_name, "");
+    const categoryName = sanitizeFileName(category?.category, "");
     if (!categoryName) continue;
     const filePath = path.join(domainDir, `${categoryName}.md`);
     const block = [
       `时间：${createdAt || new Date().toISOString()}`,
       `来源日期：${(Array.isArray(sourceDates) ? sourceDates : []).join(", ")}`,
       "",
-      formatDomainBlock({
-        createdAt,
-        experiences: category?.experiences,
-        lessons: category?.lessons,
-      }),
+      formatDomainBlock({ createdAt, item: category, sections: schema.sections }),
     ].join("\n");
-    await storage.appendMemoryDocument(
-      EXPERIENCE_PATCH_SCHEMA.weekly.documentKind,
-      filePath,
-      block,
-    );
+    await storage.appendMemoryDocument(schema.documentKind, filePath, block);
     writtenCount += 1;
   }
   return writtenCount > 0;

@@ -12,6 +12,7 @@ export async function runYearlySummaryIfNeeded({
   storage,
   invokeModel = null,
   promptI18n = {},
+  fields,
   abortSignal = null,
   basePath = "",
   listMonthDirs,
@@ -40,6 +41,7 @@ export async function runYearlySummaryIfNeeded({
       const knownDomainTree = modelTree?.[domainName] || {};
       const prompt = buildYearlySummaryPrompt({
         promptI18n,
+        fields,
         domainName,
         knownTreeText: JSON.stringify(knownDomainTree, null, 2),
         mergedText,
@@ -53,7 +55,7 @@ export async function runYearlySummaryIfNeeded({
       const saved = await saveYearlySummary({
         basePath,
         yearKey,
-        domainName: parsedSummary.domain_name || domainName,
+        domainName: parsedSummary.domain || domainName,
         categories: parsedSummary.categories,
         createdAt: new Date().toISOString(),
         sourceMonths: targetMonths,

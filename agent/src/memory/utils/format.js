@@ -5,21 +5,19 @@
  */
 import { dedupeTextList } from "@noobot/memory-protocol/text";
 
-export function formatDomainBlock({ createdAt = "", experiences = [], lessons = [] } = {}) {
-  const normalizedExperiences = dedupeTextList(experiences);
-  const normalizedLessons = dedupeTextList(lessons);
-  const expLines = normalizedExperiences.length
-    ? normalizedExperiences.map((item) => `- ${item}`).join("\n")
-    : "- （无）";
-  const lessonLines = normalizedLessons.length
-    ? normalizedLessons.map((item) => `- ${item}`).join("\n")
-    : "- （无）";
+export function renderSectionLines(item = {}, sections = []) {
+  const lines = [];
+  for (const { heading, field } of sections) {
+    const values = dedupeTextList(item?.[field]);
+    lines.push(heading, ...(values.length ? values.map((value) => `- ${value}`) : ["- （无）"]));
+  }
+  return lines;
+}
+
+export function formatDomainBlock({ createdAt = "", item = {}, sections = [] } = {}) {
   return [
     `[${createdAt || new Date().toISOString()}]`,
-    "经验：",
-    expLines,
-    "教训：",
-    lessonLines,
+    ...renderSectionLines(item, sections),
     "",
   ].join("\n");
 }

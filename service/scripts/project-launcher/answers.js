@@ -10,8 +10,11 @@ import {
   DEFAULT_SUPER_ADMIN_USER_ID,
   DEFAULT_TEMPLATE_PATH,
   DEFAULT_WORKSPACE_ROOT,
+  DEFAULT_EXECUTION_ISOLATION_MODE,
+  EXECUTION_ISOLATION_MODES,
 } from "./constants.js";
 import { normalizeSetupLocale, resolveConfigLanguage, t } from "./i18n.js";
+import { listConversationModelOptions, resolveLibraryModelKey } from "./provider.js";
 
 export function validateCollectedAnswers(raw = {}) {
   const setupLocale = normalizeSetupLocale(raw.setupLocale, "zh");
@@ -20,14 +23,31 @@ export function validateCollectedAnswers(raw = {}) {
   const modelName = String(raw.modelName || "").trim();
   const apiKey = String(raw.apiKey || "").trim();
   const baseUrl = String(raw.baseUrl || "").trim();
+  const executionIsolationMode = String(raw.executionIsolationMode || "")
+    .trim()
+    .toLowerCase();
   const superAdminUserId = String(raw.superAdminUserId || "").trim();
   const superAdminConnectCode = String(raw.superAdminConnectCode || "").trim();
 
   if (!workspaceRoot) throw new Error(t(setupLocale, "errWorkspaceRootRequired"));
   if (!workspaceTemplatePath) throw new Error(t(setupLocale, "errWorkspaceTemplatePathRequired"));
   if (!modelName) throw new Error(t(setupLocale, "errModelRequired"));
-  if (!apiKey) throw new Error(t(setupLocale, "errApiKeyRequired"));
-  if (!baseUrl) throw new Error(t(setupLocale, "errBaseUrlRequired"));
+  const modelKey = resolveLibraryModelKey(modelName);
+  if (!modelKey) {
+    throw new Error(
+      t(setupLocale, "errModelNotInLibrary", {
+        value: modelName,
+        keys: listConversationModelOptions()
+          .map((option) => option.key)
+          .join(", "),
+      }),
+    );
+  }
+  if (!EXECUTION_ISOLATION_MODES.includes(executionIsolationMode)) {
+    throw new Error(
+      t(setupLocale, "errExecutionIsolationModeInvalid", { value: executionIsolationMode }),
+    );
+  }
   if (!superAdminUserId) throw new Error(t(setupLocale, "errSuperAdminUserIdRequired"));
   if (!superAdminConnectCode) throw new Error(t(setupLocale, "errSuperAdminConnectCodeRequired"));
 
@@ -36,9 +56,10 @@ export function validateCollectedAnswers(raw = {}) {
     configLanguage: resolveConfigLanguage(setupLocale),
     workspaceRoot,
     workspaceTemplatePath,
-    modelName,
+    modelKey,
     apiKey,
     baseUrl,
+    executionIsolationMode,
     superAdminUserId,
     superAdminConnectCode,
   };
@@ -60,6 +81,8 @@ export function collectAnswersFromEnv(cliOptions = {}) {
     modelName: process.env.NOOBOT_MODEL_NAME || "",
     apiKey: process.env.NOOBOT_MODEL_API_KEY || "",
     baseUrl: process.env.NOOBOT_MODEL_BASE_URL || "",
+    executionIsolationMode:
+      process.env.NOOBOT_EXECUTION_ISOLATION_MODE || DEFAULT_EXECUTION_ISOLATION_MODE,
     superAdminUserId: process.env.NOOBOT_SUPER_ADMIN_USER_ID || DEFAULT_SUPER_ADMIN_USER_ID,
     superAdminConnectCode:
       process.env.NOOBOT_SUPER_ADMIN_CONNECT_CODE || DEFAULT_SUPER_ADMIN_CONNECT_CODE,
@@ -167,20 +190,32 @@ export async function askInteractiveQuestions(cliOptions = {}) {
       defaultValue: DEFAULT_TEMPLATE_PATH,
       required: true,
     });
-    const modelName = await ask({
+    const modelName = await askChoice({
       locale: setupLocale,
-      label: t(setupLocale, "stepModelName"),
-      required: true,
+      title: t(setupLocale, "stepModelName"),
+      hint: t(setupLocale, "stepModelNameHint"),
+      options: listConversationModelOptions().map((option) => ({
+        value: option.key,
+        label: option.description ? `${option.model} | ${option.description}` : option.model,
+      })),
     });
     const apiKey = await ask({
       locale: setupLocale,
       label: t(setupLocale, "stepApiKey"),
-      required: true,
     });
     const baseUrl = await ask({
       locale: setupLocale,
       label: t(setupLocale, "stepBaseUrl"),
-      required: true,
+    });
+    const executionIsolationMode = await askChoice({
+      locale: setupLocale,
+      title: t(setupLocale, "stepExecutionIsolationMode"),
+      hint: t(setupLocale, "stepExecutionIsolationModeHint"),
+      options: [
+        { value: "sandbox", label: t(setupLocale, "isolationModeSandbox") },
+        { value: "host", label: t(setupLocale, "isolationModeHost") },
+      ],
+      defaultValue: DEFAULT_EXECUTION_ISOLATION_MODE,
     });
     const superAdminUserId = await ask({
       locale: setupLocale,
@@ -202,6 +237,7 @@ export async function askInteractiveQuestions(cliOptions = {}) {
       modelName,
       apiKey,
       baseUrl,
+      executionIsolationMode,
       superAdminUserId,
       superAdminConnectCode,
     });

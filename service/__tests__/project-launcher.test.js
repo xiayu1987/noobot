@@ -11,37 +11,27 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { promisify } from "node:util";
-import { resolveProviderEnvNames } from "../scripts/project-launcher/provider.js";
+import {
+  listConversationModelOptions,
+  parseTemplateVariableName,
+  resolveLibraryModelKey,
+} from "../scripts/project-launcher/provider.js";
 
 const execFileAsync = promisify(execFile);
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const launcherPath = path.resolve(testDir, "../scripts/project-launcher.js");
 
-test("project launcher maps model families to their provider credentials", () => {
-  assert.deepEqual(resolveProviderEnvNames("qwen3.7-max"), {
-    apiKeyEnv: "DASHSCOPE_API_KEY",
-    baseUrlEnv: "DASHSCOPE_API_ADDRESS",
-  });
-  assert.deepEqual(resolveProviderEnvNames("kimi-k3"), {
-    apiKeyEnv: "MOONSHOT_API_KEY",
-    baseUrlEnv: "MOONSHOT_API_ADDRESS",
-  });
-  assert.deepEqual(resolveProviderEnvNames("glm-5.3"), {
-    apiKeyEnv: "ZAI_API_KEY",
-    baseUrlEnv: "ZAI_API_ADDRESS",
-  });
-  assert.deepEqual(resolveProviderEnvNames("gemini-3.7-flash"), {
-    apiKeyEnv: "GEMINI_API_KEY",
-    baseUrlEnv: "GEMINI_API_ADDRESS",
-  });
-  assert.deepEqual(resolveProviderEnvNames("deepseek-v4"), {
-    apiKeyEnv: "DEEPSEEK_API_KEY",
-    baseUrlEnv: "DEEPSEEK_API_ADDRESS",
-  });
-  assert.deepEqual(resolveProviderEnvNames("grok-4.6"), {
-    apiKeyEnv: "XAI_API_KEY",
-    baseUrlEnv: "XAI_API_ADDRESS",
-  });
+test("project launcher offers only conversation models from the model library", () => {
+  const keys = listConversationModelOptions().map((option) => option.key);
+  assert.ok(keys.includes("gpt_6_sol"));
+  assert.ok(keys.includes("qwen3_7_max"));
+  assert.equal(keys.includes("gpt_image_2_5_flare"), false);
+  assert.equal(resolveLibraryModelKey("qwen3_7_max"), "qwen3_7_max");
+  assert.equal(resolveLibraryModelKey("Kimi-K3"), "kimi_k3");
+  assert.equal(resolveLibraryModelKey("gpt-image-2.5-flare"), "");
+  assert.equal(resolveLibraryModelKey("not-a-library-model"), "");
+  assert.equal(parseTemplateVariableName("${DASHSCOPE_API_KEY}"), "DASHSCOPE_API_KEY");
+  assert.equal(parseTemplateVariableName("plain-value"), "");
 });
 
 const minimalGlobalExample = {
@@ -166,12 +156,60 @@ test("project launcher initializes a known provider from the model library", asy
       NOOBOT_MODEL_NAME: "gpt-6-sol",
       NOOBOT_MODEL_API_KEY: "test-key",
       NOOBOT_MODEL_BASE_URL: "https://example.invalid/v1",
+      NOOBOT_WORKSPACE_ROOT: "./workspace",
     },
   });
 
   const globalConfig = await readJson(path.join(serviceRoot, "config", "global.config.json"));
   assert.equal(globalConfig.providers?.["gpt_6_sol"]?.reasoning_effort, "medium");
   assert.equal(globalConfig.providers?.["gpt_6_sol"]?.tool_reasoning_effort, "medium");
+  assert.equal(globalConfig.providers.gpt_6_sol.api_key, "${OPENAI_API_KEY}");
+  assert.equal(globalConfig.providers.gpt_6_sol.base_url, "${OPENAI_API_ADDRESS}");
+  assert.equal(globalConfig.default_provider, "gpt_6_sol");
+  assert.equal(globalConfig.security.execution_isolation.mode, "sandbox");
+  const params = await readJson(path.join(serviceRoot, "workspace", "config-params.json"));
+  assert.equal(JSON.stringify(params).includes("test-key"), true);
+  assert.equal(JSON.stringify(params).includes("https://example.invalid/v1"), true);
+});
+
+test("project launcher falls back to model library config when key and url are empty", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+
+  await runLauncher(serviceRoot, {
+    env: {
+      NOOBOT_MODEL_NAME: "qwen3_7_max",
+      NOOBOT_MODEL_API_KEY: "",
+      NOOBOT_MODEL_BASE_URL: "",
+      NOOBOT_EXECUTION_ISOLATION_MODE: "host",
+      NOOBOT_WORKSPACE_ROOT: "./workspace",
+    },
+  });
+
+  const globalConfig = await readJson(path.join(serviceRoot, "config", "global.config.json"));
+  const provider = globalConfig.providers.qwen3_7_max;
+  assert.equal(provider.model, "qwen3.7-max");
+  assert.equal(provider.api_key, "${DASHSCOPE_API_KEY}");
+  assert.equal(provider.base_url, "${DASHSCOPE_API_ADDRESS}");
+  assert.equal(globalConfig.default_provider, "qwen3_7_max");
+  assert.equal(globalConfig.security.execution_isolation.mode, "host");
+});
+
+test("project launcher rejects models outside the model library", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+
+  await assert.rejects(
+    runLauncher(serviceRoot, { env: { NOOBOT_MODEL_NAME: "not-a-library-model" } }),
+    (error) => /not in the model library/.test(String(error.stderr || error.message)),
+  );
+  await assert.rejects(
+    runLauncher(serviceRoot, {
+      env: { NOOBOT_MODEL_NAME: "gpt_6_sol", NOOBOT_EXECUTION_ISOLATION_MODE: "vm" },
+    }),
+    (error) => /only sandbox or host/.test(String(error.stderr || error.message)),
+  );
+  assert.equal(await exists(path.join(serviceRoot, "config", "global.config.json")), false);
 });
 
 test("project launcher preserves explicit provider reasoning settings during incremental sync", async (t) => {

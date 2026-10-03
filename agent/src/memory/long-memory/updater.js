@@ -11,11 +11,16 @@ import {
   renderLongMemoryDocument,
 } from "@noobot/memory-protocol/long-memory";
 
-export async function updateLongMemory(storage, basePath, { model, values }, patchText) {
+export async function updateLongMemory(
+  storage,
+  basePath,
+  { model, values, orphans = new Map() },
+  patchText,
+) {
   const nextValues = applyLongMemoryPatch(model, values, parseLongMemoryPatch(model, patchText));
   if (isSameLongMemory(values, nextValues)) return { changed: false };
   const longPath = storage.longPath(basePath);
   await storage.ensureDir(path.dirname(longPath));
-  await storage.writeText(longPath, renderLongMemoryDocument(model, nextValues));
+  await storage.writeText(longPath, renderLongMemoryDocument(model, nextValues, orphans));
   return { changed: true };
 }

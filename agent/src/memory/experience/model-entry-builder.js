@@ -5,16 +5,16 @@
  */
 
 export function buildSubcategoryModelEntries(parsedSummary = {}, fallbackDomainName = "") {
-  const domainName = parsedSummary?.domain_name || fallbackDomainName;
+  const domainName = parsedSummary?.domain || fallbackDomainName;
   const entries = [];
   for (const category of Array.isArray(parsedSummary?.categories) ? parsedSummary.categories : []) {
     for (const subcategory of Array.isArray(category?.subcategories)
       ? category.subcategories
       : []) {
       entries.push({
-        domain_name: domainName,
-        category_name: category?.category_name,
-        subcategory_name: subcategory?.subcategory_name,
+        domain: domainName,
+        category: category?.category,
+        subcategory: subcategory?.subcategory,
       });
     }
   }

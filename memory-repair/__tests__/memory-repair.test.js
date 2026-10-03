@@ -100,7 +100,6 @@ function createMemoryIo(files) {
       readText: async (relativePath) => files.get(relativePath),
       writeText: async (relativePath, text) => void files.set(relativePath, text),
       writeBackup: async (relativePath, text) => void backups.set(relativePath, text),
-      removeFile: async (relativePath) => void files.delete(relativePath),
       listMarkdownFiles: async (relativeDir) =>
         [...files.keys()].filter((relativePath) => relativePath.startsWith(`${relativeDir}/`)),
     },
@@ -110,16 +109,17 @@ function createMemoryIo(files) {
 const LAYOUT = Object.freeze({
   shortMemory: "memory/short-memory.json",
   longMemory: "memory/long-memory.md",
+  longMemoryModel: "memory/long-memory-model.md",
   experienceModel: "memory/experience-model.md",
+  experienceFields: "memory/experience-fields.md",
   experienceMetadata: "memory/experience/metadata.md",
   dailySummaryDir: "memory/daily_summary",
   weeklySummaryDir: "memory/weekly_summary",
   monthlySummaryDir: "memory/monthly_summary",
   yearlySummaryDir: "memory/yearly_summary",
-  obsoleteFiles: ["memory/long-memory-model.md"],
 });
 
-test("workspace repair backs up every rewritten or removed document", async () => {
+test("workspace repair backs up every rewritten document", async () => {
   const { files, backups, io } = createMemoryIo(
     new Map([
       ["memory/short-memory.json", '{"items":[]}\n'],
@@ -134,14 +134,19 @@ test("workspace repair backs up every rewritten or removed document", async () =
   assert.deepEqual(
     report.map((entry) => [entry.relativePath, entry.status]),
     [
+      ["memory/long-memory-model.md", "reset"],
       ["memory/long-memory.md", "reset"],
+      ["memory/experience-fields.md", "created"],
       ["memory/experience/metadata.md", "migrated"],
       ["memory/daily_summary/2026-09-29/域.md", "migrated"],
-      ["memory/long-memory-model.md", "removed"],
     ],
   );
   assert.equal(files.get("memory/long-memory.md"), "NOOBOT_LONG_MEMORY/1\n");
-  assert.equal(files.has("memory/long-memory-model.md"), false);
+  assert.equal(
+    files.get("memory/long-memory-model.md"),
+    renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL),
+  );
+  assert.equal(backups.get("memory/long-memory-model.md"), "NOOBOT_LONG_MEMORY_MODEL/1\n");
   assert.equal(backups.get("memory/long-memory.md"), "1. legacy numbered memory\n");
   assert.equal(backups.get("memory/experience/metadata.md"), LEGACY_METADATA);
   assert.equal(backups.has("memory/experience-model.md"), false);
@@ -155,11 +160,17 @@ test("workspace repair creates missing required documents from the protocol", as
     report.map((entry) => [entry.relativePath, entry.status]),
     [
       ["memory/short-memory.json", "created"],
+      ["memory/long-memory-model.md", "created"],
       ["memory/long-memory.md", "created"],
       ["memory/experience-model.md", "created"],
+      ["memory/experience-fields.md", "created"],
     ],
   );
   assert.deepEqual(JSON.parse(files.get("memory/short-memory.json")), { items: [] });
+  assert.equal(
+    files.get("memory/experience-fields.md"),
+    renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS),
+  );
   assert.equal(
     files.get("memory/experience-model.md"),
     renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL),
@@ -181,4 +192,67 @@ test("workspace repair requires a complete layout", async () => {
 
 test("workspace repair requires a complete io port", async () => {
   await assert.rejects(repairMemoryWorkspace({ layout: LAYOUT, io: {} }), TypeError);
+});
+
+const USER_LONG_MEMORY_MODEL = [
+  "NOOBOT_LONG_MEMORY_MODEL/1",
+  "",
+  "personal_info.location | single | 城市",
+  "work.tech_stack | list:2 | 常用技术栈",
+  "",
+].join("\n");
+
+test("long memory values are validated against the user field protocol", async () => {
+  const longMemory = "NOOBOT_LONG_MEMORY/1\n\nwork.tech_stack：\n1. Node.js\n2. Vue\n";
+  const { files, io } = createMemoryIo(
+    new Map([
+      ["memory/short-memory.json", '{"items":[]}\n'],
+      ["memory/long-memory-model.md", USER_LONG_MEMORY_MODEL],
+      ["memory/long-memory.md", longMemory],
+      ["memory/experience-model.md", EXPERIENCE_MODEL],
+      [
+        "memory/experience-fields.md",
+        renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS),
+      ],
+    ]),
+  );
+  assert.deepEqual(await repairMemoryWorkspace({ layout: LAYOUT, io }), []);
+  assert.equal(files.get("memory/long-memory-model.md"), USER_LONG_MEMORY_MODEL);
+  assert.equal(files.get("memory/long-memory.md"), longMemory);
+});
+
+test("fields removed from the user protocol do not reset the value document", () => {
+  const text = "NOOBOT_LONG_MEMORY/1\n\nremoved.field：保留\n";
+  assert.deepEqual(migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, text }), {
+    status: MEMORY_REPAIR_STATUS.CANONICAL,
+    text,
+  });
+});
+
+test("user experience fields are kept and broken ones are reset", () => {
+  const custom = [
+    "NOOBOT_EXPERIENCE_FIELDS/1",
+    "",
+    "STAGE: daily",
+    "- tools | 工具 | 用到的关键工具",
+    "STAGE: weekly",
+    "- experiences | 经验",
+    "STAGE: monthly",
+    "- patterns | 规律",
+    "STAGE: yearly",
+    "- principles | 原则",
+    "",
+  ].join("\n");
+  assert.deepEqual(
+    migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS, text: custom }),
+    { status: MEMORY_REPAIR_STATUS.CANONICAL, text: custom },
+  );
+  const broken = "NOOBOT_EXPERIENCE_FIELDS/1\n\nSTAGE: daily\n- domain | 冲突\n";
+  assert.deepEqual(
+    migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS, text: broken }),
+    {
+      status: MEMORY_REPAIR_STATUS.RESET,
+      text: renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS),
+    },
+  );
 });

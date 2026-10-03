@@ -5,9 +5,13 @@
  */
 import { MEMORY_DOCUMENT_KIND, renderMemoryDocument } from "./document.js";
 import { renderDefaultExperienceModelText } from "./experience/default-model.js";
+import { renderExperienceFieldsText } from "./experience/fields.js";
+import { renderLongMemoryModelText } from "./long-memory.js";
 
 export function renderDefaultMemoryDocument(kind) {
   if (kind === MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL) return renderDefaultExperienceModelText();
+  if (kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL) return renderLongMemoryModelText();
+  if (kind === MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS) return renderExperienceFieldsText();
   return renderMemoryDocument(kind, "");
 }
 

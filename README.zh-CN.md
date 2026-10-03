@@ -95,15 +95,18 @@ chmod +x start.sh
 
 - `start.sh` 会先执行项目启动引导（`scripts/project-launcher.mjs`）。
 - 若 `service/config/global.config.json` 不存在，会进入交互式配置并自动生成配置文件。
+- 引导中模型从内置模型库选择；`api_key` 和 `base_url` 可留空，留空时保留模型库中的 `${ENV}` 引用，之后可在 `config-params.json` 中补填；还会选择执行隔离模式（`sandbox` 在 Docker 中执行命令，`host` 直接在本机执行）。
 - 在非交互环境可用环境变量初始化（示例）：
 
 ```bash
-NOOBOT_MODEL_FORMAT=openai_compatible \
-NOOBOT_MODEL_NAME=gemini-3-flash \
+NOOBOT_MODEL_NAME=gemini_3_7_flash \
 NOOBOT_MODEL_API_KEY=xxx \
 NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
+NOOBOT_EXECUTION_ISOLATION_MODE=sandbox \
 ./start.sh
 ```
+
+`NOOBOT_MODEL_NAME` 可填模型库 key 或 model 名；`NOOBOT_MODEL_API_KEY`、`NOOBOT_MODEL_BASE_URL` 可选；`NOOBOT_EXECUTION_ISOLATION_MODE` 为 `sandbox`（默认）或 `host`。
 
 可选：`NOOBOT_SETUP_LANG=zh|en`（初始化引导语言，并同步 `preferences.language` 与配置内置文案的中英文文本）。
 

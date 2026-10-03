@@ -11,6 +11,7 @@
     "./short-memory": "./src/short-memory.js",
     "./long-memory": "./src/long-memory.js",
     "./experience/schema": "./src/experience/schema.js",
+    "./experience/fields": "./src/experience/fields.js",
     "./experience/patch-items": "./src/experience/patch-items.js",
     "./experience/summary-output": "./src/experience/summary-output.js",
     "./experience/model-text": "./src/experience/model-text.js",

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
+import { LONG_MEMORY_MODEL, parseLongMemoryModelText } from "@noobot/memory-protocol/long-memory";
 import {
   renderDefaultMemoryDocument,
   renderDefaultShortMemoryText,
@@ -11,14 +12,7 @@ import {
 import { MEMORY_REPAIR_STATUS, migrateMemoryDocument } from "./document-migration.js";
 
 function requireIo(io) {
-  for (const name of [
-    "exists",
-    "readText",
-    "writeText",
-    "writeBackup",
-    "removeFile",
-    "listMarkdownFiles",
-  ]) {
+  for (const name of ["exists", "readText", "writeText", "writeBackup", "listMarkdownFiles"]) {
     if (typeof io?.[name] !== "function") {
       throw new TypeError(`memory workspace repair requires io.${name}`);
     }
@@ -27,10 +21,20 @@ function requireIo(io) {
 
 async function collectDocuments(layout, io) {
   const documents = [
+    {
+      kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL,
+      relativePath: layout.longMemoryModel,
+      required: true,
+    },
     { kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY, relativePath: layout.longMemory, required: true },
     {
       kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL,
       relativePath: layout.experienceModel,
+      required: true,
+    },
+    {
+      kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS,
+      relativePath: layout.experienceFields,
       required: true,
     },
     { kind: MEMORY_DOCUMENT_KIND.EXPERIENCE_METADATA, relativePath: layout.experienceMetadata },
@@ -48,9 +52,33 @@ async function collectDocuments(layout, io) {
   return documents;
 }
 
+async function repairDocument(document, { io, backup, report, longMemoryModel }) {
+  const entry = (status) => ({ kind: document.kind, relativePath: document.relativePath, status });
+  if (!(await io.exists(document.relativePath))) {
+    if (!document.required) return null;
+    const text = renderDefaultMemoryDocument(document.kind);
+    await io.writeText(document.relativePath, text);
+    report.push(entry(MEMORY_REPAIR_STATUS.CREATED));
+    return text;
+  }
+  const original = await io.readText(document.relativePath);
+  const result = migrateMemoryDocument({ kind: document.kind, text: original, longMemoryModel });
+  if (result.status === MEMORY_REPAIR_STATUS.CANONICAL) return original;
+  await backup(document.relativePath, original);
+  await io.writeText(document.relativePath, result.text);
+  report.push(entry(result.status));
+  return result.text;
+}
+
 export async function repairMemoryWorkspace({ layout, io } = {}) {
   requireIo(io);
-  if (!layout?.shortMemory || !layout?.longMemory || !layout?.experienceModel) {
+  if (
+    !layout?.shortMemory ||
+    !layout?.longMemory ||
+    !layout?.longMemoryModel ||
+    !layout?.experienceModel ||
+    !layout?.experienceFields
+  ) {
     throw new TypeError("memory workspace repair requires a complete layout");
   }
   const report = [];
@@ -63,33 +91,12 @@ export async function repairMemoryWorkspace({ layout, io } = {}) {
       status: MEMORY_REPAIR_STATUS.CREATED,
     });
   }
+  let longMemoryModel = LONG_MEMORY_MODEL;
   for (const document of await collectDocuments(layout, io)) {
-    if (!(await io.exists(document.relativePath))) {
-      if (!document.required) continue;
-      await io.writeText(document.relativePath, renderDefaultMemoryDocument(document.kind));
-      report.push({
-        kind: document.kind,
-        relativePath: document.relativePath,
-        status: MEMORY_REPAIR_STATUS.CREATED,
-      });
-      continue;
+    const text = await repairDocument(document, { io, backup, report, longMemoryModel });
+    if (document.kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL && text !== null) {
+      longMemoryModel = parseLongMemoryModelText(text);
     }
-    const original = await io.readText(document.relativePath);
-    const result = migrateMemoryDocument({ kind: document.kind, text: original });
-    if (result.status === MEMORY_REPAIR_STATUS.CANONICAL) continue;
-    await backup(document.relativePath, original);
-    await io.writeText(document.relativePath, result.text);
-    report.push({
-      kind: document.kind,
-      relativePath: document.relativePath,
-      status: result.status,
-    });
-  }
-  for (const relativePath of layout.obsoleteFiles || []) {
-    if (!(await io.exists(relativePath))) continue;
-    await backup(relativePath, await io.readText(relativePath));
-    await io.removeFile(relativePath);
-    report.push({ kind: "obsolete", relativePath, status: "removed" });
   }
   return report;
 }
