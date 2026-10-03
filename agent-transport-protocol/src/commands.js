@@ -381,7 +381,6 @@ export class AgentTransportProtocolError extends Error {
     super(`invalid_agent_command: ${errors.join(", ")}`);
     this.name = "AgentTransportProtocolError";
     this.code = "INVALID_AGENT_COMMAND";
-    this.errorCode = this.code;
     this.errors = [...errors];
     this.command = command;
     this.statusCode = 400;

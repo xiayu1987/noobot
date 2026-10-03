@@ -74,7 +74,7 @@ export function normalizeExpectedAggregateVersion(value) {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw Object.assign(
       new TypeError("expectedAggregateVersion must be a non-negative safe integer"),
-      { statusCode: 400, errorCode: "INVALID_SESSION_AGGREGATE_VERSION" },
+      { statusCode: 400, code: "INVALID_SESSION_AGGREGATE_VERSION" },
     );
   }
   return value;

@@ -142,7 +142,7 @@ export class BotManager {
     return this.memory.deleteSessionMemoryBySessionIds({ userId, sessionIds });
   }
 
-  async deleteToolResultOverflowBySessionIds({ userId, sessionIds = [] } = {}) {
+  async deleteSemanticTransferBySessionIds({ userId, sessionIds = [] } = {}) {
     const basePath = String(this.getWorkspacePath(userId) || "").trim();
     const normalizedIds = [
       ...new Set(
@@ -160,26 +160,14 @@ export class BotManager {
       ...WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE.split("/"),
       ".semantic-transfer",
     );
-    const legacyOverflowRoot = path.join(
-      basePath,
-      ...WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE.split("/"),
-      ".tool-result-overflow",
-    );
     const deletedSessionIds = [];
     for (const sessionId of normalizedIds) {
       const safeSessionDir = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
       if (!safeSessionDir) continue;
-      await Promise.all([
-        rm(path.join(semanticTransferRoot, safeSessionDir), { recursive: true, force: true }),
-        rm(path.join(legacyOverflowRoot, safeSessionDir), { recursive: true, force: true }),
-      ]);
+      await rm(path.join(semanticTransferRoot, safeSessionDir), { recursive: true, force: true });
       deletedSessionIds.push(sessionId);
     }
     return { deletedSessionIds, deletedCount: deletedSessionIds.length };
-  }
-
-  async deleteSemanticTransferBySessionIds({ userId, sessionIds = [] } = {}) {
-    return this.deleteToolResultOverflowBySessionIds({ userId, sessionIds });
   }
 
   async loadUserConfig(basePath) {

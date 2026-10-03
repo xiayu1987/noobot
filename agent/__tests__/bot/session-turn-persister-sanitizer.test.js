@@ -13,17 +13,14 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 
-test("appendAgentMessages uses one batch persistence call when the Session supports it", async () => {
+test("appendAgentMessages persists all messages through one appendTurns batch", async () => {
   const batches = [];
-  let appendTurnCount = 0;
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
-      appendTurn: async () => {
-        appendTurnCount += 1;
-      },
       appendTurns: async (payload = {}) => {
         batches.push(payload);
+        return { appended: true, reason: "", turns: payload.turns };
       },
     },
   });
@@ -37,7 +34,6 @@ test("appendAgentMessages uses one batch persistence call when the Session suppo
     ],
   });
 
-  assert.equal(appendTurnCount, 0);
   assert.equal(batches.length, 1);
   assert.deepEqual(
     batches[0].turns.map((turn) => turn.messageUid),
@@ -51,7 +47,10 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
-      appendTurns: async (payload = {}) => batches.push(payload),
+      appendTurns: async (payload = {}) => {
+        batches.push(payload);
+        return { appended: true, reason: "", turns: payload.turns };
+      },
     },
   });
 
@@ -74,12 +73,15 @@ test("appendAgentMessages preserves the canonical tool policy at the Session bou
 
 test("appendAgentMessages keeps scoped persistence identity for logs and messages", async () => {
   const executionPayloads = [];
-  const turnPayloads = [];
+  const batches = [];
   const persistenceContext = { locationResolver: { scope: "workflow-node" } };
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async (payload = {}) => executionPayloads.push(payload),
-      appendTurn: async (payload = {}) => turnPayloads.push(payload),
+      appendTurns: async (payload = {}) => {
+        batches.push(payload);
+        return { appended: true, reason: "", turns: payload.turns };
+      },
     },
   });
 
@@ -97,8 +99,11 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
     executionPayloads.every((payload) => payload.persistenceContext === persistenceContext),
     true,
   );
-  assert.equal(turnPayloads.length, 1);
-  assert.equal(turnPayloads[0].persistenceContext, persistenceContext);
+  assert.equal(batches.length, 1);
+  assert.equal(batches[0].turns.length, 1);
+  assert.equal(batches[0].persistenceContext, persistenceContext);
+  assert.equal(batches[0].parentSessionId, "root-1");
+  assert.equal("persistenceContext" in batches[0].turns[0], false);
 });
 
 test("appendAgentMessages forwards the authoritative realtime message identity", async () => {
@@ -106,7 +111,10 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
-      appendTurn: async (payload = {}) => turns.push(payload),
+      appendTurns: async (payload = {}) => {
+        turns.push(...payload.turns);
+        return { appended: true, reason: "", turns: payload.turns };
+      },
     },
   });
 
@@ -130,7 +138,10 @@ test("appendAgentMessages forwards the canonical internal control message type",
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
-      appendTurn: async (payload = {}) => turns.push(payload),
+      appendTurns: async (payload = {}) => {
+        turns.push(...payload.turns);
+        return { appended: true, reason: "", turns: payload.turns };
+      },
     },
   });
 
@@ -152,12 +163,15 @@ test("appendAgentMessages forwards the canonical internal control message type",
 });
 
 test("appendAgentMessages forwards presentation identity and checkpoint context", async () => {
-  const turns = [];
+  const batches = [];
   const persistenceContext = { locationResolver: { scope: "running-turn" } };
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
-      appendTurn: async (payload = {}) => turns.push(payload),
+      appendTurns: async (payload = {}) => {
+        batches.push(payload);
+        return { appended: true, reason: "", turns: payload.turns };
+      },
     },
   });
 
@@ -187,18 +201,22 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
     ],
   });
 
-  assert.equal(turns[0].presentationMessageId, "msg_chat_1");
-  assert.equal(turns[0].chatPresentation, false);
-  assert.equal(turns[0].activityTimeline[0].eventId, "guidance-analysis:1");
-  assert.equal(turns[0].persistenceContext, persistenceContext);
+  const [turn] = batches[0].turns;
+  assert.equal(turn.presentationMessageId, "msg_chat_1");
+  assert.equal(turn.chatPresentation, false);
+  assert.equal(turn.activityTimeline[0].eventId, "guidance-analysis:1");
+  assert.equal(batches[0].persistenceContext, persistenceContext);
 });
 
 test("SessionTurnPersister normalizes parentSessionId once for every persistence outlet", async () => {
-  const appendedTurns = [];
+  const batches = [];
   const executionLogs = [];
   const session = {
     appendExecutionLog: async (payload = {}) => executionLogs.push(payload),
-    appendTurn: async (payload = {}) => appendedTurns.push(payload),
+    appendTurns: async (payload = {}) => {
+      batches.push(payload);
+      return { appended: true, reason: "", turns: payload.turns };
+    },
   };
   const persister = new SessionTurnPersister({ session });
   const rawParentSessionId = `  ${"p".repeat(205)}  `;
@@ -212,10 +230,10 @@ test("SessionTurnPersister normalizes parentSessionId once for every persistence
   });
 
   const expected = "p".repeat(200);
-  assert.equal(appendedTurns[0].parentSessionId, expected);
+  assert.equal(batches[0].parentSessionId, expected);
   assert.equal(executionLogs[0].parentSessionId, expected);
 
-  appendedTurns.length = 0;
+  batches.length = 0;
   executionLogs.length = 0;
   await persister.appendAgentMessages({
     userId: "u1",
@@ -223,7 +241,7 @@ test("SessionTurnPersister normalizes parentSessionId once for every persistence
     parentSessionId: "   ",
     messages: [{ role: "assistant", content: "done" }],
   });
-  assert.equal(appendedTurns[0].parentSessionId, "");
+  assert.equal(batches[0].parentSessionId, "");
   assert.equal(executionLogs[0].parentSessionId, "");
 });
 
@@ -231,8 +249,9 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
   const appendedTurns = [];
   const session = {
     appendExecutionLog: async () => {},
-    appendTurn: async (payload = {}) => {
-      appendedTurns.push(payload);
+    appendTurns: async (payload = {}) => {
+      appendedTurns.push(...payload.turns);
+      return { appended: true, reason: "", turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -284,8 +303,9 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
   const appendedTurns = [];
   const session = {
     appendExecutionLog: async () => {},
-    appendTurn: async (payload = {}) => {
-      appendedTurns.push(payload);
+    appendTurns: async (payload = {}) => {
+      appendedTurns.push(...payload.turns);
+      return { appended: true, reason: "", turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -353,8 +373,9 @@ test("SessionTurnPersister persists canonical plugin metadata without old concre
     appendExecutionLog: async (payload = {}) => {
       executionLogs.push(payload);
     },
-    appendTurn: async (payload = {}) => {
-      appendedTurns.push(payload);
+    appendTurns: async (payload = {}) => {
+      appendedTurns.push(...payload.turns);
+      return { appended: true, reason: "", turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -401,8 +422,9 @@ test("SessionTurnPersister writes thinking timing to turn timing source when inj
   const appendedTurns = [];
   const session = {
     appendExecutionLog: async () => {},
-    appendTurn: async (payload = {}) => {
-      appendedTurns.push(payload);
+    appendTurns: async (payload = {}) => {
+      appendedTurns.push(...payload.turns);
+      return { appended: true, reason: "", turns: payload.turns };
     },
   };
   const persister = new SessionTurnPersister({ session });
@@ -449,9 +471,9 @@ test("appendAgentMessages keeps relayCorrelationId on persisted injected turns",
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
-      appendTurn: async () => {},
       appendTurns: async (payload = {}) => {
-        appendedTurns.push(...(Array.isArray(payload.turns) ? payload.turns : []));
+        appendedTurns.push(...payload.turns);
+        return { appended: true, reason: "", turns: payload.turns };
       },
     },
   });
@@ -490,7 +512,8 @@ test("appendAgentMessages keeps canonical user interjection time and sequence", 
     session: {
       appendExecutionLog: async () => {},
       appendTurns: async (payload = {}) => {
-        appendedTurns.push(...(Array.isArray(payload.turns) ? payload.turns : []));
+        appendedTurns.push(...payload.turns);
+        return { appended: true, reason: "", turns: payload.turns };
       },
     },
   });

@@ -5,6 +5,7 @@
  */
 
 import { shouldRecordRuntimeExecutionLog } from "@noobot/shared/runtime-events-config";
+import { readRepositoryParentSessionId } from "../../session/services/session-scope-resolution.js";
 
 export class ExecutionLogService {
   constructor({ executionRepo, sessionRepo, runtimeEventsConfig = {} } = {}) {
@@ -13,12 +14,19 @@ export class ExecutionLogService {
     this.runtimeEventsConfig = runtimeEventsConfig;
   }
 
-  async _resolveParentSessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    if (typeof this.sessionRepo?.resolveSessionScope === "function") {
-      const scope = await this.sessionRepo.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
-      return scope?.resolvedParentSessionId || "";
-    }
-    return this.sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+  async _resolveParentSessionId(
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    return readRepositoryParentSessionId(
+      this.sessionRepo,
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
   }
 
   async getExecutionBundle({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
@@ -54,7 +62,9 @@ export class ExecutionLogService {
     parentSessionId = "",
     persistenceContext = null,
   }) {
-    if (!shouldRecordRuntimeExecutionLog({ event, category, type, data }, this.runtimeEventsConfig)) {
+    if (
+      !shouldRecordRuntimeExecutionLog({ event, category, type, data }, this.runtimeEventsConfig)
+    ) {
       return { appended: false, skipped: true, reason: "runtime_event_policy" };
     }
     const resolvedParentSessionId = await this._resolveParentSessionId(

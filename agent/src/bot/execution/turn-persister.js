@@ -12,7 +12,6 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { emitEvent } from "../../events/index.js";
-import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
 import { EXECUTION_LOG_EVENT, MESSAGE_ROLE, MESSAGE_TYPE } from "../config/constants.js";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
@@ -162,7 +161,6 @@ function normalizeSessionTurnInput(input = {}) {
       valueOrDefault(input.turnTimingThinkingFinishedAt, thinkingFinishedAt),
     ),
     persistenceContext: valueOrDefault(input.persistenceContext, null),
-    deferTurnPersistence: input.deferTurnPersistence === true,
   };
 }
 
@@ -230,8 +228,8 @@ function buildTurnTimingDiagnostic(input) {
   };
 }
 
-async function appendSessionTurnDiagnostics(messagePersister, input, fullTurnPayload) {
-  await messagePersister.appendExecutionLog({
+async function appendSessionTurnDiagnostics(session, input, fullTurnPayload) {
+  await session.appendExecutionLog({
     userId: input.userId,
     sessionId: input.sessionId,
     parentSessionId: input.parentSessionId,
@@ -243,7 +241,7 @@ async function appendSessionTurnDiagnostics(messagePersister, input, fullTurnPay
     persistenceContext: input.persistenceContext,
   });
   if (!hasTurnTiming(input)) return;
-  await messagePersister.appendExecutionLog({
+  await session.appendExecutionLog({
     userId: input.userId,
     sessionId: input.sessionId,
     parentSessionId: input.parentSessionId,
@@ -256,9 +254,9 @@ async function appendSessionTurnDiagnostics(messagePersister, input, fullTurnPay
   });
 }
 
-async function tryAppendSessionTurnDiagnostics(messagePersister, input, fullTurnPayload) {
+async function tryAppendSessionTurnDiagnostics(session, input, fullTurnPayload) {
   try {
-    await appendSessionTurnDiagnostics(messagePersister, input, fullTurnPayload);
+    await appendSessionTurnDiagnostics(session, input, fullTurnPayload);
   } catch (error) {
     emitEvent(input.eventListener, "session_turn_diagnostic_persistence_failed", {
       sessionId: input.sessionId,
@@ -272,9 +270,6 @@ async function tryAppendSessionTurnDiagnostics(messagePersister, input, fullTurn
 
 function buildTurnPayload(input) {
   return {
-    userId: input.userId,
-    sessionId: input.sessionId,
-    parentSessionId: input.parentSessionId,
     role: input.role,
     messageUid: input.messageUid,
     messageId: input.messageId,
@@ -317,7 +312,6 @@ function buildTurnPayload(input) {
     ts: input.ts,
     turnTimingThinkingStartedAt: input.turnTimingThinkingStartedAt,
     turnTimingThinkingFinishedAt: input.turnTimingThinkingFinishedAt,
-    persistenceContext: input.persistenceContext,
   };
 }
 
@@ -394,14 +388,12 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     turnTimingThinkingFinishedAt: includeTurnTiming ? input.thinkingFinishedAt : "",
     eventListener: input.eventListener,
     persistenceContext: input.persistenceContext,
-    deferTurnPersistence: true,
   };
 }
 
 export class SessionTurnPersister {
   constructor({ session = null } = {}) {
     this.session = session;
-    this.messagePersister = new MessagePersister(session);
   }
 
   buildDefaultAssistantTurn({ agentResult = {}, dialogProcessId = "" }) {
@@ -413,39 +405,35 @@ export class SessionTurnPersister {
     };
   }
 
-  async appendSessionTurn(payload = {}) {
+  async _prepareTurnPayload(payload = {}) {
     const input = normalizeSessionTurnInput(payload);
-    const fullTurnPayload = buildFullTurnPayload(input);
-    await tryAppendSessionTurnDiagnostics(this.messagePersister, input, fullTurnPayload);
-    const turnPayload = buildTurnPayload(input);
-    if (input.deferTurnPersistence) return turnPayload;
-    await this.messagePersister.appendTurn(turnPayload);
-    emitEvent(input.eventListener, `${input.role}_message_saved`, { sessionId: input.sessionId });
-    return turnPayload;
+    await tryAppendSessionTurnDiagnostics(this.session, input, buildFullTurnPayload(input));
+    return buildTurnPayload(input);
   }
 
   async appendAgentMessages(payload = {}) {
     const input = normalizeAgentMessagesInput(payload);
     const turnPayloads = [];
     for (const messageItem of input.messages) {
-      const turnPayload = await this.appendSessionTurn(
+      const turnPayload = await this._prepareTurnPayload(
         buildAgentMessageTurnInput(messageItem, input, turnPayloads.length === 0),
       );
       turnPayloads.push(turnPayload);
     }
     if (!turnPayloads.length) return [];
-    const persistedTurns = await this.messagePersister.appendTurns({
+    const appendResult = await this.session.appendTurns({
       userId: input.userId,
       sessionId: input.sessionId,
       parentSessionId: normalizeParentSessionId(input.parentSessionId),
       turns: turnPayloads,
       persistenceContext: input.persistenceContext,
     });
+    if (!appendResult.appended) return appendResult.turns;
     for (const turnPayload of turnPayloads) {
       emitEvent(input.eventListener, `${turnPayload.role}_message_saved`, {
         sessionId: input.sessionId,
       });
     }
-    return Array.isArray(persistedTurns) ? persistedTurns : [];
+    return appendResult.turns;
   }
 }

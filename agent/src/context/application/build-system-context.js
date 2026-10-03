@@ -105,7 +105,7 @@ export async function buildSystemContext({
   const selectedConnectorIds = normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds);
   const includeConnectors = enabled("connectors") || selectedConnectorIds.length > 0;
   const locale = runConfig?.locale || "zh-CN";
-  const scenarioProfile = resolveScenarioProfile({ runConfig, effectiveConfig });
+  const scenarioProfile = resolveScenarioProfile({ runConfig });
 
   const treeInfo = await resolveSessionTreeWithRootSessionId({
     runtimeBasePath,

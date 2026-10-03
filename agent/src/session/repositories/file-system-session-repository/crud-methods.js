@@ -242,7 +242,7 @@ class SessionCrudMethods {
         if (createOnly && persistedForChecks) {
           const error = new Error("session already exists");
           error.statusCode = 409;
-          error.errorCode = "SESSION_ALREADY_EXISTS";
+          error.code = "SESSION_ALREADY_EXISTS";
           throw error;
         }
         if (expectedAggregateVersion !== undefined && expectedAggregateVersion !== null) {
@@ -250,7 +250,7 @@ class SessionCrudMethods {
           if (actualVersion !== Number(expectedAggregateVersion)) {
             const error = new Error("session aggregate version conflict");
             error.statusCode = 409;
-            error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
+            error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
             error.currentVersion = actualVersion;
             throw error;
           }

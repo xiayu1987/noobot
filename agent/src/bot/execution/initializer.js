@@ -9,11 +9,7 @@ import { createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { CALLER_ROLE } from "../config/constants.js";
 
 export class SessionExecutionInitializer {
-  constructor({
-    session = null,
-    configService = null,
-    workspaceService = null,
-  } = {}) {
+  constructor({ session = null, configService = null, workspaceService = null } = {}) {
     this.session = session;
     this.configService = configService;
     this.workspaceService = workspaceService;
@@ -61,7 +57,7 @@ export class SessionExecutionInitializer {
       persistenceContext,
     });
 
-    await this.session.upsertTurnTiming?.({
+    await this.session.upsertTurnTiming({
       userId,
       sessionId: usedSessionId,
       parentSessionId,
@@ -72,12 +68,14 @@ export class SessionExecutionInitializer {
     });
 
     const executionStartIndex =
-      (await this.session.getExecutionBundle({
-        userId,
-        sessionId: usedSessionId,
-        parentSessionId,
-        persistenceContext,
-      }))?.logs?.length || 0;
+      (
+        await this.session.getExecutionBundle({
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          persistenceContext,
+        })
+      )?.logs?.length || 0;
 
     const sessionScope = await this.session.resolveSessionScope({
       userId,

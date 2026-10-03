@@ -178,7 +178,7 @@ export class SessionExecutionFinalizer {
       eventListener: runtimeEventListener,
       persistenceContext,
     });
-    await this.session.upsertTurnTiming?.({
+    await this.session.upsertTurnTiming({
       userId,
       sessionId,
       parentSessionId,

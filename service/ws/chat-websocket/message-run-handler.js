@@ -97,7 +97,7 @@ function createFailureCommitter(context) {
       phase: failureContext.phase,
       failure: {
         phase: failureContext.phase,
-        code: text(error?.errorCode || error?.code || "turn_failed"),
+        code: text(error?.code || "turn_failed"),
         message: String(error?.message || "turn failed"),
         retryable: false,
       },

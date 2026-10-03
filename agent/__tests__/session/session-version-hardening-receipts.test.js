@@ -98,7 +98,7 @@ test("attachment binding rejects placeholders and cross-session injection after 
           expectedAggregateVersion: 1,
           attachments: [attachment],
         }),
-        (e) => e.errorCode === "INVALID_CANONICAL_ATTACHMENT",
+        (e) => e.code === "INVALID_CANONICAL_ATTACHMENT",
       );
       assert.equal(h.get().messages.length, 1);
       assert.deepEqual(h.get().messages[0].attachments || [], []);
@@ -188,7 +188,7 @@ test("idempotency keys reject reuse with a different request", async () => {
       turnScopeId: "t2",
       commandId: "same",
     }),
-    (error) => error.errorCode === "SESSION_IDEMPOTENCY_KEY_REUSED",
+    (error) => error.code === "SESSION_IDEMPOTENCY_KEY_REUSED",
   );
 
   const replace = harness({
@@ -211,6 +211,6 @@ test("idempotency keys reject reuse with a different request", async () => {
       turnScopeId: "other-new",
       commandId: "replace-key",
     }),
-    (error) => error.errorCode === "SESSION_IDEMPOTENCY_KEY_REUSED",
+    (error) => error.code === "SESSION_IDEMPOTENCY_KEY_REUSED",
   );
 });

@@ -95,20 +95,43 @@ export const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
   }),
 });
 
-export function localizeBuiltinScenarios(scenarios, { locale = "", translate } = {}) {
+function assertTranslate(translate, caller) {
   if (typeof translate !== "function") {
-    throw new TypeError("localizeBuiltinScenarios requires an explicit translate function");
+    throw new TypeError(`${caller} requires an explicit translate function`);
   }
+}
+
+function localizeScenarioEntry(scenarioKey, entry, { locale, translate }) {
+  const keys = BUILTIN_SCENARIO_I18N_KEYS[scenarioKey];
+  if (!keys) return entry;
+  return {
+    ...entry,
+    name: translate(keys.name, locale, entry.name),
+    description: translate(keys.description, locale, entry.description),
+  };
+}
+
+export function localizeBuiltinScenarios(scenarios, { locale = "", translate } = {}) {
+  assertTranslate(translate, "localizeBuiltinScenarios");
   const source = isPlainObject(scenarios) ? scenarios : BUILTIN_SCENARIOS;
   const definitions = cloneJson(source.definitions || {});
   for (const scenarioKey of BUILTIN_SCENARIO_KEYS) {
-    const definition = definitions[scenarioKey];
-    const keys = BUILTIN_SCENARIO_I18N_KEYS[scenarioKey];
-    if (!definition || !keys) continue;
-    definition.name = translate(keys.name, locale, definition.name);
-    definition.description = translate(keys.description, locale, definition.description);
+    if (!definitions[scenarioKey]) continue;
+    definitions[scenarioKey] = localizeScenarioEntry(scenarioKey, definitions[scenarioKey], {
+      locale,
+      translate,
+    });
   }
   return { default: source.default, definitions };
+}
+
+export function localizeScenarioProfile(scenarioProfile, { locale = "", translate } = {}) {
+  assertTranslate(translate, "localizeScenarioProfile");
+  if (!isPlainObject(scenarioProfile)) return {};
+  return localizeScenarioEntry(String(scenarioProfile.key || ""), scenarioProfile, {
+    locale,
+    translate,
+  });
 }
 
 function cloneJson(value) {

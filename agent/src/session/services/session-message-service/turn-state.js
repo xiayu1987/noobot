@@ -23,7 +23,6 @@ import {
 } from "@noobot/session-protocol";
 import { createSessionMessageUid } from "../../../context/session/message-uid.js";
 import { normalizeMessageEntity } from "../../entities/message-entity.js";
-import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
 import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";
 import {
@@ -33,6 +32,7 @@ import {
   withAuthorityOutboxMutation,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir } from "./outbox-scope.js";
+import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 
 function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
   if (!assistantMessage || typeof assistantMessage !== "object" || Array.isArray(assistantMessage))
@@ -71,9 +71,6 @@ function resolveTurnAcceptance(service, session, event = {}) {
     const existingDialogProcessId = String(
       session?.turnLifecycle?.turns?.[turnScopeId]?.dialogProcessId || "",
     ).trim();
-    if (!existingDialogProcessId && typeof service.allocateDialogProcessId !== "function") {
-      throw new TypeError("Turn acceptance requires a dialog identity allocator");
-    }
     lifecycleEvent.dialogProcessId =
       existingDialogProcessId || String(service.allocateDialogProcessId()).trim();
   }
@@ -207,16 +204,10 @@ export async function getTurnLifecycleSnapshot({
   terminalLimit = 10,
 } = {}) {
   if (!userId || !sessionId) return { found: false, reason: "missing_session" };
-  const resolvedParentSessionId = await this._resolveParentSessionId(
+  const { session } = await this._findSession(
     userId,
     sessionId,
     parentSessionId,
-    persistenceContext,
-  );
-  const session = await this.sessionRepo.findById(
-    userId,
-    sessionId,
-    resolvedParentSessionId,
     persistenceContext,
   );
   if (!session) return { found: false, reason: "session_not_found" };
@@ -254,20 +245,14 @@ export async function applyTurnLifecycleEvent({
       ...event,
     });
   }
-  return this._withSessionMutation(
+  const mutation = this._withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const { session, resolvedParentSessionId } = await this._findSession(
         userId,
         sessionId,
         parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
         persistenceContext,
       );
       if (!session) return { applied: false, reason: "session_not_found" };
@@ -349,6 +334,7 @@ export async function applyTurnLifecycleEvent({
     parentSessionId,
     persistenceContext,
   );
+  return resolveDeletedSessionAs(mutation, { applied: false });
 }
 
 export async function provisionSessionWithInitialTurn({
@@ -363,39 +349,22 @@ export async function provisionSessionWithInitialTurn({
   const intent = validateSessionProvisionIntent({ ...event, createSessionIfAbsent });
   if (!intent.valid || !intent.requested)
     return { applied: false, reason: "invalid_session_provision_intent" };
-  return this._withSessionMutation(
+  const mutation = this._withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      let session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
-      const isNew = !session;
-      if (isNew && (await this.sessionRepo.isSessionDeleted?.(userId, sessionId))) {
+      const found = await this._findSession(userId, sessionId, parentSessionId, persistenceContext);
+      const { resolvedParentSessionId } = found;
+      const isNew = !found.session;
+      if (isNew && (await this.sessionRepo.isSessionDeleted(userId, sessionId))) {
         return { applied: false, reason: "session_not_found" };
       }
-      session ||=
-        this.sessionRepo.createInitialSession?.({
+      const session =
+        found.session ||
+        this.sessionRepo.createInitialSession({
           sessionId,
           parentSessionId: resolvedParentSessionId,
-        }) ||
-        normalizeSessionEntity(
-          { sessionId, parentSessionId: resolvedParentSessionId, messages: [] },
-          {
-            now: this.now,
-            sessionId,
-            parentSessionId: resolvedParentSessionId,
-          },
-        );
+        });
       const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
         this,
         session,
@@ -460,6 +429,7 @@ export async function provisionSessionWithInitialTurn({
     parentSessionId,
     persistenceContext,
   );
+  return resolveDeletedSessionAs(mutation, { applied: false });
 }
 
 export async function upsertTurnTiming({
@@ -474,20 +444,14 @@ export async function upsertTurnTiming({
   modelLoopRound = 0,
 } = {}) {
   if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
-  return this._withSessionMutation(
+  const mutation = this._withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const { session, resolvedParentSessionId } = await this._findSession(
         userId,
         sessionId,
         parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
         persistenceContext,
       );
       if (!session) return { upserted: false, reason: "session_not_found" };
@@ -510,6 +474,7 @@ export async function upsertTurnTiming({
     parentSessionId,
     persistenceContext,
   );
+  return resolveDeletedSessionAs(mutation, { upserted: false });
 }
 
 export async function assertReusedUserTurnIdentity({
@@ -526,16 +491,10 @@ export async function assertReusedUserTurnIdentity({
   if (!normalizedTurnScopeId) throw new TypeError("reused Turn turnScopeId is required");
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) throw new TypeError("reused Turn dialogProcessId is required");
-  const resolvedParentSessionId = await this._resolveParentSessionId(
+  const { session } = await this._findSession(
     userId,
     sessionId,
     parentSessionId,
-    persistenceContext,
-  );
-  const session = await this.sessionRepo.findById(
-    userId,
-    sessionId,
-    resolvedParentSessionId,
     persistenceContext,
   );
   if (!session) throw new TypeError("reused Turn session was not found");

@@ -348,72 +348,7 @@ export function normalizeAvailableBotScenarios(definitions = {}) {
       label: normalizePreferenceString(scenarioDefinitions?.[scenarioKey]?.name),
       description: normalizePreferenceString(scenarioDefinitions?.[scenarioKey]?.description),
       model: normalizePreferenceString(scenarioDefinitions?.[scenarioKey]?.model),
-      defaultModel: scenarioDefinitions?.[scenarioKey]?.defaultModel,
-      defaultModelAlias: normalizePreferenceString(
-        scenarioDefinitions?.[scenarioKey]?.defaultModelAlias,
-      ),
-      enabledModels: Array.isArray(scenarioDefinitions?.[scenarioKey]?.enabledModels)
-        ? scenarioDefinitions[scenarioKey].enabledModels
-        : [],
     }));
-}
-
-export function normalizeModelOptionsFromEnabledModels(
-  enabledModels = [],
-  selectedModel = "",
-  pluginModelConfig = {},
-  memoryModel = "",
-) {
-  const optionMap = new Map();
-  const addOption = (rawOption = {}) => {
-    const value = normalizePreferenceString(
-      typeof rawOption === "string"
-        ? rawOption
-        : rawOption?.value || rawOption?.alias || rawOption?.key || rawOption?.model || "",
-    );
-    if (!value || optionMap.has(value)) return;
-    const label =
-      normalizePreferenceString(
-        typeof rawOption === "string"
-          ? rawOption
-          : rawOption?.label || rawOption?.name || rawOption?.alias || rawOption?.model || value,
-      ) || value;
-    optionMap.set(value, {
-      value,
-      label,
-      alias:
-        normalizePreferenceString(
-          typeof rawOption === "string" ? value : rawOption?.alias || value,
-        ) || value,
-      key:
-        normalizePreferenceString(
-          typeof rawOption === "string" ? value : rawOption?.key || rawOption?.alias || value,
-        ) || value,
-      name:
-        normalizePreferenceString(
-          typeof rawOption === "string" ? label : rawOption?.name || label,
-        ) || label,
-      model: normalizePreferenceString(typeof rawOption === "string" ? "" : rawOption?.model || ""),
-      description: normalizePreferenceString(
-        typeof rawOption === "string" ? "" : rawOption?.description || "",
-      ),
-    });
-  };
-  (Array.isArray(enabledModels) ? enabledModels : []).forEach(addOption);
-  addOption(selectedModel);
-  addOption(memoryModel);
-  return Array.from(optionMap.values());
-}
-
-export function normalizeModelOptionsFromScenarios(
-  availableBotScenarios = [],
-  selectedModel = "",
-  pluginModelConfig = {},
-) {
-  const scenarioModels = (Array.isArray(availableBotScenarios) ? availableBotScenarios : [])
-    .map((scenarioItem) => scenarioItem?.model)
-    .filter(Boolean);
-  return normalizeModelOptionsFromEnabledModels(scenarioModels, selectedModel, pluginModelConfig);
 }
 
 export function getAvailableScenarioKeySet(availableBotScenarios = []) {

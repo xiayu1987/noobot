@@ -38,8 +38,16 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     async appendExecutionLog(payload = {}) {
       appendedExecutionLogs.push(payload);
     },
-    async appendTurn(payload = {}) {
-      persistedTurns.push(payload);
+    async appendTurns(payload = {}) {
+      persistedTurns.push(...payload.turns);
+      return { appended: true, reason: "", turns: payload.turns };
+    },
+    async upsertTurnTiming() {},
+    async getTurnSummaryCheckpointState() {
+      return null;
+    },
+    async getSessionTurns() {
+      return persistedTurns;
     },
     async commitTurn(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;
@@ -363,6 +371,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
 
 test("continue mode closed-loop: should build continue context and persist parent session linkage", async () => {
   const persistedTurns = [];
+  const persistedBatches = [];
   const upstreamEvents = [];
   let continueContextBuilt = false;
   let capturedRunConfig = null;
@@ -386,8 +395,17 @@ test("continue mode closed-loop: should build continue context and persist paren
       return { sessionDir: path.join("/tmp/noobot-test", userId, "runtime", "session", sessionId) };
     },
     async appendExecutionLog() {},
-    async appendTurn(payload = {}) {
-      persistedTurns.push(payload);
+    async appendTurns(payload = {}) {
+      persistedBatches.push(payload);
+      persistedTurns.push(...payload.turns);
+      return { appended: true, reason: "", turns: payload.turns };
+    },
+    async upsertTurnTiming() {},
+    async getTurnSummaryCheckpointState() {
+      return null;
+    },
+    async getSessionTurns() {
+      return persistedTurns;
     },
     async commitTurn(payload = {}) {
       const messageUid = `sm_${payload.turnScopeId}`;
@@ -528,8 +546,10 @@ test("continue mode closed-loop: should build continue context and persist paren
   const assistantTurn = persistedTurns.find((turn) => turn.role === "assistant");
   assert.ok(userTurn);
   assert.ok(assistantTurn);
-  assert.equal(userTurn.parentSessionId, parentSessionId);
-  assert.equal(assistantTurn.parentSessionId, parentSessionId);
+  assert.ok(persistedBatches.length > 0);
+  for (const batch of persistedBatches) {
+    assert.equal(batch.parentSessionId, parentSessionId);
+  }
   assert.equal(result.parentSessionId, parentSessionId);
   assert.equal(result.parentDialogProcessId, "dp-parent-1");
   assert.equal(result.answer, "continue answer");

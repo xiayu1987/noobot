@@ -130,7 +130,10 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
   };
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
-    appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
+    appendAgentMessages: async (payload = {}) => {
+      checkpointPayloads.push(payload);
+      return payload.messages;
+    },
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
       runtimeAgentContext,

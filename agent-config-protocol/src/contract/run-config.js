@@ -7,7 +7,6 @@
 import { mergeConfig } from "../pipeline/effective-config.js";
 import { isPlainObject, normalizeStringList } from "../utils.js";
 import { removeDeniedToolNamesFromAllow } from "../policy/tool-policy.js";
-import { readModelSelectionAlias } from "../policy/model-selection.js";
 
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {
@@ -22,10 +21,6 @@ export class RunConfigResolver {
     return Array.isArray(input)
       ? input.filter((item) => isPlainObject(item) && (item?.name ?? "").trim())
       : [];
-  }
-
-  readModelSelectionValue(modelConfig = "") {
-    return readModelSelectionAlias(modelConfig);
   }
 
   mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
@@ -87,9 +82,7 @@ export class RunConfigResolver {
     const normalizeStringArray = (value = []) => this.normalizeStringArray(value);
     const scenarioToolNamesRaw = normalizeStringArray(scenarioDefinition?.tools);
     const scenarioServiceItems = normalizeStringArray(scenarioDefinition?.services);
-    const scenarioMcpServerItems = normalizeStringArray(
-      scenarioDefinition?.mcpServers ?? scenarioDefinition?.mcp_servers,
-    );
+    const scenarioMcpServerItems = normalizeStringArray(scenarioDefinition?.mcpServers);
     const scenarioToolNameSet = new Set(scenarioToolNamesRaw);
     if (scenarioServiceItems.length) {
       scenarioToolNameSet.add("call_service");

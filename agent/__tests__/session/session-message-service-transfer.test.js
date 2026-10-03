@@ -3,10 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+
+const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
+after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
 
 function emptyTurnLifecycle() {
   return {
@@ -18,11 +24,14 @@ function emptyTurnLifecycle() {
   };
 }
 
-test("SessionMessageService.appendTurn persists transferEnvelopes", async () => {
+test("SessionMessageService.appendTurns persists transferEnvelopes", async () => {
   const saved = [];
   const sessionRepo = {
-    async resolveParentSessionId() {
-      return "";
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
+    },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async ensureSession() {},
     async findById() {
@@ -71,12 +80,10 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
     },
     meta: { persisted: true },
   };
-  await service.appendTurn({
+  await service.appendTurns({
     userId: "u1",
     sessionId: "s1",
-    role: "assistant",
-    content: "done",
-    transferEnvelopes: [envelope],
+    turns: [{ role: "assistant", content: "done", transferEnvelopes: [envelope] }],
   });
 
   assert.equal(saved.length, 1);
@@ -90,7 +97,7 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
   );
 });
 
-test("SessionMessageService.appendTurn stores thinking timing in turnTimings without message timing", async () => {
+test("SessionMessageService.appendTurns stores thinking timing in turnTimings without message timing", async () => {
   const saved = [];
   const session = {
     sessionId: "s1",
@@ -99,8 +106,11 @@ test("SessionMessageService.appendTurn stores thinking timing in turnTimings wit
     turnTimings: [],
   };
   const sessionRepo = {
-    async resolveParentSessionId() {
-      return "";
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
+    },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async ensureSession() {},
     async findById() {
@@ -115,18 +125,22 @@ test("SessionMessageService.appendTurn stores thinking timing in turnTimings wit
     now: () => "2026-06-07T00:00:00.000Z",
   });
 
-  await service.appendTurn({
+  await service.appendTurns({
     userId: "u1",
     sessionId: "s1",
-    role: "assistant",
-    content: "done",
-    turnScopeId: "turn-1",
-    dialogProcessId: "dp-1",
-    thinkingStartedAt: "",
-    thinkingFinishedAt: "",
-    turnTimingThinkingStartedAt: "2026-07-08T15:45:58.275Z",
-    turnTimingThinkingFinishedAt: "2026-07-08T15:47:11.710Z",
-    turnTimingModelLoopRound: 6,
+    turns: [
+      {
+        role: "assistant",
+        content: "done",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+        thinkingStartedAt: "",
+        thinkingFinishedAt: "",
+        turnTimingThinkingStartedAt: "2026-07-08T15:45:58.275Z",
+        turnTimingThinkingFinishedAt: "2026-07-08T15:47:11.710Z",
+        turnTimingModelLoopRound: 6,
+      },
+    ],
   });
 
   assert.equal(saved.length, 1);
@@ -144,7 +158,7 @@ test("SessionMessageService.appendTurn stores thinking timing in turnTimings wit
   ]);
 });
 
-test("SessionMessageService.appendTurn keeps existing turn timing when later same-turn appends pass empty timing", async () => {
+test("SessionMessageService.appendTurns keeps existing turn timing when later same-turn appends pass empty timing", async () => {
   const saved = [];
   const session = {
     sessionId: "s1",
@@ -153,8 +167,11 @@ test("SessionMessageService.appendTurn keeps existing turn timing when later sam
     turnTimings: [],
   };
   const sessionRepo = {
-    async resolveParentSessionId() {
-      return "";
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
+    },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async ensureSession() {},
     async findById() {
@@ -169,30 +186,38 @@ test("SessionMessageService.appendTurn keeps existing turn timing when later sam
     now: () => "2026-06-07T00:00:00.000Z",
   });
 
-  await service.appendTurn({
+  await service.appendTurns({
     userId: "u1",
     sessionId: "s1",
-    role: "user",
-    content: "injected guidance",
-    turnScopeId: "turn-1",
-    dialogProcessId: "dp-1",
-    thinkingStartedAt: "",
-    thinkingFinishedAt: "",
-    turnTimingThinkingStartedAt: "2026-07-08T16:29:24.453Z",
-    turnTimingThinkingFinishedAt: "2026-07-08T16:30:44.744Z",
-    injectedMessage: true,
+    turns: [
+      {
+        role: "user",
+        content: "injected guidance",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+        thinkingStartedAt: "",
+        thinkingFinishedAt: "",
+        turnTimingThinkingStartedAt: "2026-07-08T16:29:24.453Z",
+        turnTimingThinkingFinishedAt: "2026-07-08T16:30:44.744Z",
+        injectedMessage: true,
+      },
+    ],
   });
-  await service.appendTurn({
+  await service.appendTurns({
     userId: "u1",
     sessionId: "s1",
-    role: "assistant",
-    content: "done",
-    turnScopeId: "turn-1",
-    dialogProcessId: "dp-1",
-    thinkingStartedAt: "",
-    thinkingFinishedAt: "",
-    turnTimingThinkingStartedAt: "",
-    turnTimingThinkingFinishedAt: "",
+    turns: [
+      {
+        role: "assistant",
+        content: "done",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+        thinkingStartedAt: "",
+        thinkingFinishedAt: "",
+        turnTimingThinkingStartedAt: "",
+        turnTimingThinkingFinishedAt: "",
+      },
+    ],
   });
 
   assert.equal(saved.length, 2);
@@ -233,8 +258,11 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
     turnLifecycle: emptyTurnLifecycle(),
   };
   const sessionRepo = {
-    async resolveParentSessionId() {
-      return "";
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
+    },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async findById() {
       return session;
@@ -290,8 +318,11 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
     turnLifecycle: emptyTurnLifecycle(),
   };
   const sessionRepo = {
-    async resolveParentSessionId() {
-      return "";
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
+    },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async findById() {
       return session;

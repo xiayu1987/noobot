@@ -32,7 +32,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
     userId: "admin",
     sessionId: "session-engine-stop",
     globalConfig: {
-      defaultModelAlias: "test_model",
+      defaultProvider: "test_model",
       providers: {
         test_model: {
           enabled: true,

@@ -18,9 +18,8 @@ test("@core PBE-040 agent config protocol is exposed through the canonical conne
     expect.arrayContaining(["read_file", "write_file", "search", "patch_file"]),
   );
   expect(Array.isArray(payload.enabledModels)).toBe(true);
-  expect(
-    payload.defaultModelAlias || payload.defaultModel?.alias || payload.defaultModel?.value,
-  ).toBeTruthy();
+  expect(payload.enabledModels.map((item) => item.alias)).toContain(payload.defaultModelAlias);
+  expect(payload).not.toHaveProperty("defaultModel");
 
   await sendAndStop({
     page: noobot.page,

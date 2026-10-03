@@ -391,11 +391,11 @@ class SessionArtifactMethods {
             }),
             repair: {
               status: "failed",
-              errorCode: String(error?.code || error?.errorCode || "SESSION_REPAIR_FAILED"),
+              errorCode: String(error?.code || "SESSION_REPAIR_FAILED"),
               message: String(error?.message || "Session repair failed"),
               failedAt: this.now(),
               trigger: {
-                code: String(repairTrigger?.code || repairTrigger?.errorCode || ""),
+                code: String(repairTrigger?.code || ""),
                 message: String(repairTrigger?.message || ""),
               },
             },

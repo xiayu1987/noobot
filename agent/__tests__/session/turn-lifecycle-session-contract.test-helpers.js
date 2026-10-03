@@ -46,9 +46,6 @@ function harness(initial = {}) {
     async withSessionMutation(_u, _s, _p, operation) {
       return operation();
     },
-    async resolveParentSessionId() {
-      return "";
-    },
     async resolveSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
     },
@@ -103,11 +100,11 @@ function newSessionHarness() {
     async withSessionMutation(_u, _s, _p, operation) {
       return operation();
     },
-    async resolveParentSessionId() {
-      return "";
-    },
     async resolveSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
+    },
+    async isSessionDeleted() {
+      return false;
     },
     createInitialSession({ sessionId }) {
       return normalizeSessionEntity(
@@ -167,12 +164,4 @@ const deliveryReceiptOf = (envelope) => ({
   sequence: envelope.ordering.sequence,
 });
 
-export {
-  now,
-  createSessionDir,
-  harness,
-  newSessionHarness,
-  event,
-  eventIdOf,
-  deliveryReceiptOf,
-};
+export { now, createSessionDir, harness, newSessionHarness, event, eventIdOf, deliveryReceiptOf };

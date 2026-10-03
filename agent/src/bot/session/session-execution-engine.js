@@ -194,9 +194,9 @@ export class SessionExecutionEngine {
           ? (payload = {}) => this.session.bindTurnAttachments(payload)
           : null,
       assertReusedUserTurnIdentity: (payload = {}) => this._assertReusedUserTurnIdentity(payload),
-      getSessionTurns: (payload = {}) => this.session?.getSessionTurns?.(payload),
+      getSessionTurns: (payload = {}) => this.session.getSessionTurns(payload),
       getTurnSummaryCheckpointState: (payload = {}) =>
-        this.session?.getTurnSummaryCheckpointState?.(payload),
+        this.session.getTurnSummaryCheckpointState(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };
@@ -507,56 +507,6 @@ export class SessionExecutionEngine {
     return resolveAttachmentIndexBasePath(this, userId);
   }
 
-  async _appendSessionTurn({
-    userId,
-    sessionId,
-    role,
-    content,
-    type = "",
-    taskId = null,
-    taskStatus = null,
-    tool_calls = null,
-    tool_call_id = "",
-    attachments = [],
-    modelAlias = "",
-    modelName = "",
-    summarized = false,
-    toolName = "",
-    rawModelContent = null,
-    modelAdditionalKwargs = null,
-    modelResponseMetadata = null,
-    dialogProcessId = "",
-    parentDialogProcessId = "",
-    parentSessionId = "",
-    turnScopeId = "",
-    eventListener,
-  }) {
-    await this.turnPersister.appendSessionTurn({
-      userId,
-      sessionId,
-      role,
-      content,
-      type,
-      taskId,
-      taskStatus,
-      tool_calls,
-      tool_call_id,
-      attachments,
-      modelAlias,
-      modelName,
-      summarized,
-      toolName,
-      rawModelContent,
-      modelAdditionalKwargs,
-      modelResponseMetadata,
-      dialogProcessId,
-      parentDialogProcessId,
-      parentSessionId,
-      turnScopeId,
-      eventListener,
-    });
-  }
-
   async _appendAgentMessages({
     userId,
     sessionId,
@@ -582,47 +532,47 @@ export class SessionExecutionEngine {
   }
 
   async _assertReusedUserTurnIdentity(payload = {}) {
-    return this.session?.assertReusedUserTurnIdentity?.(payload);
+    return this.session.assertReusedUserTurnIdentity(payload);
   }
 
   async applyTurnLifecycleEvent(payload = {}) {
-    return this.session?.applyTurnLifecycleEvent?.(payload);
+    return this.session.applyTurnLifecycleEvent(payload);
   }
 
   async getTurnLifecycleSnapshot(payload = {}) {
-    return this.session?.getTurnLifecycleSnapshot?.(payload);
+    return this.session.getTurnLifecycleSnapshot(payload);
   }
 
   async commitAuthorityEvent(payload = {}) {
-    return this.session?.commitAuthorityEvent?.(payload);
+    return this.session.commitAuthorityEvent(payload);
   }
 
   async getPendingAuthorityEvents(payload = {}) {
-    return this.session?.getPendingAuthorityEvents?.(payload);
+    return this.session.getPendingAuthorityEvents(payload);
   }
 
   async recordAuthorityEventAttempts(payload = {}) {
-    return this.session?.recordAuthorityEventAttempts?.(payload);
+    return this.session.recordAuthorityEventAttempts(payload);
   }
 
   async acknowledgeAuthorityEvents(payload = {}) {
-    return this.session?.acknowledgeAuthorityEvents?.(payload);
+    return this.session.acknowledgeAuthorityEvents(payload);
   }
 
   async compactAuthorityEvents(payload = {}) {
-    return this.session?.compactAuthorityEvents?.(payload);
+    return this.session.compactAuthorityEvents(payload);
   }
 
   async getExecution(payload = {}) {
-    return this.session?.getExecution?.(payload);
+    return this.session.getExecution(payload);
   }
 
   async getExecutionChildren(payload = {}) {
-    return this.session?.getExecutionChildren?.(payload);
+    return this.session.getExecutionChildren(payload);
   }
 
   async getExecutionTree(payload = {}) {
-    return this.session?.getExecutionTree?.(payload);
+    return this.session.getExecutionTree(payload);
   }
 
   async _initializeRunSessionRuntime(payload = {}) {

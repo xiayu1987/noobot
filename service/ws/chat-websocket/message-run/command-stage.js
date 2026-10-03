@@ -168,7 +168,7 @@ function createActionEvent(context, command, run, executionIntent, startedAt) {
 
 function rejectedActionError(accepted) {
   const error = new Error(accepted?.reason || "action_rejected");
-  error.errorCode = accepted?.reason || "action_rejected";
+  error.code = accepted?.reason || "action_rejected";
   error.currentVersion = accepted?.currentVersion;
   if (accepted?.reason === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT) error.statusCode = 409;
   return error;

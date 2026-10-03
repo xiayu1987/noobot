@@ -139,7 +139,7 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
           const error = new Error(`delete-from-${statusCode}`);
           error.statusCode = statusCode;
           if (statusCode === 409) {
-            error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT";
+            error.code = "SESSION_AGGREGATE_VERSION_CONFLICT";
             error.currentVersion = 7;
           }
           throw error;
@@ -255,14 +255,14 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
-        replaceTurn: async (payload) => {
-          calls.push(payload);
-          return createReplaceTurnResult(payload, {
-            version: 4,
-            replacedTurnScopeIds: ["scope-old"],
-            replacementUserMessageId: "replacement-user-1",
-          });
-        },
+      },
+      replaceSessionTurn: async (payload) => {
+        calls.push(payload);
+        return createReplaceTurnResult(payload, {
+          version: 4,
+          replacedTurnScopeIds: ["scope-old"],
+          replacementUserMessageId: "replacement-user-1",
+        });
       },
       getAttachmentById: async () => null,
     },
@@ -314,14 +314,14 @@ test("session-routes: replace-turn rejects duplicate /api/internal service route
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
-        replaceTurn: async (payload) => {
-          calls.push(payload);
-          return createReplaceTurnResult(payload, {
-            version: 5,
-            replacedTurnScopeIds: ["client-turn:api"],
-            replacementUserMessageId: "replacement-user-2",
-          });
-        },
+      },
+      replaceSessionTurn: async (payload) => {
+        calls.push(payload);
+        return createReplaceTurnResult(payload, {
+          version: 5,
+          replacedTurnScopeIds: ["client-turn:api"],
+          replacementUserMessageId: "replacement-user-2",
+        });
       },
       getAttachmentById: async () => null,
     },
@@ -363,12 +363,12 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
-        replaceTurn: async () => {
-          const statusCode = errors.shift();
-          const error = new Error(`replace-turn-${statusCode}`);
-          error.statusCode = statusCode;
-          throw error;
-        },
+      },
+      replaceSessionTurn: async () => {
+        const statusCode = errors.shift();
+        const error = new Error(`replace-turn-${statusCode}`);
+        error.statusCode = statusCode;
+        throw error;
       },
       getAttachmentById: async () => null,
     },

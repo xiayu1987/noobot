@@ -260,7 +260,7 @@ export function createTurnFinalizer({
       return;
     }
     sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
-      code: String(error?.errorCode || error?.code || "run_failed"),
+      code: String(error?.code || "run_failed"),
       message: errorMessage,
     });
     webSocket.close(1011, "error");

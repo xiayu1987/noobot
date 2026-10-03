@@ -94,8 +94,8 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
     sessionArtifactEvents: [],
   };
   const repo = {
-    async resolveParentSessionId() {
-      return "";
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async resolveSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };
@@ -229,8 +229,8 @@ test("plugin artifact replacement increments revision and rejects a stale base r
     sessionArtifactEvents: [],
   };
   const repo = {
-    async resolveParentSessionId() {
-      return "";
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async resolveSessionScope() {
       return { resolvedParentSessionId: "", sessionDir };

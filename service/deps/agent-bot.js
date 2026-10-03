@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { BotManager } from "noobot-agent/bot-manage";
+export { BotManager } from "noobot-agent/bot";

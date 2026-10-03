@@ -11,7 +11,6 @@ import { fileURLToPath } from "node:url";
 const AGENT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC_ROOT = path.join(AGENT_ROOT, "src");
 const TEST_ROOT = path.join(AGENT_ROOT, "__tests__");
-const SYSTEM_CORE_ROOT = path.join(SRC_ROOT, "system-core");
 
 const EXPECTED_SOURCE_DIRECTORIES = new Set([
   "application",
@@ -31,7 +30,6 @@ const EXPECTED_SOURCE_DIRECTORIES = new Set([
   "session",
   "shared",
   "skills",
-  "system-core",
   "tools",
   "transfer-adapter",
   "transfer",
@@ -52,12 +50,6 @@ function relativeToAgent(filePath) {
 }
 
 const violations = [];
-const compatibilityFiles = walk(SYSTEM_CORE_ROOT).map(relativeToAgent);
-if (compatibilityFiles.length !== 1 || compatibilityFiles[0] !== "src/system-core/index.js") {
-  violations.push(
-    `src/system-core is a compatibility facade and may contain only index.js; found: ${compatibilityFiles.join(", ") || "nothing"}`,
-  );
-}
 
 const actualSourceDirectories = readdirSync(SRC_ROOT, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -73,7 +65,7 @@ for (const requiredDirectory of ["bot", "context", "runtime"]) {
   }
 }
 
-const legacyPathPattern = /(?:agent\/)?(?:src|__tests__)\/system-core\/(?!index\.js)/g;
+const legacyPathPattern = /(?:agent\/)?(?:src|__tests__)\/system-core\//g;
 for (const filePath of [...walk(SRC_ROOT), ...walk(TEST_ROOT)]) {
   if (!/\.(?:[cm]?js|ts|tsx|json|md)$/.test(filePath)) continue;
   const content = readFileSync(filePath, "utf8");
@@ -84,15 +76,10 @@ for (const filePath of [...walk(SRC_ROOT), ...walk(TEST_ROOT)]) {
 }
 
 const packageJson = JSON.parse(readFileSync(path.join(AGENT_ROOT, "package.json"), "utf8"));
-if (packageJson.exports?.["./bot-manage"] !== "./src/bot/index.js") {
-  violations.push(
-    "the noobot-agent/bot-manage compatibility export must resolve to src/bot/index.js",
-  );
-}
-if (packageJson.exports?.["./system-core"] !== "./src/system-core/index.js") {
-  violations.push(
-    "the noobot-agent/system-core compatibility export must resolve to src/system-core/index.js",
-  );
+for (const removedExport of ["./bot-manage", "./system-core"]) {
+  if (Object.hasOwn(packageJson.exports || {}, removedExport)) {
+    violations.push(`removed compatibility export must not be declared: ${removedExport}`);
+  }
 }
 
 if (violations.length > 0) {

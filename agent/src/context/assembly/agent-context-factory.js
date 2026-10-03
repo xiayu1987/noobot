@@ -199,7 +199,7 @@ export class AgentContextFactory {
       if (!isNewSession && !isExistingSession) {
         const error = new Error(`unsupported context mode: ${String(mode || "<empty>")}`);
         error.statusCode = 400;
-        error.errorCode = "INVALID_CONTEXT_MODE";
+        error.code = "INVALID_CONTEXT_MODE";
         throw error;
       }
       if (isNewSession) {

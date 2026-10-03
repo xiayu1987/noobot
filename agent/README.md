@@ -20,7 +20,7 @@ npm test
 The authoritative list is `package.json#exports`. Main public subpaths include:
 
 - `noobot-agent/agent`
-- `noobot-agent/bot-manage`
+- `noobot-agent/bot`
 - `noobot-agent/tools`
 - `noobot-agent/model`
 - `noobot-agent/event`

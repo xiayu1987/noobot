@@ -3,10 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+
+const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
+after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
 
 function createService({ initialSession }) {
   const saved = [];
@@ -16,8 +22,14 @@ function createService({ initialSession }) {
     ...initialSession,
   });
   const sessionRepo = {
-    async resolveParentSessionId() {
-      return currentSession?.parentSessionId || "";
+    async resolveSessionScope() {
+      return {
+        resolvedParentSessionId: currentSession?.parentSessionId || "",
+        sessionDir: TEST_SESSION_DIR,
+      };
+    },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async findById() {
       return currentSession;
@@ -120,11 +132,17 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   });
 
   assert.deepEqual(Object.keys(result).sort(), [
+    "aggregateVersion",
+    "commandId",
+    "committedAggregateVersion",
     "deduplicated",
     "removedAuthorityOutboxEvents",
     "session",
     "turnReplacement",
   ]);
+  assert.equal(result.aggregateVersion, 3);
+  assert.equal(result.commandId, "idem-1");
+  assert.equal(result.committedAggregateVersion, 3);
   assert.deepEqual(result.turnReplacement, {
     protocolVersion: 1,
     eventType: "turn.replaced",
@@ -643,7 +661,7 @@ test("SessionMessageService.assertReusedUserTurnIdentity rejects immutable attac
         attachments: [divergentAttachment],
       }),
       (error) =>
-        error?.errorCode === "INVALID_CANONICAL_ATTACHMENT" ||
+        error?.code === "INVALID_CANONICAL_ATTACHMENT" ||
         /attachments do not match Session authority/.test(error?.message || ""),
     );
   }

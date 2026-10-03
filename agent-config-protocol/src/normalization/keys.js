@@ -56,7 +56,7 @@ export function normalizeKnownConfigKeys(input, path = []) {
   if (!isPlainObject(input)) return input;
 
   const currentPath = Array.isArray(path) ? path : [];
-  const inMcpServersSubtree = currentPath[0] === "mcpServers" || currentPath[0] === "mcp_servers";
+  const inMcpServersSubtree = currentPath[0] === "mcpServers";
 
   const out = {};
   for (const [rawKey, value] of Object.entries(input)) {

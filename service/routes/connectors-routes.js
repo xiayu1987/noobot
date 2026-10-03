@@ -15,7 +15,7 @@ function assertOwner(req, userId = "") {
   if (!authenticatedUserId || authenticatedUserId !== requestedUserId) {
     const error = new Error("connector owner does not match authenticated user");
     error.status = 403;
-    error.errorCode = "connector_owner_mismatch";
+    error.code = "connector_owner_mismatch";
     throw error;
   }
   return requestedUserId;
@@ -82,7 +82,7 @@ function registerConnectorSelectionRoutes(app, { bot, connectorRuntime, jsonOpti
           `selected connector is not connected: ${disconnectedSelection.join(", ")}`,
         );
         error.status = 409;
-        error.errorCode = "connector_not_connected";
+        error.code = "connector_not_connected";
         throw error;
       }
       const savedSelectedConnectorIds = await bot.session.setRootSessionSelectedConnectorIds({

@@ -147,6 +147,6 @@ test("buildAgentContextFromBuilder rejects unknown context modes", async () => {
         sessionId: "s1",
         contextBuilder: {},
       }),
-    (error) => error?.errorCode === "INVALID_CONTEXT_MODE",
+    (error) => error?.code === "INVALID_CONTEXT_MODE",
   );
 });

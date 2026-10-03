@@ -47,7 +47,7 @@ function prepareAttachmentBinding({
   if (canonicalAttachments.length === 0) {
     throw Object.assign(new TypeError("attachment binding requires at least one attachment"), {
       statusCode: 400,
-      errorCode: INVALID_CANONICAL_ATTACHMENT_ERROR_CODE,
+      code: INVALID_CANONICAL_ATTACHMENT_ERROR_CODE,
     });
   }
   return {
@@ -87,16 +87,10 @@ export async function bindTurnAttachments({
     identity.userId,
     identity.sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const { session, resolvedParentSessionId } = await this._findSession(
         identity.userId,
         identity.sessionId,
         parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        identity.userId,
-        identity.sessionId,
-        resolvedParentSessionId,
         persistenceContext,
       );
       if (!session) throw Object.assign(new Error("session not found"), { statusCode: 404 });
@@ -109,7 +103,7 @@ export async function bindTurnAttachments({
       if (!idempotency.allowed) {
         throw Object.assign(new Error("commandId was reused with a different request"), {
           statusCode: 409,
-          errorCode: SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED,
+          code: SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED,
         });
       }
       const messages = Array.isArray(session.messages) ? session.messages : [];
@@ -139,7 +133,7 @@ export async function bindTurnAttachments({
       if (existingBinding) {
         throw Object.assign(new Error("Turn attachments are already bound"), {
           statusCode: 409,
-          errorCode: SESSION_ERROR_CODE.TURN_ATTACHMENTS_ALREADY_BOUND,
+          code: SESSION_ERROR_CODE.TURN_ATTACHMENTS_ALREADY_BOUND,
         });
       }
       const currentVersion = resolveAggregateVersion(session);
@@ -150,7 +144,7 @@ export async function bindTurnAttachments({
       if (!concurrency.allowed) {
         throw Object.assign(new Error("session aggregate version conflict"), {
           statusCode: 409,
-          errorCode: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+          code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
           currentVersion,
         });
       }
@@ -158,7 +152,7 @@ export async function bindTurnAttachments({
       if (Array.isArray(currentMessage.attachments) && currentMessage.attachments.length > 0) {
         throw Object.assign(new Error("Turn attachments are already bound"), {
           statusCode: 409,
-          errorCode: SESSION_ERROR_CODE.TURN_ATTACHMENTS_ALREADY_BOUND,
+          code: SESSION_ERROR_CODE.TURN_ATTACHMENTS_ALREADY_BOUND,
         });
       }
       const userMessage = { ...currentMessage, attachments: canonicalAttachments };

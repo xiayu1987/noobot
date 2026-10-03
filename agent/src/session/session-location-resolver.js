@@ -76,15 +76,6 @@ export class ScopedSessionLocationResolver {
     Object.freeze(this);
   }
 
-  async resolveParentSessionId(_userId, _sessionId, parentSessionId = "") {
-    this._assertIdentity(_userId, _sessionId);
-    const resolvedParentSessionId = String(parentSessionId || "").trim();
-    if (this.parentSessionId && resolvedParentSessionId !== this.parentSessionId) {
-      throw new Error("scoped session parent does not match its execution scope");
-    }
-    return resolvedParentSessionId;
-  }
-
   async resolveSessionDir(userId, sessionId) {
     this._assertIdentity(userId, sessionId);
     return this.sessionDir;
@@ -92,7 +83,11 @@ export class ScopedSessionLocationResolver {
 
   async resolveSessionScope(userId, sessionId, parentSessionId = "") {
     this._assertIdentity(userId, sessionId);
-    return buildScope(this.sessionDir, parentSessionId);
+    const resolvedParentSessionId = String(parentSessionId || "").trim();
+    if (this.parentSessionId && resolvedParentSessionId !== this.parentSessionId) {
+      throw new Error("scoped session parent does not match its execution scope");
+    }
+    return buildScope(this.sessionDir, resolvedParentSessionId);
   }
 
   _assertIdentity(userId, sessionId) {
@@ -109,7 +104,11 @@ export class ScopedSessionLocationResolver {
   }
 }
 
-export function createPersistenceContext({ locationResolver, metadataContributor = null, sessionGeneration = null } = {}) {
+export function createPersistenceContext({
+  locationResolver,
+  metadataContributor = null,
+  sessionGeneration = null,
+} = {}) {
   if (!locationResolver || typeof locationResolver.resolveSessionScope !== "function") {
     throw new TypeError("persistence context requires a locationResolver");
   }
@@ -132,9 +131,10 @@ export function createPersistenceContext({ locationResolver, metadataContributor
     parentSessionId: String(locationResolver?.parentSessionId || "").trim(),
     locationResolver,
     metadataContributor,
-    sessionGeneration: Number.isInteger(Number(sessionGeneration)) && Number(sessionGeneration) > 0
-      ? Number(sessionGeneration)
-      : null,
+    sessionGeneration:
+      Number.isInteger(Number(sessionGeneration)) && Number(sessionGeneration) > 0
+        ? Number(sessionGeneration)
+        : null,
   });
 }
 

@@ -41,7 +41,6 @@ const globalConfig = {
     },
   },
   defaultProvider: "scenario_default",
-  defaultModelAlias: "scenario_default",
 };
 
 test("resolveEffectiveModelSpec uses selectedModel string before scenario default", () => {
@@ -49,18 +48,6 @@ test("resolveEffectiveModelSpec uses selectedModel string before scenario defaul
     globalConfig,
     userConfig: {},
     selectedModel: "selected_alias",
-    scenario: "programming",
-  });
-
-  assert.equal(spec.alias, "selected_alias");
-  assert.equal(spec.model, "selected-model");
-});
-
-test("resolveEffectiveModelSpec accepts selectedModel object before scenario default", () => {
-  const spec = resolveEffectiveModelSpec({
-    globalConfig,
-    userConfig: {},
-    selectedModel: { value: "selected_alias" },
     scenario: "programming",
   });
 
@@ -114,7 +101,6 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
         },
       },
       defaultProvider: "system_default",
-      defaultModelAlias: "system_default",
     },
     userConfig: {},
     selectedModel: "",

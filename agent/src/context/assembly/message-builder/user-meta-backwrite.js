@@ -55,7 +55,7 @@ export function queueUserMetaBackwrite(
 export async function applyPendingUserMetaBackwrites(
   runtime = {},
   {
-    turnPersister = null,
+    turnPersister,
     userId = "",
     sessionId = "",
     parentSessionId = "",
@@ -80,23 +80,21 @@ export async function applyPendingUserMetaBackwrites(
     }
     const nextContent = appendUserMetaParsedResult(message.content, record.result);
     updateContextMessageById(modelContext, record.userMetaMessageUid, { content: nextContent });
-    if (turnPersister && typeof turnPersister.appendAgentMessages === "function") {
-      await turnPersister.appendAgentMessages({
-        userId,
-        sessionId,
-        parentSessionId,
-        dialogProcessId,
-        turnScopeId,
-        eventListener,
-        persistenceContext,
-        messages: [
-          {
-            ...message,
-            content: nextContent,
-          },
-        ],
-      });
-    }
+    await turnPersister.appendAgentMessages({
+      userId,
+      sessionId,
+      parentSessionId,
+      dialogProcessId,
+      turnScopeId,
+      eventListener,
+      persistenceContext,
+      messages: [
+        {
+          ...message,
+          content: nextContent,
+        },
+      ],
+    });
     remaining = remaining.slice(1);
     setBackwrites(runtime, remaining);
     appliedCount += 1;

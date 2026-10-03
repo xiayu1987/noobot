@@ -15,9 +15,9 @@ import { mergeDuplicationIgnoreGlobs } from "./quality/duplication-config.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  clones: 116,
-  duplicatedLines: 2618,
-  percentage: 0.97859,
+  clones: 100,
+  duplicatedLines: 1623,
+  percentage: 0.603669,
 });
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-duplication-"));

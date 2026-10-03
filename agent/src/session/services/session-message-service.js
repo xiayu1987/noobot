@@ -5,7 +5,7 @@
  */
 import { commitTurn } from "./session-message-service/commit-turn.js";
 import { bindTurnAttachments } from "./session-message-service/bind-turn-attachments.js";
-import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
+import { appendTurns } from "./session-message-service/append-turn.js";
 import { commitMessageEvent } from "./session-message-service/message-event.js";
 import {
   acknowledgeAuthorityEvents,
@@ -36,13 +36,12 @@ export class SessionMessageService {
     sessionRepo,
     sessionCrudService = null,
     now = () => new Date().toISOString(),
-    allocateDialogProcessId = null,
+    allocateDialogProcessId,
   } = {}) {
     this.sessionRepo = sessionRepo;
     this.sessionCrudService = sessionCrudService;
     this.now = now;
     this.allocateDialogProcessId = allocateDialogProcessId;
-    this._mutationTails = new Map();
   }
 
   async _resolveParentSessionId(
@@ -60,6 +59,22 @@ export class SessionMessageService {
     );
   }
 
+  async _findSession(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    const resolvedParentSessionId = await this._resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+      persistenceContext,
+    );
+    return { session, resolvedParentSessionId };
+  }
+
   async _withSessionMutation(
     userId,
     sessionId,
@@ -67,48 +82,13 @@ export class SessionMessageService {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    const scopeKey = persistenceContext?.locationResolver
-      ? JSON.stringify(
-          await persistenceContext.locationResolver.resolveSessionScope(
-            userId,
-            sessionId,
-            parentSessionId,
-          ),
-        )
-      : "";
-    const key = `${String(userId || "").trim()}\u0000${String(sessionId || "").trim()}\u0000${scopeKey}`;
-    const previous = this._mutationTails.get(key) || Promise.resolve();
-    let release;
-    const current = new Promise((resolve) => {
-      release = resolve;
-    });
-    this._mutationTails.set(key, current);
-    await previous.then(
-      () => undefined,
-      () => undefined,
+    return this.sessionRepo.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      operation,
+      persistenceContext,
     );
-    try {
-      if (typeof this.sessionRepo?.withSessionMutation === "function") {
-        try {
-          return await this.sessionRepo.withSessionMutation(
-            userId,
-            sessionId,
-            parentSessionId,
-            operation,
-            persistenceContext,
-          );
-        } catch (error) {
-          if (error?.code === "SESSION_DELETED" || error?.errorCode === "SESSION_DELETED") {
-            return { appended: false, applied: false, upserted: false, reason: "session_deleted" };
-          }
-          throw error;
-        }
-      }
-      return await operation();
-    } finally {
-      release();
-      if (this._mutationTails.get(key) === current) this._mutationTails.delete(key);
-    }
   }
 
   async commitTurn(payload = {}) {
@@ -116,9 +96,6 @@ export class SessionMessageService {
   }
   async bindTurnAttachments(payload = {}) {
     return bindTurnAttachments.call(this, payload);
-  }
-  async appendTurn(payload = {}) {
-    return appendTurn.call(this, payload);
   }
   async appendTurns(payload = {}) {
     return appendTurns.call(this, payload);

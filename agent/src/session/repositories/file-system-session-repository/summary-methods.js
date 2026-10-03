@@ -110,7 +110,7 @@ class SessionSummaryMethods {
         createdAt: metadata.createdAt || existing?.createdAt,
         updatedAt: metadata.updatedAt || existing?.updatedAt,
         depth: existing?.depth,
-        errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
+        errorCode: error?.code || "SESSION_PROTOCOL_INVALID",
         reason: error?.message || "Session uses an unsupported protocol",
       });
       const next = current.sessions.filter((item) => item.sessionId !== normalizedSessionId);
@@ -162,7 +162,7 @@ class SessionSummaryMethods {
             createdAt: metadata.createdAt,
             updatedAt: metadata.updatedAt,
             depth: this._getSummaryDepth(sessionId, tree),
-            errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
+            errorCode: error?.code || "SESSION_PROTOCOL_INVALID",
             reason: error?.message || "Session uses an unsupported protocol",
           }),
         );

@@ -12,6 +12,24 @@ import express, { registerSessionRoutes, withTestServer } from "./session-routes
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
 
+const emptyCleanup = async () => ({ deletedCount: 0, deletedSessionIds: [] });
+
+function createDeletionBot({ session = {}, ...overrides } = {}) {
+  return {
+    session: {
+      getRootSessionId: async () => "",
+      listSessionIds: async () => [],
+      ...session,
+    },
+    deleteScopedAttachmentsBySessionIds: emptyCleanup,
+    deleteSemanticTransferBySessionIds: emptyCleanup,
+    deleteSessionMemoryBySessionIds: async () => ({ deletedCount: 0 }),
+    pruneOrphanScopedAttachments: emptyCleanup,
+    getAttachmentById: async () => null,
+    ...overrides,
+  };
+}
+
 test("session-routes: 删除 session 时清理 harness 运行记录", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-route-harness-"));
   const runsDir = path.join(basePath, "runtime", "plugin-data", "harness", "runs");
@@ -31,17 +49,10 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
   );
 
   const app = express();
-  const bot = {
-    session: {
-      getSessionData: async () => ({}),
-      getRootSessionId: async () => "",
-      deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
-      getAllSessionsData: async () => [],
-    },
+  const bot = createDeletionBot({
+    session: { deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }) },
     getWorkspacePath: () => basePath,
-    deleteScopedAttachmentsBySessionIds: async () => ({ deletedCount: 0, deletedSessionIds: [] }),
-    getAttachmentById: async () => null,
-  };
+  });
   const pluginHost = createServicePluginHost();
   await pluginHost.registerServiceRoutes(app, {
     ports: createPluginServicePorts({ bot, translateText: (key) => key }),
@@ -66,17 +77,11 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
 });
 test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除当前 session 附件", async () => {
   const attachmentDeleteCalls = [];
-  const overflowDeleteCalls = [];
+  const semanticTransferDeleteCalls = [];
   const app = express();
   registerSessionRoutes(app, {
-    bot: {
-      session: {
-        getSessionData: async () => ({}),
-        getRootSessionId: async () => "",
-        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
-        getAllSessionsData: async () => [],
-      },
-      getWorkspacePath: () => "",
+    bot: createDeletionBot({
+      session: { deleteSessionBranch: async () => ({ deletedSessionIds: [] }) },
       deleteScopedAttachmentsBySessionIds: async (payload = {}) => {
         attachmentDeleteCalls.push(payload);
         return {
@@ -84,15 +89,14 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
           deletedSessionIds: payload?.sessionIds || [],
         };
       },
-      deleteToolResultOverflowBySessionIds: async (payload = {}) => {
-        overflowDeleteCalls.push(payload);
+      deleteSemanticTransferBySessionIds: async (payload = {}) => {
+        semanticTransferDeleteCalls.push(payload);
         return {
           deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0,
           deletedSessionIds: payload?.sessionIds || [],
         };
       },
-      getAttachmentById: async () => null,
-    },
+    }),
     handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => key,
   });
@@ -111,8 +115,8 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
     userId: "u1",
     sessionIds: ["s-fallback-delete"],
   });
-  assert.equal(overflowDeleteCalls.length, 1);
-  assert.deepEqual(overflowDeleteCalls[0], {
+  assert.equal(semanticTransferDeleteCalls.length, 1);
+  assert.deepEqual(semanticTransferDeleteCalls[0], {
     userId: "u1",
     sessionIds: ["s-fallback-delete"],
   });
@@ -120,13 +124,13 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
 
 test("session-routes: plugin related session identities share the authoritative artifact cleanup", async () => {
   const attachmentDeleteCalls = [];
-  const overflowDeleteCalls = [];
+  const semanticTransferDeleteCalls = [];
   const memoryDeleteCalls = [];
   const orphanPruneCalls = [];
   const pluginCleanupCalls = [];
   const app = express();
   registerSessionRoutes(app, {
-    bot: {
+    bot: createDeletionBot({
       session: {
         getRootSessionId: async () => "s-delete",
         deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
@@ -136,8 +140,8 @@ test("session-routes: plugin related session identities share the authoritative 
         attachmentDeleteCalls.push(payload);
         return { deletedCount: payload.sessionIds.length, deletedSessionIds: payload.sessionIds };
       },
-      deleteToolResultOverflowBySessionIds: async (payload) => {
-        overflowDeleteCalls.push(payload);
+      deleteSemanticTransferBySessionIds: async (payload) => {
+        semanticTransferDeleteCalls.push(payload);
         return { deletedCount: payload.sessionIds.length, deletedSessionIds: payload.sessionIds };
       },
       deleteSessionMemoryBySessionIds: async (payload) => {
@@ -148,7 +152,7 @@ test("session-routes: plugin related session identities share the authoritative 
         orphanPruneCalls.push(payload);
         return { deletedCount: 0, deletedSessionIds: [] };
       },
-    },
+    }),
     pluginHost: {
       getPluginDiagnostics: async () => ({}),
       emitAfterSessionDelete: async (payload) => {
@@ -170,7 +174,7 @@ test("session-routes: plugin related session identities share the authoritative 
 
   const expected = { userId: "u1", sessionIds: ["s-delete", "workflow-node-session"] };
   assert.deepEqual(attachmentDeleteCalls, [expected]);
-  assert.deepEqual(overflowDeleteCalls, [expected]);
+  assert.deepEqual(semanticTransferDeleteCalls, [expected]);
   assert.deepEqual(memoryDeleteCalls, [expected]);
   assert.deepEqual(orphanPruneCalls, [
     { userId: "u1", keepSessionIds: ["s-keep", "workflow-node-keep"] },
@@ -182,22 +186,19 @@ test("session-routes: orphan attachment cleanup reads ids without loading Sessio
   const pruneCalls = [];
   const app = express();
   registerSessionRoutes(app, {
-    bot: {
+    bot: createDeletionBot({
       session: {
-        getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
         listSessionIds: async () => ["s-keep"],
         getAllSessionsData: async () => {
           throw new Error("invalid_attachment_id");
         },
       },
-      deleteScopedAttachmentsBySessionIds: async () => ({ deletedCount: 0, deletedSessionIds: [] }),
       pruneOrphanScopedAttachments: async (payload) => {
         pruneCalls.push(payload);
         return { deletedCount: 0, deletedSessionIds: [] };
       },
-      getAttachmentById: async () => null,
-    },
+    }),
     handleChat: (_req, res) => res.json({ ok: true }),
     translateText: (key) => key,
   });

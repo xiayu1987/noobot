@@ -57,6 +57,7 @@ test("SessionExecutionFinalizer waits for execution event durability before read
   const order = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
         order.push("bundle");
@@ -97,6 +98,7 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
   let bundleReads = 0;
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
         bundleReads += 1;
@@ -140,6 +142,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
         return { logs: [] };
@@ -202,6 +205,7 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
         return { logs: [] };
@@ -499,6 +503,7 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
   };
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
         return { logs: [] };
@@ -576,6 +581,7 @@ test("completed turn summary policy marks are durably upserted before the next d
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
         return { logs: [] };
@@ -615,6 +621,7 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
   let appendCalled = false;
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
       async getExecutionBundle() {
         return { logs: [] };

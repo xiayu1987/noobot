@@ -13,17 +13,15 @@ import {
 
 export const INVALID_CANONICAL_ATTACHMENT_ERROR_CODE = "INVALID_CANONICAL_ATTACHMENT";
 
-function invalidCanonicalAttachmentError(message) {
-  const error = new Error(message);
+function invalidCanonicalAttachmentError(message, cause) {
+  const error = new Error(message, cause ? { cause } : undefined);
   error.statusCode = 400;
-  error.errorCode = INVALID_CANONICAL_ATTACHMENT_ERROR_CODE;
+  error.code = INVALID_CANONICAL_ATTACHMENT_ERROR_CODE;
   return error;
 }
 
 function rethrowAsInvalidCanonicalAttachment(error) {
-  error.statusCode ??= 400;
-  error.errorCode ??= INVALID_CANONICAL_ATTACHMENT_ERROR_CODE;
-  throw error;
+  throw invalidCanonicalAttachmentError(String(error?.message || error), error);
 }
 
 function cleanPlainObject(value = {}) {

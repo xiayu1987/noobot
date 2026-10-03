@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveLocalizedBuiltinScenarios } from "#agent/config";
-import { getEnabledProviders, resolveDefaultModelSpec } from "#agent/model";
+import { getEnabledProviders, pickAlias } from "#agent/model";
 import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import { withJsonError } from "./route-wrapper.js";
-import { normalizePluginMode } from "@noobot/agent-config-protocol";
+import { createClientModelCatalog, normalizePluginMode } from "@noobot/agent-config-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -43,64 +43,11 @@ function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
   return mergedPlugins;
 }
 
-function isConversationProvider(provider = {}) {
-  if (!provider || typeof provider !== "object") return false;
-  return provider?.enabled === true && provider?.used_for_conversation === true;
-}
-
-function buildClientModelOption(alias = "", provider = {}) {
-  const normalizedAlias = String(alias || provider?.alias || "").trim();
-  if (!normalizedAlias) return null;
-  const model = String(provider?.model || "").trim();
-  const name = String(provider?.name || provider?.label || normalizedAlias).trim();
-  return {
-    value: normalizedAlias,
-    alias: normalizedAlias,
-    key: normalizedAlias,
-    label: name || normalizedAlias,
-    name: name || normalizedAlias,
-    model,
-    description: String(provider?.description || "").trim(),
-  };
-}
-
-function buildClientEnabledModels(globalConfig = {}, userConfig = {}) {
-  const providers = getEnabledProviders(globalConfig, userConfig);
-  return Object.entries(providers)
-    .filter(([, provider]) => isConversationProvider(provider))
-    .map(([alias, provider]) => buildClientModelOption(alias, provider))
-    .filter(Boolean);
-}
-
-function buildClientDefaultModel(globalConfig = {}, userConfig = {}, enabledModels = []) {
-  const safeEnabledModels = Array.isArray(enabledModels) ? enabledModels : [];
-  const enabledModelKeySet = new Set(
-    safeEnabledModels
-      .flatMap((modelItem) => [
-        modelItem?.value,
-        modelItem?.alias,
-        modelItem?.key,
-        modelItem?.model,
-      ])
-      .map((modelKey) => String(modelKey || "").trim())
-      .filter(Boolean),
-  );
-  const defaultSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
-  const defaultOption = isConversationProvider(defaultSpec)
-    ? buildClientModelOption(defaultSpec?.alias, defaultSpec)
-    : null;
-  const defaultKeys = [
-    defaultOption?.value,
-    defaultOption?.alias,
-    defaultOption?.key,
-    defaultOption?.model,
-  ]
-    .map((modelKey) => String(modelKey || "").trim())
-    .filter(Boolean);
-  if (defaultOption && defaultKeys.some((modelKey) => enabledModelKeySet.has(modelKey))) {
-    return defaultOption;
-  }
-  return safeEnabledModels[0] || null;
+function buildClientModelCatalog(globalConfig = {}, userConfig = {}) {
+  return createClientModelCatalog({
+    providers: getEnabledProviders(globalConfig, userConfig),
+    defaultAlias: pickAlias({ globalConfig, userConfig, skillConfig: {} }),
+  });
 }
 
 function buildClientPermissions(role = "user", { canUseIDE = false } = {}) {
@@ -187,14 +134,9 @@ export function registerAuthRoutes(
             globalConfig?.plugins,
             loadedSuperAdminConfig?.plugins,
           );
-          const superAdminEnabledModels = buildClientEnabledModels(
+          const superAdminModelCatalog = buildClientModelCatalog(
             globalConfig,
             loadedSuperAdminConfig,
-          );
-          const superAdminDefaultModel = buildClientDefaultModel(
-            globalConfig,
-            loadedSuperAdminConfig,
-            superAdminEnabledModels,
           );
           const apiKey = issueApiKey({ userId, role: "super_admin" });
           res.json({
@@ -205,11 +147,7 @@ export function registerAuthRoutes(
             permissions: buildClientPermissions("super_admin", { canUseIDE: true }),
             scenarios: superAdminScenarios,
             plugins: superAdminPlugins,
-            enabledModels: superAdminEnabledModels,
-            defaultModel: superAdminDefaultModel,
-            defaultModelAlias: String(
-              superAdminDefaultModel?.alias || superAdminDefaultModel?.value || "",
-            ).trim(),
+            ...superAdminModelCatalog,
           });
           return;
         }
@@ -239,8 +177,7 @@ export function registerAuthRoutes(
           globalConfig?.plugins,
           loadedUserConfig?.plugins,
         );
-        const enabledModels = buildClientEnabledModels(globalConfig, loadedUserConfig);
-        const defaultModel = buildClientDefaultModel(globalConfig, loadedUserConfig, enabledModels);
+        const modelCatalog = buildClientModelCatalog(globalConfig, loadedUserConfig);
         const apiKey = issueApiKey({ userId, role: "user" });
         res.json({
           ok: true,
@@ -252,9 +189,7 @@ export function registerAuthRoutes(
           }),
           scenarios: mergedScenarios,
           plugins: mergedPlugins,
-          enabledModels,
-          defaultModel,
-          defaultModelAlias: String(defaultModel?.alias || defaultModel?.value || "").trim(),
+          ...modelCatalog,
         });
       },
       { fallbackErrorKey: "connect.failed", translateText },

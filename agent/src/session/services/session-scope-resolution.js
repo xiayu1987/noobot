@@ -11,14 +11,11 @@ export async function readRepositoryParentSessionId(
   parentSessionId = "",
   persistenceContext = null,
 ) {
-  if (typeof sessionRepo?.resolveSessionScope === "function") {
-    const scope = await sessionRepo.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    return scope?.resolvedParentSessionId || "";
-  }
-  return sessionRepo.resolveParentSessionId(userId, sessionId, parentSessionId);
+  const scope = await sessionRepo.resolveSessionScope(
+    userId,
+    sessionId,
+    parentSessionId,
+    persistenceContext,
+  );
+  return scope.resolvedParentSessionId;
 }

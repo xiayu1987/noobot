@@ -3,11 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+
+const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
+after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
 
 function createService({ initialSession }) {
   const saved = [];
@@ -17,8 +23,14 @@ function createService({ initialSession }) {
     ...initialSession,
   });
   const sessionRepo = {
-    async resolveParentSessionId() {
-      return currentSession?.parentSessionId || "";
+    async resolveSessionScope() {
+      return {
+        resolvedParentSessionId: currentSession?.parentSessionId || "",
+        sessionDir: TEST_SESSION_DIR,
+      };
+    },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
     },
     async findById() {
       return currentSession;

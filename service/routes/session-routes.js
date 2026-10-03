@@ -318,8 +318,6 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
         expectedAggregateVersion: command.expectedAggregateVersion,
         commandId: command.commandId,
       };
-      if (Array.isArray(command.payload.attachments))
-        payload.attachments = command.payload.attachments;
       const logDeleteMutation = (event, data = {}, level = "debug") =>
         writeRoutedRuntimeEvent({
           scope: "session",
@@ -350,9 +348,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           deletedTurnScopeIds: Array.isArray(result?.deletedTurnScopeIds)
             ? result.deletedTurnScopeIds.map((value) => String(value || "").trim()).filter(Boolean)
             : [],
-          aggregateVersion: Number(
-            result?.aggregateVersion || result?.session?.aggregateVersion || 0,
-          ),
+          aggregateVersion: result.aggregateVersion,
           deduplicated: result?.deduplicated === true,
           remainingMessages: messages.map((message = {}, index) => ({
             index,
@@ -370,7 +366,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           "service.messageDelete.failed",
           {
             error: String(error?.message || error || "delete_failed"),
-            errorCode: String(error?.errorCode || error?.code || "").trim(),
+            errorCode: String(error?.code || "").trim(),
             statusCode: Number(error?.statusCode || 0),
           },
           "error",
@@ -399,11 +395,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     };
     if (Array.isArray(command.payload.attachments))
       payload.attachments = command.payload.attachments;
-    const replaceSessionTurn =
-      typeof bot?.replaceSessionTurn === "function"
-        ? bot.replaceSessionTurn.bind(bot)
-        : bot.session.replaceTurn.bind(bot.session);
-    const result = await replaceSessionTurn(payload);
+    const result = await bot.replaceSessionTurn(payload);
     const lifecycle = result?.session?.turnLifecycle || {};
     const replacedTurns =
       lifecycle?.replacedTurns && typeof lifecycle.replacedTurns === "object"
@@ -473,14 +465,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           sessionId,
         });
         const branchSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
-        const hasRemainingSessionIdentityAuthority =
-          typeof bot?.session?.listSessionIds === "function";
-        const listedRemainingSessionIds = hasRemainingSessionIdentityAuthority
-          ? await bot.session.listSessionIds({ userId })
-          : [];
-        const remainingSessionIds = (
-          Array.isArray(listedRemainingSessionIds) ? listedRemainingSessionIds : []
-        )
+        const remainingSessionIds = (await bot.session.listSessionIds({ userId }))
           .map((item) => String(item || "").trim())
           .filter(Boolean);
         const pluginCleanup = await pluginHost.emitAfterSessionDelete({
@@ -494,47 +479,23 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           branchSessionIds,
           pluginCleanup?.deletedRelatedSessionIds,
         );
-        const deletedAttachments =
-          typeof bot.deleteScopedAttachmentsBySessionIds === "function"
-            ? await bot.deleteScopedAttachmentsBySessionIds({
-                userId,
-                sessionIds: deletedSessionIds,
-              })
-            : { deletedSessionIds: [], deletedCount: 0 };
-        const deletedToolResultOverflow =
-          typeof bot.deleteToolResultOverflowBySessionIds === "function"
-            ? await bot.deleteToolResultOverflowBySessionIds({
-                userId,
-                sessionIds: deletedSessionIds,
-              })
-            : { deletedSessionIds: [], deletedCount: 0 };
-        const deletedMemory =
-          typeof bot.deleteSessionMemoryBySessionIds === "function"
-            ? await bot.deleteSessionMemoryBySessionIds({
-                userId,
-                sessionIds: deletedSessionIds,
-              })
-            : { deletedCount: 0 };
-        let deletedOrphanAttachments = { deletedSessionIds: [], deletedCount: 0 };
-        if (
-          typeof bot.pruneOrphanScopedAttachments === "function" &&
-          hasRemainingSessionIdentityAuthority
-        ) {
-          const keepSessionIds = mergeSessionDeletionIds(
+        const cleanupScope = { userId, sessionIds: deletedSessionIds };
+        const deletedAttachments = await bot.deleteScopedAttachmentsBySessionIds(cleanupScope);
+        const deletedSemanticTransfer = await bot.deleteSemanticTransferBySessionIds(cleanupScope);
+        const deletedMemory = await bot.deleteSessionMemoryBySessionIds(cleanupScope);
+        const deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
+          userId,
+          keepSessionIds: mergeSessionDeletionIds(
             remainingSessionIds,
             pluginCleanup?.retainedRelatedSessionIds,
-          );
-          deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
-            userId,
-            keepSessionIds,
-          });
-        }
+          ),
+        });
         res.json({
           ok: true,
           ...result,
           deletedAttachments,
           deletedOrphanAttachments,
-          deletedToolResultOverflow,
+          deletedSemanticTransfer,
           deletedMemory,
         });
       },
