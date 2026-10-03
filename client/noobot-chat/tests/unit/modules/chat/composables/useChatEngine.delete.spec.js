@@ -123,8 +123,25 @@ describe("useChatEngine.delete", () => {
   });
 
   it("deleteMonotonicMessage waits for confirmed stop before cascading deletion from resolved user message", async () => {
+    let stopConfirmed = false;
+    let stopConfirmedBeforeDelete = false;
+    const deleteSessionMessagesFromApi = vi.fn(async () => {
+      stopConfirmedBeforeDelete = stopConfirmed;
+      return {
+        ok: true,
+        session: makeSession("local-delete", { messages: [], rawMessages: [], messageCount: 0 }),
+        deletedCount: 2,
+        anchorIndex: 0,
+        deletedTurnScopeIds: ["client-turn:resend-stale"],
+      };
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
     const { engine, activeSession, deps, turnRuntimeRegistry } = createHarness({
       sessionId: "local-delete",
+      deps: { deleteSessionMessagesFromApi, applySessionDetail },
     });
     const first = {
       id: "m1",
@@ -159,6 +176,7 @@ describe("useChatEngine.delete", () => {
           turnScopeId: target.turnScopeId,
           messages: [first, target],
         });
+        stopConfirmed = true;
       });
       return true;
     });
@@ -166,6 +184,8 @@ describe("useChatEngine.delete", () => {
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
+    expect(stopConfirmedBeforeDelete).toBe(true);
     expect(activeSession.value.messages).toEqual([]);
   });
 

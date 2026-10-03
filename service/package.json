@@ -21,7 +21,7 @@
     "start": "node app.js",
     "cli": "node bin/noobot.js",
     "dev": "node --watch app.js",
-    "test:bot-manage": "npm --prefix ../agent run test:bot-manage",
+    "test:bot": "npm --prefix ../agent run test:bot",
     "check:tool-schema:live:gemini:admin": "npm --prefix ../agent run check:tool-schema:live:gemini:admin",
     "init": "node scripts/init.js",
     "pm2:start": "PM2_HOME=../.pm2 npx pm2 start ../ecosystem.noobot.config.cjs --only noobot-service",

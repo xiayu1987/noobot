@@ -153,6 +153,44 @@ function createCommandResult({
   };
 }
 
+function badRequest(message) {
+  return Object.assign(new Error(message), { statusCode: 400 });
+}
+
+function normalizeAnchoredCommandRequest({ userId, sessionId, anchor, commandId }) {
+  if (!userId || !sessionId) throw badRequest("userId and sessionId are required");
+  const matcher = createMessageAnchorMatcher(anchor);
+  if (!matcher) throw badRequest("message anchor is required");
+  const normalizedCommandId = String(commandId || "").trim();
+  if (!normalizedCommandId) throw badRequest("commandId is required");
+  return { matcher, normalizedCommandId };
+}
+
+function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
+  const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage);
+  for (const key of ["turnId", "turn_id", "messageId", "message_id", "id", "messageUid"]) {
+    delete replacementBaseMessage[key];
+  }
+  const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(fields.attachments);
+  return normalizeMessageEntity(
+    {
+      ...replacementBaseMessage,
+      messageUid: createSessionMessageUid(),
+      role: "user",
+      type: "message",
+      content: fields.content,
+      turnScopeId: fields.turnScopeId,
+      dialogProcessId: fields.dialogProcessId,
+      pending: false,
+      error: false,
+      done: true,
+      ts: nowValue,
+      ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
+    },
+    () => nowValue,
+  );
+}
+
 export async function deleteFromMessage({
   userId,
   sessionId,
@@ -162,24 +200,13 @@ export async function deleteFromMessage({
   expectedAggregateVersion = null,
   commandId = "",
 } = {}) {
-  if (!userId || !sessionId) {
-    const error = new Error("userId and sessionId are required");
-    error.statusCode = 400;
-    throw error;
-  }
-  const matcher = createMessageAnchorMatcher(anchor);
+  const { matcher, normalizedCommandId } = normalizeAnchoredCommandRequest({
+    userId,
+    sessionId,
+    anchor,
+    commandId,
+  });
   const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
-  if (!matcher) {
-    const error = new Error("message anchor is required");
-    error.statusCode = 400;
-    throw error;
-  }
-  const normalizedCommandId = String(commandId || "").trim();
-  if (!normalizedCommandId) {
-    const error = new Error("commandId is required");
-    error.statusCode = 400;
-    throw error;
-  }
   const requestHash = createMessageDeleteFingerprint({ anchor });
   return this._withSessionMutation(
     userId,
@@ -268,36 +295,17 @@ export async function replaceTurn({
   commandId = "",
   attachments = undefined,
 } = {}) {
-  if (!userId || !sessionId) {
-    const error = new Error("userId and sessionId are required");
-    error.statusCode = 400;
-    throw error;
-  }
   const normalizedNewContent = String(newContent || "").trim();
-  if (!normalizedNewContent) {
-    const error = new Error("newContent is required");
-    error.statusCode = 400;
-    throw error;
-  }
-  const matcher = createMessageAnchorMatcher(anchor);
+  if (!normalizedNewContent) throw badRequest("newContent is required");
+  const { matcher, normalizedCommandId } = normalizeAnchoredCommandRequest({
+    userId,
+    sessionId,
+    anchor,
+    commandId,
+  });
   const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
-  if (!matcher) {
-    const error = new Error("message anchor is required");
-    error.statusCode = 400;
-    throw error;
-  }
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
-  if (!normalizedTurnScopeId) {
-    const error = new Error("turnScopeId is required");
-    error.statusCode = 400;
-    throw error;
-  }
-  const normalizedCommandId = String(commandId || "").trim();
-  if (!normalizedCommandId) {
-    const error = new Error("commandId is required");
-    error.statusCode = 400;
-    throw error;
-  }
+  if (!normalizedTurnScopeId) throw badRequest("turnScopeId is required");
   const requestHash = createTurnReplaceFingerprint({
     anchor,
     newContent: normalizedNewContent,
@@ -330,41 +338,24 @@ export async function replaceTurn({
       } = prepared;
       const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
       const replacedMessages = messages.slice(turnStartIndex);
-      const replacedUserMessage = messages[turnStartIndex];
-      const nextVersion = nextAggregateVersion;
       const nowValue = this.now();
       const replacementDialogProcessId = String(this.allocateDialogProcessId()).trim();
       if (!replacementDialogProcessId)
         throw new TypeError("allocated replacement dialogProcessId is empty");
-      const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage);
-      delete replacementBaseMessage.turnId;
-      delete replacementBaseMessage.turn_id;
-      delete replacementBaseMessage.messageId;
-      delete replacementBaseMessage.message_id;
-      delete replacementBaseMessage.id;
-      delete replacementBaseMessage.messageUid;
-      const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(attachments);
-      const newMessage = normalizeMessageEntity(
+      const newMessage = buildReplacementUserMessage(
+        messages[turnStartIndex],
         {
-          ...replacementBaseMessage,
-          messageUid: createSessionMessageUid(),
-          role: "user",
-          type: "message",
           content: normalizedNewContent,
           turnScopeId: normalizedTurnScopeId,
           dialogProcessId: replacementDialogProcessId,
-          pending: false,
-          error: false,
-          done: true,
-          ts: nowValue,
-          ...(nextAttachments !== undefined ? { attachments: nextAttachments } : {}),
+          attachments,
         },
-        () => nowValue,
+        nowValue,
       );
       session.messages = [...messages.slice(0, turnStartIndex), newMessage];
       pruneSessionTurnTimings(session);
       session.updatedAt = nowValue;
-      session.aggregateVersion = nextVersion;
+      session.aggregateVersion = nextAggregateVersion;
 
       const replacementUserMessageId = String(newMessage.messageId || "").trim();
       const turnReplacement = createTurnReplacementCommit({

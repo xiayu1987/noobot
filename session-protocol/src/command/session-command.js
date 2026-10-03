@@ -12,8 +12,6 @@ export const SESSION_COMMAND = Object.freeze({
   TURN_ATTACHMENTS_BIND: "session.turn.attachments.bind",
   TURN_REPLACE: "session.turn.replace",
   MESSAGE_DELETE_FROM: "session.message.delete_from",
-  RENAME: "session.rename",
-  DELETE_BRANCH: "session.delete_branch",
 });
 
 const COMMAND_TYPES = new Set(Object.values(SESSION_COMMAND));

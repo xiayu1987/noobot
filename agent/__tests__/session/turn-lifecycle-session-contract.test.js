@@ -242,6 +242,11 @@ test("terminal resolution reads status from the Turn without returning messages"
         return h.reload();
       },
     },
+    taskRepo: {
+      async getBundle() {
+        return null;
+      },
+    },
     sessionTreeService: {},
     now,
   });

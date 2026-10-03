@@ -296,7 +296,7 @@ assertFileContains(
     {
       name: "terminal recovery cannot append messages",
       pattern:
-        /isTerminalTurnLifecycleState\(lifecycleTurn\.state\)[\s\S]*?normalizedPersistedUids\.length[\s\S]*?TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE/,
+        /isTerminalTurnLifecycleState\(lifecycleTurn\.state\)[\s\S]*?request\.persistedMessageUids\.length[\s\S]*?TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE/,
     },
   ],
 );

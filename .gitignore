@@ -41,5 +41,8 @@ model-proxy/model-proxy.config.json
 
 report/
 
+# Runtime mutation lock roots created beside workspace roots
+*.mutation-locks/
+
 # Generated test artifacts (the canonical Playwright output is /test-results/protocol/)
 **/test-results/

@@ -131,17 +131,6 @@ export class SessionTreeService {
     return this.treeRepo.loopSession(normalizedSessionId, sessionTree, []).length;
   }
 
-  async getSessionDepth({ userId, sessionId }) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return 0;
-    const sessionTree = await this.treeRepo.getTree(userId);
-    if (sessionTree?.nodes?.[normalizedSessionId]) {
-      return this.resolveDepthInTree(normalizedSessionId, sessionTree);
-    }
-    const session = await this.sessionRepo.findById(userId, normalizedSessionId);
-    return session ? 1 : 0;
-  }
-
   async deleteSessionBranch({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
