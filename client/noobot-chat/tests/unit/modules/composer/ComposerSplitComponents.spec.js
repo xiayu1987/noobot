@@ -238,10 +238,7 @@ describe("ComposerMoreOptions", () => {
           { key: "default", label: "默认" },
         ],
         selectedScenarioDescription: "code",
-        normalizedPluginOptions: [
-          { key: "workflow", label: "工作流" },
-          { key: "disabled", label: "禁用", enabled: false },
-        ],
+        normalizedPluginOptions: [{ key: "workflow" }, { key: "disabled", enabled: false }],
         selectedPluginKeySet: new Set(["workflow"]),
         resolveScenarioLabel,
       },
@@ -289,7 +286,7 @@ describe("ComposerSelectedTags", () => {
       props: {
         selectedConnectorNames: ["prod-db"],
         selectedScenarioLabel: "编程",
-        selectedPluginLabels: ["工作流"],
+        selectedPluginLabels: ["workflow"],
         uploadFiles: [{ name: "brief.pdf" }, { name: "very-long-screenshot-name.png" }],
       },
       global: globalMountOptions,
@@ -298,7 +295,7 @@ describe("ComposerSelectedTags", () => {
     const rowText = wrapper.find(".selected-connectors-row").text();
     expect(rowText).toContain("场景: 编程");
     expect(rowText).toContain("prod-db");
-    expect(rowText).toContain("工作流");
+    expect(rowText).toContain("workflow");
     expect(rowText).toContain("brief.pdf");
     expect(
       wrapper.findAll(".selected-attachment-name").map((item) => item.attributes("title")),

@@ -74,8 +74,7 @@ export function useComposerOptions(props, emit, translate) {
     const sourcePlugins = Array.isArray(props.availablePlugins) ? props.availablePlugins : [];
     return sourcePlugins
       .map((pluginItem) => ({
-        key: String(pluginItem?.key || pluginItem?.name || "").trim(),
-        label: String(pluginItem?.label || pluginItem?.name || pluginItem?.key || "").trim(),
+        key: String(pluginItem?.key || "").trim(),
         description: String(pluginItem?.description || "").trim(),
         enabled: pluginItem?.enabled === true,
       }))
@@ -94,7 +93,7 @@ export function useComposerOptions(props, emit, translate) {
   const selectedPluginLabels = computed(() =>
     normalizedPluginOptions.value
       .filter((pluginItem) => selectedPluginKeySet.value.has(pluginItem.key))
-      .map((pluginItem) => pluginItem.label || pluginItem.key),
+      .map((pluginItem) => pluginItem.key),
   );
 
   function onSelectedPluginsChange(pluginKeys = []) {

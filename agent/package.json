@@ -36,7 +36,7 @@
     "check:tool-schema:live:gemini:admin": "node scripts/check-openai-tool-schema.js --live --model gemini_3_flash --userId admin",
     "test": "node --test \"__tests__/**/*.test.js\"",
     "test:e2e:execution-isolation": "node --test __tests__/e2e/execution-isolation.e2e.js",
-    "test:bot-manage": "node --test __tests__/bot/*.test.js",
+    "test:bot": "node --test __tests__/bot/*.test.js",
     "test:tools": "node --test __tests__/tools/*.test.js",
     "test:utils": "node --test __tests__/shared/utils/*.test.js __tests__/shared/utils/**/*.test.js",
     "test:connectors": "node --test __tests__/integrations/connectors/*.test.js __tests__/integrations/connectors/**/*.test.js",

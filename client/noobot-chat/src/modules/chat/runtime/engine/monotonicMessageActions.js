@@ -200,20 +200,6 @@ export function createMonotonicMessageActions({
     return findMessageIdentityIndex(targetMessage, messages);
   }
 
-  function collectMessageCascadeTurnScopeIds(targetMessage = {}) {
-    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
-    const startIndex = userTargetMessage ? findMessageCascadeStartIndex(userTargetMessage) : -1;
-    if (startIndex < 0) return [];
-    return [
-      ...new Set(
-        (activeSession.value?.messages || [])
-          .slice(startIndex)
-          .map(getMessageTurnScopeId)
-          .filter(Boolean),
-      ),
-    ];
-  }
-
   function cascadeDeleteMessagesFrom(targetMessage = {}) {
     const session = activeSession.value;
     if (!session) return false;
@@ -287,92 +273,82 @@ export function createMonotonicMessageActions({
         originalTargetMessage: targetMessage,
       });
       if (prepared === false) return false;
-      if (typeof deleteSessionMessagesFromApi === "function") {
-        const sessionId = normalizeTrimmedString(
-          activeSession.value?.sessionId || activeSessionId.value,
-        );
-        messageOperationStore?.updateOperation?.(deleteOperation?.opId, { status: "deleting" });
-        logMessageMutationDiagnostics("frontend.messageDelete.requestPrepared", () => ({
-          sessionId,
-          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-          turnScopeId: getMessageTurnScopeId(userTargetMessage),
-          anchor,
-          commandId: deleteCommandId,
-        }));
-        const sessionAggregateVersionManager = createSessionAggregateVersionManager({
-          activeSession,
-        });
-        const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
-          mutate: async ({ expectedAggregateVersion }) => {
-            const result = await deleteSessionMessagesFromApi(
-              {
-                userId: userId?.value || userId,
-                sessionId,
-                parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
-                anchor,
-                expectedAggregateVersion,
-                commandId: deleteCommandId,
-              },
-              { fetcher: authFetch },
-            );
-            const payload = typeof result?.json === "function" ? await result.json() : result;
-            return { result, payload };
-          },
-          conflictOptions: {
-            sessionId,
-            logContext: { turnScopeId: anchor.turnScopeId || "" },
-          },
-        });
-        const result = mutationResult?.result;
-        const payload = mutationResult?.payload;
-        logMessageMutationDiagnostics("frontend.messageDelete.responseReceived", () => ({
-          sessionId,
-          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-          turnScopeId: getMessageTurnScopeId(userTargetMessage),
-          responseOk: result?.ok !== false && payload?.ok !== false,
-          deletedCount: payload?.deletedCount,
-          anchorIndex: payload?.anchorIndex,
-          deletedTurnScopeIds: payload?.deletedTurnScopeIds,
-          responseMessages: summarizeDeleteMessages(payload?.session?.messages),
-        }));
-        if (result?.ok === false || payload?.ok === false) return false;
-        const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
-        if (!sessionDetail) return false;
-        const confirmedDeletedTurnScopeIds = payload.deletedTurnScopeIds;
-        confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, {
-          sessionId,
-        });
-        cascadeDeleteMessagesFrom(userTargetMessage);
-        logMessageMutationDiagnostics("frontend.messageDelete.localCascadeApplied", () => ({
-          sessionId,
-          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-          turnScopeId: getMessageTurnScopeId(userTargetMessage),
-          stage: "before-detail-apply",
-          messages: summarizeDeleteMessages(activeSession.value?.messages),
-        }));
-        applySessionDetail?.(sessionDetail, {
-          mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-          deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
-        });
-        cascadeDeleteMessagesFrom(userTargetMessage);
-        logMessageMutationDiagnostics("frontend.messageDelete.completed", () => ({
-          sessionId,
-          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-          turnScopeId: getMessageTurnScopeId(userTargetMessage),
-          confirmedDeletedTurnScopeIds,
-          messagesAfter: summarizeDeleteMessages(activeSession.value?.messages),
-        }));
-        clearPendingInteraction?.();
-        return true;
-      }
-      const sessionId = sessionRuntimeId(activeSession.value || activeSessionId?.value);
-      confirmTurnRuntimeDeletion(
-        turnRuntimeRegistry?.value,
-        collectMessageCascadeTurnScopeIds(userTargetMessage),
-        { sessionId },
+      const sessionId = normalizeTrimmedString(
+        activeSession.value?.sessionId || activeSessionId.value,
       );
-      const cascaded = cascadeDeleteMessagesFrom(userTargetMessage);
-      return cascaded;
+      messageOperationStore?.updateOperation?.(deleteOperation?.opId, { status: "deleting" });
+      logMessageMutationDiagnostics("frontend.messageDelete.requestPrepared", () => ({
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        anchor,
+        commandId: deleteCommandId,
+      }));
+      const sessionAggregateVersionManager = createSessionAggregateVersionManager({
+        activeSession,
+      });
+      const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
+        mutate: async ({ expectedAggregateVersion }) => {
+          const result = await deleteSessionMessagesFromApi(
+            {
+              userId: userId?.value || userId,
+              sessionId,
+              parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
+              anchor,
+              expectedAggregateVersion,
+              commandId: deleteCommandId,
+            },
+            { fetcher: authFetch },
+          );
+          const payload = typeof result?.json === "function" ? await result.json() : result;
+          return { result, payload };
+        },
+        conflictOptions: {
+          sessionId,
+          logContext: { turnScopeId: anchor.turnScopeId || "" },
+        },
+      });
+      const result = mutationResult?.result;
+      const payload = mutationResult?.payload;
+      logMessageMutationDiagnostics("frontend.messageDelete.responseReceived", () => ({
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        responseOk: result?.ok !== false && payload?.ok !== false,
+        deletedCount: payload?.deletedCount,
+        anchorIndex: payload?.anchorIndex,
+        deletedTurnScopeIds: payload?.deletedTurnScopeIds,
+        responseMessages: summarizeDeleteMessages(payload?.session?.messages),
+      }));
+      if (result?.ok === false || payload?.ok === false) return false;
+      const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
+      if (!sessionDetail) return false;
+      const confirmedDeletedTurnScopeIds = payload.deletedTurnScopeIds;
+      confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, {
+        sessionId,
+      });
+      cascadeDeleteMessagesFrom(userTargetMessage);
+      logMessageMutationDiagnostics("frontend.messageDelete.localCascadeApplied", () => ({
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        stage: "before-detail-apply",
+        messages: summarizeDeleteMessages(activeSession.value?.messages),
+      }));
+      applySessionDetail?.(sessionDetail, {
+        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+        deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
+      });
+      cascadeDeleteMessagesFrom(userTargetMessage);
+      logMessageMutationDiagnostics("frontend.messageDelete.completed", () => ({
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        confirmedDeletedTurnScopeIds,
+        messagesAfter: summarizeDeleteMessages(activeSession.value?.messages),
+      }));
+      clearPendingInteraction?.();
+      return true;
     } finally {
       if (deleteOperation) messageOperationStore?.completeOperation?.(deleteOperation.opId);
     }

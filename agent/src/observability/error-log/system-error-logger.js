@@ -80,7 +80,7 @@ export class SystemErrorLogger {
     userId = "",
     sessionId = "",
     parentSessionId = "",
-    source = "bot-manage",
+    source = "bot",
     event = "system_error",
     error = null,
     extra = {},

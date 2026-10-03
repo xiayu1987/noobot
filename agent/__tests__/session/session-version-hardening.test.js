@@ -595,6 +595,10 @@ test("turn summary checkpoint restores explicitly retained messages to active co
   assert.deepEqual(h.get().turnSummaryCheckpoints.t.receipts[0].retainedMessageUids, [
     "sm_retained",
   ]);
+  const reloaded = normalizeSessionEntity(structuredClone(h.get()));
+  assert.deepEqual(reloaded.turnSummaryCheckpoints.t.receipts[0].retainedMessageUids, [
+    "sm_retained",
+  ]);
 });
 
 test("turn summary checkpoints reject a split assistant tool-call and result pair", async () => {

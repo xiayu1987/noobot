@@ -27,7 +27,7 @@ function projectSessionTreeDepth(summary = {}, depth = 0) {
 export class SessionCrudService {
   constructor({
     sessionRepo,
-    taskRepo = null,
+    taskRepo,
     sessionTreeService,
     attachmentService,
     now = () => new Date().toISOString(),
@@ -113,14 +113,12 @@ export class SessionCrudService {
       persistenceContext,
     );
     if (!session) return { exists: false, session: null, task: null };
-    const task = this.taskRepo
-      ? await this.taskRepo.getBundle(userId, sessionId, parentSessionId, persistenceContext)
-      : await this.sessionRepo.getTaskBundle?.(
-          userId,
-          sessionId,
-          parentSessionId,
-          persistenceContext,
-        );
+    const task = await this.taskRepo.getBundle(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
     return { exists: true, session, task: task || null };
   }
 
@@ -426,7 +424,7 @@ export class SessionCrudService {
             ...sessionBundle.session,
             sessionId,
             parentSessionId,
-            depth: await this.sessionTreeService.getSessionDepth({ userId, sessionId }),
+            depth: this.sessionTreeService.resolveDepthInTree(sessionId, sessionTree),
           };
         }),
       )

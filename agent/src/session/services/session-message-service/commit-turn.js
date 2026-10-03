@@ -22,7 +22,29 @@ import {
   resolveTurnCommitAction,
 } from "@noobot/session-protocol";
 
-export async function commitTurn(payload = {}) {
+function createStatusError(message, statusCode, fields = {}) {
+  return Object.assign(new Error(message), { statusCode, ...fields });
+}
+
+function trimText(value) {
+  return String(value || "").trim();
+}
+
+const COMMIT_TURN_TEXT_FIELDS = [
+  "content",
+  "turnScopeId",
+  "resumeDialogProcessId",
+  "resumeTurnScopeId",
+  "messageId",
+  "dialogProcessId",
+  "parentDialogProcessId",
+];
+
+function trimCommitTurnTextFields(payload) {
+  return Object.fromEntries(COMMIT_TURN_TEXT_FIELDS.map((key) => [key, trimText(payload[key])]));
+}
+
+function normalizeCommitTurnRequest(payload) {
   if (Object.prototype.hasOwnProperty.call(payload, "attachments")) {
     throw Object.assign(
       new TypeError("attachments must be bound with session.turn.attachments.bind"),
@@ -33,42 +55,185 @@ export async function commitTurn(payload = {}) {
     userId,
     sessionId,
     parentSessionId = "",
-    content = "",
     action = TURN_COMMIT_ACTION.SEND,
-    turnScopeId = "",
-    dialogProcessId = "",
-    parentDialogProcessId = "",
     expectedAggregateVersion = null,
     commandId = "",
-    messageId = "",
-    resumeDialogProcessId = "",
-    resumeTurnScopeId = "",
     messageOrigin = "natural",
     userMetaMaterialized = false,
     persistenceContext = null,
   } = payload;
-  if (!userId || !sessionId) {
-    const error = new Error("userId and sessionId are required");
-    error.statusCode = 400;
-    throw error;
-  }
-  const normalizedContent = String(content || "").trim();
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
-  const normalizedAction = resolveTurnCommitAction(action);
-  const normalizedCommandId = String(commandId || normalizedTurnScopeId).trim();
-  const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
-  const requestHash = createTurnCommitFingerprint({
-    action: normalizedAction,
-    content: normalizedContent,
-    turnScopeId: normalizedTurnScopeId,
-    resumeDialogProcessId: String(resumeDialogProcessId || "").trim(),
-    resumeTurnScopeId: String(resumeTurnScopeId || "").trim(),
+  if (!userId || !sessionId) throw createStatusError("userId and sessionId are required", 400);
+  const request = {
+    userId,
+    sessionId,
+    parentSessionId,
+    persistenceContext,
+    ...trimCommitTurnTextFields(payload),
+    action: resolveTurnCommitAction(action),
+    expectedAggregateVersion: normalizeExpectedAggregateVersion(expectedAggregateVersion),
+    messageOrigin: trimText(messageOrigin).toLowerCase(),
+    userMetaMaterialized: userMetaMaterialized === true,
+  };
+  request.commandId = String(commandId || request.turnScopeId).trim();
+  request.requestHash = createTurnCommitFingerprint({
+    action: request.action,
+    content: request.content,
+    turnScopeId: request.turnScopeId,
+    resumeDialogProcessId: request.resumeDialogProcessId,
+    resumeTurnScopeId: request.resumeTurnScopeId,
   });
-  if (!normalizedContent || !normalizedTurnScopeId || !normalizedCommandId) {
-    const error = new Error("content, turnScopeId and commandId are required");
-    error.statusCode = 400;
-    throw error;
+  if (!request.content || !request.turnScopeId || !request.commandId) {
+    throw createStatusError("content, turnScopeId and commandId are required", 400);
   }
+  return request;
+}
+
+function buildCommitTurnResult(session, userMessage, request, { deduplicated, attachments }) {
+  return {
+    session,
+    userMessage,
+    attachments,
+    aggregateVersion: resolveAggregateVersion(session),
+    deduplicated,
+    turnScopeId: request.turnScopeId,
+    dialogProcessId: resolveContextMessageDialogProcessId(userMessage),
+  };
+}
+
+function resolveDeduplicatedCommit(session, request) {
+  const idempotency = decideCommandIdempotency({
+    commandId: request.commandId,
+    type: SESSION_COMMAND.TURN_COMMIT,
+    requestHash: request.requestHash,
+    receipts: session.turnLifecycle.commandReceipts,
+  });
+  if (!idempotency.allowed) {
+    throw createStatusError("commandId was reused with a different request", 409, {
+      code: SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED,
+    });
+  }
+  if (!idempotency.deduplicated) return null;
+  const receiptMessageUid = trimText(idempotency.receipt?.result?.messageUid);
+  const existing = session.messages.find(
+    (item) => trimText(item?.messageUid) === receiptMessageUid,
+  );
+  if (!existing) throw new TypeError("turn commit receipt materialization is missing");
+  return buildCommitTurnResult(session, existing, request, {
+    deduplicated: true,
+    attachments: [],
+  });
+}
+
+function assertCommitTurnAllowed(session, request) {
+  const currentVersion = resolveAggregateVersion(session);
+  const concurrency = decideAggregateConcurrency({
+    expectedAggregateVersion: request.expectedAggregateVersion,
+    aggregateVersion: currentVersion,
+  });
+  if (!concurrency.allowed) {
+    throw createStatusError("session aggregate version conflict", 409, {
+      code: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+      currentVersion,
+    });
+  }
+  if (isTurnCommitContinuation(request.action)) {
+    const continuation = decideMaterializedTurnContinuation({
+      lifecycle: session.turnLifecycle,
+      turnScopeId: request.turnScopeId,
+      source: {
+        turnScopeId: request.resumeTurnScopeId,
+        dialogProcessId: request.resumeDialogProcessId,
+      },
+    });
+    if (!continuation.allowed) {
+      throw createStatusError("continue command does not match authoritative Turn relation", 409, {
+        code: SESSION_ERROR_CODE.CONTINUE_AUTHORITY_MISMATCH,
+        reason: continuation.reason,
+      });
+    }
+  }
+  return { currentVersion, nextAggregateVersion: concurrency.nextAggregateVersion };
+}
+
+function buildCommitUserMessage(request, resolvedParentSessionId, nowValue) {
+  return normalizeMessageEntity(
+    {
+      messageUid: createSessionMessageUid(),
+      messageId: request.messageId,
+      role: "user",
+      type: "message",
+      content: request.content,
+      userName: String(request.userId),
+      sessionId: request.sessionId,
+      parentSessionId: resolvedParentSessionId,
+      dialogProcessId: request.dialogProcessId,
+      parentDialogProcessId: request.parentDialogProcessId,
+      turnScopeId: request.turnScopeId,
+      messageOrigin: request.messageOrigin,
+      userMetaMaterialized: request.userMetaMaterialized,
+      attachments: [],
+      turnCommit: {
+        action: request.action,
+        commandId: request.commandId,
+        requestHash: request.requestHash,
+        ...(isTurnCommitContinuation(request.action)
+          ? {
+              resumeDialogProcessId: request.resumeDialogProcessId,
+              resumeTurnScopeId: request.resumeTurnScopeId,
+            }
+          : {}),
+      },
+      ts: nowValue,
+    },
+    () => nowValue,
+  );
+}
+
+function applyCommittedTurn(session, request, userMessage, { nextAggregateVersion, nowValue }) {
+  session.messages = [...session.messages, userMessage];
+  session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
+  session.aggregateVersion = nextAggregateVersion;
+  session.turnLifecycle.commandReceipts = appendCommandReceipt(
+    session.turnLifecycle.commandReceipts,
+    {
+      commandId: request.commandId,
+      type: SESSION_COMMAND.TURN_COMMIT,
+      turnScopeId: request.turnScopeId,
+      requestHash: request.requestHash,
+      aggregateVersion: session.aggregateVersion,
+      result: { messageUid: userMessage.messageUid },
+      committedAt: nowValue,
+    },
+  );
+  session.updatedAt = nowValue;
+}
+
+async function saveAndReloadCommittedTurn(service, session, request, context) {
+  const { userId, sessionId, persistenceContext } = request;
+  await service.sessionRepo.save(userId, session, context.resolvedParentSessionId, {
+    expectedAggregateVersion: context.currentVersion,
+    persistenceContext,
+  });
+  const savedSession = await service.sessionRepo.findById(
+    userId,
+    sessionId,
+    context.resolvedParentSessionId,
+    persistenceContext,
+  );
+  if (!savedSession) throw new TypeError("committed session could not be reloaded");
+  const savedMessage = savedSession.messages.find(
+    (item) => item?.role === "user" && trimText(item?.turnScopeId) === request.turnScopeId,
+  );
+  if (!savedMessage) throw new TypeError("committed user message could not be reloaded");
+  return buildCommitTurnResult(savedSession, savedMessage, request, {
+    deduplicated: false,
+    attachments: savedMessage.attachments || [],
+  });
+}
+
+export async function commitTurn(payload = {}) {
+  const request = normalizeCommitTurnRequest(payload);
+  const { userId, sessionId, parentSessionId, persistenceContext } = request;
   return this._withSessionMutation(
     userId,
     sessionId,
@@ -79,145 +244,17 @@ export async function commitTurn(payload = {}) {
         parentSessionId,
         persistenceContext,
       );
-      if (!session) {
-        const error = new Error("session not found");
-        error.statusCode = 404;
-        throw error;
-      }
-      const messages = session.messages;
-      const lifecycle = session.turnLifecycle;
-      const idempotency = decideCommandIdempotency({
-        commandId: normalizedCommandId,
-        type: SESSION_COMMAND.TURN_COMMIT,
-        requestHash,
-        receipts: lifecycle.commandReceipts,
-      });
-      if (!idempotency.allowed) {
-        const error = new Error("commandId was reused with a different request");
-        error.statusCode = 409;
-        error.code = SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED;
-        throw error;
-      }
-      if (idempotency.deduplicated) {
-        const existing = messages.find(
-          (item) =>
-            String(item?.messageUid || "").trim() ===
-            String(idempotency.receipt?.result?.messageUid || "").trim(),
-        );
-        if (!existing) throw new TypeError("turn commit receipt materialization is missing");
-        return {
-          session,
-          userMessage: existing,
-          attachments: [],
-          aggregateVersion: resolveAggregateVersion(session),
-          deduplicated: true,
-          turnScopeId: normalizedTurnScopeId,
-          dialogProcessId: resolveContextMessageDialogProcessId(existing),
-        };
-      }
-      const currentVersion = resolveAggregateVersion(session);
-      const concurrency = decideAggregateConcurrency({
-        expectedAggregateVersion: normalizedExpectedVersion,
-        aggregateVersion: currentVersion,
-      });
-      if (!concurrency.allowed) {
-        const error = new Error("session aggregate version conflict");
-        error.statusCode = 409;
-        error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
-        error.currentVersion = currentVersion;
-        throw error;
-      }
-      const resumeDialog = String(resumeDialogProcessId || "").trim();
-      const resumeScope = String(resumeTurnScopeId || "").trim();
-      if (isTurnCommitContinuation(normalizedAction)) {
-        const continuation = decideMaterializedTurnContinuation({
-          lifecycle,
-          turnScopeId: normalizedTurnScopeId,
-          source: { turnScopeId: resumeScope, dialogProcessId: resumeDialog },
-        });
-        if (!continuation.allowed) {
-          const error = new Error("continue command does not match authoritative Turn relation");
-          error.statusCode = 409;
-          error.code = SESSION_ERROR_CODE.CONTINUE_AUTHORITY_MISMATCH;
-          error.reason = continuation.reason;
-          throw error;
-        }
-      }
+      if (!session) throw createStatusError("session not found", 404);
+      const deduplicated = resolveDeduplicatedCommit(session, request);
+      if (deduplicated) return deduplicated;
+      const { currentVersion, nextAggregateVersion } = assertCommitTurnAllowed(session, request);
       const nowValue = this.now();
-      const userMessage = normalizeMessageEntity(
-        {
-          messageUid: createSessionMessageUid(),
-          messageId: String(messageId || "").trim(),
-          role: "user",
-          type: "message",
-          content: normalizedContent,
-          userName: String(userId),
-          sessionId,
-          parentSessionId: resolvedParentSessionId,
-          dialogProcessId: String(dialogProcessId || "").trim(),
-          parentDialogProcessId: String(parentDialogProcessId || "").trim(),
-          turnScopeId: normalizedTurnScopeId,
-          messageOrigin: String(messageOrigin || "")
-            .trim()
-            .toLowerCase(),
-          userMetaMaterialized: userMetaMaterialized === true,
-          attachments: [],
-          turnCommit: {
-            action: normalizedAction,
-            commandId: normalizedCommandId,
-            requestHash,
-            ...(isTurnCommitContinuation(normalizedAction)
-              ? {
-                  resumeDialogProcessId: String(resumeDialogProcessId).trim(),
-                  resumeTurnScopeId: String(resumeTurnScopeId).trim(),
-                }
-              : {}),
-          },
-          ts: nowValue,
-        },
-        () => nowValue,
-      );
-      session.messages = [...messages, userMessage];
-      session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
-      session.aggregateVersion = concurrency.nextAggregateVersion;
-      session.turnLifecycle.commandReceipts = appendCommandReceipt(
-        session.turnLifecycle.commandReceipts,
-        {
-          commandId: normalizedCommandId,
-          type: SESSION_COMMAND.TURN_COMMIT,
-          turnScopeId: normalizedTurnScopeId,
-          requestHash,
-          aggregateVersion: session.aggregateVersion,
-          result: { messageUid: userMessage.messageUid },
-          committedAt: nowValue,
-        },
-      );
-      session.updatedAt = nowValue;
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
-        expectedAggregateVersion: currentVersion,
-        persistenceContext,
+      const userMessage = buildCommitUserMessage(request, resolvedParentSessionId, nowValue);
+      applyCommittedTurn(session, request, userMessage, { nextAggregateVersion, nowValue });
+      return saveAndReloadCommittedTurn(this, session, request, {
+        resolvedParentSessionId,
+        currentVersion,
       });
-      const savedSession =
-        (await this.sessionRepo.findById(
-          userId,
-          sessionId,
-          resolvedParentSessionId,
-          persistenceContext,
-        )) || session;
-      const savedMessage =
-        (savedSession.messages || []).find(
-          (item) =>
-            item?.role === "user" && String(item?.turnScopeId || "") === normalizedTurnScopeId,
-        ) || userMessage;
-      return {
-        session: savedSession,
-        userMessage: savedMessage,
-        attachments: savedMessage.attachments || [],
-        aggregateVersion: resolveAggregateVersion(savedSession),
-        deduplicated: false,
-        turnScopeId: normalizedTurnScopeId,
-        dialogProcessId: resolveContextMessageDialogProcessId(savedMessage),
-      };
     },
     parentSessionId,
     persistenceContext,

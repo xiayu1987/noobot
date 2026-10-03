@@ -40,7 +40,6 @@ export function normalizeAvailablePlugins(pluginDefinitions = {}) {
         pluginDefinition && typeof pluginDefinition === "object" ? pluginDefinition : {};
       return {
         key: String(pluginKey || "").trim(),
-        label: String(source?.label || source?.name || pluginKey || "").trim(),
         description: String(source?.description || "").trim(),
         enabled: source?.enabled === true,
         selectedByDefault:

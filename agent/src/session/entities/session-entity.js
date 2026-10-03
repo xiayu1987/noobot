@@ -13,7 +13,6 @@ import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { firstTextField, normalizeTextField, objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
 
-
 function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   const events = [];
   const eventIds = new Set();
@@ -36,7 +35,6 @@ function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   }
   return events;
 }
-
 
 export function normalizeTurnTimingEntity(timing = {}) {
   if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
@@ -69,6 +67,14 @@ export function normalizeTurnTimingsEntity(turnTimings = []) {
   return [...byKey.values()];
 }
 
+function normalizeCheckpointUidList(values) {
+  return [
+    ...new Set(
+      (Array.isArray(values) ? values : []).map((uid) => String(uid || "").trim()).filter(Boolean),
+    ),
+  ];
+}
+
 function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
   if (!checkpoints || typeof checkpoints !== "object" || Array.isArray(checkpoints)) return {};
   const normalized = {};
@@ -99,20 +105,9 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
         const checkpointId = String(receipt.checkpointId || "").trim();
         const requestHash = String(receipt.requestHash || "").trim();
         if (!checkpointId || !requestHash) return null;
-        const persistedMessageUids = [
-          ...new Set(
-            (Array.isArray(receipt.persistedMessageUids) ? receipt.persistedMessageUids : [])
-              .map((uid) => String(uid || "").trim())
-              .filter(Boolean),
-          ),
-        ];
-        const summarizedMessageUids = [
-          ...new Set(
-            (Array.isArray(receipt.summarizedMessageUids) ? receipt.summarizedMessageUids : [])
-              .map((uid) => String(uid || "").trim())
-              .filter(Boolean),
-          ),
-        ];
+        const persistedMessageUids = normalizeCheckpointUidList(receipt.persistedMessageUids);
+        const summarizedMessageUids = normalizeCheckpointUidList(receipt.summarizedMessageUids);
+        const retainedMessageUids = normalizeCheckpointUidList(receipt.retainedMessageUids);
         if (persistedMessageUids.some((uid) => !ownedMessageUids.has(uid))) return null;
         if (summarizedMessageUids.some((uid) => !allMessageUids.has(uid))) return null;
         return {
@@ -121,6 +116,7 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
           requestHash,
           persistedMessageUids,
           summarizedMessageUids,
+          retainedMessageUids,
           markedCount: Math.max(0, Number(receipt.markedCount) || 0),
           committedAt: String(receipt.committedAt || "").trim(),
         };

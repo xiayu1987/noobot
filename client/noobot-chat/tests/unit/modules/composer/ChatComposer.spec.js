@@ -515,8 +515,8 @@ describe("ChatComposer interactions", () => {
         ],
       },
       availablePlugins: [
-        { key: "workflow", label: "工作流", enabled: true },
-        { key: "harness", label: "Harness", enabled: true },
+        { key: "workflow", enabled: true },
+        { key: "harness", enabled: true },
       ],
       selectedPlugins: ["workflow"],
     });
@@ -526,8 +526,8 @@ describe("ChatComposer interactions", () => {
     expect(tagText).toContain("prod-db");
     expect(tagText).toContain("ops-shell");
     expect(tagText).toContain("alerts-mail");
-    expect(tagText).toContain("工作流");
-    expect(tagText).not.toContain("Harness");
+    expect(tagText).toContain("workflow");
+    expect(tagText).not.toContain("harness");
     expect(tagText).toContain("brief.pdf");
     expect(tagText).toContain("screenshot.png");
   });

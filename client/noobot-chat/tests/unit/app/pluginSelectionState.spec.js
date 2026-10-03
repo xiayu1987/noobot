@@ -51,18 +51,15 @@ describe("plugin selection state", () => {
     expect(
       normalizeAvailablePlugins({
         workflow: {
-          label: " Workflow ",
           description: " Runs workflow ",
           enabled: true,
           mode: "off",
         },
         harness: {
-          name: "Harness",
           enabled: true,
           mode: " ON ",
         },
         disabled: {
-          label: "Disabled",
           enabled: false,
         },
         " ": {
@@ -72,14 +69,12 @@ describe("plugin selection state", () => {
     ).toEqual([
       {
         key: "workflow",
-        label: "Workflow",
         description: "Runs workflow",
         enabled: true,
         selectedByDefault: false,
       },
       {
         key: "harness",
-        label: "Harness",
         description: "",
         enabled: true,
         selectedByDefault: true,

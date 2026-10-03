@@ -30,7 +30,7 @@ export async function appendSystemErrorLog({
   userId = "",
   sessionId = "",
   parentSessionId = "",
-  source = "bot-manage",
+  source = "bot",
   event = "system_error",
   message = "",
   stack = "",
@@ -49,24 +49,27 @@ export async function appendSystemErrorLog({
     extra: extra && typeof extra === "object" ? extra : {},
   };
   if (sessionId) {
-    await writeRoutedRuntimeEvent({
-      scope: "session",
-      userId,
-      sessionId,
-      parentSessionId,
-      source,
-      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      event,
-      message,
-      data: {
+    await writeRoutedRuntimeEvent(
+      {
+        scope: "session",
+        userId,
+        sessionId,
+        parentSessionId,
+        source,
+        category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        event,
         message,
-        stack,
-        extra: record.extra,
+        data: {
+          message,
+          stack,
+          extra: record.extra,
+        },
       },
-    }, {
-      workspaceRoot,
-    });
+      {
+        workspaceRoot,
+      },
+    );
   } else {
     const targetFiles = resolveTargetLogFiles({
       basePath,

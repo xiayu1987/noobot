@@ -246,10 +246,10 @@ const composerExtensionBaseProps = computed(() => ({
           class="composer-option-button plugin-option-button noobot-pill-option"
           :type="selectedPluginKeySet.has(pluginItem.key) ? 'primary' : 'default'"
           :disabled="pluginItem.enabled === false"
-          :title="pluginItem.description || pluginItem.label"
+          :title="pluginItem.description || pluginItem.key"
           @click="emit('toggle-plugin', pluginItem.key)"
         >
-          {{ pluginItem.label || pluginItem.key }}
+          {{ pluginItem.key }}
         </el-button>
       </div>
       <span v-else class="plugin-empty-text">{{ translate("composer.noAvailablePlugins") }}</span>
