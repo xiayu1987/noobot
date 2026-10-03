@@ -37,17 +37,14 @@ export async function finalizeAgentTurn({
     0,
     Number(dispatchRuntime?.summaryCheckpointPersistedTotal) || 0,
   );
-  const durableCheckpointState =
-    typeof getTurnSummaryCheckpointState === "function"
-      ? await getTurnSummaryCheckpointState({
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId,
-          dialogProcessId,
-          turnScopeId: resolvedTurnScopeId,
-          persistenceContext,
-        })
-      : null;
+  const durableCheckpointState = await getTurnSummaryCheckpointState({
+    userId,
+    sessionId: usedSessionId,
+    parentSessionId,
+    dialogProcessId,
+    turnScopeId: resolvedTurnScopeId,
+    persistenceContext,
+  });
   const durablePersistedMessageUids = (
     Array.isArray(durableCheckpointState?.receipts) ? durableCheckpointState.receipts : []
   ).flatMap((receipt) =>
@@ -67,18 +64,12 @@ export async function finalizeAgentTurn({
       .filter(Boolean),
   );
 
-  const persistedSessionMessagesResult =
-    typeof getSessionTurns === "function"
-      ? await getSessionTurns({
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId,
-          persistenceContext,
-        })
-      : [];
-  const persistedSessionMessages = Array.isArray(persistedSessionMessagesResult)
-    ? persistedSessionMessagesResult
-    : [];
+  const persistedSessionMessages = await getSessionTurns({
+    userId,
+    sessionId: usedSessionId,
+    parentSessionId,
+    persistenceContext,
+  });
   const scopedPersistedTurnMessages = persistedSessionMessages.filter(
     (message) =>
       String(message?.turnScopeId || "").trim() === resolvedTurnScopeId &&

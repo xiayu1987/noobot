@@ -8,12 +8,6 @@ import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol
 const clean = (value = "") => String(value ?? "").trim();
 const stringList = (value = []) => (Array.isArray(value) ? value.map(clean).filter(Boolean) : []);
 
-function selectedModelValue(value) {
-  if (typeof value === "string") return clean(value);
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-  return clean(value.value || value.alias || value.key || value.model);
-}
-
 export function buildAgentTransportConsumption({
   transportCommand = {},
   identity = {},
@@ -74,7 +68,7 @@ export function buildAgentTransportConsumption({
       confirmationLevel: normalizeSecurityRiskLevel(resolvedRunConfig?.safeConfirmLevel),
       locale: clean(resolvedRunConfig?.locale),
       scenario: clean(resolvedRunConfig?.scenario),
-      selectedModel: selectedModelValue(resolvedRunConfig?.selectedModel),
+      selectedModel: clean(resolvedRunConfig?.selectedModel),
       memoryModel: clean(resolvedRunConfig?.memoryModel),
       selectedPlugins: stringList(resolvedRunConfig?.selectedPlugins),
       pluginModelConfigKeys: Object.keys(

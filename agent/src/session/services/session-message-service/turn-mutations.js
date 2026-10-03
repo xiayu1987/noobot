@@ -32,13 +32,13 @@ import {
   removeAuthorityOutboxTurnScopes,
   withAuthorityOutboxMutation,
 } from "../../authority-outbox-store/outbox-journal.js";
-import { resolveOutboxSessionDir } from "./outbox-scope.js";
+import { requireOutboxSessionDir } from "./outbox-scope.js";
 
 function assertIdempotencyDecision(decision) {
   if (decision.allowed) return;
   const error = new Error("commandId was reused with a different request");
   error.statusCode = 409;
-  error.errorCode = SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED;
+  error.code = SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED;
   throw error;
 }
 
@@ -46,9 +46,111 @@ function assertConcurrencyDecision(decision) {
   if (decision.allowed) return;
   const error = new Error("session aggregate version conflict");
   error.statusCode = 409;
-  error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
+  error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
   error.currentVersion = decision.aggregateVersion;
   throw error;
+}
+
+async function prepareSessionCommand({
+  userId,
+  sessionId,
+  parentSessionId,
+  persistenceContext,
+  commandId,
+  type,
+  requestHash,
+  expectedAggregateVersion,
+  matcher,
+}) {
+  const { session, resolvedParentSessionId } = await this._findSession(
+    userId,
+    sessionId,
+    parentSessionId,
+    persistenceContext,
+  );
+  if (!session) {
+    const error = new Error("session not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  const idempotency = decideCommandIdempotency({
+    commandId,
+    type,
+    requestHash,
+    receipts: session.turnLifecycle.commandReceipts,
+  });
+  assertIdempotencyDecision(idempotency);
+  if (idempotency.deduplicated) {
+    return {
+      deduplicatedResult: createCommandResult({
+        session,
+        receiptResult: idempotency.receipt.result,
+        commandId,
+        committedAggregateVersion: idempotency.receipt.aggregateVersion,
+        removedAuthorityOutboxEvents: 0,
+        deduplicated: true,
+      }),
+    };
+  }
+  const currentVersion = resolveAggregateVersion(session);
+  const concurrency = decideAggregateConcurrency({
+    expectedAggregateVersion,
+    aggregateVersion: currentVersion,
+  });
+  assertConcurrencyDecision(concurrency);
+  const anchorIndex = session.messages.findIndex((messageItem) => matcher(messageItem));
+  if (anchorIndex < 0) {
+    const error = new Error("message anchor not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  return {
+    session,
+    resolvedParentSessionId,
+    currentVersion,
+    nextAggregateVersion: concurrency.nextAggregateVersion,
+    messages: session.messages,
+    anchorIndex,
+  };
+}
+
+async function removeOutboxTurnScopes({
+  userId,
+  sessionId,
+  resolvedParentSessionId,
+  persistenceContext,
+  removedTurnScopeIds,
+}) {
+  if (!removedTurnScopeIds.length) return 0;
+  const sessionDir = await requireOutboxSessionDir(
+    this,
+    userId,
+    sessionId,
+    resolvedParentSessionId,
+    persistenceContext,
+  );
+  return withAuthorityOutboxMutation(sessionDir, () =>
+    removeAuthorityOutboxTurnScopes(sessionDir, removedTurnScopeIds),
+  );
+}
+
+function createCommandResult({
+  session,
+  receiptResult,
+  commandId,
+  committedAggregateVersion,
+  removedAuthorityOutboxEvents,
+  deduplicated,
+}) {
+  return {
+    session,
+    ...receiptResult,
+    aggregateVersion: resolveAggregateVersion(session),
+    committedAggregateVersion,
+    commandId,
+    removedAuthorityOutboxEvents,
+    deduplicated,
+  };
 }
 
 export async function deleteFromMessage({
@@ -59,7 +161,6 @@ export async function deleteFromMessage({
   anchor = {},
   expectedAggregateVersion = null,
   commandId = "",
-  attachments = undefined,
 } = {}) {
   if (!userId || !sessionId) {
     const error = new Error("userId and sessionId are required");
@@ -84,53 +185,26 @@ export async function deleteFromMessage({
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const prepared = await prepareSessionCommand.call(this, {
         userId,
         sessionId,
         parentSessionId,
         persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
-      if (!session) {
-        const error = new Error("session not found");
-        error.statusCode = 404;
-        throw error;
-      }
-      const idempotency = decideCommandIdempotency({
         commandId: normalizedCommandId,
         type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
         requestHash,
-        receipts: session.turnLifecycle.commandReceipts,
-      });
-      assertIdempotencyDecision(idempotency);
-      if (idempotency.deduplicated) {
-        return {
-          session,
-          ...idempotency.receipt.result,
-          aggregateVersion: resolveAggregateVersion(session),
-          committedAggregateVersion: idempotency.receipt.aggregateVersion,
-          commandId: normalizedCommandId,
-          deduplicated: true,
-        };
-      }
-      const currentVersion = resolveAggregateVersion(session);
-      const concurrency = decideAggregateConcurrency({
         expectedAggregateVersion: normalizedExpectedVersion,
-        aggregateVersion: currentVersion,
+        matcher,
       });
-      assertConcurrencyDecision(concurrency);
-      const messages = Array.isArray(session.messages) ? session.messages : [];
-      const anchorIndex = messages.findIndex((messageItem) => matcher(messageItem));
-      if (anchorIndex < 0) {
-        const error = new Error("message anchor not found");
-        error.statusCode = 404;
-        throw error;
-      }
+      if (prepared.deduplicatedResult) return prepared.deduplicatedResult;
+      const {
+        session,
+        resolvedParentSessionId,
+        currentVersion,
+        nextAggregateVersion,
+        messages,
+        anchorIndex,
+      } = prepared;
       const deletedMessages = messages.slice(anchorIndex);
       const deletedCount = deletedMessages.length;
       const deletedTurnScopeIds = uniqueValues(deletedMessages.map(resolveTurnScopeId));
@@ -142,7 +216,7 @@ export async function deleteFromMessage({
       session.messages = messages.slice(0, anchorIndex);
       pruneSessionTurnTimings(session);
       session.updatedAt = this.now();
-      session.aggregateVersion = concurrency.nextAggregateVersion;
+      session.aggregateVersion = nextAggregateVersion;
       session.turnLifecycle = lifecycleDeletion.lifecycle;
 
       const result = { deletedCount, anchorIndex, deletedTurnScopeIds };
@@ -157,35 +231,25 @@ export async function deleteFromMessage({
           committedAt: this.now(),
         },
       );
-      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const deletionSessionDir = await resolveOutboxSessionDir(
-        this,
+      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes.call(this, {
         userId,
         sessionId,
         resolvedParentSessionId,
         persistenceContext,
-      );
-      let removedAuthorityOutboxEvents = 0;
-      if (deletionSessionDir && lifecycleDeletion.removedTurnScopeIds?.length) {
-        removedAuthorityOutboxEvents = await withAuthorityOutboxMutation(deletionSessionDir, () =>
-          removeAuthorityOutboxTurnScopes(
-            deletionSessionDir,
-            lifecycleDeletion.removedTurnScopeIds,
-          ),
-        );
-      }
-      return {
+        removedTurnScopeIds: lifecycleDeletion.removedTurnScopeIds,
+      });
+      return createCommandResult({
         session,
-        ...result,
-        removedAuthorityOutboxEvents,
-        aggregateVersion: session.aggregateVersion,
+        receiptResult: result,
         commandId: normalizedCommandId,
+        committedAggregateVersion: session.aggregateVersion,
+        removedAuthorityOutboxEvents,
         deduplicated: false,
-      };
+      });
     },
     parentSessionId,
     persistenceContext,
@@ -244,60 +308,35 @@ export async function replaceTurn({
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const prepared = await prepareSessionCommand.call(this, {
         userId,
         sessionId,
         parentSessionId,
         persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
-      if (!session) {
-        const error = new Error("session not found");
-        error.statusCode = 404;
-        throw error;
-      }
-      const idempotency = decideCommandIdempotency({
         commandId: normalizedCommandId,
         type: SESSION_COMMAND.TURN_REPLACE,
         requestHash,
-        receipts: session.turnLifecycle.commandReceipts,
-      });
-      assertIdempotencyDecision(idempotency);
-      if (idempotency.deduplicated) {
-        return { session, ...idempotency.receipt.result, deduplicated: true };
-      }
-      const currentVersion = resolveAggregateVersion(session);
-      const concurrency = decideAggregateConcurrency({
         expectedAggregateVersion: normalizedExpectedVersion,
-        aggregateVersion: currentVersion,
+        matcher,
       });
-      assertConcurrencyDecision(concurrency);
-      const messages = Array.isArray(session.messages) ? session.messages : [];
-      const anchorIndex = messages.findIndex((messageItem) => matcher(messageItem));
-      if (anchorIndex < 0) {
-        const error = new Error("message anchor not found");
-        error.statusCode = 404;
-        throw error;
-      }
+      if (prepared.deduplicatedResult) return prepared.deduplicatedResult;
+      const {
+        session,
+        resolvedParentSessionId,
+        currentVersion,
+        nextAggregateVersion,
+        messages,
+        anchorIndex,
+      } = prepared;
       const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
       const replacedMessages = messages.slice(turnStartIndex);
-      const replacedUserMessage = messages[turnStartIndex] || messages[anchorIndex] || {};
-      const nextVersion = concurrency.nextAggregateVersion;
+      const replacedUserMessage = messages[turnStartIndex];
+      const nextVersion = nextAggregateVersion;
       const nowValue = this.now();
-      if (typeof this.allocateDialogProcessId !== "function") {
-        throw new TypeError(
-          "SessionMessageService requires allocateDialogProcessId for Turn replacement",
-        );
-      }
       const replacementDialogProcessId = String(this.allocateDialogProcessId()).trim();
       if (!replacementDialogProcessId)
         throw new TypeError("allocated replacement dialogProcessId is empty");
-      const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage || {});
+      const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage);
       delete replacementBaseMessage.turnId;
       delete replacementBaseMessage.turn_id;
       delete replacementBaseMessage.messageId;
@@ -359,31 +398,26 @@ export async function replaceTurn({
           committedAt: nowValue,
         },
       );
-      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       assertTurnReplacementMaterialization({ commit: turnReplacement, session });
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: currentVersion,
         persistenceContext,
       });
-      const replacementSessionDir = await resolveOutboxSessionDir(
-        this,
+      const removedAuthorityOutboxEvents = await removeOutboxTurnScopes.call(this, {
         userId,
         sessionId,
         resolvedParentSessionId,
         persistenceContext,
-      );
-      let removedAuthorityOutboxEvents = 0;
-      if (replacementSessionDir && lifecycleReplacement.removedTurnScopeIds?.length) {
-        removedAuthorityOutboxEvents = await withAuthorityOutboxMutation(
-          replacementSessionDir,
-          () =>
-            removeAuthorityOutboxTurnScopes(
-              replacementSessionDir,
-              lifecycleReplacement.removedTurnScopeIds,
-            ),
-        );
-      }
-      return { session, ...result, removedAuthorityOutboxEvents, deduplicated: false };
+        removedTurnScopeIds: lifecycleReplacement.removedTurnScopeIds,
+      });
+      return createCommandResult({
+        session,
+        receiptResult: result,
+        commandId: normalizedCommandId,
+        committedAggregateVersion: session.aggregateVersion,
+        removedAuthorityOutboxEvents,
+        deduplicated: false,
+      });
     },
     parentSessionId,
     persistenceContext,

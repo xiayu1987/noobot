@@ -342,7 +342,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
     const messageService = new SessionMessageService({ sessionRepo });
     const persister = new SessionTurnPersister({
       session: {
-        appendTurn: (payload = {}) => messageService.appendTurn(payload),
+        appendTurns: (payload = {}) => messageService.appendTurns(payload),
         appendExecutionLog: (payload = {}) =>
           executionRepo.appendLog(
             payload.userId,
@@ -354,15 +354,19 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
           ),
       },
     });
-    await messageService.appendTurn({
+    await messageService.appendTurns({
       userId: "alice",
       sessionId: "child-agent",
       parentSessionId: "root-agent",
-      role: "user",
-      content: "node task",
-      dialogProcessId: "dialog-workflow-node-agent",
-      turnScopeId: "workflow-node:agent",
       persistenceContext: context,
+      turns: [
+        {
+          role: "user",
+          content: "node task",
+          dialogProcessId: "dialog-workflow-node-agent",
+          turnScopeId: "workflow-node:agent",
+        },
+      ],
     });
     await persister.appendAgentMessages({
       userId: "alice",

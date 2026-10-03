@@ -63,16 +63,6 @@ const guidanceAnalysisIntensity = computed({
   },
 });
 
-function getModelMetaText(modelItem = {}) {
-  return [
-    modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "",
-    modelItem.model,
-  ]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function onHarnessStepModelChange(stepKey = "", value = "") {
   const key = String(stepKey || "").trim();
   if (!key) return;
@@ -214,15 +204,13 @@ function isHarnessStepModelDisabled(stepKey = "") {
         >
           <el-option
             v-for="modelItem in modelOptions"
-            :key="`${stepItem.key}-${modelItem.value}`"
-            :label="modelItem.label"
-            :value="modelItem.value"
+            :key="`${stepItem.key}-${modelItem.alias}`"
+            :label="modelItem.alias"
+            :value="modelItem.alias"
           >
             <div class="model-option-content">
-              <span class="model-option-label">{{ modelItem.label }}</span>
-              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{
-                getModelMetaText(modelItem)
-              }}</span>
+              <span class="model-option-label">{{ modelItem.alias }}</span>
+              <span v-if="modelItem.model" class="model-option-meta">{{ modelItem.model }}</span>
               <span v-if="modelItem.description" class="model-option-description">{{
                 modelItem.description
               }}</span>

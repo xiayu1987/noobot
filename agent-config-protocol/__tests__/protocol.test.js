@@ -11,6 +11,7 @@ import {
   ensureModelProviderInConfigFile,
   createConfigSnapshot,
   localizeBuiltinScenarios,
+  localizeScenarioProfile,
   mergeToolPolicyPatch,
   migrateConfigFileToCurrentProtocol,
   resolveBuiltinScenarios,
@@ -167,6 +168,19 @@ test("scenario localization requires an explicit adapter", () => {
     translate: (key, locale, fallback) => `${locale}:${key}:${fallback}`,
   });
   assert.match(localized.definitions.programming.name, /^en-US:scenarios\.programming\.name:/);
+});
+test("scenario profile localization translates builtin keys and passes other profiles through", () => {
+  const translate = (key, locale, fallback) => `${locale}:${key}:${fallback}`;
+  assert.throws(() => localizeScenarioProfile({ key: "programming" }), /explicit translate/);
+  const localized = localizeScenarioProfile(
+    { key: "programming", name: "编程", description: "d", tools: ["read_file"] },
+    { locale: "en-US", translate },
+  );
+  assert.equal(localized.name, "en-US:scenarios.programming.name:编程");
+  assert.deepEqual(localized.tools, ["read_file"]);
+  const custom = { key: "custom", name: "n", description: "d" };
+  assert.deepEqual(localizeScenarioProfile(custom, { translate }), custom);
+  assert.deepEqual(localizeScenarioProfile(undefined, { translate }), {});
 });
 test("programming required tools use the scenario protocol list and deny remains final", () => {
   const sourceTools = [

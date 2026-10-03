@@ -239,7 +239,6 @@ export class SessionExecutionRunner {
         presentationMessageId,
         userMessageAttachments,
         appendAgentMessages: this.appendAgentMessages,
-        getSessionTurns: this.getSessionTurns,
         commitSummaryCheckpoint: this.commitSummaryCheckpoint,
         userId,
         sessionId: usedSessionId,

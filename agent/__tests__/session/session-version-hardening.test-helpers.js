@@ -3,7 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { after } from "node:test";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+
+const TEST_SESSION_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-dir-"));
+after(() => fs.rmSync(TEST_SESSION_DIR, { recursive: true, force: true }));
 
 export function harness(initial = {}) {
   let session = structuredClone({
@@ -20,8 +27,8 @@ export function harness(initial = {}) {
       lockCalls += 1;
       return operation();
     },
-    async resolveParentSessionId() {
-      return "";
+    async resolveSessionScope() {
+      return { resolvedParentSessionId: "", sessionDir: TEST_SESSION_DIR };
     },
     async ensureSession() {},
     async findById() {
@@ -32,7 +39,7 @@ export function harness(initial = {}) {
       if (expectedAggregateVersion != null && Number(expectedAggregateVersion) !== actual) {
         const error = new Error("session version conflict");
         error.statusCode = 409;
-        error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT";
+        error.code = "SESSION_AGGREGATE_VERSION_CONFLICT";
         error.currentVersion = actual;
         throw error;
       }

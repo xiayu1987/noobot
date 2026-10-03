@@ -7,81 +7,48 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveScenarioProfile } from "../../src/context/builders/scenario-resolver.js";
-import { resolveBuiltinScenarios, sanitizeScenarioConfig } from "@noobot/agent-config-protocol";
+import {
+  RunConfigResolver,
+  resolveBuiltinScenarios,
+  sanitizeScenarioConfig,
+} from "@noobot/agent-config-protocol";
 
-test("resolveScenarioProfile prefers runConfig scenarioProfile over builtin scenario definition", () => {
+function resolveRunConfig(runConfig = {}, globalConfig = {}) {
+  return new RunConfigResolver({ globalConfig }).resolveScenarioRunConfig(runConfig, {});
+}
+
+test("resolveScenarioProfile only consumes runConfig.scenarioProfile", () => {
   const result = resolveScenarioProfile({
     runConfig: {
-      scenario: "programming",
       scenarioProfile: {
-        name: "临时覆盖",
+        key: "custom",
+        name: "临时",
         description: "run profile",
         model: "openai:gpt-5",
-        tools: [" execute_script ", ""],
-      },
-    },
-    effectiveConfig: {
-      scenarios: {
-        default: "programming",
-        definitions: {
-          programming: {
-            model: "openai:gpt-4.1",
-            tools: ["unsafe_tool"],
-            context: ["attachments"],
-          },
-        },
+        tools: ["execute_script"],
+        context: ["scenario"],
+        services: ["svc.query"],
+        mcpServers: ["server-a"],
       },
     },
   });
 
-  assert.equal(result.key, "programming");
-  assert.equal(result.name, "临时覆盖");
-  assert.equal(result.description, "run profile");
-  assert.equal(result.model, "openai:gpt-5");
-  assert.deepEqual(result.tools, ["execute_script"]);
-  assert.deepEqual(result.context, [
-    "scenario",
-    "system_runtime",
-    "base_prompt",
-    "long_memory",
-    "services",
-    "mcp_servers",
-  ]);
-});
-
-test("resolveScenarioProfile supports runConfig mcp aliases and ignores custom scenario definitions", () => {
-  const fromRunConfig = resolveScenarioProfile({
-    runConfig: {
-      scenarioProfile: {
-        mcp_servers: [" server-a ", "", "server-b"],
-        services: [" svc.query ", null],
-      },
-    },
-    effectiveConfig: {},
+  assert.deepEqual(result, {
+    key: "custom",
+    name: "临时",
+    description: "run profile",
+    model: "openai:gpt-5",
+    tools: ["execute_script"],
+    context: ["scenario"],
+    services: ["svc.query"],
+    mcpServers: ["server-a"],
   });
-  assert.deepEqual(fromRunConfig.mcpServers, ["server-a", "server-b"]);
-  assert.deepEqual(fromRunConfig.services, ["svc.query"]);
-
-  const fromDefinition = resolveScenarioProfile({
-    runConfig: { scenario: "assistant" },
-    effectiveConfig: {
-      scenarios: {
-        definitions: {
-          assistant: {
-            mcp_servers: [" server-c "],
-          },
-        },
-      },
-    },
-  });
-  assert.equal(fromDefinition.key, "assistant");
-  assert.deepEqual(fromDefinition.mcpServers, []);
+  assert.deepEqual(resolveScenarioProfile({ runConfig: { scenario: "programming" } }), {});
 });
 
 test("resolveScenarioProfile programming description mentions preferred code tools by actual names", () => {
   const result = resolveScenarioProfile({
-    runConfig: { scenario: "programming" },
-    effectiveConfig: {},
+    runConfig: resolveRunConfig({ scenario: "programming" }),
   });
 
   assert.match(result.description, /search/);
@@ -92,12 +59,10 @@ test("resolveScenarioProfile programming description mentions preferred code too
 
 test("resolveScenarioProfile localizes builtin scenario names from runtime locale", () => {
   const english = resolveScenarioProfile({
-    runConfig: { scenario: "programming", locale: "en-US" },
-    effectiveConfig: {},
+    runConfig: resolveRunConfig({ scenario: "programming", locale: "en-US" }),
   });
   const chinese = resolveScenarioProfile({
-    runConfig: { scenario: "programming", locale: "zh-CN" },
-    effectiveConfig: {},
+    runConfig: resolveRunConfig({ scenario: "programming", locale: "zh-CN" }),
   });
 
   assert.equal(english.name, "Programming");
@@ -106,8 +71,7 @@ test("resolveScenarioProfile localizes builtin scenario names from runtime local
 
 test("resolveScenarioProfile supports builtin text scenario without a hard-coded default model", () => {
   const result = resolveScenarioProfile({
-    runConfig: { scenario: "text", locale: "zh-CN" },
-    effectiveConfig: {},
+    runConfig: resolveRunConfig({ scenario: "text", locale: "zh-CN" }),
   });
 
   assert.equal(result.key, "text");

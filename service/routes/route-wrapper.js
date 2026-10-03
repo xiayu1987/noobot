@@ -8,27 +8,23 @@ import { HTTP_STATUS } from "#agent/constants";
 
 export function withJsonError(
   handler,
-  {
-    statusCode = HTTP_STATUS.BAD_REQUEST,
-    fallbackErrorKey = "",
-    translateText = () => "",
-  } = {},
+  { statusCode = HTTP_STATUS.BAD_REQUEST, fallbackErrorKey = "", translateText = () => "" } = {},
 ) {
   return async (req, res) => {
     try {
       return await handler(req, res);
     } catch (error) {
-      const fallbackMessage = fallbackErrorKey
-        ? translateText(fallbackErrorKey, req?.locale)
-        : "";
+      const fallbackMessage = fallbackErrorKey ? translateText(fallbackErrorKey, req?.locale) : "";
       const errorStatusCode = Number(error?.statusCode || error?.status || 0);
       const responseStatusCode =
         Number.isInteger(errorStatusCode) && errorStatusCode >= 400 && errorStatusCode < 600
           ? errorStatusCode
           : statusCode;
-      const errorCode = String(error?.errorCode || "").trim();
-      const hasCurrentVersion = error?.currentVersion !== undefined &&
-        error?.currentVersion !== null && String(error.currentVersion).trim() !== "";
+      const errorCode = String(error?.code || "").trim();
+      const hasCurrentVersion =
+        error?.currentVersion !== undefined &&
+        error?.currentVersion !== null &&
+        String(error.currentVersion).trim() !== "";
       const currentVersion = Number(error?.currentVersion);
       res.status(responseStatusCode).json({
         ok: false,
@@ -41,20 +37,16 @@ export function withJsonError(
   };
 }
 
-export function createJsonRouteWrapper(
-  {
-    statusCode = HTTP_STATUS.BAD_REQUEST,
-    fallbackErrorKey = "",
-    translateText = () => "",
-  } = {},
-) {
+export function createJsonRouteWrapper({
+  statusCode = HTTP_STATUS.BAD_REQUEST,
+  fallbackErrorKey = "",
+  translateText = () => "",
+} = {}) {
   return (handler, overrideOptions = {}) =>
     withJsonError(handler, {
       statusCode,
       fallbackErrorKey,
       translateText,
-      ...(overrideOptions && typeof overrideOptions === "object"
-        ? overrideOptions
-        : {}),
+      ...(overrideOptions && typeof overrideOptions === "object" ? overrideOptions : {}),
     });
 }

@@ -290,7 +290,7 @@ export class FileMutationCoordinator {
         if (Date.now() >= deadline) {
           const failure = new Error(this.timeoutMessage);
           failure.statusCode = 409;
-          failure.errorCode = this.timeoutErrorCode;
+          failure.code = this.timeoutErrorCode;
           throw failure;
         }
         await new Promise((resolve) => setTimeout(resolve, this.pollMs));

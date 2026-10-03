@@ -71,7 +71,7 @@ test("projectCanonicalAttachmentIdentity ignores access fields but rejects incom
   ]) {
     assert.throws(
       () => projectCanonicalAttachmentIdentity(attachment, "s1"),
-      (error) => error?.errorCode === "INVALID_CANONICAL_ATTACHMENT",
+      (error) => error?.code === "INVALID_CANONICAL_ATTACHMENT",
     );
   }
 });
@@ -142,7 +142,7 @@ test("normalizeAttachmentMetas accepts only canonical attachment fields", () => 
       normalizeAttachmentMetas([
         { id: "att_legacy", sessionId: "session_1", attachmentSource: "user" },
       ]),
-    (error) => error?.errorCode === "INVALID_CANONICAL_ATTACHMENT",
+    (error) => error?.code === "INVALID_CANONICAL_ATTACHMENT",
   );
 });
 

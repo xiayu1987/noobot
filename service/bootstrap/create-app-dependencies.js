@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BotManager } from "#agent/bot-manage";
+import { BotManager } from "#agent/bot";
 import { createGlobalConfigBuilder } from "#agent/config";
 import {
   normalizeLocale,

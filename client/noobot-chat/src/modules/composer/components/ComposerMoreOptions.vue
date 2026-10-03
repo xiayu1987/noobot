@@ -7,6 +7,7 @@
 import { computed } from "vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import ExtensionOutlet from "../../../extensions/components/ExtensionOutlet.vue";
+import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { sharedComposerOptionProps } from "../model/composerOptionProps.js";
 import {
@@ -69,43 +70,14 @@ function updateSafeConfirmSlider(value) {
   );
 }
 
-const normalizedModelOptions = computed(() => {
-  const optionMap = new Map();
-  const addOption = (rawOption) => {
-    const value = String(
-      typeof rawOption === "string"
-        ? rawOption
-        : rawOption?.value || rawOption?.key || rawOption?.model || "",
-    ).trim();
-    if (!value || optionMap.has(value)) return;
-    const label =
-      String(
-        typeof rawOption === "string"
-          ? rawOption
-          : rawOption?.label || rawOption?.name || rawOption?.alias || rawOption?.model || value,
-      ).trim() || value;
-    optionMap.set(value, {
-      value,
-      label,
-      alias:
-        String(typeof rawOption === "string" ? value : rawOption?.alias || value).trim() || value,
-      key:
-        String(
-          typeof rawOption === "string" ? value : rawOption?.key || rawOption?.alias || value,
-        ).trim() || value,
-      name:
-        String(typeof rawOption === "string" ? label : rawOption?.name || label).trim() || label,
-      model: String(typeof rawOption === "string" ? "" : rawOption?.model || "").trim(),
-      description: String(typeof rawOption === "string" ? "" : rawOption?.description || "").trim(),
-    });
-  };
-  (Array.isArray(props.modelOptions) ? props.modelOptions : []).forEach(addOption);
-  addOption(props.selectedModel);
-  provideExtensionValues(EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS, {
-    selectedPluginKeySet: selectedPluginKeySetSnapshot.value,
-  }).forEach(addOption);
-  return Array.from(optionMap.values());
-});
+const normalizedModelOptions = computed(() =>
+  normalizeClientModelOptions([
+    ...(Array.isArray(props.modelOptions) ? props.modelOptions : []),
+    ...provideExtensionValues(EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS, {
+      selectedPluginKeySet: selectedPluginKeySetSnapshot.value,
+    }),
+  ]),
+);
 
 const hasModelOptions = computed(() => normalizedModelOptions.value.length > 0);
 const modelSelectionRows = computed(() => [
@@ -139,23 +111,10 @@ function pluginContext(pluginId = "") {
   });
 }
 
-function getModelMetaText(modelItem = {}) {
-  return [
-    modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "",
-    modelItem.model,
-  ]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function getSelectedModelLabel() {
   const selectedValue = String(props.selectedModel || "").trim();
   if (!selectedValue) return translate("composer.modelUsingDefault");
-  const selectedOption = normalizedModelOptions.value.find(
-    (modelItem) => modelItem.value === selectedValue,
-  );
-  return selectedOption?.label || selectedValue;
+  return selectedValue;
 }
 
 const composerModelExtensionContext = computed(() => ({
@@ -330,16 +289,14 @@ const composerExtensionBaseProps = computed(() => ({
         >
           <el-option
             v-for="modelItem in normalizedModelOptions"
-            :key="`${row.optionKeyPrefix}${modelItem.value}`"
-            :label="modelItem.label"
-            :value="modelItem.value"
+            :key="`${row.optionKeyPrefix}${modelItem.alias}`"
+            :label="modelItem.alias"
+            :value="modelItem.alias"
             class="model-select-option"
           >
             <div class="model-option-content">
-              <span class="model-option-label">{{ modelItem.label }}</span>
-              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{
-                getModelMetaText(modelItem)
-              }}</span>
+              <span class="model-option-label">{{ modelItem.alias }}</span>
+              <span v-if="modelItem.model" class="model-option-meta">{{ modelItem.model }}</span>
               <span v-if="modelItem.description" class="model-option-description">{{
                 modelItem.description
               }}</span>

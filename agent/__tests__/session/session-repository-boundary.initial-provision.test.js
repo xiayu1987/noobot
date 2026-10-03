@@ -241,7 +241,7 @@ test("summary write failure is repaired from the committed Session artifact", as
   });
 });
 
-test("appendTurn cannot implicitly create a missing Session", async () => {
+test("appendTurns cannot implicitly create a missing Session", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createSessionServices({ workspaceRoot });
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
@@ -249,19 +249,17 @@ test("appendTurn cannot implicitly create a missing Session", async () => {
       "session-1",
       "",
     );
-    const result = await runtime.sessionMessageService.appendTurn({
+    const result = await runtime.sessionMessageService.appendTurns({
       userId: "u1",
       sessionId: "session-1",
-      role: "user",
-      content: "must be provisioned first",
-      turnScopeId: "turn-1",
+      turns: [{ role: "user", content: "must be provisioned first", turnScopeId: "turn-1" }],
     });
-    assert.deepEqual(result, { appended: false, reason: "session_not_found" });
+    assert.deepEqual(result, { appended: false, reason: "session_not_found", turns: [] });
     assert.equal(await exists(scope.sessionFile), false);
   });
 });
 
-test("getSessionTurns reads from the same scoped persistence location used by appendTurn", async () => {
+test("getSessionTurns reads from the same scoped persistence location used by appendTurns", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createSessionServices({ workspaceRoot });
     const session = runtime.sessionMessageService;
@@ -281,25 +279,29 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
       {},
       persistenceContext,
     );
-    await session.appendTurn({
+    await session.appendTurns({
       userId: "u1",
       sessionId: "child-session-1",
       parentSessionId: "parent-session-1",
       persistenceContext,
-      role: "assistant",
-      messageUid: "sm-child-1",
-      messageId: "msg-child-1",
-      dialogProcessId: "dialog-child-1",
-      turnScopeId: "turn-child-1",
-      content: "child model response",
-      activityTimeline: [
+      turns: [
         {
-          eventId: "model-content:msg-child-1",
-          activityKind: "model-content",
-          sequence: 1,
-          sequenceDomain: "message-event",
-          sequenceScopeId: "msg-child-1",
-          authority: "authoritative",
+          role: "assistant",
+          messageUid: "sm-child-1",
+          messageId: "msg-child-1",
+          dialogProcessId: "dialog-child-1",
+          turnScopeId: "turn-child-1",
+          content: "child model response",
+          activityTimeline: [
+            {
+              eventId: "model-content:msg-child-1",
+              activityKind: "model-content",
+              sequence: 1,
+              sequenceDomain: "message-event",
+              sequenceScopeId: "msg-child-1",
+              authority: "authoritative",
+            },
+          ],
         },
       ],
     });

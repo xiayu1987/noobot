@@ -214,7 +214,7 @@ test("deleteSessionBranch tombstones persisted child Sessions outside the Sessio
   });
 });
 
-test("appendTurn should not recreate session after deletion marker is set", async () => {
+test("appendTurns should not recreate session after deletion marker is set", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "race-session";
@@ -235,11 +235,10 @@ test("appendTurn should not recreate session after deletion marker is set", asyn
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
     assert.equal(await exists(scope.sessionFile), false);
 
-    await runtime.sessionMessageService.appendTurn({
+    await runtime.sessionMessageService.appendTurns({
       userId,
       sessionId,
-      role: "assistant",
-      content: "late async write",
+      turns: [{ role: "assistant", content: "late async write" }],
     });
 
     assert.equal(await exists(scope.sessionFile), false);

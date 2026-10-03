@@ -14,7 +14,6 @@ import {
   persistSelectedModelPreference,
   persistMemoryModelPreference,
   normalizeAvailableBotScenarios,
-  normalizeModelOptionsFromEnabledModels,
   normalizePluginModelConfig,
   readPluginModelConfigPreference,
   readSelectedModelPreference,
@@ -145,36 +144,9 @@ describe("ui preferences storage", () => {
         label: "Workflow",
         description: "Run workflow",
         model: "",
-        defaultModel: undefined,
-        defaultModelAlias: "",
-        enabledModels: [],
       },
     ]);
     expect(normalizeAvailableBotScenarios(null)).toEqual([]);
-  });
-
-  it("preserves case-sensitive custom provider names in model options", () => {
-    expect(
-      normalizeModelOptionsFromEnabledModels([
-        {
-          value: "GLM_5_3",
-          alias: "GLM_5_3",
-          key: "GLM_5_3",
-          label: "GLM 5.3",
-          model: "ZHIPU/GLM-5.3",
-        },
-      ]),
-    ).toEqual([
-      {
-        value: "GLM_5_3",
-        alias: "GLM_5_3",
-        key: "GLM_5_3",
-        label: "GLM 5.3",
-        name: "GLM 5.3",
-        model: "ZHIPU/GLM-5.3",
-        description: "",
-      },
-    ]);
   });
 
   it("resolves bot scenario with saved, current, default, and empty-config branches", () => {

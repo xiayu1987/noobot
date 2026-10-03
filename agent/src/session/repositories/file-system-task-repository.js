@@ -12,7 +12,7 @@ export class FileSystemTaskRepository {
     sessionPathResolver,
     storageService,
     normalizeTask,
-    sessionRepository = null,
+    sessionRepository,
     now = () => new Date().toISOString(),
   } = {}) {
     this.pathResolver = pathResolver;
@@ -45,7 +45,12 @@ export class FileSystemTaskRepository {
   }
 
   async getBundle(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const { taskFile } = await this._resolveTaskScope(userId, sessionId, parentSessionId, persistenceContext);
+    const { taskFile } = await this._resolveTaskScope(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
     const bundle = await this.storageService.readJson(taskFile, {
       sessionId,
       currentTaskId: "",
@@ -63,51 +68,11 @@ export class FileSystemTaskRepository {
   }
 
   async save(userId, sessionId, task, parentSessionId = "", persistenceContext = null) {
-    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
-    const save = async () => {
-      const { sessionDir } = await this._resolveTaskScope(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      await fsMkdir(sessionDir, { recursive: true });
-
-      const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
-      const normalizedTask = this.normalizeTask(task);
-      const existingIndex = bundle.tasks.findIndex(
-        (taskItem) => taskItem.taskId === normalizedTask.taskId,
-      );
-      if (existingIndex >= 0) {
-        bundle.tasks[existingIndex] = {
-          ...bundle.tasks[existingIndex],
-          ...normalizedTask,
-        };
-      } else {
-        bundle.tasks.push(normalizedTask);
-      }
-      bundle.currentTaskId = String(normalizedTask.taskId || "").trim();
-      bundle.updatedAt = this.now();
-
-      await writeTaskArtifact({
-        storageService: this.storageService,
-        sessionDir,
-        taskPayload: {
-          sessionId,
-          currentTaskId: bundle.currentTaskId,
-          tasks: bundle.tasks,
-          updatedAt: bundle.updatedAt,
-        },
-      });
-    };
-    if (typeof this.sessionRepository?.withSessionMutation === "function") {
-      await this.sessionRepository.withSessionMutation(
-        userId, sessionId, parentSessionId, save, persistenceContext,
-      );
-    } else {
-      await save();
-    }
-    return true;
+    const normalizedTask = this.normalizeTask(task);
+    return this._mutateBundle(userId, sessionId, parentSessionId, persistenceContext, (bundle) => {
+      upsertTasks(bundle.tasks, [normalizedTask]);
+      return normalizedTask.taskId;
+    });
   }
 
   async saveBatch(
@@ -118,58 +83,57 @@ export class FileSystemTaskRepository {
     currentTaskId = "",
     persistenceContext = null,
   ) {
-    if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
-    const save = async () => {
-      const { sessionDir } = await this._resolveTaskScope(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-      await fsMkdir(sessionDir, { recursive: true });
+    const normalizedTasks = tasks
+      .map((task) => this.normalizeTask(task))
+      .filter((task) => task.taskId);
+    return this._mutateBundle(userId, sessionId, parentSessionId, persistenceContext, (bundle) => {
+      upsertTasks(bundle.tasks, normalizedTasks);
+      return currentTaskId;
+    });
+  }
 
-      const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
-      const existingTasks = Array.isArray(bundle.tasks) ? bundle.tasks : [];
-      const taskIndexMap = new Map(
-        existingTasks.map((task, index) => [task.taskId, index]),
-      );
-
-      for (const task of tasks) {
-        const normalizedTask = this.normalizeTask(task);
-        if (!normalizedTask.taskId) continue;
-        const existingIndex = taskIndexMap.get(normalizedTask.taskId);
-        if (existingIndex === undefined) {
-          existingTasks.push(normalizedTask);
-          taskIndexMap.set(normalizedTask.taskId, existingTasks.length - 1);
-        } else {
-          existingTasks[existingIndex] = {
-            ...existingTasks[existingIndex],
-            ...normalizedTask,
-          };
-        }
-      }
-
-      bundle.tasks = existingTasks;
-      bundle.currentTaskId = String(currentTaskId || "").trim();
-      bundle.updatedAt = this.now();
-      await writeTaskArtifact({
-        storageService: this.storageService,
-        sessionDir,
-        taskPayload: {
+  async _mutateBundle(userId, sessionId, parentSessionId, persistenceContext, mutate) {
+    if (await this.sessionRepository.isSessionDeleted(userId, sessionId)) return false;
+    await this.sessionRepository.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      async () => {
+        const { sessionDir } = await this._resolveTaskScope(
+          userId,
           sessionId,
-          currentTaskId: bundle.currentTaskId,
-          tasks: bundle.tasks,
-          updatedAt: bundle.updatedAt,
-        },
-      });
-    };
-    if (typeof this.sessionRepository?.withSessionMutation === "function") {
-      await this.sessionRepository.withSessionMutation(
-        userId, sessionId, parentSessionId, save, persistenceContext,
-      );
-    } else {
-      await save();
-    }
+          parentSessionId,
+          persistenceContext,
+        );
+        await fsMkdir(sessionDir, { recursive: true });
+        const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
+        bundle.currentTaskId = String(mutate(bundle) || "").trim();
+        bundle.updatedAt = this.now();
+        await writeTaskArtifact({
+          storageService: this.storageService,
+          sessionDir,
+          taskPayload: {
+            sessionId,
+            currentTaskId: bundle.currentTaskId,
+            tasks: bundle.tasks,
+            updatedAt: bundle.updatedAt,
+          },
+        });
+      },
+      persistenceContext,
+    );
     return true;
+  }
+}
+
+function upsertTasks(existingTasks, normalizedTasks) {
+  const taskIndexMap = new Map(existingTasks.map((task, index) => [task.taskId, index]));
+  for (const normalizedTask of normalizedTasks) {
+    const existingIndex = taskIndexMap.get(normalizedTask.taskId);
+    if (existingIndex === undefined) {
+      taskIndexMap.set(normalizedTask.taskId, existingTasks.push(normalizedTask) - 1);
+    } else {
+      existingTasks[existingIndex] = { ...existingTasks[existingIndex], ...normalizedTask };
+    }
   }
 }

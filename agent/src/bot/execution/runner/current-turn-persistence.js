@@ -90,7 +90,6 @@ function projectPersistedMessage(message = {}) {
 export function bindCurrentTurnPersistence({
   dispatchRuntime,
   appendAgentMessages,
-  getSessionTurns,
   commitSummaryCheckpoint,
   userId,
   sessionId,
@@ -109,8 +108,8 @@ export function bindCurrentTurnPersistence({
 
   const enqueuePersistence = () => {
     const persist = async () => {
-      const messages = dispatchRuntime.currentTurnMessages?.toArray?.();
-      if (!Array.isArray(messages) || !messages.length) return;
+      const messages = dispatchRuntime.currentTurnMessages.toArray();
+      if (!messages.length) return;
       const checkpointEntries = buildCheckpointEntries(messages);
       const changedEntries = checkpointEntries.filter(
         ({ key, fingerprint }) =>
@@ -123,7 +122,7 @@ export function bindCurrentTurnPersistence({
           .filter(Boolean);
         return;
       }
-      const persistedMessages = await appendAgentMessages?.({
+      const persistedMessages = await appendAgentMessages({
         userId,
         sessionId,
         parentSessionId,
@@ -141,21 +140,8 @@ export function bindCurrentTurnPersistence({
           item.activityTimeline.length > 0,
       );
       let durableActivityMessages = [];
-      if (
-        activityMessages.length > 0 &&
-        ((Array.isArray(persistedMessages) && persistedMessages.length > 0) ||
-          typeof getSessionTurns === "function")
-      ) {
-        const durableMessages =
-          Array.isArray(persistedMessages) && persistedMessages.length > 0
-            ? persistedMessages
-            : await getSessionTurns({
-                userId,
-                sessionId,
-                parentSessionId,
-                persistenceContext,
-              });
-        durableActivityMessages = projectActivityDurability(activityMessages, durableMessages);
+      if (activityMessages.length > 0) {
+        durableActivityMessages = projectActivityDurability(activityMessages, persistedMessages);
         if (durableActivityMessages.some((item) => item.missingEventIds.length > 0)) {
           emitEvent(eventListener, "timeline_checkpoint_durability_mismatch", {
             sessionId,

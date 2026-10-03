@@ -11,7 +11,6 @@ export async function resolveOutboxSessionDir(
   resolvedParentSessionId = "",
   persistenceContext = null,
 ) {
-  if (typeof service?.sessionRepo?.resolveSessionScope !== "function") return "";
   const scope = await service.sessionRepo.resolveSessionScope(
     userId,
     sessionId,

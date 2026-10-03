@@ -6,10 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  appendTurn,
-  appendTurns,
-} from "../../src/session/services/session-message-service/append-turn.js";
+import { appendTurns } from "../../src/session/services/session-message-service/append-turn.js";
+import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
@@ -23,6 +21,7 @@ test("appendTurns upserts an ordered message batch with one Session save", async
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
       findById: async () => {
         findCount += 1;
@@ -64,8 +63,9 @@ test("appendTurns upserts an ordered message batch with one Session save", async
 
   assert.equal(findCount, 1);
   assert.equal(saveCount, 1);
+  assert.equal(result.appended, true);
   assert.deepEqual(
-    result.map((message) => message.messageUid),
+    result.turns.map((message) => message.messageUid),
     ["sm_assistant", "sm_tool_1", "sm_tool_2"],
   );
   assert.deepEqual(
@@ -80,6 +80,7 @@ test("appendTurns supersedes the prior canonical assistant presentation in one T
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: { findById: async () => session, save: async () => {} },
   };
   const canonical = (messageUid, content) => ({
@@ -134,6 +135,7 @@ test("appendTurns persists the canonical tool policy", async () => {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: { findById: async () => session, save: async () => {} },
   };
 
@@ -162,6 +164,7 @@ test("appendTurns persists the canonical internal control message type", async (
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
       findById: async () => session,
       save: async () => {},
@@ -195,6 +198,7 @@ test("appendTurns preserves canonical user interjection time and sequence", asyn
     now: () => "2026-09-18T01:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: { findById: async () => session, save: async () => {} },
   };
 
@@ -227,6 +231,7 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: { findById: async () => session, save: async () => {} },
   };
 
@@ -250,7 +255,7 @@ test("appendTurns leaves natural user presentation unspecified and visible", asy
   assert.equal("chatPresentation" in session.messages[0], false);
 });
 
-test("appendTurn updates an existing message with the same authoritative messageId", async () => {
+test("appendTurns updates an existing message with the same authoritative messageId", async () => {
   const session = {
     currentTaskId: "",
     messages: [
@@ -271,6 +276,7 @@ test("appendTurn updates an existing message with the same authoritative message
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
       findById: async () => session,
       save: async () => {
@@ -279,15 +285,19 @@ test("appendTurn updates an existing message with the same authoritative message
     },
   };
 
-  const result = await appendTurn.call(service, {
+  const result = await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
-    role: "assistant",
-    content: "completed",
-    type: "message",
-    messageId: "message-1",
-    dialogProcessId: "dialog-1",
-    turnScopeId: "turn-1",
+    turns: [
+      {
+        role: "assistant",
+        content: "completed",
+        type: "message",
+        messageId: "message-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+      },
+    ],
   });
 
   assert.equal(session.messages.length, 1);
@@ -296,12 +306,13 @@ test("appendTurn updates an existing message with the same authoritative message
   assert.equal(session.messages[0].messageId, "message-1");
   assert.match(session.messages[0].messageUid, /^sm_/);
   assert.equal(session.messages[0].ts, "2026-07-25T00:00:00.000Z");
-  assert.equal(result.messageId, "message-1");
-  assert.equal(result.messageUid, session.messages[0].messageUid);
+  assert.equal(result.appended, true);
+  assert.equal(result.turns[0].messageId, "message-1");
+  assert.equal(result.turns[0].messageUid, session.messages[0].messageUid);
   assert.equal(saveCount, 1);
 });
 
-test("appendTurn does not overwrite another dialog when local message ids collide", async () => {
+test("appendTurns does not overwrite another dialog when local message ids collide", async () => {
   const session = {
     currentTaskId: "",
     messages: [
@@ -321,18 +332,23 @@ test("appendTurn does not overwrite another dialog when local message ids collid
     now: () => "2026-07-25T01:00:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: { findById: async () => session, save: async () => {} },
   };
 
-  await appendTurn.call(service, {
+  await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
-    role: "user",
-    content: "new guidance",
-    messageId: "am_1g",
-    dialogProcessId: "dialog-new",
-    turnScopeId: "turn-new",
-    injectedMessage: true,
+    turns: [
+      {
+        role: "user",
+        content: "new guidance",
+        messageId: "am_1g",
+        dialogProcessId: "dialog-new",
+        turnScopeId: "turn-new",
+        injectedMessage: true,
+      },
+    ],
   });
 
   assert.equal(session.messages.length, 2);
@@ -346,23 +362,23 @@ test("appendTurn does not overwrite another dialog when local message ids collid
   );
 });
 
-test("appendTurn assigns a stable persisted identity when no runtime messageId is provided", async () => {
+test("appendTurns assigns a stable persisted identity when no runtime messageId is provided", async () => {
   const session = { currentTaskId: "", messages: [] };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: {
       findById: async () => session,
       save: async () => {},
     },
   };
 
-  await appendTurn.call(service, {
+  await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
-    role: "user",
-    content: "hello",
+    turns: [{ role: "user", content: "hello" }],
   });
 
   assert.equal(session.messages.length, 1);
@@ -371,7 +387,7 @@ test("appendTurn assigns a stable persisted identity when no runtime messageId i
   assert.equal(session.messages[0].id, session.messages[0].messageUid);
 });
 
-test("appendTurn uses messageUid as the persistence identity and validates its dialog scope", async () => {
+test("appendTurns uses messageUid as the persistence identity and validates its dialog scope", async () => {
   const session = {
     currentTaskId: "",
     messages: [
@@ -390,73 +406,92 @@ test("appendTurn uses messageUid as the persistence identity and validates its d
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: { findById: async () => session, save: async () => {} },
   };
 
-  const updated = await appendTurn.call(service, {
+  const updated = await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
-    messageUid: "sm_fixed",
-    role: "assistant",
-    content: "done",
-    messageId: "a-different-runtime-id",
-    dialogProcessId: "dialog-1",
-    turnScopeId: "turn-1",
+    turns: [
+      {
+        messageUid: "sm_fixed",
+        role: "assistant",
+        content: "done",
+        messageId: "a-different-runtime-id",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+      },
+    ],
   });
   assert.equal(session.messages.length, 1);
-  assert.equal(updated.messageUid, "sm_fixed");
-  assert.equal(updated.content, "done");
+  assert.equal(updated.appended, true);
+  assert.equal(updated.turns[0].messageUid, "sm_fixed");
+  assert.equal(updated.turns[0].content, "done");
 
   await assert.rejects(
-    appendTurn.call(service, {
+    appendTurns.call(service, {
       userId: "u1",
       sessionId: "s1",
-      messageUid: "sm_fixed",
-      role: "assistant",
-      content: "wrong dialog",
-      messageId: "am_1",
-      dialogProcessId: "dialog-2",
-      turnScopeId: "turn-2",
+      turns: [
+        {
+          messageUid: "sm_fixed",
+          role: "assistant",
+          content: "wrong dialog",
+          messageId: "am_1",
+          dialogProcessId: "dialog-2",
+          turnScopeId: "turn-2",
+        },
+      ],
     }),
     (error) => error.code === "SESSION_MESSAGE_IDENTITY_CONFLICT",
   );
 
   await assert.rejects(
-    appendTurn.call(service, {
+    appendTurns.call(service, {
       userId: "u1",
       sessionId: "s1",
-      messageUid: "sm_unknown",
-      role: "assistant",
-      content: "ambiguous update",
-      messageId: "a-different-runtime-id",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
+      turns: [
+        {
+          messageUid: "sm_unknown",
+          role: "assistant",
+          content: "ambiguous update",
+          messageId: "a-different-runtime-id",
+          dialogProcessId: "dialog-1",
+          turnScopeId: "turn-1",
+        },
+      ],
     }),
     (error) => error.code === "SESSION_MESSAGE_UID_MISMATCH",
   );
 });
 
-test("appendTurn preserves assistant presentation identity in the authoritative snapshot", async () => {
+test("appendTurns preserves assistant presentation identity in the authoritative snapshot", async () => {
   const session = { currentTaskId: "", messages: [] };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
     _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
     _resolveParentSessionId: async () => "",
+    _findSession: SessionMessageService.prototype._findSession,
     sessionRepo: { findById: async () => session, save: async () => {} },
   };
 
-  await appendTurn.call(service, {
+  await appendTurns.call(service, {
     userId: "u1",
     sessionId: "s1",
-    role: "assistant",
-    messageUid: "sm_analysis",
-    messageId: "msg_model_turn_1",
-    presentationMessageId: "msg_chat_1",
-    chatPresentation: false,
-    content: "working through the model analysis",
-    type: "tool_call",
-    dialogProcessId: "dialog-1",
-    turnScopeId: "turn-1",
+    turns: [
+      {
+        role: "assistant",
+        messageUid: "sm_analysis",
+        messageId: "msg_model_turn_1",
+        presentationMessageId: "msg_chat_1",
+        chatPresentation: false,
+        content: "working through the model analysis",
+        type: "tool_call",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+      },
+    ],
   });
 
   assert.equal(session.messages.length, 1);

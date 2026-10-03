@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { localizeBuiltinScenarios, resolveBuiltinScenarios } from "@noobot/agent-config-protocol";
+import {
+  localizeBuiltinScenarios,
+  localizeScenarioProfile,
+  resolveBuiltinScenarios,
+} from "@noobot/agent-config-protocol";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 export function resolveLocalizedBuiltinScenarios(
@@ -15,4 +19,8 @@ export function resolveLocalizedBuiltinScenarios(
     locale,
     translate: tSystem,
   });
+}
+
+export function resolveLocalizedScenarioProfile(scenarioProfile = {}, { locale = "" } = {}) {
+  return localizeScenarioProfile(scenarioProfile, { locale, translate: tSystem });
 }

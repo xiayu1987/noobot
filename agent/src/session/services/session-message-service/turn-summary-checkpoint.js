@@ -11,6 +11,7 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { createHash } from "node:crypto";
 import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
+import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 
 function normalizeMessageUids(values = []) {
   return [
@@ -116,20 +117,14 @@ export async function commitTurnSummaryCheckpoint({
     return { committed: false, reason: "missing_checkpoint_identity", markedCount: 0 };
   }
 
-  return this._withSessionMutation(
+  const mutation = this._withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const { session, resolvedParentSessionId } = await this._findSession(
         userId,
         sessionId,
         parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
         persistenceContext,
       );
       if (!session) return { committed: false, reason: "session_not_found", markedCount: 0 };
@@ -311,4 +306,5 @@ export async function commitTurnSummaryCheckpoint({
     parentSessionId,
     persistenceContext,
   );
+  return resolveDeletedSessionAs(mutation, { committed: false, markedCount: 0 });
 }

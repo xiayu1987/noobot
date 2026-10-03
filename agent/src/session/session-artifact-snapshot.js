@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { runBestEffort } from "@noobot/shared/best-effort";
+import { createSessionDeletedError, isSessionDeletedError } from "@noobot/session-protocol";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { buildSessionDisplaySummary } from "./session-summary-builders.js";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
@@ -25,15 +26,6 @@ import {
 } from "./session-artifact-session.js";
 import { normalizeSessionDocumentForCurrentProtocol } from "./session-document-normalization.js";
 
-function createSessionDeletedSnapshotError(sessionId = "") {
-  const error = new Error(`session has been deleted: ${String(sessionId || "").trim()}`);
-  error.statusCode = 410;
-  error.errorCode = "SESSION_DELETED";
-  error.code = "SESSION_DELETED";
-  error.sessionId = String(sessionId || "").trim();
-  return error;
-}
-
 export async function persistSessionArtifactSnapshot({
   outputDir = "",
   sessionPayload = {},
@@ -51,7 +43,7 @@ export async function persistSessionArtifactSnapshot({
   const assertWritable = async () => {
     if (typeof assertSessionWritable !== "function") return true;
     const result = await assertSessionWritable({ sessionId, outputDir });
-    if (result === false) throw createSessionDeletedSnapshotError(sessionId);
+    if (result === false) throw createSessionDeletedError({ sessionId });
     return true;
   };
   const run = async () => {
@@ -118,7 +110,7 @@ export async function persistSessionArtifactSnapshot({
             await assertWritable();
             await rename(backupDir, outputDir);
           } catch (restoreError) {
-            if (restoreError?.code !== "SESSION_DELETED") {
+            if (!isSessionDeletedError(restoreError)) {
               restoreError.cause = restoreError.cause || error;
               throw restoreError;
             }

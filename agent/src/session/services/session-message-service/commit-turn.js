@@ -73,16 +73,10 @@ export async function commitTurn(payload = {}) {
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const { session, resolvedParentSessionId } = await this._findSession(
         userId,
         sessionId,
         parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
         persistenceContext,
       );
       if (!session) {
@@ -101,7 +95,7 @@ export async function commitTurn(payload = {}) {
       if (!idempotency.allowed) {
         const error = new Error("commandId was reused with a different request");
         error.statusCode = 409;
-        error.errorCode = SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED;
+        error.code = SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED;
         throw error;
       }
       if (idempotency.deduplicated) {
@@ -129,7 +123,7 @@ export async function commitTurn(payload = {}) {
       if (!concurrency.allowed) {
         const error = new Error("session aggregate version conflict");
         error.statusCode = 409;
-        error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
+        error.code = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
         error.currentVersion = currentVersion;
         throw error;
       }
@@ -144,7 +138,7 @@ export async function commitTurn(payload = {}) {
         if (!continuation.allowed) {
           const error = new Error("continue command does not match authoritative Turn relation");
           error.statusCode = 409;
-          error.errorCode = SESSION_ERROR_CODE.CONTINUE_AUTHORITY_MISMATCH;
+          error.code = SESSION_ERROR_CODE.CONTINUE_AUTHORITY_MISMATCH;
           error.reason = continuation.reason;
           throw error;
         }

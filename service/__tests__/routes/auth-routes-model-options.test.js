@@ -16,11 +16,10 @@ test("connect exposes a case-sensitive custom provider after rejecting system fi
     workspaceService: { ensureUserWorkspace: async () => {} },
     loadUserConfigForUser: async () => ({
       providers: {
-        "GLM_5_3": {
+        GLM_5_3: {
           enabled: true,
           used_for_conversation: true,
           model: "ZHIPU/GLM-5.3",
-          name: "GLM 5.3",
           description: "forged user description",
           reasoning_effort: "medium",
           tool_reasoning_effort: "medium",
@@ -57,17 +56,14 @@ test("connect exposes a case-sensitive custom provider after rejecting system fi
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.deepEqual(
-      payload.enabledModels.find((item) => item.value === "GLM_5_3"),
-      {
-        value: "GLM_5_3",
-        alias: "GLM_5_3",
-        key: "GLM_5_3",
-        label: "GLM_5_3",
-        name: "GLM_5_3",
-        model: "ZHIPU/GLM-5.3",
-        description: "forged user description",
-      },
+      payload.enabledModels.find((item) => item.alias === "GLM_5_3"),
+      { alias: "GLM_5_3", model: "ZHIPU/GLM-5.3", description: "forged user description" },
     );
-    assert.equal(payload.enabledModels.some((item) => item.value === "glm_5_3"), false);
+    assert.equal(
+      payload.enabledModels.some((item) => item.alias === "glm_5_3"),
+      false,
+    );
+    assert.equal(payload.defaultModelAlias, "");
+    assert.equal("defaultModel" in payload, false);
   });
 });

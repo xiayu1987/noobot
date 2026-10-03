@@ -32,3 +32,4 @@ export * from "./policy/model-selection.js";
 export * from "./policy/threshold-policy.js";
 export * from "./policy/system-runtime-counters.js";
 export * from "./projection/plugin-config-plan.js";
+export * from "./projection/client-model-catalog.js";

@@ -180,11 +180,11 @@ test("BotManager replaceSessionTurn persists an empty attachment set without wor
   assert.deepEqual(result.attachments, []);
 });
 
-test("BotManager should cleanup session-scoped tool-result-overflow directories", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-overflow-cleanup-"));
-  const overflowRoot = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
-  const sessionDeleteDir = path.join(overflowRoot, "session-delete");
-  const sessionKeepDir = path.join(overflowRoot, "session-keep");
+test("BotManager should cleanup session-scoped semantic transfer directories", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-semantic-transfer-cleanup-"));
+  const semanticTransferRoot = path.join(basePath, "runtime", "ops_workdir", ".semantic-transfer");
+  const sessionDeleteDir = path.join(semanticTransferRoot, "session-delete");
+  const sessionKeepDir = path.join(semanticTransferRoot, "session-keep");
   await fs.mkdir(sessionDeleteDir, { recursive: true });
   await fs.mkdir(sessionKeepDir, { recursive: true });
   await fs.writeFile(path.join(sessionDeleteDir, "sample.json"), '{"ok":true}', "utf8");
@@ -198,7 +198,7 @@ test("BotManager should cleanup session-scoped tool-result-overflow directories"
     },
   });
 
-  const result = await manager.deleteToolResultOverflowBySessionIds({
+  const result = await manager.deleteSemanticTransferBySessionIds({
     userId: "u1",
     sessionIds: ["session-delete"],
   });

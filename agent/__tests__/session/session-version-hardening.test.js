@@ -201,7 +201,7 @@ test("different identity with stale version receives canonical conflict", async 
     }),
     (e) =>
       e.statusCode === 409 &&
-      e.errorCode === "SESSION_AGGREGATE_VERSION_CONFLICT" &&
+      e.code === "SESSION_AGGREGATE_VERSION_CONFLICT" &&
       e.currentVersion === 3,
   );
 });
@@ -219,7 +219,7 @@ test("expectedAggregateVersion accepts only missing or non-negative safe integer
           commandId: `i-${value}`,
           expectedAggregateVersion: value,
         }),
-        (e) => e.statusCode === 400 && e.errorCode === "INVALID_SESSION_AGGREGATE_VERSION",
+        (e) => e.statusCode === 400 && e.code === "INVALID_SESSION_AGGREGATE_VERSION",
       );
     });
   }
@@ -246,7 +246,7 @@ test("expectedAggregateVersion accepts only missing or non-negative safe integer
       commandId: "iz",
       expectedAggregateVersion: "0",
     }),
-    (error) => error.errorCode === "INVALID_SESSION_AGGREGATE_VERSION",
+    (error) => error.code === "INVALID_SESSION_AGGREGATE_VERSION",
   );
 });
 
@@ -305,7 +305,7 @@ test("continue identity round-trips only when it matches the authoritative conti
       resumeTurnScopeId: "old",
       resumeDialogProcessId: "dp-old",
     }),
-    (error) => error.errorCode === "SESSION_CONTINUE_AUTHORITY_MISMATCH",
+    (error) => error.code === "SESSION_CONTINUE_AUTHORITY_MISMATCH",
   );
 });
 
@@ -379,7 +379,7 @@ test("bindTurnAttachments enforces command, aggregate, message and single-bindin
     await h.service.bindTurnAttachments({ ...base, attachments: [canonical()] });
     await assert.rejects(
       h.service.bindTurnAttachments({ ...base, attachments: [canonical("a2")] }),
-      (error) => error.errorCode === "SESSION_IDEMPOTENCY_KEY_REUSED",
+      (error) => error.code === "SESSION_IDEMPOTENCY_KEY_REUSED",
     );
   });
 
@@ -395,7 +395,7 @@ test("bindTurnAttachments enforces command, aggregate, message and single-bindin
         expectedAggregateVersion: 0,
         attachments: [canonical()],
       }),
-      (error) => error.errorCode === "SESSION_AGGREGATE_VERSION_CONFLICT",
+      (error) => error.code === "SESSION_AGGREGATE_VERSION_CONFLICT",
     );
   });
 
@@ -436,7 +436,7 @@ test("bindTurnAttachments enforces command, aggregate, message and single-bindin
         expectedAggregateVersion: 2,
         attachments: [canonical("a2")],
       }),
-      (error) => error.errorCode === "SESSION_TURN_ATTACHMENTS_ALREADY_BOUND",
+      (error) => error.code === "SESSION_TURN_ATTACHMENTS_ALREADY_BOUND",
     );
   });
 });
@@ -459,13 +459,10 @@ test("internal append and summary checkpoint use mutation lock without changing 
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
   });
-  await h.service.appendTurn({
+  await h.service.appendTurns({
     userId: "u1",
     sessionId: "s1",
-    role: "assistant",
-    content: "a",
-    turnScopeId: "t",
-    dialogProcessId: "dp",
+    turns: [{ role: "assistant", content: "a", turnScopeId: "t", dialogProcessId: "dp" }],
   });
   const targetUid = h.get().messages.find((message) => message.content === "a").messageUid;
   await h.service.commitTurnSummaryCheckpoint({

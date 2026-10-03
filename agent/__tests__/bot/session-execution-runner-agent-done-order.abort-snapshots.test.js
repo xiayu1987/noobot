@@ -415,7 +415,7 @@ test("runSession drains accepted user interjections before sealing the stopped s
       ["second interjection", "user-interjection:interjection-command-2", "human"],
     ],
   );
-  assert.ok(callOrder.indexOf("appendSessionTurn") < callOrder.indexOf("consumeUserInterjections"));
+  assert.ok(callOrder.indexOf("commitSessionTurn") < callOrder.indexOf("consumeUserInterjections"));
 });
 
 test("runSession emits stopped snapshot diagnostic when abort candidate is incomplete", async () => {

@@ -162,7 +162,7 @@ test("detached sub-session uses the selected parent model over a stale runtime m
   await runner({
     parentExecutionScope: createParentExecutionScope({ runtimeModel: "stale_model" }),
     parentContext: createParentContext({
-      runConfig: { selectedModel: { value: "gpt_5_4" }, runtimeModel: "parent_override" },
+      runConfig: { selectedModel: "gpt_5_4", runtimeModel: "parent_override" },
     }),
     message: "hello",
     strategy: createCompleteStrategy(),
@@ -342,9 +342,6 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     async withSessionMutation(_userId, _sessionId, _context, operation) {
       return operation();
     },
-    async resolveParentSessionId() {
-      return "parent1";
-    },
     async resolveSessionScope() {
       return { resolvedParentSessionId: "parent1", sessionDir };
     },
@@ -358,6 +355,9 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
         },
         { now: fixedNow },
       );
+    },
+    async isSessionDeleted() {
+      return false;
     },
     async findById() {
       return persisted

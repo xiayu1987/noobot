@@ -123,7 +123,6 @@ export function createSessionServices(
   const sessionCrudService = new SessionCrudService({
     sessionRepo: sessionRepository,
     taskRepo: taskRepository,
-    treeRepo: sessionTreeRepository,
     sessionTreeService,
     attachmentService: canonicalAttachmentService,
     now: nowFn,
@@ -355,9 +354,6 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.resolveTurnTerminalState(bindPersistenceScope(payload));
     },
 
-    async appendTurn(payload = {}) {
-      return sessionMessageService.appendTurn(payload);
-    },
     async appendTurns(payload = {}) {
       return sessionMessageService.appendTurns(payload);
     },

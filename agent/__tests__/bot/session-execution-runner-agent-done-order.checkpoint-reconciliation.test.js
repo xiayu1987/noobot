@@ -341,7 +341,7 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
         activityTimeline: [{ eventId: "guidance-analysis:1" }],
       },
     ],
-    getTurnSummaryCheckpointState: null,
+    getTurnSummaryCheckpointState: async () => null,
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
       return { ok: true };

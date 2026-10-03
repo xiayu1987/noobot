@@ -4,22 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject } from "../utils.js";
-
-export function readModelSelectionAlias(modelConfig = "") {
-  if (typeof modelConfig === "string") return modelConfig.trim();
-  if (!isPlainObject(modelConfig)) return "";
-  return String(modelConfig.value || modelConfig.alias || modelConfig.key || modelConfig.model || "").trim();
-}
+const readAlias = (value) => (typeof value === "string" ? value.trim() : "");
 
 export function selectModelAlias({ selectedModel = "", scenario = "", effectiveConfig = {} } = {}) {
-  const requested = readModelSelectionAlias(selectedModel);
+  const requested = readAlias(selectedModel);
   if (requested) return Object.freeze({ alias: requested, source: "requested" });
-  const scenarioKey = String(scenario || "").trim();
-  const scenarioAlias = readModelSelectionAlias(effectiveConfig?.scenarios?.definitions?.[scenarioKey]?.model);
+  const scenarioKey = readAlias(scenario);
+  const scenarioAlias = readAlias(effectiveConfig?.scenarios?.definitions?.[scenarioKey]?.model);
   if (scenarioAlias) return Object.freeze({ alias: scenarioAlias, source: "scenario" });
-  const configured = readModelSelectionAlias(
-    effectiveConfig?.defaultModelAlias || effectiveConfig?.defaultProvider,
-  );
-  return Object.freeze({ alias: configured, source: "configured_default" });
+  return Object.freeze({
+    alias: readAlias(effectiveConfig?.defaultProvider),
+    source: "configured_default",
+  });
 }

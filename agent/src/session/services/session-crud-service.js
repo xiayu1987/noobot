@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+import { readRepositoryParentSessionId } from "./session-scope-resolution.js";
 import {
   buildSessionDisplaySummary,
   buildUnavailableSessionSummary,
@@ -27,14 +28,12 @@ export class SessionCrudService {
   constructor({
     sessionRepo,
     taskRepo = null,
-    treeRepo,
-    sessionTreeService = null,
+    sessionTreeService,
     attachmentService,
     now = () => new Date().toISOString(),
   } = {}) {
     this.sessionRepo = sessionRepo;
     this.taskRepo = taskRepo;
-    this.treeRepo = treeRepo;
     this.sessionTreeService = sessionTreeService;
     this.attachmentService = attachmentService;
     this.now = now;
@@ -47,16 +46,13 @@ export class SessionCrudService {
     operation,
     persistenceContext = null,
   ) {
-    if (typeof this.sessionRepo?.withSessionMutation === "function") {
-      return this.sessionRepo.withSessionMutation(
-        userId,
-        sessionId,
-        parentSessionId,
-        operation,
-        persistenceContext,
-      );
-    }
-    return operation();
+    return this.sessionRepo.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      operation,
+      persistenceContext,
+    );
   }
 
   async listSessionIds({ userId }) {
@@ -101,11 +97,6 @@ export class SessionCrudService {
   }
 
   async repairSession({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
-    if (typeof this.sessionRepo?.repairSessionProtocol !== "function") {
-      const error = new Error("Session protocol repair is unavailable");
-      error.code = "SESSION_REPAIR_UNAVAILABLE";
-      throw error;
-    }
     return this.sessionRepo.repairSessionProtocol(
       userId,
       sessionId,
@@ -175,20 +166,11 @@ export class SessionCrudService {
       return { exists: false, sessionId: normalizedSessionId, sessions: [] };
     }
 
-    const sessionTree = await this.treeRepo.getTree(userId);
-    const allSessionIds = [];
-    const queue = [normalizedSessionId];
-    const visited = new Set();
-    while (queue.length) {
-      const currentSessionId = queue.shift();
-      if (!currentSessionId || visited.has(currentSessionId)) continue;
-      visited.add(currentSessionId);
-      allSessionIds.push(currentSessionId);
-      const children = Array.isArray(sessionTree?.nodes?.[currentSessionId]?.children)
-        ? sessionTree.nodes[currentSessionId].children
-        : [];
-      for (const childSessionId of children) queue.push(childSessionId);
-    }
+    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
+    const allSessionIds = this.sessionTreeService.collectBranchSessionIds(
+      normalizedSessionId,
+      sessionTree,
+    );
 
     const sessions = [];
     for (const currentSessionId of allSessionIds) {
@@ -204,12 +186,7 @@ export class SessionCrudService {
       const rawMessages = Array.isArray(currentBundle.session.messages)
         ? currentBundle.session.messages
         : [];
-      const depth = this.sessionTreeService
-        ? await this.sessionTreeService.getSessionDepth({
-            userId,
-            sessionId: currentSessionId,
-          })
-        : this._getDepthFromTree(currentSessionId, sessionTree);
+      const depth = this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree);
       const displayProjection = projectSessionTreeDepth(
         buildSessionDisplaySummary(currentBundle.session),
         depth,
@@ -326,7 +303,7 @@ export class SessionCrudService {
 
   async getSessionDisplayData({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
-    const sessionTree = await this.treeRepo.getTree(userId);
+    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
     if (!sessionTree?.nodes?.[normalizedSessionId]) {
       return {
         exists: false,
@@ -338,43 +315,29 @@ export class SessionCrudService {
       };
     }
 
-    const allSessionIds = [];
-    const queue = [normalizedSessionId];
-    const visited = new Set();
-    while (queue.length) {
-      const currentSessionId = queue.shift();
-      if (!currentSessionId || visited.has(currentSessionId)) continue;
-      visited.add(currentSessionId);
-      allSessionIds.push(currentSessionId);
-      const children = Array.isArray(sessionTree?.nodes?.[currentSessionId]?.children)
-        ? sessionTree.nodes[currentSessionId].children
-        : [];
-      for (const childSessionId of children) queue.push(childSessionId);
-    }
+    const allSessionIds = this.sessionTreeService.collectBranchSessionIds(
+      normalizedSessionId,
+      sessionTree,
+    );
 
     const sessions = [];
     for (const currentSessionId of allSessionIds) {
       const currentParentSessionId = String(
         sessionTree?.nodes?.[currentSessionId]?.parentSessionId || "",
       );
-      const depth = this.sessionTreeService
-        ? await this.sessionTreeService.getSessionDepth({ userId, sessionId: currentSessionId })
-        : this._getDepthFromTree(currentSessionId, sessionTree);
+      const depth = this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree);
       let summary = null;
       try {
-        summary =
-          typeof this.sessionRepo?.readSessionDisplaySummary === "function"
-            ? await this.sessionRepo.readSessionDisplaySummary(
-                userId,
-                currentSessionId,
-                currentParentSessionId,
-              )
-            : null;
+        summary = await this.sessionRepo.readSessionDisplaySummary(
+          userId,
+          currentSessionId,
+          currentParentSessionId,
+        );
       } catch (error) {
         summary = buildUnavailableSessionSummary({
           sessionId: currentSessionId,
           parentSessionId: currentParentSessionId,
-          errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
+          errorCode: error?.code || "SESSION_PROTOCOL_INVALID",
           reason: error?.message || "Session requires protocol repair",
           depth,
         });
@@ -407,9 +370,7 @@ export class SessionCrudService {
   }
 
   async maintainSessionDisplaySummaries({ userId }) {
-    const sessionTree = this.sessionTreeService
-      ? await this.sessionTreeService.getSessionTree({ userId })
-      : await this.treeRepo.getTree(userId);
+    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
 
     const sessionIds = await this.listSessionIds({ userId });
     const rebuiltSessionIds = [];
@@ -428,7 +389,7 @@ export class SessionCrudService {
       } catch (error) {
         failures.push({
           sessionId,
-          code: String(error?.code || error?.errorCode || ""),
+          code: String(error?.code || ""),
           message: String(error?.message || error || ""),
         });
       }
@@ -437,9 +398,7 @@ export class SessionCrudService {
   }
 
   async getAllSessionsData({ userId, failures = null }) {
-    const sessionTree = this.sessionTreeService
-      ? await this.sessionTreeService.getSessionTree({ userId })
-      : await this.treeRepo.getTree(userId);
+    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
 
     const sessionIds = await this.listSessionIds({ userId });
 
@@ -458,7 +417,7 @@ export class SessionCrudService {
             if (Array.isArray(failures)) {
               failures.push({
                 sessionId,
-                code: String(error?.code || error?.errorCode || ""),
+                code: String(error?.code || ""),
                 message: String(error?.message || error || ""),
               });
             }
@@ -469,9 +428,7 @@ export class SessionCrudService {
             ...sessionBundle.session,
             sessionId,
             parentSessionId,
-            depth: this.sessionTreeService
-              ? await this.sessionTreeService.getSessionDepth({ userId, sessionId })
-              : 0,
+            depth: await this.sessionTreeService.getSessionDepth({ userId, sessionId }),
           };
         }),
       )
@@ -485,47 +442,21 @@ export class SessionCrudService {
     return sessionList;
   }
 
-  _getDepthFromTree(sessionId = "", sessionTree = null) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId || !sessionTree?.nodes?.[normalizedSessionId]) return 0;
-    if (typeof this.treeRepo?.loopSession === "function") {
-      return this.treeRepo.loopSession(normalizedSessionId, sessionTree, []).length;
-    }
-    const visited = new Set();
-    let depth = 0;
-    let currentId = normalizedSessionId;
-    while (currentId && !visited.has(currentId) && sessionTree?.nodes?.[currentId]) {
-      visited.add(currentId);
-      depth += 1;
-      currentId = String(sessionTree.nodes[currentId]?.parentSessionId || "").trim();
-    }
-    return depth;
-  }
-
   async getAllSessionSummaries({ userId }) {
-    const sessionTree = this.sessionTreeService
-      ? await this.sessionTreeService.getSessionTree({ userId })
-      : await this.treeRepo.getTree(userId);
+    const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
     const sessionIds = await this.listSessionIds({ userId });
     const expectedIds = new Set(
       sessionIds.map((item) => String(item || "").trim()).filter(Boolean),
     );
-    if (typeof this.sessionRepo?.ensureSessionDisplaySummary === "function") {
-      for (const sessionId of sessionIds) {
-        const parentSessionId = String(
-          sessionTree?.nodes?.[sessionId]?.parentSessionId || "",
-        ).trim();
-        try {
-          await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
-        } catch {
-          continue;
-        }
+    for (const sessionId of sessionIds) {
+      const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+      try {
+        await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
+      } catch {
+        continue;
       }
     }
-    let payload =
-      typeof this.sessionRepo?.readSessionsSummary === "function"
-        ? await this.sessionRepo.readSessionsSummary(userId)
-        : { sessions: [], updatedAt: this.now() };
+    let payload = await this.sessionRepo.readSessionsSummary(userId);
     const summaries = Array.isArray(payload?.sessions) ? payload.sessions : [];
     const summaryIndex = reconcileSessionSummaryIndex({ sessions: summaries, sessionIds });
     const summaryIds = new Set(
@@ -540,9 +471,12 @@ export class SessionCrudService {
         const sessionId = String(summary?.sessionId || "").trim();
         if (!expectedIds.has(sessionId)) return true;
         if (!sessionTree?.nodes?.[sessionId]) return false;
-        return Number(summary?.depth || 0) !== this._getDepthFromTree(sessionId, sessionTree);
+        return (
+          Number(summary?.depth || 0) !==
+          this.sessionTreeService.resolveDepthInTree(sessionId, sessionTree)
+        );
       });
-    if (needsRebuild && typeof this.sessionRepo?.rebuildSessionsSummary === "function") {
+    if (needsRebuild) {
       payload = await this.sessionRepo.rebuildSessionsSummary(userId, { sessionTree });
     }
     const sessions = (Array.isArray(payload?.sessions) ? payload.sessions : [])
@@ -557,10 +491,10 @@ export class SessionCrudService {
 
   async setSessionModelAlias({ userId, sessionId, modelAlias }) {
     return this._withSessionMutation(userId, sessionId, "", async () => {
-      const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      const resolvedParentSessionId = await readRepositoryParentSessionId(
+        this.sessionRepo,
         userId,
         sessionId,
-        "",
       );
       const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
       if (!session) return null;
@@ -579,10 +513,10 @@ export class SessionCrudService {
       throw error;
     }
     return this._withSessionMutation(userId, sessionId, "", async () => {
-      const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      const resolvedParentSessionId = await readRepositoryParentSessionId(
+        this.sessionRepo,
         userId,
         sessionId,
-        "",
       );
       const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId);
       if (!session) return null;
@@ -594,23 +528,19 @@ export class SessionCrudService {
   }
 
   async getRootSessionSelectedConnectorIds({ userId, sessionId }) {
-    const rootSessionId = this.sessionTreeService
-      ? await this.sessionTreeService.getRootSessionId({ userId, sessionId })
-      : String(sessionId || "").trim();
+    const rootSessionId = await this.sessionTreeService.getRootSessionId({ userId, sessionId });
     if (!rootSessionId) return normalizeSelectedConnectorIds([]);
     return this.sessionRepo.readSelectedConnectorIds(userId, rootSessionId);
   }
 
   async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
-    const rootSessionId = this.sessionTreeService
-      ? await this.sessionTreeService.getRootSessionId({ userId, sessionId })
-      : String(sessionId || "").trim();
+    const rootSessionId = await this.sessionTreeService.getRootSessionId({ userId, sessionId });
     if (!rootSessionId) return normalizeSelectedConnectorIds([]);
     return this._withSessionMutation(userId, rootSessionId, "", async () => {
-      const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      const resolvedParentSessionId = await readRepositoryParentSessionId(
+        this.sessionRepo,
         userId,
         rootSessionId,
-        "",
       );
       const session = await this.sessionRepo.findById(
         userId,

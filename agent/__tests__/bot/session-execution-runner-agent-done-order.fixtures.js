@@ -32,8 +32,9 @@ export function createRunner({
   runConfig = {},
   prepareAgentTurnExecution,
   runtime,
-  getSessionTurns,
-  getTurnSummaryCheckpointState,
+  getSessionTurns = async () => [],
+  getTurnSummaryCheckpointState = async () => null,
+  appendAgentMessages = async () => [],
 }) {
   const defaultRuntime = runtime || { attachmentMetas: [] };
   let authorityEventSequence = 0;
@@ -134,7 +135,7 @@ export function createRunner({
       return prepared;
     },
     commitSessionTurn: async (payload = {}) => {
-      callOrder.push("appendSessionTurn");
+      callOrder.push("commitSessionTurn");
       const messageUid = `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
       return {
         aggregateVersion: 1,
@@ -160,6 +161,7 @@ export function createRunner({
     },
     getSessionTurns,
     getTurnSummaryCheckpointState,
+    appendAgentMessages,
     finalizeRunSession,
     upsertParentAsyncTask: () => {
       callOrder.push("upsertParentAsyncTask");

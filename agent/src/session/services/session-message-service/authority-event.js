@@ -36,6 +36,7 @@ import {
   writeAuthorityOutboxCheckpoint,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir, resolveOutboxSessionDir } from "./outbox-scope.js";
+import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 
 const text = (value) => String(value || "").trim();
 
@@ -91,20 +92,14 @@ export async function commitAuthorityEvent({
   if (!orderingDomain || !orderingScopeId) {
     throw new TypeError("authority event commit requires ordering domain and scope");
   }
-  return this._withSessionMutation(
+  const mutation = this._withSessionMutation(
     owner.userId,
     owner.sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const { session, resolvedParentSessionId } = await this._findSession(
         owner.userId,
         owner.sessionId,
         parentSessionId,
-        persistenceContext,
-      );
-      const session = await this.sessionRepo.findById(
-        owner.userId,
-        owner.sessionId,
-        resolvedParentSessionId,
         persistenceContext,
       );
       if (!session) return { committed: false, reason: "session_not_found" };
@@ -219,6 +214,7 @@ export async function commitAuthorityEvent({
     parentSessionId,
     persistenceContext,
   );
+  return resolveDeletedSessionAs(mutation, { committed: false });
 }
 
 export async function getPendingAuthorityEvents({

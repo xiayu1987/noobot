@@ -20,16 +20,6 @@ function getWorkflowSemanticModel() {
   return String(pluginConfig.value?.semanticModel || "").trim();
 }
 
-function getModelMetaText(modelItem = {}) {
-  return [
-    modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "",
-    modelItem.model,
-  ]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function onWorkflowSemanticModelChange(value = "") {
   const nextValue = String(value || "").trim();
   props.pluginContext.config.patch({ semanticModel: nextValue });
@@ -57,15 +47,13 @@ function onWorkflowSemanticModelChange(value = "") {
       >
         <el-option
           v-for="modelItem in modelOptions"
-          :key="`workflow-${modelItem.value}`"
-          :label="modelItem.label"
-          :value="modelItem.value"
+          :key="`workflow-${modelItem.alias}`"
+          :label="modelItem.alias"
+          :value="modelItem.alias"
         >
           <div class="model-option-content">
-            <span class="model-option-label">{{ modelItem.label }}</span>
-            <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{
-              getModelMetaText(modelItem)
-            }}</span>
+            <span class="model-option-label">{{ modelItem.alias }}</span>
+            <span v-if="modelItem.model" class="model-option-meta">{{ modelItem.model }}</span>
             <span v-if="modelItem.description" class="model-option-description">{{
               modelItem.description
             }}</span>

@@ -15,16 +15,12 @@ function createEngine({
   captureSessionToShortMemory,
   maybeSummarize,
   globalConfig = {},
-  appendTurn,
+  appendTurns = async (payload = {}) => ({ appended: true, reason: "", turns: payload.turns }),
 } = {}) {
   const session = {
     async appendExecutionLog() {},
-    async appendTurn(...args) {
-      if (typeof appendTurn === "function") {
-        return appendTurn(...args);
-      }
-      return undefined;
-    },
+    appendTurns,
+    async upsertTurnTiming() {},
     async saveCurrentTurnTasks() {},
     async getExecutionBundle() {
       return { logs: [] };
@@ -91,8 +87,9 @@ function buildFinalizeInput(userConfig = {}) {
 test("_finalizeRunSession forwards thinkingStartedAt to turn timing persistence", async () => {
   const appendTurnPayloads = [];
   const engine = createEngine({
-    appendTurn: async (payload = {}) => {
-      appendTurnPayloads.push(payload);
+    appendTurns: async (payload = {}) => {
+      appendTurnPayloads.push(...payload.turns);
+      return { appended: true, reason: "", turns: payload.turns };
     },
   });
 

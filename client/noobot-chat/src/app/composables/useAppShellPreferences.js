@@ -15,7 +15,6 @@ import {
   hasStoredSelectedModelPreference,
   loadUiPreferences,
   normalizeAvailableBotScenarios,
-  normalizeModelOptionsFromEnabledModels,
   readPluginModelConfigPreference,
   readMemoryModelPreference,
   readSelectedModelPreference,
@@ -37,36 +36,9 @@ function resolveModelValue(value) {
 }
 
 function resolveDefaultSelectedModelFromConfig(config = {}, scenarioKey = "") {
-  const defaultModel = config?.defaultModel;
   const currentScenarioKey = resolveModelValue(scenarioKey);
-  const scenarioDefinition = currentScenarioKey && config?.definitions && typeof config.definitions === "object"
-    ? config.definitions[currentScenarioKey] || {}
-    : {};
-  const scenarioDefaultModel = scenarioDefinition?.defaultModel;
-  const candidates = [
-    scenarioDefinition?.defaultModelAlias,
-    typeof scenarioDefaultModel === "string" ? scenarioDefaultModel : "",
-    scenarioDefaultModel?.value,
-    scenarioDefaultModel?.alias,
-    scenarioDefaultModel?.key,
-    scenarioDefaultModel?.model,
-    scenarioDefinition?.model,
-    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.value : "",
-    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.alias : "",
-    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.key : "",
-    Array.isArray(scenarioDefinition?.enabledModels) ? scenarioDefinition.enabledModels[0]?.model : "",
-    config?.defaultModelAlias,
-    typeof defaultModel === "string" ? defaultModel : "",
-    defaultModel?.value,
-    defaultModel?.alias,
-    defaultModel?.key,
-    defaultModel?.model,
-    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.value : "",
-    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.alias : "",
-    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.key : "",
-    Array.isArray(config?.enabledModels) ? config.enabledModels[0]?.model : "",
-  ];
-  return candidates.map(resolveModelValue).find(Boolean) || "";
+  const scenarioModel = currentScenarioKey ? config?.definitions?.[currentScenarioKey]?.model : "";
+  return resolveModelValue(scenarioModel) || resolveModelValue(config?.defaultModelAlias);
 }
 
 export function useAppShellPreferences({ scenarioConfig } = {}) {
@@ -90,30 +62,16 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys(userId.value));
   const selectedPlugins = ref(loadSelectedPluginKeys(userId.value));
 
-  const availableBotScenarios = computed(() => normalizeAvailableBotScenarios(
-    currentScenarioConfig.value?.definitions,
-  ));
+  const availableBotScenarios = computed(() =>
+    normalizeAvailableBotScenarios(currentScenarioConfig.value?.definitions),
+  );
 
-  const activeScenarioDefinition = computed(() => {
-    const scenarioKey = String(botScenario.value || "").trim();
-    const definitions = currentScenarioConfig.value?.definitions;
-    return scenarioKey && definitions && typeof definitions === "object"
-      ? definitions[scenarioKey] || {}
-      : {};
-  });
-
-  const availableModelOptions = computed(() => normalizeModelOptionsFromEnabledModels(
-    Array.isArray(activeScenarioDefinition.value?.enabledModels) && activeScenarioDefinition.value.enabledModels.length
-      ? activeScenarioDefinition.value.enabledModels
-      : currentScenarioConfig.value?.enabledModels || [],
-    selectedModel.value,
-    pluginModelConfig.value,
-    memoryModel.value,
-  ));
+  const availableModelOptions = computed(() => currentScenarioConfig.value?.enabledModels || []);
 
   const availablePlugins = computed(() => {
     const definitions =
-      currentScenarioConfig.value?.plugins && typeof currentScenarioConfig.value.plugins === "object"
+      currentScenarioConfig.value?.plugins &&
+      typeof currentScenarioConfig.value.plugins === "object"
         ? currentScenarioConfig.value.plugins
         : {};
     return normalizeAvailablePlugins(definitions);
@@ -193,7 +151,11 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   }
 
   function onSelectedModelUpdate(value = "") {
-    updateSelectedModelPreference({ preferenceRef: selectedModel, value, scenarioKey: botScenario.value });
+    updateSelectedModelPreference({
+      preferenceRef: selectedModel,
+      value,
+      scenarioKey: botScenario.value,
+    });
   }
 
   function onMemoryModelUpdate(value = "") {
@@ -202,13 +164,16 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   }
 
   function onPluginModelConfigUpdate(value = {}) {
-    updatePluginModelConfigPreference({ preferenceRef: pluginModelConfig, value, scenarioKey: botScenario.value });
+    updatePluginModelConfigPreference({
+      preferenceRef: pluginModelConfig,
+      value,
+      scenarioKey: botScenario.value,
+    });
   }
 
   function onSummaryPolicyUpdate(value = {}) {
-    summaryPolicy.value = value && typeof value === "object" && !Array.isArray(value)
-      ? { ...value }
-      : {};
+    summaryPolicy.value =
+      value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
   }
 
   function onFrontendThresholdsEnabledUpdate(value = false) {

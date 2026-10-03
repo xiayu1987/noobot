@@ -55,7 +55,7 @@ test("scoped resolver confines a run to its allowed user-relative root", async (
   await assert.rejects(() => resolver.resolveSessionScope("alice", ""), /requires a sessionId/);
   await assert.rejects(() => resolver.resolveSessionScope("alice", "other"), /id does not match/);
   await assert.rejects(
-    () => resolver.resolveParentSessionId("alice", "child", "other"),
+    () => resolver.resolveSessionScope("alice", "child", "other"),
     /parent does not match/,
   );
 });

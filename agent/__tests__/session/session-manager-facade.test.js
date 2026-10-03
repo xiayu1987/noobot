@@ -290,8 +290,9 @@ test("createSessionFacade should delegate message and tree methods", async () =>
     },
     sessionCrudService: {},
     sessionMessageService: {
-      async appendTurn(payload = {}) {
+      async appendTurns(payload = {}) {
         appendCaptured = payload;
+        return { appended: true, reason: "", turns: payload.turns };
       },
       async getSessionTurns() {
         return [{ role: "user", content: "hi" }];
@@ -302,7 +303,11 @@ test("createSessionFacade should delegate message and tree methods", async () =>
     executionLogService: {},
   });
 
-  await session.appendTurn({ userId: "u1", sessionId: "s1", role: "user", content: "hi" });
+  await session.appendTurns({
+    userId: "u1",
+    sessionId: "s1",
+    turns: [{ role: "user", content: "hi" }],
+  });
   const turns = await session.getSessionTurns({ userId: "u1", sessionId: "s1" });
   const deleted = await session.deleteSessionBranch({ userId: "u1", sessionId: "s2" });
 

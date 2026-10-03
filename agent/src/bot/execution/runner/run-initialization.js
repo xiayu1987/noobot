@@ -12,7 +12,6 @@ import {
   resolveInitialLifecycleState,
 } from "../../../runtime/lifecycle/state-machine.js";
 import { resolveRunTurnScopeId } from "../turn-command.js";
-import { readSelectedModelValue } from "./selected-model.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
 
 function applyCanonicalRunMessageIdentity(runConfig = {}) {
@@ -60,7 +59,7 @@ export async function initializeSessionRun({
   if (runConfig?.reuseExistingUserTurn === true && !String(requestedDialogProcessId || "").trim()) {
     const error = new Error("reused Turn requires its precommitted dialogProcessId");
     error.statusCode = 400;
-    error.errorCode = "MISSING_REUSED_TURN_DIALOG_PROCESS_ID";
+    error.code = "MISSING_REUSED_TURN_DIALOG_PROCESS_ID";
     throw error;
   }
   if (runConfig?.reuseExistingUserTurn === true) {
@@ -140,7 +139,7 @@ export async function initializeSessionRun({
   lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));
   if (
     !String(resolvedRunConfig?.runtimeModel || "").trim() &&
-    !readSelectedModelValue(resolvedRunConfig?.selectedModel) &&
+    !String(resolvedRunConfig?.selectedModel || "").trim() &&
     String(currentSessionModelAlias || "").trim()
   ) {
     resolvedRunConfig.runtimeModel = String(currentSessionModelAlias || "").trim();

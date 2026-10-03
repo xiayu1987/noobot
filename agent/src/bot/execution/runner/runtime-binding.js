@@ -62,7 +62,6 @@ export async function bindAgentDispatchRuntime({
   presentationMessageId,
   userMessageAttachments,
   appendAgentMessages,
-  getSessionTurns,
   commitSummaryCheckpoint,
   userId,
   sessionId,
@@ -180,7 +179,6 @@ export async function bindAgentDispatchRuntime({
   bindCurrentTurnPersistence({
     dispatchRuntime,
     appendAgentMessages,
-    getSessionTurns,
     commitSummaryCheckpoint,
     userId,
     sessionId,

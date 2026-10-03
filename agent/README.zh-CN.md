@@ -20,7 +20,7 @@ npm test
 唯一完整清单以 `package.json#exports` 为准，主要公开子路径包括：
 
 - `noobot-agent/agent`
-- `noobot-agent/bot-manage`
+- `noobot-agent/bot`
 - `noobot-agent/tools`
 - `noobot-agent/model`
 - `noobot-agent/event`

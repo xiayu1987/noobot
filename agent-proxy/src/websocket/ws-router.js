@@ -171,15 +171,12 @@ export class WsRouter {
               dispatched: false,
               transport: "websocket",
               errorType: String(error?.name || "Error"),
-              errorCode: String(error?.errorCode || error?.code || ""),
+              errorCode: String(error?.code || ""),
               validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
             },
           });
         }
-        if (
-          !parsedCommand &&
-          String(error?.errorCode || error?.code || "") === "INVALID_AGENT_COMMAND"
-        ) {
+        if (!parsedCommand && String(error?.code || "") === "INVALID_AGENT_COMMAND") {
           const commandId = String(payload?.commandId || "").trim();
           const commandType = String(payload?.commandType || "").trim();
           const sessionId = String(payload?.identity?.sessionId || "").trim();
@@ -330,7 +327,7 @@ export class WsRouter {
       outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
       identity: command.identity,
       error: {
-        code: String(error?.code || error?.errorCode || "COMMAND_FAILED"),
+        code: String(error?.code || "COMMAND_FAILED"),
         message: String(error?.message || AGENT_PROXY_ERROR.DEFAULT),
       },
     });

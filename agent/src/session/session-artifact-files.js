@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { createSessionDeletedError } from "@noobot/session-protocol";
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
 
@@ -48,19 +49,6 @@ export async function readJsonArtifactFile(filePath = "", fallback = null) {
   return readPersistedJsonFile({ filePath, fallback, readFile });
 }
 
-function createSessionDeletedArtifactError(
-  sessionId = "",
-  operation = "session artifact mutation",
-) {
-  const error = new Error(`session has been deleted: ${String(sessionId || "").trim()}`);
-  error.statusCode = 410;
-  error.errorCode = "SESSION_DELETED";
-  error.code = "SESSION_DELETED";
-  error.sessionId = String(sessionId || "").trim();
-  error.operation = operation;
-  return error;
-}
-
 export async function assertArtifactSessionWritable({
   assertSessionWritable = null,
   sessionId = "",
@@ -69,7 +57,7 @@ export async function assertArtifactSessionWritable({
 } = {}) {
   if (typeof assertSessionWritable !== "function") return true;
   const result = await assertSessionWritable({ sessionId, sessionDir, operation });
-  if (result === false) throw createSessionDeletedArtifactError(sessionId, operation);
+  if (result === false) throw createSessionDeletedError({ sessionId, operation });
   return true;
 }
 

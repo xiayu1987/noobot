@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { createSessionDeletedError } from "@noobot/session-protocol";
 
 class SessionAccessMethods {
   async _readDeletedSessions(userId = "") {
@@ -98,16 +99,6 @@ class SessionAccessMethods {
     return Boolean(payload?.sessions?.[normalizedSessionId]);
   }
 
-  createSessionDeletedError(userId = "", sessionId = "") {
-    const error = new Error(`session has been deleted: ${String(sessionId || "").trim()}`);
-    error.statusCode = 410;
-    error.errorCode = "SESSION_DELETED";
-    error.code = "SESSION_DELETED";
-    error.userId = String(userId || "").trim();
-    error.sessionId = String(sessionId || "").trim();
-    return error;
-  }
-
   createSessionGenerationStaleError(
     userId = "",
     sessionId = "",
@@ -116,7 +107,7 @@ class SessionAccessMethods {
   ) {
     const error = new Error(`stale session generation: ${String(sessionId || "").trim()}`);
     error.statusCode = 409;
-    error.errorCode = "SESSION_GENERATION_STALE";
+    error.code = "SESSION_GENERATION_STALE";
     error.code = "SESSION_GENERATION_STALE";
     error.userId = String(userId || "").trim();
     error.sessionId = String(sessionId || "").trim();
@@ -127,20 +118,16 @@ class SessionAccessMethods {
 
   async assertSessionWritable(userId = "", sessionId = "", persistenceContext = null) {
     if (await this.isSessionDeleted(userId, sessionId)) {
-      throw this.createSessionDeletedError(userId, sessionId);
+      throw createSessionDeletedError({ userId, sessionId });
     }
     const lifecycle = await this.getSessionLifecycle(userId, sessionId);
-    if (lifecycle?.state === "deleted") throw this.createSessionDeletedError(userId, sessionId);
+    if (lifecycle?.state === "deleted") throw createSessionDeletedError({ userId, sessionId });
     const token = Number(persistenceContext?.sessionGeneration);
     const current = Number(lifecycle?.generation);
     if (Number.isInteger(token) && token > 0 && token !== current) {
       throw this.createSessionGenerationStaleError(userId, sessionId, token, current);
     }
     return lifecycle;
-  }
-
-  async resolveParentSessionId(userId, sessionId, parentSessionId = "") {
-    return this.sessionPathResolver.resolveParentSessionId(userId, sessionId, parentSessionId);
   }
 
   async resolveSessionDir(userId, sessionId, parentSessionId = "") {

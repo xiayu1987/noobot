@@ -13,16 +13,10 @@ export async function getSessionTurns({
   parentSessionId = "",
   persistenceContext = null,
 } = {}) {
-  const resolvedParentSessionId = await this._resolveParentSessionId(
+  const { session } = await this._findSession(
     userId,
     sessionId,
     parentSessionId,
-    persistenceContext,
-  );
-  const session = await this.sessionRepo.findById(
-    userId,
-    sessionId,
-    resolvedParentSessionId,
     persistenceContext,
   );
   return session?.messages || [];
@@ -34,16 +28,10 @@ export async function getSessionContextSource({
   parentSessionId = "",
   persistenceContext = null,
 } = {}) {
-  const resolvedParentSessionId = await this._resolveParentSessionId(
+  const { session } = await this._findSession(
     userId,
     sessionId,
     parentSessionId,
-    persistenceContext,
-  );
-  const session = await this.sessionRepo.findById(
-    userId,
-    sessionId,
-    resolvedParentSessionId,
     persistenceContext,
   );
   const messages = Array.isArray(session?.messages) ? session.messages : [];
@@ -69,16 +57,10 @@ export async function getTurnSummaryCheckpointState({
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   if (!userId || !sessionId || !normalizedDialogProcessId || !normalizedTurnScopeId) return null;
-  const resolvedParentSessionId = await this._resolveParentSessionId(
+  const { session } = await this._findSession(
     userId,
     sessionId,
     parentSessionId,
-    persistenceContext,
-  );
-  const session = await this.sessionRepo.findById(
-    userId,
-    sessionId,
-    resolvedParentSessionId,
     persistenceContext,
   );
   const state = session?.turnSummaryCheckpoints?.[normalizedTurnScopeId];

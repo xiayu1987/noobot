@@ -249,7 +249,7 @@ export function createMessageHandler({
             dispatched: false,
             transport: "websocket",
             errorType: String(error?.name || "Error"),
-            errorCode: String(error?.errorCode || error?.code || ""),
+            errorCode: String(error?.code || ""),
             validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
           },
         });
@@ -258,14 +258,12 @@ export function createMessageHandler({
           event: "service.websocket.request.rejected",
           data: {
             errorType: error?.name || "Error",
-            errorCode: String(error?.errorCode || error?.code || ""),
+            errorCode: String(error?.code || ""),
           },
         });
         if (parsedCommand) {
           sendFailedCommandReceipt(sendEvent, parsedCommand, {
-            code: String(
-              error?.errors?.[0] || error?.errorCode || error?.code || "invalid_command",
-            ).trim(),
+            code: String(error?.errors?.[0] || error?.code || "invalid_command").trim(),
             message: error?.message || translateText("ws.unknownError", state.currentLocale),
           });
           return;

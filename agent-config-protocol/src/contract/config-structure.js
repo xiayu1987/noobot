@@ -198,11 +198,7 @@ const TOOLS_STRUCTURE = object({
 });
 
 const SCENARIO_ENTRY_STRUCTURE = object({
-  name: string(),
-  description: string(),
   model: string({ modelReference: "model" }),
-  tools: array({ item: string({ nonEmpty: true }) }),
-  context: array({ item: string({ nonEmpty: true }) }),
 });
 
 const PLUGINS_STRUCTURE = object({

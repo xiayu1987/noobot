@@ -54,19 +54,19 @@ export function createTurnCommand({
   if (!command.userId || !command.sessionId || !command.turnScopeId || !command.commandId) {
     const error = new Error("turn command identity is incomplete");
     error.statusCode = 400;
-    error.errorCode = "INVALID_TURN_COMMAND";
+    error.code = "INVALID_TURN_COMMAND";
     throw error;
   }
   if (resume && (!command.sourceIdentity.dialogProcessId || !command.sourceIdentity.turnScopeId)) {
     const error = new Error("continue command source identity is incomplete");
     error.statusCode = 400;
-    error.errorCode = "INVALID_CONTINUE_SOURCE_IDENTITY";
+    error.code = "INVALID_CONTINUE_SOURCE_IDENTITY";
     throw error;
   }
   if (resume && origin !== TURN_COMMAND_ORIGIN.USER) {
     const error = new Error("only user turns can continue a stopped turn");
     error.statusCode = 400;
-    error.errorCode = "INVALID_CONTINUE_ORIGIN";
+    error.code = "INVALID_CONTINUE_ORIGIN";
     throw error;
   }
   return Object.freeze(command);

@@ -6,9 +6,8 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./system-core": "./src/system-core/index.js",
     "./agent": "./src/runtime/index.js",
-    "./bot-manage": "./src/bot/index.js",
+    "./bot": "./src/bot/index.js",
     "./tools": "./src/tools/index.js",
     "./model": "./src/models/index.js",
     "./event": "./src/events/index.js",
@@ -32,7 +31,7 @@
   "scripts": {
     "check": "node -e \"import('./src/runtime/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\"",
     "check:tools": "node -e \"import('./src/tools/index.js').then(()=>console.log('tools ok')).catch(e=>{console.error(e);process.exit(1);})\"",
-    "check:api": "node -e \"Promise.all([import('./src/index.js'),import('./src/system-core/index.js'),import('./src/models/index.js'),import('./src/tools/index.js')]).then(()=>console.log('api ok')).catch(e=>{console.error(e);process.exit(1);})\"",
+    "check:api": "node -e \"Promise.all([import('./src/index.js'),import('./src/bot/index.js'),import('./src/models/index.js'),import('./src/tools/index.js')]).then(()=>console.log('api ok')).catch(e=>{console.error(e);process.exit(1);})\"",
     "check:tool-schema": "node scripts/check-openai-tool-schema.js --userId admin",
     "check:tool-schema:live:gemini:admin": "node scripts/check-openai-tool-schema.js --live --model gemini_3_flash --userId admin",
     "test": "node --test \"__tests__/**/*.test.js\"",

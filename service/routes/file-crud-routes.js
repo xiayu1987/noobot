@@ -30,19 +30,19 @@ function validateWorkspaceText(content) {
   if (typeof content !== "string") {
     const error = new TypeError("workspace file content must be a string");
     error.status = 400;
-    error.errorCode = "INVALID_WORKSPACE_FILE_CONTENT";
+    error.code = "INVALID_WORKSPACE_FILE_CONTENT";
     throw error;
   }
   if (Buffer.byteLength(content, "utf8") > LENGTH_THRESHOLDS.serviceHttp.workspaceFileBytes) {
     const error = new Error("workspace file content exceeds the configured size limit");
     error.status = 413;
-    error.errorCode = "WORKSPACE_FILE_CONTENT_TOO_LARGE";
+    error.code = "WORKSPACE_FILE_CONTENT_TOO_LARGE";
     throw error;
   }
   if (UNSAFE_TEXT_CONTROL_CHARACTERS.test(content)) {
     const error = new TypeError("workspace file content contains unsafe control characters");
     error.status = 400;
-    error.errorCode = "INVALID_WORKSPACE_FILE_CONTENT";
+    error.code = "INVALID_WORKSPACE_FILE_CONTENT";
     throw error;
   }
   return content;
@@ -57,7 +57,7 @@ function validateJsonDocumentWrite(relativePath, content) {
       `${path.basename(relativePath)} parse failed: ${error?.message || String(error)}`,
     );
     parseError.status = 400;
-    parseError.errorCode = "INVALID_JSON_DOCUMENT";
+    parseError.code = "INVALID_JSON_DOCUMENT";
     throw parseError;
   }
 }

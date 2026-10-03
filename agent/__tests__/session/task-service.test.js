@@ -146,29 +146,3 @@ test("saveCurrentTurnTasks drops blank task ids and returns the persisted bundle
   ]);
   assert.equal(session.currentTaskId, "t2");
 });
-
-test("task service falls back to legacy repo hooks when mutation guard is absent", async () => {
-  const session = { currentTaskId: "", messages: [] };
-  const bundle = { currentTaskId: "", tasks: [] };
-  const { taskRepo } = createRepos({ session, bundle });
-  const legacySessionRepo = {
-    async resolveParentSessionId(userId, sessionId, parentSessionId) {
-      return parentSessionId || "legacy-parent";
-    },
-    async ensureSession() {},
-    async findById() {
-      return session;
-    },
-    async save() {},
-  };
-  const service = new TaskService({ sessionRepo: legacySessionRepo, taskRepo });
-
-  const returned = await service.saveCurrentTurnTasks({
-    userId: "u1",
-    sessionId: "s1",
-    currentTurnTasks: [{ taskId: "t9" }],
-  });
-
-  assert.equal(returned, bundle);
-  assert.equal(session.currentTaskId, "t9");
-});

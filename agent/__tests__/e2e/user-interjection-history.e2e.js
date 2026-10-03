@@ -51,13 +51,9 @@ test("session execution preserves every user interjection into the next model hi
       return { sessionDir: path.join(root, userId, "runtime", "session", resolvedSessionId) };
     },
     async appendExecutionLog() {},
-    async appendTurn(payload = {}) {
-      persistedTurns.push(payload);
-      return payload;
-    },
     async appendTurns({ turns = [] } = {}) {
       persistedTurns.push(...turns);
-      return turns;
+      return { appended: true, reason: "", turns };
     },
     async getSessionTurns() {
       return persistedTurns;

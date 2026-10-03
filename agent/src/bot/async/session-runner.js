@@ -300,7 +300,7 @@ export class AsyncSessionRunner {
 
     const job = this.jobs.get(key);
     if (!job?.promise) {
-      const bundle = await this.session?.getSessionBundle?.({
+      const bundle = await this.session.getSessionBundle({
         userId: normalizedUserId,
         sessionId: normalizedSessionId,
         parentSessionId: normalizedParentSessionId,

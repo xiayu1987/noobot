@@ -35,16 +35,13 @@ export class TaskService {
     operation,
     persistenceContext = null,
   ) {
-    if (typeof this.sessionRepo?.withSessionMutation === "function") {
-      return this.sessionRepo.withSessionMutation(
-        userId,
-        sessionId,
-        parentSessionId,
-        operation,
-        persistenceContext,
-      );
-    }
-    return operation();
+    return this.sessionRepo.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      operation,
+      persistenceContext,
+    );
   }
 
   async _withResolvedSession({ userId, sessionId, parentSessionId, persistenceContext }, handler) {

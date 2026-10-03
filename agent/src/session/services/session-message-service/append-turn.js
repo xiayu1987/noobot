@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { upsertTurnInSession } from "./turn-upsert.js";
+import { resolveDeletedSessionAs } from "./session-deleted-result.js";
 
 export async function appendTurns({
   userId,
@@ -13,24 +14,18 @@ export async function appendTurns({
   persistenceContext = null,
 } = {}) {
   const sourceTurns = Array.isArray(turns) ? turns : [];
-  if (!sourceTurns.length) return [];
-  return this._withSessionMutation(
+  if (!sourceTurns.length) return { appended: false, reason: "empty_batch", turns: [] };
+  const mutation = this._withSessionMutation(
     userId,
     sessionId,
     async () => {
-      const resolvedParentSessionId = await this._resolveParentSessionId(
+      const { session, resolvedParentSessionId } = await this._findSession(
         userId,
         sessionId,
         parentSessionId,
         persistenceContext,
       );
-      const session = await this.sessionRepo.findById(
-        userId,
-        sessionId,
-        resolvedParentSessionId,
-        persistenceContext,
-      );
-      if (!session) return { appended: false, reason: "session_not_found" };
+      if (!session) return { appended: false, reason: "session_not_found", turns: [] };
 
       const persistedTurns = sourceTurns.map((turn = {}) =>
         upsertTurnInSession(this, session, resolvedParentSessionId, {
@@ -42,20 +37,10 @@ export async function appendTurns({
         }),
       );
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-      return persistedTurns;
+      return { appended: true, reason: "", turns: persistedTurns };
     },
     parentSessionId,
     persistenceContext,
   );
-}
-
-export async function appendTurn(payload = {}) {
-  const result = await appendTurns.call(this, {
-    userId: payload.userId,
-    sessionId: payload.sessionId,
-    parentSessionId: payload.parentSessionId,
-    turns: [payload],
-    persistenceContext: payload.persistenceContext,
-  });
-  return Array.isArray(result) ? result[0] : result;
+  return resolveDeletedSessionAs(mutation, { appended: false, turns: [] });
 }

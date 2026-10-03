@@ -15,7 +15,6 @@ import {
   isExecutionAbortError,
 } from "@noobot/session-protocol";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
-import { readSelectedModelValue } from "../execution/runner/selected-model.js";
 import {
   createDetachedTerminalReceipt,
   createScopedSubSessionEventListener,
@@ -239,7 +238,7 @@ function createDetachedRunConfig(
   });
   const runtimeModel =
     String(runConfigPatch.runtimeModel || "").trim() ||
-    readSelectedModelValue(config.selectedModel) ||
+    String(config.selectedModel || "").trim() ||
     String(inheritedRunConfig.runtimeModel || "").trim() ||
     String(inheritedRuntime?.runtimeModel || "").trim();
   if (runtimeModel) config.runtimeModel = runtimeModel;
@@ -391,9 +390,6 @@ function createLifecycleIdentity(request, identity, config, persistenceContext, 
 
 function createLifecycleCommitter(session, lifecycleIdentity, scopedEventListener) {
   return async (event = {}) => {
-    if (typeof session.applyTurnLifecycleEvent !== "function") {
-      throw new Error("detached sub-session requires authoritative Turn lifecycle support");
-    }
     const committed = await session.applyTurnLifecycleEvent({ ...lifecycleIdentity, ...event });
     if (!committed?.applied && !committed?.deduplicated) {
       throw new Error(committed?.reason || "detached sub-session lifecycle commit failed");

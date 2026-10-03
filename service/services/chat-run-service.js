@@ -40,7 +40,7 @@ export async function resolveAuthoritativeConnectorSelection({
     const invalidIds = selectedConnectorIds.filter((id) => !connectedConnectorIds.has(id));
     if (invalidIds.length) {
       const error = new Error(`selected connector is unavailable: ${invalidIds.join(", ")}`);
-      error.errorCode = "connector_selection_invalid";
+      error.code = "connector_selection_invalid";
       throw error;
     }
   } else {
@@ -175,7 +175,7 @@ export function createChatRunService({
           processed: false,
           transport: "http",
           errorType: String(error?.name || "Error"),
-          errorCode: String(error?.errorCode || error?.code || ""),
+          errorCode: String(error?.code || ""),
           validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
         },
       });
