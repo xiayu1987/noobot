@@ -108,7 +108,6 @@ class SessionAccessMethods {
     const error = new Error(`stale session generation: ${String(sessionId || "").trim()}`);
     error.statusCode = 409;
     error.code = "SESSION_GENERATION_STALE";
-    error.code = "SESSION_GENERATION_STALE";
     error.userId = String(userId || "").trim();
     error.sessionId = String(sessionId || "").trim();
     error.expectedGeneration = expectedGeneration;

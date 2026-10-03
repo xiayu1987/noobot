@@ -4,10 +4,63 @@
  * SPDX-License-Identifier: MIT
  */
 import { text as clean } from "../normalize.js";
+import { validateTurnReplacementCommit } from "../lifecycle/turn-replacement.js";
 import { SESSION_COMMAND } from "./session-command.js";
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isCanonicalText(value) {
+  return typeof value === "string" && Boolean(value) && value === clean(value);
+}
+
+function isNonNegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function collectUnknownFieldErrors(result, allowedKeys, errors) {
+  if (Object.keys(result).some((key) => !allowedKeys.includes(key))) {
+    errors.push("unknown_command_result_field");
+  }
+}
+
+function validateMessageUidResult(result, errors) {
+  if (!clean(result.messageUid)) errors.push("missing_result_message_uid");
+  collectUnknownFieldErrors(result, ["messageUid"], errors);
+  if (result.messageUid !== clean(result.messageUid)) {
+    errors.push("non_canonical_result_message_uid");
+  }
+}
+
+function validateMessageDeleteResult(result, errors) {
+  collectUnknownFieldErrors(result, ["deletedCount", "anchorIndex", "deletedTurnScopeIds"], errors);
+  if (!isNonNegativeInteger(result.deletedCount)) errors.push("invalid_result_deleted_count");
+  if (!isNonNegativeInteger(result.anchorIndex)) errors.push("invalid_result_anchor_index");
+  if (
+    !Array.isArray(result.deletedTurnScopeIds) ||
+    !result.deletedTurnScopeIds.every(isCanonicalText)
+  ) {
+    errors.push("invalid_result_deleted_turn_scope_ids");
+  }
+}
+
+function validateTurnReplaceResult(result, errors) {
+  collectUnknownFieldErrors(result, ["turnReplacement"], errors);
+  if (!validateTurnReplacementCommit(result.turnReplacement).valid) {
+    errors.push("invalid_result_turn_replacement");
+  }
+}
+
+const COMMAND_RESULT_VALIDATORS = Object.freeze({
+  [SESSION_COMMAND.TURN_COMMIT]: validateMessageUidResult,
+  [SESSION_COMMAND.TURN_ATTACHMENTS_BIND]: validateMessageUidResult,
+  [SESSION_COMMAND.MESSAGE_DELETE_FROM]: validateMessageDeleteResult,
+  [SESSION_COMMAND.TURN_REPLACE]: validateTurnReplaceResult,
+});
+
 function normalizeCommandResult(type, result) {
-  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  if (!isPlainObject(result)) return null;
   if (type === SESSION_COMMAND.TURN_COMMIT || type === SESSION_COMMAND.TURN_ATTACHMENTS_BIND) {
     const messageUid = clean(result.messageUid);
     return messageUid ? { messageUid } : {};
@@ -16,21 +69,11 @@ function normalizeCommandResult(type, result) {
 }
 
 export function validateCommandReceiptResult(type, result) {
-  if (type !== SESSION_COMMAND.TURN_COMMIT && type !== SESSION_COMMAND.TURN_ATTACHMENTS_BIND) {
-    return Object.freeze({ valid: true, errors: Object.freeze([]) });
-  }
+  const validate = COMMAND_RESULT_VALIDATORS[type];
+  if (!validate) return Object.freeze({ valid: true, errors: Object.freeze([]) });
   const errors = [];
-  if (!result || typeof result !== "object" || Array.isArray(result)) {
-    errors.push("invalid_command_result");
-  } else {
-    if (!clean(result.messageUid)) errors.push("missing_result_message_uid");
-    if (Object.keys(result).some((key) => key !== "messageUid")) {
-      errors.push("unknown_command_result_field");
-    }
-    if (result.messageUid !== clean(result.messageUid)) {
-      errors.push("non_canonical_result_message_uid");
-    }
-  }
+  if (isPlainObject(result)) validate(result, errors);
+  else errors.push("invalid_command_result");
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 

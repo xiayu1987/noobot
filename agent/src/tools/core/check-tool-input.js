@@ -19,9 +19,7 @@ import {
 import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
-  getSessionIdsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -40,10 +38,6 @@ function tCheckInput(agentContext = {}, key = "") {
     pathSeparatorsNotAllowed: "common.pathSeparatorsNotAllowed",
     controlCharsNotAllowed: "common.controlCharsNotAllowed",
     fileNameIncludedRequired: "common.fileNameIncludedRequired",
-    invalidUuidFormat: "common.invalidUuidFormat",
-    sessionContextMissing: "common.sessionContextMissing",
-    parentSessionNotFound: "common.parentSessionNotFound",
-    notFoundInParentSessionMessages: "common.notFoundInParentSessionMessages",
     pathOutOfScope: "common.pathOutOfScope",
     fileNotFound: "common.fileNotFound",
   };
@@ -71,12 +65,6 @@ function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName 
         suggestedSandboxPath: String(resolution?.candidateSandboxPath || ""),
       })
     : tCheckInput(agentContext, "pathOutOfScope");
-}
-
-function isUuid(value = "") {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    String(value || "").trim(),
-  );
 }
 
 async function resolveExistingParent(targetPath = "") {
@@ -127,20 +115,6 @@ export function projectToolPathRef(pathRef = {}) {
   });
 }
 
-function resolveSessionContext(agentContext = {}) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const sessionManager = runtime?.sessionManager || null;
-  const sessionIds = getSessionIdsFromAgentContext(agentContext, runtime);
-  const userId = String(agentContext?.userId || sessionIds.userId || "").trim();
-  if (!sessionManager || !userId) {
-    throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
-      code: ERROR_CODE.RECOVERABLE_SESSION_CONTEXT_MISSING,
-      details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
-    });
-  }
-  return { sessionManager, userId };
-}
-
 function assertValidSimpleFileName({ fileName = "", fieldName = "fileName" }) {
   const normalizedFileName = String(fileName || "").trim();
   if (!normalizedFileName) {
@@ -184,86 +158,6 @@ export function assertValidFileNameFromPath({ filePath = "", fieldName = "filePa
     fileName: parsedName,
     fieldName,
   });
-}
-
-export async function assertValidParentSessionId({
-  parentSessionId = "",
-  agentContext = {},
-  fieldName = "parentSessionId",
-}) {
-  const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
-  if (!normalizedParentSessionId) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
-      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-      details: { field: fieldName },
-    });
-  }
-  if (!isUuid(normalizedParentSessionId)) {
-    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "invalidUuidFormat")}`, {
-      code: ERROR_CODE.RECOVERABLE_INVALID_PARENT_SESSION_ID,
-      details: { field: fieldName, value: normalizedParentSessionId },
-    });
-  }
-
-  const { sessionManager, userId } = resolveSessionContext(agentContext);
-
-  const sessionTree = await sessionManager.getSessionTree({ userId });
-  if (!sessionTree?.nodes?.[normalizedParentSessionId]) {
-    throw recoverableToolError(
-      `${tCheckInput(agentContext, "parentSessionNotFound")}: ${normalizedParentSessionId}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_PARENT_SESSION_NOT_FOUND,
-        details: { parentSessionId: normalizedParentSessionId },
-      },
-    );
-  }
-  return normalizedParentSessionId;
-}
-
-export async function assertValidParentDialogProcessId({
-  parentSessionId = "",
-  parentDialogProcessId = "",
-  agentContext = {},
-  parentSessionFieldName = "parentSessionId",
-  dialogFieldName = "parentDialogProcessId",
-}) {
-  const normalizedParentSessionId = await assertValidParentSessionId({
-    parentSessionId,
-    agentContext,
-    fieldName: parentSessionFieldName,
-  });
-  const normalizedParentDialogProcessId = String(parentDialogProcessId || "").trim();
-  if (!normalizedParentDialogProcessId) {
-    throw recoverableToolError(`${dialogFieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
-      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-      details: { field: dialogFieldName },
-    });
-  }
-
-  const { sessionManager, userId } = resolveSessionContext(agentContext);
-
-  const exists = await sessionManager.hasDialogProcessIdInSession({
-    userId,
-    sessionId: normalizedParentSessionId,
-    dialogProcessId: normalizedParentDialogProcessId,
-  });
-  if (!exists) {
-    throw recoverableToolError(
-      `${dialogFieldName} ${tCheckInput(agentContext, "notFoundInParentSessionMessages")}: ${normalizedParentDialogProcessId}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_PARENT_DIALOG_PROCESS_NOT_FOUND,
-        details: {
-          field: dialogFieldName,
-          parentSessionId: normalizedParentSessionId,
-          parentDialogProcessId: normalizedParentDialogProcessId,
-        },
-      },
-    );
-  }
-  return {
-    parentSessionId: normalizedParentSessionId,
-    parentDialogProcessId: normalizedParentDialogProcessId,
-  };
 }
 
 export async function resolveAuthorizedUserWorkspaceFilePath({

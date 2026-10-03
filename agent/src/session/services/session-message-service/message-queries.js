@@ -34,7 +34,7 @@ export async function getSessionContextSource({
     parentSessionId,
     persistenceContext,
   );
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const messages = session ? session.messages : [];
   const repair = repairOrphanedTerminalTurns({
     messages,
     turnLifecycle: session?.turnLifecycle || {},
@@ -78,10 +78,14 @@ export async function hasDialogProcessIdInSession({
 }) {
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) return false;
-  const session = await this.sessionRepo.findById(userId, sessionId, parentSessionId);
+  const { session } = await this._findSession(
+    userId,
+    sessionId,
+    parentSessionId,
+    persistenceContext,
+  );
   if (!session) return false;
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  return messages.some(
+  return session.messages.some(
     (messageItem) =>
       resolveContextMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
   );

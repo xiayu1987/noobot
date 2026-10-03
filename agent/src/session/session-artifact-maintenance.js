@@ -140,7 +140,7 @@ export async function cleanupSessionArtifacts({
   dryRun = true,
   mutationCoordinator = sessionMutationCoordinator,
   mutationLockDir = "",
-  assertSessionWritable = null,
+  assertSessionWritable,
   allowDeletedCleanup = false,
 } = {}) {
   const run = async () => {
@@ -198,7 +198,7 @@ export async function repairSessionArtifacts({
   sessionId = "",
   mutationCoordinator = sessionMutationCoordinator,
   mutationLockDir = "",
-  assertSessionWritable = null,
+  assertSessionWritable,
 } = {}) {
   const run = async () => {
     await assertArtifactSessionWritable({

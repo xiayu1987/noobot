@@ -52,7 +52,7 @@ export class ShortMemoryManager {
     });
     if (!sessionData) return false;
 
-    const messages = Array.isArray(sessionData.messages) ? sessionData.messages : [];
+    const { messages } = sessionData;
     if (!messages.length) return false;
     const latestDialogProcessId =
       [...messages]

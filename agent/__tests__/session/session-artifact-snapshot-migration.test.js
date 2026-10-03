@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile, writeFile } from "node:fs/promises";
 import {
+  assumeSessionWritable,
   buildSessionArtifactFileMap,
   persistSessionArtifactSnapshot,
   readSessionArtifactSnapshot,
@@ -17,6 +18,7 @@ test("snapshot reads legacy transfer reasons only after canonical Session migrat
   withTemp(async (root) => {
     await persistSessionArtifactSnapshot({
       outputDir: root,
+      assertSessionWritable: assumeSessionWritable,
       sessionPayload: {
         sessionId: "legacy-transfer-session",
         messages: [

@@ -9,7 +9,7 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 523,
+  complexityCount: 520,
   longFunctionCount: 101,
   maxComplexity: 79,
   hotspots: Object.freeze({

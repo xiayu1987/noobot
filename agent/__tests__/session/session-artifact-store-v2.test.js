@@ -11,6 +11,7 @@ import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 
 import {
   appendRollingJsonlArtifactLog,
+  assumeSessionWritable,
   buildSessionArtifactFileMap,
   cleanupSessionArtifacts,
   inspectSessionArtifacts,
@@ -676,15 +677,29 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
     const beforeIndex = await readFile(indexPath, "utf8");
     assert.equal((await inspectSessionArtifacts({ sessionDir })).ok, false);
     assert.equal(await readFile(indexPath, "utf8"), beforeIndex);
-    const firstRepair = await repairSessionArtifacts({ sessionDir });
+    const firstRepair = await repairSessionArtifacts({
+      sessionDir,
+      assertSessionWritable: assumeSessionWritable,
+    });
     assert.deepEqual(firstRepair.repaired, ["segment-000001.jsonl"]);
-    assert.deepEqual((await repairSessionArtifacts({ sessionDir })).repaired, []);
-    const dry = await cleanupSessionArtifacts({ sessionDir });
+    assert.deepEqual(
+      (await repairSessionArtifacts({ sessionDir, assertSessionWritable: assumeSessionWritable }))
+        .repaired,
+      [],
+    );
+    const dry = await cleanupSessionArtifacts({
+      sessionDir,
+      assertSessionWritable: assumeSessionWritable,
+    });
     assert.equal(dry.dryRun, true);
     await access(orphan);
     await access(temp);
     await access(staging);
-    const cleaned = await cleanupSessionArtifacts({ sessionDir, dryRun: false });
+    const cleaned = await cleanupSessionArtifacts({
+      sessionDir,
+      dryRun: false,
+      assertSessionWritable: assumeSessionWritable,
+    });
     assert.equal(cleaned.removed.includes(orphan), true);
     await assert.rejects(access(orphan), { code: "ENOENT" });
     await assert.rejects(access(temp), { code: "ENOENT" });
@@ -758,6 +773,7 @@ test("snapshot publishes committed artifacts and rejects incomplete new snapshot
         messages: canonicalMessages([{ role: "user", content: "hello" }]),
       },
       executionPayload: { logs: [{ id: 1 }] },
+      assertSessionWritable: assumeSessionWritable,
     });
     const snapshot = await readSessionArtifactSnapshot({ outputDir, allowLegacy: false });
     assert.equal(snapshot.session.sessionId, "snapshot-session");
@@ -776,6 +792,7 @@ test("snapshot publish rejects deleted sessions and cleans staging without resto
         sessionId: "zombie-snapshot",
         messages: canonicalMessages([{ role: "user", content: "old" }]),
       },
+      assertSessionWritable: assumeSessionWritable,
     });
     let deleted = false;
     const lockDir = path.join(root, ".lifecycle", "zombie.lock");

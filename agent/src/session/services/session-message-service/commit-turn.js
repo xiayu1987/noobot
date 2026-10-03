@@ -84,7 +84,7 @@ export async function commitTurn(payload = {}) {
         error.statusCode = 404;
         throw error;
       }
-      const messages = Array.isArray(session.messages) ? session.messages : [];
+      const messages = session.messages;
       const lifecycle = session.turnLifecycle;
       const idempotency = decideCommandIdempotency({
         commandId: normalizedCommandId,
@@ -193,7 +193,6 @@ export async function commitTurn(payload = {}) {
         },
       );
       session.updatedAt = nowValue;
-      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: currentVersion,
         persistenceContext,

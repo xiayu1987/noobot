@@ -5,8 +5,8 @@
  */
 import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
-function messageAttachments(messages = []) {
-  return (Array.isArray(messages) ? messages : []).flatMap((message) =>
+function messageAttachments(messages) {
+  return messages.flatMap((message) =>
     Array.isArray(message?.attachments) ? message.attachments : [],
   );
 }
@@ -19,7 +19,7 @@ export async function projectSessionAttachmentState({
   if (!attachmentService?.readAttachmentMetas) {
     throw new TypeError("session attachment projection requires attachmentService");
   }
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const { messages } = session;
   const attachments = messageAttachments(messages);
   if (!attachments.length) return session;
 

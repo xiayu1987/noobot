@@ -106,7 +106,7 @@ export async function bindTurnAttachments({
           code: SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED,
         });
       }
-      const messages = Array.isArray(session.messages) ? session.messages : [];
+      const messages = session.messages;
       const messageIndex = messages.findIndex(
         (message) =>
           text(message?.messageUid) === identity.messageUid &&

@@ -233,14 +233,12 @@ function updateSessionMetadata(service, session, turn, input) {
     modelLoopRound: resolveTimingField(input, "turnTimingModelLoopRound", "modelLoopRound"),
   });
   session.updatedAt = service.now();
-  if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
 }
 
 export function upsertTurnInSession(service, session, resolvedParentSessionId, input = {}) {
   const turn = buildTurnEntity(service, session, resolvedParentSessionId, input);
   applyToolFields(turn, input);
   applyAttachments(turn, input);
-  session.messages = Array.isArray(session.messages) ? session.messages : [];
   const persistedTurn = persistTurn(service, session.messages, turn);
   updateSessionMetadata(service, session, turn, input);
   return persistedTurn;

@@ -183,9 +183,7 @@ export class SessionCrudService {
         parentSessionId: currentParentSessionId,
       });
       if (!currentBundle?.exists || !currentBundle?.session) continue;
-      const rawMessages = Array.isArray(currentBundle.session.messages)
-        ? currentBundle.session.messages
-        : [];
+      const rawMessages = currentBundle.session.messages;
       const depth = this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree);
       const displayProjection = projectSessionTreeDepth(
         buildSessionDisplaySummary(currentBundle.session),

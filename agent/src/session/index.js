@@ -54,6 +54,50 @@ function normalizeContextServicePayload(payload = {}) {
   };
 }
 
+function createSessionLifecycleAccess(sessionRepository) {
+  return {
+    async getSessionLifecycle({ userId = "", sessionId = "", initialize = true } = {}) {
+      return sessionRepository.getSessionLifecycle(userId, sessionId, { initialize });
+    },
+    async assertSessionWritable({ userId = "", sessionId = "", persistenceContext = null } = {}) {
+      return sessionRepository.assertSessionWritable(userId, sessionId, persistenceContext);
+    },
+    async withSessionLifecycleMutation({ userId = "", sessionId = "" } = {}, operation) {
+      return sessionRepository.withSessionLifecycleMutation(userId, sessionId, operation);
+    },
+  };
+}
+
+function createScopedPersistenceContextFactory(pathResolver) {
+  return function createScopedPersistenceContext({
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    scopeId = "",
+    relativeDir = "",
+    allowedRoot = "",
+    metadataContributor = null,
+    sessionGeneration = null,
+  } = {}) {
+    if (!String(sessionId || "").trim() || !String(scopeId || "").trim()) {
+      throw new TypeError("scoped persistence context requires sessionId and scopeId");
+    }
+    return createPersistenceContext({
+      locationResolver: new ScopedSessionLocationResolver({
+        pathResolver,
+        userId,
+        sessionId,
+        parentSessionId,
+        scopeId,
+        relativeDir,
+        allowedRoot,
+      }),
+      metadataContributor,
+      sessionGeneration,
+    });
+  };
+}
+
 export function createSessionServices(
   globalConfig = {},
   { now = null, attachmentService = null } = {},
@@ -160,35 +204,10 @@ export function createSessionServices(
   return {
     pathResolver,
     sessionPathResolver,
+    ...createSessionLifecycleAccess(sessionRepository),
     storageService,
     attachmentService: canonicalAttachmentService,
-    createScopedPersistenceContext({
-      userId = "",
-      sessionId = "",
-      parentSessionId = "",
-      scopeId = "",
-      relativeDir = "",
-      allowedRoot = "",
-      metadataContributor = null,
-      sessionGeneration = null,
-    } = {}) {
-      if (!String(sessionId || "").trim() || !String(scopeId || "").trim()) {
-        throw new TypeError("scoped persistence context requires sessionId and scopeId");
-      }
-      return createPersistenceContext({
-        locationResolver: new ScopedSessionLocationResolver({
-          pathResolver,
-          userId,
-          sessionId,
-          parentSessionId,
-          scopeId,
-          relativeDir,
-          allowedRoot,
-        }),
-        metadataContributor,
-        sessionGeneration,
-      });
-    },
+    createScopedPersistenceContext: createScopedPersistenceContextFactory(pathResolver),
     sessionTreeService,
     sessionCrudService,
     sessionMessageService,
@@ -278,8 +297,15 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async getSessionLifecycle(payload = {}) {
-      if (typeof runtime.getSessionLifecycle !== "function") return null;
       return runtime.getSessionLifecycle(payload);
+    },
+
+    async assertSessionWritable(payload = {}) {
+      return runtime.assertSessionWritable(payload);
+    },
+
+    async withSessionLifecycleMutation(payload = {}, operation) {
+      return runtime.withSessionLifecycleMutation(payload, operation);
     },
 
     async ensureRuntimeDirs(userId) {
@@ -562,6 +588,7 @@ export {
 } from "./session-summary-builders.js";
 export {
   SESSION_ARTIFACT_FILE_NAMES,
+  assumeSessionWritable,
   appendExecutionLogArtifact,
   appendJsonlArtifactLog,
   buildSessionArtifactFileMap,

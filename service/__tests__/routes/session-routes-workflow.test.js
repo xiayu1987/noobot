@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
-import { persistSessionArtifactSnapshot } from "noobot-agent/session";
+import { assumeSessionWritable, persistSessionArtifactSnapshot } from "noobot-agent/session";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
 async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
@@ -45,6 +45,7 @@ test("workflow service reads persisted segmented child execution events after re
   );
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
+    assertSessionWritable: assumeSessionWritable,
     sessionPayload: { sessionId: "child-s", aggregateVersion: 0, messages: [] },
     taskPayload: { sessionId: "child-s", tasks: [] },
     executionPayload: { sessionId: "child-s", logs: [] },
@@ -70,6 +71,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
   );
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
+    assertSessionWritable: assumeSessionWritable,
     sessionPayload: {
       sessionId: "node-s",
       aggregateVersion: 1,
@@ -142,6 +144,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
   const turnScopeId = "workflow-node:wf_node_1";
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
+    assertSessionWritable: assumeSessionWritable,
     sessionPayload: {
       sessionId: "node-s",
       aggregateVersion: 1,

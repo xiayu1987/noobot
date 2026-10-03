@@ -12,6 +12,7 @@ import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import {
   buildSessionArtifactFileMap,
   readJsonArtifactFile,
+  requireSessionWritableGuard,
   writeJsonArtifactFile,
 } from "./session-artifact-files.js";
 import {
@@ -35,13 +36,13 @@ export async function persistSessionArtifactSnapshot({
   now = () => new Date().toISOString(),
   mutationCoordinator = sessionMutationCoordinator,
   mutationLockDir = "",
-  assertSessionWritable = null,
+  assertSessionWritable,
 } = {}) {
+  requireSessionWritableGuard(assertSessionWritable);
   const normalizedSessionPayload =
     sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {};
   const sessionId = String(normalizedSessionPayload?.sessionId || "").trim();
   const assertWritable = async () => {
-    if (typeof assertSessionWritable !== "function") return true;
     const result = await assertSessionWritable({ sessionId, outputDir });
     if (result === false) throw createSessionDeletedError({ sessionId });
     return true;

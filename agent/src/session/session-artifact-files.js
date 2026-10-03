@@ -49,13 +49,22 @@ export async function readJsonArtifactFile(filePath = "", fallback = null) {
   return readPersistedJsonFile({ filePath, fallback, readFile });
 }
 
+export const assumeSessionWritable = async () => true;
+
+export function requireSessionWritableGuard(assertSessionWritable) {
+  if (typeof assertSessionWritable !== "function") {
+    throw new TypeError("assertSessionWritable is required for session artifact mutation");
+  }
+  return assertSessionWritable;
+}
+
 export async function assertArtifactSessionWritable({
-  assertSessionWritable = null,
+  assertSessionWritable,
   sessionId = "",
   sessionDir = "",
   operation = "session artifact mutation",
 } = {}) {
-  if (typeof assertSessionWritable !== "function") return true;
+  requireSessionWritableGuard(assertSessionWritable);
   const result = await assertSessionWritable({ sessionId, sessionDir, operation });
   if (result === false) throw createSessionDeletedError({ sessionId, operation });
   return true;
