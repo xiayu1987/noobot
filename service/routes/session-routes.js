@@ -341,16 +341,13 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
       });
       try {
         const result = await bot.session.deleteFromMessage(payload);
-        const messages = Array.isArray(result?.session?.messages) ? result.session.messages : [];
         void logDeleteMutation("service.messageDelete.committed", {
-          deletedCount: Number(result?.deletedCount || 0),
-          anchorIndex: Number(result?.anchorIndex ?? -1),
-          deletedTurnScopeIds: Array.isArray(result?.deletedTurnScopeIds)
-            ? result.deletedTurnScopeIds.map((value) => String(value || "").trim()).filter(Boolean)
-            : [],
+          deletedCount: result.deletedCount,
+          anchorIndex: result.anchorIndex,
+          deletedTurnScopeIds: result.deletedTurnScopeIds,
           aggregateVersion: result.aggregateVersion,
-          deduplicated: result?.deduplicated === true,
-          remainingMessages: messages.map((message = {}, index) => ({
+          deduplicated: result.deduplicated === true,
+          remainingMessages: result.session.messages.map((message = {}, index) => ({
             index,
             id: String(message?.id || message?.messageId || "").trim(),
             role: String(message?.role || "").trim(),

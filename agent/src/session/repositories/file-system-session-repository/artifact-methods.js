@@ -15,6 +15,7 @@ import {
   replaceAuthorityOutboxRecords,
 } from "../../authority-outbox-store/outbox-journal.js";
 import {
+  assumeSessionWritable,
   buildSessionArtifactFileMap,
   readSessionArtifact,
   readSessionArtifactForRepair,
@@ -362,6 +363,7 @@ class SessionArtifactMethods {
                 sessionDir: stagingDir,
                 sessionId,
                 mutationCoordinator: null,
+                assertSessionWritable: assumeSessionWritable,
               });
               return {
                 migrated:

@@ -219,6 +219,7 @@ describe("useChatEngine.delete", () => {
       session: backendSession,
       deletedCount: 2,
       anchorIndex: 1,
+      deletedTurnScopeIds: ["client-turn:delete-1"],
       version: 3,
     }));
     const applySessionDetail = vi.fn((detail) => {
@@ -279,6 +280,7 @@ describe("useChatEngine.delete", () => {
       session: backendSession,
       deletedCount: 2,
       anchorIndex: 0,
+      deletedTurnScopeIds: ["turn-stopped-tail"],
       version: 4,
     }));
     const applySessionDetail = vi.fn((detail) => {

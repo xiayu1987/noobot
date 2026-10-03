@@ -149,6 +149,9 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
       },
     },
     session: {
+      async getSessionLifecycle({ sessionId = "" } = {}) {
+        return { sessionId, state: "active", generation: 1 };
+      },
       createScopedPersistenceContext() {
         return Object.freeze({ marker: "scoped" });
       },

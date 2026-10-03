@@ -9,7 +9,7 @@ export const SESSIONS_SUMMARY_SCHEMA_VERSION = 2;
 
 export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
   const sessionId = String(session?.sessionId || "").trim();
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const { messages } = session;
   const firstUserMessage = messages.find(
     (messageItem) =>
       messageItem?.injectedMessage !== true &&

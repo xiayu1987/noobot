@@ -228,7 +228,7 @@ export async function commitTurnSummaryCheckpoint({
         ...normalizedRetainedUids,
       ]);
       const messagesByUid = new Map();
-      for (const message of Array.isArray(session.messages) ? session.messages : []) {
+      for (const message of session.messages) {
         const messageUid = String(message?.messageUid || "").trim();
         if (messageUid && requestedUids.has(messageUid)) messagesByUid.set(messageUid, message);
       }
@@ -264,20 +264,18 @@ export async function commitTurnSummaryCheckpoint({
       const summarizedSet = new Set(normalizedSummarizedUids);
       const retainedSet = new Set(normalizedRetainedUids);
       let markedCount = 0;
-      session.messages = (Array.isArray(session.messages) ? session.messages : []).map(
-        (message) => {
-          const messageUid = String(message?.messageUid || "").trim();
-          if (summarizedSet.has(messageUid)) {
-            if (message?.summarized === true) return message;
-            markedCount += 1;
-            return { ...message, summarized: true };
-          }
-          if (retainedSet.has(messageUid) && message?.summarized === true) {
-            return { ...message, summarized: false };
-          }
-          return message;
-        },
-      );
+      session.messages = session.messages.map((message) => {
+        const messageUid = String(message?.messageUid || "").trim();
+        if (summarizedSet.has(messageUid)) {
+          if (message?.summarized === true) return message;
+          markedCount += 1;
+          return { ...message, summarized: true };
+        }
+        if (retainedSet.has(messageUid) && message?.summarized === true) {
+          return { ...message, summarized: false };
+        }
+        return message;
+      });
       const checkpointRevision = currentRevision + 1;
       const receipt = {
         checkpointId: normalizedCheckpointId,

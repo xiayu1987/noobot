@@ -101,9 +101,18 @@ test("ScopedArtifactPersistenceHelpers scoped writer and event logger write insi
 test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot from session service", async () => {
   const tempRoot = await createTempRoot();
   const outputDir = path.join(tempRoot, "u1", "plugin/node-c");
+  const guardCalls = [];
   const helpers = createHelpers({
     baseDir: tempRoot,
     session: {
+      async withSessionLifecycleMutation(payload, operation) {
+        guardCalls.push(["lock", payload.userId, payload.sessionId]);
+        return operation();
+      },
+      async assertSessionWritable(payload = {}) {
+        guardCalls.push(["writable", payload.userId, payload.sessionId]);
+        return true;
+      },
       async getSessionBundle(payload = {}) {
         assert.equal(payload.userId, "u1");
         assert.equal(payload.sessionId, "s1");
@@ -136,6 +145,11 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
     outputDir,
     metadata: { kind: "snapshot" },
   });
+  assert.deepEqual(guardCalls[0], ["lock", "u1", "s1"]);
+  assert.equal(
+    guardCalls.slice(1).every((call) => call[0] === "writable" && call[2] === "s1"),
+    true,
+  );
 
   const taskJson = JSON.parse(await fs.readFile(persisted.files.task, "utf8"));
   const executionJson = JSON.parse(await fs.readFile(persisted.files.execution, "utf8"));

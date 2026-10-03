@@ -37,8 +37,8 @@ export function upsertSessionTurnTiming(session = {}, timing = {}) {
   if (!matched) session.turnTimings.push(incoming);
 }
 
-export function pruneSessionTurnTimings(session = {}) {
-  const messages = Array.isArray(session.messages) ? session.messages : [];
+export function pruneSessionTurnTimings(session) {
+  const messages = session.messages;
   const liveKeys = new Set(messages.map(resolveTurnTimingKey).filter(Boolean));
   session.turnTimings = (Array.isArray(session.turnTimings) ? session.turnTimings : []).filter(
     (item) => liveKeys.has(resolveTurnTimingKey(item)),

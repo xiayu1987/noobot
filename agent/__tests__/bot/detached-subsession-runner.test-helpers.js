@@ -42,6 +42,9 @@ export function createDeps(overrides = {}) {
       },
     },
     session: {
+      async getSessionLifecycle({ sessionId = "" } = {}) {
+        return { sessionId, state: "active", generation: 1 };
+      },
       async applyTurnLifecycleEvent(payload = {}) {
         calls.lifecyclePayloads.push(payload);
         const sequence = calls.lifecyclePayloads.length;

@@ -98,27 +98,16 @@ export class ScopedArtifactPersistenceHelpers {
       executionBundle && typeof executionBundle === "object"
         ? executionBundle
         : { sessionId, logs: [] };
-    const sessionRepo =
-      this.session?.repositories?.sessionRepository ||
-      this.session?.sessionRepo ||
-      this.session?.sessionRepository ||
-      this.session?.repo ||
-      null;
-    return persistSnapshotJsonFiles({
-      outputDir,
-      sessionPayload: session || { sessionId, messages: [] },
-      taskPayload: { sessionId, currentTaskId: "", tasks, updatedAt: this.now() },
-      executionPayload: execution,
-      metadata,
-      mutationLockDir:
-        typeof sessionRepo?._sessionLifecycleLockDir === "function"
-          ? sessionRepo._sessionLifecycleLockDir(userId, sessionId)
-          : "",
-      assertSessionWritable:
-        typeof sessionRepo?.assertSessionWritable === "function"
-          ? () => sessionRepo.assertSessionWritable(userId, sessionId)
-          : null,
-    });
+    return this.session.withSessionLifecycleMutation({ userId, sessionId }, () =>
+      persistSnapshotJsonFiles({
+        outputDir,
+        sessionPayload: session || { sessionId, messages: [] },
+        taskPayload: { sessionId, currentTaskId: "", tasks, updatedAt: this.now() },
+        executionPayload: execution,
+        metadata,
+        assertSessionWritable: () => this.session.assertSessionWritable({ userId, sessionId }),
+      }),
+    );
   }
 
   createScopedJsonWriter() {

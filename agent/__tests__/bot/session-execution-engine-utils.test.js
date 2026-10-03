@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import {
+  assumeSessionWritable,
   readJsonlArtifactFile,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
@@ -229,6 +230,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const outputDir = path.join(await createTempRoot(), "snapshot");
   const persisted = await persistSnapshotJsonFiles({
     outputDir,
+    assertSessionWritable: assumeSessionWritable,
     sessionPayload: {
       sessionId: "s1",
       parentSessionId: "p1",

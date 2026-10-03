@@ -170,9 +170,8 @@ function buildTimelineByRoute(context) {
 }
 
 export function buildToolArtifactTimelineProjection(session = {}) {
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
   const context = createArtifactProjectionContext(String(session?.sessionId || "").trim());
-  for (const message of messages) {
+  for (const message of session.messages) {
     collectTimelineArtifacts(message, context);
     collectToolCalls(message, context);
     collectToolResult(message, context);

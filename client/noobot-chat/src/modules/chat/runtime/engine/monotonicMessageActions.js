@@ -291,14 +291,12 @@ export function createMonotonicMessageActions({
         const sessionId = normalizeTrimmedString(
           activeSession.value?.sessionId || activeSessionId.value,
         );
-        const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
         messageOperationStore?.updateOperation?.(deleteOperation?.opId, { status: "deleting" });
         logMessageMutationDiagnostics("frontend.messageDelete.requestPrepared", () => ({
           sessionId,
           dialogProcessId: getMessageDialogProcessId(userTargetMessage),
           turnScopeId: getMessageTurnScopeId(userTargetMessage),
           anchor,
-          locallyDeletedTurnScopeIds,
           commandId: deleteCommandId,
         }));
         const sessionAggregateVersionManager = createSessionAggregateVersionManager({
@@ -332,22 +330,15 @@ export function createMonotonicMessageActions({
           dialogProcessId: getMessageDialogProcessId(userTargetMessage),
           turnScopeId: getMessageTurnScopeId(userTargetMessage),
           responseOk: result?.ok !== false && payload?.ok !== false,
-          deletedCount: Number(payload?.deletedCount || 0),
-          anchorIndex: Number(payload?.anchorIndex ?? -1),
-          deletedTurnScopeIds: Array.isArray(payload?.deletedTurnScopeIds)
-            ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
-            : [],
+          deletedCount: payload?.deletedCount,
+          anchorIndex: payload?.anchorIndex,
+          deletedTurnScopeIds: payload?.deletedTurnScopeIds,
           responseMessages: summarizeDeleteMessages(payload?.session?.messages),
         }));
         if (result?.ok === false || payload?.ok === false) return false;
         const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
         if (!sessionDetail) return false;
-        const protocolDeletedTurnScopeIds = Array.isArray(payload?.deletedTurnScopeIds)
-          ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
-          : [];
-        const confirmedDeletedTurnScopeIds = protocolDeletedTurnScopeIds.length
-          ? protocolDeletedTurnScopeIds
-          : locallyDeletedTurnScopeIds;
+        const confirmedDeletedTurnScopeIds = payload.deletedTurnScopeIds;
         confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, {
           sessionId,
         });

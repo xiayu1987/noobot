@@ -83,7 +83,7 @@ function resolveTurnAcceptance(service, session, event = {}) {
 function findTurnScopeUserMessage(session, turnScopeId) {
   const scope = String(turnScopeId || "").trim();
   return (
-    (Array.isArray(session?.messages) ? session.messages : []).find(
+    session.messages.find(
       (message) =>
         String(message?.role || "").trim() === "user" &&
         String(message?.turnScopeId || "").trim() === scope,
@@ -189,7 +189,7 @@ function materializeAcceptedUserMessage({
     },
     () => nowValue,
   );
-  session.messages = [...(Array.isArray(session.messages) ? session.messages : []), userMessage];
+  session.messages = [...session.messages, userMessage];
   session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
   return userMessage;
 }
@@ -314,7 +314,6 @@ export async function applyTurnLifecycleEvent({
       if (result.terminalMaterialization)
         session.messages = [...result.terminalMaterialization.messages];
       session.updatedAt = nowValue;
-      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: actualVersion,
         persistenceContext,
@@ -409,7 +408,6 @@ export async function provisionSessionWithInitialTurn({
       });
       if (userMessage) session.aggregateVersion = nextAggregateVersion;
       session.updatedAt = nowValue;
-      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: isNew ? undefined : actualVersion,
         createOnly: isNew,
@@ -467,7 +465,6 @@ export async function upsertTurnTiming({
         return { upserted: false, reason: "unchanged", session };
       }
       session.updatedAt = this.now();
-      if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
       return { upserted: true, session };
     },
@@ -498,7 +495,7 @@ export async function assertReusedUserTurnIdentity({
     persistenceContext,
   );
   if (!session) throw new TypeError("reused Turn session was not found");
-  const messages = Array.isArray(session.messages) ? session.messages : [];
+  const messages = session.messages;
   const targetIndex = (() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const messageItem = messages[index];

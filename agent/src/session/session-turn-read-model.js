@@ -35,9 +35,7 @@ function collectSessionPresentationTurnScopeIds(session = {}) {
   return [
     ...new Set(
       [
-        ...(Array.isArray(session?.messages) ? session.messages : []).map((message) =>
-          text(message?.turnScopeId),
-        ),
+        ...session.messages.map((message) => text(message?.turnScopeId)),
         ...selectPresentedSessionLifecycleTurns(session?.turnLifecycle).map((turn) =>
           text(turn?.turnScopeId),
         ),

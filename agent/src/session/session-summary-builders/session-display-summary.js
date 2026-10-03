@@ -87,7 +87,7 @@ function text(value) {
 }
 
 function createDisplaySummaryContext(session) {
-  const messages = Array.isArray(session.messages) ? session.messages : [];
+  const { messages } = session;
   return {
     session,
     messages,

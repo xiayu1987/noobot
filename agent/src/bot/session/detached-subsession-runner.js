@@ -347,7 +347,6 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
 }
 
 async function resolveDetachedSessionGeneration(session, identity) {
-  if (typeof session.getSessionLifecycle !== "function") return 0;
   const lifecycle = await session.getSessionLifecycle({
     userId: identity.userId,
     sessionId: identity.subSessionId,
