@@ -30,6 +30,37 @@ import {
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
 
+function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset }) {
+  const subResult = detachedRun?.result || {};
+  const subAnswer = String(subResult?.answer || "").trim();
+  const subTraces = Array.isArray(subResult?.traces) ? subResult.traces : [];
+  const subMessages = Array.isArray(subResult?.messages) ? subResult.messages : [];
+  const traceToolNames = Array.from(
+    new Set(subTraces.map((item) => String(item?.tool || "").trim()).filter(Boolean)),
+  );
+  return toToolJsonResult(
+    TOOL_NAME.CALL_MCP_TASK,
+    {
+      ok: true,
+      mcpName,
+      status: TOOL_RESULT_STATUS.COMPLETED,
+      sessionId: String(detachedRun?.sessionId || "").trim(),
+      parentSessionId,
+      tools: mcpToolset.toolNames || [],
+      answer: subAnswer,
+      summary: {
+        answer_length: subAnswer.length,
+        trace_count: subTraces.length,
+        message_count: subMessages.length,
+        used_tools: traceToolNames,
+        dialog_process_id: resolveContextMessageDialogProcessId(subResult),
+      },
+      error: "",
+    },
+    true,
+  );
+}
+
 export function createMcpTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const callMcpTaskTool = new DynamicStructuredTool({
@@ -136,35 +167,12 @@ export function createMcpTool({ agentContext }) {
                 : {},
           },
         });
-        const subSessionId = String(detachedRun?.sessionId || "").trim();
-        const subResult = detachedRun?.result || {};
-        const subAnswer = String(subResult?.answer || "").trim();
-        const subTraces = Array.isArray(subResult?.traces) ? subResult.traces : [];
-        const subMessages = Array.isArray(subResult?.messages) ? subResult.messages : [];
-        const traceToolNames = Array.from(
-          new Set(subTraces.map((item) => String(item?.tool || "").trim()).filter(Boolean)),
-        );
-        return toToolJsonResult(
-          TOOL_NAME.CALL_MCP_TASK,
-          {
-            ok: true,
-            mcpName: normalizedMcpName,
-            status: TOOL_RESULT_STATUS.COMPLETED,
-            sessionId: subSessionId,
-            parentSessionId,
-            tools: mcpToolset.toolNames || [],
-            answer: subAnswer,
-            summary: {
-              answer_length: subAnswer.length,
-              trace_count: subTraces.length,
-              message_count: subMessages.length,
-              used_tools: traceToolNames,
-              dialog_process_id: resolveContextMessageDialogProcessId(subResult),
-            },
-            error: "",
-          },
-          true,
-        );
+        return buildMcpTaskResult({
+          detachedRun,
+          mcpName: normalizedMcpName,
+          parentSessionId,
+          mcpToolset,
+        });
       } catch (error) {
         if (isAbortError(error)) throw error;
         if (basePath) {

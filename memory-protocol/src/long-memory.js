@@ -19,6 +19,8 @@ export const LONG_MEMORY_PATCH_ACTION = Object.freeze({
   DELETE: "DELETE",
 });
 
+export const LONG_MEMORY_PATCH_NOOP = "NOOP";
+
 export const LONG_MEMORY_ERROR_CODE = Object.freeze({
   DOCUMENT_INVALID: "LONG_MEMORY_DOCUMENT_INVALID",
   MODEL_INVALID: "LONG_MEMORY_MODEL_INVALID",
@@ -138,7 +140,53 @@ export const LONG_MEMORY_MODEL = createLongMemoryModel([
     maxItems: 8,
     description: "常关注的话题",
   },
+  {
+    key: "work.role_domain",
+    kind: LONG_MEMORY_FIELD_KIND.SINGLE,
+    description: "职业角色与所在行业领域",
+  },
+  {
+    key: "work.long_term_projects",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 3,
+    description: "长期投入的项目、业务或目标",
+  },
+  {
+    key: "work.tools_methods",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 8,
+    description: "常用的工具、技术与方法",
+  },
+  {
+    key: "work.work_style",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "工作方式与习惯（如规划、执行、检查、复盘的做法）",
+  },
+  {
+    key: "work.quality_standards",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "对质量与交付结果的判断标准",
+  },
+  {
+    key: "work.assistant_collaboration",
+    kind: LONG_MEMORY_FIELD_KIND.LIST,
+    maxItems: 5,
+    description: "对助手的协作期望（如执行方式、汇报形式、需确认的边界）",
+  },
 ]);
+
+export const LONG_MEMORY_MODEL_FIELDS_SINCE = Object.freeze({
+  2: Object.freeze([
+    "work.role_domain",
+    "work.long_term_projects",
+    "work.tools_methods",
+    "work.work_style",
+    "work.quality_standards",
+    "work.assistant_collaboration",
+  ]),
+});
 
 const DOCUMENT_FIELD_RE = new RegExp(`^([a-z0-9_.]+)${LONG_MEMORY_VALUE_SEPARATOR}(.*)$`);
 
@@ -270,10 +318,12 @@ function renderFieldKind(field) {
   return field.kind === LONG_MEMORY_FIELD_KIND.LIST ? `list:${field.maxItems}` : "single";
 }
 
+export function renderLongMemoryModelLine(field) {
+  return `${field.key} | ${renderFieldKind(field)} | ${field.description}`;
+}
+
 export function renderLongMemoryModelText(model = LONG_MEMORY_MODEL) {
-  const lines = model.fields.map(
-    (field) => `${field.key} | ${renderFieldKind(field)} | ${field.description}`,
-  );
+  const lines = model.fields.map(renderLongMemoryModelLine);
   return renderMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL, lines.join("\n"));
 }
 
@@ -310,9 +360,13 @@ function parsePatchLine(model, line) {
 }
 
 export function parseLongMemoryPatch(model, text = "") {
-  return splitLines(stripMarkdownFence(String(text ?? "")))
-    .filter(Boolean)
-    .map((line) => parsePatchLine(model, line));
+  const lines = splitLines(stripMarkdownFence(String(text ?? ""))).filter(Boolean);
+  if (!lines.length) throw patchError("long memory patch is empty; use NOOP for no change");
+  if (lines.includes(LONG_MEMORY_PATCH_NOOP)) {
+    if (lines.length > 1) throw patchError("NOOP must be the only long memory patch line");
+    return [];
+  }
+  return lines.map((line) => parsePatchLine(model, line));
 }
 
 function applySingleCommands(next, commands) {
@@ -378,4 +432,5 @@ export const LONG_MEMORY_PATCH_GRAMMAR = Object.freeze([
   "DELETE <list.field> <n>",
   `UPDATE <single.field>${LONG_MEMORY_VALUE_SEPARATOR}<value>`,
   "DELETE <single.field>",
+  LONG_MEMORY_PATCH_NOOP,
 ]);

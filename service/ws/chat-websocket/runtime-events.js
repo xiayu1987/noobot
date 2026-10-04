@@ -42,6 +42,12 @@ export function recordServiceWebSocketSendFailure({
   );
 }
 
+const trimRuntimeText = (value) => String(value || "").trim();
+
+function describeRuntimeError(error) {
+  return error?.message || String(error || "");
+}
+
 export function recordServiceWebSocketRuntimeError({
   sessionLogConfig,
   event = "service.websocket.runtime.failed",
@@ -53,7 +59,7 @@ export function recordServiceWebSocketRuntimeError({
   error = null,
   data = {},
 } = {}) {
-  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedSessionId = trimRuntimeText(sessionId);
   if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
   return writeRoutedRuntimeEvent(
     {
@@ -62,14 +68,14 @@ export function recordServiceWebSocketRuntimeError({
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
       event,
-      userId: String(userId || "").trim(),
+      userId: trimRuntimeText(userId),
       sessionId: normalizedSessionId,
-      parentSessionId: String(parentSessionId || "").trim(),
-      dialogProcessId: String(dialogProcessId || "").trim(),
-      turnScopeId: String(turnScopeId || "").trim(),
+      parentSessionId: trimRuntimeText(parentSessionId),
+      dialogProcessId: trimRuntimeText(dialogProcessId),
+      turnScopeId: trimRuntimeText(turnScopeId),
       data: {
         ...(data && typeof data === "object" ? data : {}),
-        error: error?.message || String(error || ""),
+        error: describeRuntimeError(error),
       },
     },
     sessionLogConfig,

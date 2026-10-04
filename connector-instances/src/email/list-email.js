@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeEmailConnectionInfo } from "./connection.js";
+import { createImapClient, normalizeEmailConnectionInfo } from "./connection.js";
 
 function normalizeListPaging(payload = {}) {
   const page = Number(payload?.page || 1);
@@ -64,16 +64,7 @@ export async function executeListEmail({ payload = {}, connectionInfo = {} } = {
   const { page, pageSize } = normalizeListPaging(payload);
   const unseenOnly = payload?.unseen_only === true;
 
-  const imapClient = new ImapFlow({
-    logger: false,
-    host: normalizedConnectionInfo.imapHost,
-    port: normalizedConnectionInfo.imapPort,
-    secure: normalizedConnectionInfo.imapSecure,
-    auth: {
-      user: normalizedConnectionInfo.username,
-      pass: normalizedConnectionInfo.password,
-    },
-  });
+  const imapClient = createImapClient(ImapFlow, normalizedConnectionInfo);
 
   await imapClient.connect();
   try {

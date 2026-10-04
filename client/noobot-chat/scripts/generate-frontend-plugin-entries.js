@@ -49,20 +49,34 @@ function toEntryModuleItem(item = {}, outputDir = "") {
   };
 }
 
+const UNSAFE_SOURCE_CHARS = {
+  "<": "\\u003C",
+  ">": "\\u003E",
+  "\u2028": "\\u2028",
+  "\u2029": "\\u2029",
+};
+
+function toSafeSourceLiteral(value) {
+  return String(JSON.stringify(value ?? null)).replace(
+    /[<>\u2028\u2029]/g,
+    (char) => UNSAFE_SOURCE_CHARS[char],
+  );
+}
+
 function buildOutputSource(entries = []) {
   const objectLines = entries.map((item) => {
     const componentLoaderLines = Object.entries(item.componentImports)
       .map(
         ([id, modulePath]) =>
-          `      ${JSON.stringify(id)}: () => import(${JSON.stringify(modulePath)})`,
+          `      ${toSafeSourceLiteral(id)}: () => import(${toSafeSourceLiteral(modulePath)})`,
       )
       .join(",\n");
     return `  {
-    pluginId: ${JSON.stringify(item.pluginId)},
-    name: ${JSON.stringify(item.name)},
-    version: ${JSON.stringify(item.version)},
-    manifest: Object.freeze(${JSON.stringify(item.manifest)}),
-    loadModule: () => import(${JSON.stringify(item.entryImportPath)}),
+    pluginId: ${toSafeSourceLiteral(item.pluginId)},
+    name: ${toSafeSourceLiteral(item.name)},
+    version: ${toSafeSourceLiteral(item.version)},
+    manifest: Object.freeze(${toSafeSourceLiteral(item.manifest)}),
+    loadModule: () => import(${toSafeSourceLiteral(item.entryImportPath)}),
     componentLoaders: Object.freeze({${componentLoaderLines ? `\n${componentLoaderLines}\n    ` : ""}}),
   }`;
   });

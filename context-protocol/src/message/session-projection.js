@@ -37,6 +37,18 @@ function optionalPlainObject(value, field) {
   return value;
 }
 
+function pickTextFields(source, fields) {
+  return Object.fromEntries(fields.map((field) => [field, source[field] || ""]));
+}
+
+function pickFlagFields(source, fields) {
+  return Object.fromEntries(fields.map((field) => [field, source[field] === true]));
+}
+
+function normalizeRawModelContent(value) {
+  return typeof value === "string" || Array.isArray(value) ? value : null;
+}
+
 export function normalizeContextTransferEnvelopes(envelopes = []) {
   if (!Array.isArray(envelopes)) {
     throw new TypeError("Session Context transferEnvelopes must be an array");
@@ -59,30 +71,27 @@ export function projectSessionRecordToContextMessage(record = {}) {
     messageUid,
     role,
     content: source.content ?? "",
-    rawModelContent:
-      typeof source.rawModelContent === "string" || Array.isArray(source.rawModelContent)
-        ? source.rawModelContent
-        : null,
-    type: source.type || "",
-    userName: source.userName || "",
-    sessionId: source.sessionId || "",
-    parentSessionId: source.parentSessionId || "",
-    dialogProcessId: source.dialogProcessId || "",
-    parentDialogProcessId: source.parentDialogProcessId || "",
-    turnScopeId: source.turnScopeId || "",
-    summarized: source.summarized === true,
-    injectedMessage: source.injectedMessage === true,
-    injectedBy: source.injectedBy || "",
-    injectedMessageType: source.injectedMessageType || "",
-    messageOrigin: source.messageOrigin || "",
-    userMetaMaterialized: source.userMetaMaterialized === true,
-    pluginMessage: source.pluginMessage === true,
-    terminalHistoryProjection: source.terminalHistoryProjection === true,
-    terminalHistoryExplanation: source.terminalHistoryExplanation === true,
-    terminalStatus: source.terminalStatus || "",
-    terminalReason: source.terminalReason || "",
+    rawModelContent: normalizeRawModelContent(source.rawModelContent),
+    ...pickTextFields(source, [
+      "type",
+      "userName",
+      "sessionId",
+      "parentSessionId",
+      "dialogProcessId",
+      "parentDialogProcessId",
+      "turnScopeId",
+    ]),
+    ...pickFlagFields(source, ["summarized", "injectedMessage"]),
+    ...pickTextFields(source, ["injectedBy", "injectedMessageType", "messageOrigin"]),
+    ...pickFlagFields(source, [
+      "userMetaMaterialized",
+      "pluginMessage",
+      "terminalHistoryProjection",
+      "terminalHistoryExplanation",
+    ]),
+    ...pickTextFields(source, ["terminalStatus", "terminalReason"]),
     tool_calls: optionalArray(source.tool_calls, "tool_calls"),
-    tool_call_id: source.tool_call_id || "",
+    ...pickTextFields(source, ["tool_call_id"]),
     modelAdditionalKwargs: optionalPlainObject(
       source.modelAdditionalKwargs,
       "modelAdditionalKwargs",

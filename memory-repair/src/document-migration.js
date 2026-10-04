@@ -5,14 +5,18 @@
  */
 import {
   MEMORY_DOCUMENT_KIND,
+  currentMemoryDocumentVersion,
   hasMemoryDocumentHeader,
+  readMemoryDocumentVersion,
   renderMemoryDocument,
 } from "@noobot/memory-protocol/document";
 import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
 import {
   LONG_MEMORY_MODEL,
+  LONG_MEMORY_MODEL_FIELDS_SINCE,
   parseLongMemoryDocument,
   parseLongMemoryModelText,
+  renderLongMemoryModelLine,
 } from "@noobot/memory-protocol/long-memory";
 import { parseExperienceModelText } from "@noobot/memory-protocol/experience/model-text";
 import { parseExperienceFieldsText } from "@noobot/memory-protocol/experience/fields";
@@ -78,6 +82,39 @@ function migrateLegacyBody(kind, text) {
   return renderMemoryDocument(kind, rest.join("\n"));
 }
 
+function documentBody(text) {
+  const normalized = String(text ?? "").replace(/\r\n?/g, "\n");
+  const newlineIndex = normalized.indexOf("\n");
+  return newlineIndex < 0 ? "" : normalized.slice(newlineIndex + 1).trim();
+}
+
+function upgradeLongMemoryModel(text) {
+  const kind = MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL;
+  const fileVersion = readMemoryDocumentVersion(kind, text);
+  const currentVersion = currentMemoryDocumentVersion(kind);
+  if (fileVersion === null || fileVersion >= currentVersion) return "";
+  const body = documentBody(text);
+  let declared;
+  try {
+    declared = parseLongMemoryModelText(renderMemoryDocument(kind, body)).byKey;
+  } catch {
+    return "";
+  }
+  const appended = [];
+  for (let version = fileVersion + 1; version <= currentVersion; version += 1) {
+    for (const key of LONG_MEMORY_MODEL_FIELDS_SINCE[version] ?? []) {
+      if (!declared.has(key))
+        appended.push(renderLongMemoryModelLine(LONG_MEMORY_MODEL.byKey.get(key)));
+    }
+  }
+  return renderMemoryDocument(kind, [body, ...appended].join("\n"));
+}
+
+function migrateDocumentText(kind, text) {
+  if (kind === MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL) return upgradeLongMemoryModel(text);
+  return migrateLegacyBody(kind, text);
+}
+
 export function migrateMemoryDocument({
   kind,
   text = "",
@@ -85,7 +122,7 @@ export function migrateMemoryDocument({
 } = {}) {
   const context = { longMemoryModel };
   if (isValid(kind, text, context)) return { status: MEMORY_REPAIR_STATUS.CANONICAL, text };
-  const migrated = migrateLegacyBody(kind, text);
+  const migrated = migrateDocumentText(kind, text);
   if (migrated && isValid(kind, migrated, context)) {
     return { status: MEMORY_REPAIR_STATUS.MIGRATED, text: migrated };
   }

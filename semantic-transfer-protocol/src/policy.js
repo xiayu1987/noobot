@@ -38,6 +38,10 @@ export function normalizeTransferPolicy({
     allowAttachment: policy.allowAttachment !== false,
   });
 }
+function assertAttachmentPersistence(policy, capabilities) {
+  if (!policy.allowAttachment || capabilities.attachmentPersistence === false)
+    throw new Error("attachment_persistence_required");
+}
 export function decideTransfer({
   content = "",
   forceAttachment = false,
@@ -53,8 +57,7 @@ export function decideTransfer({
   });
   const length = typeof content === "string" ? content.length : Number(content?.length || 0);
   if (forceAttachment || policy.preference === TRANSFER_PREFERENCE.ATTACHMENT) {
-    if (!policy.allowAttachment || capabilities.attachmentPersistence === false)
-      throw new Error("attachment_persistence_required");
+    assertAttachmentPersistence(policy, capabilities);
     return {
       mode: "attachment",
       reason: forceAttachment
@@ -65,8 +68,7 @@ export function decideTransfer({
     };
   }
   if (length > policy.maxDirectChars) {
-    if (!policy.allowAttachment || capabilities.attachmentPersistence === false)
-      throw new Error("attachment_persistence_required");
+    assertAttachmentPersistence(policy, capabilities);
     return {
       mode: "attachment",
       reason: TRANSFER_DECISION_REASON.THRESHOLD,

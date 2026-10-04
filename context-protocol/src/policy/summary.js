@@ -164,22 +164,37 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
       : collectRetainedInjectedMessageIndexes(source, policyOptions);
   if (injected && retainedInjected.has(index)) return false;
   if (injected) return true;
+  if (
+    isLatestCheckpointMessageIndex(source, index, {
+      latestCheckpointBoundaryIndexes,
+      latestCheckpointEvidenceIndexes,
+    })
+  )
+    return false;
+  if (
+    isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY) ||
+    isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)
+  ) {
+    return shouldMarkCurrentTurnSummarizedByPolicy(message);
+  }
+  return shouldMarkCurrentTurnSummarizedMessage(message);
+}
+
+function isLatestCheckpointMessageIndex(
+  source,
+  index,
+  { latestCheckpointBoundaryIndexes, latestCheckpointEvidenceIndexes },
+) {
   const latestBoundary =
     latestCheckpointBoundaryIndexes instanceof Set
       ? latestCheckpointBoundaryIndexes
       : collectLatestCheckpointBoundaryMessageIndexes(source);
+  if (latestBoundary.has(index)) return true;
   const latestEvidence =
     latestCheckpointEvidenceIndexes instanceof Set
       ? latestCheckpointEvidenceIndexes
       : collectLatestCheckpointEvidenceMessageIndexes(source);
-  if (latestBoundary.has(index) || latestEvidence.has(index)) return false;
-  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) {
-    return shouldMarkCurrentTurnSummarizedByPolicy(message);
-  }
-  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)) {
-    return shouldMarkCurrentTurnSummarizedByPolicy(message);
-  }
-  return shouldMarkCurrentTurnSummarizedMessage(message);
+  return latestEvidence.has(index);
 }
 
 function summaryScope(messages, { policyOptions }) {

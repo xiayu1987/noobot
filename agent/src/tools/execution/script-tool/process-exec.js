@@ -141,15 +141,80 @@ function createTerminationController(child, abortSignal, timeoutMs, onTerminate,
   };
 }
 
-export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
-  const outputDir = resolveOutputDir(options?.generatedDataRoot, "executeScriptForeground");
+async function openOutputFiles(sessionDir, kind) {
+  const outputDir = resolveOutputDir(sessionDir, kind);
   await mkdir(outputDir, { recursive: true });
   const stdoutPath = path.join(outputDir, "stdout.txt");
   const stderrPath = path.join(outputDir, "stderr.txt");
   const stdoutStream = createWriteStream(stdoutPath);
   const stderrStream = createWriteStream(stderrPath);
-  const stdoutFinished = waitForWritableFinished(stdoutStream);
-  const stderrFinished = waitForWritableFinished(stderrStream);
+  return {
+    outputDir,
+    stdoutPath,
+    stderrPath,
+    stdoutStream,
+    stderrStream,
+    streams: [stdoutStream, stderrStream],
+    finished: [waitForWritableFinished(stdoutStream), waitForWritableFinished(stderrStream)],
+  };
+}
+
+async function finalizeOutputFiles(files) {
+  await Promise.all([
+    normalizeCommandOutputFile(files.stdoutPath),
+    normalizeCommandOutputFile(files.stderrPath),
+  ]);
+  const stdoutStat = await stat(files.stdoutPath).catch(() => ({ size: 0 }));
+  const stderrStat = await stat(files.stderrPath).catch(() => ({ size: 0 }));
+  return {
+    stdoutBytes: Number(stdoutStat?.size || 0),
+    stderrBytes: Number(stderrStat?.size || 0),
+  };
+}
+
+function startTermination(child, files, abortSignal, timeoutMs, options, onSettle) {
+  const termination = createTerminationController(
+    child,
+    abortSignal,
+    timeoutMs,
+    options?.onTerminate,
+    () => {
+      detachChildOutput(child, files.streams);
+      onSettle();
+    },
+  );
+  const outputPipeOptions = {
+    maxBytes: OUTPUT_ARTIFACT_MAX_BYTES,
+    onLimit: () => termination.terminate("output_limit"),
+  };
+  return { termination, outputPipeOptions };
+}
+
+function resolveTerminationMessage(termination, spawnError, timeoutMs) {
+  if (spawnError?.message) return spawnError.message;
+  if (termination.outputLimitExceeded) {
+    return `command output exceeded ${OUTPUT_ARTIFACT_MAX_BYTES} bytes`;
+  }
+  if (termination.timedOut) return `command timed out after ${Number(timeoutMs)}ms`;
+  return termination.aborted ? "command aborted" : "";
+}
+
+function resolveResultCode(termination, code, spawnError) {
+  if (termination.outputLimitExceeded) return SCRIPT_RESULT_CODE.OUTPUT_LIMIT_EXCEEDED;
+  if (termination.timedOut) return 124;
+  if (termination.aborted) return 130;
+  if (Number.isFinite(Number(code))) return Number(code);
+  return Number(spawnError?.code || 0) || 0;
+}
+
+function pickOutputLimitFields(termination) {
+  return termination.outputLimitExceeded
+    ? { outputLimitExceeded: true, outputLimitBytes: OUTPUT_ARTIFACT_MAX_BYTES }
+    : {};
+}
+
+export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
+  const files = await openOutputFiles(options?.generatedDataRoot, "executeScriptForeground");
 
   return new Promise((resolve, reject) => {
     const child = spawnCommandProcess(cmd, cwd);
@@ -159,30 +224,23 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
     const stderrCapture = { bytes: 0 };
     let spawnError = null;
     let settled = false;
-    const termination = createTerminationController(
+    const { termination, outputPipeOptions } = startTermination(
       child,
+      files,
       abortSignal,
       timeoutMs,
-      options?.onTerminate,
-      () => {
-        detachChildOutput(child, [stdoutStream, stderrStream]);
-        settle(null, null);
-      },
+      options,
+      () => settle(null, null),
     );
-
-    const outputPipeOptions = {
-      maxBytes: OUTPUT_ARTIFACT_MAX_BYTES,
-      onLimit: () => termination.terminate("output_limit"),
-    };
     pipeReadableToWritable(
       child.stdout,
-      stdoutStream,
+      files.stdoutStream,
       (chunk) => appendCapture(stdoutChunks, chunk, stdoutCapture, FOREGROUND_CAPTURE_BYTES),
       outputPipeOptions,
     );
     pipeReadableToWritable(
       child.stderr,
-      stderrStream,
+      files.stderrStream,
       (chunk) => appendCapture(stderrChunks, chunk, stderrCapture, FOREGROUND_CAPTURE_BYTES),
       outputPipeOptions,
     );
@@ -194,16 +252,9 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       settled = true;
       const finalize = async () => {
         termination.dispose();
-        detachChildOutput(child, [stdoutStream, stderrStream]);
-        await Promise.allSettled([stdoutFinished, stderrFinished]);
-        await Promise.all([
-          normalizeCommandOutputFile(stdoutPath),
-          normalizeCommandOutputFile(stderrPath),
-        ]);
-        const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
-        const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
-        const stdoutBytes = Number(stdoutStat?.size || 0);
-        const stderrBytes = Number(stderrStat?.size || 0);
+        detachChildOutput(child, files.streams);
+        await Promise.allSettled(files.finished);
+        const { stdoutBytes, stderrBytes } = await finalizeOutputFiles(files);
         const outputOverflow =
           stdoutBytes > FOREGROUND_CAPTURE_BYTES || stderrBytes > FOREGROUND_CAPTURE_BYTES;
         const stdoutBuffer = Buffer.concat(stdoutChunks);
@@ -214,47 +265,24 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
         const rawStderr = decodeCommandOutput(
           outputOverflow ? stderrBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES) : stderrBuffer,
         );
-        const fallbackStderr =
-          spawnError?.message ||
-          (termination.outputLimitExceeded
-            ? `command output exceeded ${OUTPUT_ARTIFACT_MAX_BYTES} bytes`
-            : termination.timedOut
-              ? `command timed out after ${Number(timeoutMs)}ms`
-              : termination.aborted
-                ? "command aborted"
-                : "");
-        const resultCode = termination.outputLimitExceeded
-          ? SCRIPT_RESULT_CODE.OUTPUT_LIMIT_EXCEEDED
-          : termination.timedOut
-            ? 124
-            : termination.aborted
-              ? 130
-              : Number.isFinite(Number(code))
-                ? Number(code)
-                : Number(spawnError?.code || 0) || 0;
         const result = {
-          code: resultCode,
+          code: resolveResultCode(termination, code, spawnError),
           stdout,
-          stderr: rawStderr || fallbackStderr,
+          stderr: rawStderr || resolveTerminationMessage(termination, spawnError, timeoutMs),
           ...(signal ? { signal } : {}),
-          ...(termination.outputLimitExceeded
-            ? {
-                outputLimitExceeded: true,
-                outputLimitBytes: OUTPUT_ARTIFACT_MAX_BYTES,
-              }
-            : {}),
+          ...pickOutputLimitFields(termination),
           ...(outputOverflow
             ? {
                 outputOverflow: true,
-                stdoutPath,
-                stderrPath,
+                stdoutPath: files.stdoutPath,
+                stderrPath: files.stderrPath,
                 stdoutBytes,
                 stderrBytes,
               }
             : {}),
         };
         if (!outputOverflow)
-          await rm(outputDir, { recursive: true, force: true }).catch(() => undefined);
+          await rm(files.outputDir, { recursive: true, force: true }).catch(() => undefined);
         return result;
       };
       void finalize().then(resolve, reject);
@@ -316,36 +344,22 @@ function pipeReadableToWritable(readable, writable, onChunk = null, options = {}
 }
 
 export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
-  const outputDir = resolveOutputDir(options?.generatedDataRoot, "executeScriptBackground");
-  await mkdir(outputDir, { recursive: true });
-  const stdoutPath = path.join(outputDir, "stdout.txt");
-  const stderrPath = path.join(outputDir, "stderr.txt");
-  const stdoutStream = createWriteStream(stdoutPath);
-  const stderrStream = createWriteStream(stderrPath);
-  const stdoutFinished = waitForWritableFinished(stdoutStream);
-  const stderrFinished = waitForWritableFinished(stderrStream);
+  const files = await openOutputFiles(options?.generatedDataRoot, "executeScriptBackground");
 
   return await new Promise((resolve, reject) => {
     const child = spawnCommandProcess(cmd, cwd);
     let spawnError = null;
     let settled = false;
-    const termination = createTerminationController(
+    const { termination, outputPipeOptions } = startTermination(
       child,
+      files,
       abortSignal,
       timeoutMs,
-      options?.onTerminate,
-      () => {
-        detachChildOutput(child, [stdoutStream, stderrStream]);
-        settle(null, null);
-      },
+      options,
+      () => settle(null, null),
     );
-
-    const outputPipeOptions = {
-      maxBytes: OUTPUT_ARTIFACT_MAX_BYTES,
-      onLimit: () => termination.terminate("output_limit"),
-    };
-    pipeReadableToWritable(child.stdout, stdoutStream, null, outputPipeOptions);
-    pipeReadableToWritable(child.stderr, stderrStream, null, outputPipeOptions);
+    pipeReadableToWritable(child.stdout, files.stdoutStream, null, outputPipeOptions);
+    pipeReadableToWritable(child.stderr, files.stderrStream, null, outputPipeOptions);
     child.on("error", (error) => {
       spawnError = error;
     });
@@ -354,9 +368,9 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
       settled = true;
       const finalize = async () => {
         termination.dispose();
-        detachChildOutput(child, [stdoutStream, stderrStream]);
+        detachChildOutput(child, files.streams);
         try {
-          await Promise.all([stdoutFinished, stderrFinished]);
+          await Promise.all(files.finished);
         } catch (error) {
           spawnError ||= error;
         }
@@ -367,43 +381,19 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
           termination.aborted
         ) {
           const fallbackMessage =
-            spawnError?.message ||
-            (termination.outputLimitExceeded
-              ? `command output exceeded ${OUTPUT_ARTIFACT_MAX_BYTES} bytes`
-              : termination.timedOut
-                ? `command timed out after ${Number(timeoutMs)}ms`
-                : "command aborted");
-          const existingStderr = await readFile(stderrPath, "utf8").catch(() => "");
-          if (!existingStderr) await writeFile(stderrPath, fallbackMessage, "utf8");
+            resolveTerminationMessage(termination, spawnError, timeoutMs) || "command aborted";
+          const existingStderr = await readFile(files.stderrPath, "utf8").catch(() => "");
+          if (!existingStderr) await writeFile(files.stderrPath, fallbackMessage, "utf8");
         }
-        await Promise.all([
-          normalizeCommandOutputFile(stdoutPath),
-          normalizeCommandOutputFile(stderrPath),
-        ]);
-        const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
-        const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
-        const resultCode = termination.outputLimitExceeded
-          ? SCRIPT_RESULT_CODE.OUTPUT_LIMIT_EXCEEDED
-          : termination.timedOut
-            ? 124
-            : termination.aborted
-              ? 130
-              : Number.isFinite(Number(code))
-                ? Number(code)
-                : Number(spawnError?.code || 0) || 0;
+        const { stdoutBytes, stderrBytes } = await finalizeOutputFiles(files);
         return {
-          code: resultCode,
+          code: resolveResultCode(termination, code, spawnError),
           ...(signal ? { signal } : {}),
-          ...(termination.outputLimitExceeded
-            ? {
-                outputLimitExceeded: true,
-                outputLimitBytes: OUTPUT_ARTIFACT_MAX_BYTES,
-              }
-            : {}),
-          stdoutPath,
-          stderrPath,
-          stdoutBytes: Number(stdoutStat?.size || 0),
-          stderrBytes: Number(stderrStat?.size || 0),
+          ...pickOutputLimitFields(termination),
+          stdoutPath: files.stdoutPath,
+          stderrPath: files.stderrPath,
+          stdoutBytes,
+          stderrBytes,
         };
       };
       void finalize().then(resolve, reject);

@@ -17,6 +17,18 @@ import {
 } from "../workflow/prompts.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "./acceptance-status.js";
 
+function toRefinementTarget(item = {}) {
+  return { index: Number(item.id), task: String(item.content || "").trim() };
+}
+
+function pickKnownRefinementTargets(indexes, mainPlanMap) {
+  if (!Array.isArray(indexes)) return [];
+  return indexes
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && mainPlanMap.has(item))
+    .map((item) => mainPlanMap.get(item));
+}
+
 function formatSubPlansText(subPlans = [], targetId = 0) {
   if (!Array.isArray(subPlans) || !subPlans.length) return "\uff08\u7a7a\uff09";
   return (
@@ -89,58 +101,27 @@ export function createPlanRevisionHelpers({
     const mainPlans = parseMainPlansFromPlanText(normalizedBucket.planText);
     if (!mainPlans.length) return [];
     const mainPlanMap = new Map(
-      mainPlans.map((item = {}) => [
-        Number(item.id),
-        { index: Number(item.id), task: String(item.content || "").trim() },
-      ]),
+      mainPlans.map((item) => [Number(item.id), toRefinementTarget(item)]),
     );
-    const preferredTargets = Array.isArray(preferredTargetMainStepIndexes)
-      ? preferredTargetMainStepIndexes
-      : [];
-    const normalizedPreferredTargets = preferredTargets
-      .map((item) => Number(item))
-      .filter((item) => Number.isFinite(item) && mainPlanMap.has(item));
-    if (normalizedPreferredTargets.length) {
-      return normalizedPreferredTargets.map((item) => mainPlanMap.get(item));
-    }
-
-    const pendingTargetIndexes = Array.isArray(
+    const candidateIndexLists = [
+      preferredTargetMainStepIndexes,
       state?.pending?.planRefinementContext?.targetMainStepIndexes,
-    )
-      ? state.pending.planRefinementContext.targetMainStepIndexes
-      : [];
-    const normalizedPendingTargets = pendingTargetIndexes
-      .map((item) => Number(item))
-      .filter((item) => Number.isFinite(item) && mainPlanMap.has(item));
-    if (normalizedPendingTargets.length) {
-      return normalizedPendingTargets.map((item) => mainPlanMap.get(item));
-    }
-
-    const nextPhaseTargetIndexes = Array.isArray(normalizedBucket?.nextPhase?.checklistIndexes)
-      ? normalizedBucket.nextPhase.checklistIndexes
-      : [];
-    const normalizedNextPhaseTargets = nextPhaseTargetIndexes
-      .map((item) => Number(item))
-      .filter((item) => Number.isFinite(item) && mainPlanMap.has(item));
-    if (normalizedNextPhaseTargets.length) {
-      return normalizedNextPhaseTargets.map((item) => mainPlanMap.get(item));
+      normalizedBucket?.nextPhase?.checklistIndexes,
+    ];
+    for (const indexes of candidateIndexLists) {
+      const targets = pickKnownRefinementTargets(indexes, mainPlanMap);
+      if (targets.length) return targets;
     }
 
     const doc = parsePlanDocumentFromText(normalizedBucket.planText);
     const targetsWithoutSubPlans = mainPlans
       .filter((item = {}) => {
-        const id = Number(item?.id);
-        const subPlans = Array.isArray(doc?.subPlansByMainId?.[String(id)])
-          ? doc.subPlansByMainId[String(id)]
-          : [];
-        return subPlans.length === 0;
+        const subPlans = doc?.subPlansByMainId?.[String(Number(item?.id))];
+        return !Array.isArray(subPlans) || subPlans.length === 0;
       })
-      .map((item = {}) => ({ index: Number(item.id), task: String(item.content || "").trim() }));
+      .map(toRefinementTarget);
     if (targetsWithoutSubPlans.length) return targetsWithoutSubPlans;
-
-    const target = mainPlans[0] || null;
-    if (!target) return [];
-    return [{ index: Number(target.id), task: String(target.content || "").trim() }];
+    return [toRefinementTarget(mainPlans[0])];
   }
 
   function appendRawPatchText(bucket = {}, patchText = "", source = "") {

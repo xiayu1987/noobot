@@ -16,6 +16,6 @@
     "@noobot/sanitize": "file:../sanitize"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test"
   }
 }

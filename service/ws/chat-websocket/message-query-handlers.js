@@ -41,6 +41,19 @@ function sendAuthoritativeTurnSnapshot(sendEvent, command, snapshot) {
   sendEvent(TURN_SNAPSHOT_WIRE_EVENT, createTurnSnapshotEnvelope(snapshot));
 }
 
+const trimText = (value) => String(value || "").trim();
+
+function resolveTurnCommandIdentity(authInfo, command) {
+  const identity = {
+    userId: trimText(authInfo?.userId),
+    sessionId: trimText(command.identity?.sessionId),
+    parentSessionId: trimText(command.identity?.parentSessionId),
+  };
+  const commandId = trimText(command.commandId);
+  const valid = Boolean(identity.userId && identity.sessionId && commandId);
+  return { identity, commandId, terminalLimit: command.options?.terminalLimit, valid };
+}
+
 export function createMessageQueryHandlers({
   state,
   authInfo,
@@ -65,19 +78,18 @@ export function createMessageQueryHandlers({
   };
 
   const handleSnapshotGet = async (command) => {
-    const userId = String(authInfo?.userId || "").trim();
-    const sessionId = String(command.identity?.sessionId || "").trim();
-    const commandId = String(command.commandId || "").trim();
-    if (!userId || !sessionId || !commandId) {
+    const { identity, commandId, terminalLimit, valid } = resolveTurnCommandIdentity(
+      authInfo,
+      command,
+    );
+    if (!valid) {
       sendFailedCommandReceipt(sendEvent, command, { code: "invalid_snapshot_request" });
       return;
     }
     const recovered = await recoverTurnFinalize?.({
-      userId,
-      sessionId,
-      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
+      ...identity,
       commandId: `${commandId}:recovery`,
-      terminalLimit: command.options?.terminalLimit,
+      terminalLimit,
     });
     if (
       !recovered?.recovered &&
@@ -88,11 +100,9 @@ export function createMessageQueryHandlers({
       return;
     }
     await recoverSnapshotOrphan?.({
-      userId,
-      sessionId,
-      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
+      ...identity,
       commandId: `${commandId}:orphan-recovery`,
-      terminalLimit: command.options?.terminalLimit,
+      terminalLimit,
     });
     const bot = resolveBot();
     const reader = bot?.getTurnLifecycleSnapshot;
@@ -101,12 +111,10 @@ export function createMessageQueryHandlers({
       return;
     }
     const result = await reader.call(bot, {
-      userId,
-      sessionId,
-      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
+      ...identity,
       commandId,
       knownSequence: command.options?.knownSequence,
-      terminalLimit: command.options?.terminalLimit,
+      terminalLimit,
     });
     if (!result?.found) {
       sendFailedCommandReceipt(sendEvent, command, {
@@ -156,20 +164,15 @@ export function createMessageQueryHandlers({
   };
 
   const handleFinalize = async (command) => {
-    const userId = String(authInfo?.userId || "").trim();
-    const sessionId = String(command.identity?.sessionId || "").trim();
-    const commandId = String(command.commandId || "").trim();
-    if (!userId || !sessionId || !commandId) {
+    const { identity, commandId, terminalLimit, valid } = resolveTurnCommandIdentity(
+      authInfo,
+      command,
+    );
+    if (!valid) {
       sendFailedCommandReceipt(sendEvent, command, { code: "invalid_finalize_request" });
       return;
     }
-    const result = await recoverTurnFinalize?.({
-      userId,
-      sessionId,
-      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
-      commandId,
-      terminalLimit: command.options?.terminalLimit,
-    });
+    const result = await recoverTurnFinalize?.({ ...identity, commandId, terminalLimit });
     if (!result?.recovered && result?.reason !== "no_recoverable_finalize") {
       sendFailedCommandReceipt(sendEvent, command, {
         code: result?.reason || "finalize_recovery_failed",

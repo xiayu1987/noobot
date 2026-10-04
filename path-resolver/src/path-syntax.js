@@ -28,12 +28,8 @@ function decodeFileUrl(value = "") {
   }
 }
 
-export function normalizePathForPlatform(
-  value = "",
-  { platform = "", trailingSlash = false } = {},
-) {
+export function normalizePathForPlatform(value = "", { trailingSlash = false } = {}) {
   const decoded = decodeFileUrl(value);
-  const resolvedPlatform = detectPathPlatform(decoded, platform);
   let normalized = decoded.replaceAll("\\", "/");
   const prefix = normalized.startsWith("//") ? "//" : normalized.startsWith("/") ? "/" : "";
   const body = normalized.slice(prefix.length);
@@ -46,12 +42,11 @@ export function normalizePathForPlatform(
   }
   normalized = `${prefix}${parts.join("/")}` || prefix;
   if (trailingSlash && normalized && !normalized.endsWith("/")) normalized += "/";
-  if (resolvedPlatform === PLATFORM.WINDOWS) return normalized;
   return normalized;
 }
 
 export function isAbsolutePathForPlatform(value = "", platform = "") {
-  const normalized = normalizePathForPlatform(value, { platform });
+  const normalized = normalizePathForPlatform(value);
   const resolvedPlatform = detectPathPlatform(value, platform);
   return resolvedPlatform === PLATFORM.WINDOWS
     ? /^(?:[a-z]:\/|\/\/[^/]+\/[^/]+)/i.test(normalized)

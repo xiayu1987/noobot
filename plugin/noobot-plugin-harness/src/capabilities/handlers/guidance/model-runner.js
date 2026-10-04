@@ -111,6 +111,38 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   return runPlanUpdateAfterSummary(ctx, meta);
 }
 
+function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, state, modelMessages }) {
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
+  const revisionContextMessages = buildPlanChecklistContextMessages({
+    locale,
+    planText: bucket?.planText || "",
+    bucket,
+    ctx,
+  })
+    .map((item = {}) => String(item?.content || "").trim())
+    .filter(Boolean);
+  return buildCapabilityProtocolModelMessages({
+    locale,
+    agentMessages: modelMessages,
+    contextMessages: revisionContextMessages,
+    protocolPrompt: buildPlanningRevisionPrompt(locale, bucket, state),
+    workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, {
+      programmingMode,
+      textMode,
+      dynamicPolicyPrompt,
+    }),
+    responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
+      programmingMode,
+      textMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
+    }),
+  });
+}
+
 export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessages = null } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -124,10 +156,6 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     return false;
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "summary",
@@ -138,32 +166,13 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
   if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "revision" })) {
     return changed;
   }
-  const revisionTask = buildPlanningRevisionPrompt(locale, bucket, state);
-  const revisionContextMessages = buildPlanChecklistContextMessages({
-    locale,
-    planText: bucket?.planText || "",
-    bucket,
+  const revisionMessagesFinal = buildPlanRevisionModelMessages({
     ctx,
-  })
-    .map((item = {}) => String(item?.content || "").trim())
-    .filter(Boolean);
-  const revisionWorkflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  });
-  const revisionMessagesFinal = buildCapabilityProtocolModelMessages({
+    meta,
     locale,
-    agentMessages: modelMessages,
-    contextMessages: revisionContextMessages,
-    protocolPrompt: revisionTask,
-    workflowPolicyPrompt: revisionWorkflowPolicyPrompt,
-    responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
-      programmingMode,
-      textMode,
-      dynamicPolicyPrompt,
-      includeWorkflowPolicy: false,
-    }),
+    bucket,
+    state,
+    modelMessages,
   });
   let revisionResponse = null;
   try {

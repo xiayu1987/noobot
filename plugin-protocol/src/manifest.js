@@ -125,6 +125,12 @@ const surfaceContributionSchema = z
   })
   .strict();
 
+const CONTRIBUTION_ID_UNIQUENESS_RULES = Object.freeze([
+  ["service", "routes", "route ids must be unique"],
+  ["agent", "tools", "tool contribution ids must be unique"],
+  ["frontend", "extensions", "frontend contribution ids must be unique"],
+]);
+
 export const pluginManifestSchema = z
   .object({
     protocolVersion: z.literal(PLUGIN_PROTOCOL_VERSION),
@@ -291,29 +297,11 @@ export const pluginManifestSchema = z
         });
       }
     }
-    const routeIds = (manifest.contributes.service?.routes || []).map((item) => item.id);
-    if (new Set(routeIds).size !== routeIds.length) {
-      context.addIssue({
-        code: "custom",
-        path: ["contributes", "service", "routes"],
-        message: "route ids must be unique",
-      });
-    }
-    const toolIds = (manifest.contributes.agent?.tools || []).map((item) => item.id);
-    if (new Set(toolIds).size !== toolIds.length) {
-      context.addIssue({
-        code: "custom",
-        path: ["contributes", "agent", "tools"],
-        message: "tool contribution ids must be unique",
-      });
-    }
-    const extensionIds = (manifest.contributes.frontend?.extensions || []).map((item) => item.id);
-    if (new Set(extensionIds).size !== extensionIds.length) {
-      context.addIssue({
-        code: "custom",
-        path: ["contributes", "frontend", "extensions"],
-        message: "frontend contribution ids must be unique",
-      });
+    for (const [surface, key, message] of CONTRIBUTION_ID_UNIQUENESS_RULES) {
+      const ids = (manifest.contributes[surface]?.[key] || []).map((item) => item.id);
+      if (new Set(ids).size !== ids.length) {
+        context.addIssue({ code: "custom", path: ["contributes", surface, key], message });
+      }
     }
     validateFrontendExtensionModules(manifest.contributes.frontend?.extensions, context);
   });

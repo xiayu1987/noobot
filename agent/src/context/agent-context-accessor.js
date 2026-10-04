@@ -30,6 +30,24 @@ export function getSystemRuntimeFromRuntime(runtime = {}) {
   return systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {};
 }
 
+function getRuntimeRunConfig(runtime, systemRuntime) {
+  if (runtime?.runConfig && typeof runtime.runConfig === "object") return runtime.runConfig;
+  if (systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object") {
+    return systemRuntime.runConfig;
+  }
+  return {};
+}
+
+export function resolveRuntimeTurnScopeId(runtime = {}) {
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  return String(
+    systemRuntime?.turnScopeId ||
+      systemRuntime?.config?.turnScopeId ||
+      getRuntimeRunConfig(runtime, systemRuntime)?.turnScopeId ||
+      "",
+  ).trim();
+}
+
 export function getSystemRuntimeFromAgentContext(scope = {}) {
   return getSystemRuntimeFromRuntime(getRuntimeFromAgentContext(scope));
 }

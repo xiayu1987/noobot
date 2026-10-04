@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeEmailConnectionInfo } from "./connection.js";
+import { createImapClient, normalizeEmailConnectionInfo } from "./connection.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 const BINARY_MIME_TYPE = "application/octet-stream";
@@ -76,6 +76,31 @@ async function saveEmailAttachments({ attachmentHandler = null, parsedEmail = nu
   };
 }
 
+function toBufferChunk(sourceChunk) {
+  if (Buffer.isBuffer(sourceChunk)) return sourceChunk;
+  if (sourceChunk instanceof Uint8Array) return Buffer.from(sourceChunk);
+  return Buffer.from(String(sourceChunk || ""));
+}
+
+function isIterableSource(sourceValue) {
+  return (
+    typeof sourceValue?.[Symbol.asyncIterator] === "function" ||
+    typeof sourceValue?.[Symbol.iterator] === "function"
+  );
+}
+
+export async function readEmailSourceBuffer(sourceValue) {
+  if (!sourceValue) return Buffer.from("");
+  if (typeof sourceValue === "string") return Buffer.from(sourceValue);
+  if (sourceValue instanceof Uint8Array) return toBufferChunk(sourceValue);
+  if (!isIterableSource(sourceValue)) return Buffer.from(String(sourceValue || ""));
+  const sourceChunks = [];
+  for await (const sourceChunk of sourceValue) {
+    if (sourceChunk) sourceChunks.push(toBufferChunk(sourceChunk));
+  }
+  return Buffer.concat(sourceChunks);
+}
+
 export async function executeReadEmail({
   payload = {},
   connectionInfo = {},
@@ -86,16 +111,7 @@ export async function executeReadEmail({
   const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
   const folder = String(payload?.folder || "INBOX").trim() || "INBOX";
   const uid = Number(payload?.uid || 0);
-  const imapClient = new ImapFlow({
-    logger: false,
-    host: normalizedConnectionInfo.imapHost,
-    port: normalizedConnectionInfo.imapPort,
-    secure: normalizedConnectionInfo.imapSecure,
-    auth: {
-      user: normalizedConnectionInfo.username,
-      pass: normalizedConnectionInfo.password,
-    },
-  });
+  const imapClient = createImapClient(ImapFlow, normalizedConnectionInfo);
   await imapClient.connect();
   try {
     const mailboxLock = await imapClient.getMailboxLock(folder);
@@ -143,42 +159,7 @@ export async function executeReadEmail({
         throw new Error(`Email was not found by uid: ${resolvedUid}`);
       }
       resolvedUid = Number(fetchedMessages?.uid || resolvedUid);
-      const rawSourceBuffer = await (async () => {
-        const sourceValue = fetchedMessages?.source;
-        if (!sourceValue) return Buffer.from("");
-        if (Buffer.isBuffer(sourceValue)) return sourceValue;
-        if (typeof sourceValue === "string") return Buffer.from(sourceValue);
-        if (sourceValue instanceof Uint8Array) return Buffer.from(sourceValue);
-        if (typeof sourceValue?.[Symbol.asyncIterator] === "function") {
-          const sourceChunks = [];
-          for await (const sourceChunk of sourceValue) {
-            if (!sourceChunk) continue;
-            sourceChunks.push(
-              Buffer.isBuffer(sourceChunk)
-                ? sourceChunk
-                : sourceChunk instanceof Uint8Array
-                  ? Buffer.from(sourceChunk)
-                  : Buffer.from(String(sourceChunk || "")),
-            );
-          }
-          return Buffer.concat(sourceChunks);
-        }
-        if (typeof sourceValue?.[Symbol.iterator] === "function") {
-          const sourceChunks = [];
-          for (const sourceChunk of sourceValue) {
-            if (!sourceChunk) continue;
-            sourceChunks.push(
-              Buffer.isBuffer(sourceChunk)
-                ? sourceChunk
-                : sourceChunk instanceof Uint8Array
-                  ? Buffer.from(sourceChunk)
-                  : Buffer.from(String(sourceChunk || "")),
-            );
-          }
-          return Buffer.concat(sourceChunks);
-        }
-        return Buffer.from(String(sourceValue || ""));
-      })();
+      const rawSourceBuffer = await readEmailSourceBuffer(fetchedMessages?.source);
       const parsedEmail = await simpleParser(rawSourceBuffer);
       const persistedAttachments = await saveEmailAttachments({
         attachmentHandler,

@@ -22,19 +22,26 @@ export function createTurnIdentity({
   return identity;
 }
 
-export function resolveTurnIdentity(value = {}, fallback = {}) {
-  if (isEventProtocolEnvelope(value)) {
-    return createTurnIdentity({
-      sessionId: value?.identity?.sessionId,
-      turnScopeId: value?.identity?.turnScopeId,
-      dialogProcessId: value?.payload?.dialogProcessId,
-    });
-  }
+function resolveEnvelopeTurnIdentity(value = {}) {
+  return createTurnIdentity({
+    sessionId: value?.identity?.sessionId,
+    turnScopeId: value?.identity?.turnScopeId,
+    dialogProcessId: value?.payload?.dialogProcessId,
+  });
+}
+
+function resolveRecordTurnIdentity(value = {}, fallback = {}) {
   return createTurnIdentity({
     sessionId: value?.sessionId || fallback?.sessionId,
     turnScopeId: value?.turnScopeId || value?.statusTurnScopeId || fallback?.turnScopeId,
     dialogProcessId: value?.dialogProcessId || fallback?.dialogProcessId,
   });
+}
+
+export function resolveTurnIdentity(value = {}, fallback = {}) {
+  return isEventProtocolEnvelope(value)
+    ? resolveEnvelopeTurnIdentity(value)
+    : resolveRecordTurnIdentity(value, fallback);
 }
 
 export function createTurnKey(identity = {}) {

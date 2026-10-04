@@ -138,6 +138,50 @@ function resolveDslDefaultNodeNames(locale = "zh-CN") {
   return getWorkflowDslDefaultNodeNames(normalizeDslLocale(locale));
 }
 
+function promoteBranchAndMergeStateTypes(semantic) {
+  const outgoingCount = new Map();
+  const incomingCount = new Map();
+  for (const edge of semantic.flowtos) {
+    outgoingCount.set(edge.from, Number(outgoingCount.get(edge.from) || 0) + 1);
+    incomingCount.set(edge.to, Number(incomingCount.get(edge.to) || 0) + 1);
+  }
+  for (const node of semantic.nodes) {
+    if (
+      String(node?.type || DSL_TYPES.NODE_STATE)
+        .trim()
+        .toLowerCase() !== DSL_TYPES.NODE_STATE
+    ) {
+      continue;
+    }
+    const id = String(node?.id || "").trim();
+    if (Number(outgoingCount.get(id) || 0) > 1 && Number(node.stateType) === 0) {
+      node.stateType = 2;
+    }
+    if (Number(incomingCount.get(id) || 0) > 1 && Number(node.stateType) === 1) {
+      node.stateType = 3;
+    }
+  }
+}
+
+const DSL_AUTO_TYPES = Object.freeze([
+  DSL_TYPES.AUTO_SUBMIT,
+  DSL_TYPES.AUTO_AUDIT,
+  DSL_TYPES.AUTO_BACK,
+  DSL_TYPES.AUTO_STOP,
+]);
+
+function parseAutoAction(attrs, { lineNo, locale, fail }) {
+  const type = String(attrs.type || DSL_TYPES.AUTO_SUBMIT)
+    .trim()
+    .toLowerCase();
+  if (!DSL_AUTO_TYPES.includes(type)) {
+    fail(lineNo, dslMessage(DSL_ERROR_MESSAGE.AUTO_TYPE_INVALID, { locale, params: { type } }));
+  }
+  const stepRaw = attrs.stepIndex ?? attrs.step ?? "0";
+  const stepIndex = Number.isFinite(Number(stepRaw)) ? Math.floor(Number(stepRaw)) : 0;
+  return { type, stepIndex };
+}
+
 function parseWorkflowDslTextWithOptions(text = "", options = {}) {
   const locale = normalizeDslLocale(options?.locale || "en-US");
   const { startName, endName } = resolveDslDefaultNodeNames(locale);
@@ -239,25 +283,7 @@ function parseWorkflowDslTextWithOptions(text = "", options = {}) {
 
     if (head === DSL_PROTOCOL.CMD_AUTO) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
-      const type = String(attrs.type || DSL_TYPES.AUTO_SUBMIT)
-        .trim()
-        .toLowerCase();
-      if (
-        ![
-          DSL_TYPES.AUTO_SUBMIT,
-          DSL_TYPES.AUTO_AUDIT,
-          DSL_TYPES.AUTO_BACK,
-          DSL_TYPES.AUTO_STOP,
-        ].includes(type)
-      ) {
-        failWithLocale(
-          lineNo,
-          dslMessage(DSL_ERROR_MESSAGE.AUTO_TYPE_INVALID, { locale, params: { type } }),
-        );
-      }
-      const stepRaw = attrs.stepIndex ?? attrs.step ?? "0";
-      const stepIndex = Number.isFinite(Number(stepRaw)) ? Math.floor(Number(stepRaw)) : 0;
-      semantic.autoActions.push({ type, stepIndex });
+      semantic.autoActions.push(parseAutoAction(attrs, { lineNo, locale, fail: failWithLocale }));
       continue;
     }
 
@@ -284,28 +310,7 @@ function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     }
   }
 
-  const outgoingCount = new Map();
-  const incomingCount = new Map();
-  for (const edge of semantic.flowtos) {
-    outgoingCount.set(edge.from, Number(outgoingCount.get(edge.from) || 0) + 1);
-    incomingCount.set(edge.to, Number(incomingCount.get(edge.to) || 0) + 1);
-  }
-  for (const node of semantic.nodes) {
-    if (
-      String(node?.type || DSL_TYPES.NODE_STATE)
-        .trim()
-        .toLowerCase() !== DSL_TYPES.NODE_STATE
-    ) {
-      continue;
-    }
-    const id = String(node?.id || "").trim();
-    if (Number(outgoingCount.get(id) || 0) > 1 && Number(node.stateType) === 0) {
-      node.stateType = 2;
-    }
-    if (Number(incomingCount.get(id) || 0) > 1 && Number(node.stateType) === 1) {
-      node.stateType = 3;
-    }
-  }
+  promoteBranchAndMergeStateTypes(semantic);
 
   if (!semantic.nodes.some((n) => n.id === DSL_DEFAULTS.START_NODE_ID)) {
     semantic.nodes.unshift({

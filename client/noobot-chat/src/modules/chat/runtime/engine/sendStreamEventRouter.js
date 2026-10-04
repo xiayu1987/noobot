@@ -178,6 +178,24 @@ function routeAuthoritativeRuntimeEvent({
   return routed;
 }
 
+function pickTerminalRouteContext(context) {
+  return {
+    activeSession: context.activeSession,
+    activeSessionId: context.activeSessionId,
+    applyConversationState: context.applyConversationState,
+    applyRunStateEvent: context.applyRunStateEvent,
+    botMessage: context.botMessage,
+    classifyRealtimeLog: context.classifyRealtimeLog,
+    clearPendingInteraction: context.clearPendingInteraction,
+    foldMessagesForView: context.foldMessagesForView,
+    makeViewMessage: context.makeViewMessage,
+    mergeAssistantAttachments: context.mergeAssistantAttachments,
+    navigateOnFirstResponseOnce: context.navigateOnFirstResponseOnce,
+    requestedTextStreaming: context.requestedTextStreaming,
+    streamState: context.streamState,
+  };
+}
+
 export function createSendStreamEventHandler(context) {
   const {
     activeSession,
@@ -290,21 +308,7 @@ export function createSendStreamEventHandler(context) {
     )
       return;
     const ignoredSubSessionEvent = isIgnoredSubSessionEvent(event, data);
-    const terminalContext = {
-      activeSession,
-      activeSessionId,
-      applyConversationState,
-      applyRunStateEvent,
-      botMessage: botMsg,
-      classifyRealtimeLog,
-      clearPendingInteraction,
-      foldMessagesForView,
-      makeViewMessage,
-      mergeAssistantAttachments,
-      navigateOnFirstResponseOnce,
-      requestedTextStreaming,
-      streamState,
-    };
+    const terminalContext = pickTerminalRouteContext(context);
     routePostProjectionEvent(event, data, {
       activeSession,
       activeSessionId,

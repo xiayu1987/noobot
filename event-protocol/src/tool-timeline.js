@@ -38,20 +38,26 @@ export function resolveCanonicalToolTimelineStatus(entry = {}) {
   return entry.success === false ? "failed" : "completed";
 }
 
+function pickPayloadAttachments(payload = {}) {
+  return Array.isArray(payload?.attachments) && payload.attachments.length
+    ? { attachments: payload.attachments }
+    : {};
+}
+
 function createToolEventFact(envelope = {}) {
+  const identity = envelope?.identity || {};
+  const ordering = envelope?.ordering || {};
   return {
-    eventId: text(envelope?.identity?.eventId),
-    sequence: Number(envelope?.ordering?.sequence || 0),
-    sequenceScopeId: text(envelope?.ordering?.scopeId),
-    sequenceDomain: text(envelope?.ordering?.domain),
+    eventId: text(identity.eventId),
+    sequence: Number(ordering.sequence || 0),
+    sequenceScopeId: text(ordering.scopeId),
+    sequenceDomain: text(ordering.domain),
     authority: "authoritative",
     timestamp: text(envelope.occurredAt),
-    sessionId: text(envelope?.identity?.sessionId),
+    sessionId: text(identity.sessionId),
     dialogProcessId: text(envelope?.payload?.dialogProcessId),
-    turnScopeId: text(envelope?.identity?.turnScopeId),
-    ...(Array.isArray(envelope?.payload?.attachments) && envelope.payload.attachments.length
-      ? { attachments: envelope.payload.attachments }
-      : {}),
+    turnScopeId: text(identity.turnScopeId),
+    ...pickPayloadAttachments(envelope?.payload),
   };
 }
 

@@ -4,18 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 
+function trimText(value) {
+  return String(value || "").trim();
+}
+
 export function normalizeEmailConnectionInfo(connectionInfo = {}) {
   const info = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
-  const username = String(info?.username || "").trim();
-  const password = String(info?.password || "").trim();
-  const smtpHost = String(info?.smtp_host || "").trim();
-  const imapHost = String(info?.imap_host || "").trim();
+  const username = trimText(info.username);
+  const password = trimText(info.password);
+  const smtpHost = trimText(info.smtp_host);
+  const imapHost = trimText(info.imap_host);
   const smtpPort = Number(info.smtp_port || 587);
   const imapPort = Number(info.imap_port || 993);
   const smtpSecure = info.smtp_secure === true;
   const imapSecure = info.imap_secure !== false;
-  const fromEmail = String(info?.from_email || username).trim();
-  const toEmail = String(info?.to_email || "").trim();
+  const fromEmail = trimText(info.from_email || username);
+  const toEmail = trimText(info.to_email);
 
   if (!username || !password) {
     throw new Error("Email username and password are required");
@@ -36,4 +40,17 @@ export function normalizeEmailConnectionInfo(connectionInfo = {}) {
     fromEmail,
     toEmail,
   };
+}
+
+export function createImapClient(ImapFlow, normalizedConnectionInfo) {
+  return new ImapFlow({
+    logger: false,
+    host: normalizedConnectionInfo.imapHost,
+    port: normalizedConnectionInfo.imapPort,
+    secure: normalizedConnectionInfo.imapSecure,
+    auth: {
+      user: normalizedConnectionInfo.username,
+      pass: normalizedConnectionInfo.password,
+    },
+  });
 }

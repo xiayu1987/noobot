@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import nodePath from "node:path";
-import {
-  detectPathPlatform,
-  isAbsolutePathForPlatform,
-  normalizePathForPlatform,
-} from "./path-syntax.js";
+import { isAbsolutePathForPlatform, normalizePathForPlatform } from "./path-syntax.js";
 
 export {
   detectPathPlatform,
@@ -66,14 +62,13 @@ export function isAbsolutePathAnyPlatform(value = "", platform = "") {
 }
 
 export function resolvePathUnderRoot(rootPath = "", targetPath = "", { platform = "" } = {}) {
-  const normalizedTarget = normalizePathForPlatform(targetPath, { platform });
+  const normalizedTarget = normalizePathForPlatform(targetPath);
   if (!rootPath || isAbsolutePathAnyPlatform(normalizedTarget, platform)) return normalizedTarget;
   return joinPathForPlatform(rootPath, normalizedTarget);
 }
 
 export function joinPathForPlatform(basePath = "", ...segments) {
-  const platform = detectPathPlatform(basePath);
-  return normalizePathForPlatform([basePath, ...segments].filter(Boolean).join("/"), { platform });
+  return normalizePathForPlatform([basePath, ...segments].filter(Boolean).join("/"));
 }
 
 export function normalizeSlashPath(value = "") {

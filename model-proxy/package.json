@@ -7,7 +7,7 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "test": "node --test __tests__/*.test.js",
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "pm2:start": "PM2_HOME=../.pm2 npx pm2 start ../ecosystem.noobot.config.cjs --only noobot-model-proxy",

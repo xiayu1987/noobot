@@ -5,7 +5,8 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeEmailConnectionInfo } from "../src/email/connection.js";
+import { createImapClient, normalizeEmailConnectionInfo } from "../src/email/connection.js";
+import { readEmailSourceBuffer } from "../src/email/read-email.js";
 import { executeEmailOperation } from "../src/email/email-connector-channel.js";
 
 test("email connection normalization preserves explicit fields and defaults ports", () => {
@@ -39,5 +40,40 @@ test("email operation rejects unknown operations without network access", async 
     code: 1,
     stdout: "",
     stderr: "Email operation is invalid",
+  });
+});
+
+test("email source buffer normalizes every supported source shape", async () => {
+  const buffer = Buffer.from("raw");
+  assert.equal((await readEmailSourceBuffer(null)).length, 0);
+  assert.equal(await readEmailSourceBuffer(buffer), buffer);
+  assert.equal((await readEmailSourceBuffer("text")).toString(), "text");
+  assert.equal((await readEmailSourceBuffer(new Uint8Array([104, 105]))).toString(), "hi");
+  const syncChunks = ["a", null, new Uint8Array([98]), Buffer.from("c")];
+  assert.equal((await readEmailSourceBuffer(syncChunks)).toString(), "abc");
+  async function* asyncChunks() {
+    yield Buffer.from("x");
+    yield "";
+    yield 7;
+  }
+  assert.equal((await readEmailSourceBuffer(asyncChunks())).toString(), "x7");
+  assert.equal((await readEmailSourceBuffer({ value: 1 })).toString(), "[object Object]");
+});
+
+test("imap client factory maps normalized connection fields", () => {
+  const client = createImapClient(
+    class {
+      constructor(options) {
+        this.options = options;
+      }
+    },
+    { imapHost: "imap.example.com", imapPort: 993, imapSecure: true, username: "u", password: "p" },
+  );
+  assert.deepEqual(client.options, {
+    logger: false,
+    host: "imap.example.com",
+    port: 993,
+    secure: true,
+    auth: { user: "u", pass: "p" },
   });
 });

@@ -65,13 +65,7 @@ export function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connect
   };
 }
 
-export function cleanTerminalOutputForLLM(
-  output = {},
-  { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
-) {
-  const source = output && typeof output === "object" && !Array.isArray(output) ? output : {};
-  const stdout = tailClip(normalizeTerminalText(source?.stdout || ""), maxChars);
-  const stderr = tailClip(normalizeTerminalText(source?.stderr || ""), maxChars);
+function buildClippedStreamsResult(source, stdout, stderr) {
   return {
     code: safeNum(source?.code),
     stdout: stdout.text,
@@ -89,26 +83,26 @@ export function cleanTerminalOutputForLLM(
   };
 }
 
+function toOutputSource(output) {
+  return output && typeof output === "object" && !Array.isArray(output) ? output : {};
+}
+
+export function cleanTerminalOutputForLLM(
+  output = {},
+  { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
+) {
+  const source = toOutputSource(output);
+  const stdout = tailClip(normalizeTerminalText(source?.stdout || ""), maxChars);
+  const stderr = tailClip(normalizeTerminalText(source?.stderr || ""), maxChars);
+  return buildClippedStreamsResult(source, stdout, stderr);
+}
+
 export function cleanDatabaseOutputForLLM(
   output = {},
   { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
 ) {
-  const source = output && typeof output === "object" && !Array.isArray(output) ? output : {};
+  const source = toOutputSource(output);
   const stdout = tailClip(compactStdout(source?.stdout || ""), maxChars);
   const stderr = tailClip(normalizeText(source?.stderr || ""), maxChars);
-  return {
-    code: safeNum(source?.code),
-    stdout: stdout.text,
-    stderr: stderr.text,
-    truncated: stdout.truncated || stderr.truncated,
-    truncate_limit_chars: Math.max(
-      Number(stdout.truncateLimitChars || 0),
-      Number(stderr.truncateLimitChars || 0),
-    ),
-    stdout_truncated_chars: Number(stdout.truncatedChars || 0),
-    stderr_truncated_chars: Number(stderr.truncatedChars || 0),
-    truncated_chars_total: Number(stdout.truncatedChars || 0) + Number(stderr.truncatedChars || 0),
-    stdout_original_length: stdout.originalLength,
-    stderr_original_length: stderr.originalLength,
-  };
+  return buildClippedStreamsResult(source, stdout, stderr);
 }

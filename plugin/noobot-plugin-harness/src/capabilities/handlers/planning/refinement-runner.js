@@ -48,6 +48,26 @@ const applyRevisedPlanFromText = planRevisionHelpers.applyRevisedPlanFromText;
 const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRefinementPrompt;
 const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
 
+function relayRefinementNextPhase(ctx, bucket, locale) {
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "next_phase_plan_refinement",
+    content: buildNextPhaseRelayContent(bucket, locale, "refinement"),
+    dedupe: true,
+  });
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "next_phase_plan_refinement_followup",
+    content: [
+      buildPostPlanUserFollowupPrompt(locale, "refinement"),
+      formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    dedupe: true,
+  });
+}
+
 export async function runPlanningRefinementBySeparateModel(
   ctx = {},
   meta = {},
@@ -180,38 +200,23 @@ export async function runPlanningRefinementBySeparateModel(
     dedupe: true,
     transferPayload: normalizeTransferPayload(refinementAttachments),
   });
+  const appliedTargetMainStepIndexes = refinementTargetMainSteps.map((item) => item.index);
   const refinementApplied = applyRevisedPlanFromText(ctx, refinementText, {
     source,
     stage: "refinement",
-    targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index),
+    targetMainStepIndexes: appliedTargetMainStepIndexes,
   });
   if (refinementApplied) {
-    relaySeparateModelOutputAsUserMessage(ctx, {
-      locale,
-      purpose: "next_phase_plan_refinement",
-      content: buildNextPhaseRelayContent(bucket, locale, "refinement"),
-      dedupe: true,
-    });
-    relaySeparateModelOutputAsUserMessage(ctx, {
-      locale,
-      purpose: "next_phase_plan_refinement_followup",
-      content: [
-        buildPostPlanUserFollowupPrompt(locale, "refinement"),
-        formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-      dedupe: true,
-    });
+    relayRefinementNextPhase(ctx, bucket, locale);
     return {
       applied: true,
       status: "completed",
-      targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index),
+      targetMainStepIndexes: appliedTargetMainStepIndexes,
     };
   }
   return {
     applied: false,
     status: "invalid_refinement_payload",
-    targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index),
+    targetMainStepIndexes: appliedTargetMainStepIndexes,
   };
 }

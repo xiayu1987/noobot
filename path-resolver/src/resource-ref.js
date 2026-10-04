@@ -22,6 +22,14 @@ export function createResourceId() {
   return `res_${randomUUID().replaceAll("-", "")}`;
 }
 
+function normalizeCapabilities(capabilities = {}) {
+  return {
+    read: capabilities?.read === true,
+    write: capabilities?.write === true,
+    scriptInput: capabilities?.scriptInput === true,
+  };
+}
+
 export function createResourceRef({
   resourceId = createResourceId(),
   kind = "file",
@@ -46,11 +54,7 @@ export function createResourceRef({
     attachment: attachment ? clone(attachment) : null,
     size: Number.isFinite(Number(size)) ? Number(size) : null,
     mimeType: text(mimeType) || "application/octet-stream",
-    capabilities: {
-      read: capabilities?.read === true,
-      write: capabilities?.write === true,
-      scriptInput: capabilities?.scriptInput === true,
-    },
+    capabilities: normalizeCapabilities(capabilities),
   };
   assertResourceRef(result);
   return Object.freeze(result);

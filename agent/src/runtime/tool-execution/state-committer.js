@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
+import {
+  getSystemRuntimeFromRuntime,
+  resolveRuntimeTurnScopeId,
+} from "../../context/agent-context-accessor.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_PHASE_STATUS, HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
@@ -21,22 +25,8 @@ import {
 } from "@noobot/session-protocol";
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
-  const runConfig =
-    runtime?.runConfig && typeof runtime.runConfig === "object"
-      ? runtime.runConfig
-      : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
-        ? systemRuntime.runConfig
-        : {};
-  const turnScopeId = String(
-    systemRuntime?.turnScopeId ||
-      systemRuntime?.config?.turnScopeId ||
-      runConfig?.turnScopeId ||
-      "",
-  ).trim();
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const turnScopeId = resolveRuntimeTurnScopeId(runtime);
   const resolvedDialogProcessId = String(
     dialogProcessId || systemRuntime?.dialogProcessId || "",
   ).trim();
