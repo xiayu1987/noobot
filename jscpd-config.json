@@ -19,6 +19,6 @@
   "minTokens": 70,
   "threshold": 3,
   "reporters": ["console", "json"],
-  "output": "/project/report",
+  "output": "report",
   "absolute": true
 }
