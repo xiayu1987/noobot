@@ -78,18 +78,27 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const patchGrammar = (params.patchGrammar || []).join("\n");
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
       return [
-        "You are a long-term memory refiner. Long-term memory records only the user's personal information and preference facts.",
+        "You are a long-term memory refiner. Long-term memory records the user's stable profile: personal information, interests and personality, plus their work role, long-term goals, usual tools and methods, work habits, quality standards, and collaboration expectations toward the assistant.",
         `[Field model] One field per line: field | kind (used/max) | description\n${fieldModel}`,
         "Kind rules: single holds one value, UPDATE overwrites it and DELETE clears it; list:N is an array edited by item number and must never exceed N items.",
         `[Patch protocol] One command per line. Output commands only; no markdown, JSON, or explanations. Separate field and value with the full-width colon "：":\n${patchGrammar}`,
         'Numbering rule: <n> always refers to the item\'s current number in "Existing long-term memory"; each number of a list may appear once per batch; never use ADD or item numbers on single fields.',
         "Capacity rule: when a list is full, merge near-duplicates with UPDATE or DELETE the least valuable item before ADD; a batch whose result exceeds the limit is rejected as a whole.",
-        "Selection rule: keep only stable, long-term, recurring, or explicitly stated personal information and preferences; do not record specific tasks, bugs, files, implementation steps, or temporary project facts; ignore anything outside the field model.",
-        "Update rule: UPDATE when new information corrects old information, DELETE when old information expires or is denied, never ADD near-duplicates; output nothing when no change is needed.",
+        "Selection rule: keep only stable, long-term, recurring, or explicitly stated information and preferences. Task-focused conversations are profile sources too: ways of working the user repeatedly shows, and norms, requirements, or corrections they state explicitly, should be distilled into the underlying lasting tendency under the matching fields. Do not record specific task content, one-off decisions, temporary state, or details that only matter for the current matter; ignore anything outside the field model.",
+        "Abstraction rule: each value is one short abstract statement (about 10 words or fewer) describing a lasting tendency, principle, or standard of the user, not a retelling of the conversation or a practice. Step one level up from the concrete practice and record the principle it reflects, never operation steps, ordering, or checklist items; values about preferences, habits, methods, or standards must not use proper names (languages, frameworks, software, platforms, brands, organizations, people, works), only their category; basic profile facts such as city, occupation, or industry may keep the necessary name. No value may include numbers, dates, amounts, thresholds, files, or events, or quote the user. Keep one entry per tendency and merge near-duplicates into a broader one. When unsure whether something is abstract enough or holds long term, leave it out and prefer NOOP.",
+        "Classification rule: choose fields by what the information means; personal habits about daily life, travel, or spending must not go into work fields; ignore information with no fitting field.",
+        "Update rule: UPDATE when new information corrects old information, DELETE when old information expires or is denied, never ADD near-duplicates; when no change is needed output exactly one line NOOP, never an empty reply, and never mix NOOP with other commands.",
         `Existing long-term memory:\n${existingLongMemory || "(empty)"}`,
         `New short-term memory chunks:\n${promptPayload}`,
       ].join("\n\n");
     },
+    patchCorrectionPrompt: (params = {}) =>
+      [
+        String(params.prompt || "").trim(),
+        `Previous output:\n${String(params.previousOutput || "").trim() || "(empty)"}`,
+        `Validation error: ${String(params.error || "").trim()}`,
+        "The previous output failed patch protocol validation. Output the complete patch again strictly following the patch protocol; when no change is needed output exactly one line NOOP.",
+      ].join("\n\n"),
     dailyExperiencePrompt: (params = {}) => {
       const knownDomainText = String(params.knownDomainText || "").trim();
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);

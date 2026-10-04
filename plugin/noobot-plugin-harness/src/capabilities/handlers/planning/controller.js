@@ -39,16 +39,16 @@ function resolvePlanningTurnThresholds(ctx = {}, meta = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full;
-  const scoped = scopedMode?.planning || {};
+  const harness = meta?.harness || {};
   const planUpdate = resolveGatedThresholdWithSource({
     meta,
-    runtimeValue: meta?.harness?.planning?.planUpdate?.triggerTurnsThreshold,
-    scopedValue: scoped?.planUpdate?.triggerTurnsThreshold,
+    runtimeValue: harness.planning?.planUpdate?.triggerTurnsThreshold,
+    scopedValue: scopedMode?.planning?.planUpdate?.triggerTurnsThreshold,
     defaultValue: DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   });
   const phaseAcceptance = resolveGatedThresholdWithSource({
     meta,
-    runtimeValue: meta?.harness?.acceptance?.phase?.triggerTurnsThreshold,
+    runtimeValue: harness.acceptance?.phase?.triggerTurnsThreshold,
     scopedValue: scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
     defaultValue: DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   });

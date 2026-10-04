@@ -5,7 +5,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 
 import { processToolResults } from "../../../src/runtime/turn/response-processor.js";
 import { settleToolCallInTurn } from "../../../src/runtime/tool-execution/tool-runner.js";
@@ -19,12 +21,15 @@ import {
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
+const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-tool-batch-"));
+test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
+
 function createRuntime(abortSignal = null) {
   const runtime = {
     abortSignal,
     userId: "admin",
-    basePath: os.tmpdir(),
-    globalConfig: { workspaceRoot: os.tmpdir() },
+    basePath: workspaceRoot,
+    globalConfig: { workspaceRoot },
     runConfig: {
       executionId: "run-tool-batch",
       turnScopeId: "turn-tool-batch",

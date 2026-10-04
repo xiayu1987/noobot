@@ -61,9 +61,10 @@ test("model requires unique valid fields", () => {
 });
 
 test("canonical model declares the built-in long memory fields", () => {
-  assert.equal(LONG_MEMORY_MODEL.fields.length, 18);
+  assert.equal(LONG_MEMORY_MODEL.fields.length, 24);
   assert.equal(LONG_MEMORY_MODEL.byKey.get("history_preferences.common_topics").maxItems, 8);
   assert.equal(LONG_MEMORY_MODEL.byKey.get("personal_info.location").kind, "single");
+  assert.equal(LONG_MEMORY_MODEL.byKey.get("work.assistant_collaboration").maxItems, 5);
 });
 
 test("document round-trips and rejects malformed content", () => {
@@ -130,6 +131,13 @@ test("list commands use snapshot indexes and enforce limits", () => {
 });
 
 test("patch shape must match field kind", () => {
+  assert.deepEqual(parseLongMemoryPatch(model, "NOOP"), []);
+  assert.deepEqual(parseLongMemoryPatch(model, "```\nNOOP\n```"), []);
+  rejectsWith(LONG_MEMORY_ERROR_CODE.PATCH_INVALID, () => parseLongMemoryPatch(model, ""));
+  rejectsWith(LONG_MEMORY_ERROR_CODE.PATCH_INVALID, () => parseLongMemoryPatch(model, "  \n "));
+  rejectsWith(LONG_MEMORY_ERROR_CODE.PATCH_INVALID, () =>
+    parseLongMemoryPatch(model, "NOOP\nUPDATE personal.city：上海"),
+  );
   const invalid = [
     "ADD personal.city：上海",
     "UPDATE personal.city 1：上海",

@@ -13,6 +13,7 @@ import { StorageManager } from "./storage/index.js";
 import { ShortMemoryManager } from "./short-memory/index.js";
 import { LongMemoryManager } from "./long-memory/index.js";
 import {
+  LONG_MEMORY_ERROR_CODE,
   LONG_MEMORY_PATCH_GRAMMAR,
   renderLongMemoryBody,
   renderLongMemoryFieldsForPrompt,
@@ -114,14 +115,24 @@ export class MemoryManager {
       }) || "",
     ).trim();
     if (!prompt) throw new Error("long memory prompt is not configured");
-    const output = await invokeModel({
-      prompt,
-      flow: "memory.summary",
-      purpose: "memory_consolidation",
-    });
+    const request = { flow: "memory.summary", purpose: "memory_consolidation" };
+    const output = await invokeModel({ ...request, prompt });
     assertNotAborted(abortSignal);
-    const { changed } = await this.longMemory.update(basePath, state, output.text);
-    return changed;
+    try {
+      return (await this.longMemory.update(basePath, state, output.text)).changed;
+    } catch (error) {
+      if (error?.code !== LONG_MEMORY_ERROR_CODE.PATCH_INVALID) throw error;
+      const correctionPrompt = String(
+        promptI18n.patchCorrectionPrompt({
+          prompt,
+          previousOutput: output.text,
+          error: error.message,
+        }),
+      ).trim();
+      const retried = await invokeModel({ ...request, prompt: correctionPrompt });
+      assertNotAborted(abortSignal);
+      return (await this.longMemory.update(basePath, state, retried.text)).changed;
+    }
   }
 
   async maybeSummarize({

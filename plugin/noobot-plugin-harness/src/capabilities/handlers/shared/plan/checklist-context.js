@@ -8,7 +8,6 @@ import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { parsePlanDocumentFromText, renderPlanDocument } from "./text-protocol.js";
 import { getPlanAcceptanceStatusMap } from "./acceptance-status.js";
 
-
 function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
   const statusMap = getPlanAcceptanceStatusMap(bucket);
   if (!Object.keys(statusMap).length) return String(planText || "").trim();
@@ -20,7 +19,8 @@ function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
       const match = text.match(/^\s*(\d+(?:\.\d+)?)(?:\.|\s)\s+(.+?)\s*$/);
       if (!match) return text;
       const planId = String(match[1] || "").trim();
-      const acceptance = statusMap[planId] && typeof statusMap[planId] === "object" ? statusMap[planId] : null;
+      const acceptance =
+        statusMap[planId] && typeof statusMap[planId] === "object" ? statusMap[planId] : null;
       if (!acceptance) return text;
       const taskStatus = String(acceptance.taskStatus || "").trim() || "pending";
       const source = String(acceptance.source || "").trim();
@@ -101,8 +101,12 @@ function buildCompletePlanTextFromChecklist(checklist = []) {
   }
 
   const comparePlanId = (left, right) => {
-    const a = String(left || "").split(".").map((item) => Number(item));
-    const b = String(right || "").split(".").map((item) => Number(item));
+    const a = String(left || "")
+      .split(".")
+      .map((item) => Number(item));
+    const b = String(right || "")
+      .split(".")
+      .map((item) => Number(item));
     const length = Math.max(a.length, b.length);
     for (let index = 0; index < length; index += 1) {
       const delta = Number(a[index] || 0) - Number(b[index] || 0);
@@ -117,7 +121,9 @@ function buildCompletePlanTextFromChecklist(checklist = []) {
       const lines = [`${id}. ${content}`];
       const subSteps = subStepsByMainId.get(id);
       if (subSteps) {
-        for (const [subId, subContent] of [...subSteps.entries()].sort((a, b) => comparePlanId(a[0], b[0]))) {
+        for (const [subId, subContent] of [...subSteps.entries()].sort((a, b) =>
+          comparePlanId(a[0], b[0]),
+        )) {
           lines.push(`${subId} ${subContent}`);
         }
       }
@@ -127,10 +133,7 @@ function buildCompletePlanTextFromChecklist(checklist = []) {
     .trim();
 }
 
-export function resolveCurrentTaskGoalText({
-  bucket = {},
-  currentTaskGoal = "",
-} = {}) {
+export function resolveCurrentTaskGoalText({ bucket = {}, currentTaskGoal = "" } = {}) {
   const explicit = String(currentTaskGoal || "").trim();
   if (explicit) return explicit;
   return String(bucket?.currentTaskGoal || "").trim();
@@ -152,13 +155,31 @@ function prependCurrentTaskGoalToPlanText({
     locale,
     HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLAN_CHECKLIST_TASKS_HEADER,
   );
-  return [
-    goalHeader,
-    goal,
-    plan ? "" : "",
-    plan ? tasksHeader : "",
-    plan,
-  ].filter((item) => String(item || "").length > 0).join("\n").trim();
+  return [goalHeader, goal, plan ? "" : "", plan ? tasksHeader : "", plan]
+    .filter((item) => String(item || "").length > 0)
+    .join("\n")
+    .trim();
+}
+
+function renderBucketPlanDocument(bucket = {}) {
+  return hasRenderablePlanDocument(bucket?.planDocument)
+    ? String(renderPlanDocument(bucket.planDocument) || "").trim()
+    : "";
+}
+
+function renderNumberedPlanText(normalizedPlanText = "") {
+  const parsed = parsePlanDocumentFromText(normalizedPlanText);
+  const hasNumberedPlans = Array.isArray(parsed?.mainPlans) && parsed.mainPlans.length > 0;
+  const rendered = hasNumberedPlans ? String(renderPlanDocument(parsed) || "").trim() : "";
+  return rendered || normalizedPlanText;
+}
+
+function resolveChecklistPlanText(planText = "", bucket = {}) {
+  const renderedDocument = renderBucketPlanDocument(bucket);
+  if (renderedDocument) return renderedDocument;
+  const normalizedPlanText = String(planText || bucket?.planText || "").trim();
+  if (normalizedPlanText) return renderNumberedPlanText(normalizedPlanText);
+  return buildCompletePlanTextFromChecklist(bucket?.taskChecklist || []);
 }
 
 export function resolveCompletePlanChecklistText({
@@ -168,28 +189,9 @@ export function resolveCompletePlanChecklistText({
   locale = LOCALE.ZH_CN,
 } = {}) {
   const taskGoal = resolveCurrentTaskGoalText({ bucket, currentTaskGoal });
-  const renderedDocument = hasRenderablePlanDocument(bucket?.planDocument)
-    ? String(renderPlanDocument(bucket.planDocument) || "").trim()
-    : "";
-  if (renderedDocument) {
-    return prependCurrentTaskGoalToPlanText({ locale, planText: renderedDocument, currentTaskGoal: taskGoal });
-  }
-
-  const normalizedPlanText = String(planText || bucket?.planText || "").trim();
-  if (normalizedPlanText) {
-    const parsed = parsePlanDocumentFromText(normalizedPlanText);
-    const hasNumberedPlans = Array.isArray(parsed?.mainPlans) && parsed.mainPlans.length > 0;
-    if (hasNumberedPlans) {
-      const rendered = String(renderPlanDocument(parsed) || "").trim();
-      if (rendered) {
-        return prependCurrentTaskGoalToPlanText({ locale, planText: rendered, currentTaskGoal: taskGoal });
-      }
-    }
-    return prependCurrentTaskGoalToPlanText({ locale, planText: normalizedPlanText, currentTaskGoal: taskGoal });
-  }
   return prependCurrentTaskGoalToPlanText({
     locale,
-    planText: buildCompletePlanTextFromChecklist(bucket?.taskChecklist || []),
+    planText: resolveChecklistPlanText(planText, bucket),
     currentTaskGoal: taskGoal,
   });
 }

@@ -15,6 +15,54 @@ export const AUTHORITY_EVENT_CONSUMER = Object.freeze({
 
 const KNOWN_CONSUMERS = new Set(Object.values(AUTHORITY_EVENT_CONSUMER));
 
+function findInvalidAuthorityEvent(events) {
+  for (const item of events) {
+    const eventId = clean(item?.eventId);
+    const validation = validateProtocolEvent(item?.envelope);
+    if (!eventId || eventId !== clean(item?.envelope?.identity?.eventId) || !validation.valid) {
+      return validation;
+    }
+  }
+  return null;
+}
+
+async function publishAuthorityEvents(events, publishEvent) {
+  const acknowledgements = [];
+  for (const item of events) {
+    const sent = await publishEvent(item.envelope.identity.eventType, item.envelope);
+    if (sent !== true) return { acknowledgements, sendFailed: true };
+    acknowledgements.push({
+      eventId: clean(item.eventId),
+      orderingDomain: clean(item.envelope.ordering.domain),
+      orderingScopeId: clean(item.envelope.ordering.scopeId),
+      sequence: Number(item.envelope.ordering.sequence),
+    });
+  }
+  return { acknowledgements, sendFailed: false };
+}
+
+async function compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession) {
+  if (typeof bot.compactAuthorityEvents !== "function") return;
+  const now = Date.now();
+  const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${clean(
+    identity.persistenceScope?.scopeId,
+  )}`;
+  const lastCompactAt = lastCompactAtBySession.get(accountingKey);
+  if (
+    lastCompactAt !== undefined &&
+    now - lastCompactAt < TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs
+  ) {
+    return;
+  }
+  await bot.compactAuthorityEvents({
+    ...identity,
+    retainDeliveredAfter: new Date(
+      now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
+    ).toISOString(),
+  });
+  lastCompactAtBySession.set(accountingKey, now);
+}
+
 export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumerId } = {}) {
   const normalizedConsumerId = clean(consumerId);
   if (!KNOWN_CONSUMERS.has(normalizedConsumerId)) {
@@ -57,17 +105,14 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
       }
       const events = Array.isArray(pending.events) ? pending.events : [];
       if (!events.length) break;
-      for (const item of events) {
-        const eventId = clean(item?.eventId);
-        const validation = validateProtocolEvent(item?.envelope);
-        if (!eventId || eventId !== clean(item?.envelope?.identity?.eventId) || !validation.valid) {
-          return {
-            dispatched: false,
-            reason: "invalid_authority_event_envelope",
-            delivered,
-            errors: validation.errors,
-          };
-        }
+      const invalid = findInvalidAuthorityEvent(events);
+      if (invalid) {
+        return {
+          dispatched: false,
+          reason: "invalid_authority_event_envelope",
+          delivered,
+          errors: invalid.errors,
+        };
       }
       if (typeof publishEvent !== "function") {
         return { dispatched: false, reason: "authority_event_transport_unavailable", delivered };
@@ -84,21 +129,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
           delivered,
         };
       }
-      const acknowledgements = [];
-      let sendFailed = false;
-      for (const item of events) {
-        const sent = await publishEvent(item.envelope.identity.eventType, item.envelope);
-        if (sent !== true) {
-          sendFailed = true;
-          break;
-        }
-        acknowledgements.push({
-          eventId: clean(item.eventId),
-          orderingDomain: clean(item.envelope.ordering.domain),
-          orderingScopeId: clean(item.envelope.ordering.scopeId),
-          sequence: Number(item.envelope.ordering.sequence),
-        });
-      }
+      const { acknowledgements, sendFailed } = await publishAuthorityEvents(events, publishEvent);
       if (acknowledgements.length) {
         const acknowledged = await bot.acknowledgeAuthorityEvents({
           ...identity,
@@ -118,25 +149,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent, consumer
         return { dispatched: false, reason: "authority_event_send_failed", delivered };
       }
     }
-    if (typeof bot.compactAuthorityEvents === "function") {
-      const now = Date.now();
-      const accountingKey = `${identity.userId}\u0000${identity.sessionId}\u0000${clean(
-        persistenceScope?.scopeId,
-      )}`;
-      const lastCompactAt = lastCompactAtBySession.get(accountingKey);
-      if (
-        lastCompactAt === undefined ||
-        now - lastCompactAt >= TIME_THRESHOLDS.agent.authorityOutboxCompactIntervalMs
-      ) {
-        await bot.compactAuthorityEvents({
-          ...identity,
-          retainDeliveredAfter: new Date(
-            now - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
-          ).toISOString(),
-        });
-        lastCompactAtBySession.set(accountingKey, now);
-      }
-    }
+    await compactAuthorityEventsIfDue(bot, identity, lastCompactAtBySession);
     return { dispatched: true, delivered };
   };
 

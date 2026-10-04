@@ -88,6 +88,37 @@ function collectExternalChanges(existingRecord, before, beforeSha256) {
   return changes;
 }
 
+function createMutationError(message, code, status) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
+function assertMutationPreconditions({
+  before,
+  beforeSha256,
+  expectedSha256,
+  operation,
+  logicalPath,
+}) {
+  if (expectedSha256 !== undefined && beforeSha256 !== expectedSha256) {
+    const error = createMutationError(
+      `file changed since it was loaded: ${logicalPath}; read the file again and rebuild the patch`,
+      "file_mutation_conflict",
+      409,
+    );
+    error.details = { filePath: logicalPath, expectedSha256, actualSha256: beforeSha256 };
+    throw error;
+  }
+  if (operation === "create" && before.exists) {
+    throw createMutationError("target file already exists", "file_mutation_already_exists", 409);
+  }
+  if (operation === "delete" && !before.exists) {
+    throw createMutationError("target file does not exist", "file_mutation_not_found", 404);
+  }
+}
+
 async function applyFileMutationInternal({
   filePath,
   logicalPath,
@@ -114,28 +145,13 @@ async function applyFileMutationInternal({
   }
   const before = await readExisting(filePath);
   const beforeSha256 = before.exists ? digest(before.buffer) : null;
-  if (expectedSha256 !== undefined && beforeSha256 !== expectedSha256) {
-    const error = new Error(
-      `file changed since it was loaded: ${normalizedLogicalPath}; read the file again and rebuild the patch`,
-    );
-    error.code = "file_mutation_conflict";
-    error.status = 409;
-    error.details = { filePath: normalizedLogicalPath, expectedSha256, actualSha256: beforeSha256 };
-    throw error;
-  }
-  if (normalizedOperation === "create" && before.exists) {
-    const error = new Error("target file already exists");
-    error.code = "file_mutation_already_exists";
-    error.status = 409;
-    throw error;
-  }
-  if (normalizedOperation === "delete" && !before.exists) {
-    const error = new Error("target file does not exist");
-    error.code = "file_mutation_not_found";
-    error.status = 404;
-    throw error;
-  }
-
+  assertMutationPreconditions({
+    before,
+    beforeSha256,
+    expectedSha256,
+    operation: normalizedOperation,
+    logicalPath: normalizedLogicalPath,
+  });
   const nextContent = content === null ? null : String(content);
   const afterBuffer = nextContent === null ? Buffer.alloc(0) : Buffer.from(nextContent, "utf8");
   const afterIsText = nextContent !== null && !afterBuffer.includes(0);

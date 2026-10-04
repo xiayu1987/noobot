@@ -11,79 +11,112 @@ const IDE_TOKEN_COOKIE_KEY = "noobot_ide_token";
 const OPENVSCODE_TOKEN_COOKIE_KEY = "vscode-tkn";
 
 function buildProxyHeaders(headers = {}, targetPort = 0, targetHost = DEFAULT_HOST) {
-  const nextHeaders = { ...(headers || {}) }; nextHeaders.host = `${targetHost}:${targetPort}`; delete nextHeaders[IDE_TOKEN_HEADER_KEY]; return nextHeaders;
+  const nextHeaders = { ...(headers || {}) };
+  nextHeaders.host = `${targetHost}:${targetPort}`;
+  delete nextHeaders[IDE_TOKEN_HEADER_KEY];
+  return nextHeaders;
 }
 function parseCookieHeader(cookieHeader = "") {
-  const result = new Map(); for (const chunk of String(cookieHeader || "").split(";")) { const i = chunk.indexOf("="); if (i <= 0) continue; const key = chunk.slice(0, i).trim(); if (key) result.set(key, chunk.slice(i + 1).trim()); } return result;
+  const result = new Map();
+  for (const chunk of String(cookieHeader || "").split(";")) {
+    const i = chunk.indexOf("=");
+    if (i <= 0) continue;
+    const key = chunk.slice(0, i).trim();
+    if (key) result.set(key, chunk.slice(i + 1).trim());
+  }
+  return result;
 }
-function buildTokenCookieValue(instance = {}) { return `${String(instance?.basePath || "").trim()}:${String(instance?.connectionToken || "").trim()}`; }
+function buildTokenCookieValue(instance = {}) {
+  return `${String(instance?.basePath || "").trim()}:${String(instance?.connectionToken || "").trim()}`;
+}
 function normalizeProxyPath(url = "", queryKeyToStrip = "") {
-  try { const parsed = new URL(String(url || "/"), "http://localhost"); if (queryKeyToStrip) parsed.searchParams.delete(queryKeyToStrip); return `${parsed.pathname}${parsed.search}`; }
-  catch { const text = String(url || "/"); const parsed = new URL(text.startsWith("/") ? `http://localhost${text}` : `http://localhost/${text}`); if (queryKeyToStrip) parsed.searchParams.delete(queryKeyToStrip); return `${parsed.pathname}${parsed.search}`; }
+  try {
+    const parsed = new URL(String(url || "/"), "http://localhost");
+    if (queryKeyToStrip) parsed.searchParams.delete(queryKeyToStrip);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    const text = String(url || "/");
+    const parsed = new URL(
+      text.startsWith("/") ? `http://localhost${text}` : `http://localhost/${text}`,
+    );
+    if (queryKeyToStrip) parsed.searchParams.delete(queryKeyToStrip);
+    return `${parsed.pathname}${parsed.search}`;
+  }
 }
-function appendQueryParam(urlPath = "", key = "", value = "") { const parsed = new URL(String(urlPath || "/"), "http://localhost"); parsed.searchParams.set(key, String(value || "")); return `${parsed.pathname}${parsed.search}`; }
-function buildOpenVSCodeUpstreamPath(urlPath, instance, result) { return result?.source === "openvscode-cookie" ? String(urlPath || "/") : appendQueryParam(urlPath, IDE_TOKEN_QUERY_KEY, instance?.connectionToken); }
+function appendQueryParam(urlPath = "", key = "", value = "") {
+  const parsed = new URL(String(urlPath || "/"), "http://localhost");
+  parsed.searchParams.set(key, String(value || ""));
+  return `${parsed.pathname}${parsed.search}`;
+}
+function buildOpenVSCodeUpstreamPath(urlPath, instance, result) {
+  return result?.source === "openvscode-cookie"
+    ? String(urlPath || "/")
+    : appendQueryParam(urlPath, IDE_TOKEN_QUERY_KEY, instance?.connectionToken);
+}
 
-export function createOpenVSCodeProxy({ resolveInstanceFromUrl, touchInstance } = {}) {
-  function resolveTokenFromRequest(req = {}, instance = {}) {
-    const expectedToken = String(instance?.connectionToken || "").trim();
-    if (!expectedToken) {
-      return { ok: false, source: "none", queryTokenValid: false };
-    }
-    let parsedUrl = null;
-    try {
-      parsedUrl = new URL(String(req?.url || req?.originalUrl || "/"), "http://localhost");
-    } catch {
-      return { ok: false, source: "none", queryTokenValid: false };
-    }
-    const queryToken = String(parsedUrl.searchParams.get(IDE_TOKEN_QUERY_KEY) || "").trim();
-    const headerToken = String(req?.headers?.[IDE_TOKEN_HEADER_KEY] || "").trim();
-    const cookieTokenValue = String(
-      parseCookieHeader(req?.headers?.cookie || "").get(IDE_TOKEN_COOKIE_KEY) || "",
-    ).trim();
-    const openVSCodeCookieToken = String(
-      parseCookieHeader(req?.headers?.cookie || "").get(OPENVSCODE_TOKEN_COOKIE_KEY) || "",
-    ).trim();
-    const cookieExpectedValue = buildTokenCookieValue(instance);
-    const queryTokenValid = queryToken && queryToken === expectedToken;
-    if (queryTokenValid) return { ok: true, source: "query", queryTokenValid };
-    if (headerToken && headerToken === expectedToken) {
-      return { ok: true, source: "header", queryTokenValid };
-    }
-    if (openVSCodeCookieToken && openVSCodeCookieToken === expectedToken) {
-      return { ok: true, source: "openvscode-cookie", queryTokenValid };
-    }
-    if (cookieTokenValue && cookieTokenValue === cookieExpectedValue) {
-      return { ok: true, source: "cookie", queryTokenValid };
-    }
-    return { ok: false, source: "none", queryTokenValid };
+function resolveTokenFromRequest(req = {}, instance = {}) {
+  const expectedToken = String(instance?.connectionToken || "").trim();
+  if (!expectedToken) {
+    return { ok: false, source: "none", queryTokenValid: false };
   }
-
-  function writeForbiddenResponse(res) {
-    if (!res || res.headersSent) return;
-    res.status(403).json({ ok: false, error: "OpenVSCode access denied" });
+  let parsedUrl = null;
+  try {
+    parsedUrl = new URL(String(req?.url || req?.originalUrl || "/"), "http://localhost");
+  } catch {
+    return { ok: false, source: "none", queryTokenValid: false };
   }
+  const queryToken = String(parsedUrl.searchParams.get(IDE_TOKEN_QUERY_KEY) || "").trim();
+  const headerToken = String(req?.headers?.[IDE_TOKEN_HEADER_KEY] || "").trim();
+  const cookieTokenValue = String(
+    parseCookieHeader(req?.headers?.cookie || "").get(IDE_TOKEN_COOKIE_KEY) || "",
+  ).trim();
+  const openVSCodeCookieToken = String(
+    parseCookieHeader(req?.headers?.cookie || "").get(OPENVSCODE_TOKEN_COOKIE_KEY) || "",
+  ).trim();
+  const cookieExpectedValue = buildTokenCookieValue(instance);
+  const queryTokenValid = queryToken && queryToken === expectedToken;
+  if (queryTokenValid) return { ok: true, source: "query", queryTokenValid };
+  if (headerToken && headerToken === expectedToken) {
+    return { ok: true, source: "header", queryTokenValid };
+  }
+  if (openVSCodeCookieToken && openVSCodeCookieToken === expectedToken) {
+    return { ok: true, source: "openvscode-cookie", queryTokenValid };
+  }
+  if (cookieTokenValue && cookieTokenValue === cookieExpectedValue) {
+    return { ok: true, source: "cookie", queryTokenValid };
+  }
+  return { ok: false, source: "none", queryTokenValid };
+}
 
-  function writeUpgradeForbidden(socket) {
-    if (!socket || !socket.writable) {
-      socket?.destroy?.();
-      return;
-    }
-    socket.write(
-      "HTTP/1.1 403 Forbidden\r\n" +
+function writeForbiddenResponse(res) {
+  if (!res || res.headersSent) return;
+  res.status(403).json({ ok: false, error: "OpenVSCode access denied" });
+}
+
+function writeUpgradeForbidden(socket) {
+  if (!socket || !socket.writable) {
+    socket?.destroy?.();
+    return;
+  }
+  socket.write(
+    "HTTP/1.1 403 Forbidden\r\n" +
       "Connection: close\r\n" +
       "Content-Type: text/plain\r\n" +
       "Content-Length: 20\r\n\r\n" +
       "OpenVSCode forbidden",
-    );
-    socket.destroy();
-  }
+  );
+  socket.destroy();
+}
 
-  function canHandleRequest(url = "") {
-    try { return new URL(url || "/", "http://localhost").pathname.startsWith(`${IDE_PATH_PREFIX}/`); }
-    catch { return String(url || "").startsWith(`${IDE_PATH_PREFIX}/`); }
+function canHandleRequest(url = "") {
+  try {
+    return new URL(url || "/", "http://localhost").pathname.startsWith(`${IDE_PATH_PREFIX}/`);
+  } catch {
+    return String(url || "").startsWith(`${IDE_PATH_PREFIX}/`);
   }
+}
 
+export function createOpenVSCodeProxy({ resolveInstanceFromUrl, touchInstance } = {}) {
   async function proxyHttp(req, res) {
     const instance = await resolveInstanceFromUrl(req.originalUrl || req.url || "");
     if (!instance) {
@@ -96,11 +129,11 @@ export function createOpenVSCodeProxy({ resolveInstanceFromUrl, touchInstance } 
       return;
     }
     touchInstance(instance);
-    const sanitizedTargetPath = normalizeProxyPath(req.originalUrl || req.url || "/", IDE_TOKEN_QUERY_KEY);
-    if (
-      req.method === "GET" &&
-      tokenCheckResult.queryTokenValid
-    ) {
+    const sanitizedTargetPath = normalizeProxyPath(
+      req.originalUrl || req.url || "/",
+      IDE_TOKEN_QUERY_KEY,
+    );
+    if (req.method === "GET" && tokenCheckResult.queryTokenValid) {
       const cookiePath = `${IDE_PATH_PREFIX}/${instance.basePath}`;
       res.setHeader(
         "Set-Cookie",

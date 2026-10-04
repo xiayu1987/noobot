@@ -5,7 +5,9 @@
  */
 
 function normalizeForDedup(textValue) {
-  let normalizedText = String(textValue || "").trim().toLowerCase();
+  let normalizedText = String(textValue || "")
+    .trim()
+    .toLowerCase();
   normalizedText = normalizedText.replace(/https?:\/\/\S+|www\.\S+/g, "");
   normalizedText = normalizedText.replace(/\s+/g, "");
   normalizedText = normalizedText.replace(/[^\u4e00-\u9fff0-9a-z]+/g, "");
@@ -26,8 +28,18 @@ function prepareAdPatternMatchers(adPatterns) {
   return matchers;
 }
 
+function matchesAdPattern(matcher, lowerLine) {
+  if (matcher?.type === "regex") {
+    return matcher.value instanceof RegExp && matcher.value.test(lowerLine);
+  }
+  if (matcher?.type === "string") return lowerLine.includes(String(matcher.value || ""));
+  return false;
+}
+
 function isNoiseOrAdLine(lineText, adPatterns, adPatternMatchers = null) {
-  const normalizedLine = String(lineText || "").replace(/\s+/g, " ").trim();
+  const normalizedLine = String(lineText || "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!normalizedLine) return true;
   if (normalizedLine.length <= 2) return true;
 
@@ -36,26 +48,15 @@ function isNoiseOrAdLine(lineText, adPatterns, adPatternMatchers = null) {
     ? adPatternMatchers
     : prepareAdPatternMatchers(adPatterns);
 
-  for (const matcher of matchers) {
-    if (
-      matcher?.type === "regex" &&
-      matcher.value instanceof RegExp &&
-      matcher.value.test(lowerLine) &&
-      normalizedLine.length <= 60
-    ) {
-      return true;
-    }
-
-    if (
-      matcher?.type === "string" &&
-      lowerLine.includes(String(matcher.value || "")) &&
-      normalizedLine.length <= 60
-    ) {
-      return true;
-    }
+  if (
+    normalizedLine.length <= 60 &&
+    matchers.some((matcher) => matchesAdPattern(matcher, lowerLine))
+  ) {
+    return true;
   }
 
-  if ((normalizedLine.match(/[|｜/·•>\-]/g) || []).length >= 4 && normalizedLine.length <= 80) return true;
+  if ((normalizedLine.match(/[|｜/·•>\-]/g) || []).length >= 4 && normalizedLine.length <= 80)
+    return true;
   if (/^[\W_0-9]+$/u.test(normalizedLine)) return true;
 
   return false;
@@ -82,7 +83,7 @@ function diceCoefficient(leftText, rightText) {
     }
   }
 
-  return (2 * overlap) / ((leftText.length - 1) + (rightText.length - 1));
+  return (2 * overlap) / (leftText.length - 1 + (rightText.length - 1));
 }
 
 function cleanAndDedupLines(lines, adPatterns, simThreshold = 0.94) {
@@ -92,7 +93,9 @@ function cleanAndDedupLines(lines, adPatterns, simThreshold = 0.94) {
   const adPatternMatchers = prepareAdPatternMatchers(adPatterns);
 
   for (const lineValue of lines || []) {
-    const normalizedLine = String(lineValue || "").replace(/\s+/g, " ").trim();
+    const normalizedLine = String(lineValue || "")
+      .replace(/\s+/g, " ")
+      .trim();
     if (!normalizedLine) continue;
     if (isNoiseOrAdLine(normalizedLine, adPatterns, adPatternMatchers)) continue;
 
@@ -131,8 +134,4 @@ function cleanAndDedupLines(lines, adPatterns, simThreshold = 0.94) {
   return out;
 }
 
-export {
-  prepareAdPatternMatchers,
-  isNoiseOrAdLine,
-  cleanAndDedupLines,
-};
+export { prepareAdPatternMatchers, isNoiseOrAdLine, cleanAndDedupLines };

@@ -202,7 +202,7 @@ test("long memory follows the user field protocol and keeps removed fields", asy
   await writeFile(
     path.join(userRoot, "memory/long-memory-model.md"),
     [
-      "NOOBOT_LONG_MEMORY_MODEL/1",
+      "NOOBOT_LONG_MEMORY_MODEL/2",
       "",
       "personal_info.occupation | single | 职业",
       "work.tech_stack | list:3 | 常用技术栈",
@@ -236,7 +236,7 @@ test("an invalid user field protocol falls back to the built-in fields", async (
   const { workspaceRoot, userRoot } = await createLongMemoryUserRoot();
   await writeFile(
     path.join(userRoot, "memory/long-memory-model.md"),
-    "NOOBOT_LONG_MEMORY_MODEL/1\n\nbroken line\n",
+    "NOOBOT_LONG_MEMORY_MODEL/2\n\nbroken line\n",
   );
   const service = new MemoryManager({ workspaceRoot });
   const state = await service.longMemory.readState(userRoot);
@@ -325,7 +325,7 @@ test("maybeSummarize uses configured memoryModel for long memory and experience 
   assert.deepEqual(files, ["模型选择.md"]);
 });
 
-test("maybeSummarize records an invalid long memory patch, continues later stages and clears short memory", async () => {
+test("maybeSummarize retries an invalid long memory patch once, then continues later stages and clears short memory", async () => {
   const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
   await writeShortMemoryItems(userRoot);
   const calls = [];
@@ -333,6 +333,7 @@ test("maybeSummarize records an invalid long memory patch, continues later stage
     createModelPort: createModelPortFactory(
       [
         "这是不符合字段补丁协议的文本",
+        "重试仍然不符合协议",
         'ADD D[1] domain="记忆容错" new=true experiences="长期记忆失败不中断" lessons="失败要记录"',
       ],
       calls,
@@ -349,11 +350,69 @@ test("maybeSummarize records an invalid long memory patch, continues later stage
     [["long_memory", "LONG_MEMORY_PATCH_INVALID"]],
   );
   assert.deepEqual(
-    calls.slice(0, 2).map((call) => call.request.invocation.flow),
-    ["memory.summary", "memory.experience.daily"],
+    calls.slice(0, 3).map((call) => call.request.invocation.flow),
+    ["memory.summary", "memory.summary", "memory.experience.daily"],
   );
   const dateDirs = await readdir(path.join(userRoot, "memory/daily_summary"));
   assert.equal(dateDirs.length, 1);
+  const shortDoc = JSON.parse(
+    await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
+  );
+  assert.equal(shortDoc.items.length, 0);
+  assert.equal(await readLongMemoryDoc(userRoot), EMPTY_LONG_MEMORY_DOCUMENT);
+});
+
+test("maybeSummarize writes long memory when the correction retry returns a valid patch", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot);
+  const calls = [];
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
+    createModelPort: createModelPortFactory(
+      [
+        "不符合协议",
+        "UPDATE personal_info.location：上海",
+        'ADD D[1] domain="记忆容错" new=true experiences="纠错重试" lessons="带上错误信息"',
+      ],
+      calls,
+    ),
+  });
+  const stageErrors = [];
+  await service.maybeSummarize({
+    userId,
+    userConfig: {},
+    onStageError: (entry) => stageErrors.push(entry),
+  });
+  assert.deepEqual(stageErrors, []);
+  const retryPrompt = JSON.stringify(calls[1].request);
+  assert.match(retryPrompt, /不符合协议/);
+  assert.match(retryPrompt, /invalid long memory patch line/);
+  assert.match(await readLongMemoryDoc(userRoot), /上海/);
+});
+
+test("maybeSummarize treats NOOP as a successful no-change long memory stage", async () => {
+  const { workspaceRoot, userId, userRoot } = await createLongMemoryUserRoot();
+  await writeShortMemoryItems(userRoot);
+  const calls = [];
+  const service = new MemoryManager(createMemoryConfig(workspaceRoot), {
+    createModelPort: createModelPortFactory(
+      [
+        "NOOP",
+        'ADD D[1] domain="记忆容错" new=true experiences="无变更也要推进" lessons="显式标记"',
+      ],
+      calls,
+    ),
+  });
+  const stageErrors = [];
+  await service.maybeSummarize({
+    userId,
+    userConfig: {},
+    onStageError: (entry) => stageErrors.push(entry),
+  });
+  assert.deepEqual(stageErrors, []);
+  assert.deepEqual(
+    calls.slice(0, 2).map((call) => call.request.invocation.flow),
+    ["memory.summary", "memory.experience.daily"],
+  );
   const shortDoc = JSON.parse(
     await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
   );

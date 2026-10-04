@@ -20,7 +20,7 @@
 | 文件（相对 `memory/`）   | kind                  | 协议头                                |
 | ------------------------ | --------------------- | ------------------------------------- |
 | `long-memory.md`         | `long_memory`         | `NOOBOT_LONG_MEMORY/1`                |
-| `long-memory-model.md`   | `long_memory_model`   | `NOOBOT_LONG_MEMORY_MODEL/1`          |
+| `long-memory-model.md`   | `long_memory_model`   | `NOOBOT_LONG_MEMORY_MODEL/2`          |
 | `experience-model.md`    | `experience_model`    | `NOOBOT_EXPERIENCE_MODEL/1`           |
 | `experience-fields.md`   | `experience_fields`   | `NOOBOT_EXPERIENCE_FIELDS/1`          |
 | `experience/metadata.md` | `experience_metadata` | `NOOBOT_EXPERIENCE_METADATA/1`        |
@@ -36,11 +36,13 @@
 内置常量 `LONG_MEMORY_MODEL` 是字段的唯一代码定义，只用于首次生成和兜底。工作区的 `long-memory-model.md` 由它渲染，用户可以增删改字段，运行时只读这份文件；解析失败时回落内置字段：
 
 ```
-NOOBOT_LONG_MEMORY_MODEL/1
+NOOBOT_LONG_MEMORY_MODEL/2
 
 personal_info.location | single | 城市
 work.tech_stack | list:8 | 常用技术栈
 ```
+
+字段协议的版本号表示“内置字段集合”的版本。`LONG_MEMORY_MODEL_FIELDS_SINCE` 记录每个版本新引入的内置字段（`/2` 新增 6 个 `work.*` 字段）。旧版本文件由 `@noobot/memory-repair` 升级：保留原文、注释和用户的增删改，只追加文件版本之后引入、且文件中没有的字段；文件版本内已有、被用户删掉的字段不补回。
 
 值文档中协议已删除的字段作为孤儿保留，写回时原样写出，不会因字段变更而重置。类型：
 

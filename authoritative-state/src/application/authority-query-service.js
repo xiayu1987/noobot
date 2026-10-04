@@ -156,14 +156,19 @@ export function projectAuthoritativeExecution(turn = {}, session = {}) {
   };
 }
 
+function versionKey(record) {
+  return [
+    Date.parse(record?.updatedAt || "") || 0,
+    Number(record?.revision || 0),
+    Number(record?.sequence || 0),
+  ];
+}
+
 function isNewer(left, right) {
-  const leftUpdatedAt = Date.parse(left?.updatedAt || "") || 0;
-  const rightUpdatedAt = Date.parse(right?.updatedAt || "") || 0;
-  if (leftUpdatedAt !== rightUpdatedAt) return leftUpdatedAt > rightUpdatedAt;
-  if (Number(left?.revision || 0) !== Number(right?.revision || 0)) {
-    return Number(left?.revision || 0) > Number(right?.revision || 0);
-  }
-  return Number(left?.sequence || 0) > Number(right?.sequence || 0);
+  const leftKey = versionKey(left);
+  const rightKey = versionKey(right);
+  const index = leftKey.findIndex((value, position) => value !== rightKey[position]);
+  return index >= 0 && leftKey[index] > rightKey[index];
 }
 
 function stableObject(value) {

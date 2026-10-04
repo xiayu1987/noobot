@@ -18,7 +18,7 @@ export const MEMORY_DOCUMENT_KIND = Object.freeze({
 
 export const MEMORY_DOCUMENT_HEADER = Object.freeze({
   [MEMORY_DOCUMENT_KIND.LONG_MEMORY]: "NOOBOT_LONG_MEMORY/1",
-  [MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL]: "NOOBOT_LONG_MEMORY_MODEL/1",
+  [MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL]: "NOOBOT_LONG_MEMORY_MODEL/2",
   [MEMORY_DOCUMENT_KIND.EXPERIENCE_MODEL]: "NOOBOT_EXPERIENCE_MODEL/1",
   [MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS]: "NOOBOT_EXPERIENCE_FIELDS/1",
   [MEMORY_DOCUMENT_KIND.EXPERIENCE_METADATA]: "NOOBOT_EXPERIENCE_METADATA/1",
@@ -43,6 +43,22 @@ function normalizeNewlines(text) {
 export function hasMemoryDocumentHeader(kind, text = "") {
   const header = headerFor(kind);
   return normalizeNewlines(text).split("\n", 1)[0].trim() === header;
+}
+
+function splitHeader(header) {
+  const slash = header.lastIndexOf("/");
+  return { name: header.slice(0, slash), version: Number(header.slice(slash + 1)) };
+}
+
+export function currentMemoryDocumentVersion(kind) {
+  return splitHeader(headerFor(kind)).version;
+}
+
+export function readMemoryDocumentVersion(kind, text = "") {
+  const { name } = splitHeader(headerFor(kind));
+  const firstLine = normalizeNewlines(text).split("\n", 1)[0].trim();
+  const matched = /^(.+)\/([1-9]\d*)$/.exec(firstLine);
+  return matched && matched[1] === name ? Number(matched[2]) : null;
 }
 
 export function readMemoryDocumentBody(kind, text = "") {

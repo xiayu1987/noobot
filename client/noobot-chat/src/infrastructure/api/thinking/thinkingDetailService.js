@@ -7,6 +7,14 @@ import { getSessionThinkingDetailApi } from "../chat/chatApi.js";
 
 let authenticatedFetcher = null;
 
+function assertThinkingDetailPayload(data) {
+  const payload = data || {};
+  if (payload.ok && payload.exists) return payload;
+  const error = new Error(payload.error || "thinking detail not found");
+  if (payload.ok) error.code = "thinking_detail_not_found";
+  throw error;
+}
+
 export const thinkingDetailService = Object.freeze({
   configure({ fetcher = null } = {}) {
     authenticatedFetcher = typeof fetcher === "function" ? fetcher : null;
@@ -16,14 +24,9 @@ export const thinkingDetailService = Object.freeze({
       { userId, sessionId, dialogProcessId, turnScopeId },
       authenticatedFetcher ? { fetcher: authenticatedFetcher } : {},
     );
-    if (!response?.ok)
+    if (!response?.ok) {
       throw new Error(`failed to load thinking detail: ${response?.status || 500}`);
-    const data = await response.json();
-    if (!data?.ok || !data?.exists) {
-      const error = new Error(data?.error || "thinking detail not found");
-      if (data?.ok && !data?.exists) error.code = "thinking_detail_not_found";
-      throw error;
     }
-    return data;
+    return assertThinkingDetailPayload(await response.json());
   },
 });

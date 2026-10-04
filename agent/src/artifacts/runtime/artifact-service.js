@@ -11,6 +11,10 @@ import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { isModelOutputArtifactContentBlock } from "@noobot/model-protocol";
+import {
+  getSystemRuntimeFromRuntime,
+  resolveRuntimeTurnScopeId,
+} from "../../context/agent-context-accessor.js";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -117,22 +121,8 @@ export async function fetchRemoteMediaArtifact(
 }
 
 function resolveGeneratedArtifactOwnership(runtime = {}, dialogProcessId = "") {
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
-  const runConfig =
-    runtime?.runConfig && typeof runtime.runConfig === "object"
-      ? runtime.runConfig
-      : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
-        ? systemRuntime.runConfig
-        : {};
-  const turnScopeId = String(
-    systemRuntime?.turnScopeId ||
-      systemRuntime?.config?.turnScopeId ||
-      runConfig?.turnScopeId ||
-      "",
-  ).trim();
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const turnScopeId = resolveRuntimeTurnScopeId(runtime);
   const resolvedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   const sessionId = String(systemRuntime?.sessionId || systemRuntime?.rootSessionId || "").trim();
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };

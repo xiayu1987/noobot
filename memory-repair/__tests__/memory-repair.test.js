@@ -8,6 +8,12 @@ import assert from "node:assert/strict";
 import { MEMORY_DOCUMENT_KIND } from "@noobot/memory-protocol/document";
 import { renderDefaultMemoryDocument } from "@noobot/memory-protocol/defaults";
 import {
+  LONG_MEMORY_MODEL,
+  LONG_MEMORY_MODEL_FIELDS_SINCE,
+  parseLongMemoryModelText,
+  renderLongMemoryModelLine,
+} from "@noobot/memory-protocol/long-memory";
+import {
   MEMORY_REPAIR_STATUS,
   migrateMemoryDocument,
   repairMemoryWorkspace,
@@ -195,12 +201,70 @@ test("workspace repair requires a complete io port", async () => {
 });
 
 const USER_LONG_MEMORY_MODEL = [
-  "NOOBOT_LONG_MEMORY_MODEL/1",
+  "NOOBOT_LONG_MEMORY_MODEL/2",
   "",
   "personal_info.location | single | 城市",
   "work.tech_stack | list:2 | 常用技术栈",
   "",
 ].join("\n");
+
+const V2_FIELD_LINES = LONG_MEMORY_MODEL_FIELDS_SINCE[2].map((key) =>
+  renderLongMemoryModelLine(LONG_MEMORY_MODEL.byKey.get(key)),
+);
+
+test("a v1 field protocol upgrades by appending only fields introduced after v1", () => {
+  const text = [
+    "NOOBOT_LONG_MEMORY_MODEL/1",
+    "",
+    "# 用户注释保留",
+    "personal_info.location | single | 所在城市（用户改过说明）",
+    "work.tech_stack | list:2 | 用户自定义字段",
+    "work.tools_methods | list:3 | 用户已手动加过",
+    "",
+  ].join("\n");
+  const result = migrateMemoryDocument({ kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL, text });
+  assert.equal(result.status, MEMORY_REPAIR_STATUS.MIGRATED);
+  assert.equal(
+    result.text,
+    [
+      "NOOBOT_LONG_MEMORY_MODEL/2",
+      "",
+      "# 用户注释保留",
+      "personal_info.location | single | 所在城市（用户改过说明）",
+      "work.tech_stack | list:2 | 用户自定义字段",
+      "work.tools_methods | list:3 | 用户已手动加过",
+      ...V2_FIELD_LINES.filter((line) => !line.startsWith("work.tools_methods ")),
+      "",
+    ].join("\n"),
+  );
+  const upgraded = parseLongMemoryModelText(result.text);
+  assert.equal(upgraded.byKey.has("personal_info.age"), false);
+  assert.equal(upgraded.byKey.has("interests.hobbies"), false);
+  assert.equal(upgraded.byKey.get("work.tools_methods").maxItems, 3);
+});
+
+test("a v2 field protocol missing new fields is kept as the user's choice", () => {
+  assert.deepEqual(
+    migrateMemoryDocument({
+      kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL,
+      text: USER_LONG_MEMORY_MODEL,
+    }),
+    { status: MEMORY_REPAIR_STATUS.CANONICAL, text: USER_LONG_MEMORY_MODEL },
+  );
+});
+
+test("an unparseable v1 field protocol is reset to the built-in fields", () => {
+  assert.deepEqual(
+    migrateMemoryDocument({
+      kind: MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL,
+      text: "NOOBOT_LONG_MEMORY_MODEL/1\n\nbroken line\n",
+    }),
+    {
+      status: MEMORY_REPAIR_STATUS.RESET,
+      text: renderDefaultMemoryDocument(MEMORY_DOCUMENT_KIND.LONG_MEMORY_MODEL),
+    },
+  );
+});
 
 test("long memory values are validated against the user field protocol", async () => {
   const longMemory = "NOOBOT_LONG_MEMORY/1\n\nwork.tech_stack：\n1. Node.js\n2. Vue\n";

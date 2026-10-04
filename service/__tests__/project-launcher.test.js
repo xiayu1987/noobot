@@ -168,8 +168,8 @@ test("project launcher initializes a known provider from the model library", asy
   assert.equal(globalConfig.default_provider, "gpt_6_sol");
   assert.equal(globalConfig.security.execution_isolation.mode, "sandbox");
   const params = await readJson(path.join(serviceRoot, "workspace", "config-params.json"));
-  assert.equal(JSON.stringify(params).includes("test-key"), true);
-  assert.equal(JSON.stringify(params).includes("https://example.invalid/v1"), true);
+  assert.equal(params.values.OPENAI_API_KEY, "test-key");
+  assert.equal(params.values.OPENAI_API_ADDRESS, "https://example.invalid/v1");
 });
 
 test("project launcher falls back to model library config when key and url are empty", async (t) => {

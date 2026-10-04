@@ -6,6 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
@@ -14,6 +16,9 @@ import { BotManager } from "../../src/bot/index.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
+
+const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-closure-flow-"));
+test.after(() => fs.rmSync(workspaceRoot, { recursive: true, force: true }));
 
 test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async () => {
   const persistedTurns = [];
@@ -33,7 +38,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       return { logs: [...appendedExecutionLogs] };
     },
     async resolveSessionScope({ userId, sessionId }) {
-      return { sessionDir: path.join("/tmp/noobot-test", userId, "runtime", "session", sessionId) };
+      return { sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId) };
     },
     async appendExecutionLog(payload = {}) {
       appendedExecutionLogs.push(payload);
@@ -107,7 +112,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           attachmentSource: "user",
           name: attachment.name || "input",
           mimeType: attachment.mimeType || attachment.type || "application/octet-stream",
-          path: attachment.path || `/tmp/noobot-test/input-${index}`,
+          path: attachment.path || path.join(workspaceRoot, `input-${index}`),
         }));
       },
     },
@@ -130,7 +135,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     },
     workspaceService: {
       async ensureUserWorkspace() {
-        return "/tmp/noobot-test";
+        return workspaceRoot;
       },
     },
     errorLogger: {
@@ -200,7 +205,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
                 name: "result.png",
                 mimeType: "image/png",
                 size: 2048,
-                path: "/tmp/noobot-test/result.png",
+                path: path.join(workspaceRoot, "result.png"),
                 relativePath: "result.png",
                 generatedByModel: true,
               },
@@ -249,7 +254,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
                 name: String(firstIncoming?.name || "input.png"),
                 mimeType: String(firstIncoming?.mimeType || "image/png"),
                 size: Number(firstIncoming?.size || 0),
-                path: "/tmp/noobot-test/input.png",
+                path: path.join(workspaceRoot, "input.png"),
                 relativePath: "input.png",
               },
             ],
@@ -392,7 +397,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       return { logs: [] };
     },
     async resolveSessionScope({ userId, sessionId }) {
-      return { sessionDir: path.join("/tmp/noobot-test", userId, "runtime", "session", sessionId) };
+      return { sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId) };
     },
     async appendExecutionLog() {},
     async appendTurns(payload = {}) {
@@ -451,7 +456,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     },
     workspaceService: {
       async ensureUserWorkspace() {
-        return "/tmp/noobot-test";
+        return workspaceRoot;
       },
     },
     errorLogger: {

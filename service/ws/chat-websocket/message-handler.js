@@ -261,13 +261,13 @@ export function createMessageHandler({
             errorCode: String(error?.code || ""),
           },
         });
-        if (parsedCommand) {
+        const receiptSent =
+          parsedCommand &&
           sendFailedCommandReceipt(sendEvent, parsedCommand, {
             code: String(error?.errors?.[0] || error?.code || "invalid_command").trim(),
             message: error?.message || translateText("ws.unknownError", state.currentLocale),
           });
-          return;
-        }
+        if (receiptSent) return;
         webSocket.close(1008, "invalid request");
         return;
       }

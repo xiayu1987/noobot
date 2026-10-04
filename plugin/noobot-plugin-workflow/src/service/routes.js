@@ -15,6 +15,19 @@ import {
 } from "@noobot/event-protocol/workflow-runtime-event";
 const normalizeRouteText = (value) => String(value ?? "").trim();
 
+function mergeSessionSnapshotBody(session, sessionSummary) {
+  const {
+    sessionId: _sessionId,
+    parentSessionId: _parentSessionId,
+    ...snapshot
+  } = {
+    ...(session && typeof session === "object" ? session : {}),
+    ...(sessionSummary && typeof sessionSummary === "object" ? sessionSummary : {}),
+    messages: Array.isArray(session?.messages) ? session.messages : sessionSummary?.messages || [],
+  };
+  return snapshot;
+}
+
 function createSessionSnapshotEnvelope({
   authoritySessionId,
   dialogProcessId,
@@ -31,15 +44,7 @@ function createSessionSnapshotEnvelope({
   if (!workflowRunId || !nodeExecutionId || !turnScopeId || !childSessionId || !occurredAt) {
     throw new Error("workflow session snapshot is missing canonical runtime identity");
   }
-  const {
-    sessionId: _sessionId,
-    parentSessionId: _parentSessionId,
-    ...snapshot
-  } = {
-    ...(session && typeof session === "object" ? session : {}),
-    ...(sessionSummary && typeof sessionSummary === "object" ? sessionSummary : {}),
-    messages: Array.isArray(session?.messages) ? session.messages : sessionSummary?.messages || [],
-  };
+  const snapshot = mergeSessionSnapshotBody(session, sessionSummary);
   return createWorkflowRuntimeEnvelope({
     eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
     authoritySessionId,
@@ -83,6 +88,33 @@ function parseExecutionPage(query = {}) {
   return { cursor, limit };
 }
 
+function logDetail({
+  userId = "",
+  sessionId = "",
+  dialogProcessId = "",
+  traceId = "",
+  event = "",
+  level = "debug",
+  data = {},
+} = {}) {
+  return writeRoutedRuntimeEvent({
+    scope: "session",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+    level,
+    debugType: "workflow-diagnostics",
+    event,
+    userId: String(userId || "").trim(),
+    sessionId: String(sessionId || "").trim(),
+    dialogProcessId: String(dialogProcessId || "").trim(),
+    data: {
+      traceId: String(traceId || "").trim(),
+      ...(data && typeof data === "object" ? data : {}),
+    },
+  });
+}
+
 export function createWorkflowServiceRouteHandlers(context = {}) {
   const sessions = context?.ports?.sessions;
   const badRequestStatus = context?.ports?.http?.status?.BAD_REQUEST || 400;
@@ -93,31 +125,6 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
   ) {
     throw new Error("workflow service session ports are required");
   }
-  const logDetail = ({
-    userId = "",
-    sessionId = "",
-    dialogProcessId = "",
-    traceId = "",
-    event = "",
-    level = "debug",
-    data = {},
-  } = {}) =>
-    writeRoutedRuntimeEvent({
-      scope: "session",
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
-      level,
-      debugType: "workflow-diagnostics",
-      event,
-      userId: String(userId || "").trim(),
-      sessionId: String(sessionId || "").trim(),
-      dialogProcessId: String(dialogProcessId || "").trim(),
-      data: {
-        traceId: String(traceId || "").trim(),
-        ...(data && typeof data === "object" ? data : {}),
-      },
-    });
 
   const sessionDetailHandler = async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;

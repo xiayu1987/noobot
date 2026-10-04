@@ -48,7 +48,7 @@ export function convertPathView({
   const hostPlatform = resolveHostPlatform(agentContext);
   const fromPlatformHint =
     normalizePlatform(sourcePlatform) || (from === PATH_VIEWS.HOST ? hostPlatform : "");
-  const normalized = normalizePathForPlatform(path, { platform: fromPlatformHint });
+  const normalized = normalizePathForPlatform(path);
   const fromPlatform = fromPlatformHint || detectPathPlatform(normalized);
   const toPlatform =
     normalizePlatform(targetPlatform) ||
@@ -78,7 +78,7 @@ export function convertPathView({
     }
   }
   return {
-    path: normalizePathForPlatform(converted, { platform: toPlatform }),
+    path: normalizePathForPlatform(converted),
     sourcePath: normalized,
     sourcePlatform: fromPlatform,
     sourceView: from,

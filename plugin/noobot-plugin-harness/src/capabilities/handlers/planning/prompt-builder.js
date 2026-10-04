@@ -190,21 +190,14 @@ export function buildPlanningPromptBase(
   });
 }
 
-export function resolveLatestUserMessageText(ctx = {}) {
-  const messages = resolveModelMessages(ctx);
-  const latestFrontendFromMessages = resolveLatestUserTextFromMessages(messages, {
-    preferFrontend: true,
-  });
-  if (latestFrontendFromMessages) return latestFrontendFromMessages;
-  const latestFromMessages = resolveLatestUserTextFromMessages(messages);
-  if (latestFromMessages) return latestFromMessages;
-  const history = resolveModelMessageBlocks(ctx).history;
-  const latestFrontendFromHistory = resolveLatestUserTextFromMessages(history, {
-    preferFrontend: true,
-  });
-  if (latestFrontendFromHistory) return latestFrontendFromHistory;
-  const latestFromHistory = resolveLatestUserTextFromMessages(history);
-  if (latestFromHistory) return latestFromHistory;
+function resolveLatestUserTextFromSource(messages = []) {
+  return (
+    resolveLatestUserTextFromMessages(messages, { preferFrontend: true }) ||
+    resolveLatestUserTextFromMessages(messages)
+  );
+}
+
+function resolveFallbackUserText(ctx = {}) {
   const fallbackCandidates = [
     ctx?.userMessage,
     ctx?.message,
@@ -217,6 +210,14 @@ export function resolveLatestUserMessageText(ctx = {}) {
     if (text) return text;
   }
   return "";
+}
+
+export function resolveLatestUserMessageText(ctx = {}) {
+  return (
+    resolveLatestUserTextFromSource(resolveModelMessages(ctx)) ||
+    resolveLatestUserTextFromSource(resolveModelMessageBlocks(ctx).history) ||
+    resolveFallbackUserText(ctx)
+  );
 }
 
 export function buildPlanningMessagePlan(

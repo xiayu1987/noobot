@@ -60,7 +60,7 @@ function normalizeRoleAlias(value = "") {
   return normalized;
 }
 
-function getLangChainMessageKind(messageItem = {}) {
+function collectLangChainIdParts(messageItem = {}) {
   const idParts = [];
   if (Array.isArray(messageItem?.lc_id)) idParts.push(...messageItem.lc_id);
   if (Array.isArray(messageItem?.id)) idParts.push(...messageItem.id);
@@ -68,7 +68,13 @@ function getLangChainMessageKind(messageItem = {}) {
   if (serializedName) idParts.push(serializedName);
   const serializedType = trim(messageItem?.type === "constructor" ? "" : messageItem?.type);
   if (serializedType) idParts.push(serializedType);
-  const haystack = idParts.map((part) => lower(part)).join("|");
+  return idParts;
+}
+
+function getLangChainMessageKind(messageItem = {}) {
+  const haystack = collectLangChainIdParts(messageItem)
+    .map((part) => lower(part))
+    .join("|");
   if (!haystack) return "";
   if (haystack.includes("humanmessage") || /\bhuman\b/.test(haystack)) return "user";
   if (haystack.includes("aimessage") || /\bai\b/.test(haystack)) return "assistant";

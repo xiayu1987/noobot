@@ -112,6 +112,40 @@ function resolvePlaywrightChromiumExecutable({
   }
 }
 
+function listMacLibreOfficeCandidates(env = {}) {
+  const home = env.HOME || "";
+  return [
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice.bin",
+    joinClientPath(home, "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice"),
+    joinClientPath(home, "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice.bin"),
+  ];
+}
+
+function listWindowsLibreOfficeCandidates(env = {}) {
+  const programFiles = env.PROGRAMFILES || "C:\\Program Files";
+  const programFilesX86 =
+    env["PROGRAMFILES(X86)"] || env.PROGRAMFILES_X86 || "C:\\Program Files (x86)";
+  return [programFiles, programFilesX86].flatMap((base) => [
+    joinClientPath(base, "LibreOffice", "program", "soffice.exe"),
+    joinClientPath(base, "LibreOffice", "program", "libreoffice.exe"),
+  ]);
+}
+
+const LINUX_LIBRE_OFFICE_CANDIDATES = Object.freeze([
+  "/usr/bin/libreoffice",
+  "/usr/bin/soffice",
+  "/snap/bin/libreoffice",
+  "/opt/libreoffice/program/soffice",
+  "/opt/libreoffice7.6/program/soffice",
+]);
+
+function listPlatformLibreOfficeCandidates(platform, env) {
+  if (platform === "darwin") return listMacLibreOfficeCandidates(env);
+  if (platform === "win32") return listWindowsLibreOfficeCandidates(env);
+  return LINUX_LIBRE_OFFICE_CANDIDATES;
+}
+
 function resolveLibreOfficeExecutable({
   env = process.env,
   platform = process.platform,
@@ -123,63 +157,9 @@ function resolveLibreOfficeExecutable({
     env.SOFFICE_EXE,
     env.SOFFICE_PATH,
   ];
-
-  if (platform === "darwin") {
-    const macCandidates = [
-      "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-      "/Applications/LibreOffice.app/Contents/MacOS/soffice.bin",
-      joinClientPath(
-        env.HOME || "",
-        "Applications",
-        "LibreOffice.app",
-        "Contents",
-        "MacOS",
-        "soffice",
-      ),
-      joinClientPath(
-        env.HOME || "",
-        "Applications",
-        "LibreOffice.app",
-        "Contents",
-        "MacOS",
-        "soffice.bin",
-      ),
-    ];
-    return (
-      resolveFirstExistingPath([...configuredCandidates, ...macCandidates], exists) ||
-      findExecutableInPath("soffice", { env, platform, exists }) ||
-      findExecutableInPath("libreoffice", { env, platform, exists }) ||
-      ""
-    );
-  }
-
-  if (platform === "win32") {
-    const programFiles = env.PROGRAMFILES || "C:\\Program Files";
-    const programFilesX86 =
-      env["PROGRAMFILES(X86)"] || env.PROGRAMFILES_X86 || "C:\\Program Files (x86)";
-    const winCandidates = [
-      joinClientPath(programFiles, "LibreOffice", "program", "soffice.exe"),
-      joinClientPath(programFiles, "LibreOffice", "program", "libreoffice.exe"),
-      joinClientPath(programFilesX86, "LibreOffice", "program", "soffice.exe"),
-      joinClientPath(programFilesX86, "LibreOffice", "program", "libreoffice.exe"),
-    ];
-    return (
-      resolveFirstExistingPath([...configuredCandidates, ...winCandidates], exists) ||
-      findExecutableInPath("soffice", { env, platform, exists }) ||
-      findExecutableInPath("libreoffice", { env, platform, exists }) ||
-      ""
-    );
-  }
-
-  const linuxCandidates = [
-    "/usr/bin/libreoffice",
-    "/usr/bin/soffice",
-    "/snap/bin/libreoffice",
-    "/opt/libreoffice/program/soffice",
-    "/opt/libreoffice7.6/program/soffice",
-  ];
+  const candidates = [...configuredCandidates, ...listPlatformLibreOfficeCandidates(platform, env)];
   return (
-    resolveFirstExistingPath([...configuredCandidates, ...linuxCandidates], exists) ||
+    resolveFirstExistingPath(candidates, exists) ||
     findExecutableInPath("soffice", { env, platform, exists }) ||
     findExecutableInPath("libreoffice", { env, platform, exists }) ||
     ""
@@ -294,6 +274,20 @@ function buildDependencySourceItem({
   };
 }
 
+function buildPlaywrightSourceItem(runtimeEnv, env) {
+  return buildDependencySourceItem({
+    key: "playwright",
+    name: "Playwright Chromium",
+    available: Boolean(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH),
+    installMode: "playwright-managed-or-existing",
+    sourceType: "playwright",
+    customEnvKeys: hasCustomDependencySource(env, "NOOBOT_PLAYWRIGHT_CHROMIUM_PATH")
+      ? ["NOOBOT_PLAYWRIGHT_CHROMIUM_PATH"]
+      : [],
+    configKeys: ["playwright.chromium"],
+  });
+}
+
 function summarizeDarwinDependencySources({
   runtimeEnv = {},
   env = process.env,
@@ -312,17 +306,7 @@ function summarizeDarwinDependencySources({
     exists,
   });
   return [
-    buildDependencySourceItem({
-      key: "playwright",
-      name: "Playwright Chromium",
-      available: Boolean(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH),
-      installMode: "playwright-managed-or-existing",
-      sourceType: "playwright",
-      customEnvKeys: hasCustomDependencySource(env, "NOOBOT_PLAYWRIGHT_CHROMIUM_PATH")
-        ? ["NOOBOT_PLAYWRIGHT_CHROMIUM_PATH"]
-        : [],
-      configKeys: ["playwright.chromium"],
-    }),
+    buildPlaywrightSourceItem(runtimeEnv, env),
     buildDependencySourceItem({
       key: "libreoffice",
       name: "LibreOffice",
@@ -369,17 +353,7 @@ function summarizeWin32DependencySources({
   const pathEnv = runtimeEnv.PATH || env.PATH || "";
   const nodePath = resolveBinaryPath("node", { env: { ...env, PATH: pathEnv }, platform, exists });
   return [
-    buildDependencySourceItem({
-      key: "playwright",
-      name: "Playwright Chromium",
-      available: Boolean(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH),
-      installMode: "playwright-managed-or-existing",
-      sourceType: "playwright",
-      customEnvKeys: hasCustomDependencySource(env, "NOOBOT_PLAYWRIGHT_CHROMIUM_PATH")
-        ? ["NOOBOT_PLAYWRIGHT_CHROMIUM_PATH"]
-        : [],
-      configKeys: ["playwright.chromium"],
-    }),
+    buildPlaywrightSourceItem(runtimeEnv, env),
     buildDependencySourceItem({
       key: "libreoffice",
       name: "LibreOffice",

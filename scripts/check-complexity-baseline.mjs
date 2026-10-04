@@ -9,8 +9,8 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 518,
-  longFunctionCount: 97,
+  complexityCount: 490,
+  longFunctionCount: 85,
   maxComplexity: 79,
   hotspots: Object.freeze({
     "agent/src/runtime/capability-runner/index.js": [0, 0, 0],
