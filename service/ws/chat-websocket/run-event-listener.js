@@ -18,72 +18,115 @@ import {
   TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
   assertTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
-function buildEventAudit(eventName, eventData, sessionId, turnScopeId) {
-  const canonicalEnvelope = asEventProtocolEnvelope(eventData);
+const AUDIT_LIST_LIMIT = QUANTITY_THRESHOLDS.diagnostics.eventAuditListLimit;
+
+function trimmedText(value) {
+  return String(value || "").trim();
+}
+
+function countOf(value) {
+  return Number(value || 0);
+}
+
+function boundedList(value, mapItem) {
+  return Array.isArray(value) ? value.slice(0, AUDIT_LIST_LIMIT).map(mapItem) : [];
+}
+
+function auditActivity(activity = {}) {
+  return {
+    eventId: trimmedText(activity?.eventId),
+    activityKind: trimmedText(activity?.activityKind),
+    sequence: countOf(activity?.sequence),
+    sequenceDomain: trimmedText(activity?.sequenceDomain),
+    sequenceScopeId: trimmedText(activity?.sequenceScopeId),
+    authority: trimmedText(activity?.authority),
+  };
+}
+
+function auditMessage(message = {}) {
+  return {
+    messageUid: trimmedText(message?.messageUid),
+    messageId: trimmedText(message?.messageId),
+    presentationMessageId: trimmedText(message?.presentationMessageId),
+    role: trimmedText(message?.role),
+    type: trimmedText(message?.type),
+    activityTimelineCount: countOf(message?.activityTimelineCount),
+    activityTimeline: boundedList(message?.activityTimeline, auditActivity),
+  };
+}
+
+function auditEnvelopeIdentity(canonicalEnvelope, eventData, sessionId, turnScopeId) {
+  const protocol = canonicalEnvelope?.protocol;
   const identity = canonicalEnvelope?.identity || {};
-  const ordering = canonicalEnvelope?.ordering || {};
   const payload = canonicalEnvelope?.payload || eventData;
   return {
-    eventName,
-    protocolName: String(canonicalEnvelope?.protocol?.name || "").trim(),
-    protocolVersion: Number(canonicalEnvelope?.protocol?.version || 0),
-    eventFamily: String(canonicalEnvelope?.protocol?.family || "").trim(),
-    schemaVersion: Number(canonicalEnvelope?.protocol?.schemaVersion || 0),
-    eventType: String(identity.eventType || eventData?.eventType || "").trim(),
-    sessionId: String(identity.sessionId || eventData?.sessionId || sessionId || "").trim(),
-    dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-    turnScopeId: String(identity.turnScopeId || eventData?.turnScopeId || turnScopeId || "").trim(),
-    messageId: String(identity.messageId || "").trim(),
-    presentationMessageId: String(payload?.presentationMessageId || "").trim(),
-    eventId: String(identity.eventId || "").trim(),
-    messageCount: Number(eventData?.messageCount || 0),
-    assistantCount: Number(eventData?.assistantCount || 0),
-    toolCount: Number(eventData?.toolCount || 0),
-    activityTimelineCount: Number(eventData?.activityTimelineCount || 0),
-    messages: Array.isArray(eventData?.messages)
-      ? eventData.messages.slice(0, 64).map((message = {}) => ({
-          messageUid: String(message?.messageUid || "").trim(),
-          messageId: String(message?.messageId || "").trim(),
-          presentationMessageId: String(message?.presentationMessageId || "").trim(),
-          role: String(message?.role || "").trim(),
-          type: String(message?.type || "").trim(),
-          activityTimelineCount: Number(message?.activityTimelineCount || 0),
-          activityTimeline: Array.isArray(message?.activityTimeline)
-            ? message.activityTimeline.slice(0, 64).map((activity = {}) => ({
-                eventId: String(activity?.eventId || "").trim(),
-                activityKind: String(activity?.activityKind || "").trim(),
-                sequence: Number(activity?.sequence || 0),
-                sequenceDomain: String(activity?.sequenceDomain || "").trim(),
-                sequenceScopeId: String(activity?.sequenceScopeId || "").trim(),
-                authority: String(activity?.authority || "").trim(),
-              }))
-            : [],
-        }))
-      : [],
-    workflowRunId: String(eventData?.workflowRunId || "").trim(),
-    nodeExecutionId: String(eventData?.nodeExecutionId || "").trim(),
-    workflowStatus: String(eventData?.status || "").trim(),
-    workflowRevision: Number(eventData?.revision || 0),
-    workflowSequence: Number(eventData?.sequence || 0),
+    protocolName: trimmedText(protocol?.name),
+    protocolVersion: countOf(protocol?.version),
+    eventFamily: trimmedText(protocol?.family),
+    schemaVersion: countOf(protocol?.schemaVersion),
+    eventType: trimmedText(identity.eventType || eventData?.eventType),
+    sessionId: trimmedText(identity.sessionId || eventData?.sessionId || sessionId),
+    dialogProcessId: trimmedText(payload?.dialogProcessId),
+    turnScopeId: trimmedText(identity.turnScopeId || eventData?.turnScopeId || turnScopeId),
+    messageId: trimmedText(identity.messageId),
+    presentationMessageId: trimmedText(payload?.presentationMessageId),
+    eventId: trimmedText(identity.eventId),
+  };
+}
+
+function auditMessageCounts(eventData) {
+  return {
+    messageCount: countOf(eventData?.messageCount),
+    assistantCount: countOf(eventData?.assistantCount),
+    toolCount: countOf(eventData?.toolCount),
+    activityTimelineCount: countOf(eventData?.activityTimelineCount),
+    messages: boundedList(eventData?.messages, auditMessage),
+  };
+}
+
+function auditWorkflow(eventData) {
+  const sourceMessage = eventData?.sourceMessage;
+  return {
+    workflowRunId: trimmedText(eventData?.workflowRunId),
+    nodeExecutionId: trimmedText(eventData?.nodeExecutionId),
+    workflowStatus: trimmedText(eventData?.status),
+    workflowRevision: countOf(eventData?.revision),
+    workflowSequence: countOf(eventData?.sequence),
     nodeSessionCount: Array.isArray(eventData?.nodeSessions) ? eventData.nodeSessions.length : 0,
     semanticTextLength: String(eventData?.semanticText || "").length,
-    sourceMessage:
-      eventData?.sourceMessage && typeof eventData.sourceMessage === "object"
-        ? eventData.sourceMessage
-        : null,
-    sequence: Number(ordering.sequence || 0),
-    sequenceDomain: String(ordering.domain || "").trim(),
-    sequenceScopeId: String(ordering.scopeId || "").trim(),
+    sourceMessage: sourceMessage && typeof sourceMessage === "object" ? sourceMessage : null,
+  };
+}
+
+function isPlainRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function auditOrderingAndFlags(eventName, canonicalEnvelope, eventData) {
+  const ordering = canonicalEnvelope?.ordering || {};
+  return {
+    sequence: countOf(ordering.sequence),
+    sequenceDomain: trimmedText(ordering.domain),
+    sequenceScopeId: trimmedText(ordering.scopeId),
     hasTool: Boolean(eventData?.tool),
     hasResult: eventData?.result !== undefined,
     agentTransportConsumption:
-      eventName === "agent_transport_parameters_consumed" &&
-      eventData &&
-      typeof eventData === "object" &&
-      !Array.isArray(eventData)
+      eventName === "agent_transport_parameters_consumed" && isPlainRecord(eventData)
         ? eventData
         : null,
+  };
+}
+
+function buildEventAudit(eventName, eventData, sessionId, turnScopeId) {
+  const canonicalEnvelope = asEventProtocolEnvelope(eventData);
+  return {
+    eventName,
+    ...auditEnvelopeIdentity(canonicalEnvelope, eventData, sessionId, turnScopeId),
+    ...auditMessageCounts(eventData),
+    ...auditWorkflow(eventData),
+    ...auditOrderingAndFlags(eventName, canonicalEnvelope, eventData),
     dataKeys: Object.keys(eventData).sort(),
   };
 }

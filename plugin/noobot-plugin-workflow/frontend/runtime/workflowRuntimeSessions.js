@@ -15,45 +15,52 @@ function normalizeRuntimeStatusInput(item = {}) {
   return { ...canonical, status: String(canonical.status || "").trim() };
 }
 
+function objectOr(value, fallback) {
+  return value && typeof value === "object" ? value : fallback;
+}
+
+function firstText(...values) {
+  return String(values.find(Boolean) || "").trim();
+}
+
+function finiteNumberOrUndefined(primary, fallback) {
+  const value = Number(primary ?? fallback);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function resolveNodeRootSessionId(source, workflowPayload) {
+  if (source.rootSessionId) return firstText(source.rootSessionId);
+  const payload = workflowPayload.value;
+  return firstText(payload?.planningDialog?.sessionId, payload?.runMeta?.sessionId);
+}
+
 function makeNodeSessionFromRun(item = {}, workflowPayload) {
-  const step = item?.step && typeof item.step === "object" ? item.step : {};
-  const dialogProcessId = String(item?.nodeDialogProcessId || "").trim();
+  const source = objectOr(item, {});
+  const step = objectOr(source.step, {});
   return {
-    transition: Number(item?.transition || 0),
-    workflowRunId: String(item?.workflowRunId || "").trim(),
-    nodeExecutionId: String(item?.nodeExecutionId || "").trim(),
-    commandId: String(item?.commandId || "").trim(),
-    parentSessionId: String(item?.parentSessionId || "").trim(),
-    nodeName: String(step?.nodeName || item?.nodeName || "").trim(),
-    nodeId: String(step?.nodeId || item?.nodeId || "").trim(),
-    nodeType: Number.isFinite(Number(step?.nodeType ?? item?.nodeType))
-      ? Number(step?.nodeType ?? item?.nodeType)
-      : undefined,
-    actionNodeStateId: String(item?.actionNodeStateId || step?.actionNodeStateId || "").trim(),
-    stepId: String(item?.stepId || step?.stepId || "").trim(),
-    stepIndex: Number.isFinite(Number(item?.stepIndex ?? step?.stepIndex))
-      ? Number(item?.stepIndex ?? step?.stepIndex)
-      : undefined,
-    type: String(step?.type || item?.type || "").trim(),
-    stateType: Number.isFinite(Number(step?.stateType ?? item?.stateType))
-      ? Number(step?.stateType ?? item?.stateType)
-      : undefined,
-    rootSessionId: String(
-      item?.rootSessionId ||
-        workflowPayload.value?.planningDialog?.sessionId ||
-        workflowPayload.value?.runMeta?.sessionId ||
-        "",
-    ).trim(),
-    dialogProcessId,
-    sessionId: String(item?.nodeSessionId || item?.sessionId || "").trim(),
+    transition: Number(source.transition || 0),
+    workflowRunId: firstText(source.workflowRunId),
+    nodeExecutionId: firstText(source.nodeExecutionId),
+    commandId: firstText(source.commandId),
+    parentSessionId: firstText(source.parentSessionId),
+    nodeName: firstText(step.nodeName, source.nodeName),
+    nodeId: firstText(step.nodeId, source.nodeId),
+    nodeType: finiteNumberOrUndefined(step.nodeType, source.nodeType),
+    actionNodeStateId: firstText(source.actionNodeStateId, step.actionNodeStateId),
+    stepId: firstText(source.stepId, step.stepId),
+    stepIndex: finiteNumberOrUndefined(source.stepIndex, step.stepIndex),
+    type: firstText(step.type, source.type),
+    stateType: finiteNumberOrUndefined(step.stateType, source.stateType),
+    rootSessionId: resolveNodeRootSessionId(source, workflowPayload),
+    dialogProcessId: firstText(source.nodeDialogProcessId),
+    sessionId: firstText(source.nodeSessionId, source.sessionId),
     transferEnvelopes: pickTransferEnvelopeList(item, NODE_RESULT_FIRST_FIELDS, {
       skipEmpty: false,
     }),
-    status: String(item?.status || "").trim(),
-    stepFailure:
-      item?.stepFailure && typeof item.stepFailure === "object" ? item.stepFailure : null,
-    parallelWave: Number(item?.parallelWave || 0),
-    waveOrder: Number(item?.waveOrder || 0),
+    status: firstText(source.status),
+    stepFailure: objectOr(source.stepFailure, null),
+    parallelWave: Number(source.parallelWave || 0),
+    waveOrder: Number(source.waveOrder || 0),
   };
 }
 

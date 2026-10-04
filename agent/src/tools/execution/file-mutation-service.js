@@ -119,21 +119,15 @@ function assertMutationPreconditions({
   }
 }
 
-async function applyFileMutationInternal({
-  filePath,
-  logicalPath,
-  content = null,
-  operation = "replace",
-  scopeId = "",
-  mutationRoot,
-  expectedSha256 = undefined,
-  rollbackState = null,
-  sessionScope = null,
-  writeText,
-  removeFile = async (target) => unlink(target),
-} = {}) {
+const FILE_MUTATION_OPERATIONS = Object.freeze(["create", "replace", "update", "delete"]);
+
+function isRollbackState(rollbackState) {
+  return Boolean(rollbackState) && typeof rollbackState === "object";
+}
+
+function normalizeMutationRequest({ logicalPath, operation, scopeId, mutationRoot, writeText }) {
   const normalizedOperation = String(operation || "replace");
-  if (!["create", "replace", "update", "delete"].includes(normalizedOperation))
+  if (!FILE_MUTATION_OPERATIONS.includes(normalizedOperation))
     throw new TypeError(`unsupported file mutation operation: ${normalizedOperation}`);
   const normalizedScopeId = normalizeMutationScope(scopeId, normalizedOperation);
   const normalizedLogicalPath = String(logicalPath || "").trim();
@@ -143,102 +137,106 @@ async function applyFileMutationInternal({
   if (typeof writeText !== "function") {
     throw new TypeError("file mutation write capability is required");
   }
-  const before = await readExisting(filePath);
-  const beforeSha256 = before.exists ? digest(before.buffer) : null;
-  assertMutationPreconditions({
-    before,
-    beforeSha256,
-    expectedSha256,
+  return {
     operation: normalizedOperation,
+    scopeId: normalizedScopeId,
     logicalPath: normalizedLogicalPath,
-  });
+    root,
+    isAggregate: normalizedOperation === "update",
+  };
+}
+
+function describeNextContent(content, before) {
   const nextContent = content === null ? null : String(content);
   const afterBuffer = nextContent === null ? Buffer.alloc(0) : Buffer.from(nextContent, "utf8");
   const afterIsText = nextContent !== null && !afterBuffer.includes(0);
+  const diffable = nextContent === null || afterIsText;
+  const diffTarget = nextContent === null ? "" : nextContent;
   const incrementalDiff =
-    before.isText && (nextContent === null || afterIsText)
-      ? createFileDiff(before.content || "", nextContent === null ? "" : nextContent)
-      : null;
-  const isAggregate = normalizedOperation === "update";
-  const id = isAggregate
-    ? aggregateMutationId(normalizedScopeId, normalizedLogicalPath)
-    : randomUUID();
-  const existingRecord = isAggregate ? await readOptionalRecord(root, id) : null;
-  if (rollbackState && typeof rollbackState === "object") {
-    rollbackState.before = before;
-    rollbackState.record = existingRecord;
+    before.isText && diffable ? createFileDiff(before.content || "", diffTarget) : null;
+  return { nextContent, afterBuffer, afterIsText, diffable, diffTarget, incrementalDiff };
+}
+
+function assertAggregateIdentity(existingMutation, request) {
+  if (!existingMutation) return;
+  if (
+    existingMutation.path !== request.logicalPath ||
+    existingMutation.aggregate?.scopeId !== request.scopeId
+  ) {
+    throw new Error("file mutation aggregate identity conflict");
   }
-  const existingMutation = existingRecord?.mutations?.[0] || null;
-  if (existingMutation) {
-    if (
-      existingMutation.path !== normalizedLogicalPath ||
-      existingMutation.aggregate?.scopeId !== normalizedScopeId
-    ) {
-      throw new Error("file mutation aggregate identity conflict");
-    }
-  }
+}
+
+function buildAggregateHistory({ request, existingRecord, before, beforeSha256, next }) {
   const externalChanges = collectExternalChanges(existingRecord, before, beforeSha256);
   const initialBeforeContent = existingRecord ? existingRecord.snapshots?.before : before.content;
   const aggregateDiff =
-    isAggregate && typeof initialBeforeContent === "string" && (nextContent === null || afterIsText)
-      ? createFileDiff(initialBeforeContent, nextContent === null ? "" : nextContent)
-      : incrementalDiff;
+    request.isAggregate && typeof initialBeforeContent === "string" && next.diffable
+      ? createFileDiff(initialBeforeContent, next.diffTarget)
+      : next.incrementalDiff;
   const previousDiffs = Array.isArray(existingRecord?.snapshots?.diffs)
     ? existingRecord.snapshots.diffs
     : [];
   const revision = previousDiffs.length + 1;
-  const incrementalDiffEntry = incrementalDiff
-    ? { revision, ...incrementalDiff }
+  const incrementalDiffEntry = next.incrementalDiff
+    ? { revision, ...next.incrementalDiff }
     : { revision, diff: null };
-  const diffs = isAggregate ? [...previousDiffs, incrementalDiffEntry] : undefined;
-  const beforeMeta = existingMutation?.before || {
-    exists: before.exists,
-    isText: before.isText,
-    size: before.buffer.length,
-    sha256: beforeSha256,
-    snapshotRef: before.exists && before.isText ? { mutationId: id, section: "before" } : null,
+  const diffs = request.isAggregate ? [...previousDiffs, incrementalDiffEntry] : undefined;
+  return { externalChanges, initialBeforeContent, aggregateDiff, revision, diffs };
+}
+
+function buildBeforeMeta({ existingMutation, before, beforeSha256, id }) {
+  return (
+    existingMutation?.before || {
+      exists: before.exists,
+      isText: before.isText,
+      size: before.buffer.length,
+      sha256: beforeSha256,
+      snapshotRef: before.exists && before.isText ? { mutationId: id, section: "before" } : null,
+    }
+  );
+}
+
+function buildAfterMeta(next, id) {
+  const exists = next.nextContent !== null;
+  return {
+    exists,
+    isText: next.afterIsText,
+    size: next.afterBuffer.length,
+    sha256: exists ? digest(next.afterBuffer) : null,
+    snapshotRef: exists && next.afterIsText ? { mutationId: id, section: "after" } : null,
   };
-  const afterMeta = {
-    exists: nextContent !== null,
-    isText: afterIsText,
-    size: afterBuffer.length,
-    sha256: nextContent === null ? null : digest(afterBuffer),
-    snapshotRef: nextContent !== null && afterIsText ? { mutationId: id, section: "after" } : null,
+}
+
+function buildAggregateMeta(request, history) {
+  if (!request.isAggregate) return null;
+  return {
+    scopeId: request.scopeId,
+    path: request.logicalPath,
+    revision: history.revision,
+    diffCount: history.diffs.length,
+    ...(history.externalChanges.length
+      ? { externalChangeCount: history.externalChanges.length }
+      : {}),
   };
-  const aggregate = isAggregate
-    ? {
-        scopeId: normalizedScopeId,
-        path: normalizedLogicalPath,
-        revision,
-        diffCount: diffs.length,
-        ...(externalChanges.length ? { externalChangeCount: externalChanges.length } : {}),
-      }
-    : null;
-  const result = createFileMutationResult({
-    id,
-    operation: before.exists ? normalizedOperation : "create",
-    path: normalizedLogicalPath,
-    fileName: path.basename(normalizedLogicalPath || filePath),
-    before: beforeMeta,
-    after: afterMeta,
-    diff: aggregateDiff
-      ? { ...aggregateDiff, snapshotRef: { mutationId: id, section: "diff" } }
-      : null,
-    aggregate,
-    sessionScope,
-  });
+}
+
+async function commitMutationRecord({
+  root,
+  id,
+  record,
+  filePath,
+  before,
+  beforeSha256,
+  afterMeta,
+  nextContent,
+  rollbackState,
+  writeText,
+  removeFile,
+}) {
   await mkdir(root, { recursive: true });
   const recordPath = path.join(root, `${id}.json`);
   const temporaryRecordPath = `${recordPath}.${randomUUID()}.tmp`;
-  const record = {
-    ...result,
-    snapshots: {
-      before: initialBeforeContent,
-      after: nextContent,
-      diff: aggregateDiff,
-      ...(isAggregate ? { diffs, externalChanges } : {}),
-    },
-  };
   let targetCommitted = false;
   try {
     await assertFileMutationVersion(filePath, beforeSha256);
@@ -247,7 +245,7 @@ async function applyFileMutationInternal({
     targetCommitted = true;
     await writeFile(temporaryRecordPath, JSON.stringify(record), "utf8");
     await rename(temporaryRecordPath, recordPath);
-    if (rollbackState && typeof rollbackState === "object") rollbackState.committedRecord = record;
+    if (isRollbackState(rollbackState)) rollbackState.committedRecord = record;
   } catch (error) {
     await rm(temporaryRecordPath, { force: true }).catch((cleanupError) => {
       void cleanupError;
@@ -265,6 +263,87 @@ async function applyFileMutationInternal({
     error.code = error.code || "file_mutation_commit_failed";
     throw error;
   }
+}
+
+async function applyFileMutationInternal({
+  filePath,
+  logicalPath,
+  content = null,
+  operation = "replace",
+  scopeId = "",
+  mutationRoot,
+  expectedSha256 = undefined,
+  rollbackState = null,
+  sessionScope = null,
+  writeText,
+  removeFile = async (target) => unlink(target),
+} = {}) {
+  const request = normalizeMutationRequest({
+    logicalPath,
+    operation,
+    scopeId,
+    mutationRoot,
+    writeText,
+  });
+  const before = await readExisting(filePath);
+  const beforeSha256 = before.exists ? digest(before.buffer) : null;
+  assertMutationPreconditions({
+    before,
+    beforeSha256,
+    expectedSha256,
+    operation: request.operation,
+    logicalPath: request.logicalPath,
+  });
+  const next = describeNextContent(content, before);
+  const id = request.isAggregate
+    ? aggregateMutationId(request.scopeId, request.logicalPath)
+    : randomUUID();
+  const existingRecord = request.isAggregate ? await readOptionalRecord(request.root, id) : null;
+  if (isRollbackState(rollbackState)) {
+    rollbackState.before = before;
+    rollbackState.record = existingRecord;
+  }
+  const existingMutation = existingRecord?.mutations?.[0] || null;
+  assertAggregateIdentity(existingMutation, request);
+  const history = buildAggregateHistory({ request, existingRecord, before, beforeSha256, next });
+  const afterMeta = buildAfterMeta(next, id);
+  const result = createFileMutationResult({
+    id,
+    operation: before.exists ? request.operation : "create",
+    path: request.logicalPath,
+    fileName: path.basename(request.logicalPath || filePath),
+    before: buildBeforeMeta({ existingMutation, before, beforeSha256, id }),
+    after: afterMeta,
+    diff: history.aggregateDiff
+      ? { ...history.aggregateDiff, snapshotRef: { mutationId: id, section: "diff" } }
+      : null,
+    aggregate: buildAggregateMeta(request, history),
+    sessionScope,
+  });
+  const record = {
+    ...result,
+    snapshots: {
+      before: history.initialBeforeContent,
+      after: next.nextContent,
+      diff: history.aggregateDiff,
+      ...(request.isAggregate
+        ? { diffs: history.diffs, externalChanges: history.externalChanges }
+        : {}),
+    },
+  };
+  await commitMutationRecord({
+    root: request.root,
+    id,
+    record,
+    filePath,
+    before,
+    beforeSha256,
+    afterMeta,
+    nextContent: next.nextContent,
+    rollbackState,
+    writeText,
+    removeFile,
+  });
   return result;
 }
 

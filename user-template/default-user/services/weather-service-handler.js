@@ -10,46 +10,72 @@ function formatHint(endpointCfg = {}) {
   };
 }
 
-function pickWeatherSummary(raw = {}, city = "") {
-  const current = Array.isArray(raw?.current_condition)
-    ? raw.current_condition[0] || {}
-    : {};
-  const nearest = Array.isArray(raw?.nearest_area)
-    ? raw.nearest_area[0] || {}
-    : {};
-  const today = Array.isArray(raw?.weather) ? raw.weather[0] || {} : {};
-  const astronomy = Array.isArray(today?.astronomy) ? today.astronomy[0] || {} : {};
+function firstEntry(list) {
+  return Array.isArray(list) ? list[0] || {} : {};
+}
 
+function toText(value) {
+  return String(value || "");
+}
+
+function firstLabel(list) {
+  return toText(list?.[0]?.value);
+}
+
+function pickTextFields(source, mapping) {
+  return Object.fromEntries(
+    Object.entries(mapping).map(([outputKey, sourceKey]) => [outputKey, toText(source[sourceKey])]),
+  );
+}
+
+function pickLocation(nearest, city) {
   return {
-    location: {
-      query_city: String(city || ""),
-      area: String(nearest?.areaName?.[0]?.value || ""),
-      region: String(nearest?.region?.[0]?.value || ""),
-      country: String(nearest?.country?.[0]?.value || ""),
-      latitude: String(nearest?.latitude || ""),
-      longitude: String(nearest?.longitude || ""),
-    },
-    current: {
-      observation_time: String(current?.observation_time || ""),
-      local_obs_time: String(current?.localObsDateTime || ""),
-      weather: String(current?.weatherDesc?.[0]?.value || ""),
-      temp_c: String(current?.temp_C || ""),
-      feels_like_c: String(current?.FeelsLikeC || ""),
-      humidity: String(current?.humidity || ""),
-      wind_kmph: String(current?.windspeedKmph || ""),
-      wind_dir: String(current?.winddir16Point || ""),
-      pressure: String(current?.pressure || ""),
-      uv_index: String(current?.uvIndex || ""),
-      visibility_km: String(current?.visibility || ""),
-    },
-    today: {
-      date: String(today?.date || ""),
-      max_temp_c: String(today?.maxtempC || ""),
-      min_temp_c: String(today?.mintempC || ""),
-      avg_temp_c: String(today?.avgtempC || ""),
-      sunrise: String(astronomy?.sunrise || ""),
-      sunset: String(astronomy?.sunset || ""),
-    },
+    query_city: toText(city),
+    area: firstLabel(nearest.areaName),
+    region: firstLabel(nearest.region),
+    country: firstLabel(nearest.country),
+    ...pickTextFields(nearest, { latitude: "latitude", longitude: "longitude" }),
+  };
+}
+
+function pickCurrent(current) {
+  return {
+    ...pickTextFields(current, {
+      observation_time: "observation_time",
+      local_obs_time: "localObsDateTime",
+    }),
+    weather: firstLabel(current.weatherDesc),
+    ...pickTextFields(current, {
+      temp_c: "temp_C",
+      feels_like_c: "FeelsLikeC",
+      humidity: "humidity",
+      wind_kmph: "windspeedKmph",
+      wind_dir: "winddir16Point",
+      pressure: "pressure",
+      uv_index: "uvIndex",
+      visibility_km: "visibility",
+    }),
+  };
+}
+
+function pickToday(today) {
+  const astronomy = firstEntry(today.astronomy);
+  return {
+    ...pickTextFields(today, {
+      date: "date",
+      max_temp_c: "maxtempC",
+      min_temp_c: "mintempC",
+      avg_temp_c: "avgtempC",
+    }),
+    ...pickTextFields(astronomy, { sunrise: "sunrise", sunset: "sunset" }),
+  };
+}
+
+function pickWeatherSummary(raw = {}, city = "") {
+  return {
+    location: pickLocation(firstEntry(raw?.nearest_area), city),
+    current: pickCurrent(firstEntry(raw?.current_condition)),
+    today: pickToday(firstEntry(raw?.weather)),
   };
 }
 
@@ -68,15 +94,14 @@ export default async function weatherServiceHandler({
     };
   }
   const hint = formatHint(endpointCfg);
-  const city =
-    String(queryString?.city || body?.city || "Chongqing").trim() || "Chongqing";
+  const city = String(queryString?.city || body?.city || "Chongqing").trim() || "Chongqing";
   const outputFormat =
     String(
       custom_param ||
-      queryString?.custom_param ||
-      body?.custom_param ||
-      endpointCfg?.custom_param_format ||
-      "j1",
+        queryString?.custom_param ||
+        body?.custom_param ||
+        endpointCfg?.custom_param_format ||
+        "j1",
     ).trim() || "j1";
   const baseUrl = String(endpointCfg?.url || "https://wttr.in").trim();
   const targetUrl = `${baseUrl.replace(/\/+$/, "")}/${encodeURIComponent(city)}?format=${encodeURIComponent(outputFormat)}`;

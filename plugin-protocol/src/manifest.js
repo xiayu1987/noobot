@@ -131,6 +131,152 @@ const CONTRIBUTION_ID_UNIQUENESS_RULES = Object.freeze([
   ["frontend", "extensions", "frontend contribution ids must be unique"],
 ]);
 
+function addManifestIssue(context, path, message) {
+  context.addIssue({ code: "custom", path, message });
+}
+
+function validateRequiredPorts(manifest, context) {
+  const requiredPermissions = new Set(manifest.requires.permissions);
+  for (const port of new Set(manifest.requires.ports)) {
+    const supportedByDeclaredEntry = Object.values(PLUGIN_SURFACE).some(
+      (surface) => manifest.entries[surface] && PLUGIN_SURFACE_HOST_PORTS[surface].includes(port),
+    );
+    if (!supportedByDeclaredEntry) {
+      addManifestIssue(
+        context,
+        ["requires", "ports"],
+        `${port} is not available on any declared plugin entry`,
+      );
+    }
+    for (const permission of PLUGIN_PORT_PERMISSION_REQUIREMENTS[port] || []) {
+      if (!requiredPermissions.has(permission)) {
+        addManifestIssue(
+          context,
+          ["requires", "permissions"],
+          `${permission} is required by port ${port}`,
+        );
+      }
+    }
+  }
+}
+
+function validateContributionPorts(manifest, context) {
+  const requiredPorts = new Set(manifest.requires.ports);
+  const contributions = Object.values(manifest.contributes);
+  const requiredPortByContribution = [
+    ["hooks.register", contributions.some((item) => item?.hooks?.registers?.length)],
+    ["hooks.emit", contributions.some((item) => item?.hooks?.emits?.length)],
+    ["tools.register", Boolean(manifest.contributes.agent?.tools?.length)],
+    ["routes.bind", Boolean(manifest.contributes.service?.routes?.length)],
+    ["frontend.contribute", Boolean(manifest.contributes.frontend?.extensions?.length)],
+  ];
+  for (const [port, used] of requiredPortByContribution) {
+    if (used && !requiredPorts.has(port)) {
+      addManifestIssue(
+        context,
+        ["requires", "ports"],
+        `${port} is required by declared contributions`,
+      );
+    }
+  }
+}
+
+function validateSurfacePorts(surface, contributes, context) {
+  const allowedPorts = new Set(PLUGIN_SURFACE_HOST_PORTS[surface]);
+  const surfaceUsesPort = {
+    [PLUGIN_HOST_PORT.HOOKS_REGISTER]: Boolean(contributes?.hooks?.registers?.length),
+    [PLUGIN_HOST_PORT.HOOKS_EMIT]: Boolean(contributes?.hooks?.emits?.length),
+    [PLUGIN_HOST_PORT.TOOLS_REGISTER]: Boolean(contributes?.tools?.length),
+    [PLUGIN_HOST_PORT.ROUTES_BIND]: Boolean(contributes?.routes?.length),
+    [PLUGIN_HOST_PORT.FRONTEND_CONTRIBUTE]: Boolean(contributes?.extensions?.length),
+  };
+  for (const [port, used] of Object.entries(surfaceUsesPort)) {
+    if (used && !allowedPorts.has(port)) {
+      addManifestIssue(context, ["contributes", surface], `${port} is not available on ${surface}`);
+    }
+  }
+}
+
+function validateSurfaceHookOwnership(surface, contributes, context) {
+  for (const point of [
+    ...(contributes?.hooks?.registers || []).map((item) => item.point),
+    ...(contributes?.hooks?.emits || []),
+  ]) {
+    const ownerSurface =
+      requireHookPointDomain(point) === HOOK_POINT_DOMAIN.SERVICE
+        ? PLUGIN_SURFACE.SERVICE
+        : PLUGIN_SURFACE.AGENT;
+    if (ownerSurface !== surface) {
+      addManifestIssue(
+        context,
+        ["contributes", surface, "hooks"],
+        `${point} is owned by ${ownerSurface}`,
+      );
+    }
+  }
+}
+
+const SURFACE_CONTRIBUTION_OWNERS = Object.freeze([
+  ["routes", PLUGIN_SURFACE.SERVICE, "routes are service contributions"],
+  ["tools", PLUGIN_SURFACE.AGENT, "tools are agent contributions"],
+  ["extensions", PLUGIN_SURFACE.FRONTEND, "extensions are frontend contributions"],
+]);
+
+function validateSurfaceContributionKinds(surface, contributes, context) {
+  for (const [key, ownerSurface, message] of SURFACE_CONTRIBUTION_OWNERS) {
+    if (contributes?.[key]?.length && surface !== ownerSurface) {
+      addManifestIssue(context, ["contributes", surface, key], message);
+    }
+  }
+}
+
+function hasDuplicates(values) {
+  return new Set(values).size !== values.length;
+}
+
+function validateSurfaceHookUniqueness(surface, contributes, context) {
+  const registers = contributes?.hooks?.registers || [];
+  const emits = contributes?.hooks?.emits || [];
+  if (hasDuplicates(registers.map((item) => item.id))) {
+    addManifestIssue(
+      context,
+      ["contributes", surface, "hooks", "registers"],
+      "hook registration ids must be unique",
+    );
+  }
+  if (hasDuplicates(emits)) {
+    addManifestIssue(
+      context,
+      ["contributes", surface, "hooks", "emits"],
+      "hook emissions must be unique",
+    );
+  }
+}
+
+function validateSurfaceContributions(manifest, context) {
+  for (const surface of Object.values(PLUGIN_SURFACE)) {
+    const contributes = manifest.contributes[surface];
+    if (contributes && !manifest.entries[surface]) {
+      addManifestIssue(
+        context,
+        ["entries", surface],
+        `contributes.${surface} requires entries.${surface}`,
+      );
+    }
+    if (manifest.entries[surface]) validateSurfacePorts(surface, contributes, context);
+    validateSurfaceHookOwnership(surface, contributes, context);
+    validateSurfaceContributionKinds(surface, contributes, context);
+    validateSurfaceHookUniqueness(surface, contributes, context);
+  }
+}
+
+function validateContributionIdUniqueness(manifest, context) {
+  for (const [surface, key, message] of CONTRIBUTION_ID_UNIQUENESS_RULES) {
+    const ids = (manifest.contributes[surface]?.[key] || []).map((item) => item.id);
+    if (hasDuplicates(ids)) addManifestIssue(context, ["contributes", surface, key], message);
+  }
+}
+
 export const pluginManifestSchema = z
   .object({
     protocolVersion: z.literal(PLUGIN_PROTOCOL_VERSION),
@@ -169,140 +315,10 @@ export const pluginManifestSchema = z
   })
   .strict()
   .superRefine((manifest, context) => {
-    const requiredPorts = new Set(manifest.requires.ports);
-    const requiredPermissions = new Set(manifest.requires.permissions);
-    for (const port of requiredPorts) {
-      const supportedByDeclaredEntry = Object.values(PLUGIN_SURFACE).some(
-        (surface) => manifest.entries[surface] && PLUGIN_SURFACE_HOST_PORTS[surface].includes(port),
-      );
-      if (!supportedByDeclaredEntry) {
-        context.addIssue({
-          code: "custom",
-          path: ["requires", "ports"],
-          message: `${port} is not available on any declared plugin entry`,
-        });
-      }
-      for (const permission of PLUGIN_PORT_PERMISSION_REQUIREMENTS[port] || []) {
-        if (!requiredPermissions.has(permission)) {
-          context.addIssue({
-            code: "custom",
-            path: ["requires", "permissions"],
-            message: `${permission} is required by port ${port}`,
-          });
-        }
-      }
-    }
-    const requiredPortByContribution = [
-      [
-        "hooks.register",
-        Object.values(manifest.contributes).some((item) => item?.hooks?.registers?.length),
-      ],
-      [
-        "hooks.emit",
-        Object.values(manifest.contributes).some((item) => item?.hooks?.emits?.length),
-      ],
-      ["tools.register", Boolean(manifest.contributes.agent?.tools?.length)],
-      ["routes.bind", Boolean(manifest.contributes.service?.routes?.length)],
-      ["frontend.contribute", Boolean(manifest.contributes.frontend?.extensions?.length)],
-    ];
-    for (const [port, used] of requiredPortByContribution) {
-      if (used && !requiredPorts.has(port)) {
-        context.addIssue({
-          code: "custom",
-          path: ["requires", "ports"],
-          message: `${port} is required by declared contributions`,
-        });
-      }
-    }
-    for (const surface of Object.values(PLUGIN_SURFACE)) {
-      const contributes = manifest.contributes[surface];
-      if (contributes && !manifest.entries[surface]) {
-        context.addIssue({
-          code: "custom",
-          path: ["entries", surface],
-          message: `contributes.${surface} requires entries.${surface}`,
-        });
-      }
-      if (manifest.entries[surface]) {
-        const allowedPorts = new Set(PLUGIN_SURFACE_HOST_PORTS[surface]);
-        const surfaceUsesPort = {
-          [PLUGIN_HOST_PORT.HOOKS_REGISTER]: Boolean(contributes?.hooks?.registers?.length),
-          [PLUGIN_HOST_PORT.HOOKS_EMIT]: Boolean(contributes?.hooks?.emits?.length),
-          [PLUGIN_HOST_PORT.TOOLS_REGISTER]: Boolean(contributes?.tools?.length),
-          [PLUGIN_HOST_PORT.ROUTES_BIND]: Boolean(contributes?.routes?.length),
-          [PLUGIN_HOST_PORT.FRONTEND_CONTRIBUTE]: Boolean(contributes?.extensions?.length),
-        };
-        for (const [port, used] of Object.entries(surfaceUsesPort)) {
-          if (used && !allowedPorts.has(port)) {
-            context.addIssue({
-              code: "custom",
-              path: ["contributes", surface],
-              message: `${port} is not available on ${surface}`,
-            });
-          }
-        }
-      }
-      for (const point of [
-        ...(contributes?.hooks?.registers || []).map((item) => item.point),
-        ...(contributes?.hooks?.emits || []),
-      ]) {
-        const ownerSurface =
-          requireHookPointDomain(point) === HOOK_POINT_DOMAIN.SERVICE
-            ? PLUGIN_SURFACE.SERVICE
-            : PLUGIN_SURFACE.AGENT;
-        if (ownerSurface !== surface) {
-          context.addIssue({
-            code: "custom",
-            path: ["contributes", surface, "hooks"],
-            message: `${point} is owned by ${ownerSurface}`,
-          });
-        }
-      }
-      if (contributes?.routes?.length && surface !== PLUGIN_SURFACE.SERVICE) {
-        context.addIssue({
-          code: "custom",
-          path: ["contributes", surface, "routes"],
-          message: "routes are service contributions",
-        });
-      }
-      if (contributes?.tools?.length && surface !== PLUGIN_SURFACE.AGENT) {
-        context.addIssue({
-          code: "custom",
-          path: ["contributes", surface, "tools"],
-          message: "tools are agent contributions",
-        });
-      }
-      if (contributes?.extensions?.length && surface !== PLUGIN_SURFACE.FRONTEND) {
-        context.addIssue({
-          code: "custom",
-          path: ["contributes", surface, "extensions"],
-          message: "extensions are frontend contributions",
-        });
-      }
-      const registers = contributes?.hooks?.registers || [];
-      const emits = contributes?.hooks?.emits || [];
-      const registrationIds = registers.map((item) => item.id);
-      if (new Set(registrationIds).size !== registrationIds.length) {
-        context.addIssue({
-          code: "custom",
-          path: ["contributes", surface, "hooks", "registers"],
-          message: "hook registration ids must be unique",
-        });
-      }
-      if (new Set(emits).size !== emits.length) {
-        context.addIssue({
-          code: "custom",
-          path: ["contributes", surface, "hooks", "emits"],
-          message: "hook emissions must be unique",
-        });
-      }
-    }
-    for (const [surface, key, message] of CONTRIBUTION_ID_UNIQUENESS_RULES) {
-      const ids = (manifest.contributes[surface]?.[key] || []).map((item) => item.id);
-      if (new Set(ids).size !== ids.length) {
-        context.addIssue({ code: "custom", path: ["contributes", surface, key], message });
-      }
-    }
+    validateRequiredPorts(manifest, context);
+    validateContributionPorts(manifest, context);
+    validateSurfaceContributions(manifest, context);
+    validateContributionIdUniqueness(manifest, context);
     validateFrontendExtensionModules(manifest.contributes.frontend?.extensions, context);
   });
 

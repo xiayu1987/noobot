@@ -23,6 +23,138 @@ import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 const LIFECYCLE_SUPERSEDED = "superseded";
 const isAcceptedChannelDelivery = (result = {}) =>
   result.result === "sent" || result.result === "queued" || result.result === LIFECYCLE_SUPERSEDED;
+const TERMINAL_LIFECYCLE_DELIVERY_EVENT = "agentProxy.channel.terminalLifecycle.delivery";
+
+function resolveBroadcastContext(envelope) {
+  const eventData = envelope?.data || {};
+  const lifecycle = eventData?.payload || {};
+  return {
+    envelope,
+    eventData,
+    lifecycle,
+    terminalLifecycle:
+      envelope?.event === TURN_LIFECYCLE_WIRE_EVENT && isTerminalTurnEvent(lifecycle?.eventType),
+  };
+}
+
+function terminalLogIdentity({ eventData, lifecycle }) {
+  return {
+    sessionId: eventData?.identity?.sessionId,
+    dialogProcessId: lifecycle.dialogProcessId,
+    turnScopeId: eventData?.identity?.turnScopeId,
+  };
+}
+
+function terminalEventFields({ eventData, lifecycle }) {
+  return {
+    eventId: String(eventData?.identity?.eventId || "").trim(),
+    eventType: String(lifecycle.eventType || "").trim(),
+  };
+}
+
+function terminalSequences({ envelope, eventData }) {
+  return {
+    lifecycleSequence: Number(eventData?.ordering?.sequence || 0),
+    transportSequence: Number(envelope?.sequence || 0),
+  };
+}
+
+function logTerminalDeliveryDeferred(manager, channel, context) {
+  manager.logSessionEvent(channel, {
+    category: "transport",
+    level: "warn",
+    event: "agentProxy.channel.terminalLifecycle.deliveryDeferred",
+    ...terminalLogIdentity(context),
+    data: {
+      channelKey: channel.key,
+      ...terminalEventFields(context),
+      sequence: Number(context.eventData?.ordering?.sequence || 0),
+      reason: "no_subscriber",
+    },
+  });
+}
+
+function bufferForReconnect(manager, channel, subscriberSocket, context) {
+  const eventBuffer = subscriberSocket.__agentProxyReconnectTransaction?.eventBuffer;
+  if (!Array.isArray(eventBuffer)) return false;
+  eventBuffer.push({
+    channelKey: channel.key,
+    sequence: Number(context.envelope?.sequence || 0),
+    envelope: context.envelope,
+  });
+  if (context.terminalLifecycle) {
+    manager.logSessionEvent(channel, {
+      category: "transport",
+      event: TERMINAL_LIFECYCLE_DELIVERY_EVENT,
+      ...terminalLogIdentity(context),
+      data: {
+        channelKey: channel.key,
+        connectionId: ensureConnectionId(subscriberSocket),
+        ...terminalEventFields(context),
+        ...terminalSequences(context),
+        result: "buffered_for_reconnect",
+      },
+    });
+  }
+  return true;
+}
+
+function logTerminalDelivery(manager, channel, delivery, context) {
+  const { subscriberSocket, connectionId, sendResult, accepted } = delivery;
+  manager.logSessionEvent(channel, {
+    category: "transport",
+    level: accepted ? "info" : "warn",
+    event: TERMINAL_LIFECYCLE_DELIVERY_EVENT,
+    ...terminalLogIdentity(context),
+    data: {
+      channelKey: channel.key,
+      connectionId,
+      ...terminalEventFields(context),
+      ...terminalSequences(context),
+      bufferedAmount: Number(subscriberSocket.bufferedAmount || 0),
+      result: sendResult.result,
+      reason: sendResult.reason,
+    },
+  });
+}
+
+function logBroadcastDrop(manager, channel, delivery, context) {
+  const { envelope, eventData } = context;
+  manager.logSessionEvent(channel, {
+    category: "transport",
+    level: "warn",
+    event: "agentProxy.channel.broadcast.delivery",
+    data: {
+      channelKey: channel.key,
+      connectionId: delivery.connectionId,
+      result: delivery.sendResult.result,
+      dropReason: delivery.sendResult.reason,
+      ...resolveMessageEventTrace(envelope?.event, eventData, envelope?.sequence),
+    },
+  });
+}
+
+function rememberDeliveredSequence(channel, subscriberSocket, envelope) {
+  if (envelope?.event === TURN_LIFECYCLE_WIRE_EVENT) return;
+  if (isTransientMessageEvent(envelope?.data)) return;
+  subscriberSocket.__agentProxyLastSequenceByChannel =
+    subscriberSocket.__agentProxyLastSequenceByChannel || {};
+  subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(envelope?.sequence || 0);
+}
+
+function deliverBroadcastToSubscriber(manager, channel, subscriberSocket, context) {
+  const connectionId = ensureConnectionId(subscriberSocket);
+  const sendResult = manager.sendChannelEvent(channel, subscriberSocket, context.envelope);
+  const accepted = isAcceptedChannelDelivery(sendResult);
+  const delivery = { subscriberSocket, connectionId, sendResult, accepted };
+  if (context.terminalLifecycle) logTerminalDelivery(manager, channel, delivery, context);
+  if (!accepted) {
+    logBroadcastDrop(manager, channel, delivery, context);
+    return;
+  }
+  manager.recordSuccessfulDataPlaneOperation("deliveries");
+  rememberDeliveredSequence(channel, subscriberSocket, context.envelope);
+}
 
 class SubscriberBroadcastMethods {
   attachSubscriber(channel, socket, { sendStateSnapshot = true } = {}) {
@@ -307,104 +439,14 @@ class SubscriberBroadcastMethods {
 
   broadcastChannelEvent(channel, envelope) {
     if (!channel || !envelope) return;
-    const eventData = envelope?.data || {};
-    const lifecycle = eventData?.payload || {};
-    const terminalLifecycle =
-      envelope?.event === TURN_LIFECYCLE_WIRE_EVENT && isTerminalTurnEvent(lifecycle?.eventType);
-    if (!channel.subscribers.size && terminalLifecycle) {
-      this.logSessionEvent(channel, {
-        category: "transport",
-        level: "warn",
-        event: "agentProxy.channel.terminalLifecycle.deliveryDeferred",
-        sessionId: eventData?.identity?.sessionId,
-        dialogProcessId: lifecycle.dialogProcessId,
-        turnScopeId: eventData?.identity?.turnScopeId,
-        data: {
-          channelKey: channel.key,
-          eventId: String(eventData?.identity?.eventId || "").trim(),
-          eventType: String(lifecycle.eventType || "").trim(),
-          sequence: Number(eventData?.ordering?.sequence || 0),
-          reason: "no_subscriber",
-        },
-      });
+    const context = resolveBroadcastContext(envelope);
+    if (!channel.subscribers.size && context.terminalLifecycle) {
+      logTerminalDeliveryDeferred(this, channel, context);
     }
     this.recordSuccessfulDataPlaneOperation("broadcasts");
     for (const subscriberSocket of channel.subscribers) {
-      const reconnectTransaction = subscriberSocket.__agentProxyReconnectTransaction;
-      if (Array.isArray(reconnectTransaction?.eventBuffer)) {
-        reconnectTransaction.eventBuffer.push({
-          channelKey: channel.key,
-          sequence: Number(envelope?.sequence || 0),
-          envelope,
-        });
-        if (terminalLifecycle) {
-          this.logSessionEvent(channel, {
-            category: "transport",
-            event: "agentProxy.channel.terminalLifecycle.delivery",
-            sessionId: eventData?.identity?.sessionId,
-            dialogProcessId: lifecycle.dialogProcessId,
-            turnScopeId: eventData?.identity?.turnScopeId,
-            data: {
-              channelKey: channel.key,
-              connectionId: ensureConnectionId(subscriberSocket),
-              eventId: String(eventData?.identity?.eventId || "").trim(),
-              eventType: String(lifecycle.eventType || "").trim(),
-              lifecycleSequence: Number(eventData?.ordering?.sequence || 0),
-              transportSequence: Number(envelope?.sequence || 0),
-              result: "buffered_for_reconnect",
-            },
-          });
-        }
-        continue;
-      }
-      const connectionId = ensureConnectionId(subscriberSocket);
-      const sendResult = this.sendChannelEvent(channel, subscriberSocket, envelope);
-      const deliveryAccepted = isAcceptedChannelDelivery(sendResult);
-      if (terminalLifecycle) {
-        this.logSessionEvent(channel, {
-          category: "transport",
-          level: deliveryAccepted ? "info" : "warn",
-          event: "agentProxy.channel.terminalLifecycle.delivery",
-          sessionId: eventData?.identity?.sessionId,
-          dialogProcessId: lifecycle.dialogProcessId,
-          turnScopeId: eventData?.identity?.turnScopeId,
-          data: {
-            channelKey: channel.key,
-            connectionId,
-            eventId: String(eventData?.identity?.eventId || "").trim(),
-            eventType: String(lifecycle.eventType || "").trim(),
-            lifecycleSequence: Number(eventData?.ordering?.sequence || 0),
-            transportSequence: Number(envelope?.sequence || 0),
-            bufferedAmount: Number(subscriberSocket.bufferedAmount || 0),
-            result: sendResult.result,
-            reason: sendResult.reason,
-          },
-        });
-      }
-      if (!deliveryAccepted) {
-        this.logSessionEvent(channel, {
-          category: "transport",
-          level: "warn",
-          event: "agentProxy.channel.broadcast.delivery",
-          data: {
-            channelKey: channel.key,
-            connectionId,
-            result: sendResult.result,
-            dropReason: sendResult.reason,
-            ...resolveMessageEventTrace(envelope?.event, eventData, envelope?.sequence),
-          },
-        });
-      }
-      if (!deliveryAccepted) continue;
-      this.recordSuccessfulDataPlaneOperation("deliveries");
-      if (envelope?.event === TURN_LIFECYCLE_WIRE_EVENT) continue;
-
-      if (isTransientMessageEvent(envelope?.data)) continue;
-      subscriberSocket.__agentProxyLastSequenceByChannel =
-        subscriberSocket.__agentProxyLastSequenceByChannel || {};
-      subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(
-        envelope?.sequence || 0,
-      );
+      if (bufferForReconnect(this, channel, subscriberSocket, context)) continue;
+      deliverBroadcastToSubscriber(this, channel, subscriberSocket, context);
     }
   }
 

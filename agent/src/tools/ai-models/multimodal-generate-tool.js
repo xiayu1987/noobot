@@ -177,6 +177,221 @@ function resolveGenerationModelSpec({
   };
 }
 
+function trimmedText(value) {
+  return String(value || "").trim();
+}
+
+function assertGenerationModelSupported(state, runtime) {
+  const { resolvedModelSpec, resolvedModelName } = state;
+  if (!resolvedModelSpec) {
+    throw recoverableToolError(
+      tMultimodal(runtime, "modelNotFound", { model: resolvedModelName }),
+      {
+        code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
+        details: { requestedModel: trimmedText(resolvedModelName) },
+      },
+    );
+  }
+  if (supportsModelMultimodalGeneration(resolvedModelSpec, [MODEL_MULTIMODAL_MODALITY.IMAGE])) {
+    return;
+  }
+  const currentModelAlias = trimmedText(resolvedModelSpec.alias || resolvedModelName);
+  const currentModelName = trimmedText(resolvedModelSpec.model);
+  throw recoverableToolError(
+    tMultimodal(runtime, "multimodalUnsupportedError", {
+      model: currentModelAlias || currentModelName || "unknown_model",
+    }),
+    {
+      code: ERROR_CODE.RECOVERABLE_MODEL_MULTIMODAL_GENERATION_UNSUPPORTED,
+      details: {
+        message: tMultimodal(runtime, "multimodalUnsupportedMessage"),
+        modelAlias: currentModelAlias,
+        model: currentModelName,
+      },
+    },
+  );
+}
+
+function buildImageGenerationRequest({ modelSpec, generationContent, imageSize, input, runtime }) {
+  return {
+    model: modelSpec,
+    messages: [],
+    operation: {
+      kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
+      input: { prompt: generationContent },
+      options: {
+        size: imageSize,
+        resolution: input.resolution,
+        n: input.n,
+        quality: input.quality,
+        imageUrls: normalizeStringArray(input.image_urls),
+      },
+    },
+    options: {
+      signal: runtime?.abortSignal || undefined,
+      locale: runtime?.systemRuntime?.config?.locale || runtime?.locale || "zh-CN",
+    },
+    invocation: {
+      flow: MULTIMODAL_FLOW_NAME,
+      purpose: MULTIMODAL_PURPOSE_NAME,
+      domain: MULTIMODAL_DOMAIN_NAME,
+      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+    },
+  };
+}
+
+async function materializeImageAttachments(imageArtifacts, fetchImpl, runtime) {
+  const outputArtifacts = [];
+  for (const imageArtifact of imageArtifacts) {
+    const resolvedBase64 =
+      imageArtifact.b64Json || (await imageUrlToBase64(imageArtifact.url, fetchImpl, runtime));
+    if (!resolvedBase64) continue;
+    outputArtifacts.push({
+      type: "attachment_bytes",
+      name: imageArtifact.fileName,
+      mimeType: MIME_TYPE.IMAGE_PNG,
+      contentBase64: resolvedBase64,
+    });
+  }
+  return outputArtifacts;
+}
+
+function stateFailureDetails(state, error = {}, message = "") {
+  return buildFailureDetails({
+    message,
+    modelAlias: trimmedText(state.resolvedModelSpec?.alias),
+    model: trimmedText(state.resolvedModelSpec?.model),
+    requestedModel: state.resolvedModelName,
+    effectiveImageSize: state.effectiveImageSize,
+    modelSpec: state.resolvedModelSpec || {},
+    requestUrl: error?.requestUrl,
+    requestMethod: error?.requestMethod,
+  });
+}
+
+function toGenerationFailure(error, state, runtime) {
+  const errorStatusCode = Number(error?.status || error?.statusCode || 0);
+  const errorMessage = String(error?.message || String(error || "")).trim();
+  if (errorStatusCode === 403 && errorMessage.toLowerCase().includes("images api is not enabled")) {
+    const hintMessage = appendCapabilityHint(
+      tMultimodal(runtime, "imagesApiNotEnabledError"),
+      runtime,
+    );
+    return recoverableToolError(hintMessage, {
+      code: ERROR_CODE.RECOVERABLE_IMAGES_API_NOT_ENABLED,
+      details: stateFailureDetails(state, error, hintMessage),
+    });
+  }
+  const baseMessage = errorMessage || tMultimodal(runtime, "generateFailed");
+  if (!shouldAppendCapabilityHint(error)) {
+    return recoverableToolError(baseMessage, {
+      code: resolveGenerateErrorCode(error),
+      details: stateFailureDetails(state, error),
+    });
+  }
+  const hintMessage = appendCapabilityHint(baseMessage, runtime);
+  return recoverableToolError(hintMessage, {
+    code: resolveGenerateErrorCode(error),
+    details: stateFailureDetails(state, error, hintMessage),
+  });
+}
+
+async function generateImages(input, deps, state) {
+  const { runtime } = deps;
+  const selection = resolveGenerationModelSpec({
+    modelName: input.model_name,
+    effectiveConfig: deps.effectiveConfig,
+    globalConfig: deps.globalConfig,
+    userConfig: deps.userConfig,
+  });
+  state.resolvedModelName = selection.resolvedModelName;
+  state.resolvedModelSpec = selection.resolvedModelSpec;
+  assertGenerationModelSupported(state, runtime);
+  state.effectiveImageSize = trimmedText(input.size || input.image_size);
+  const modelPort = runtime?.modelPort;
+  if (!modelPort || typeof modelPort.invoke !== "function") {
+    throw new TypeError("multimodal generation requires runtime.modelPort");
+  }
+  const response = await modelPort.invoke(
+    buildImageGenerationRequest({
+      modelSpec: state.resolvedModelSpec,
+      generationContent: state.generationContent,
+      imageSize: state.effectiveImageSize,
+      input,
+      runtime,
+    }),
+  );
+  const generationResult = response.result;
+  const imageArtifacts = Array.isArray(generationResult?.imageArtifacts)
+    ? generationResult.imageArtifacts
+    : [];
+  if (!imageArtifacts.length) {
+    throw recoverableToolError(tMultimodal(runtime, "generateFailed"), {
+      code: ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED,
+      details: stateFailureDetails(
+        state,
+        {},
+        "Image generation completed without an image_generation_call result",
+      ),
+    });
+  }
+  const outputArtifacts = await materializeImageAttachments(
+    imageArtifacts,
+    deps.sharedFetch,
+    runtime,
+  );
+  return toToolJsonResult(
+    TOOL_NAME.MULTIMODAL_GENERATE,
+    {
+      ok: true,
+      status: TOOL_RESULT_STATUS.COMPLETED,
+      callMode: TOOL_CALL_MODE.MULTIMODAL_GENERATION,
+      modelAlias: trimmedText(state.resolvedModelSpec?.alias),
+      model: trimmedText(state.resolvedModelSpec?.model),
+      text: trimmedText(generationResult?.rawText),
+      generationContentSource: "tool_input_generation_content",
+      outputArtifacts,
+      summary: {
+        task_id: trimmedText(generationResult?.taskId),
+        generated_image_count: imageArtifacts.length,
+        saved_attachment_count: outputArtifacts.length,
+      },
+    },
+    true,
+  );
+}
+
+async function runMultimodalGeneration(rawInput = {}, deps = {}) {
+  const input = {
+    model_name: "",
+    image_size: "",
+    size: "",
+    resolution: "",
+    n: 1,
+    quality: "",
+    image_urls: [],
+  };
+  for (const [key, value] of Object.entries(rawInput || {})) {
+    if (value !== undefined) input[key] = value;
+  }
+  const state = {
+    generationContent: trimmedText(input.generation_content),
+    resolvedModelSpec: null,
+    resolvedModelName: "",
+    effectiveImageSize: "",
+  };
+  if (!state.generationContent) {
+    throw recoverableToolError(tMultimodal(deps.runtime, "generationContentRequired"), {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+    });
+  }
+  try {
+    return await generateImages(input, deps, state);
+  } catch (error) {
+    throw toGenerationFailure(error, state, deps.runtime);
+  }
+}
+
 export function createMultimodalGenerateTool({ agentContext }) {
   const runtime = agentContext?.bindings?.runtime || {};
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
@@ -213,213 +428,14 @@ export function createMultimodalGenerateTool({ agentContext }) {
         .optional()
         .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
     }),
-    func: async ({
-      generation_content,
-      model_name = "",
-      image_size = "",
-      size = "",
-      resolution = "",
-      n = 1,
-      quality = "",
-      image_urls = [],
-    }) => {
-      const generationContent = String(generation_content || "").trim();
-      let resolvedModelSpec = null;
-      let resolvedModelName = "";
-      let effectiveImageSize = "";
-      if (!generationContent) {
-        throw recoverableToolError(tMultimodal(runtime, "generationContentRequired"), {
-          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        });
-      }
-      try {
-        const resolvedSelection = resolveGenerationModelSpec({
-          modelName: model_name,
-          effectiveConfig,
-          globalConfig,
-          userConfig,
-        });
-        resolvedModelName = resolvedSelection.resolvedModelName;
-        const selectedModelSpec = resolvedSelection.resolvedModelSpec;
-        resolvedModelSpec = selectedModelSpec;
-        if (!resolvedModelSpec) {
-          throw recoverableToolError(
-            tMultimodal(runtime, "modelNotFound", { model: resolvedModelName }),
-            {
-              code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
-              details: {
-                requestedModel: String(resolvedModelName || "").trim(),
-              },
-            },
-          );
-        }
-        if (
-          !supportsModelMultimodalGeneration(resolvedModelSpec || {}, [
-            MODEL_MULTIMODAL_MODALITY.IMAGE,
-          ])
-        ) {
-          const currentModelAlias = String(
-            resolvedModelSpec?.alias || resolvedModelName || "",
-          ).trim();
-          const currentModelName = String(resolvedModelSpec?.model || "").trim();
-          throw recoverableToolError(
-            tMultimodal(runtime, "multimodalUnsupportedError", {
-              model: currentModelAlias || currentModelName || "unknown_model",
-            }),
-            {
-              code: ERROR_CODE.RECOVERABLE_MODEL_MULTIMODAL_GENERATION_UNSUPPORTED,
-              details: {
-                message: tMultimodal(runtime, "multimodalUnsupportedMessage"),
-                modelAlias: currentModelAlias,
-                model: currentModelName,
-              },
-            },
-          );
-        }
-
-        effectiveImageSize = String(size || image_size || "").trim();
-        const modelPort = runtime?.modelPort;
-        if (!modelPort || typeof modelPort.invoke !== "function") {
-          throw new TypeError("multimodal generation requires runtime.modelPort");
-        }
-        const response = await modelPort.invoke({
-          model: resolvedModelSpec,
-          messages: [],
-          operation: {
-            kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
-            input: { prompt: generationContent },
-            options: {
-              size: effectiveImageSize,
-              resolution,
-              n,
-              quality,
-              imageUrls: normalizeStringArray(image_urls),
-            },
-          },
-          options: {
-            signal: runtime?.abortSignal || undefined,
-            locale: runtime?.systemRuntime?.config?.locale || runtime?.locale || "zh-CN",
-          },
-          invocation: {
-            flow: MULTIMODAL_FLOW_NAME,
-            purpose: MULTIMODAL_PURPOSE_NAME,
-            domain: MULTIMODAL_DOMAIN_NAME,
-            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-          },
-        });
-        const generationResult = response.result;
-        const imageArtifacts = Array.isArray(generationResult?.imageArtifacts)
-          ? generationResult.imageArtifacts
-          : [];
-        if (!imageArtifacts.length) {
-          throw recoverableToolError(tMultimodal(runtime, "generateFailed"), {
-            code: ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED,
-            details: buildFailureDetails({
-              message: "Image generation completed without an image_generation_call result",
-              modelAlias: String(resolvedModelSpec?.alias || "").trim(),
-              model: String(resolvedModelSpec?.model || "").trim(),
-              requestedModel: resolvedModelName,
-              effectiveImageSize,
-              modelSpec: resolvedModelSpec || {},
-            }),
-          });
-        }
-        const generatedAttachments = [];
-        for (const imageArtifact of imageArtifacts) {
-          const resolvedBase64 =
-            imageArtifact.b64Json ||
-            (await imageUrlToBase64(imageArtifact.url, sharedFetch, runtime));
-          if (!resolvedBase64) continue;
-          generatedAttachments.push({
-            name: imageArtifact.fileName,
-            mimeType: MIME_TYPE.IMAGE_PNG,
-            contentBase64: resolvedBase64,
-          });
-        }
-        const outputArtifacts = generatedAttachments.map((item) => ({
-          type: "attachment_bytes",
-          name: item.name,
-          mimeType: item.mimeType,
-          contentBase64: item.contentBase64,
-        }));
-        return toToolJsonResult(
-          TOOL_NAME.MULTIMODAL_GENERATE,
-          {
-            ok: true,
-            status: TOOL_RESULT_STATUS.COMPLETED,
-            callMode: TOOL_CALL_MODE.MULTIMODAL_GENERATION,
-            modelAlias: String(resolvedModelSpec?.alias || "").trim(),
-            model: String(resolvedModelSpec?.model || "").trim(),
-            text: String(generationResult?.rawText || "").trim(),
-            generationContentSource: "tool_input_generation_content",
-            outputArtifacts,
-            summary: {
-              task_id: String(generationResult?.taskId || "").trim(),
-              generated_image_count: imageArtifacts.length,
-              saved_attachment_count: outputArtifacts.length,
-            },
-          },
-          true,
-        );
-      } catch (error) {
-        const errorStatusCode = Number(error?.status || error?.statusCode || 0);
-        const errorMessage = String(error?.message || String(error || "")).trim();
-        const normalizedMessage = errorMessage.toLowerCase();
-        const modelAlias = String(resolvedModelSpec?.alias || "").trim();
-        const modelName = String(resolvedModelSpec?.model || "").trim();
-
-        if (errorStatusCode === 403 && normalizedMessage.includes("images api is not enabled")) {
-          const hintMessage = appendCapabilityHint(
-            tMultimodal(runtime, "imagesApiNotEnabledError"),
-            runtime,
-          );
-          throw recoverableToolError(hintMessage, {
-            code: ERROR_CODE.RECOVERABLE_IMAGES_API_NOT_ENABLED,
-            details: buildFailureDetails({
-              message: hintMessage,
-              modelAlias,
-              model: modelName,
-              requestedModel: resolvedModelName,
-              effectiveImageSize,
-              modelSpec: resolvedModelSpec || {},
-              requestUrl: error?.requestUrl,
-              requestMethod: error?.requestMethod,
-            }),
-          });
-        }
-        if (!shouldAppendCapabilityHint(error)) {
-          throw recoverableToolError(errorMessage || tMultimodal(runtime, "generateFailed"), {
-            code: resolveGenerateErrorCode(error),
-            details: buildFailureDetails({
-              modelAlias,
-              model: modelName,
-              requestedModel: resolvedModelName,
-              effectiveImageSize,
-              modelSpec: resolvedModelSpec || {},
-              requestUrl: error?.requestUrl,
-              requestMethod: error?.requestMethod,
-            }),
-          });
-        }
-        const hintMessage = appendCapabilityHint(
-          errorMessage || tMultimodal(runtime, "generateFailed"),
-          runtime,
-        );
-        throw recoverableToolError(hintMessage, {
-          code: resolveGenerateErrorCode(error),
-          details: buildFailureDetails({
-            message: hintMessage,
-            modelAlias,
-            model: modelName,
-            requestedModel: resolvedModelName,
-            effectiveImageSize,
-            modelSpec: resolvedModelSpec || {},
-            requestUrl: error?.requestUrl,
-            requestMethod: error?.requestMethod,
-          }),
-        });
-      }
-    },
+    func: async (input) =>
+      runMultimodalGeneration(input, {
+        runtime,
+        effectiveConfig,
+        globalConfig,
+        userConfig,
+        sharedFetch,
+      }),
   });
 
   return [multimodalGenerateTool];

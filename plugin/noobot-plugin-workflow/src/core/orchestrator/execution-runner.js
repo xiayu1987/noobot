@@ -185,6 +185,219 @@ function rememberCompletedStepResult({
   });
 }
 
+function resolveWaveNodeIdentity({ planningNodeSessions = [], step = {} } = {}) {
+  const planningNodeIdentity = resolvePlanningNodeIdentity({
+    planningNodeSessions,
+    pendingStep: step,
+  });
+  const nodeIdentity = planningNodeIdentity
+    ? {
+        ...planningNodeIdentity,
+        sessionId: String(planningNodeIdentity?.sessionId || "").trim() || randomUUID(),
+      }
+    : null;
+  const childExecutionId = deriveAgentExecutionId({
+    executionId: nodeIdentity?.childExecutionId,
+    turnScopeId: nodeIdentity?.turnScopeId,
+  });
+  return { nodeIdentity, childExecutionId };
+}
+
+function findNodeStateByExecutionId(snapshot = null, nodeExecutionId = "") {
+  const target = String(nodeExecutionId || "").trim();
+  return (
+    snapshot?.nodes?.find?.((node) => String(node?.nodeExecutionId || "").trim() === target) || null
+  );
+}
+
+async function commitWaveNodeState({ nodeState, nodeIdentity, ctx, ...fields } = {}) {
+  const fact = await commitAndPublishWorkflowNodeState({
+    repository: nodeState.repository,
+    ctx,
+    workflowRunId: nodeIdentity.workflowRunId,
+    nodeExecutionId: nodeIdentity.nodeExecutionId,
+    ...fields,
+  });
+  nodeState.snapshot = fact?.snapshot || nodeState.snapshot;
+  return fact;
+}
+
+function buildChildTerminalError(childTerminal = {}) {
+  if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED) {
+    const failure = childTerminal.lifecycle.failure || { message: "child execution failed" };
+    const error = new Error(failure.message || "child execution failed");
+    error.code = failure.code || "WORKFLOW_CHILD_EXECUTION_FAILED";
+    error.failure = failure;
+    error.nodeTerminalCommitted = true;
+    return error;
+  }
+  if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.STOPPED) {
+    const error = new Error(
+      childTerminal.lifecycle?.failure?.message ||
+        `child execution reached ${childTerminal.lifecycle.state}`,
+    );
+    error.name = "AbortError";
+    error.code = childTerminal.lifecycle?.failure?.code || "WORKFLOW_CHILD_TERMINAL_FAILURE";
+    error.nodeTerminalCommitted = true;
+    return error;
+  }
+  return null;
+}
+
+async function commitWaveChildTerminal({
+  nodeState,
+  nodeIdentity,
+  ctx,
+  action,
+  runningFact,
+  childExecutionId,
+} = {}) {
+  const childTerminal = resolveCommittedChildTerminal(action?.subSession, childExecutionId);
+  await commitWaveNodeState({
+    nodeState,
+    nodeIdentity,
+    ctx,
+    status: childTerminal.nodeStatus,
+    expectedRevision: runningFact?.node?.revision ?? null,
+    nodeSessionId: action?.subSession?.sessionId || "",
+    agentDialogProcessId: action?.subSession?.dialogProcessId || "",
+    childExecutionId,
+    failure:
+      childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
+        ? childTerminal.lifecycle.failure || { message: "child execution failed" }
+        : null,
+  });
+  const terminalError = buildChildTerminalError(childTerminal);
+  if (terminalError) throw terminalError;
+}
+
+function shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFact } = {}) {
+  if (!nodeState.repository || !nodeIdentity || !runningFact?.node) return false;
+  return error?.nodeTerminalCommitted !== true && error?.nodeTerminalReceiptRejected !== true;
+}
+
+function toWaveNodeFailure(error) {
+  return {
+    name: error?.name || "Error",
+    code: error?.code || "",
+    message: error?.message || String(error || "workflow node failed"),
+  };
+}
+
+async function commitWaveNodeFailure({
+  error,
+  nodeState,
+  nodeIdentity,
+  ctx,
+  action,
+  runningFact,
+  childExecutionId,
+} = {}) {
+  if (!shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFact })) return;
+  const stopped = isWorkflowAbortError(error, ctx);
+  await commitWaveNodeState({
+    nodeState,
+    nodeIdentity,
+    ctx,
+    status: stopped ? WORKFLOW_NODE_STATUS.STOPPED : WORKFLOW_NODE_STATUS.FAILED,
+    expectedRevision: runningFact.node.revision,
+    nodeSessionId: action?.subSession?.sessionId || "",
+    agentDialogProcessId: action?.subSession?.dialogProcessId || "",
+    childExecutionId,
+    failure: toWaveNodeFailure(error),
+  });
+}
+
+async function runWaveStep({
+  step,
+  idx,
+  hookManager,
+  options,
+  ctx,
+  semantic,
+  instanceId,
+  planningNodeSessions,
+  completedStepResults,
+  nodeState,
+  transitions,
+} = {}) {
+  throwIfWorkflowAborted(ctx);
+  const upstreamActionSteps = resolveWorkflowUpstreamActionSteps({
+    instanceId,
+    pendingStep: step,
+  });
+  const upstreamNodeResults = buildWorkflowUpstreamAttachmentResults({
+    upstreamActionSteps,
+    completedStepResults,
+  });
+  const { nodeIdentity, childExecutionId } = resolveWaveNodeIdentity({
+    planningNodeSessions,
+    step,
+  });
+  const trackState = Boolean(nodeState.repository && nodeIdentity);
+  let runningFact = null;
+  if (trackState) {
+    const currentNodeState = findNodeStateByExecutionId(
+      nodeState.snapshot,
+      nodeIdentity?.nodeExecutionId,
+    );
+    runningFact = await commitWaveNodeState({
+      nodeState,
+      nodeIdentity,
+      ctx,
+      status: WORKFLOW_NODE_STATUS.RUNNING,
+      expectedRevision: currentNodeState?.revision ?? null,
+      nodeSessionId: nodeIdentity.sessionId,
+      childExecutionId,
+    });
+  }
+  let action = null;
+  try {
+    action = await runNodeAgent({
+      hookManager,
+      options,
+      ctx,
+      instanceId,
+      pendingStep: step,
+      semantic,
+      nodeIdentity,
+      transition: transitions + idx + 1,
+      upstreamNodeResults,
+    });
+    throwIfWorkflowAborted(ctx);
+    if (trackState) {
+      await commitWaveChildTerminal({
+        nodeState,
+        nodeIdentity,
+        ctx,
+        action,
+        runningFact,
+        childExecutionId,
+      });
+    }
+  } catch (error) {
+    await commitWaveNodeFailure({
+      error,
+      nodeState,
+      nodeIdentity,
+      ctx,
+      action,
+      runningFact,
+      childExecutionId,
+    });
+    throw error;
+  }
+  return {
+    step,
+    action: action?.action || null,
+    subSession: action?.subSession || null,
+    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(action),
+    nodeIdentity: action?.nodeIdentity || nodeIdentity || null,
+    upstreamNodeResults,
+    order: idx,
+  };
+}
+
 export async function runWorkflowExecution({
   hookManager,
   options = {},
@@ -213,10 +426,13 @@ export async function runWorkflowExecution({
   const nodeAgentRuns = [];
   const completedStepResults = new Map();
   const nodeStateRepository = resolveWorkflowNodeStateRepository(options);
-  let nodeStateSnapshot = await nodeStateRepository.initialize({
-    workflowRunId: instanceId,
-    planningNodeSessions,
-  });
+  const nodeState = {
+    repository: nodeStateRepository,
+    snapshot: await nodeStateRepository.initialize({
+      workflowRunId: instanceId,
+      planningNodeSessions,
+    }),
+  };
   let transitions = 0;
 
   try {
@@ -227,145 +443,21 @@ export async function runWorkflowExecution({
       const waveSize = parallelEnabled ? Math.min(maxParallelNodeAgents, pending.length) : 1;
       const waveSteps = pending.slice(0, waveSize);
       const settledWaveResults = await Promise.allSettled(
-        waveSteps.map(async (step, idx) => {
-          throwIfWorkflowAborted(ctx);
-          const upstreamActionSteps = resolveWorkflowUpstreamActionSteps({
-            instanceId,
-            pendingStep: step,
-          });
-          const upstreamNodeResults = buildWorkflowUpstreamAttachmentResults({
-            upstreamActionSteps,
-            completedStepResults,
-          });
-          const planningNodeIdentity = resolvePlanningNodeIdentity({
-            planningNodeSessions,
-            pendingStep: step,
-          });
-          const nodeIdentity = planningNodeIdentity
-            ? {
-                ...planningNodeIdentity,
-                sessionId: String(planningNodeIdentity?.sessionId || "").trim() || randomUUID(),
-              }
-            : null;
-          const childExecutionId = deriveAgentExecutionId({
-            executionId: nodeIdentity?.childExecutionId,
-            turnScopeId: nodeIdentity?.turnScopeId,
-          });
-          const currentNodeState =
-            nodeStateSnapshot?.nodes?.find?.(
-              (node) =>
-                String(node?.nodeExecutionId || "").trim() ===
-                String(nodeIdentity?.nodeExecutionId || "").trim(),
-            ) || null;
-          let runningFact = null;
-          if (nodeStateRepository && nodeIdentity) {
-            runningFact = await commitAndPublishWorkflowNodeState({
-              repository: nodeStateRepository,
-              ctx,
-              workflowRunId: nodeIdentity.workflowRunId,
-              nodeExecutionId: nodeIdentity.nodeExecutionId,
-              status: WORKFLOW_NODE_STATUS.RUNNING,
-              expectedRevision: currentNodeState?.revision ?? null,
-              nodeSessionId: nodeIdentity.sessionId,
-              childExecutionId,
-            });
-            nodeStateSnapshot = runningFact?.snapshot || nodeStateSnapshot;
-          }
-          let action = null;
-          try {
-            action = await runNodeAgent({
-              hookManager,
-              options,
-              ctx,
-              instanceId,
-              pendingStep: step,
-              semantic,
-              nodeIdentity,
-              transition: transitions + idx + 1,
-              upstreamNodeResults,
-            });
-            throwIfWorkflowAborted(ctx);
-            if (nodeStateRepository && nodeIdentity) {
-              const childTerminal = resolveCommittedChildTerminal(
-                action?.subSession,
-                childExecutionId,
-              );
-              const terminalFact = await commitAndPublishWorkflowNodeState({
-                repository: nodeStateRepository,
-                ctx,
-                workflowRunId: nodeIdentity.workflowRunId,
-                nodeExecutionId: nodeIdentity.nodeExecutionId,
-                status: childTerminal.nodeStatus,
-                expectedRevision: runningFact?.node?.revision ?? null,
-                nodeSessionId: action?.subSession?.sessionId || "",
-                agentDialogProcessId: action?.subSession?.dialogProcessId || "",
-                childExecutionId,
-                failure:
-                  childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
-                    ? childTerminal.lifecycle.failure || { message: "child execution failed" }
-                    : null,
-              });
-              nodeStateSnapshot = terminalFact?.snapshot || nodeStateSnapshot;
-              if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED) {
-                const failure = childTerminal.lifecycle.failure || {
-                  message: "child execution failed",
-                };
-                const error = new Error(failure.message || "child execution failed");
-                error.code = failure.code || "WORKFLOW_CHILD_EXECUTION_FAILED";
-                error.failure = failure;
-                error.nodeTerminalCommitted = true;
-                throw error;
-              } else if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.STOPPED) {
-                const error = new Error(
-                  childTerminal.lifecycle?.failure?.message ||
-                    `child execution reached ${childTerminal.lifecycle.state}`,
-                );
-                error.name = "AbortError";
-                error.code =
-                  childTerminal.lifecycle?.failure?.code || "WORKFLOW_CHILD_TERMINAL_FAILURE";
-                error.nodeTerminalCommitted = true;
-                throw error;
-              }
-            }
-          } catch (error) {
-            if (
-              nodeStateRepository &&
-              nodeIdentity &&
-              runningFact?.node &&
-              error?.nodeTerminalCommitted !== true &&
-              error?.nodeTerminalReceiptRejected !== true
-            ) {
-              const stopped = isWorkflowAbortError(error, ctx);
-              const terminalFact = await commitAndPublishWorkflowNodeState({
-                repository: nodeStateRepository,
-                ctx,
-                workflowRunId: nodeIdentity.workflowRunId,
-                nodeExecutionId: nodeIdentity.nodeExecutionId,
-                status: stopped ? WORKFLOW_NODE_STATUS.STOPPED : WORKFLOW_NODE_STATUS.FAILED,
-                expectedRevision: runningFact.node.revision,
-                nodeSessionId: action?.subSession?.sessionId || "",
-                agentDialogProcessId: action?.subSession?.dialogProcessId || "",
-                childExecutionId,
-                failure: {
-                  name: error?.name || "Error",
-                  code: error?.code || "",
-                  message: error?.message || String(error || "workflow node failed"),
-                },
-              });
-              nodeStateSnapshot = terminalFact?.snapshot || nodeStateSnapshot;
-            }
-            throw error;
-          }
-          return {
+        waveSteps.map((step, idx) =>
+          runWaveStep({
             step,
-            action: action?.action || null,
-            subSession: action?.subSession || null,
-            nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(action),
-            nodeIdentity: action?.nodeIdentity || nodeIdentity || null,
-            upstreamNodeResults,
-            order: idx,
-          };
-        }),
+            idx,
+            hookManager,
+            options,
+            ctx,
+            semantic,
+            instanceId,
+            planningNodeSessions,
+            completedStepResults,
+            nodeState,
+            transitions,
+          }),
+        ),
       );
       const rejectedWaveResult = settledWaveResults.find((item) => item.status === "rejected");
       if (rejectedWaveResult) throw rejectedWaveResult.reason;
@@ -432,15 +524,15 @@ export async function runWorkflowExecution({
     return {
       execution,
       nodeAgentRuns,
-      nodeStateSnapshot,
+      nodeStateSnapshot: nodeState.snapshot,
       instanceId,
     };
   } catch (error) {
-    if (nodeStateRepository && nodeStateSnapshot) {
+    if (nodeStateRepository && nodeState.snapshot) {
       const stopped = isWorkflowAbortError(error, ctx);
-      nodeStateSnapshot = await settleUnstartedWorkflowNodes({
+      nodeState.snapshot = await settleUnstartedWorkflowNodes({
         repository: nodeStateRepository,
-        snapshot: nodeStateSnapshot,
+        snapshot: nodeState.snapshot,
         ctx,
         status: stopped ? WORKFLOW_NODE_STATUS.STOPPED : WORKFLOW_NODE_STATUS.SKIPPED,
       });

@@ -280,76 +280,78 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
   return true;
 }
 
-export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action = "auto" } = {}) {
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder) return false;
-  const { bucket, state } = holder;
-  const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) return false;
-  const locale = state?.locale || LOCALE.ZH_CN;
-  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
-    ctx,
-    meta,
-  );
+function resolveAnalysisFlowTags(workflowPurpose) {
+  const isAnalysis = workflowPurpose === "analysis";
+  return {
+    pluginFlow: isAnalysis ? "analysis" : undefined,
+    chain: isAnalysis ? "auxiliary" : undefined,
+  };
+}
 
+function summaryCheckpointMessageCount(state) {
+  return Array.isArray(state?.pending?.summaryCheckpointMessageIds)
+    ? state.pending.summaryCheckpointMessageIds.length
+    : 0;
+}
+
+function isActionAllowed(requestedAction, decisionAction) {
+  return requestedAction === "auto" || requestedAction === decisionAction;
+}
+
+function selectSummaryRequest(ctx, state, policy) {
+  captureGuidanceSummaryCheckpoint(ctx, state);
+  return {
+    purpose: "summary",
+    workflowPurpose: "summary",
+    reason: "",
+    prompt: buildGuidanceSummaryPromptText({ ...policy, includeWorkflowPolicy: false }),
+  };
+}
+
+function selectGuidanceAdviceRequest(state, policy) {
+  const reason = state.pending.guidance;
+  const { locale, ...flags } = policy;
+  const prompt = buildGuidancePromptContent(locale, reason, {
+    includeMarker: true,
+    ...flags,
+    includeWorkflowPolicy: false,
+  });
+  setPendingStateWithMeta(state, "guidance", null);
+  state.counters.consecutiveToolFailures = 0;
+  state.counters.totalToolFailures = 0;
+  return { purpose: "guidance", workflowPurpose: "guidance", reason, prompt };
+}
+
+function selectAnalysisRequest(ctx, state, locale) {
+  if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.modelContext?.messages)) return null;
+  const prompt = buildGuidanceAnalysisPromptText({
+    locale,
+    marker: getGuidanceAnalysisMarker(locale),
+  });
+  setPendingStateWithMeta(state, "analysis", false);
+  return { purpose: "guidance", workflowPurpose: "analysis", reason: "", prompt };
+}
+
+function selectGuidanceRequest({ ctx, state, action, policy }) {
   const requestedAction = String(action || "auto")
     .trim()
     .toLowerCase();
-  const allowSummary =
-    requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
-  const allowGuidance =
-    requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.guidance;
-  const allowAnalysis =
-    requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.analysis;
+  if (
+    isActionAllowed(requestedAction, GUIDANCE_DECISION.action.summary) &&
+    state.pending.summary === true
+  )
+    return selectSummaryRequest(ctx, state, policy);
+  if (isActionAllowed(requestedAction, GUIDANCE_DECISION.action.guidance) && state.pending.guidance)
+    return selectGuidanceAdviceRequest(state, policy);
+  if (
+    isActionAllowed(requestedAction, GUIDANCE_DECISION.action.analysis) &&
+    state.pending.analysis === true
+  )
+    return selectAnalysisRequest(ctx, state, policy.locale);
+  return null;
+}
 
-  let purpose = "";
-  let workflowPurpose = "";
-  let prompt = "";
-  let reason = "";
-  if (allowSummary && state.pending.summary === true) {
-    purpose = "summary";
-    workflowPurpose = "summary";
-    captureGuidanceSummaryCheckpoint(ctx, state);
-    prompt = buildGuidanceSummaryPromptText({
-      locale,
-      programmingMode,
-      textMode,
-      dynamicPolicyPrompt,
-      includeWorkflowPolicy: false,
-    });
-  } else if (allowGuidance && state.pending.guidance) {
-    purpose = "guidance";
-    workflowPurpose = "guidance";
-    reason = state.pending.guidance;
-    prompt = buildGuidancePromptContent(locale, reason, {
-      includeMarker: true,
-      programmingMode,
-      textMode,
-      dynamicPolicyPrompt,
-      includeWorkflowPolicy: false,
-    });
-    setPendingStateWithMeta(state, "guidance", null);
-    state.counters.consecutiveToolFailures = 0;
-    state.counters.totalToolFailures = 0;
-  } else if (allowAnalysis && state.pending.analysis === true) {
-    if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.modelContext?.messages)) {
-      return false;
-    }
-    purpose = "guidance";
-    workflowPurpose = "analysis";
-    prompt = buildGuidanceAnalysisPromptText({
-      locale,
-      marker: getGuidanceAnalysisMarker(locale),
-    });
-    setPendingStateWithMeta(state, "analysis", false);
-  } else {
-    return false;
-  }
-
-  const modelMessages = resolveCapabilityModelMessages(meta, {
-    ctx,
-    purpose,
-  });
+function buildGuidanceWorkflowContextContents({ ctx, bucket, locale, purpose }) {
   const planChecklistContextMessages = buildPlanChecklistContextMessages({
     locale,
     planText: bucket?.planText || "",
@@ -366,171 +368,271 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
           }),
         ]
       : planChecklistContextMessages;
-  const workflowContextContents = workflowContextMessages
+  return workflowContextMessages
     .map((item = {}) => String(item?.content || "").trim())
     .filter(Boolean);
-  const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
+}
+
+function buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request }) {
+  const { locale, ...flags } = policy;
+  const { purpose, workflowPurpose, prompt } = request;
+  const modelMessages = resolveCapabilityModelMessages(meta, { ctx, purpose });
+  const workflowContextContents = buildGuidanceWorkflowContextContents({
+    ctx,
+    bucket,
+    locale,
+    purpose,
   });
+  const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, flags);
   const responsibilityPrompt =
     workflowPurpose === "summary" || workflowPurpose === "analysis"
       ? buildWorkflowResponsibilityConstraintUserPrompt(locale, workflowPurpose, {
-          programmingMode,
-          textMode,
-          dynamicPolicyPrompt,
+          ...flags,
           includeWorkflowPolicy: false,
         })
       : "";
-  const isGuidanceRequest = workflowPurpose === "guidance" || workflowPurpose === "analysis";
-  const invokerMessages = isGuidanceRequest
-    ? buildCapabilityModelMessages({
-        locale,
-        agentMessages: modelMessages,
-        task: prompt,
-        taskRole: "user",
-        postTaskSystemMessages: workflowPurpose === "guidance" ? [workflowPolicyPrompt] : [],
-        postTaskMessages: [...workflowContextContents, responsibilityPrompt],
-        postTaskRole: "user",
-      })
-    : buildCapabilityProtocolModelMessages({
-        locale,
-        agentMessages: modelMessages,
-        contextMessages: workflowContextContents,
-        protocolPrompt: prompt,
-        workflowPolicyPrompt,
-        responsibilityPrompt,
-      });
+  if (workflowPurpose === "guidance" || workflowPurpose === "analysis") {
+    return buildCapabilityModelMessages({
+      locale,
+      agentMessages: modelMessages,
+      task: prompt,
+      taskRole: "user",
+      postTaskSystemMessages: workflowPurpose === "guidance" ? [workflowPolicyPrompt] : [],
+      postTaskMessages: [...workflowContextContents, responsibilityPrompt],
+      postTaskRole: "user",
+    });
+  }
+  return buildCapabilityProtocolModelMessages({
+    locale,
+    agentMessages: modelMessages,
+    contextMessages: workflowContextContents,
+    protocolPrompt: prompt,
+    workflowPolicyPrompt,
+    responsibilityPrompt,
+  });
+}
 
-  let response = null;
-  const relayCorrelationId = `rc_${randomUUID()}`;
+function logGuidanceModelFailure(ctx, { purpose, summaryStartedAt, error }) {
+  if (purpose === "summary") {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: "summary_model_failed",
+      detail: {
+        durationMs: Date.now() - summaryStartedAt,
+        error: String(error?.message || error || ""),
+      },
+    });
+  }
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.GUIDANCE,
+    event: GUIDANCE_EVENTS.separateModelCallFailed,
+    detail: { purpose, error: String(error?.message || error || "") },
+  });
+}
+
+async function invokeGuidanceModel({
+  ctx,
+  meta,
+  state,
+  invoker,
+  locale,
+  request,
+  messages,
+  relayCorrelationId,
+}) {
+  const { purpose, workflowPurpose } = request;
+  const flowTags = resolveAnalysisFlowTags(workflowPurpose);
   const summaryStartedAt = purpose === "summary" ? Date.now() : 0;
   if (purpose === "summary") {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: "summary_model_started",
-      detail: {
-        requestedMessageCount: Array.isArray(state?.pending?.summaryCheckpointMessageIds)
-          ? state.pending.summaryCheckpointMessageIds.length
-          : 0,
-      },
+      detail: { requestedMessageCount: summaryCheckpointMessageCount(state) },
     });
   }
   try {
-    response = await invokeCapabilityModel({
+    const response = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose,
         activity:
           workflowPurpose === "analysis" ? defineCapabilityActivity("guidance_analysis") : null,
-        pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
-        chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
+        ...flowTags,
         relayCorrelationId,
         promptVersion: PROMPT_ENVELOPE.VERSION,
         envelopeType: PROMPT_ENVELOPE.TYPE,
         domain: CAPABILITY_DOMAIN.GUIDANCE,
-        model: resolveCapabilityModelName(meta, {
-          purpose,
-          domain: CAPABILITY_DOMAIN.GUIDANCE,
-        }),
+        model: resolveCapabilityModelName(meta, { purpose, domain: CAPABILITY_DOMAIN.GUIDANCE }),
         locale,
         prompt: "",
-        messages: invokerMessages,
+        messages,
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
       },
       purpose,
-      pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
-      chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
+      ...flowTags,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
           purpose,
-          pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
-          chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
+          ...flowTags,
           response: retryResponse,
         });
       },
       ctx,
       meta,
     });
+    return { ok: true, response, summaryStartedAt };
   } catch (error) {
-    if (purpose === "summary") {
-      appendCapabilityLog(ctx, {
-        domain: CAPABILITY_DOMAIN.GUIDANCE,
-        event: "summary_model_failed",
-        detail: {
-          durationMs: Date.now() - summaryStartedAt,
-          error: String(error?.message || error || ""),
-        },
-      });
-    }
+    logGuidanceModelFailure(ctx, { purpose, summaryStartedAt, error });
+    return { ok: false, summaryStartedAt };
+  }
+}
+
+async function prepareSummaryRelay(ctx, meta, responseText) {
+  const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
+  const summaryMergeText = String(parsedSummary?.overviewText || "").trim() || responseText;
+  const summaryTransferPayload =
+    shouldSaveSummaryToAttachment(meta) && responseText
+      ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
+          purpose: "summary",
+          content: responseText,
+          generationSource: "harness_summary",
+          domain: CAPABILITY_DOMAIN.GUIDANCE,
+        })
+      : { transferEnvelopes: [] };
+  recordSummaryTransferEnvelopes(ctx, summaryTransferPayload);
+  const injectedText = await transferSummaryInjectionMessage(ctx, {
+    fullText: responseText,
+    summaryText: responseText,
+    detailText: responseText,
+    injectMode: "full",
+    meta,
+  });
+  const relayText = [
+    injectedText || responseText,
+    formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  return { relayText, relayAttachments: summaryTransferPayload, summaryMergeText };
+}
+
+async function prepareGuidanceRelay(ctx, meta, request, responseText) {
+  const { purpose, workflowPurpose } = request;
+  if (purpose === "summary") return prepareSummaryRelay(ctx, meta, responseText);
+  const relayAttachments =
+    workflowPurpose !== "analysis"
+      ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
+          purpose,
+          content: responseText,
+          generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,
+          domain: CAPABILITY_DOMAIN.GUIDANCE,
+        })
+      : [];
+  return { relayText: responseText, relayAttachments, summaryMergeText: responseText };
+}
+
+async function finalizeSummaryGuidance({
+  ctx,
+  meta,
+  state,
+  locale,
+  responseText,
+  summaryMergeText,
+  summaryStartedAt,
+}) {
+  recordLatestSummaryFullText(ctx, responseText);
+  const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
+  const checkpointRequestedMessageCount = summaryCheckpointMessageCount(state);
+  const checkpointStartedAt = Date.now();
+  const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
+  setPendingStateWithMeta(state, "summary", false);
+  state.counters.summaryTurns = 0;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.GUIDANCE,
+    event: "summary_checkpoint_ready",
+    detail: {
+      modelDurationMs: Date.now() - summaryStartedAt,
+      checkpointPreparationMs: Date.now() - checkpointStartedAt,
+      requestedMessageCount: checkpointRequestedMessageCount,
+      markedCount,
+    },
+  });
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.GUIDANCE,
+    event: GUIDANCE_EVENTS.summaryMessagesMarked,
+    detail: { markedCount },
+  });
+  if (!isSummaryCompletionMarked(mergedSummaryText, locale)) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: GUIDANCE_EVENTS.separateModelCallFailed,
-      detail: { purpose, error: String(error?.message || error || "") },
-    });
-    return false;
-  }
-  const responseText = String(response?.output?.text || "").trim();
-  let relayText = responseText;
-  let relayAttachments = [];
-  let summaryMergeText = responseText;
-  if (purpose === "summary") {
-    const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
-    const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || responseText;
-    summaryMergeText = summaryOverviewText;
-    const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
-    const summaryTransferPayload =
-      persistSummaryAttachment && responseText
-        ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
-            purpose: "summary",
-            content: responseText,
-            generationSource: "harness_summary",
-            domain: CAPABILITY_DOMAIN.GUIDANCE,
-          })
-        : { transferEnvelopes: [] };
-    recordSummaryTransferEnvelopes(ctx, summaryTransferPayload);
-    relayText = await transferSummaryInjectionMessage(ctx, {
-      fullText: responseText,
-      summaryText: responseText,
-      detailText: responseText,
-      injectMode: "full",
-      meta,
-    });
-    relayText = [
-      relayText || responseText,
-      formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    relayAttachments = summaryTransferPayload;
-  } else if (workflowPurpose !== "analysis") {
-    relayAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
-      purpose,
-      content: responseText,
-      generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,
-      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,
     });
   }
+}
+
+function guidanceGeneratedEvent(workflowPurpose) {
+  if (workflowPurpose === "summary") return GUIDANCE_EVENTS.summaryGeneratedBySeparateModel;
+  if (workflowPurpose === "analysis") return GUIDANCE_EVENTS.analysisGeneratedBySeparateModel;
+  return GUIDANCE_EVENTS.guidanceGeneratedBySeparateModel;
+}
+
+function recordGuidanceOutput(bucket, request, flowTags, responseText) {
   if (!Array.isArray(bucket.guidanceOutputs)) {
     bucket.guidanceOutputs = [];
   }
   bucket.guidanceOutputs.push({
-    purpose,
-    pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
-    chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
-    reason: reason || undefined,
+    purpose: request.purpose,
+    ...flowTags,
+    reason: request.reason || undefined,
     content: responseText,
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action = "auto" } = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  const invoker = resolveCapabilityModelInvoker(meta);
+  if (!invoker) return false;
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
+  const policy = { locale, programmingMode, textMode, dynamicPolicyPrompt };
+  const request = selectGuidanceRequest({ ctx, state, action, policy });
+  if (!request) return false;
+  const { purpose, workflowPurpose, reason } = request;
+  const flowTags = resolveAnalysisFlowTags(workflowPurpose);
+  const messages = buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request });
+  const relayCorrelationId = `rc_${randomUUID()}`;
+  const invocation = await invokeGuidanceModel({
+    ctx,
+    meta,
+    state,
+    invoker,
+    locale,
+    request,
+    messages,
+    relayCorrelationId,
+  });
+  if (!invocation.ok) return false;
+  const responseText = String(invocation.response?.output?.text || "").trim();
+  const { relayText, relayAttachments, summaryMergeText } = await prepareGuidanceRelay(
+    ctx,
+    meta,
+    request,
+    responseText,
+  );
+  recordGuidanceOutput(bucket, request, flowTags, responseText);
   const relayInjected = relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
-    pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
-    chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
+    ...flowTags,
     relayCorrelationId,
     content: relayText,
     transferPayload: normalizeTransferPayload(relayAttachments),
@@ -539,56 +641,24 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: GUIDANCE_EVENTS.separateModelRelayFailed,
-      detail: {
-        purpose,
-        workflowPurpose,
-        hasResponseText: Boolean(responseText),
-      },
+      detail: { purpose, workflowPurpose, hasResponseText: Boolean(responseText) },
     });
     return false;
   }
   if (purpose === "summary") {
-    recordLatestSummaryFullText(ctx, responseText);
-    const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
-    const checkpointRequestedMessageCount = Array.isArray(
-      state?.pending?.summaryCheckpointMessageIds,
-    )
-      ? state.pending.summaryCheckpointMessageIds.length
-      : 0;
-    const checkpointStartedAt = Date.now();
-    const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
-    setPendingStateWithMeta(state, "summary", false);
-    state.counters.summaryTurns = 0;
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: "summary_checkpoint_ready",
-      detail: {
-        modelDurationMs: Date.now() - summaryStartedAt,
-        checkpointPreparationMs: Date.now() - checkpointStartedAt,
-        requestedMessageCount: checkpointRequestedMessageCount,
-        markedCount,
-      },
+    await finalizeSummaryGuidance({
+      ctx,
+      meta,
+      state,
+      locale,
+      responseText,
+      summaryMergeText,
+      summaryStartedAt: invocation.summaryStartedAt,
     });
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: GUIDANCE_EVENTS.summaryMessagesMarked,
-      detail: { markedCount },
-    });
-    if (!isSummaryCompletionMarked(mergedSummaryText, locale)) {
-      appendCapabilityLog(ctx, {
-        domain: CAPABILITY_DOMAIN.GUIDANCE,
-        event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,
-      });
-    }
   }
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.GUIDANCE,
-    event:
-      workflowPurpose === "summary"
-        ? GUIDANCE_EVENTS.summaryGeneratedBySeparateModel
-        : workflowPurpose === "analysis"
-          ? GUIDANCE_EVENTS.analysisGeneratedBySeparateModel
-          : GUIDANCE_EVENTS.guidanceGeneratedBySeparateModel,
+    event: guidanceGeneratedEvent(workflowPurpose),
     detail: { reason: reason || undefined },
   });
   return true;

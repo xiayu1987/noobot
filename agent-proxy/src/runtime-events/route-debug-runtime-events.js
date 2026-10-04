@@ -17,6 +17,65 @@ function parseChannelKeyPart(channelKey = "", index = 0) {
   );
 }
 
+function firstTrimmed(...candidates) {
+  return String(candidates.find(Boolean) || "").trim();
+}
+
+function firstLowerTrimmed(...candidates) {
+  return firstTrimmed(...candidates).toLowerCase();
+}
+
+function resolvePayloadSessionId(payload) {
+  return firstTrimmed(payload?.identity?.sessionId, payload?.sessionId);
+}
+
+function resolveRouteIdentity({ payload, socket, channel, data }) {
+  const identity = payload?.identity;
+  return {
+    userId: firstTrimmed(
+      socket?.__agentProxyUserId,
+      data?.userId,
+      channel?.ownerUserId,
+      parseChannelKeyPart(channel?.key, 0),
+    ),
+    sessionId: firstTrimmed(
+      identity?.sessionId,
+      payload?.sessionId,
+      data?.sessionId,
+      channel?.startPayload?.identity?.sessionId,
+      parseChannelKeyPart(channel?.key, 1),
+    ),
+    dialogProcessId: firstTrimmed(
+      identity?.dialogProcessId,
+      payload?.dialogProcessId,
+      data?.dialogProcessId,
+    ),
+    turnScopeId: firstTrimmed(identity?.turnScopeId, payload?.turnScopeId, data?.turnScopeId),
+  };
+}
+
+function summarizeRouteChannel(channel, data) {
+  return {
+    targetChannelKey: String(channel?.key || data?.targetChannelKey || ""),
+    channelStatus: String(channel?.status || data?.channelStatus || ""),
+    upstreamReadyState: channel?.upstreamSocket?.readyState ?? data?.upstreamReadyState ?? null,
+  };
+}
+
+function summarizeRouteData({ payload, socket, channel, data }) {
+  return {
+    action: firstLowerTrimmed(payload?.action, data?.action),
+    commandType: firstLowerTrimmed(payload?.commandType, data?.commandType),
+    payloadSessionId: resolvePayloadSessionId(payload),
+    payloadUserIdPresent: false,
+    payloadChannelKeyPresent: Boolean(payload?.channelKey),
+    socketUserIdPresent: Boolean(socket?.__agentProxyUserId),
+    socketActiveChannelKeyPresent: Boolean(socket?.__agentProxyActiveChannelKey),
+    ...summarizeRouteChannel(channel, data),
+    ...data,
+  };
+}
+
 export function writeAgentProxyRouteDebugEvent({
   event = "agentProxy.route.debug",
   payload = {},
@@ -25,21 +84,7 @@ export function writeAgentProxyRouteDebugEvent({
   data = {},
   workspaceRoot,
 } = {}) {
-  const sessionId = String(
-    payload?.identity?.sessionId ||
-      payload?.sessionId ||
-      data?.sessionId ||
-      channel?.startPayload?.identity?.sessionId ||
-      parseChannelKeyPart(channel?.key, 1) ||
-      "",
-  ).trim();
-  const userId = String(
-    socket?.__agentProxyUserId ||
-      data?.userId ||
-      channel?.ownerUserId ||
-      parseChannelKeyPart(channel?.key, 0) ||
-      "",
-  ).trim();
+  const route = { payload, socket, channel, data };
   return writeRoutedRuntimeEvent({
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
@@ -47,31 +92,8 @@ export function writeAgentProxyRouteDebugEvent({
     level: "debug",
     debugType: "agent-proxy-route",
     event,
-    userId,
-    sessionId,
-    dialogProcessId: String(
-      payload?.identity?.dialogProcessId || payload?.dialogProcessId || data?.dialogProcessId || "",
-    ).trim(),
-    turnScopeId: String(
-      payload?.identity?.turnScopeId || payload?.turnScopeId || data?.turnScopeId || "",
-    ).trim(),
+    ...resolveRouteIdentity(route),
     workspaceRoot,
-    data: {
-      action: String(payload?.action || data?.action || "")
-        .trim()
-        .toLowerCase(),
-      commandType: String(payload?.commandType || data?.commandType || "")
-        .trim()
-        .toLowerCase(),
-      payloadSessionId: String(payload?.identity?.sessionId || payload?.sessionId || "").trim(),
-      payloadUserIdPresent: false,
-      payloadChannelKeyPresent: Boolean(payload?.channelKey),
-      socketUserIdPresent: Boolean(socket?.__agentProxyUserId),
-      socketActiveChannelKeyPresent: Boolean(socket?.__agentProxyActiveChannelKey),
-      targetChannelKey: String(channel?.key || data?.targetChannelKey || ""),
-      channelStatus: String(channel?.status || data?.channelStatus || ""),
-      upstreamReadyState: channel?.upstreamSocket?.readyState ?? data?.upstreamReadyState ?? null,
-      ...data,
-    },
+    data: summarizeRouteData(route),
   });
 }

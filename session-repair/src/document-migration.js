@@ -286,283 +286,357 @@ export function reconcileUncommittedAggregateConflictContinuations(document = {}
   return { document: next, changed: true, repaired };
 }
 
-export function migrateSessionDocument(document = {}, { sessionId: suppliedSessionId = "" } = {}) {
-  if (!document || typeof document !== "object" || Array.isArray(document)) {
-    throw Object.assign(new TypeError("Session repair source must be an object"), {
-      code: "SESSION_REPAIR_SOURCE_INVALID",
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function ensureRecordField(owner, key) {
+  if (!isRecord(owner[key])) owner[key] = {};
+  return owner[key];
+}
+
+function migrationError(message, code, ErrorType = TypeError) {
+  return Object.assign(new ErrorType(message), { code });
+}
+
+function markMigrated(context, migration) {
+  context.changed = true;
+  context.migrations.push(migration);
+}
+
+function migrateEventTypedReceipt(context, receipt, eventType, commandIdMap) {
+  if (text(receipt.type) && text(receipt.type) !== eventType) {
+    throw migrationError(
+      "Session lifecycle receipt type is ambiguous",
+      "SESSION_COMMAND_RECEIPT_TYPE_CONFLICT",
+    );
+  }
+  const originalCommandId = text(receipt.commandId);
+  const commandId = createTurnLifecycleCommandId({
+    commandId: originalCommandId,
+    eventType,
+    phase: text(receipt.envelope?.phase),
+  });
+  if (!commandId) {
+    throw migrationError(
+      "Session lifecycle receipt cannot be migrated",
+      "SESSION_COMMAND_RECEIPT_UNMIGRATABLE",
+    );
+  }
+  commandIdMap.set(originalCommandId, commandId);
+  const migrated = { ...receipt, commandId, type: eventType };
+  delete migrated.eventType;
+  if (migrated.envelope && typeof migrated.envelope === "object") {
+    migrated.envelope = { ...migrated.envelope, commandId };
+  }
+  context.changed = true;
+  return migrated;
+}
+
+function remapLifecycleCommandIds(context, commandIdMap) {
+  for (const turn of Object.values(context.turns)) {
+    if (!isRecord(turn)) continue;
+    const commandId = commandIdMap.get(text(turn.commandId));
+    if (commandId) turn.commandId = commandId;
+    const completionCommitId = commandIdMap.get(text(turn.completionCommitId));
+    if (completionCommitId) turn.completionCommitId = completionCommitId;
+  }
+  const { next } = context;
+  if (Array.isArray(next.authorityEventOutbox)) {
+    next.authorityEventOutbox = next.authorityEventOutbox.map((entry) => {
+      const envelope = entry?.envelope;
+      const commandId = commandIdMap.get(text(envelope?.commandId));
+      return commandId ? { ...entry, envelope: { ...envelope, commandId } } : entry;
     });
+  }
+  context.migrations.push("turn-lifecycle-command-receipts-v1");
+}
+
+function migrateLifecycleCommandReceipts(context) {
+  const { lifecycle } = context;
+  const commandReceipts = Array.isArray(lifecycle.commandReceipts) ? lifecycle.commandReceipts : [];
+  const commandIdMap = new Map();
+  let normalizedCommandReceipts = false;
+  lifecycle.commandReceipts = commandReceipts.map((receipt) => {
+    if (!isRecord(receipt)) return receipt;
+    const eventType = text(receipt.eventType);
+    if (eventType) return migrateEventTypedReceipt(context, receipt, eventType, commandIdMap);
+    if (!context.migrateArtifactProtocol) return receipt;
+    const normalized = normalizeCommandReceipt(receipt);
+    if (!normalized) return receipt;
+    if (JSON.stringify(normalized) !== JSON.stringify(receipt)) normalizedCommandReceipts = true;
+    return normalized;
+  });
+  if (normalizedCommandReceipts) markMigrated(context, "session-command-receipt-canonical-v1");
+  if (commandIdMap.size) remapLifecycleCommandIds(context, commandIdMap);
+}
+
+function terminalStatusMatches(status, turns) {
+  const turnScopeId = text(status?.turnScopeId);
+  const terminalStatus = turns[turnScopeId]?.terminalStatus;
+  return Boolean(
+    turnScopeId &&
+    terminalStatus &&
+    text(terminalStatus.status) === text(status?.status) &&
+    text(terminalStatus.reason) === text(status?.reason) &&
+    text(terminalStatus.dialogProcessId) === text(status?.dialogProcessId),
+  );
+}
+
+function migrateTurnStatuses(context) {
+  const { next } = context;
+  if (!Array.isArray(next.turnStatuses)) return;
+  for (const status of next.turnStatuses) {
+    if (!terminalStatusMatches(status, context.turns)) {
+      throw migrationError(
+        "Session terminal fact sources conflict",
+        "SESSION_TERMINAL_FACT_CONFLICT",
+      );
+    }
+  }
+  delete next.turnStatuses;
+  markMigrated(context, "turn-terminal-single-source-v1");
+}
+
+function hasCommandReceipt(lifecycle, commandId) {
+  return lifecycle.commandReceipts.some((receipt) => text(receipt?.commandId) === commandId);
+}
+
+function migrateTurnCommitReceipts(context) {
+  const { next, lifecycle } = context;
+  if (!Array.isArray(next.messages)) return;
+  let migratedTurnCommitReceipt = false;
+  for (const message of next.messages) {
+    const turnCommit = message?.turnCommit;
+    const commandId = text(turnCommit?.commandId);
+    if (!commandId) continue;
+    const requestHash = createTurnCommitFingerprint({
+      action: resolveTurnCommitAction(turnCommit.action),
+      content: text(message.content),
+      turnScopeId: text(message.turnScopeId),
+      resumeDialogProcessId: text(turnCommit.resumeDialogProcessId),
+      resumeTurnScopeId: text(turnCommit.resumeTurnScopeId),
+      attachments: message.attachments,
+    });
+    if (hasCommandReceipt(lifecycle, commandId)) continue;
+    lifecycle.commandReceipts.push({
+      commandId,
+      type: SESSION_COMMAND.TURN_COMMIT,
+      turnScopeId: text(message.turnScopeId),
+      requestHash,
+      aggregateVersion: Number(next.aggregateVersion || 0),
+      result: { messageUid: text(message.messageUid) },
+      committedAt: text(message.ts),
+    });
+    context.changed = true;
+    migratedTurnCommitReceipt = true;
+  }
+  if (migratedTurnCommitReceipt) context.migrations.push("turn-commit-command-receipts-v1");
+}
+
+const MUTATION_OPERATION_COMMANDS = Object.freeze({
+  delete_from: SESSION_COMMAND.MESSAGE_DELETE_FROM,
+  replace_turn: SESSION_COMMAND.TURN_REPLACE,
+});
+
+function migrateMutationReceipt(lifecycle, receipt) {
+  const type = MUTATION_OPERATION_COMMANDS[text(receipt?.operation)];
+  const commandId = text(receipt?.commandId);
+  if (!type || !commandId || !text(receipt?.requestHash)) {
+    throw migrationError(
+      "Session mutation receipt cannot be migrated",
+      "SESSION_MUTATION_RECEIPT_UNMIGRATABLE",
+    );
+  }
+  const existing = lifecycle.commandReceipts.find((item) => text(item?.commandId) === commandId);
+  if (existing) {
+    if (text(existing.type) !== type || text(existing.requestHash) !== text(receipt.requestHash)) {
+      throw migrationError(
+        "Session command receipt sources conflict",
+        "SESSION_COMMAND_RECEIPT_CONFLICT",
+      );
+    }
+    return;
+  }
+  lifecycle.commandReceipts.push({
+    commandId,
+    type,
+    requestHash: text(receipt.requestHash),
+    aggregateVersion: Number(receipt.aggregateVersion || 0),
+    result: isRecord(receipt.result) ? structuredClone(receipt.result) : {},
+    committedAt: text(receipt.committedAt),
+  });
+}
+
+function migrateMutationReceipts(context) {
+  const { next } = context;
+  if (!Array.isArray(next.mutationReceipts)) return;
+  for (const receipt of next.mutationReceipts) migrateMutationReceipt(context.lifecycle, receipt);
+  delete next.mutationReceipts;
+  markMigrated(context, "session-command-receipts-v1");
+}
+
+function migrateAggregateVersion(context) {
+  const { next } = context;
+  if (!("version" in next || "revision" in next)) return;
+  next.aggregateVersion = Math.max(
+    0,
+    Number(next.aggregateVersion || next.version || next.revision) || 0,
+  );
+  delete next.version;
+  delete next.revision;
+  markMigrated(context, "session-aggregate-version-v1");
+}
+
+function migrateDocumentMessage(context, message, index) {
+  const result = migrateMessage(
+    message,
+    context.sessionId,
+    index,
+    context.transferMigration,
+    context.migrateArtifactProtocol,
+  );
+  context.changed ||= result.changed;
+  return result.message;
+}
+
+function applyMessageRepair(context, repair, migration) {
+  if (!repair.changed) return;
+  context.next.messages = repair.document.messages;
+  markMigrated(context, migration);
+}
+
+function migrateDocumentMessages(context) {
+  const { next } = context;
+  if (Array.isArray(next.messages)) {
+    next.messages = next.messages.map((message, index) =>
+      migrateDocumentMessage(context, message, index),
+    );
+  }
+  applyMessageRepair(
+    context,
+    reconcileDuplicateCanonicalAssistantPresentations(next),
+    "duplicate-canonical-assistant-presentation",
+  );
+  applyMessageRepair(
+    context,
+    reconcileCompletedTurnSummaryMarks(next),
+    "completed-turn-summary-marks",
+  );
+  if (isRecord(next.message)) next.message = migrateDocumentMessage(context, next.message, 0);
+  context.migrations.push(...completedSemanticTransferMigrationNames(context.transferMigration));
+}
+
+function resolveReplacementDialogProcessId(context, replacement) {
+  const { next } = context;
+  const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
+  const replacementUserMessageId = text(replacement.replacementUserMessageId);
+  const message = (Array.isArray(next.messages) ? next.messages : []).find(
+    (item) => text(item.messageId || item.id || item.messageUid) === replacementUserMessageId,
+  );
+  const turn = (Array.isArray(next.turnOrder) ? next.turnOrder : []).find(
+    (item) => text(item.turnScopeId) === replacementTurnScopeId,
+  );
+  const resolved = text(message?.dialogProcessId || turn?.dialogProcessId);
+  if (!resolved) {
+    throw migrationError(
+      `Cannot migrate replacement dialog identity for Session ${context.sessionId}`,
+      "SESSION_REPLACEMENT_IDENTITY_UNMIGRATABLE",
+      Error,
+    );
+  }
+  return resolved;
+}
+
+function migrateReplacement(context, replacement) {
+  if (!isRecord(replacement)) return;
+  if (
+    replacement.committedVersion === undefined &&
+    replacement.replacementDialogProcessId !== undefined
+  ) {
+    return;
+  }
+  replacement.committedAggregateVersion = Number(
+    replacement.committedAggregateVersion || replacement.committedVersion || 0,
+  );
+  replacement.replacementDialogProcessId =
+    text(replacement.replacementDialogProcessId) ||
+    resolveReplacementDialogProcessId(context, replacement);
+  delete replacement.committedVersion;
+  context.changed = true;
+}
+
+function migrateReplacedTurns(context) {
+  for (const replacement of Object.values(context.next.turnLifecycle?.replacedTurns || {})) {
+    migrateReplacement(context, replacement);
+  }
+}
+
+function dropLegacyTerminalCommits(context) {
+  if (!Object.hasOwn(context.next, "turnTerminalCommits")) return;
+  delete context.next.turnTerminalCommits;
+  context.changed = true;
+}
+
+function extractLegacyAuthorityEventOutbox(context) {
+  const { next } = context;
+  if (!Object.hasOwn(next, "authorityEventOutbox")) return [];
+  const legacyAuthorityEventOutbox = Array.isArray(next.authorityEventOutbox)
+    ? next.authorityEventOutbox
+    : [];
+  delete next.authorityEventOutbox;
+  markMigrated(context, "authority-event-outbox-journal-v1");
+  return legacyAuthorityEventOutbox;
+}
+
+function createDocumentMigrationContext(document, suppliedSessionId) {
+  if (!isRecord(document)) {
+    throw migrationError(
+      "Session repair source must be an object",
+      "SESSION_REPAIR_SOURCE_INVALID",
+    );
   }
   const next = structuredClone(document);
   const sourceSchemaVersion = resolveSessionArtifactSchemaVersion(next.schemaVersion);
-  const migrateArtifactProtocol = sourceSchemaVersion <= SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION;
   const sessionId = text(next.sessionId || suppliedSessionId);
   const transferMigration = createSemanticTransferMigration(next);
   const migrations = [];
-  let changed = migrateArtifactSchema(next, migrations, sourceSchemaVersion);
-  const lifecycle =
-    next.turnLifecycle &&
-    typeof next.turnLifecycle === "object" &&
-    !Array.isArray(next.turnLifecycle)
-      ? next.turnLifecycle
-      : (next.turnLifecycle = {});
-  const turns =
-    lifecycle.turns && typeof lifecycle.turns === "object" && !Array.isArray(lifecycle.turns)
-      ? lifecycle.turns
-      : (lifecycle.turns = {});
-  const commandReceipts = Array.isArray(lifecycle.commandReceipts) ? lifecycle.commandReceipts : [];
-  const lifecycleCommandIdMap = new Map();
-  let normalizedCommandReceipts = false;
-  lifecycle.commandReceipts = commandReceipts.map((receipt) => {
-    if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return receipt;
-    const eventType = text(receipt.eventType);
-    if (!eventType && migrateArtifactProtocol) {
-      const normalized = normalizeCommandReceipt(receipt);
-      if (!normalized) return receipt;
-      if (JSON.stringify(normalized) !== JSON.stringify(receipt)) normalizedCommandReceipts = true;
-      return normalized;
-    }
-    if (!eventType) return receipt;
-    if (text(receipt.type) && text(receipt.type) !== eventType) {
-      throw Object.assign(new TypeError("Session lifecycle receipt type is ambiguous"), {
-        code: "SESSION_COMMAND_RECEIPT_TYPE_CONFLICT",
-      });
-    }
-    const originalCommandId = text(receipt.commandId);
-    const commandId = createTurnLifecycleCommandId({
-      commandId: originalCommandId,
-      eventType,
-      phase: text(receipt.envelope?.phase),
-    });
-    if (!commandId) {
-      throw Object.assign(new TypeError("Session lifecycle receipt cannot be migrated"), {
-        code: "SESSION_COMMAND_RECEIPT_UNMIGRATABLE",
-      });
-    }
-    lifecycleCommandIdMap.set(originalCommandId, commandId);
-    const migrated = { ...receipt, commandId, type: eventType };
-    delete migrated.eventType;
-    if (migrated.envelope && typeof migrated.envelope === "object") {
-      migrated.envelope = { ...migrated.envelope, commandId };
-    }
-    changed = true;
-    return migrated;
-  });
-  if (normalizedCommandReceipts) {
-    changed = true;
-    migrations.push("session-command-receipt-canonical-v1");
-  }
-  if (lifecycleCommandIdMap.size) {
-    for (const turn of Object.values(turns)) {
-      if (!turn || typeof turn !== "object" || Array.isArray(turn)) continue;
-      const commandId = lifecycleCommandIdMap.get(text(turn.commandId));
-      if (commandId) turn.commandId = commandId;
-      const completionCommitId = lifecycleCommandIdMap.get(text(turn.completionCommitId));
-      if (completionCommitId) turn.completionCommitId = completionCommitId;
-    }
-    if (Array.isArray(next.authorityEventOutbox)) {
-      next.authorityEventOutbox = next.authorityEventOutbox.map((entry) => {
-        const envelope = entry?.envelope;
-        const commandId = lifecycleCommandIdMap.get(text(envelope?.commandId));
-        return commandId ? { ...entry, envelope: { ...envelope, commandId } } : entry;
-      });
-    }
-    migrations.push("turn-lifecycle-command-receipts-v1");
-  }
-  if (Array.isArray(next.turnStatuses)) {
-    for (const status of next.turnStatuses) {
-      const turnScopeId = text(status?.turnScopeId);
-      const terminalStatus = turns[turnScopeId]?.terminalStatus;
-      if (
-        !turnScopeId ||
-        !terminalStatus ||
-        text(terminalStatus.status) !== text(status?.status) ||
-        text(terminalStatus.reason) !== text(status?.reason) ||
-        text(terminalStatus.dialogProcessId) !== text(status?.dialogProcessId)
-      ) {
-        throw Object.assign(new TypeError("Session terminal fact sources conflict"), {
-          code: "SESSION_TERMINAL_FACT_CONFLICT",
-        });
-      }
-    }
-    delete next.turnStatuses;
-    changed = true;
-    migrations.push("turn-terminal-single-source-v1");
-  }
-  if (Array.isArray(next.messages)) {
-    let migratedTurnCommitReceipt = false;
-    for (const message of next.messages) {
-      const turnCommit = message?.turnCommit;
-      const commandId = text(turnCommit?.commandId);
-      if (!commandId) continue;
-      const requestHash = createTurnCommitFingerprint({
-        action: resolveTurnCommitAction(turnCommit.action),
-        content: text(message.content),
-        turnScopeId: text(message.turnScopeId),
-        resumeDialogProcessId: text(turnCommit.resumeDialogProcessId),
-        resumeTurnScopeId: text(turnCommit.resumeTurnScopeId),
-        attachments: message.attachments,
-      });
-      if (lifecycle.commandReceipts.some((receipt) => text(receipt?.commandId) === commandId)) {
-        continue;
-      }
-      lifecycle.commandReceipts.push({
-        commandId,
-        type: SESSION_COMMAND.TURN_COMMIT,
-        turnScopeId: text(message.turnScopeId),
-        requestHash,
-        aggregateVersion: Number(next.aggregateVersion || 0),
-        result: {
-          messageUid: text(message.messageUid),
-        },
-        committedAt: text(message.ts),
-      });
-      changed = true;
-      migratedTurnCommitReceipt = true;
-    }
-    if (migratedTurnCommitReceipt) {
-      migrations.push("turn-commit-command-receipts-v1");
-    }
-  }
-  if (Array.isArray(next.mutationReceipts)) {
-    const operationTypes = {
-      delete_from: SESSION_COMMAND.MESSAGE_DELETE_FROM,
-      replace_turn: SESSION_COMMAND.TURN_REPLACE,
-    };
-    for (const receipt of next.mutationReceipts) {
-      const type = operationTypes[text(receipt?.operation)];
-      const commandId = text(receipt?.commandId);
-      if (!type || !commandId || !text(receipt?.requestHash)) {
-        throw Object.assign(new TypeError("Session mutation receipt cannot be migrated"), {
-          code: "SESSION_MUTATION_RECEIPT_UNMIGRATABLE",
-        });
-      }
-      const existing = lifecycle.commandReceipts.find(
-        (item) => text(item?.commandId) === commandId,
-      );
-      if (existing) {
-        if (
-          text(existing.type) !== type ||
-          text(existing.requestHash) !== text(receipt.requestHash)
-        ) {
-          throw Object.assign(new TypeError("Session command receipt sources conflict"), {
-            code: "SESSION_COMMAND_RECEIPT_CONFLICT",
-          });
-        }
-        continue;
-      }
-      lifecycle.commandReceipts.push({
-        commandId,
-        type,
-        requestHash: text(receipt.requestHash),
-        aggregateVersion: Number(receipt.aggregateVersion || 0),
-        result:
-          receipt.result && typeof receipt.result === "object" && !Array.isArray(receipt.result)
-            ? structuredClone(receipt.result)
-            : {},
-        committedAt: text(receipt.committedAt),
-      });
-    }
-    delete next.mutationReceipts;
-    changed = true;
-    migrations.push("session-command-receipts-v1");
-  }
-  if ("version" in next || "revision" in next) {
-    next.aggregateVersion = Math.max(
-      0,
-      Number(next.aggregateVersion || next.version || next.revision) || 0,
-    );
-    delete next.version;
-    delete next.revision;
-    changed = true;
-    migrations.push("session-aggregate-version-v1");
-  }
-  if (Array.isArray(next.messages)) {
-    next.messages = next.messages.map((message, index) => {
-      const result = migrateMessage(
-        message,
-        sessionId,
-        index,
-        transferMigration,
-        migrateArtifactProtocol,
-      );
-      changed ||= result.changed;
-      return result.message;
-    });
-  }
-  const canonicalPresentationRepair = reconcileDuplicateCanonicalAssistantPresentations(next);
-  if (canonicalPresentationRepair.changed) {
-    next.messages = canonicalPresentationRepair.document.messages;
-    changed = true;
-    migrations.push("duplicate-canonical-assistant-presentation");
-  }
-  const summaryRepair = reconcileCompletedTurnSummaryMarks(next);
-  if (summaryRepair.changed) {
-    next.messages = summaryRepair.document.messages;
-    changed = true;
-    migrations.push("completed-turn-summary-marks");
-  }
-  if (next.message && typeof next.message === "object" && !Array.isArray(next.message)) {
-    const result = migrateMessage(
-      next.message,
-      sessionId,
-      0,
-      transferMigration,
-      migrateArtifactProtocol,
-    );
-    next.message = result.message;
-    changed ||= result.changed;
-  }
-  migrations.push(...completedSemanticTransferMigrationNames(transferMigration));
-  const replacementDialogProcessId = (replacement = {}) => {
-    const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
-    const replacementUserMessageId = text(replacement.replacementUserMessageId);
-    const message = (Array.isArray(next.messages) ? next.messages : []).find(
-      (item) => text(item.messageId || item.id || item.messageUid) === replacementUserMessageId,
-    );
-    const turn = (Array.isArray(next.turnOrder) ? next.turnOrder : []).find(
-      (item) => text(item.turnScopeId) === replacementTurnScopeId,
-    );
-    const resolved = text(message?.dialogProcessId || turn?.dialogProcessId);
-    if (!resolved) {
-      throw Object.assign(
-        new Error(`Cannot migrate replacement dialog identity for Session ${sessionId}`),
-        {
-          code: "SESSION_REPLACEMENT_IDENTITY_UNMIGRATABLE",
-        },
-      );
-    }
-    return resolved;
+  const changed = migrateArtifactSchema(next, migrations, sourceSchemaVersion);
+  const lifecycle = ensureRecordField(next, "turnLifecycle");
+  return {
+    next,
+    migrations,
+    changed,
+    lifecycle,
+    turns: ensureRecordField(lifecycle, "turns"),
+    sessionId,
+    transferMigration,
+    migrateArtifactProtocol: sourceSchemaVersion <= SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
   };
-  const migrateReplacement = (replacement) => {
-    if (!replacement || typeof replacement !== "object" || Array.isArray(replacement)) return;
-    if (
-      replacement.committedVersion === undefined &&
-      replacement.replacementDialogProcessId !== undefined
-    )
-      return;
-    replacement.committedAggregateVersion = Number(
-      replacement.committedAggregateVersion || replacement.committedVersion || 0,
-    );
-    replacement.replacementDialogProcessId =
-      text(replacement.replacementDialogProcessId) || replacementDialogProcessId(replacement);
-    delete replacement.committedVersion;
-    changed = true;
+}
+
+const DOCUMENT_MIGRATION_STEPS = Object.freeze([
+  migrateLifecycleCommandReceipts,
+  migrateTurnStatuses,
+  migrateTurnCommitReceipts,
+  migrateMutationReceipts,
+  migrateAggregateVersion,
+  migrateDocumentMessages,
+  migrateReplacedTurns,
+  dropLegacyTerminalCommits,
+]);
+
+export function migrateSessionDocument(document = {}, { sessionId: suppliedSessionId = "" } = {}) {
+  const context = createDocumentMigrationContext(document, suppliedSessionId);
+  for (const step of DOCUMENT_MIGRATION_STEPS) step(context);
+  const legacyAuthorityEventOutbox = extractLegacyAuthorityEventOutbox(context);
+  if (context.changed && context.migrations.length === 0) {
+    context.migrations.push("session-document-v1");
+  }
+  return {
+    document: context.next,
+    changed: context.changed,
+    migrations: context.migrations,
+    legacyAuthorityEventOutbox,
   };
-  for (const replacement of Object.values(next.turnLifecycle?.replacedTurns || {}))
-    migrateReplacement(replacement);
-  if (Object.hasOwn(next, "turnTerminalCommits")) {
-    delete next.turnTerminalCommits;
-    changed = true;
-  }
-  let legacyAuthorityEventOutbox = [];
-  if (Object.hasOwn(next, "authorityEventOutbox")) {
-    legacyAuthorityEventOutbox = Array.isArray(next.authorityEventOutbox)
-      ? next.authorityEventOutbox
-      : [];
-    delete next.authorityEventOutbox;
-    changed = true;
-    migrations.push("authority-event-outbox-journal-v1");
-  }
-  if (changed && migrations.length === 0) migrations.push("session-document-v1");
-  return { document: next, changed, migrations, legacyAuthorityEventOutbox };
 }
