@@ -9,12 +9,10 @@ import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-
 import { publishRunEvent, registerActiveRun } from "../run-registry.js";
 import { createRunEventListener } from "../run-event-listener.js";
 import { isSessionLogDebugTypeEnabled } from "@noobot/runtime-events/session-log-protocol";
-import {
-  recordServiceAgentTransportDebug,
-  recordServiceWebSocketLifecycle,
-} from "../runtime-events.js";
+import { recordServiceWebSocketLifecycle } from "../runtime-events.js";
 
 const text = (value) => String(value || "").trim();
+const REPLAYABLE_DISPATCH_FAILURES = new Set(["authority_event_send_failed"]);
 const TIMELINE_EVENT_TYPES = new Set([
   "tool_call_start",
   "tool_call_end",
@@ -46,23 +44,8 @@ function recordTimelineEvent(context, run, eventData, eventType) {
   });
 }
 
-function onEventReceived(context, command, run, eventData = {}) {
+function onEventReceived(context, run, eventData = {}) {
   const eventType = text(eventData.eventType || eventData.eventName);
-  if (eventType === "agent_transport_parameters_consumed") {
-    void recordServiceAgentTransportDebug({
-      sessionLogConfig: context.sessionLogConfig,
-      event: "agent.agentTransport.parametersConsumed",
-      command,
-      userId: run.userId,
-      data: {
-        consumed: true,
-        transport: "websocket",
-        consumer: "agent",
-        consumption: eventData.agentTransportConsumption || {},
-      },
-    });
-    return;
-  }
   if (
     eventType === WORKFLOW_RUNTIME_EVENT.PLANNING ||
     eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE
@@ -155,9 +138,11 @@ async function dispatchAuthorityEvent(context, run, active, envelope = {}, dispa
     },
     (...args) => publishRunEvent(active.runHandle, ...args),
   );
-  if (dispatch?.dispatched !== true)
-    throw new Error(dispatch?.reason || "authority_event_dispatch_failed");
-  return dispatch;
+  if (dispatch?.dispatched === true) return dispatch;
+  const reason = dispatch?.reason || "authority_event_dispatch_failed";
+  if (!REPLAYABLE_DISPATCH_FAILURES.has(reason)) throw new Error(reason);
+  recordDispatchFailure(context, run, envelope, dispatchContext, reason, dispatch?.delivered);
+  return { ...dispatch, deliveryDegraded: true };
 }
 
 function startProcessing(context, run, accepted, lifecycleData) {
@@ -235,7 +220,7 @@ function recordDeliveryTiming(context, run, active, summary) {
   });
 }
 
-export function createMessageRunEventListener(context, command, run, accepted, active) {
+export function createMessageRunEventListener(context, run, accepted, active) {
   const lifecycle = { processingStarted: null };
   const eventListener = createRunEventListener({
     sendEvent: (...args) => publishRunEvent(active.runHandle, ...args),
@@ -244,7 +229,7 @@ export function createMessageRunEventListener(context, command, run, accepted, a
     getCurrentRunMeta: () => active.runMeta,
     getCurrentRunHandle: () => active.runHandle,
     getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
-    onEventReceived: (eventData) => onEventReceived(context, command, run, eventData),
+    onEventReceived: (eventData) => onEventReceived(context, run, eventData),
     onDeliveryTiming: isSessionLogDebugTypeEnabled(
       DELIVERY_TIMING_DEBUG_TYPE,
       context.sessionLogConfig,

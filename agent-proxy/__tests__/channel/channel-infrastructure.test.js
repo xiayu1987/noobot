@@ -17,6 +17,7 @@ import {
   TURN_STATE,
 } from "@noobot/session-protocol";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import { normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
 
 function canonicalTurnLifecycle(domainEnvelope) {
   return createEventEnvelope({
@@ -90,6 +91,87 @@ test("command registry cancels reconnect snapshot commands by nested socket requ
   assert.equal(registry.cancelRequester(socket), 1);
   assert.deepEqual(resolution, { ok: false, reason: "requester_disconnected" });
   assert.equal(registry.get("snapshot-reconnect"), null);
+});
+
+test("command registry records why each command was removed", () => {
+  let currentMs = 1000;
+  const removals = [];
+  const registry = new CommandRegistry({
+    now: () => currentMs,
+    defaultTtlMs: 100,
+    maxRemovals: 3,
+    onRemove: (removal) => removals.push(removal),
+  });
+  const socket = {};
+  const register = (id, channelKey = "channel-1") =>
+    registry.register(id, { channelKey, commandType: "execution_query", requester: socket });
+  register("q-delivered");
+  register("q-cancelled");
+  register("q-expired", "channel-2");
+  register("q-missing", "channel-gone");
+  currentMs = 1040;
+  assert.equal(registry.delete("q-delivered", "delivered"), true);
+  assert.equal(registry.delete("q-unknown", "delivered"), false);
+  assert.equal(registry.cancelRequester(socket), 3);
+
+  register("q-expired", "channel-2");
+  register("q-missing", "channel-gone");
+  currentMs = 1200;
+  registry.cleanup({ channelExists: (key) => key !== "channel-gone" });
+
+  assert.deepEqual(
+    removals.map(({ commandId, reason }) => [commandId, reason]),
+    [
+      ["q-delivered", "delivered"],
+      ["q-cancelled", "requester_disconnected"],
+      ["q-expired", "requester_disconnected"],
+      ["q-missing", "requester_disconnected"],
+      ["q-expired", "ttl_expired"],
+      ["q-missing", "channel_missing"],
+    ],
+  );
+  assert.equal(removals[0].registeredForMs, 40);
+  assert.equal(removals[4].registeredForMs, 160);
+  assert.equal(registry.lastRemoval("q-expired").reason, "ttl_expired");
+  assert.equal(registry.removals.size, 3);
+  assert.equal(registry.lastRemoval("q-delivered"), null);
+});
+
+test("command registry removal callback failures do not interrupt removal", () => {
+  const registry = new CommandRegistry({
+    onRemove: () => {
+      throw new Error("log sink down");
+    },
+  });
+  const socket = {};
+  registry.register("q-1", { requester: socket });
+  registry.register("q-2", { requester: socket });
+  assert.equal(registry.cancelRequester(socket), 2);
+  assert.equal(registry.commands.size, 0);
+});
+
+test("command removal session log events satisfy the runtime event schema", () => {
+  const logged = [];
+  const manager = new ChannelManager(class {}, {
+    sessionLogClient: { log: (apiKey, event) => logged.push({ apiKey, event }) },
+  });
+  manager.channelStore.set("admin::session-1", {
+    key: "admin::session-1",
+    apiKey: "key-1",
+    startPayload: { sessionId: "session-1" },
+  });
+  const register = (id) =>
+    manager.commandRegistry.register(id, { channelKey: "admin::session-1", requester: {} });
+  register("q-delivered");
+  register("q-orphaned");
+  manager.commandRegistry.delete("q-delivered", "delivered");
+  manager.commandRegistry.delete("q-orphaned", "forward_failed");
+
+  assert.equal(logged.length, 1);
+  const record = normalizeRuntimeEventEnvelope({ source: "agent-proxy", ...logged[0].event });
+  assert.equal(record.event, "agentProxy.commandRegistry.removed");
+  assert.equal(record.category, "transport");
+  assert.equal(logged[0].event.data.reason, "forward_failed");
 });
 
 test("subscriber delivery closes a slow consumer at the backpressure boundary", () => {

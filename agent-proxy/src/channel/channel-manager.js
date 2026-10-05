@@ -28,7 +28,10 @@ export class ChannelManager {
     this.WebSocket = WebSocket;
     this.sessionLogClient = sessionLogClient;
     this.channelStore = new Map();
-    this.commandRegistry = new CommandRegistry({ defaultTtlMs: config.requestIdTtlMs });
+    this.commandRegistry = new CommandRegistry({
+      defaultTtlMs: config.requestIdTtlMs,
+      onRemove: (removal) => this.logCommandRemoval(removal),
+    });
     this.requestChannelMap = this.commandRegistry.routes;
     this.apiKeyIdentityStore = new Map();
     this.createUpstreamTransport = () => new UpstreamTransportSupervisor(WebSocket);
@@ -52,8 +55,12 @@ export class ChannelManager {
 
   drainSuccessfulDataPlaneMetrics(nowMs = Date.now()) {
     const current = this.successfulDataPlaneMetrics;
-    const total = current.upstreamMessages + current.channelEvents + current.broadcasts +
-      current.deliveries + current.lifecycleReceipts;
+    const total =
+      current.upstreamMessages +
+      current.channelEvents +
+      current.broadcasts +
+      current.deliveries +
+      current.lifecycleReceipts;
     if (!total) return null;
     this.successfulDataPlaneMetrics = {
       windowStartedAtMs: nowMs,
@@ -66,9 +73,26 @@ export class ChannelManager {
     return { ...current, windowEndedAtMs: nowMs };
   }
 
+  logCommandRemoval(removal) {
+    if (removal?.reason === "delivered") return false;
+    try {
+      const channel = this.channelStore.get(removal?.channelKey);
+      return this.logSessionEvent(channel, {
+        category: "transport",
+        level: "info",
+        event: "agentProxy.commandRegistry.removed",
+        data: { ...removal },
+      });
+    } catch {
+      return false;
+    }
+  }
+
   logSessionEvent(channel, event = {}) {
     if (!this.sessionLogClient || !channel) return false;
-    const channelSessionId = resolveOptionalSessionId(this._extractSessionIdFromChannelKey?.(channel.key));
+    const channelSessionId = resolveOptionalSessionId(
+      this._extractSessionIdFromChannelKey?.(channel.key),
+    );
     const sessionId = resolveOptionalSessionId(
       event.sessionId,
       event.data?.sessionId,
@@ -86,7 +110,11 @@ export class ChannelManager {
       ...event,
       sessionId,
       ...(parentSessionId ? { parentSessionId } : {}),
-      dialogProcessId: event.dialogProcessId || event.data?.dialogProcessId || channel.startPayload?.dialogProcessId || "",
+      dialogProcessId:
+        event.dialogProcessId ||
+        event.data?.dialogProcessId ||
+        channel.startPayload?.dialogProcessId ||
+        "",
       turnScopeId: event.turnScopeId || event.data?.turnScopeId || "",
     };
     if (!parentSessionId) delete logEvent.parentSessionId;

@@ -406,7 +406,7 @@ export class WsRouter {
     targetChannel.pendingExecutionRequests ||= new Map();
     targetChannel.pendingExecutionRequests.set(commandId, socket);
     if (this.channelManager.forwardToUpstream(targetChannel, payload)) return;
-    targetChannel.pendingExecutionRequests.delete(commandId);
+    targetChannel.pendingExecutionRequests.delete(commandId, "forward_failed");
     this._sendCommandFailure(socket, payload, {
       code: "UPSTREAM_UNAVAILABLE",
       message: AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,

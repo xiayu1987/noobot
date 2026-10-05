@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { config } from "../../src/shared/config.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   canonicalInteractionRequest,
@@ -342,6 +343,109 @@ test("upstream execution query responses return only to the registered requester
   assert.equal(getEvent(requester, "execution_tree")?.data?.commandId, "execution-query-1");
   assert.equal(getEvent(observer, "execution_tree"), null);
   assert.equal(channel.pendingExecutionRequests.size, 0);
+});
+
+test("orphan execution query responses are dropped without closing upstream", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-orphan-query" }),
+    { userId: "user-1", sessionId: "session-orphan-query" },
+  );
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, observer);
+
+  for (const event of ["execution_tree", "execution_snapshot", "execution_children"]) {
+    upstream.emit(
+      "message",
+      JSON.stringify({ event, data: { commandId: `late-${event}`, found: true } }),
+    );
+  }
+
+  assert.equal(channel.upstreamClosed, false);
+  assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR), null);
+  assert.equal(getEvent(observer, "execution_tree"), null);
+});
+
+test("execution query wire events without commandId remain invalid upstream events", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-query-no-id" }),
+    { userId: "user-1", sessionId: "session-query-no-id" },
+  );
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, observer);
+
+  upstream.emit("message", JSON.stringify({ event: "execution_tree", data: { found: true } }));
+
+  assert.equal(channel.upstreamClosed, true);
+  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR));
+});
+
+function connectInvalidFrameChannel(sessionId) {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, observer);
+  const emitLocatableInvalidFrame = (index) =>
+    upstream.emit(
+      "message",
+      JSON.stringify({
+        event: "message_event",
+        data: { identity: { eventId: `evt_bad_${index}` } },
+      }),
+    );
+  return { channel, upstream, observer, emitLocatableInvalidFrame };
+}
+
+test("locatable invalid upstream frames are dropped without closing upstream", () => {
+  const { channel, observer, emitLocatableInvalidFrame } = connectInvalidFrameChannel(
+    "session-invalid-frame-drop",
+  );
+
+  for (let index = 0; index < config.invalidUpstreamFrameLimit; index += 1) {
+    emitLocatableInvalidFrame(index);
+  }
+
+  assert.equal(channel.upstreamClosed, false);
+  assert.equal(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR), null);
+  assert.equal(getEvent(observer, "message_event"), null);
+});
+
+test("invalid upstream frames beyond the window limit close upstream", () => {
+  const { channel, observer, emitLocatableInvalidFrame } = connectInvalidFrameChannel(
+    "session-invalid-frame-limit",
+  );
+
+  for (let index = 0; index <= config.invalidUpstreamFrameLimit; index += 1) {
+    emitLocatableInvalidFrame(index);
+  }
+
+  assert.equal(channel.upstreamClosed, true);
+  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR));
+});
+
+test("unparseable upstream frames close upstream immediately", () => {
+  const { channel, upstream, observer } = connectInvalidFrameChannel("session-invalid-frame-json");
+
+  upstream.emit("message", "{not-json");
+
+  assert.equal(channel.upstreamClosed, true);
+  assert.ok(getEvent(observer, AGENT_TRANSPORT_EVENT.ERROR));
 });
 
 test("stop action should broadcast stopping state before terminal", () => {

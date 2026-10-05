@@ -76,6 +76,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     dataPlaneMetricsIntervalMs: 10000,
     reconnectSnapshotTimeoutMs: TIME_TIERS.quickInspectMs,
     turnLifecycleReceiptTimeoutMs: TIME_TIERS.flushMs,
+    invalidUpstreamFrameWindowMs: 10000,
   },
 
   capability: {

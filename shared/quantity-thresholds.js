@@ -92,4 +92,8 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
 
     maxDebugQueueBytes: 1024 * 1024,
   },
+
+  agentProxy: {
+    invalidUpstreamFrameLimit: 5,
+  },
 });

@@ -44,7 +44,27 @@ export function validateDataPlaneEvent(eventName, data) {
   return validation;
 }
 
-export function assertDataPlaneEvent(eventName, data) {
+function text(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function locateDataPlaneFrame(eventName, data) {
+  const eventId = text(data?.identity?.eventId);
+  const commandId = text(data?.commandId) || text(data?.causality?.commandId);
+  if (!eventId && !commandId) return null;
+  return {
+    eventName: text(eventName),
+    eventId,
+    commandId,
+    runId: text(data?.identity?.runId),
+  };
+}
+
+export function assertLocatableDataPlaneEvent(eventName, data) {
   const validation = validateDataPlaneEvent(eventName, data);
-  if (!validation.valid) throw new TypeError(validation.errors.join(","));
+  if (validation.valid) return;
+  const error = new TypeError(validation.errors.join(","));
+  const frameLocator = locateDataPlaneFrame(eventName, data);
+  if (frameLocator) error.frameLocator = frameLocator;
+  throw error;
 }

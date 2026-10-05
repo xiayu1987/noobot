@@ -18,13 +18,18 @@ import {
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_SNAPSHOT_WIRE_EVENT,
 } from "@noobot/session-protocol";
+import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
   AGENT_TRANSPORT_EVENT,
   createAgentTransportError,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
-import { assertDataPlaneEvent } from "./data-plane-event-validator.js";
+import { assertLocatableDataPlaneEvent } from "./data-plane-event-validator.js";
+
+const EXECUTION_QUERY_WIRE_EVENTS = new Set(
+  Object.values(EXECUTION_QUERY_CONTRACT).map((contract) => contract.wireEvent),
+);
 
 class UpstreamConnectionMethods {
   closeUpstreamChannel(channel, closeCode = 1000, reasonText = UPSTREAM_CLOSE_REASON.CLOSED) {
@@ -199,115 +204,9 @@ class UpstreamConnectionMethods {
 
         message: ({ rawData }) => {
           try {
-            const parsed = JSON.parse(String(rawData || "{}"));
-            const eventName = String(parsed?.event || "").trim();
-            if (!eventName) throw new TypeError("missing_upstream_event");
-            const eventData = parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
-            const isQueryResponse =
-              eventName === TURN_SNAPSHOT_WIRE_EVENT ||
-              Boolean(
-                String(eventData?.commandId || "").trim() &&
-                channel.pendingExecutionRequests?.has(String(eventData.commandId).trim()),
-              );
-            if (!isQueryResponse) assertDataPlaneEvent(eventName, eventData);
-            const lifecycle = eventData?.payload || {};
-            if (
-              eventName === TURN_LIFECYCLE_WIRE_EVENT &&
-              String(lifecycle?.eventType || "").trim() === TURN_EVENT.ACTION_ACCEPTED
-            ) {
-              const summary = summarizeAgentTransportCommand(channel.startPayload, {
-                accepted: true,
-                consumedByService: true,
-                transport: "websocket",
-                lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
-                lifecycleEventId: String(eventData?.identity?.eventId || "").trim(),
-                lifecycleRevision: Number(eventData?.ordering?.revision || 0),
-              });
-              this.logSessionEvent(channel, {
-                category: "debug",
-                level: "debug",
-                debugType: AGENT_TRANSPORT_DEBUG_TYPE,
-                event: "agentProxy.agentTransport.commandAccepted",
-                sessionId: summary.sessionId,
-                dialogProcessId: summary.dialogProcessId,
-                turnScopeId: summary.turnScopeId,
-                data: {
-                  event: "agentProxy.agentTransport.commandAccepted",
-                  ...summary,
-                },
-              });
-            }
-            if (eventName === TURN_SNAPSHOT_WIRE_EVENT) {
-              const commandId = String(eventData?.causality?.commandId || "").trim();
-              const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
-              if (requester) {
-                channel.pendingSnapshotRequests.delete(commandId);
-                if (typeof requester?.resolve === "function") {
-                  requester.resolve({ ok: true, snapshot: eventData });
-                } else {
-                  this.sendSocketEvent(requester, { event: eventName, data: eventData });
-                }
-              }
-              return;
-            }
-            const commandId = String(eventData?.commandId || "").trim();
-            if (eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {
-              const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
-              if (typeof requester?.resolve === "function") {
-                channel.pendingSnapshotRequests.delete(commandId);
-                requester.resolve({
-                  ok: false,
-                  reason: String(
-                    eventData?.error?.code || eventData?.outcome || "snapshot_failed",
-                  ).trim(),
-                });
-                return;
-              }
-            }
-            const executionRequester = commandId
-              ? channel.pendingExecutionRequests?.get(commandId)
-              : null;
-            if (executionRequester) {
-              channel.pendingExecutionRequests.delete(commandId);
-              this.sendSocketEvent(executionRequester, { event: eventName, data: eventData });
-              return;
-            }
-            if (eventName === AGENT_TRANSPORT_EVENT.ERROR) {
-              const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
-              if (typeof requester?.resolve === "function") {
-                channel.pendingSnapshotRequests.delete(commandId);
-                requester.resolve({
-                  ok: false,
-                  reason: eventData.code,
-                });
-                return;
-              }
-            }
-            const eventEnvelope = this.pushChannelEvent(channel, eventName, eventData);
-            this.recordSuccessfulDataPlaneOperation("upstreamMessages");
-            this.broadcastChannelEvent(channel, eventEnvelope);
+            this.handleUpstreamMessage(channel, rawData);
           } catch (error) {
-            this.logSessionEvent(channel, {
-              category: "transport",
-              level: "error",
-              event: "agentProxy.upstream.message.error",
-              data: {
-                channelKey: channel.key,
-                error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT),
-              },
-            });
-            const message = String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT);
-            const errorEnvelope = this.pushChannelEvent(
-              channel,
-              AGENT_TRANSPORT_EVENT.ERROR,
-              createAgentTransportError({
-                code: AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT,
-                message,
-                identity: { sessionId: channel.startPayload?.sessionId },
-              }),
-            );
-            this.broadcastChannelEvent(channel, errorEnvelope);
-            this.closeUpstreamChannel(channel, 1011, UPSTREAM_CLOSE_REASON.INVALID_UPSTREAM_EVENT);
+            this.reportUpstreamMessageError(channel, error);
           }
         },
 
@@ -380,6 +279,174 @@ class UpstreamConnectionMethods {
       channel.transport.phase = CHANNEL_STATUS.IDLE;
     }
     return connection;
+  }
+
+  parseUpstreamMessage(channel, rawData) {
+    const parsed = JSON.parse(String(rawData || "{}"));
+    const eventName = String(parsed?.event || "").trim();
+    if (!eventName) throw new TypeError("missing_upstream_event");
+    const eventData = parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
+    const queryCommandId = String(eventData?.commandId || "").trim();
+    const isQueryResponse =
+      eventName === TURN_SNAPSHOT_WIRE_EVENT ||
+      Boolean(
+        queryCommandId &&
+        (EXECUTION_QUERY_WIRE_EVENTS.has(eventName) ||
+          channel.pendingExecutionRequests?.has(queryCommandId)),
+      );
+    if (!isQueryResponse) assertLocatableDataPlaneEvent(eventName, eventData);
+    return { eventName, eventData };
+  }
+
+  recordDroppableUpstreamFrame(channel, error) {
+    const locator = error?.frameLocator;
+    if (!locator) return false;
+    const currentMs = nowMs();
+    const windowStartMs = currentMs - config.invalidUpstreamFrameWindowMs;
+    const recent = (channel.invalidUpstreamFrameAtMs || []).filter((atMs) => atMs > windowStartMs);
+    recent.push(currentMs);
+    channel.invalidUpstreamFrameAtMs = recent;
+    if (recent.length > config.invalidUpstreamFrameLimit) return false;
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "warn",
+      event: "agentProxy.upstream.message.dropped",
+      data: {
+        channelKey: channel.key,
+        ...locator,
+        error: String(error.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT),
+        invalidFramesInWindow: recent.length,
+        invalidFrameLimit: config.invalidUpstreamFrameLimit,
+      },
+    });
+    return true;
+  }
+
+  logUpstreamActionAccepted(channel, eventName, eventData) {
+    const lifecycle = eventData?.payload || {};
+    if (eventName !== TURN_LIFECYCLE_WIRE_EVENT) return;
+    if (String(lifecycle?.eventType || "").trim() !== TURN_EVENT.ACTION_ACCEPTED) return;
+    const summary = summarizeAgentTransportCommand(channel.startPayload, {
+      accepted: true,
+      consumedByService: true,
+      transport: "websocket",
+      lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
+      lifecycleEventId: String(eventData?.identity?.eventId || "").trim(),
+      lifecycleRevision: Number(eventData?.ordering?.revision || 0),
+    });
+    this.logSessionEvent(channel, {
+      category: "debug",
+      level: "debug",
+      debugType: AGENT_TRANSPORT_DEBUG_TYPE,
+      event: "agentProxy.agentTransport.commandAccepted",
+      sessionId: summary.sessionId,
+      dialogProcessId: summary.dialogProcessId,
+      turnScopeId: summary.turnScopeId,
+      data: {
+        event: "agentProxy.agentTransport.commandAccepted",
+        ...summary,
+      },
+    });
+  }
+
+  routeUpstreamSnapshot(channel, eventName, eventData) {
+    const commandId = String(eventData?.causality?.commandId || "").trim();
+    const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
+    if (!requester) return;
+    channel.pendingSnapshotRequests.delete(commandId, "delivered");
+    if (typeof requester?.resolve === "function") {
+      requester.resolve({ ok: true, snapshot: eventData });
+    } else {
+      this.sendSocketEvent(requester, { event: eventName, data: eventData });
+    }
+  }
+
+  resolvePendingSnapshotFailure(channel, commandId, reason) {
+    const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
+    if (typeof requester?.resolve !== "function") return false;
+    channel.pendingSnapshotRequests.delete(commandId, "snapshot_failed");
+    requester.resolve({ ok: false, reason });
+    return true;
+  }
+
+  routeExecutionQueryResponse(channel, eventName, eventData, commandId) {
+    const executionRequester = commandId ? channel.pendingExecutionRequests?.get(commandId) : null;
+    if (executionRequester) {
+      channel.pendingExecutionRequests.delete(commandId, "delivered");
+      this.sendSocketEvent(executionRequester, { event: eventName, data: eventData });
+      return true;
+    }
+    if (!EXECUTION_QUERY_WIRE_EVENTS.has(eventName)) return false;
+    const removal = this.commandRegistry?.lastRemoval?.(commandId) || null;
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "warn",
+      event: "agentProxy.upstream.executionQuery.orphanDropped",
+      data: {
+        channelKey: channel.key,
+        eventName,
+        commandId,
+        removalReason: removal?.reason || "never_registered",
+        registeredForMs: removal?.registeredForMs ?? null,
+        sinceRemovalMs: removal ? Math.max(0, nowMs() - removal.removedAtMs) : null,
+      },
+    });
+    return true;
+  }
+
+  handleUpstreamMessage(channel, rawData) {
+    const { eventName, eventData } = this.parseUpstreamMessage(channel, rawData);
+    this.logUpstreamActionAccepted(channel, eventName, eventData);
+    if (eventName === TURN_SNAPSHOT_WIRE_EVENT) {
+      this.routeUpstreamSnapshot(channel, eventName, eventData);
+      return;
+    }
+    const commandId = String(eventData?.commandId || "").trim();
+    if (
+      eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+      this.resolvePendingSnapshotFailure(
+        channel,
+        commandId,
+        String(eventData?.error?.code || eventData?.outcome || "snapshot_failed").trim(),
+      )
+    ) {
+      return;
+    }
+    if (this.routeExecutionQueryResponse(channel, eventName, eventData, commandId)) return;
+    if (
+      eventName === AGENT_TRANSPORT_EVENT.ERROR &&
+      this.resolvePendingSnapshotFailure(channel, commandId, eventData.code)
+    ) {
+      return;
+    }
+    const eventEnvelope = this.pushChannelEvent(channel, eventName, eventData);
+    this.recordSuccessfulDataPlaneOperation("upstreamMessages");
+    this.broadcastChannelEvent(channel, eventEnvelope);
+  }
+
+  reportUpstreamMessageError(channel, error) {
+    if (this.recordDroppableUpstreamFrame(channel, error)) return;
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "error",
+      event: "agentProxy.upstream.message.error",
+      data: {
+        channelKey: channel.key,
+        error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT),
+      },
+    });
+    const message = String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT);
+    const errorEnvelope = this.pushChannelEvent(
+      channel,
+      AGENT_TRANSPORT_EVENT.ERROR,
+      createAgentTransportError({
+        code: AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT,
+        message,
+        identity: { sessionId: channel.startPayload?.sessionId },
+      }),
+    );
+    this.broadcastChannelEvent(channel, errorEnvelope);
+    this.closeUpstreamChannel(channel, 1011, UPSTREAM_CLOSE_REASON.INVALID_UPSTREAM_EVENT);
   }
 }
 

@@ -9,6 +9,7 @@ import { readOptionalJsonObjectConfigSync } from "@noobot/shared/config-file";
 import { RUNTIME_PORT_TOPOLOGY } from "@noobot/runtime-topology-protocol/ports";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 export function loadFileConfig(
@@ -152,6 +153,18 @@ export const config = {
     "requestIdTtlMs",
     11 * 60 * 1000,
     5000,
+  ),
+  invalidUpstreamFrameWindowMs: envTimeMs(
+    "AGENT_PROXY_INVALID_UPSTREAM_FRAME_WINDOW_MS",
+    "invalidUpstreamFrameWindowMs",
+    TIME_THRESHOLDS.agentProxy.invalidUpstreamFrameWindowMs,
+    1000,
+  ),
+  invalidUpstreamFrameLimit: envNumber(
+    "AGENT_PROXY_INVALID_UPSTREAM_FRAME_LIMIT",
+    "invalidUpstreamFrameLimit",
+    QUANTITY_THRESHOLDS.agentProxy.invalidUpstreamFrameLimit,
+    1,
   ),
   reconnectSnapshotTimeoutMs: envTimeMs(
     "AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS",
