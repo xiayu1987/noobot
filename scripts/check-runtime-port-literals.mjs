@@ -4,27 +4,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-
-function exists(filePath) {
-  try {
-    statSync(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function resolveRepoRoot() {
-  const cwd = process.cwd();
-  if (exists(path.join(cwd, "package.json")) && exists(path.join(cwd, "scripts"))) return cwd;
-  const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts"))) {
-    return parent;
-  }
-  return cwd;
-}
+import { resolveRepoRoot } from "./lib/repo-root.mjs";
 
 const ROOT = resolveRepoRoot();
 const SOURCE_OF_TRUTH = "runtime-topology-protocol/src/ports.js";

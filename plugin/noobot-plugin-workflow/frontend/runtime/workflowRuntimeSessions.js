@@ -78,40 +78,50 @@ function resolveWorkflowRunId(workflowPayload) {
   ).trim();
 }
 
+function finiteNumberFrom(value) {
+  return Number.isFinite(Number(value)) ? Number(value) : undefined;
+}
+
 function normalizeCommittedNodeFact(item = {}) {
+  const source = objectOr(item, {});
   return {
-    workflowRunId: String(item?.workflowRunId || "").trim(),
-    nodeExecutionId: String(item?.nodeExecutionId || "").trim(),
-    nodeId: String(item?.nodeId || "").trim(),
-    nodeName: String(item?.nodeName || item?.nodeId || "").trim(),
-    actionNodeStateId: String(item?.actionNodeStateId || item?.nodeStateId || "").trim(),
-    stepId: String(item?.stepId || item?.nodeExecutionId || "").trim(),
-    stepIndex: Number.isFinite(Number(item?.stepIndex)) ? Number(item.stepIndex) : undefined,
-    commandId: String(item?.commandId || "").trim(),
-    sessionId: String(item?.sessionId || item?.nodeSessionId || "").trim(),
-    parentSessionId: String(item?.parentSessionId || "").trim(),
-    dialogProcessId: String(item?.dialogProcessId || "").trim(),
-    turnScopeId: String(item?.turnScopeId || "").trim(),
-    activeChildExecutionId: String(
-      item?.activeChildExecutionId || item?.childExecutionId || "",
-    ).trim(),
-    childExecutionId: String(item?.childExecutionId || item?.activeChildExecutionId || "").trim(),
-    attemptExecutionIds: Array.isArray(item?.attemptExecutionIds)
-      ? item.attemptExecutionIds.map(String)
+    workflowRunId: firstText(source.workflowRunId),
+    nodeExecutionId: firstText(source.nodeExecutionId),
+    nodeId: firstText(source.nodeId),
+    nodeName: firstText(source.nodeName, source.nodeId),
+    actionNodeStateId: firstText(source.actionNodeStateId, source.nodeStateId),
+    stepId: firstText(source.stepId, source.nodeExecutionId),
+    stepIndex: finiteNumberFrom(source.stepIndex),
+    commandId: firstText(source.commandId),
+    sessionId: firstText(source.sessionId, source.nodeSessionId),
+    parentSessionId: firstText(source.parentSessionId),
+    dialogProcessId: firstText(source.dialogProcessId),
+    turnScopeId: firstText(source.turnScopeId),
+    activeChildExecutionId: firstText(source.activeChildExecutionId, source.childExecutionId),
+    childExecutionId: firstText(source.childExecutionId, source.activeChildExecutionId),
+    attemptExecutionIds: Array.isArray(source.attemptExecutionIds)
+      ? source.attemptExecutionIds.map(String)
       : [],
-    status: String(item?.status || "").trim(),
-    stepFailure:
-      item?.failure && typeof item.failure === "object"
-        ? item.failure
-        : item?.stepFailure && typeof item.stepFailure === "object"
-          ? item.stepFailure
-          : null,
-    revision: Number(item?.revision || 0),
-    sequence: Number(item?.sequence || 0),
-    eventId: String(item?.eventId || "").trim(),
-    updatedAt: String(item?.updatedAt || item?.occurredAt || "").trim(),
+    status: firstText(source.status),
+    stepFailure: objectOr(source.failure, objectOr(source.stepFailure, null)),
+    revision: Number(source.revision || 0),
+    sequence: Number(source.sequence || 0),
+    eventId: firstText(source.eventId),
+    updatedAt: firstText(source.updatedAt, source.occurredAt),
   };
 }
+
+const BASE_FALLBACK_FIELDS = [
+  ["sessionId", "sessionId", "nodeSessionId"],
+  ["dialogProcessId", "dialogProcessId"],
+  ["turnScopeId", "turnScopeId"],
+  ["nodeId", "nodeId"],
+  ["nodeName", "nodeName", "nodeId"],
+  ["actionNodeStateId", "actionNodeStateId", "nodeStateId"],
+  ["stepId", "stepId"],
+  ["activeChildExecutionId", "activeChildExecutionId", "childExecutionId"],
+  ["childExecutionId", "childExecutionId", "activeChildExecutionId"],
+];
 
 function mergeCommittedNodeFact(base = {}, fact = {}) {
   if (!fact?.nodeExecutionId) return base;
@@ -120,32 +130,12 @@ function mergeCommittedNodeFact(base = {}, fact = {}) {
   const merged = {
     ...canonicalBase,
     ...canonicalFact,
-    status: String(canonicalFact.status || canonicalBase.status || "").trim(),
+    status: firstText(canonicalFact.status, canonicalBase.status),
     stepFailure: canonicalFact.stepFailure || canonicalBase.stepFailure || null,
   };
-  if (!canonicalFact.sessionId)
-    merged.sessionId = String(canonicalBase.sessionId || canonicalBase.nodeSessionId || "").trim();
-  if (!canonicalFact.dialogProcessId)
-    merged.dialogProcessId = String(canonicalBase.dialogProcessId || "").trim();
-  if (!canonicalFact.turnScopeId)
-    merged.turnScopeId = String(canonicalBase.turnScopeId || "").trim();
-  if (!canonicalFact.nodeId) merged.nodeId = String(canonicalBase.nodeId || "").trim();
-  if (!canonicalFact.nodeName)
-    merged.nodeName = String(canonicalBase.nodeName || canonicalBase.nodeId || "").trim();
-  if (!canonicalFact.actionNodeStateId)
-    merged.actionNodeStateId = String(
-      canonicalBase.actionNodeStateId || canonicalBase.nodeStateId || "",
-    ).trim();
-  if (!canonicalFact.stepId) merged.stepId = String(canonicalBase.stepId || "").trim();
-  if (!canonicalFact.activeChildExecutionId) {
-    merged.activeChildExecutionId = String(
-      canonicalBase.activeChildExecutionId || canonicalBase.childExecutionId || "",
-    ).trim();
-  }
-  if (!canonicalFact.childExecutionId) {
-    merged.childExecutionId = String(
-      canonicalBase.childExecutionId || canonicalBase.activeChildExecutionId || "",
-    ).trim();
+  for (const [field, ...fallbacks] of BASE_FALLBACK_FIELDS) {
+    if (!canonicalFact[field])
+      merged[field] = firstText(...fallbacks.map((key) => canonicalBase[key]));
   }
   return merged;
 }

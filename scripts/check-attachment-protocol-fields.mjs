@@ -4,27 +4,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { resolveRepoRoot } from "./lib/repo-root.mjs";
 import { collectSourceFiles, ignorePathParts } from "./lib/guard-scan.mjs";
-
-function exists(filePath) {
-  try {
-    statSync(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function resolveRepoRoot() {
-  const cwd = process.cwd();
-  if (exists(path.join(cwd, "package.json")) && exists(path.join(cwd, "scripts"))) return cwd;
-  const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts")))
-    return parent;
-  return cwd;
-}
 
 const ROOT = resolveRepoRoot();
 const TARGET_DIRS = [

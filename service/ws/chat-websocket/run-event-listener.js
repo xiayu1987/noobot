@@ -100,11 +100,7 @@ function auditWorkflow(eventData) {
   };
 }
 
-function isPlainRecord(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function auditOrderingAndFlags(eventName, canonicalEnvelope, eventData) {
+function auditOrderingAndFlags(canonicalEnvelope, eventData) {
   const ordering = canonicalEnvelope?.ordering || {};
   return {
     sequence: countOf(ordering.sequence),
@@ -112,10 +108,6 @@ function auditOrderingAndFlags(eventName, canonicalEnvelope, eventData) {
     sequenceScopeId: trimmedText(ordering.scopeId),
     hasTool: Boolean(eventData?.tool),
     hasResult: eventData?.result !== undefined,
-    agentTransportConsumption:
-      eventName === "agent_transport_parameters_consumed" && isPlainRecord(eventData)
-        ? eventData
-        : null,
   };
 }
 
@@ -126,7 +118,7 @@ function buildEventAudit(eventName, eventData, sessionId, turnScopeId) {
     ...auditEnvelopeIdentity(canonicalEnvelope, eventData, sessionId, turnScopeId),
     ...auditMessageCounts(eventData),
     ...auditWorkflow(eventData),
-    ...auditOrderingAndFlags(eventName, canonicalEnvelope, eventData),
+    ...auditOrderingAndFlags(canonicalEnvelope, eventData),
     dataKeys: Object.keys(eventData).sort(),
   };
 }

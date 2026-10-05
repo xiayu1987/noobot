@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import ModelUtility from "../../../../design/model/model-utility.js";
+
 class NodeBoxBase {
   constructor() {
     this.node = null;
@@ -18,25 +20,11 @@ class NodeBoxBase {
   }
 
   getNodeStartFlowtos() {
-    const result = [];
-    const nodeLineRLATs = this.getNode()?.getModel?.()?.getNodeLineRLATs?.() || [];
-    for (const nodeLineRLAT of nodeLineRLATs) {
-      if (nodeLineRLAT.getNode() === this.getNode() && nodeLineRLAT.getRLATType() === 1) {
-        result.push(nodeLineRLAT.getFlowto());
-      }
-    }
-    return result;
+    return ModelUtility.getNodeStartFlowtos(this.getNode());
   }
 
   getNodeEndFlowtos() {
-    const result = [];
-    const nodeLineRLATs = this.getNode()?.getModel?.()?.getNodeLineRLATs?.() || [];
-    for (const nodeLineRLAT of nodeLineRLATs) {
-      if (nodeLineRLAT.getNode() === this.getNode() && nodeLineRLAT.getRLATType() === 0) {
-        result.push(nodeLineRLAT.getFlowto());
-      }
-    }
-    return result;
+    return ModelUtility.getNodeEndFlowtos(this.getNode());
   }
 
   createNodeState(modelState) {
@@ -44,4 +32,4 @@ class NodeBoxBase {
   }
 }
 
-export default  NodeBoxBase;
+export default NodeBoxBase;

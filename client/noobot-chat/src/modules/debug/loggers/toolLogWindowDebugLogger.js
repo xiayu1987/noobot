@@ -10,29 +10,57 @@ let sessionLogSink = null;
 
 const text = (value) => String(value ?? "").trim();
 
-export function summarizeToolLogWindowItem(item = {}, index = 0) {
-  const content = text(
-    item?.text ?? item?.output ?? item?.result ?? item?.data?.text ?? item?.data?.output,
+const isPresent = (value) => value !== undefined && value !== null;
+
+function firstPresent(source, keys) {
+  for (const key of keys) {
+    if (isPresent(source?.[key])) return source[key];
+  }
+  return undefined;
+}
+
+function firstTruthy(source, keys) {
+  for (const key of keys) {
+    if (source?.[key]) return source[key];
+  }
+  return source?.[keys.at(-1)];
+}
+
+function resolveContent(item) {
+  return text(
+    firstPresent(item, ["text", "output", "result"]) ??
+      firstPresent(item?.data, ["text", "output"]),
   );
-  const args = item?.args ?? item?.arguments ?? item?.data?.args ?? item?.data?.arguments;
-  const result = item?.result ?? item?.output ?? item?.data?.result ?? item?.data?.output;
-  const detail = item?.detailText ?? item?.detail;
+}
+
+function resolveArgs(item) {
+  return (
+    firstPresent(item, ["args", "arguments"]) ?? firstPresent(item?.data, ["args", "arguments"])
+  );
+}
+
+function resolveResult(item) {
+  return firstPresent(item, ["result", "output"]) ?? firstPresent(item?.data, ["result", "output"]);
+}
+
+export function summarizeToolLogWindowItem(item = {}, index = 0) {
+  const content = resolveContent(item);
   return {
     index,
     event: text(item?.event),
     type: text(item?.type),
     eventType: text(item?.eventType),
-    sequence: item?.sequence ?? item?.seq ?? null,
+    sequence: firstPresent(item, ["sequence", "seq"]) ?? null,
     sequenceDomain: text(item?.sequenceDomain),
-    sequenceScopeId: text(item?.sequenceScopeId || item?.sequenceScope || item?.messageId),
+    sequenceScopeId: text(firstTruthy(item, ["sequenceScopeId", "sequenceScope", "messageId"])),
     authority: text(item?.authority),
-    eventId: text(item?.eventId || item?.id),
-    toolCallId: text(item?.toolCallId || item?.tool_call_id),
-    tool: text(item?.tool || item?.toolName || item?.name),
+    eventId: text(firstTruthy(item, ["eventId", "id"])),
+    toolCallId: text(firstTruthy(item, ["toolCallId", "tool_call_id"])),
+    tool: text(firstTruthy(item, ["tool", "toolName", "name"])),
     category: text(item?.category),
-    hasArgs: args !== undefined && args !== null,
-    hasResult: result !== undefined && result !== null,
-    detailLength: text(detail).length,
+    hasArgs: isPresent(resolveArgs(item)),
+    hasResult: isPresent(resolveResult(item)),
+    detailLength: text(firstPresent(item, ["detailText", "detail"])).length,
     textLength: content.length,
     textPreview: content.slice(0, 500),
   };
@@ -55,5 +83,7 @@ export function isToolLogWindowDebugEnabled() {
 export function logToolLogWindowDebug(event, payload = {}) {
   try {
     return emitLazyDebug(sessionLogSink, "tool-log-window", event, payload);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }

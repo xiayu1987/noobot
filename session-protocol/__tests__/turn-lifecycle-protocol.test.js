@@ -359,3 +359,12 @@ test("session provision intent is explicit and restricted to the first send acce
   ])
     assert.equal(validateSessionProvisionIntent(input).valid, false);
 });
+
+test("turn lifecycle snapshot validation rejects non-object input without throwing", () => {
+  for (const value of [null, "snapshot", 42, true]) {
+    assert.deepEqual(validateTurnLifecycleSnapshot(value), {
+      valid: false,
+      errors: ["snapshot_not_object"],
+    });
+  }
+});

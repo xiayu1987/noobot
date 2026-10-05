@@ -98,6 +98,30 @@ export function createMessageHandler({
     dispatchAuthorityEvents,
   });
 
+  const context = {
+    state,
+    webSocket,
+    sendEvent,
+    translateText,
+    sessionLogConfig,
+    canonicalRunOwnerId,
+    buildRunStateSnapshot,
+    finalizeTimeout,
+    finalizeUserStopped,
+    finalizeAborted,
+    finalizeGenericError,
+    commitUserInterjection,
+    dispatchAuthorityEvents,
+    commitCurrentFailure,
+    routes: {
+      handleExecutionQuery,
+      handleSnapshotGet,
+      handleFinalize,
+      handleInteractionResponse,
+      handleStop,
+    },
+  };
+
   return async function onMessage(rawMessage) {
     let runMessageStarted = false;
     let boundRunHandle = null;
@@ -112,103 +136,10 @@ export function createMessageHandler({
         userId: canonicalRunOwnerId,
         data: { accepted: true, transport: "websocket" },
       });
-      const { commandType } = command;
-      if (EXECUTION_QUERY_COMMAND_TYPES.includes(commandType)) {
-        await handleExecutionQuery(command, commandType);
-        return;
+      if (await routeNonRunCommand(context, command)) return;
+      if (!RUN_COMMAND_TYPES.includes(command.commandType)) {
+        throw new Error("unsupported_agent_command");
       }
-      if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
-        await handleSnapshotGet(command);
-        return;
-      }
-      if (commandType === AGENT_COMMAND.FINALIZE) {
-        await handleFinalize(command);
-        return;
-      }
-      if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
-        handleInteractionResponse(command);
-        return;
-      }
-      if (commandType === AGENT_COMMAND.INTERJECT) {
-        const activeRun = findActiveRun({
-          userId: canonicalRunOwnerId,
-          ...command.identity,
-        });
-        if (!activeRun) {
-          sendFailedCommandReceipt(sendEvent, command, {
-            code: "active_turn_not_found",
-            message: "active turn not found",
-          });
-          return;
-        }
-        const identityMatches = ["sessionId", "dialogProcessId", "turnScopeId"].every(
-          (field) =>
-            String(activeRun[field] || "").trim() === String(command.identity[field] || "").trim(),
-        );
-        if (!identityMatches) {
-          sendFailedCommandReceipt(sendEvent, command, {
-            code: "active_turn_identity_mismatch",
-            message: "active turn identity mismatch",
-          });
-          return;
-        }
-        try {
-          await enqueueUserInterjection(
-            activeRun,
-            {
-              commandId: command.commandId,
-              message: command.interaction.message,
-            },
-            (interjection) => commitUserInterjection({ activeRun, interjection }),
-          );
-        } catch (error) {
-          if (error?.code !== "active_turn_stopping") throw error;
-          sendFailedCommandReceipt(sendEvent, command, {
-            code: error.code,
-            message: error.message,
-          });
-          return;
-        }
-        let dispatch;
-        try {
-          dispatch = await dispatchAuthorityEvents?.(
-            {
-              userId: activeRun.userId,
-              sessionId: activeRun.sessionId,
-              parentSessionId: activeRun.parentSessionId,
-            },
-            (...args) => publishRunEvent(activeRun, ...args),
-          );
-        } catch (error) {
-          dispatch = { dispatched: false, reason: error?.message || "authority_dispatch_failed" };
-        }
-        if (dispatch?.dispatched !== true) {
-          void recordServiceWebSocketLifecycle({
-            sessionLogConfig,
-            event: "service.userInterjection.authorityDispatchDeferred",
-            userId: activeRun.userId,
-            sessionId: activeRun.sessionId,
-            dialogProcessId: activeRun.dialogProcessId,
-            turnScopeId: activeRun.turnScopeId,
-            data: { reason: dispatch?.reason || "authority_dispatch_unavailable" },
-          });
-        }
-        sendEvent(
-          AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-          createAgentCommandReceipt({
-            commandId: command.commandId,
-            commandType: command.commandType,
-            outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
-            identity: command.identity,
-          }),
-        );
-        return;
-      }
-      if (commandType === AGENT_COMMAND.STOP) {
-        await handleStop(command);
-        return;
-      }
-      if (!RUN_COMMAND_TYPES.includes(commandType)) throw new Error("unsupported_agent_command");
       if (state.isRunning) {
         sendFailedCommandReceipt(sendEvent, command, {
           code: "session_already_running",
@@ -224,108 +155,229 @@ export function createMessageHandler({
       });
       if (runResult?.rebound === true) {
         runMessageStarted = false;
-        sendEvent(
-          AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
-          createAgentCommandReceipt({
-            commandId: command.commandId,
-            commandType: command.commandType,
-            outcome: AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND,
-            identity: command.identity,
-          }),
-        );
+        sendCommandReceipt(context, command, AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND);
       }
     } catch (error) {
       if (!parsedCommand && error?.command) parsedCommand = error.command;
       if (!runMessageStarted || !state.currentRunMeta) {
-        void recordServiceAgentTransportDebug({
-          sessionLogConfig,
-          event: parsedCommand
-            ? "service.agentTransport.commandDispatchFailed"
-            : "service.agentTransport.commandRejected",
-          command: parsedCommand || rawMessage,
-          userId: canonicalRunOwnerId,
-          data: {
-            accepted: Boolean(parsedCommand),
-            dispatched: false,
-            transport: "websocket",
-            errorType: String(error?.name || "Error"),
-            errorCode: String(error?.code || ""),
-            validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
-          },
-        });
-        void recordServiceWebSocketLifecycle({
-          sessionLogConfig,
-          event: "service.websocket.request.rejected",
-          data: {
-            errorType: error?.name || "Error",
-            errorCode: String(error?.code || ""),
-          },
-        });
-        const receiptSent =
-          parsedCommand &&
-          sendFailedCommandReceipt(sendEvent, parsedCommand, {
-            code: String(error?.errors?.[0] || error?.code || "invalid_command").trim(),
-            message: error?.message || translateText("ws.unknownError", state.currentLocale),
-          });
-        if (receiptSent) return;
-        webSocket.close(1008, "invalid request");
+        rejectCommand(context, error, parsedCommand, rawMessage);
         return;
       }
-      if (state.currentAbortSignal?.aborted || isAbortLikeError(error)) {
-        if (state.currentRunTimedOut) {
-          const timeoutMessage = resolveExecutionAbortMessage({
-            error,
-            abortSignal: state.currentAbortSignal,
-            fallback: "run timeout",
-          });
-          await finalizeTimeout(buildRunStateSnapshot(), {
-            description: timeoutMessage,
-            errorObject: { message: timeoutMessage, code: "run_timeout" },
-          });
-        } else if (
-          isUserStopRunAbort({
-            stopRequested: state.stopRequested,
-            abortSignal: state.currentAbortSignal,
-          })
-        ) {
-          await finalizeUserStopped(buildRunStateSnapshot());
-        } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {
-          await commitCurrentFailure(error, state.currentLifecyclePhase || TURN_PHASE.ACTION);
-          return;
-        } else {
-          void recordServiceWebSocketLifecycle({
-            sessionLogConfig,
-            event: "service.websocket.run.aborted",
-            ...state.currentRunMeta,
-            data: { errorType: error?.name || "Error" },
-          });
-          const committed = await commitCurrentFailure(error, TURN_PHASE.PROCESSING, "aborted");
-          await finalizeAborted(buildRunStateSnapshot(), { error, committed });
-        }
-        return;
-      }
-      void recordServiceWebSocketLifecycle({
-        sessionLogConfig,
-        event: "service.websocket.run.failed",
-        ...state.currentRunMeta,
-        data: { errorType: error?.name || "Error" },
-      });
-      const committed = await commitCurrentFailure(error);
-      await finalizeGenericError(buildRunStateSnapshot(), { error, committed });
+      await settleFailedRun(context, error);
     } finally {
-      if (runMessageStarted) {
-        if (boundRunHandle) {
-          unregisterActiveRun(boundRunHandle);
-        }
-        if (!boundRunHandle || state.currentRunHandle === boundRunHandle) {
-          resetRunState(state);
-        }
-        void recordServiceWebSocketLifecycle({
-          sessionLogConfig,
-          event: "service.websocket.run.stateReset",
-          data: { completed: true },
-        });
-      }
+      if (runMessageStarted) releaseRun(context, boundRunHandle);
     }
   };
+}
+
+const INTERJECT_IDENTITY_FIELDS = ["sessionId", "dialogProcessId", "turnScopeId"];
+
+function sendCommandReceipt({ sendEvent }, command, outcome) {
+  sendEvent(
+    AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    createAgentCommandReceipt({
+      commandId: command.commandId,
+      commandType: command.commandType,
+      outcome,
+      identity: command.identity,
+    }),
+  );
+}
+
+async function routeNonRunCommand(context, command) {
+  const { routes } = context;
+  const { commandType } = command;
+  if (EXECUTION_QUERY_COMMAND_TYPES.includes(commandType)) {
+    await routes.handleExecutionQuery(command, commandType);
+  } else if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
+    await routes.handleSnapshotGet(command);
+  } else if (commandType === AGENT_COMMAND.FINALIZE) {
+    await routes.handleFinalize(command);
+  } else if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
+    routes.handleInteractionResponse(command);
+  } else if (commandType === AGENT_COMMAND.INTERJECT) {
+    await handleInterject(context, command);
+  } else if (commandType === AGENT_COMMAND.STOP) {
+    await routes.handleStop(command);
+  } else {
+    return false;
+  }
+  return true;
+}
+
+function findInterjectTarget({ sendEvent, canonicalRunOwnerId }, command) {
+  const activeRun = findActiveRun({ userId: canonicalRunOwnerId, ...command.identity });
+  if (!activeRun) {
+    sendFailedCommandReceipt(sendEvent, command, {
+      code: "active_turn_not_found",
+      message: "active turn not found",
+    });
+    return null;
+  }
+  const identityMatches = INTERJECT_IDENTITY_FIELDS.every(
+    (field) =>
+      String(activeRun[field] || "").trim() === String(command.identity[field] || "").trim(),
+  );
+  if (identityMatches) return activeRun;
+  sendFailedCommandReceipt(sendEvent, command, {
+    code: "active_turn_identity_mismatch",
+    message: "active turn identity mismatch",
+  });
+  return null;
+}
+
+async function enqueueInterjection({ sendEvent, commitUserInterjection }, command, activeRun) {
+  try {
+    await enqueueUserInterjection(
+      activeRun,
+      { commandId: command.commandId, message: command.interaction.message },
+      (interjection) => commitUserInterjection({ activeRun, interjection }),
+    );
+    return true;
+  } catch (error) {
+    if (error?.code !== "active_turn_stopping") throw error;
+    sendFailedCommandReceipt(sendEvent, command, { code: error.code, message: error.message });
+    return false;
+  }
+}
+
+async function dispatchInterjectionAuthority({ dispatchAuthorityEvents }, activeRun) {
+  try {
+    return await dispatchAuthorityEvents?.(
+      {
+        userId: activeRun.userId,
+        sessionId: activeRun.sessionId,
+        parentSessionId: activeRun.parentSessionId,
+      },
+      (...args) => publishRunEvent(activeRun, ...args),
+    );
+  } catch (error) {
+    return { dispatched: false, reason: error?.message || "authority_dispatch_failed" };
+  }
+}
+
+async function handleInterject(context, command) {
+  const activeRun = findInterjectTarget(context, command);
+  if (!activeRun) return;
+  if (!(await enqueueInterjection(context, command, activeRun))) return;
+  const dispatch = await dispatchInterjectionAuthority(context, activeRun);
+  if (dispatch?.dispatched !== true) {
+    void recordServiceWebSocketLifecycle({
+      sessionLogConfig: context.sessionLogConfig,
+      event: "service.userInterjection.authorityDispatchDeferred",
+      userId: activeRun.userId,
+      sessionId: activeRun.sessionId,
+      dialogProcessId: activeRun.dialogProcessId,
+      turnScopeId: activeRun.turnScopeId,
+      data: { reason: dispatch?.reason || "authority_dispatch_unavailable" },
+    });
+  }
+  sendCommandReceipt(context, command, AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED);
+}
+
+function buildRejectionDebugData(error, parsedCommand) {
+  return {
+    accepted: Boolean(parsedCommand),
+    dispatched: false,
+    transport: "websocket",
+    errorType: String(error?.name || "Error"),
+    errorCode: String(error?.code || ""),
+    validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
+  };
+}
+
+function buildRejectionReceiptError({ state, translateText }, error) {
+  return {
+    code: String(error?.errors?.[0] || error?.code || "invalid_command").trim(),
+    message: error?.message || translateText("ws.unknownError", state.currentLocale),
+  };
+}
+
+function rejectCommand(context, error, parsedCommand, rawMessage) {
+  const { sendEvent, sessionLogConfig } = context;
+  void recordServiceAgentTransportDebug({
+    sessionLogConfig,
+    event: parsedCommand
+      ? "service.agentTransport.commandDispatchFailed"
+      : "service.agentTransport.commandRejected",
+    command: parsedCommand || rawMessage,
+    userId: context.canonicalRunOwnerId,
+    data: buildRejectionDebugData(error, parsedCommand),
+  });
+  void recordServiceWebSocketLifecycle({
+    sessionLogConfig,
+    event: "service.websocket.request.rejected",
+    data: {
+      errorType: error?.name || "Error",
+      errorCode: String(error?.code || ""),
+    },
+  });
+  const receiptSent =
+    parsedCommand &&
+    sendFailedCommandReceipt(sendEvent, parsedCommand, buildRejectionReceiptError(context, error));
+  if (receiptSent) return;
+  context.webSocket.close(1008, "invalid request");
+}
+
+async function settleAbortedRun(context, error) {
+  const { state, buildRunStateSnapshot } = context;
+  if (state.currentRunTimedOut) {
+    const timeoutMessage = resolveExecutionAbortMessage({
+      error,
+      abortSignal: state.currentAbortSignal,
+      fallback: "run timeout",
+    });
+    await context.finalizeTimeout(buildRunStateSnapshot(), {
+      description: timeoutMessage,
+      errorObject: { message: timeoutMessage, code: "run_timeout" },
+    });
+  } else if (
+    isUserStopRunAbort({
+      stopRequested: state.stopRequested,
+      abortSignal: state.currentAbortSignal,
+    })
+  ) {
+    await context.finalizeUserStopped(buildRunStateSnapshot());
+  } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {
+    await context.commitCurrentFailure(error, state.currentLifecyclePhase || TURN_PHASE.ACTION);
+  } else {
+    void recordServiceWebSocketLifecycle({
+      sessionLogConfig: context.sessionLogConfig,
+      event: "service.websocket.run.aborted",
+      ...state.currentRunMeta,
+      data: { errorType: error?.name || "Error" },
+    });
+    const committed = await context.commitCurrentFailure(error, TURN_PHASE.PROCESSING, "aborted");
+    await context.finalizeAborted(buildRunStateSnapshot(), { error, committed });
+  }
+}
+
+async function settleFailedRun(context, error) {
+  const { state } = context;
+  if (state.currentAbortSignal?.aborted || isAbortLikeError(error)) {
+    await settleAbortedRun(context, error);
+    return;
+  }
+  void recordServiceWebSocketLifecycle({
+    sessionLogConfig: context.sessionLogConfig,
+    event: "service.websocket.run.failed",
+    ...state.currentRunMeta,
+    data: { errorType: error?.name || "Error" },
+  });
+  const committed = await context.commitCurrentFailure(error);
+  await context.finalizeGenericError(context.buildRunStateSnapshot(), { error, committed });
+}
+
+function releaseRun({ state, sessionLogConfig }, boundRunHandle) {
+  if (boundRunHandle) {
+    unregisterActiveRun(boundRunHandle);
+  }
+  if (!boundRunHandle || state.currentRunHandle === boundRunHandle) {
+    resetRunState(state);
+  }
+  void recordServiceWebSocketLifecycle({
+    sessionLogConfig,
+    event: "service.websocket.run.stateReset",
+    data: { completed: true },
+  });
 }

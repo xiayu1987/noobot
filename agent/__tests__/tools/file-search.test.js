@@ -5,11 +5,49 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { hasRipgrep, searchFilesWithRipgrep } from "../../src/tools/execution/file-search.js";
+import { isOutsideWorkspaceRelativePath } from "../../src/tools/execution/file-utils.js";
+
+test("isOutsideWorkspaceRelativePath flags parent and absolute paths only", () => {
+  for (const value of ["..", "../outside.txt", "..\\outside.txt", "/abs/file", "C:/x"]) {
+    assert.equal(isOutsideWorkspaceRelativePath(value), true, value);
+  }
+  for (const value of ["", "a.txt", "..foo", "a/../b", "c:foo", "dir/.."]) {
+    assert.equal(isOutsideWorkspaceRelativePath(value), false, value);
+  }
+});
+
+test("ripgrep file search drops matches outside the workspace", async (t) => {
+  if (!(await hasRipgrep())) {
+    t.skip("ripgrep is not installed");
+    return;
+  }
+  const rootPath = await mkdtemp(path.join(tmpdir(), "noobot-outside-file-search-"));
+  try {
+    const workspacePath = path.join(rootPath, "ws");
+    await mkdir(workspacePath);
+    await writeFile(path.join(rootPath, "outside.txt"), "OUTSIDE_MARKER\n", "utf8");
+    await writeFile(path.join(workspacePath, "inside.txt"), "OUTSIDE_MARKER\n", "utf8");
+
+    const result = await searchFilesWithRipgrep({
+      rootPath,
+      workspacePath,
+      query: "OUTSIDE_MARKER",
+      contextLines: 0,
+    });
+
+    assert.deepEqual(
+      result.matches.map((item) => item.filePath),
+      ["inside.txt"],
+    );
+  } finally {
+    await rm(rootPath, { recursive: true, force: true });
+  }
+});
 
 test("ripgrep file search treats a leading-dash query as a literal pattern", async (t) => {
   if (!(await hasRipgrep())) {

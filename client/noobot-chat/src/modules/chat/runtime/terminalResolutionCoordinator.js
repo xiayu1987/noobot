@@ -118,6 +118,59 @@ export function createTerminalResolutionCoordinator({
     return entry;
   };
 
+  const traceCache = (identity, decision, extra = {}) =>
+    trace("stateMachine.terminal.cache", { ...identity, decision, ...extra });
+
+  const readResolvedCache = (entry, requestedVersion, identity) => {
+    const comparison = compareVersion(requestedVersion, entry.resolvedVersion || {});
+    if (!entry.resolvedResult || comparison === null || comparison > 0) return null;
+    const cached = entry.resolvedResult;
+    if (cached.applied !== true && cached.retryable === true && entry.resolvedResponse) {
+      const reapplied = applyTurnTerminalResolution?.(entry.resolvedResponse) || {
+        applied: false,
+        reason: "resolution_apply_unavailable",
+      };
+      entry.resolvedResult = reapplied;
+      return Promise.resolve(reapplied);
+    }
+    traceCache(identity, "resolved", {
+      applied: cached?.applied === true,
+      reason: cached?.reason || "",
+    });
+    return Promise.resolve(cached);
+  };
+
+  const readExhaustedCache = (entry, requestedVersion, identity) => {
+    const comparison = compareVersion(requestedVersion, entry.exhaustedVersion || {});
+    if (!entry.exhaustedResult || comparison === null || comparison > 0) return null;
+    traceCache(identity, "exhausted", { reason: entry.exhaustedResult?.reason || "" });
+    return Promise.resolve(entry.exhaustedResult);
+  };
+
+  const readCachedResult = (entry, requestedVersion, identity) => {
+    if (entry.cooldownUntil > Date.now()) {
+      traceCache(identity, "cooldown", { reason: entry.cooldownResult?.reason || "" });
+      return Promise.resolve(entry.cooldownResult);
+    }
+    if (entry.cooldownUntil) {
+      entry.cooldownUntil = 0;
+      entry.cooldownResult = null;
+    }
+    const cached =
+      readResolvedCache(entry, requestedVersion, identity) ||
+      readExhaustedCache(entry, requestedVersion, identity);
+    if (cached) return cached;
+    if (entry.inFlight) {
+      traceCache(identity, "in_flight");
+      return entry.inFlight;
+    }
+    if (entry.timer) {
+      traceCache(identity, "retry_timer");
+      return entry.timer.promise;
+    }
+    return null;
+  };
+
   const resolve = (sessionId, turnScopeId, options = {}) => {
     const session = clean(sessionId);
     const scope = clean(turnScopeId);
@@ -159,69 +212,9 @@ export function createTerminalResolutionCoordinator({
       entry.cooldownResult = null;
     }
 
-    if (entry.cooldownUntil > Date.now()) {
-      trace("stateMachine.terminal.cache", {
-        sessionId: session,
-        turnScopeId: scope,
-        decision: "cooldown",
-        reason: entry.cooldownResult?.reason || "",
-      });
-      return Promise.resolve(entry.cooldownResult);
-    }
-    if (entry.cooldownUntil) {
-      entry.cooldownUntil = 0;
-      entry.cooldownResult = null;
-    }
-
-    const resolvedComparison = compareVersion(requestedVersion, entry.resolvedVersion || {});
-    if (entry.resolvedResult && resolvedComparison !== null && resolvedComparison <= 0) {
-      if (
-        entry.resolvedResult.applied !== true &&
-        entry.resolvedResult.retryable === true &&
-        entry.resolvedResponse
-      ) {
-        const reapplied = applyTurnTerminalResolution?.(entry.resolvedResponse) || {
-          applied: false,
-          reason: "resolution_apply_unavailable",
-        };
-        entry.resolvedResult = reapplied;
-        return Promise.resolve(reapplied);
-      }
-      trace("stateMachine.terminal.cache", {
-        sessionId: session,
-        turnScopeId: scope,
-        decision: "resolved",
-        applied: entry.resolvedResult?.applied === true,
-        reason: entry.resolvedResult?.reason || "",
-      });
-      return Promise.resolve(entry.resolvedResult);
-    }
-    const exhaustedComparison = compareVersion(requestedVersion, entry.exhaustedVersion || {});
-    if (entry.exhaustedResult && exhaustedComparison !== null && exhaustedComparison <= 0) {
-      trace("stateMachine.terminal.cache", {
-        sessionId: session,
-        turnScopeId: scope,
-        decision: "exhausted",
-        reason: entry.exhaustedResult?.reason || "",
-      });
-      return Promise.resolve(entry.exhaustedResult);
-    }
-    if (entry.inFlight) {
-      trace("stateMachine.terminal.cache", {
-        sessionId: session,
-        turnScopeId: scope,
-        decision: "in_flight",
-      });
-      return entry.inFlight;
-    }
-    if (entry.timer) {
-      trace("stateMachine.terminal.cache", {
-        sessionId: session,
-        turnScopeId: scope,
-        decision: "retry_timer",
-      });
-      return entry.timer.promise;
-    }
+    const identity = { sessionId: session, turnScopeId: scope };
+    const cached = readCachedResult(entry, requestedVersion, identity);
+    if (cached) return cached;
 
     const retry = Number(options.retry || 0);
     const commandId =
@@ -229,9 +222,126 @@ export function createTerminalResolutionCoordinator({
       `terminal-resolution:${Date.now().toString(36)}:${(++requestSequence).toString(36)}`;
     const generation = ++entry.generation;
 
+    const followUp = (extra = {}) =>
+      resolve(session, scope, {
+        ...extra,
+        commandId,
+        source: options.source || "terminal_resolution_retry",
+        ...entry.targetVersion,
+      });
+
+    const traceFetchResult = (response) => {
+      const turn = response?.turn;
+      trace("stateMachine.terminal.fetch.result", {
+        ...identity,
+        resolved: response?.resolved === true,
+        retryable: response?.retryable === true,
+        reason: response?.reason || "",
+        revision: Number(turn?.revision || response?.revision || 0),
+        sequence: Number(turn?.sequence || response?.sequence || 0),
+        terminalState: turn?.state || "",
+        responseSessionId: clean(response?.sessionId),
+        responseTurnScopeId: clean(response?.turnScopeId),
+      });
+    };
+
+    const traceApplyResult = (result) => {
+      const projection = result?.subSessionEffect?.subSessionProjection;
+      trace("stateMachine.terminal.apply", {
+        ...identity,
+        applied: result?.applied === true,
+        retryable: result?.retryable === true,
+        reason: result?.reason || "",
+        state: result?.turn?.displayState || result?.turn?.state || "",
+        terminal: result?.turn?.terminal || null,
+        projectionApplied: projection?.applied === true,
+        projectionReason: projection?.reason || "",
+      });
+    };
+
+    const settleResolvedResponse = (response) => {
+      const result = applyTurnTerminalResolution?.(response) || {
+        applied: false,
+        reason: "resolution_apply_unavailable",
+      };
+      traceApplyResult(result);
+      if (generation !== entry.generation) return result;
+      entry.resolvedVersion = versionOf(response);
+      entry.resolvedResult = result;
+      entry.resolvedResponse = response;
+      entry.exhaustedVersion = null;
+      entry.exhaustedResult = null;
+      if (result.applied !== true) return result;
+      const pendingComparison = compareVersion(entry.targetVersion, entry.resolvedVersion);
+      if (pendingComparison !== 1 && pendingComparison !== null) return result;
+      if (entry.inFlight === request) entry.inFlight = null;
+      return followUp();
+    };
+
+    const scheduleRetry = (response) => {
+      const delay = Math.max(0, Number(response.retryAfterMs || 250));
+      trace("stateMachine.terminal.retry", { ...identity, retry: retry + 1, delayMs: delay });
+      let timerId;
+      const retryPromise = new Promise((resolveRetry) => {
+        timerId = setTimeout(() => {
+          if (entry.timer?.id === timerId) entry.timer = null;
+          if (entry.inFlight === request) entry.inFlight = null;
+          resolveRetry(followUp({ retry: retry + 1 }));
+        }, delay);
+      });
+      entry.timer = { id: timerId, promise: retryPromise };
+      return retryPromise;
+    };
+
+    const settleUnresolved = (response) => {
+      const result = {
+        applied: false,
+        reason: response?.reason || "terminal_unresolved",
+        response,
+      };
+      if (response?.retryable !== true || retry >= maxRetries) {
+        entry.exhaustedVersion = { ...entry.targetVersion };
+        entry.exhaustedResult = result;
+      }
+      return result;
+    };
+
+    const settleResponse = (response) => {
+      traceFetchResult(response);
+      if (response?.resolved === true) return settleResolvedResponse(response);
+      onUnresolved({ ...identity, response, retry });
+      if (response?.retryable === true && retry < maxRetries && !disposed) {
+        return scheduleRetry(response);
+      }
+      return settleUnresolved(response);
+    };
+
+    const settleFetchError = (error) => {
+      const status = Number(error?.status || error?.response?.status || 0);
+      const rateLimited = status === 429;
+      const retryAfterMs = Math.max(250, Number(error?.retryAfterMs || 0));
+      const result = {
+        applied: false,
+        reason: rateLimited ? "terminal_resolution_rate_limited" : "terminal_resolution_failed",
+        retryable: false,
+        retryAfterMs,
+        error,
+      };
+      trace("stateMachine.terminal.fetch.failed", {
+        ...identity,
+        status,
+        reason: result.reason,
+        retryAfterMs,
+      });
+      if (generation === entry.generation) {
+        entry.cooldownUntil = Date.now() + (rateLimited ? retryAfterMs : 1000);
+        entry.cooldownResult = result;
+      }
+      return result;
+    };
+
     trace("stateMachine.terminal.fetch.start", {
-      sessionId: session,
-      turnScopeId: scope,
+      ...identity,
       source: options.source || "unknown",
       retry,
       revision: Number(requestedVersion.revision || 0),
@@ -240,131 +350,12 @@ export function createTerminalResolutionCoordinator({
     const request = Promise.resolve()
       .then(() =>
         resolveTurnTerminalStateApi(
-          {
-            userId: valueOf(userId),
-            sessionId: session,
-            turnScopeId: scope,
-            commandId,
-          },
+          { userId: valueOf(userId), ...identity, commandId },
           { fetcher },
         ),
       )
-      .then((response) => {
-        trace("stateMachine.terminal.fetch.result", {
-          sessionId: session,
-          turnScopeId: scope,
-          resolved: response?.resolved === true,
-          retryable: response?.retryable === true,
-          reason: response?.reason || "",
-          revision: Number(response?.turn?.revision || response?.revision || 0),
-          sequence: Number(response?.turn?.sequence || response?.sequence || 0),
-          terminalState: response?.turn?.state || "",
-          responseSessionId: clean(response?.sessionId),
-          responseTurnScopeId: clean(response?.turnScopeId),
-        });
-        if (response?.resolved === true) {
-          const result = applyTurnTerminalResolution?.(response) || {
-            applied: false,
-            reason: "resolution_apply_unavailable",
-          };
-          trace("stateMachine.terminal.apply", {
-            sessionId: session,
-            turnScopeId: scope,
-            applied: result?.applied === true,
-            retryable: result?.retryable === true,
-            reason: result?.reason || "",
-            state: result?.turn?.displayState || result?.turn?.state || "",
-            terminal: result?.turn?.terminal || null,
-            projectionApplied: result?.subSessionEffect?.subSessionProjection?.applied === true,
-            projectionReason: result?.subSessionEffect?.subSessionProjection?.reason || "",
-          });
-          if (generation === entry.generation) {
-            entry.resolvedVersion = versionOf(response);
-            entry.resolvedResult = result;
-            entry.resolvedResponse = response;
-            entry.exhaustedVersion = null;
-            entry.exhaustedResult = null;
-          }
-          if (result?.applied === true && generation === entry.generation) {
-            entry.resolvedVersion = versionOf(response);
-            entry.resolvedResult = result;
-            entry.resolvedResponse = response;
-            entry.exhaustedVersion = null;
-            entry.exhaustedResult = null;
-            const pendingComparison = compareVersion(entry.targetVersion, entry.resolvedVersion);
-            if (pendingComparison === 1 || pendingComparison === null) {
-              if (entry.inFlight === request) entry.inFlight = null;
-              return resolve(session, scope, {
-                commandId,
-                source: options.source || "terminal_resolution_retry",
-                ...entry.targetVersion,
-              });
-            }
-          }
-          return result;
-        }
-        onUnresolved({ sessionId: session, turnScopeId: scope, response, retry });
-        if (response?.retryable === true && retry < maxRetries && !disposed) {
-          const delay = Math.max(0, Number(response.retryAfterMs || 250));
-          trace("stateMachine.terminal.retry", {
-            sessionId: session,
-            turnScopeId: scope,
-            retry: retry + 1,
-            delayMs: delay,
-          });
-          let timerId;
-          const retryPromise = new Promise((resolveRetry) => {
-            timerId = setTimeout(() => {
-              if (entry.timer?.id === timerId) entry.timer = null;
-              if (entry.inFlight === request) entry.inFlight = null;
-              resolveRetry(
-                resolve(session, scope, {
-                  retry: retry + 1,
-                  commandId,
-                  source: options.source || "terminal_resolution_retry",
-                  ...entry.targetVersion,
-                }),
-              );
-            }, delay);
-          });
-          entry.timer = { id: timerId, promise: retryPromise };
-          return retryPromise;
-        }
-        const result = {
-          applied: false,
-          reason: response?.reason || "terminal_unresolved",
-          response,
-        };
-        if (response?.retryable !== true || retry >= maxRetries) {
-          entry.exhaustedVersion = { ...entry.targetVersion };
-          entry.exhaustedResult = result;
-        }
-        return result;
-      })
-      .catch((error) => {
-        const status = Number(error?.status || error?.response?.status || 0);
-        const retryAfterMs = Math.max(250, Number(error?.retryAfterMs || 0));
-        const result = {
-          applied: false,
-          reason:
-            status === 429 ? "terminal_resolution_rate_limited" : "terminal_resolution_failed",
-          retryable: false,
-          retryAfterMs,
-          error,
-        };
-        trace("stateMachine.terminal.fetch.failed", {
-          sessionId: session,
-          turnScopeId: scope,
-          status,
-          reason: result.reason,
-          retryAfterMs,
-        });
-        if (generation === entry.generation) {
-          entry.cooldownUntil = Date.now() + (status === 429 ? retryAfterMs : 1000);
-          entry.cooldownResult = result;
-        }
-        return result;
-      })
+      .then(settleResponse)
+      .catch(settleFetchError)
       .finally(() => {
         if (entry.inFlight === request) entry.inFlight = null;
       });

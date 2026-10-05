@@ -136,6 +136,35 @@ function hasAttachmentData(normalizedAttachmentMetas = []) {
   return Array.isArray(normalizedAttachmentMetas) && normalizedAttachmentMetas.length > 0;
 }
 
+function asObject(value) {
+  return value && typeof value === "object" ? value : {};
+}
+
+function sectionTitle(sections, key) {
+  return String(sections?.[key] || "").trim();
+}
+
+function textSection(title, content) {
+  return hasValue(content) ? toSystemSection(title, content) : "";
+}
+
+function resolveContextPromptSettings(locale) {
+  const contextPromptI18n = asObject(resolveSystemPromptFormatterI18n(locale)?.contextPrompt);
+  return {
+    contextPromptI18n,
+    sections: contextPromptI18n?.sections || {},
+    workspaceDirectoryDescriptions: asObject(contextPromptI18n?.workspaceDirectoryDescriptions),
+    defaultWorkspaceDescription: String(
+      contextPromptI18n?.defaultWorkspaceDescription || "",
+    ).trim(),
+    emptyValueText: String(contextPromptI18n?.emptyValueText || "(none)").trim(),
+  };
+}
+
+function formatLongMemory(longMemory) {
+  return typeof longMemory === "string" ? longMemory : JSON.stringify(longMemory, null, 2);
+}
+
 export function composeSystemInfoSections({
   locale = "zh-CN",
   systemPrompt = "",
@@ -151,73 +180,52 @@ export function composeSystemInfoSections({
   attachments = [],
   connectorStatusSection = {},
 }) {
-  const i18n = resolveSystemPromptFormatterI18n(locale);
-  const contextPromptI18n =
-    i18n?.contextPrompt && typeof i18n.contextPrompt === "object" ? i18n.contextPrompt : {};
-  const sections = contextPromptI18n?.sections || {};
-  const workspaceDirectoryDescriptions =
-    contextPromptI18n?.workspaceDirectoryDescriptions &&
-    typeof contextPromptI18n.workspaceDirectoryDescriptions === "object"
-      ? contextPromptI18n.workspaceDirectoryDescriptions
-      : {};
-  const defaultWorkspaceDescription = String(
-    contextPromptI18n?.defaultWorkspaceDescription || "",
-  ).trim();
-  const emptyValueText = String(contextPromptI18n?.emptyValueText || "(none)").trim();
-  const normalizedSystemPrompt = String(systemPrompt || "").trim();
-  const normalizedDynamicInfo = normalizeDynamicInfoForSystem(dynamicInfo);
-  const normalizedWorkspaceSection = buildWorkspaceDirectorySection({
+  const {
+    contextPromptI18n,
+    sections,
+    workspaceDirectoryDescriptions,
+    defaultWorkspaceDescription,
+    emptyValueText,
+  } = resolveContextPromptSettings(locale);
+  const jsonOptions = { emptyValueText };
+  const jsonSection = (key, value) =>
+    toJsonSection(sectionTitle(sections, key), value, jsonOptions);
+  const workspaceSection = buildWorkspaceDirectorySection({
     workspaceDirectories,
     workspaceDirectoryDescriptions,
     defaultWorkspaceDescription,
   });
-  const normalizedPathGuidance = buildPathGuidanceSection(staticInfo, contextPromptI18n);
   const normalizedAttachmentMetas = (Array.isArray(attachments) ? attachments : []).map(
     projectAttachmentMetaForModel,
   );
+  const executionEvidence = hasValue(contextPromptI18n?.executionEvidence)
+    ? String(contextPromptI18n.executionEvidence).trim()
+    : "";
   return [
-    normalizedSystemPrompt,
-    toJsonSection(String(sections?.staticInfo || "").trim(), staticInfo, { emptyValueText }),
-    hasValue(normalizedPathGuidance)
-      ? toSystemSection(String(sections?.pathGuidance || "").trim(), normalizedPathGuidance)
+    String(systemPrompt || "").trim(),
+    jsonSection("staticInfo", staticInfo),
+    textSection(
+      sectionTitle(sections, "pathGuidance"),
+      buildPathGuidanceSection(staticInfo, contextPromptI18n),
+    ),
+    executionEvidence
+      ? toSystemSection(sectionTitle(sections, "executionEvidence"), executionEvidence)
       : "",
-    hasValue(contextPromptI18n?.executionEvidence)
-      ? toSystemSection(
-          String(sections?.executionEvidence || "").trim(),
-          String(contextPromptI18n.executionEvidence).trim(),
-        )
-      : "",
-    toJsonSection(String(sections?.dynamicInfo || "").trim(), normalizedDynamicInfo, {
-      emptyValueText,
-    }),
-    toJsonSection(String(sections?.scenario || "").trim(), scenarioSection, { emptyValueText }),
-    hasValue(normalizedWorkspaceSection)
-      ? toSystemSection(
-          String(sections?.workspaceDirectories || "").trim(),
-          normalizedWorkspaceSection,
-        )
-      : "",
+    jsonSection("dynamicInfo", normalizeDynamicInfoForSystem(dynamicInfo)),
+    jsonSection("scenario", scenarioSection),
+    textSection(sectionTitle(sections, "workspaceDirectories"), workspaceSection),
     hasValue(longMemory)
-      ? toSystemSection(
-          String(sections?.longMemory || "").trim(),
-          typeof longMemory === "string" ? longMemory : JSON.stringify(longMemory, null, 2),
-        )
+      ? toSystemSection(sectionTitle(sections, "longMemory"), formatLongMemory(longMemory))
       : "",
-    toJsonSection(String(sections?.models || "").trim(), modelSection, { emptyValueText }),
-    toJsonSection(String(sections?.skills || "").trim(), skills, { emptyValueText }),
-    toJsonSection(String(sections?.services || "").trim(), services, { emptyValueText }),
-    hasMcpServerData(mcpServers)
-      ? toJsonSection(String(sections?.mcpServers || "").trim(), mcpServers, { emptyValueText })
-      : "",
+    jsonSection("models", modelSection),
+    jsonSection("skills", skills),
+    jsonSection("services", services),
+    hasMcpServerData(mcpServers) ? jsonSection("mcpServers", mcpServers) : "",
     hasConnectorData(connectorStatusSection)
-      ? toJsonSection(String(sections?.connectors || "").trim(), connectorStatusSection, {
-          emptyValueText,
-        })
+      ? jsonSection("connectors", connectorStatusSection)
       : "",
     hasAttachmentData(normalizedAttachmentMetas)
-      ? toJsonSection(String(sections?.attachments || "").trim(), normalizedAttachmentMetas, {
-          emptyValueText,
-        })
+      ? jsonSection("attachments", normalizedAttachmentMetas)
       : "",
   ].filter(Boolean);
 }

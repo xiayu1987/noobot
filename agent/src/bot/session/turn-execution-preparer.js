@@ -114,69 +114,35 @@ export async function prepareAgentTurnExecution(
   };
 }
 
-export async function prepareStoppedSnapshotResumeTurnExecution(
-  engine,
-  { payload = {}, contextBuilder = null, abortSignal = null } = {},
-) {
-  if (!contextBuilder || typeof contextBuilder.buildAgentContext !== "function") {
-    throw new Error("stopped snapshot resume requires a compatible contextBuilder");
-  }
-  const runConfig =
-    payload?.runConfig && typeof payload.runConfig === "object" ? payload.runConfig : {};
+function readArrayOr(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function readSnapshotMessageBlocks(snapshot) {
+  return {
+    system: readArrayOr(snapshot?.messageBlocks?.system),
+    history: readArrayOr(snapshot?.messageBlocks?.history),
+    incremental: readArrayOr(snapshot?.messageBlocks?.incremental),
+  };
+}
+
+function buildStoppedResumeIdentity(payload, runConfig) {
   const resumeDialogProcessId = String(runConfig.resumeDialogProcessId || "").trim();
   const resumeTurnScopeId = String(runConfig.resumeTurnScopeId || "").trim();
   if (!resumeDialogProcessId || !resumeTurnScopeId) {
     throw new Error("stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId");
   }
-  const identity = {
+  return {
     userId: String(payload?.userId || "").trim(),
     sessionId: String(payload?.sessionId || "").trim(),
     parentSessionId: String(payload?.parentSessionId || "").trim(),
     dialogProcessId: resumeDialogProcessId,
     turnScopeId: resumeTurnScopeId,
   };
-  const snapshot = await loadStoppedModelMessageSnapshot({
-    globalConfig: engine.globalConfig,
-    identity,
-    allowMissing: true,
-  });
-  if (!snapshot) {
-    return engine.agentRuntimeFacade.prepareTurnExecution({
-      buildContextPayload: {
-        ...payload,
-        contextBuilder,
-        runConfig: {
-          ...runConfig,
-          resumeFromStoppedSnapshot: false,
-          resumeSnapshotUnavailable: true,
-        },
-      },
-      abortSignal,
-    });
-  }
-  const userMessageAttachments = await resolveStoppedResumeAttachments(engine, {
-    contextBuilder,
-    payload,
-  });
-  const snapshotMessageBlocks = {
-    system: Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [],
-    history: Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [],
-    incremental: Array.isArray(snapshot?.messageBlocks?.incremental)
-      ? snapshot.messageBlocks.incremental
-      : [],
-  };
-  const hydratedMessageBlocks = await restoreSnapshotUserAttachmentFacts(
-    engine,
-    identity,
-    snapshotMessageBlocks,
-  );
-  const restoredUserMetaBackwrites = Array.isArray(snapshot?.userMetaBackwrites)
-    ? snapshot.userMetaBackwrites
-    : [];
-  const systemMessages = hydratedMessageBlocks.system;
-  const historyMessages = hydratedMessageBlocks.history;
-  const incrementalMessages = hydratedMessageBlocks.incremental;
-  const continuationIdentity = {
+}
+
+function buildContinuationIdentity(payload, runConfig) {
+  return {
     userName: String(payload?.userName || payload?.userId || "").trim(),
     sessionId: String(payload?.sessionId || "").trim(),
     parentSessionId: String(payload?.parentSessionId || "").trim(),
@@ -184,22 +150,34 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
     turnScopeId: String(payload?.turnScopeId || runConfig?.turnScopeId || "").trim(),
   };
-  const continuedIncrementalMessages = projectSnapshotIncrementalToContinuation(
-    incrementalMessages,
-    continuationIdentity,
-  );
-  const agentContext = await contextBuilder.buildAgentContext(systemMessages, historyMessages, {
-    dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
-    attachments: userMessageAttachments,
-    incrementalMessages: continuedIncrementalMessages,
+}
+
+function prepareWithoutStoppedSnapshot(
+  engine,
+  { payload, contextBuilder, runConfig, abortSignal },
+) {
+  return engine.agentRuntimeFacade.prepareTurnExecution({
+    buildContextPayload: {
+      ...payload,
+      contextBuilder,
+      runConfig: {
+        ...runConfig,
+        resumeFromStoppedSnapshot: false,
+        resumeSnapshotUnavailable: true,
+      },
+    },
+    abortSignal,
   });
-  const scopedAgentContext = {
+}
+
+function scopeResumedAgentContext(agentContext, userMetaBackwrites, runConfig) {
+  return {
     ...agentContext,
     context: {
       ...(agentContext?.context || {}),
       modelContext: {
         ...(agentContext?.context?.modelContext || {}),
-        userMetaBackwrites: restoredUserMetaBackwrites,
+        userMetaBackwrites,
       },
     },
     bindings: {
@@ -210,18 +188,74 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
       }),
     },
   };
-  const runtimeAgentContext = engine.agentRuntimeFacade.buildRunTurnContext(
-    scopedAgentContext,
-    abortSignal,
-  );
-  const runtime = getRuntimeFromAgentContext(runtimeAgentContext);
-  runtime.userMetaBackwrites = restoredUserMetaBackwrites;
+}
+
+function markRuntimeResumedFromSnapshot(runtime, { identity, userMetaBackwrites, snapshot }) {
+  runtime.userMetaBackwrites = userMetaBackwrites;
   runtime.resumeFromStoppedSnapshot = true;
   runtime.resumedStoppedSnapshotIdentity = identity;
   runtime.resumedStoppedSnapshotTurnProgress = applySystemRuntimeTurnProgress(
     getSystemRuntimeFromRuntime(runtime),
     snapshot?.turnProgress,
   );
+}
+
+export async function prepareStoppedSnapshotResumeTurnExecution(
+  engine,
+  { payload = {}, contextBuilder = null, abortSignal = null } = {},
+) {
+  if (!contextBuilder || typeof contextBuilder.buildAgentContext !== "function") {
+    throw new Error("stopped snapshot resume requires a compatible contextBuilder");
+  }
+  const runConfig =
+    payload?.runConfig && typeof payload.runConfig === "object" ? payload.runConfig : {};
+  const identity = buildStoppedResumeIdentity(payload, runConfig);
+  const snapshot = await loadStoppedModelMessageSnapshot({
+    globalConfig: engine.globalConfig,
+    identity,
+    allowMissing: true,
+  });
+  if (!snapshot) {
+    return prepareWithoutStoppedSnapshot(engine, {
+      payload,
+      contextBuilder,
+      runConfig,
+      abortSignal,
+    });
+  }
+  const userMessageAttachments = await resolveStoppedResumeAttachments(engine, {
+    contextBuilder,
+    payload,
+  });
+  const hydratedMessageBlocks = await restoreSnapshotUserAttachmentFacts(
+    engine,
+    identity,
+    readSnapshotMessageBlocks(snapshot),
+  );
+  const userMetaBackwrites = readArrayOr(snapshot?.userMetaBackwrites);
+  const continuedIncrementalMessages = projectSnapshotIncrementalToContinuation(
+    hydratedMessageBlocks.incremental,
+    buildContinuationIdentity(payload, runConfig),
+  );
+  const agentContext = await contextBuilder.buildAgentContext(
+    hydratedMessageBlocks.system,
+    hydratedMessageBlocks.history,
+    {
+      dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
+      attachments: userMessageAttachments,
+      incrementalMessages: continuedIncrementalMessages,
+    },
+  );
+  const scopedAgentContext = scopeResumedAgentContext(agentContext, userMetaBackwrites, runConfig);
+  const runtimeAgentContext = engine.agentRuntimeFacade.buildRunTurnContext(
+    scopedAgentContext,
+    abortSignal,
+  );
+  markRuntimeResumedFromSnapshot(getRuntimeFromAgentContext(runtimeAgentContext), {
+    identity,
+    userMetaBackwrites,
+    snapshot,
+  });
   return {
     agentContext: scopedAgentContext,
     runtimeAgentContext,

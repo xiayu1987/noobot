@@ -37,6 +37,57 @@ function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = nu
   return payload;
 }
 
+function resolvePlanningIdentity(ctx = {}, workflowMessage = null) {
+  const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
+  return {
+    turnScopeId: String(ctx?.turnScopeId || parentRunConfig?.turnScopeId || "").trim(),
+    messageId: String(
+      ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId || "",
+    ).trim(),
+    presentationMessageId: String(
+      workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId || "",
+    ).trim(),
+  };
+}
+
+function countArray(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function pickPluginMetaText(pluginMeta) {
+  return {
+    pluginSource: String(pluginMeta?.source || ""),
+    pluginKind: String(pluginMeta?.kind || ""),
+    pluginPhase: String(pluginMeta?.phase || ""),
+  };
+}
+
+function resolveSourceWorkflowRunId(pluginMeta) {
+  return String(
+    pluginMeta?.payload?.workflowRunId || pluginMeta?.payload?.execution?.workflowRunId || "",
+  );
+}
+
+function buildPlanningSourceMessage(
+  workflowMessage,
+  payload,
+  { presentationMessageId, messageId },
+) {
+  const pluginMeta = workflowMessage?.pluginMeta;
+  return {
+    role: String(workflowMessage?.role || ""),
+    type: String(workflowMessage?.type || ""),
+    pluginMessage: workflowMessage?.pluginMessage === true,
+    ...pickPluginMetaText(pluginMeta),
+    presentationMessageId,
+    messageId,
+    workflowRunId: resolveSourceWorkflowRunId(pluginMeta),
+    contentLength: String(workflowMessage?.content || "").length,
+    semanticNodeCount: countArray(payload?.semantic?.nodes),
+    semanticFlowtoCount: countArray(payload?.semantic?.flowtos),
+  };
+}
+
 export async function prepareWorkflowPlanningMessage({
   options = {},
   ctx = {},
@@ -76,14 +127,8 @@ export async function prepareWorkflowPlanningMessage({
     workflowPayload: planningWorkflowPayload,
     attachments: [],
   });
-  const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
-  const turnScopeId = String(ctx?.turnScopeId || parentRunConfig?.turnScopeId || "").trim();
-  const messageId = String(
-    ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId || "",
-  ).trim();
-  const presentationMessageId = String(
-    workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId || "",
-  ).trim();
+  const identity = resolvePlanningIdentity(ctx, workflowMessage);
+  const { turnScopeId, messageId, presentationMessageId } = identity;
   const runtimeData = {
     sessionId: String(ctx?.sessionId || "").trim(),
     dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
@@ -94,28 +139,7 @@ export async function prepareWorkflowPlanningMessage({
     semanticText,
     workflowPayload: planningWorkflowPayload,
     nodeSessions: planningNodeSessions,
-    sourceMessage: {
-      role: String(workflowMessage?.role || ""),
-      type: String(workflowMessage?.type || ""),
-      pluginMessage: workflowMessage?.pluginMessage === true,
-      pluginSource: String(workflowMessage?.pluginMeta?.source || ""),
-      pluginKind: String(workflowMessage?.pluginMeta?.kind || ""),
-      pluginPhase: String(workflowMessage?.pluginMeta?.phase || ""),
-      presentationMessageId,
-      messageId,
-      workflowRunId: String(
-        workflowMessage?.pluginMeta?.payload?.workflowRunId ||
-          workflowMessage?.pluginMeta?.payload?.execution?.workflowRunId ||
-          "",
-      ),
-      contentLength: String(workflowMessage?.content || "").length,
-      semanticNodeCount: Array.isArray(planningWorkflowPayload?.semantic?.nodes)
-        ? planningWorkflowPayload.semantic.nodes.length
-        : 0,
-      semanticFlowtoCount: Array.isArray(planningWorkflowPayload?.semantic?.flowtos)
-        ? planningWorkflowPayload.semantic.flowtos.length
-        : 0,
-    },
+    sourceMessage: buildPlanningSourceMessage(workflowMessage, planningWorkflowPayload, identity),
   };
   await commitWorkflowRuntimeEvent({
     ctx,

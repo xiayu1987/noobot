@@ -144,104 +144,137 @@ export function resolveMessageEventPresentationId(value = {}) {
   return text(value?.presentationMessageId);
 }
 
-export function validateMessageEventPayload(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return Object.freeze({
-      valid: false,
-      errors: Object.freeze(["payload_not_object"]),
-    });
-  }
-  const errors = [];
-  for (const field of [
-    "event",
-    "type",
-    "rawEvent",
-    "tool_call_id",
-    "tool_call",
-    "tool_result",
-    "toolCall",
-    "toolResult",
-    "model",
-    "output",
-  ]) {
-    if (Object.hasOwn(value, field)) errors.push(`noncanonical_${field}`);
-  }
+const NONCANONICAL_PAYLOAD_FIELDS = Object.freeze([
+  "event",
+  "type",
+  "rawEvent",
+  "tool_call_id",
+  "tool_call",
+  "tool_result",
+  "toolCall",
+  "toolResult",
+  "model",
+  "output",
+]);
+
+const USER_INTERJECTION_FACT_REQUIREMENTS = Object.freeze([
+  ["timestamp", "missing_user_interjection_fact_timestamp"],
+  ["sessionId", "missing_user_interjection_fact_session_id"],
+  ["dialogProcessId", "missing_user_interjection_fact_dialog_process_id"],
+  ["turnScopeId", "missing_user_interjection_fact_turn_scope_id"],
+  ["messageId", "missing_user_interjection_fact_message_id"],
+  ["presentationMessageId", "missing_user_interjection_fact_presentation_message_id"],
+]);
+
+const isPlainObject = (value) =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+function validatePayloadEnvelope(value) {
+  const errors = NONCANONICAL_PAYLOAD_FIELDS.filter((field) => Object.hasOwn(value, field)).map(
+    (field) => `noncanonical_${field}`,
+  );
   if (!text(value?.presentationMessageId)) errors.push("missing_presentation_message_id");
   const workflowRunId = text(value?.workflowRunId);
-  const nodeExecutionId = text(value?.nodeExecutionId);
-  if (Boolean(workflowRunId) !== Boolean(nodeExecutionId)) {
+  if (Boolean(workflowRunId) !== Boolean(text(value?.nodeExecutionId))) {
     errors.push("incomplete_workflow_identity");
   }
   if (workflowRunId && !text(value?.parentSessionId)) {
     errors.push("missing_workflow_parent_session");
   }
-  const eventType = text(value?.eventType);
-  if (!MESSAGE_EVENT_TYPES.has(eventType)) errors.push("unsupported_event_type");
+  return errors;
+}
+
+function requireEventText(value) {
+  return typeof value?.text === "string" ? [] : ["missing_text"];
+}
+
+function validateActivityDelta(value) {
+  const errors = requireEventText(value);
+  if (!text(value?.activityId)) errors.push("missing_activity_id");
+  if (!text(value?.activityKind)) errors.push("missing_activity_kind");
+  if (!ACTIVITY_EVENT_TYPES.has(text(value?.activityEventType))) {
+    errors.push("invalid_activity_event_type");
+  }
+  return errors;
+}
+
+function validateFinalContentCollections(value) {
+  const errors = [];
+  if (value?.attachments !== undefined && !Array.isArray(value.attachments)) {
+    errors.push("invalid_attachments");
+  }
+  if (value?.transferEnvelopes !== undefined && !Array.isArray(value.transferEnvelopes)) {
+    errors.push("invalid_transfer_envelopes");
+  }
+  return errors;
+}
+
+function validateUserInterjectionFact(contentFact) {
+  if (!isThinkingDetailContentFact(contentFact)) return ["invalid_user_interjection_content_fact"];
+  if (contentFact.contentKind !== THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION) {
+    return ["invalid_user_interjection_content_kind"];
+  }
+  return USER_INTERJECTION_FACT_REQUIREMENTS.filter(([field]) => !text(contentFact[field])).map(
+    ([, error]) => error,
+  );
+}
+
+function validateUserInterjection(value) {
+  const errors = validateUserInterjectionFact(value?.contentFact);
+  if (!text(value?.dialogProcessId)) errors.push("missing_user_interjection_dialog_process_id");
+  return errors;
+}
+
+function validateToolCallStart(value) {
+  const errors = [];
+  if (!text(value?.tool)) errors.push("missing_tool");
+  if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
+  if (value?.args !== undefined && !isPlainObject(value.args)) errors.push("invalid_tool_args");
+  return [...errors, ...validateToolSecurityAssessment(value)];
+}
+
+function validateToolCallEnd(value) {
+  const errors = [];
+  if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
+  if (!("result" in (value || {}))) errors.push("missing_tool_result");
+  if (typeof value?.success !== "boolean") errors.push("missing_tool_success");
+  return [...errors, ...validateToolSecurityAssessment(value)];
+}
+
+function validateEventTypeFields(value, eventType) {
+  const errors = [];
   if (eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
     errors.push(...validateTurnPresentation(value));
   }
-  if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA && typeof value?.text !== "string") {
-    errors.push("missing_text");
-  }
-  if (eventType === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA) {
-    if (typeof value?.text !== "string") errors.push("missing_text");
-    if (!text(value?.activityId)) errors.push("missing_activity_id");
-    if (!text(value?.activityKind)) errors.push("missing_activity_kind");
-    if (!ACTIVITY_EVENT_TYPES.has(text(value?.activityEventType))) {
-      errors.push("invalid_activity_event_type");
-    }
-  }
-  if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) && typeof value?.text !== "string")
+  if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA) errors.push(...requireEventText(value));
+  if (eventType === MESSAGE_EVENT_TYPE.ACTIVITY_DELTA) errors.push(...validateActivityDelta(value));
+  if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) && typeof value?.text !== "string") {
     errors.push("missing_content");
+  }
   if (eventType === MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT) {
-    if (value?.attachments !== undefined && !Array.isArray(value.attachments)) {
-      errors.push("invalid_attachments");
-    }
-    if (value?.transferEnvelopes !== undefined && !Array.isArray(value.transferEnvelopes)) {
-      errors.push("invalid_transfer_envelopes");
-    }
+    errors.push(...validateFinalContentCollections(value));
   }
-  if (ACTIVITY_EVENT_TYPES.has(eventType) && typeof value?.text !== "string") {
-    errors.push("missing_text");
-  }
+  if (ACTIVITY_EVENT_TYPES.has(eventType)) errors.push(...requireEventText(value));
   if (eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
-    if (!isThinkingDetailContentFact(value?.contentFact)) {
-      errors.push("invalid_user_interjection_content_fact");
-    } else if (value.contentFact.contentKind !== THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION) {
-      errors.push("invalid_user_interjection_content_kind");
-    } else {
-      for (const [field, error] of [
-        ["timestamp", "missing_user_interjection_fact_timestamp"],
-        ["sessionId", "missing_user_interjection_fact_session_id"],
-        ["dialogProcessId", "missing_user_interjection_fact_dialog_process_id"],
-        ["turnScopeId", "missing_user_interjection_fact_turn_scope_id"],
-        ["messageId", "missing_user_interjection_fact_message_id"],
-        ["presentationMessageId", "missing_user_interjection_fact_presentation_message_id"],
-      ]) {
-        if (!text(value.contentFact[field])) errors.push(error);
-      }
-    }
-    if (!text(value?.dialogProcessId)) errors.push("missing_user_interjection_dialog_process_id");
+    errors.push(...validateUserInterjection(value));
   }
-  if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START) {
-    if (!text(value?.tool)) errors.push("missing_tool");
-    if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
-    if (
-      value?.args !== undefined &&
-      (typeof value.args !== "object" || value.args === null || Array.isArray(value.args))
-    ) {
-      errors.push("invalid_tool_args");
-    }
-    errors.push(...validateToolSecurityAssessment(value));
+  if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START)
+    errors.push(...validateToolCallStart(value));
+  if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END) errors.push(...validateToolCallEnd(value));
+  return errors;
+}
+
+export function validateMessageEventPayload(value) {
+  if (!isPlainObject(value)) {
+    return Object.freeze({
+      valid: false,
+      errors: Object.freeze(["payload_not_object"]),
+    });
   }
-  if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END) {
-    if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
-    if (!("result" in (value || {}))) {
-      errors.push("missing_tool_result");
-    }
-    if (typeof value?.success !== "boolean") errors.push("missing_tool_success");
-    errors.push(...validateToolSecurityAssessment(value));
-  }
+  const errors = validatePayloadEnvelope(value);
+  const eventType = text(value?.eventType);
+  if (!MESSAGE_EVENT_TYPES.has(eventType)) errors.push("unsupported_event_type");
+  errors.push(...validateEventTypeFields(value, eventType));
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 

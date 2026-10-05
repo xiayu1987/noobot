@@ -17,23 +17,6 @@ import {
 import { emitAgentContextProtocolDebug } from "../../observability/agent-context-protocol-debug.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 
-const MODEL_HOOK_POINTS = new Set([
-  HOOK_POINT.AGENT.BEFORE_TURN,
-  HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
-  HOOK_POINT.AGENT.AFTER_TURN,
-  HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-  HOOK_POINT.AGENT.AFTER_LLM_CALL,
-  HOOK_POINT.AGENT.LLM_CALL_ERROR,
-]);
-const TOOL_CALL_COLLECTION_HOOK_POINTS = new Set([
-  HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
-  HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
-]);
-const TOOL_CALL_HOOK_POINTS = new Set([
-  HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
-  HOOK_POINT.AGENT.AFTER_TOOL_CALL,
-  HOOK_POINT.AGENT.TOOL_CALL_ERROR,
-]);
 const STATE_COMMIT_HOOK_POINTS = new Set([
   HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
   HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
@@ -58,74 +41,98 @@ function resolveCall(raw = {}) {
   return null;
 }
 
-export function buildHookContext(point = "", runtime = {}, raw = {}) {
-  const safeRaw = asObject(raw);
-  for (const forbiddenField of ["messages", "messageBlocks", "messageStore"]) {
+const FORBIDDEN_HOOK_FIELDS = ["messages", "messageBlocks", "messageStore"];
+
+function toFiniteNumberOrNull(value) {
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
+function resolveToolName(raw = {}, call = null) {
+  if (raw?.toolName) return String(raw.toolName || "").trim();
+  return String(call?.name || "").trim() || null;
+}
+
+function assertNoForbiddenHookFields(safeRaw = {}) {
+  for (const forbiddenField of FORBIDDEN_HOOK_FIELDS) {
     if (Object.prototype.hasOwnProperty.call(safeRaw, forbiddenField)) {
       throw new TypeError(`Hook Context V2 forbids top-level ${forbiddenField}`);
     }
   }
-  const { modelContext: suppliedModelContext, ...hookFields } = safeRaw;
-  const modelContext = suppliedModelContext?.protocolVersion
-    ? suppliedModelContext
-    : runtime?.activeMessageContext;
-  const call = resolveCall(safeRaw);
-  const merged = {
+}
+
+function pickNullable(raw = {}, keys = []) {
+  return Object.fromEntries(keys.map((key) => [key, raw?.[key] ?? null]));
+}
+
+function normalizeToolCallFields(raw = {}) {
+  const call = resolveCall(raw);
+  return {
+    calls: resolveCalls(raw),
+    call,
+    toolName: resolveToolName(raw, call),
+    commitType: raw?.commitType ? String(raw.commitType || "").trim() : null,
+  };
+}
+
+function normalizeHookFields(point = "", safeRaw = {}, hookFields = {}) {
+  return {
     ...hookFields,
     point: String(point || safeRaw?.point || "").trim(),
-    phase: safeRaw?.phase ?? null,
-    status: safeRaw?.status ?? null,
-    startedAt: safeRaw?.startedAt ?? null,
-    endedAt: safeRaw?.endedAt ?? null,
-    durationMs: Number.isFinite(Number(safeRaw?.durationMs)) ? Number(safeRaw.durationMs) : null,
-    agentContext: safeRaw?.agentContext ?? null,
-    result: safeRaw?.result ?? null,
-    error: safeRaw?.error ?? null,
-    turn: Number.isFinite(Number(safeRaw?.turn)) ? Number(safeRaw.turn) : null,
+    ...pickNullable(safeRaw, ["phase", "status", "startedAt", "endedAt"]),
+    durationMs: toFiniteNumberOrNull(safeRaw?.durationMs),
+    ...pickNullable(safeRaw, ["agentContext", "result", "error"]),
+    turn: toFiniteNumberOrNull(safeRaw?.turn),
     mode: safeRaw?.mode ? String(safeRaw.mode) : null,
-    calls: resolveCalls(safeRaw),
-    call,
-    toolName: safeRaw?.toolName
-      ? String(safeRaw.toolName || "").trim()
-      : String(call?.name || "").trim() || null,
-    commitType: safeRaw?.commitType ? String(safeRaw.commitType || "").trim() : null,
-    payload: safeRaw?.payload ?? null,
+    ...normalizeToolCallFields(safeRaw),
+    ...pickNullable(safeRaw, ["payload"]),
   };
-  const context = withHookRuntimeMeta(runtime, merged);
-  attachModelContext(context, modelContext?.protocolVersion ? modelContext : null);
+}
+
+function emitHookDocumentConsumed(runtime = {}, context = {}) {
+  const modelContext = context.modelContext;
+  const identity = modelContext?.activeTurnIdentity;
   emitAgentContextProtocolDebug(
     runtime?.eventListener || null,
     "hookDocumentConsumed",
     {
       userId: context.userId,
       sessionId: context.sessionId,
-      dialogProcessId:
-        context.modelContext?.activeTurnIdentity?.dialogProcessId || context.dialogProcessId,
-      turnScopeId: context.modelContext?.activeTurnIdentity?.turnScopeId || context.turnScopeId,
+      dialogProcessId: identity?.dialogProcessId || context.dialogProcessId,
+      turnScopeId: identity?.turnScopeId || context.turnScopeId,
     },
     {
       consumer: `hook:${context.point}`,
       contextProtocolVersion: context.contextProtocolVersion,
-      hasModelContext: context.modelContext != null,
-      modelContextProtocolVersion: Number(context.modelContext?.protocolVersion || 0),
-      messageCount: Array.isArray(context.modelContext?.messages)
-        ? context.modelContext.messages.length
-        : 0,
+      hasModelContext: modelContext != null,
+      modelContextProtocolVersion: Number(modelContext?.protocolVersion || 0),
+      messageCount: Array.isArray(modelContext?.messages) ? modelContext.messages.length : 0,
     },
   );
-  if (String(point || "").trim() === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
-    emitModelContextTrace(runtime, "hook_context_built", {
-      point: String(point || "").trim(),
-      mode: context.mode,
-      turn: context.turn,
-      rawHadMessages: Array.isArray(safeRaw?.messages),
-      rawHadMessageBlocks: Boolean(
-        safeRaw?.messageBlocks && typeof safeRaw.messageBlocks === "object",
-      ),
-      contextBlocks: summarizeDiagnosticBlocks(context.modelContext?.messageBlocks),
-      contextMessages: summarizeDiagnosticMessages(context.modelContext?.messages),
-    });
-  }
+}
+
+function emitHookContextTrace(point = "", runtime = {}, context = {}) {
+  const normalizedPoint = String(point || "").trim();
+  if (normalizedPoint !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
+  emitModelContextTrace(runtime, "hook_context_built", {
+    point: normalizedPoint,
+    mode: context.mode,
+    turn: context.turn,
+    contextBlocks: summarizeDiagnosticBlocks(context.modelContext?.messageBlocks),
+    contextMessages: summarizeDiagnosticMessages(context.modelContext?.messages),
+  });
+}
+
+export function buildHookContext(point = "", runtime = {}, raw = {}) {
+  const safeRaw = asObject(raw);
+  assertNoForbiddenHookFields(safeRaw);
+  const { modelContext: suppliedModelContext, ...hookFields } = safeRaw;
+  const modelContext = suppliedModelContext?.protocolVersion
+    ? suppliedModelContext
+    : runtime?.activeMessageContext;
+  const context = withHookRuntimeMeta(runtime, normalizeHookFields(point, safeRaw, hookFields));
+  attachModelContext(context, modelContext?.protocolVersion ? modelContext : null);
+  emitHookDocumentConsumed(runtime, context);
+  emitHookContextTrace(point, runtime, context);
   validateHookContext(point, runtime, context);
   return context;
 }
@@ -141,43 +148,10 @@ function validateHookContext(point = "", runtime = {}, context = {}) {
   if (!isValidationEnabled(runtime)) return;
   const normalizedPoint = String(point || "").trim();
   if (!normalizedPoint) return;
-  const warnings = [];
-  warnings.push(...validateHookContextProtocol(context, { point: normalizedPoint }).warnings);
-  const requireArray = (key) => {
-    if (context?.[key] == null) return;
-    if (!Array.isArray(context[key])) warnings.push(`${key} should be array`);
-  };
-  const requireObject = (key) => {
-    if (context?.[key] == null) return;
-    const value = context[key];
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      warnings.push(`${key} should be object`);
-    }
-  };
-  const requireString = (key) => {
-    if (context?.[key] == null) return;
-    if (typeof context[key] !== "string") warnings.push(`${key} should be string`);
-  };
-
-  if (MODEL_HOOK_POINTS.has(normalizedPoint)) {
-    if (context.modelContext?.messages != null && !Array.isArray(context.modelContext.messages)) {
-      warnings.push("modelContext.messages should be array");
-    }
+  const warnings = [...validateHookContextProtocol(context, { point: normalizedPoint }).warnings];
+  if (STATE_COMMIT_HOOK_POINTS.has(normalizedPoint) && context?.payload == null) {
+    warnings.push("payload should be present");
   }
-  if (TOOL_CALL_COLLECTION_HOOK_POINTS.has(normalizedPoint)) {
-    requireArray("calls");
-  }
-  if (TOOL_CALL_HOOK_POINTS.has(normalizedPoint)) {
-    requireObject("call");
-    requireString("toolName");
-  }
-  if (STATE_COMMIT_HOOK_POINTS.has(normalizedPoint)) {
-    requireString("commitType");
-    if (context?.payload == null) {
-      warnings.push("payload should be present");
-    }
-  }
-
   if (!warnings.length) return;
   emitEvent(runtime?.eventListener || null, "hook_context_schema_warning", {
     point: normalizedPoint,

@@ -103,11 +103,15 @@ export function createWorkflowRuntimeEnvelope({
   return envelope;
 }
 
-export function validateWorkflowRuntimeEnvelope(envelope = {}) {
-  const errors = [];
-  const eventType = text(envelope?.identity?.eventType);
-  const payload = envelope?.payload;
-  if (!isRecord(payload)) return Object.freeze({ valid: false, errors: ["payload_not_object"] });
+function isPositiveIntegerLike(value) {
+  return Number.isInteger(Number(value)) && Number(value) >= 1;
+}
+
+function hasSessionOwnershipField(payload = {}) {
+  return Object.hasOwn(payload, "sessionId") || Object.hasOwn(payload, "parentSessionId");
+}
+
+function validateEnvelopeIdentity(envelope, eventType, payload, errors) {
   const expectedDomain = workflowSequenceDomainForEvent(eventType);
   if (!expectedDomain) errors.push("unsupported_event");
   if (text(envelope?.ordering?.domain) !== expectedDomain) errors.push("sequence_domain_mismatch");
@@ -119,51 +123,65 @@ export function validateWorkflowRuntimeEnvelope(envelope = {}) {
   const payloadTurnScopeId = canonicalizeTurnScopeId(payload?.turnScopeId);
   if (payloadTurnScopeId && payloadTurnScopeId !== envelopeTurnScopeId)
     errors.push("turn_scope_identity_mismatch");
+  return envelopeTurnScopeId;
+}
 
+function validatePlanningFields(envelope, payload, envelopeTurnScopeId, errors) {
+  if (!envelopeTurnScopeId) errors.push("missing_planning_turn_scope");
+  if (!text(envelope?.identity?.messageId)) errors.push("missing_planning_message_identity");
+  if (!text(payload?.presentationMessageId)) errors.push("missing_planning_presentation");
+  if (!isRecord(payload?.workflowPayload)) errors.push("missing_planning_workflow_payload");
+  if (!Array.isArray(payload?.nodeSessions) || !payload.nodeSessions.length)
+    errors.push("missing_planning_nodes");
+}
+
+function validateNodeStateFields(envelope, payload, errors) {
+  if (!text(payload?.nodeExecutionId)) errors.push("missing_node_execution");
+  if (hasSessionOwnershipField(payload)) errors.push("invalid_node_session_field");
+  if (!text(payload?.status)) errors.push("missing_node_status");
+  if (!isPositiveIntegerLike(envelope?.ordering?.revision)) errors.push("invalid_node_revision");
+}
+
+function validateSnapshotLifecycle(payload, errors) {
+  const lifecycleValidation = validateTurnLifecycleSnapshot(payload?.turnLifecycleSnapshot);
+  if (!lifecycleValidation.valid) {
+    errors.push("invalid_turn_lifecycle_snapshot");
+    return;
+  }
+  if (text(payload.turnLifecycleSnapshot.sessionId) !== text(payload.nodeSessionId)) {
+    errors.push("snapshot_lifecycle_session_mismatch");
+  }
+}
+
+function validateSessionSnapshotFields(envelope, payload, errors) {
+  if (!text(payload?.nodeExecutionId)) errors.push("missing_snapshot_node_execution");
+  if (!text(payload?.nodeSessionId)) errors.push("missing_snapshot_node_session");
+  if (hasSessionOwnershipField(payload)) errors.push("invalid_snapshot_session_field");
+  if (!isPositiveIntegerLike(envelope?.ordering?.aggregateVersion))
+    errors.push("invalid_aggregate_version");
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  if (messages.some((message) => !text(message?.messageId)))
+    errors.push("missing_snapshot_message_identity");
+  validateSnapshotLifecycle(payload, errors);
+  if (!Array.isArray(payload?.turnTimings)) errors.push("invalid_turn_timings");
+}
+
+export function validateWorkflowRuntimeEnvelope(envelope = {}) {
+  const errors = [];
+  const eventType = text(envelope?.identity?.eventType);
+  const payload = envelope?.payload;
+  if (!isRecord(payload)) {
+    return Object.freeze({ valid: false, errors: Object.freeze(["payload_not_object"]) });
+  }
+  const envelopeTurnScopeId = validateEnvelopeIdentity(envelope, eventType, payload, errors);
   if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
-    if (!envelopeTurnScopeId) errors.push("missing_planning_turn_scope");
-    if (!text(envelope?.identity?.messageId)) errors.push("missing_planning_message_identity");
-    if (!text(payload?.presentationMessageId)) errors.push("missing_planning_presentation");
-    if (!isRecord(payload?.workflowPayload)) errors.push("missing_planning_workflow_payload");
-    if (!Array.isArray(payload?.nodeSessions) || !payload.nodeSessions.length)
-      errors.push("missing_planning_nodes");
+    validatePlanningFields(envelope, payload, envelopeTurnScopeId, errors);
   }
   if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
-    if (!text(payload?.nodeExecutionId)) errors.push("missing_node_execution");
-    if (Object.hasOwn(payload, "sessionId") || Object.hasOwn(payload, "parentSessionId"))
-      errors.push("invalid_node_session_field");
-    if (!text(payload?.status)) errors.push("missing_node_status");
-    if (
-      !Number.isInteger(Number(envelope?.ordering?.revision)) ||
-      Number(envelope.ordering.revision) < 1
-    )
-      errors.push("invalid_node_revision");
+    validateNodeStateFields(envelope, payload, errors);
   }
   if (eventType === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
-    if (!text(payload?.nodeExecutionId)) errors.push("missing_snapshot_node_execution");
-    if (!text(payload?.nodeSessionId)) errors.push("missing_snapshot_node_session");
-    if (Object.hasOwn(payload, "sessionId") || Object.hasOwn(payload, "parentSessionId"))
-      errors.push("invalid_snapshot_session_field");
-    if (
-      !Number.isInteger(Number(envelope?.ordering?.aggregateVersion)) ||
-      Number(envelope.ordering.aggregateVersion) < 1
-    )
-      errors.push("invalid_aggregate_version");
-    if (
-      (Array.isArray(payload?.messages) ? payload.messages : []).some(
-        (message) => !text(message?.messageId),
-      )
-    )
-      errors.push("missing_snapshot_message_identity");
-    const lifecycleValidation = validateTurnLifecycleSnapshot(payload?.turnLifecycleSnapshot);
-    if (!lifecycleValidation.valid) errors.push("invalid_turn_lifecycle_snapshot");
-    if (
-      lifecycleValidation.valid &&
-      text(payload.turnLifecycleSnapshot.sessionId) !== text(payload.nodeSessionId)
-    ) {
-      errors.push("snapshot_lifecycle_session_mismatch");
-    }
-    if (!Array.isArray(payload?.turnTimings)) errors.push("invalid_turn_timings");
+    validateSessionSnapshotFields(envelope, payload, errors);
   }
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }

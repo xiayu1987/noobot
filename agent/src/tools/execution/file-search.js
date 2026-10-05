@@ -16,6 +16,7 @@ import {
   DEFAULT_SEARCH_MAX_RESULTS,
   escapeRegExp,
   isForbiddenWorkspaceRelativePath,
+  isOutsideWorkspaceRelativePath,
   matchesGlob,
   normalizeRgPathToWorkspace,
   splitLines,
@@ -224,6 +225,132 @@ function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }
   });
 }
 
+const RIPGREP_EXCLUDED_GLOBS = [
+  "!**/.git/**",
+  "!**/node_modules/**",
+  "!**/.pm2/**",
+  "!**/dist/**",
+  "!**/build/**",
+  "!**/coverage/**",
+];
+
+async function requireRipgrepPath() {
+  const ripgrepPath = await resolveRipgrepPath();
+  if (ripgrepPath) return ripgrepPath;
+  const error = new Error("ripgrep executable is not available");
+  error.code = "ENOENT";
+  throw error;
+}
+
+function buildRipgrepArgs({ query, isRegex, caseSensitive, glob, contextCount }) {
+  const args = ["--json", "--line-number", "--column"];
+  for (const excluded of RIPGREP_EXCLUDED_GLOBS) args.push("--glob", excluded);
+  if (contextCount > 0) args.push("--context", String(contextCount));
+  if (!caseSensitive) args.push("-i");
+  if (!isRegex) args.push("-F");
+  const normalizedGlob = String(glob || "").trim();
+  if (normalizedGlob) args.push("--glob", normalizedGlob);
+  args.push("--", String(query || "").trim(), ".");
+  return args;
+}
+
+function parseRipgrepEventLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
+  }
+}
+
+function readRipgrepLine(data = {}) {
+  const lineNumber = Number(data?.line_number || 0);
+  if (!Number.isFinite(lineNumber) || lineNumber <= 0) return null;
+  return { lineNumber, lineText: toTextLine(data?.lines?.text || "") };
+}
+
+function firstSubmatchColumn(data = {}) {
+  const firstSubmatch =
+    Array.isArray(data?.submatches) && data.submatches.length ? data.submatches[0] : {};
+  return Number(firstSubmatch?.start || 0) + 1;
+}
+
+function recordRipgrepEvent(event, rawMatches, contextByFile) {
+  const type = String(event?.type || "").trim();
+  const data = event?.data && typeof event.data === "object" ? event.data : {};
+  const filePathRaw = String(data?.path?.text || "").trim();
+  if (!filePathRaw || (type !== "match" && type !== "context")) return;
+  const entry = readRipgrepLine(data);
+  if (!entry) return;
+  if (type === "match") {
+    rawMatches.push({
+      filePathRaw,
+      line: entry.lineNumber,
+      column: firstSubmatchColumn(data),
+      text: entry.lineText,
+    });
+    return;
+  }
+  const fileMap = contextByFile.get(filePathRaw) || new Map();
+  fileMap.set(entry.lineNumber, entry.lineText);
+  contextByFile.set(filePathRaw, fileMap);
+}
+
+function parseRipgrepEvents(stdout = "") {
+  const rawMatches = [];
+  const contextByFile = new Map();
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    const event = parseRipgrepEventLine(line);
+    if (event === null) continue;
+    recordRipgrepEvent(event, rawMatches, contextByFile);
+  }
+  return { rawMatches, contextByFile };
+}
+
+function collectContextLines(fileContextMap, fromLine, toLine) {
+  const collected = [];
+  for (let lineNo = fromLine; lineNo <= toLine; lineNo += 1) {
+    if (!fileContextMap.has(lineNo)) continue;
+    collected.push({ line: lineNo, text: fileContextMap.get(lineNo) });
+  }
+  return collected;
+}
+
+function assembleRipgrepMatches({
+  rawMatches,
+  contextByFile,
+  rootPath,
+  workspacePath,
+  contextCount,
+  maxCount,
+}) {
+  const matches = [];
+  for (const item of rawMatches) {
+    if (matches.length >= maxCount) break;
+    const relativePath = normalizeRgPathToWorkspace({
+      rootPath,
+      workspacePath,
+      rgPath: item.filePathRaw,
+    });
+    if (
+      !relativePath ||
+      isOutsideWorkspaceRelativePath(relativePath) ||
+      isForbiddenWorkspaceRelativePath(relativePath)
+    ) {
+      continue;
+    }
+    const fileContextMap = contextByFile.get(item.filePathRaw) || new Map();
+    matches.push({
+      filePath: relativePath,
+      line: item.line,
+      column: item.column,
+      text: item.text,
+      before: collectContextLines(fileContextMap, item.line - contextCount, item.line - 1),
+      after: collectContextLines(fileContextMap, item.line + 1, item.line + contextCount),
+    });
+  }
+  return matches;
+}
+
 export async function searchFilesWithRipgrep({
   rootPath = "",
   workspacePath = "",
@@ -236,41 +363,10 @@ export async function searchFilesWithRipgrep({
   abortSignal = null,
 } = {}) {
   throwIfAborted(abortSignal);
-  const ripgrepPath = await resolveRipgrepPath();
-  if (!ripgrepPath) {
-    const error = new Error("ripgrep executable is not available");
-    error.code = "ENOENT";
-    throw error;
-  }
+  const ripgrepPath = await requireRipgrepPath();
   const contextCount = toPositiveInt(contextLines, DEFAULT_SEARCH_CONTEXT_LINES, 0, 20);
   const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
-  const args = [
-    "--json",
-    "--line-number",
-    "--column",
-    "--glob",
-    "!**/.git/**",
-    "--glob",
-    "!**/node_modules/**",
-    "--glob",
-    "!**/.pm2/**",
-    "--glob",
-    "!**/dist/**",
-    "--glob",
-    "!**/build/**",
-    "--glob",
-    "!**/coverage/**",
-  ];
-  if (contextCount > 0) {
-    args.push("--context", String(contextCount));
-  }
-  if (!caseSensitive) args.push("-i");
-  if (!isRegex) args.push("-F");
-  if (String(glob || "").trim()) {
-    args.push("--glob", String(glob || "").trim());
-  }
-  args.push("--", String(query || "").trim(), ".");
-
+  const args = buildRipgrepArgs({ query, isRegex, caseSensitive, glob, contextCount });
   const { stdout, stoppedAtLimit } = await runRipgrepSearch({
     ripgrepPath,
     args,
@@ -281,74 +377,15 @@ export async function searchFilesWithRipgrep({
   if (!stdout.trim()) {
     return { matches: [], truncated: false };
   }
-
-  const rawMatches = [];
-  const contextByFile = new Map();
-  const lines = stdout.split(/\r?\n/).filter(Boolean);
-  for (const line of lines) {
-    let event = null;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const type = String(event?.type || "").trim();
-    const data = event?.data && typeof event.data === "object" ? event.data : {};
-    const filePathRaw = String(data?.path?.text || "").trim();
-    if (!filePathRaw) continue;
-    if (type === "match") {
-      const lineNumber = Number(data?.line_number || 0);
-      if (!Number.isFinite(lineNumber) || lineNumber <= 0) continue;
-      const lineText = toTextLine(data?.lines?.text || "");
-      const firstSubmatch =
-        Array.isArray(data?.submatches) && data.submatches.length ? data.submatches[0] : {};
-      rawMatches.push({
-        filePathRaw,
-        line: lineNumber,
-        column: Number(firstSubmatch?.start || 0) + 1,
-        text: lineText,
-      });
-      continue;
-    }
-    if (type === "context") {
-      const lineNumber = Number(data?.line_number || 0);
-      if (!Number.isFinite(lineNumber) || lineNumber <= 0) continue;
-      const lineText = toTextLine(data?.lines?.text || "");
-      const fileMap = contextByFile.get(filePathRaw) || new Map();
-      fileMap.set(lineNumber, lineText);
-      contextByFile.set(filePathRaw, fileMap);
-    }
-  }
-
-  const matches = [];
-  for (const item of rawMatches) {
-    if (matches.length >= maxCount) break;
-    const relativePath = normalizeRgPathToWorkspace({
-      rootPath,
-      workspacePath,
-      rgPath: item.filePathRaw,
-    });
-    if (!relativePath || isForbiddenWorkspaceRelativePath(relativePath)) continue;
-    const fileContextMap = contextByFile.get(item.filePathRaw) || new Map();
-    const before = [];
-    const after = [];
-    for (let lineNo = item.line - contextCount; lineNo < item.line; lineNo += 1) {
-      if (!fileContextMap.has(lineNo)) continue;
-      before.push({ line: lineNo, text: fileContextMap.get(lineNo) });
-    }
-    for (let lineNo = item.line + 1; lineNo <= item.line + contextCount; lineNo += 1) {
-      if (!fileContextMap.has(lineNo)) continue;
-      after.push({ line: lineNo, text: fileContextMap.get(lineNo) });
-    }
-    matches.push({
-      filePath: relativePath,
-      line: item.line,
-      column: item.column,
-      text: item.text,
-      before,
-      after,
-    });
-  }
+  const { rawMatches, contextByFile } = parseRipgrepEvents(stdout);
+  const matches = assembleRipgrepMatches({
+    rawMatches,
+    contextByFile,
+    rootPath,
+    workspacePath,
+    contextCount,
+    maxCount,
+  });
   return {
     matches,
     truncated: stoppedAtLimit || rawMatches.length > maxCount || matches.length >= maxCount,

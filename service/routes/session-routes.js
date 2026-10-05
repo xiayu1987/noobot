@@ -26,56 +26,81 @@ function decodeSessionCommand(body, { type, userId, sessionId }) {
   return command;
 }
 
+function toText(value) {
+  return String(value || "");
+}
+
+function resolveWorkflowRunId(message, payload) {
+  return toText(
+    payload?.workflowRunId ||
+      payload?.execution?.workflowRunId ||
+      payload?.execution?.instanceId ||
+      message?.workflowRunId,
+  ).trim();
+}
+
+function resolveTagKeys(message) {
+  return Array.isArray(message?.tags)
+    ? message.tags.map((item) => toText(item))
+    : Object.keys(message?.tags || {});
+}
+
+function isSuspiciousAssistantPlaceholder(message) {
+  return (
+    toText(message?.role).trim().toLowerCase() === "assistant" &&
+    toText(message?.type).trim() === "message" &&
+    !toText(message?.content).trim() &&
+    Boolean(toText(message?.turnScopeId).trim())
+  );
+}
+
+function isWorkflowCandidate(message, { workflowRunId, tagKeys, suspiciousAssistantPlaceholder }) {
+  return (
+    toText(message?.type).trim() === "workflow" ||
+    toText(message?.pluginMeta?.source).trim() === "workflow-plugin" ||
+    Boolean(workflowRunId) ||
+    tagKeys.includes("message") ||
+    suspiciousAssistantPlaceholder
+  );
+}
+
+function projectWorkflowMessage(doc, message, index, payload, facts) {
+  return {
+    sessionDocId: toText(doc?.sessionId),
+    index,
+    id: toText(message?.id || message?.messageId),
+    role: toText(message?.role),
+    type: toText(message?.type),
+    pluginSource: toText(message?.pluginMeta?.source),
+    pluginKind: toText(message?.pluginMeta?.kind),
+    pluginPhase: toText(message?.pluginMeta?.phase),
+    dialogProcessId: toText(message?.dialogProcessId),
+    turnScopeId: toText(message?.turnScopeId),
+    workflowRunId: facts.workflowRunId,
+    nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
+    contentLength: toText(message?.content).length,
+    tagKeys: facts.tagKeys,
+    suspiciousAssistantPlaceholder: facts.suspiciousAssistantPlaceholder,
+  };
+}
+
+function summarizeWorkflowMessage(doc, message = {}, index) {
+  const payload = message?.pluginMeta?.payload || {};
+  const facts = {
+    workflowRunId: resolveWorkflowRunId(message, payload),
+    tagKeys: resolveTagKeys(message),
+    suspiciousAssistantPlaceholder: isSuspiciousAssistantPlaceholder(message),
+  };
+  if (!isWorkflowCandidate(message, facts)) return [];
+  return [projectWorkflowMessage(doc, message, index, payload, facts)];
+}
+
 function summarizeWorkflowSessionMessages(result = {}) {
   const docs = Array.isArray(result?.sessions) ? result.sessions : [];
   return docs.flatMap((doc = {}) =>
-    (Array.isArray(doc?.messages) ? doc.messages : []).map((message = {}, index) => {
-      const payload = message?.pluginMeta?.payload || {};
-      const workflowRunId = String(
-        payload?.workflowRunId ||
-          payload?.execution?.workflowRunId ||
-          payload?.execution?.instanceId ||
-          message?.workflowRunId ||
-          "",
-      ).trim();
-      const tagKeys = Array.isArray(message?.tags)
-        ? message.tags.map((item) => String(item || ""))
-        : Object.keys(message?.tags || {});
-      const suspiciousAssistantPlaceholder =
-        String(message?.role || "")
-          .trim()
-          .toLowerCase() === "assistant" &&
-        String(message?.type || "").trim() === "message" &&
-        !String(message?.content || "").trim() &&
-        Boolean(String(message?.turnScopeId || "").trim());
-      if (
-        String(message?.type || "").trim() !== "workflow" &&
-        String(message?.pluginMeta?.source || "").trim() !== "workflow-plugin" &&
-        !workflowRunId &&
-        !tagKeys.includes("message") &&
-        !suspiciousAssistantPlaceholder
-      )
-        return [];
-      return [
-        {
-          sessionDocId: String(doc?.sessionId || ""),
-          index,
-          id: String(message?.id || message?.messageId || ""),
-          role: String(message?.role || ""),
-          type: String(message?.type || ""),
-          pluginSource: String(message?.pluginMeta?.source || ""),
-          pluginKind: String(message?.pluginMeta?.kind || ""),
-          pluginPhase: String(message?.pluginMeta?.phase || ""),
-          dialogProcessId: String(message?.dialogProcessId || ""),
-          turnScopeId: String(message?.turnScopeId || ""),
-          workflowRunId,
-          nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
-          contentLength: String(message?.content || "").length,
-          tagKeys,
-          suspiciousAssistantPlaceholder,
-        },
-      ];
-    }),
+    (Array.isArray(doc?.messages) ? doc.messages : []).map((message = {}, index) =>
+      summarizeWorkflowMessage(doc, message, index),
+    ),
   );
 }
 

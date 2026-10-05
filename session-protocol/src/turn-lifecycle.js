@@ -144,6 +144,9 @@ export function createTurnLifecycleSnapshot({
 }
 
 export function validateTurnLifecycleSnapshot(snapshot = {}) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return { valid: false, errors: ["snapshot_not_object"] };
+  }
   const errors = [];
   if (Number(snapshot.protocolVersion) !== TURN_LIFECYCLE_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");

@@ -8,6 +8,95 @@ import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol
 const clean = (value = "") => String(value ?? "").trim();
 const stringList = (value = []) => (Array.isArray(value) ? value.map(clean).filter(Boolean) : []);
 
+const countOf = (value) => (Array.isArray(value) ? value.length : 0);
+
+function summarizeIdentity(identity) {
+  return {
+    sessionId: clean(identity?.sessionId),
+    parentSessionId: clean(identity?.parentSessionId),
+    dialogProcessId: clean(identity?.dialogProcessId),
+    parentDialogProcessId: clean(identity?.parentDialogProcessId),
+    turnScopeId: clean(identity?.turnScopeId),
+  };
+}
+
+function summarizeInput({
+  normalizedMessage,
+  requestedAttachments,
+  canonicalAttachments,
+  currentUserMessage,
+}) {
+  const requestedMessageLength = String(normalizedMessage ?? "").length;
+  const persistedMessageLength = String(currentUserMessage?.content ?? "").length;
+  return {
+    requestedMessageLength,
+    persistedMessageLength,
+    messageConsumed: requestedMessageLength === persistedMessageLength,
+    requestedAttachmentCount: countOf(requestedAttachments),
+    canonicalAttachmentCount: countOf(canonicalAttachments),
+    persistedAttachmentCount: countOf(currentUserMessage?.attachments),
+  };
+}
+
+function pluginModelConfigKeys(pluginModelConfig) {
+  return Object.keys(
+    pluginModelConfig && typeof pluginModelConfig === "object" ? pluginModelConfig : {},
+  ).sort();
+}
+
+function summarizePreferences(resolvedRunConfig) {
+  return {
+    allowUserInteraction: resolvedRunConfig?.allowUserInteraction !== false,
+    sanitizeOutput: resolvedRunConfig?.sanitizeOutput !== false,
+    streaming: Object.hasOwn(resolvedRunConfig || {}, "streaming")
+      ? resolvedRunConfig.streaming === true
+      : null,
+    confirmationLevel: normalizeSecurityRiskLevel(resolvedRunConfig?.safeConfirmLevel),
+    locale: clean(resolvedRunConfig?.locale),
+    scenario: clean(resolvedRunConfig?.scenario),
+    selectedModel: clean(resolvedRunConfig?.selectedModel),
+    memoryModel: clean(resolvedRunConfig?.memoryModel),
+    selectedPlugins: stringList(resolvedRunConfig?.selectedPlugins),
+    pluginModelConfigKeys: pluginModelConfigKeys(resolvedRunConfig?.pluginModelConfig),
+    selectedConnectorIds: stringList(resolvedRunConfig?.selectedConnectorIds),
+  };
+}
+
+function summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatchRuntime }) {
+  const persistedUserMessageId = clean(currentUserMessage?.messageId || currentUserMessage?.id);
+  const requestedUserMessageId = clean(resolvedRunConfig?.userMessageId);
+  const requestedAssistantMessageId = clean(resolvedRunConfig?.presentationMessageId);
+  const messageEventStream = dispatchRuntime?.systemRuntime?.messageEventStream;
+  const boundAssistantMessageId = clean(
+    messageEventStream?.presentationMessageId ||
+      messageEventStream?.activePresentationMessageId ||
+      requestedAssistantMessageId,
+  );
+  return {
+    requestedUserMessageId,
+    persistedUserMessageId,
+    userMessageIdConsumed:
+      Boolean(requestedUserMessageId) && requestedUserMessageId === persistedUserMessageId,
+    requestedAssistantMessageId,
+    boundAssistantMessageId,
+    assistantMessageIdConsumed:
+      Boolean(requestedAssistantMessageId) &&
+      requestedAssistantMessageId === boundAssistantMessageId,
+  };
+}
+
+function summarizeConcurrency({ resolvedRunConfig, turnCommand, committedTurnResult }) {
+  const expectedAggregateVersion = resolvedRunConfig?.expectedAggregateVersion;
+  return {
+    commandId: clean(turnCommand?.commandId || resolvedRunConfig?.commandId),
+    commandIdConsumed: Boolean(clean(turnCommand?.commandId)),
+    expectedAggregateVersion: expectedAggregateVersion ?? null,
+    expectedAggregateVersionConsumed:
+      expectedAggregateVersion === turnCommand?.expectedAggregateVersion,
+    committedAggregateVersion: Number(committedTurnResult?.aggregateVersion || 0) || null,
+  };
+}
+
 export function buildAgentTransportConsumption({
   transportCommand = {},
   identity = {},
@@ -20,83 +109,20 @@ export function buildAgentTransportConsumption({
   committedTurnResult = null,
   dispatchRuntime = null,
 } = {}) {
-  const persistedUserMessageId = clean(currentUserMessage?.messageId || currentUserMessage?.id);
-  const requestedUserMessageId = clean(resolvedRunConfig?.userMessageId);
-  const requestedAssistantMessageId = clean(resolvedRunConfig?.presentationMessageId);
-  const boundAssistantMessageId = clean(
-    dispatchRuntime?.systemRuntime?.messageEventStream?.presentationMessageId ||
-      dispatchRuntime?.systemRuntime?.messageEventStream?.activePresentationMessageId ||
-      requestedAssistantMessageId,
-  );
-  const requestedMessageLength = String(normalizedMessage ?? "").length;
-  const persistedMessageLength = String(currentUserMessage?.content ?? "").length;
-  const expectedAggregateVersion = resolvedRunConfig?.expectedAggregateVersion;
-  const commandExpectedAggregateVersion = turnCommand?.expectedAggregateVersion;
-
   return {
     protocolVersion: Number(transportCommand?.protocolVersion) || null,
     commandType: clean(transportCommand?.commandType).toLowerCase(),
     commandId: clean(transportCommand?.commandId),
     consumer: "agent",
-    identity: {
-      sessionId: clean(identity?.sessionId),
-      parentSessionId: clean(identity?.parentSessionId),
-      dialogProcessId: clean(identity?.dialogProcessId),
-      parentDialogProcessId: clean(identity?.parentDialogProcessId),
-      turnScopeId: clean(identity?.turnScopeId),
-    },
-    input: {
-      requestedMessageLength,
-      persistedMessageLength,
-      messageConsumed: requestedMessageLength === persistedMessageLength,
-      requestedAttachmentCount: Array.isArray(requestedAttachments)
-        ? requestedAttachments.length
-        : 0,
-      canonicalAttachmentCount: Array.isArray(canonicalAttachments)
-        ? canonicalAttachments.length
-        : 0,
-      persistedAttachmentCount: Array.isArray(currentUserMessage?.attachments)
-        ? currentUserMessage.attachments.length
-        : 0,
-    },
-    preferences: {
-      allowUserInteraction: resolvedRunConfig?.allowUserInteraction !== false,
-      sanitizeOutput: resolvedRunConfig?.sanitizeOutput !== false,
-      streaming: Object.hasOwn(resolvedRunConfig || {}, "streaming")
-        ? resolvedRunConfig.streaming === true
-        : null,
-      confirmationLevel: normalizeSecurityRiskLevel(resolvedRunConfig?.safeConfirmLevel),
-      locale: clean(resolvedRunConfig?.locale),
-      scenario: clean(resolvedRunConfig?.scenario),
-      selectedModel: clean(resolvedRunConfig?.selectedModel),
-      memoryModel: clean(resolvedRunConfig?.memoryModel),
-      selectedPlugins: stringList(resolvedRunConfig?.selectedPlugins),
-      pluginModelConfigKeys: Object.keys(
-        resolvedRunConfig?.pluginModelConfig &&
-          typeof resolvedRunConfig.pluginModelConfig === "object"
-          ? resolvedRunConfig.pluginModelConfig
-          : {},
-      ).sort(),
-      selectedConnectorIds: stringList(resolvedRunConfig?.selectedConnectorIds),
-    },
-    presentation: {
-      requestedUserMessageId,
-      persistedUserMessageId,
-      userMessageIdConsumed:
-        Boolean(requestedUserMessageId) && requestedUserMessageId === persistedUserMessageId,
-      requestedAssistantMessageId,
-      boundAssistantMessageId,
-      assistantMessageIdConsumed:
-        Boolean(requestedAssistantMessageId) &&
-        requestedAssistantMessageId === boundAssistantMessageId,
-    },
-    concurrency: {
-      commandId: clean(turnCommand?.commandId || resolvedRunConfig?.commandId),
-      commandIdConsumed: Boolean(clean(turnCommand?.commandId)),
-      expectedAggregateVersion: expectedAggregateVersion ?? null,
-      expectedAggregateVersionConsumed:
-        expectedAggregateVersion === commandExpectedAggregateVersion,
-      committedAggregateVersion: Number(committedTurnResult?.aggregateVersion || 0) || null,
-    },
+    identity: summarizeIdentity(identity),
+    input: summarizeInput({
+      normalizedMessage,
+      requestedAttachments,
+      canonicalAttachments,
+      currentUserMessage,
+    }),
+    preferences: summarizePreferences(resolvedRunConfig),
+    presentation: summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatchRuntime }),
+    concurrency: summarizeConcurrency({ resolvedRunConfig, turnCommand, committedTurnResult }),
   };
 }

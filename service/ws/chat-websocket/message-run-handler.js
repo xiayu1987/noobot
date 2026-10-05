@@ -128,8 +128,8 @@ function createRunTransportDiagnostic(context) {
     };
 }
 
-async function executeAcceptedRun(context, command, run, accepted, active) {
-  const listener = createMessageRunEventListener(context, command, run, accepted, active);
+async function executeAcceptedRun(context, run, accepted, active) {
+  const listener = createMessageRunEventListener(context, run, accepted, active);
   const result = await accepted.agentApplication.run({
     userId: run.userId,
     sessionId: run.sessionId,
@@ -161,7 +161,7 @@ function createRunHandler(context) {
     if (await bindExistingRun(context, run, onRunBound)) return { rebound: true };
     const accepted = await acceptRunCommand(context, command, run);
     const active = await activateRun(context, command, run, accepted, onRunBound);
-    await executeAcceptedRun(context, command, run, accepted, active);
+    await executeAcceptedRun(context, run, accepted, active);
   };
 }
 

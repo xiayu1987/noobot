@@ -53,6 +53,12 @@ export function isForbiddenWorkspaceRelativePath(relativePath = "") {
     .some((segment) => segment === ".git");
 }
 
+export function isOutsideWorkspaceRelativePath(relativePath = "") {
+  const normalized = normalizeSlash(relativePath);
+  if (path.isAbsolute(normalized) || /^[A-Za-z]:\//.test(normalized)) return true;
+  return normalized.split("/")[0] === "..";
+}
+
 function globToRegExp(glob = "") {
   const normalized = normalizeSlash(glob).trim();
   if (!normalized) return null;

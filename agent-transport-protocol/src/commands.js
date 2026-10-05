@@ -206,30 +206,34 @@ function rejectUnknownFields(value, allowedKeys, path, errors) {
   }
 }
 
+function allowedTopLevelKeys(commandType) {
+  if (RUN_COMMAND_SET.has(commandType)) {
+    return [
+      ...BASE_COMMAND_KEYS,
+      "input",
+      "preferences",
+      "presentation",
+      "concurrency",
+      "session",
+      ...(commandType === AGENT_COMMAND.CONTINUE ? ["continuation"] : []),
+    ];
+  }
+  if (commandType === AGENT_COMMAND.STOP) return [...BASE_COMMAND_KEYS, "concurrency", "stop"];
+  if (
+    commandType === AGENT_COMMAND.INTERJECT ||
+    commandType === AGENT_COMMAND.INTERACTION_RESPONSE
+  ) {
+    return [...BASE_COMMAND_KEYS, "interaction"];
+  }
+  if (EXECUTION_QUERY_SET.has(commandType)) return [...BASE_COMMAND_KEYS, "query"];
+  if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET || commandType === AGENT_COMMAND.FINALIZE) {
+    return [...BASE_COMMAND_KEYS, "options"];
+  }
+  return [...BASE_COMMAND_KEYS];
+}
+
 function validateTopLevelFields(command, commandType, errors) {
-  const commandKeys = RUN_COMMAND_SET.has(commandType)
-    ? [
-        ...BASE_COMMAND_KEYS,
-        "input",
-        "preferences",
-        "presentation",
-        "concurrency",
-        "session",
-        ...(commandType === AGENT_COMMAND.CONTINUE ? ["continuation"] : []),
-      ]
-    : commandType === AGENT_COMMAND.STOP
-      ? [...BASE_COMMAND_KEYS, "concurrency", "stop"]
-      : commandType === AGENT_COMMAND.INTERJECT
-        ? [...BASE_COMMAND_KEYS, "interaction"]
-        : commandType === AGENT_COMMAND.INTERACTION_RESPONSE
-          ? [...BASE_COMMAND_KEYS, "interaction"]
-          : EXECUTION_QUERY_SET.has(commandType)
-            ? [...BASE_COMMAND_KEYS, "query"]
-            : commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET ||
-                commandType === AGENT_COMMAND.FINALIZE
-              ? [...BASE_COMMAND_KEYS, "options"]
-              : [...BASE_COMMAND_KEYS];
-  const allowedKeys = new Set(commandKeys);
+  const allowedKeys = new Set(allowedTopLevelKeys(commandType));
   for (const key of Object.keys(command)) {
     if (!TOP_LEVEL_KEYS.has(key)) errors.push(`unknown_top_level_field:${key}`);
     else if (!allowedKeys.has(key)) errors.push(`unexpected_top_level_field:${key}`);
@@ -245,126 +249,142 @@ function validateCommandHeader(command, errors) {
   return commandType;
 }
 
+function validateNestedObject(value, allowedKeys, path, errors) {
+  if (!isObject(value)) {
+    errors.push(`${path}_not_object`);
+    return false;
+  }
+  rejectUnknownFields(value, allowedKeys, path, errors);
+  return true;
+}
+
+function requireIdentityField(command, field, code, errors) {
+  if (!clean(command.identity?.[field])) errors.push(code);
+}
+
+function hasInvalidConnectorIds(connectorIds) {
+  return (
+    connectorIds.some((connectorId) => typeof connectorId !== "string" || !clean(connectorId)) ||
+    new Set(connectorIds.map(clean)).size !== connectorIds.length
+  );
+}
+
+function validateRunInput(command, errors) {
+  if (!validateNestedObject(command.input, INPUT_KEYS, "input", errors)) return;
+  if (!clean(command.input.message)) errors.push("missing_message");
+  if (!Array.isArray(command.input.attachments)) errors.push("invalid_attachments");
+}
+
+function validateRunConcurrency(command, errors) {
+  if (!validateNestedObject(command.concurrency, RUN_CONCURRENCY_KEYS, "concurrency", errors)) {
+    return;
+  }
+  const { expectedTurnRevision, expectedAggregateVersion } = command.concurrency;
+  if (expectedTurnRevision !== 0) errors.push("run_turn_revision_must_be_zero");
+  if (!Number.isInteger(expectedAggregateVersion) || expectedAggregateVersion < 0) {
+    errors.push("invalid_expected_session_version");
+  }
+}
+
+function validateRunSession(command, commandType, errors) {
+  if (!validateNestedObject(command.session, SESSION_KEYS, "session", errors)) return;
+  const { selectedConnectorIds, createIfAbsent } = command.session;
+  if (!Array.isArray(selectedConnectorIds) || hasInvalidConnectorIds(selectedConnectorIds)) {
+    errors.push("invalid_session_selected_connector_ids");
+  }
+  if (!createIfAbsent && selectedConnectorIds?.length) {
+    errors.push("unexpected_session_selected_connector_ids");
+  }
+  if (typeof createIfAbsent !== "boolean") errors.push("invalid_create_if_absent");
+  if (commandType !== AGENT_COMMAND.SEND && createIfAbsent) {
+    errors.push("create_if_absent_requires_send");
+  }
+}
+
+function validateContinuation(command, errors) {
+  validateNestedObject(command.continuation, CONTINUATION_KEYS, "continuation", errors);
+  if (!clean(command.continuation?.dialogProcessId)) {
+    errors.push("missing_continuation_dialog_process_id");
+  }
+  if (!clean(command.continuation?.turnScopeId)) errors.push("missing_continuation_turn_scope_id");
+}
+
+function validateRunCommand(command, commandType, errors) {
+  requireIdentityField(command, "turnScopeId", "missing_turn_scope_id", errors);
+  if (commandType === AGENT_COMMAND.RESEND) {
+    requireIdentityField(command, "dialogProcessId", "missing_resend_dialog_process_id", errors);
+  }
+  validateRunInput(command, errors);
+  errors.push(...validateRunPreferences(command.preferences).errors);
+  validateNestedObject(command.presentation, PRESENTATION_KEYS, "presentation", errors);
+  validateRunConcurrency(command, errors);
+  validateRunSession(command, commandType, errors);
+  if (commandType === AGENT_COMMAND.CONTINUE) validateContinuation(command, errors);
+}
+
+function validateStopCommand(command, errors) {
+  requireIdentityField(command, "turnScopeId", "missing_turn_scope_id", errors);
+  if (validateNestedObject(command.concurrency, STOP_CONCURRENCY_KEYS, "concurrency", errors)) {
+    const { expectedTurnRevision } = command.concurrency;
+    if (!Number.isInteger(expectedTurnRevision) || expectedTurnRevision < 1) {
+      errors.push("invalid_expected_turn_revision");
+    }
+  }
+  if (!validateNestedObject(command.stop, STOP_KEYS, "stop", errors)) return;
+  if (Object.prototype.hasOwnProperty.call(command.stop, "partialAssistant")) {
+    validateNestedObject(
+      command.stop.partialAssistant,
+      PARTIAL_ASSISTANT_KEYS,
+      "partial_assistant",
+      errors,
+    );
+  }
+}
+
+function validateInterjectCommand(command, errors) {
+  requireIdentityField(command, "turnScopeId", "missing_turn_scope_id", errors);
+  requireIdentityField(command, "dialogProcessId", "missing_dialog_process_id", errors);
+  validateNestedObject(command.interaction, INTERJECTION_KEYS, "interaction", errors);
+  if (!clean(command.interaction?.message)) errors.push("missing_interjection_message");
+}
+
+function validateInteractionResponseCommand(command, errors) {
+  validateNestedObject(command.interaction, INTERACTION_KEYS, "interaction", errors);
+  if (!clean(command.interaction?.requestId)) errors.push("missing_interaction_request_id");
+}
+
+function validateExecutionQueryCommand(command, commandType, errors) {
+  validateNestedObject(command.query, QUERY_KEYS, "query", errors);
+  const { requiresExecutionId } = EXECUTION_QUERY_CONTRACT[commandType];
+  const hasExecutionId = Boolean(clean(command.query?.executionId));
+  if (requiresExecutionId && !hasExecutionId) errors.push("missing_execution_id");
+  if (!requiresExecutionId && !hasExecutionId && !clean(command.query?.rootExecutionId)) {
+    errors.push("missing_execution_query_root");
+  }
+}
+
+function validateCommandBody(command, commandType, errors) {
+  if (RUN_COMMAND_SET.has(commandType)) validateRunCommand(command, commandType, errors);
+  else if (commandType === AGENT_COMMAND.STOP) validateStopCommand(command, errors);
+  else if (commandType === AGENT_COMMAND.INTERJECT) validateInterjectCommand(command, errors);
+  else if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
+    validateInteractionResponseCommand(command, errors);
+  } else if (EXECUTION_QUERY_SET.has(commandType)) {
+    validateExecutionQueryCommand(command, commandType, errors);
+  } else if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
+    validateNestedObject(command.options, SNAPSHOT_OPTION_KEYS, "options", errors);
+  } else if (commandType === AGENT_COMMAND.FINALIZE) {
+    validateNestedObject(command.options, FINALIZE_OPTION_KEYS, "options", errors);
+  }
+}
+
 export function validateAgentCommand(command) {
   const errors = [];
   if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
   const commandType = validateCommandHeader(command, errors);
   validateTopLevelFields(command, commandType, errors);
   validateIdentity(command, errors);
-
-  if (RUN_COMMAND_SET.has(commandType)) {
-    if (!clean(command.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
-    if (commandType === AGENT_COMMAND.RESEND && !clean(command.identity?.dialogProcessId)) {
-      errors.push("missing_resend_dialog_process_id");
-    }
-    if (!isObject(command.input)) errors.push("input_not_object");
-    else {
-      rejectUnknownFields(command.input, INPUT_KEYS, "input", errors);
-      if (!clean(command.input.message)) errors.push("missing_message");
-      if (!Array.isArray(command.input.attachments)) errors.push("invalid_attachments");
-    }
-    errors.push(...validateRunPreferences(command.preferences).errors);
-    if (!isObject(command.presentation)) errors.push("presentation_not_object");
-    else rejectUnknownFields(command.presentation, PRESENTATION_KEYS, "presentation", errors);
-    if (!isObject(command.concurrency)) errors.push("concurrency_not_object");
-    else {
-      rejectUnknownFields(command.concurrency, RUN_CONCURRENCY_KEYS, "concurrency", errors);
-      if (command.concurrency.expectedTurnRevision !== 0)
-        errors.push("run_turn_revision_must_be_zero");
-      if (
-        !Number.isInteger(command.concurrency.expectedAggregateVersion) ||
-        command.concurrency.expectedAggregateVersion < 0
-      ) {
-        errors.push("invalid_expected_session_version");
-      }
-    }
-    if (!isObject(command.session)) errors.push("session_not_object");
-    else {
-      rejectUnknownFields(command.session, SESSION_KEYS, "session", errors);
-      if (!Array.isArray(command.session.selectedConnectorIds)) {
-        errors.push("invalid_session_selected_connector_ids");
-      } else if (
-        command.session.selectedConnectorIds.some(
-          (connectorId) => typeof connectorId !== "string" || !clean(connectorId),
-        ) ||
-        new Set(command.session.selectedConnectorIds.map(clean)).size !==
-          command.session.selectedConnectorIds.length
-      ) {
-        errors.push("invalid_session_selected_connector_ids");
-      }
-      if (!command.session.createIfAbsent && command.session.selectedConnectorIds?.length) {
-        errors.push("unexpected_session_selected_connector_ids");
-      }
-      if (typeof command.session.createIfAbsent !== "boolean")
-        errors.push("invalid_create_if_absent");
-      if (commandType !== AGENT_COMMAND.SEND && command.session.createIfAbsent) {
-        errors.push("create_if_absent_requires_send");
-      }
-    }
-    if (commandType === AGENT_COMMAND.CONTINUE) {
-      if (!isObject(command.continuation)) errors.push("continuation_not_object");
-      else rejectUnknownFields(command.continuation, CONTINUATION_KEYS, "continuation", errors);
-      if (!clean(command.continuation?.dialogProcessId))
-        errors.push("missing_continuation_dialog_process_id");
-      if (!clean(command.continuation?.turnScopeId))
-        errors.push("missing_continuation_turn_scope_id");
-    }
-  } else if (commandType === AGENT_COMMAND.STOP) {
-    if (!clean(command.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
-    if (!isObject(command.concurrency)) errors.push("concurrency_not_object");
-    else {
-      rejectUnknownFields(command.concurrency, STOP_CONCURRENCY_KEYS, "concurrency", errors);
-      if (
-        !Number.isInteger(command.concurrency.expectedTurnRevision) ||
-        command.concurrency.expectedTurnRevision < 1
-      ) {
-        errors.push("invalid_expected_turn_revision");
-      }
-    }
-    if (!isObject(command.stop)) errors.push("stop_not_object");
-    else {
-      rejectUnknownFields(command.stop, STOP_KEYS, "stop", errors);
-      if (Object.prototype.hasOwnProperty.call(command.stop, "partialAssistant")) {
-        if (!isObject(command.stop.partialAssistant)) errors.push("partial_assistant_not_object");
-        else
-          rejectUnknownFields(
-            command.stop.partialAssistant,
-            PARTIAL_ASSISTANT_KEYS,
-            "partial_assistant",
-            errors,
-          );
-      }
-    }
-  } else if (commandType === AGENT_COMMAND.INTERJECT) {
-    if (!clean(command.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
-    if (!clean(command.identity?.dialogProcessId)) errors.push("missing_dialog_process_id");
-    if (!isObject(command.interaction)) errors.push("interaction_not_object");
-    else rejectUnknownFields(command.interaction, INTERJECTION_KEYS, "interaction", errors);
-    if (!clean(command.interaction?.message)) errors.push("missing_interjection_message");
-  } else if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
-    if (!isObject(command.interaction)) errors.push("interaction_not_object");
-    else rejectUnknownFields(command.interaction, INTERACTION_KEYS, "interaction", errors);
-    if (!clean(command.interaction?.requestId)) errors.push("missing_interaction_request_id");
-  } else if (EXECUTION_QUERY_SET.has(commandType)) {
-    if (!isObject(command.query)) errors.push("query_not_object");
-    else rejectUnknownFields(command.query, QUERY_KEYS, "query", errors);
-    const { requiresExecutionId } = EXECUTION_QUERY_CONTRACT[commandType];
-    if (requiresExecutionId && !clean(command.query?.executionId))
-      errors.push("missing_execution_id");
-    if (
-      !requiresExecutionId &&
-      !clean(command.query?.executionId) &&
-      !clean(command.query?.rootExecutionId)
-    ) {
-      errors.push("missing_execution_query_root");
-    }
-  } else if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
-    if (!isObject(command.options)) errors.push("options_not_object");
-    else rejectUnknownFields(command.options, SNAPSHOT_OPTION_KEYS, "options", errors);
-  } else if (commandType === AGENT_COMMAND.FINALIZE) {
-    if (!isObject(command.options)) errors.push("options_not_object");
-    else rejectUnknownFields(command.options, FINALIZE_OPTION_KEYS, "options", errors);
-  }
+  validateCommandBody(command, commandType, errors);
   return { valid: errors.length === 0, errors };
 }
 

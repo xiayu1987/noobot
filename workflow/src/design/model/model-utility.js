@@ -8,27 +8,21 @@ class ModelUtility {
   constructor() {}
   static getStartNode(model) {}
   static getEndNode(model) {}
-  static getNodeStartFlowtos(node) {
-    var result = [];
-    var nodeLineRLATs = node.getModel().getNodeLineRLATs();
-    for (var i = 0; i < nodeLineRLATs.length; i++) {
-      var nodeLineRLAT = nodeLineRLATs.get(i);
-      if (nodeLineRLAT.getNode() === node && nodeLineRLAT.getRLATType() === 1) {
+  static getNodeFlowtosByRLATType(node, rLATType) {
+    const result = [];
+    const nodeLineRLATs = node?.getModel?.()?.getNodeLineRLATs?.() || [];
+    for (const nodeLineRLAT of nodeLineRLATs) {
+      if (nodeLineRLAT.getNode() === node && nodeLineRLAT.getRLATType() === rLATType) {
         result.push(nodeLineRLAT.getFlowto());
       }
     }
-    var result;
+    return result;
+  }
+  static getNodeStartFlowtos(node) {
+    return ModelUtility.getNodeFlowtosByRLATType(node, 1);
   }
   static getNodeEndFlowtos(node) {
-    var result = [];
-    var nodeLineRLATs = node.getModel().getNodeLineRLATs();
-    for (var i = 0; i < nodeLineRLATs.length; i++) {
-      var nodeLineRLAT = nodeLineRLATs.get(i);
-      if (nodeLineRLAT.getNode() === node && nodeLineRLAT.getRLATType() === 0) {
-        result.push(nodeLineRLAT.getFlowto());
-      }
-    }
-    var result;
+    return ModelUtility.getNodeFlowtosByRLATType(node, 0);
   }
 }
 

@@ -150,3 +150,30 @@ test("orders facts only inside one explicit sequence domain", () => {
     false,
   );
 });
+
+test("reports a null turn lifecycle snapshot as a validation error", () => {
+  const envelope = workflowEnvelope(
+    WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
+    {
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
+      nodeSessionId: "child-session",
+      turnScopeId: "workflow-node:node-1",
+      messages: [],
+      turnLifecycleSnapshot: null,
+      turnTimings: [],
+    },
+    { domain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT, authoritySessionId: "root-session" },
+  );
+
+  const result = validateWorkflowRuntimeEnvelope(envelope);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.includes("invalid_turn_lifecycle_snapshot"));
+});
+
+test("freezes errors when the payload is not an object", () => {
+  const result = validateWorkflowRuntimeEnvelope({ payload: null });
+  assert.deepEqual(result, { valid: false, errors: ["payload_not_object"] });
+  assert.ok(Object.isFrozen(result));
+  assert.ok(Object.isFrozen(result.errors));
+});
