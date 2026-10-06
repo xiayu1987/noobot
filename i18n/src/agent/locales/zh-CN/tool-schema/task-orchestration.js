@@ -21,8 +21,12 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       "tools.task_summary.summaryContentRequired": "summaryContent 必填",
       "tools.task_summary.summaryProtocolInvalid":
         "summaryContent 不符合 NOOBOT_TASK_SUMMARY/1 协议",
-      "tools.task_summary.summaryCompletedFollowState":
-        "小结回执是后续流程的权威阶段状态。已完成事项不得重新执行；CONTINUE 时仅从 summary.nextAction 继续，COMPLETE 或 BLOCKED 时按对应状态结束。",
+      "tools.task_summary.receiptContinue":
+        "小结回执是后续流程的权威阶段状态。已完成事项不得重新执行，仅从 summary.nextAction 继续；任务完成后直接给出最终回复，不再调用 task_summary。",
+      "tools.task_summary.receiptComplete":
+        "小结回执是后续流程的权威阶段状态。任务已完成，直接给出最终回复。",
+      "tools.task_summary.receiptBlocked":
+        "小结回执是后续流程的权威阶段状态。任务受阻，直接说明阻塞原因。",
     },
   },
   task_check: {

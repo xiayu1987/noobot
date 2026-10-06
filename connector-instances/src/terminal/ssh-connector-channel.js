@@ -119,8 +119,39 @@ async function ensureSshShellState({ channelKey = "", connectionInfo = {} } = {}
   return state.readyPromise;
 }
 
-function buildCommandEnvelope(command = "", marker = "") {
-  return `set +e\n${String(command || "")}\nprintf "\\n${marker}%s\\n" "$?"\n`;
+const ANSI_ESCAPE_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b[()][0-9A-Za-z]/g;
+
+function buildCommandEnvelope(command = "", token = "") {
+  return [
+    "stty -echo 2>/dev/null; PS1=''; PS2=''; set +e",
+    `printf '%s%s\\n' '__NOOBOT_BEGIN_' '${token}__'`,
+    String(command || ""),
+    `printf '\\n%s%s%s\\n' '__NOOBOT_DONE_' '${token}__' "$?"`,
+    "",
+  ].join("\n");
+}
+
+export function parseSshCommandOutput(raw = "", token = "") {
+  const text = String(raw || "");
+  const beginMarker = `__NOOBOT_BEGIN_${token}__`;
+  const doneMarker = `__NOOBOT_DONE_${token}__`;
+  const doneIndex = text.indexOf(doneMarker);
+  if (doneIndex < 0) return null;
+  const suffix = text.slice(doneIndex + doneMarker.length);
+  const lineEnd = suffix.search(/\r?\n/);
+  if (lineEnd < 0) return null;
+  const code = Number.parseInt(suffix.slice(0, lineEnd).trim(), 10);
+  const beginIndex = text.lastIndexOf(beginMarker, doneIndex);
+  const bodyStart = beginIndex < 0 ? 0 : beginIndex + beginMarker.length;
+  return {
+    ok: code === 0,
+    code: Number.isFinite(code) ? code : 1,
+    stdout: text
+      .slice(bodyStart, doneIndex)
+      .replace(ANSI_ESCAPE_PATTERN, "")
+      .replace(/\r/g, "")
+      .trim(),
+  };
 }
 
 function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) {
@@ -131,7 +162,7 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
     }
     let stdout = "";
     let stderr = "";
-    const marker = `__NOOBOT_DONE_${randomUUID()}__`;
+    const token = randomUUID();
     const stream = state.stream;
     let settled = false;
     let timer = null;
@@ -146,18 +177,9 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
     };
     const onStdout = (chunk) => {
       stdout += String(chunk || "");
-      const markerIndex = stdout.lastIndexOf(marker);
-      if (markerIndex < 0) return;
-      const suffix = stdout.slice(markerIndex + marker.length);
-      const lineEnd = suffix.search(/\r?\n/);
-      if (lineEnd < 0) return;
-      const code = Number(suffix.slice(0, lineEnd).trim());
-      done({
-        ok: code === 0,
-        code: Number.isFinite(code) ? code : 1,
-        stdout: stdout.slice(0, markerIndex).trim(),
-        stderr: String(stderr || "").trim(),
-      });
+      const parsed = parseSshCommandOutput(stdout, token);
+      if (!parsed) return;
+      done({ ...parsed, stderr: String(stderr || "").trim() });
     };
     const onStderr = (chunk) => {
       stderr += String(chunk || "");
@@ -172,7 +194,7 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
     stream.on("data", onStdout);
     stream.stderr?.on?.("data", onStderr);
     try {
-      stream.write(buildCommandEnvelope(command, marker), (error) => {
+      stream.write(buildCommandEnvelope(command, token), (error) => {
         if (error) done(null, error);
       });
     } catch (error) {

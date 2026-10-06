@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveDefaultModelSpec } from "../../models/index.js";
+import { resolveEffectiveModelSpec } from "../../runtime/run-config/config-resolver.js";
 import { resolveModelMultimodalCapabilities } from "@noobot/model-protocol";
 
 function normalizeModelMultimodalInfo(modelSpec = {}) {
@@ -28,8 +28,11 @@ export function resolveModelSection({
   globalConfig = {},
   userConfig = {},
   effectiveConfig = {},
+  selectedModel = "",
+  scenario = "",
 } = {}) {
-  const currentModelSpec = resolveDefaultModelSpec({ globalConfig, userConfig }) || {};
+  const currentModelSpec =
+    resolveEffectiveModelSpec({ globalConfig, userConfig, selectedModel, scenario }) || {};
   const providers = effectiveConfig?.providers || {};
   return {
     current: {

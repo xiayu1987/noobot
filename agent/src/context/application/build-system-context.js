@@ -150,7 +150,13 @@ export async function buildSystemContext({
       })
     : [];
   const modelSection = enabled("model")
-    ? resolveModelSection({ globalConfig, userConfig, effectiveConfig })
+    ? resolveModelSection({
+        globalConfig,
+        userConfig,
+        effectiveConfig,
+        selectedModel: runConfig?.selectedModel,
+        scenario: runConfig?.scenario,
+      })
     : {};
   const identityInfo = resolveContextIdentityInfo({ userId: identity.userId, globalConfig });
   const staticInfo = enabled("system_runtime")

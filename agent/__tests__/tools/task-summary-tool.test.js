@@ -74,6 +74,22 @@ for (const [state, reason] of [
   });
 }
 
+test("task_summary receipt message only states the submitted state's next step", async () => {
+  const messages = {};
+  for (const state of ["CONTINUE", "COMPLETE", "BLOCKED"]) {
+    const { tool } = createTool();
+    messages[state] = JSON.parse(
+      await tool.invoke({ summaryContent: summaryContent(state) }),
+    ).message;
+  }
+  assert.match(messages.CONTINUE, /summary\.nextAction/);
+  assert.match(messages.CONTINUE, /task_summary/);
+  for (const state of ["COMPLETE", "BLOCKED"]) {
+    assert.doesNotMatch(messages[state], /summary\.nextAction|CONTINUE/);
+  }
+  assert.equal(new Set(Object.values(messages)).size, 3);
+});
+
 test("task_summary rejects non-protocol text without mutating summary state", async () => {
   const { tool, systemRuntime } = createTool();
   await assert.rejects(

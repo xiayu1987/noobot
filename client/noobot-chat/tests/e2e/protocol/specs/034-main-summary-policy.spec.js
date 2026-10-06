@@ -8,6 +8,7 @@ import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import crypto from "node:crypto";
 import {
+  TASK_SUMMARY_STATE,
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
 } from "@noobot/context-protocol/task/summary";
@@ -196,8 +197,13 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
       "state",
     ]);
     expect(result.message).toContain("小结回执是后续流程的权威阶段状态");
-    expect(result.message).toContain("已完成事项不得重新执行");
-    expect(result.message).toContain("summary.nextAction");
+    if (result.summary.state === TASK_SUMMARY_STATE.CONTINUE) {
+      expect(result.message).toContain("已完成事项不得重新执行");
+      expect(result.message).toContain("summary.nextAction");
+      expect(result.message).toContain("不再调用 task_summary");
+    } else {
+      expect(result.message).not.toContain("summary.nextAction");
+    }
     expect(resultMessage.content.includes(fullSummaryContent)).toBe(false);
     expect(result.summary.details).toBeUndefined();
     const attachmentRefs = (resultMessage.transferEnvelopes || [])

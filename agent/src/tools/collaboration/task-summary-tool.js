@@ -28,6 +28,11 @@ import {
 } from "@noobot/context-protocol/tool/context-policy";
 
 const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
+const TASK_SUMMARY_RECEIPT_TEXT_KEY = Object.freeze({
+  [TASK_SUMMARY_STATE.CONTINUE]: "tools.task_summary.receiptContinue",
+  [TASK_SUMMARY_STATE.COMPLETE]: "tools.task_summary.receiptComplete",
+  [TASK_SUMMARY_STATE.BLOCKED]: "tools.task_summary.receiptBlocked",
+});
 
 export function createTaskSummaryTool(ctx = {}) {
   const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
@@ -89,7 +94,7 @@ export function createTaskSummaryTool(ctx = {}) {
           status: TASK_STATUS.COMPLETED,
           protocolVersion: TASK_SUMMARY_PROTOCOL_VERSION,
           summary,
-          message: tTool(runtime, "tools.task_summary.summaryCompletedFollowState"),
+          message: tTool(runtime, TASK_SUMMARY_RECEIPT_TEXT_KEY[summary.state]),
         },
         true,
       );
