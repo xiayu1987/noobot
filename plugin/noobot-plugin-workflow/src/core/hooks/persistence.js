@@ -21,15 +21,6 @@ function ensureTurnMessages(agentResult = {}) {
   return turnMessages;
 }
 
-function sanitizeArtifactFileNamePart(input = "", fallback = "result") {
-  const normalized = String(input || "")
-    .trim()
-    .replaceAll(/[^a-zA-Z0-9\u4e00-\u9fa5_-]+/g, "-")
-    .replaceAll(/^-+|-+$/g, "")
-    .slice(0, 80);
-  return normalized || fallback;
-}
-
 function resolveSubSessionResult(subSession) {
   return subSession?.result && typeof subSession.result === "object" ? subSession.result : {};
 }
@@ -124,6 +115,74 @@ function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
   return payload;
 }
 
+function trimText(value) {
+  return String(value || "").trim();
+}
+
+function resolveNodeResultIdentity({ nodeIdentity, pendingStep, transition }) {
+  const identity = nodeIdentity && typeof nodeIdentity === "object" ? nodeIdentity : {};
+  const step = pendingStep || {};
+  const numericTransition = Number(transition);
+  return {
+    identity,
+    nodeName: String(identity.nodeName || step.nodeName || step.nodeId || "workflow-node").trim(),
+    nodeId: trimText(identity.nodeId || step.nodeId),
+    normalizedTransition: Number.isFinite(numericTransition) ? Math.floor(numericTransition) : 0,
+  };
+}
+
+function buildNodeResultBody({ locale, nodeName, nodeId, subSession, cleanOutput }) {
+  const keys = WORKFLOW_I18N_KEYSET.PERSISTENCE;
+  return [
+    tWorkflow(locale, keys.NODE_RESULT_TITLE),
+    "",
+    tWorkflow(locale, keys.NODE_LINE, {
+      name: nodeName || tWorkflow(locale, keys.NODE_UNNAMED_FALLBACK),
+    }),
+    tWorkflow(locale, keys.NODE_ID_LINE, { id: nodeId || "-" }),
+    tWorkflow(locale, keys.SUB_SESSION_LINE, { id: trimText(subSession.sessionId) || "-" }),
+    tWorkflow(locale, keys.DIALOG_LINE, { id: trimText(subSession.dialogProcessId) || "-" }),
+    "",
+    tWorkflow(locale, keys.FINAL_OUTPUT_TITLE),
+    "",
+    cleanOutput,
+    "",
+  ].join("\n");
+}
+
+function buildNodeResultTransferMeta({ identity, subSession, normalizedTransition }) {
+  return {
+    transition: normalizedTransition,
+    workflowRunId: trimText(identity.workflowRunId),
+    nodeExecutionId: trimText(identity.nodeExecutionId),
+    commandId: trimText(identity.commandId),
+    dialogProcessId: trimText(identity.dialogProcessId || subSession.dialogProcessId),
+    turnScopeId: trimText(identity.turnScopeId),
+    nodeSessionId: trimText(subSession.sessionId),
+  };
+}
+
+function requireSemanticTransferContent(ctx, purpose) {
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  const semanticTransferContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+  if (typeof semanticTransferContent !== "function") {
+    throw new Error(`Semantic transfer service is required for ${purpose}`);
+  }
+  return semanticTransferContent;
+}
+
+function applyNodeResultTransfer(subSession, transferPayload) {
+  const result = subSession.result;
+  if (!result || typeof result !== "object") return;
+  applyWorkflowTransferPayload(result, transferPayload);
+  if (!Array.isArray(result.messages) || !result.messages.length) return;
+  const lastIndex = result.messages.length - 1;
+  result.messages[lastIndex] = applyWorkflowTransferPayload(
+    { ...(result.messages[lastIndex] || {}) },
+    transferPayload,
+  );
+}
+
 export async function persistWorkflowNodeResultAttachment({
   options = {},
   ctx = {},
@@ -134,54 +193,15 @@ export async function persistWorkflowNodeResultAttachment({
 } = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   if (!subSession) return normalizeWorkflowTransferPayload();
-  const output = resolveSubSessionFinalOutput(subSession);
-  const cleanOutput = stripHarnessReviewAppendix(output);
+  const cleanOutput = stripHarnessReviewAppendix(resolveSubSessionFinalOutput(subSession));
   if (!cleanOutput) return normalizeWorkflowTransferPayload();
-  const identity = nodeIdentity && typeof nodeIdentity === "object" ? nodeIdentity : {};
-  const nodeName = String(
-    identity?.nodeName || pendingStep?.nodeName || pendingStep?.nodeId || "workflow-node",
-  ).trim();
-  const nodeId = String(identity?.nodeId || pendingStep?.nodeId || "").trim();
-  const normalizedTransition = Number.isFinite(Number(transition))
-    ? Math.floor(Number(transition))
-    : 0;
-  const artifactName = [
-    "workflow-node",
-    normalizedTransition > 0 ? String(normalizedTransition) : "",
-    sanitizeArtifactFileNamePart(nodeName, "node"),
-    "result.md",
-  ]
-    .filter(Boolean)
-    .join("-");
-  const body = [
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_RESULT_TITLE),
-    "",
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_LINE, {
-      name: nodeName || tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_UNNAMED_FALLBACK),
-    }),
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_ID_LINE, { id: nodeId || "-" }),
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.SUB_SESSION_LINE, {
-      id: String(subSession?.sessionId || "").trim() || "-",
-    }),
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.DIALOG_LINE, {
-      id: String(subSession?.dialogProcessId || "").trim() || "-",
-    }),
-    "",
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.FINAL_OUTPUT_TITLE),
-    "",
-    cleanOutput,
-    "",
-  ].join("\n");
-  const artifact = {
-    name: artifactName,
-    mimeType: "text/markdown",
-    contentBase64: Buffer.from(body, "utf8").toString("base64"),
-  };
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const semanticTransferContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  if (typeof semanticTransferContent !== "function") {
-    throw new Error("Semantic transfer service is required for workflow node results");
-  }
+  const { identity, nodeName, nodeId, normalizedTransition } = resolveNodeResultIdentity({
+    nodeIdentity,
+    pendingStep,
+    transition,
+  });
+  const body = buildNodeResultBody({ locale, nodeName, nodeId, subSession, cleanOutput });
+  const semanticTransferContent = requireSemanticTransferContent(ctx, "workflow node results");
   const transferred = await semanticTransferContent({
     scenario: "workflow",
     strategy: "workflow_subagent",
@@ -192,17 +212,7 @@ export async function persistWorkflowNodeResultAttachment({
         nodeId,
         nodeName,
         content: body,
-        meta: {
-          transition: normalizedTransition,
-          workflowRunId: String(identity?.workflowRunId || "").trim(),
-          nodeExecutionId: String(identity?.nodeExecutionId || "").trim(),
-          commandId: String(identity?.commandId || "").trim(),
-          dialogProcessId: String(
-            identity?.dialogProcessId || subSession?.dialogProcessId || "",
-          ).trim(),
-          turnScopeId: String(identity?.turnScopeId || "").trim(),
-          nodeSessionId: String(subSession?.sessionId || "").trim(),
-        },
+        meta: buildNodeResultTransferMeta({ identity, subSession, normalizedTransition }),
       },
     ],
     nextSteps: [],
@@ -212,25 +222,13 @@ export async function persistWorkflowNodeResultAttachment({
     source: TRANSFER_SOURCE.PLUGIN,
     reason: TRANSFER_REASON.WORKFLOW_NODE_AGENT_RESULT,
     producer: { type: "plugin", id: `workflow-node:${nodeId}` },
-    mimeType: artifact.mimeType,
+    mimeType: "text/markdown",
   });
   const transferPayload = normalizeWorkflowTransferPayload(transferred);
   if (!transferPayload.transferEnvelopes.length) {
     throw new Error("Workflow node result transfer produced no V2 envelope");
   }
-  if (subSession.result && typeof subSession.result === "object") {
-    applyWorkflowTransferPayload(subSession.result, transferPayload);
-    if (Array.isArray(subSession.result.messages) && subSession.result.messages.length) {
-      const lastIndex = subSession.result.messages.length - 1;
-      const lastMessage = subSession.result.messages[lastIndex] || {};
-      subSession.result.messages[lastIndex] = applyWorkflowTransferPayload(
-        {
-          ...lastMessage,
-        },
-        transferPayload,
-      );
-    }
-  }
+  applyNodeResultTransfer(subSession, transferPayload);
   return transferPayload;
 }
 
@@ -242,11 +240,10 @@ async function transferWorkflowFinalAttachment({
   dialogProcessId = "",
   ctx = {},
 } = {}) {
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const semanticTransferContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  if (typeof semanticTransferContent !== "function") {
-    throw new Error("Semantic transfer service is required for workflow final attachment summary");
-  }
+  const semanticTransferContent = requireSemanticTransferContent(
+    ctx,
+    "workflow final attachment summary",
+  );
   const transferred = await semanticTransferContent({
     scenario: "workflow",
     strategy: "workflow_final_plan",
@@ -332,6 +329,79 @@ function findExistingWorkflowMessage(turnMessages = [], dialogProcessId = "") {
   });
 }
 
+async function resolveWorkflowTransferParts({
+  workflowPayload = null,
+  baseWorkflowPayload = {},
+  ctx = {},
+  normalizedPhase = "",
+  dialogProcessId = "",
+} = {}) {
+  const baseTransferPayload = normalizeWorkflowTransferPayload(baseWorkflowPayload);
+  const transferReferenceBlock = buildWorkflowTransferReferenceBlock(workflowPayload, ctx);
+  const composedTransferPayload = transferReferenceBlock
+    ? await transferWorkflowFinalAttachment({
+        transferReferenceBlock,
+        normalizedPhase,
+        dialogProcessId,
+        ctx,
+      })
+    : normalizeWorkflowTransferPayload();
+  const mergedTransferPayload = mergeWorkflowTransferEnvelopes(
+    baseTransferPayload,
+    composedTransferPayload,
+  );
+  const attachmentReferenceBlock =
+    buildWorkflowTransferReferenceBlock(
+      transferReferenceBlock ? composedTransferPayload : mergedTransferPayload,
+      ctx,
+    ) || "";
+  return { mergedTransferPayload, attachmentReferenceBlock };
+}
+
+function resolveAuthoritativeWorkflowRunId(workflowRunId, baseWorkflowPayload = {}, ctx = {}) {
+  return String(
+    workflowRunId ||
+      baseWorkflowPayload?.workflowRunId ||
+      baseWorkflowPayload?.execution?.workflowRunId ||
+      baseWorkflowPayload?.execution?.instanceId ||
+      ctx?.workflowRunId ||
+      "",
+  ).trim();
+}
+
+function pickNonEmptyTimelines(messageEventProjection = {}) {
+  const timelines = {};
+  for (const key of ["activityTimeline", "toolTimeline"]) {
+    const timeline = messageEventProjection[key];
+    if (Array.isArray(timeline) && timeline.length) timelines[key] = timeline;
+  }
+  return timelines;
+}
+
+function buildWorkflowPluginMeta({
+  normalizedPhase = "",
+  semanticResolution = {},
+  sourceText = "",
+  semanticText = "",
+  sessionWorkflowPayload = {},
+} = {}) {
+  return {
+    source: "workflow-plugin",
+    kind: "workflow",
+    phase: normalizedPhase,
+    semanticInvokerUsed: semanticResolution?.invoked === true,
+    sourceTextPreview: String(sourceText || "").slice(
+      0,
+      LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars,
+    ),
+    semanticTextPreview: String(semanticText || "").slice(
+      0,
+      LENGTH_THRESHOLDS.contextPreview.workflowSemanticTextPreviewChars,
+    ),
+    payload: sessionWorkflowPayload,
+  };
+}
+
 async function upsertWorkflowMessage({
   options = {},
   agentResult = {},
@@ -354,24 +424,13 @@ async function upsertWorkflowMessage({
   const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
   const baseWorkflowPayload =
     workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {};
-  const baseTransferPayload = normalizeWorkflowTransferPayload(baseWorkflowPayload);
-  const transferReferenceBlock = buildWorkflowTransferReferenceBlock(workflowPayload, ctx);
-  const composedTransferPayload = transferReferenceBlock
-    ? await transferWorkflowFinalAttachment({
-        transferReferenceBlock,
-        normalizedPhase,
-        dialogProcessId,
-        ctx,
-      })
-    : normalizeWorkflowTransferPayload();
-  const mergedTransferPayload = mergeWorkflowTransferEnvelopes(
-    baseTransferPayload,
-    composedTransferPayload,
-  );
-  const attachmentReferenceBlock =
-    (transferReferenceBlock
-      ? buildWorkflowTransferReferenceBlock(composedTransferPayload, ctx)
-      : buildWorkflowTransferReferenceBlock(mergedTransferPayload, ctx)) || "";
+  const { mergedTransferPayload, attachmentReferenceBlock } = await resolveWorkflowTransferParts({
+    workflowPayload,
+    baseWorkflowPayload,
+    ctx,
+    normalizedPhase,
+    dialogProcessId,
+  });
   const content = composeWorkflowFinalContent({
     semanticText,
     attachmentPathBlock: attachmentReferenceBlock,
@@ -386,14 +445,11 @@ async function upsertWorkflowMessage({
   }
   const messageEventProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
   applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
-  const authoritativeWorkflowRunId = String(
-    workflowRunId ||
-      baseWorkflowPayload?.workflowRunId ||
-      baseWorkflowPayload?.execution?.workflowRunId ||
-      baseWorkflowPayload?.execution?.instanceId ||
-      ctx?.workflowRunId ||
-      "",
-  ).trim();
+  const authoritativeWorkflowRunId = resolveAuthoritativeWorkflowRunId(
+    workflowRunId,
+    baseWorkflowPayload,
+    ctx,
+  );
   const sessionWorkflowPayload = buildSessionWorkflowPayload(
     baseWorkflowPayload,
     authoritativeWorkflowRunId,
@@ -405,14 +461,7 @@ async function upsertWorkflowMessage({
     type: "workflow",
     chatPresentation: true,
     ...(presentationMessageId ? { presentationMessageId } : {}),
-    ...(Array.isArray(messageEventProjection.activityTimeline) &&
-    messageEventProjection.activityTimeline.length
-      ? { activityTimeline: messageEventProjection.activityTimeline }
-      : {}),
-    ...(Array.isArray(messageEventProjection.toolTimeline) &&
-    messageEventProjection.toolTimeline.length
-      ? { toolTimeline: messageEventProjection.toolTimeline }
-      : {}),
+    ...pickNonEmptyTimelines(messageEventProjection),
     content,
     dialogProcessId,
     modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
@@ -422,21 +471,13 @@ async function upsertWorkflowMessage({
       ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
       : {}),
     pluginMessage: true,
-    pluginMeta: {
-      source: "workflow-plugin",
-      kind: "workflow",
-      phase: normalizedPhase,
-      semanticInvokerUsed: semanticResolution?.invoked === true,
-      sourceTextPreview: String(sourceText || "").slice(
-        0,
-        LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars,
-      ),
-      semanticTextPreview: String(semanticText || "").slice(
-        0,
-        LENGTH_THRESHOLDS.contextPreview.workflowSemanticTextPreviewChars,
-      ),
-      payload: sessionWorkflowPayload,
-    },
+    pluginMeta: buildWorkflowPluginMeta({
+      normalizedPhase,
+      semanticResolution,
+      sourceText,
+      semanticText,
+      sessionWorkflowPayload,
+    }),
   };
   if (content && messageId) {
     agentResult.output = content;

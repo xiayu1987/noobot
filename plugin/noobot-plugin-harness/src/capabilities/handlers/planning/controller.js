@@ -114,294 +114,337 @@ function consumePlanningTurnIncrement(state = {}, ctx = {}) {
   return increment;
 }
 
+const PRIMARY_TOOL_HOOK_POINTS = Object.freeze([
+  HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+  HOOK_POINT.AGENT.AFTER_LLM_CALL,
+  HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+  HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+]);
+
+function accumulatePlanningTurnCounters(state, ctx) {
+  const turnIncrement = consumePlanningTurnIncrement(state, ctx);
+  state.counters.llmTurns += turnIncrement;
+  state.counters.planUpdateTurns = Number(state.counters.planUpdateTurns || 0) + turnIncrement;
+  state.counters.phaseAcceptanceTurns =
+    Number(state.counters.phaseAcceptanceTurns || 0) + turnIncrement;
+}
+
+function logPlanningThresholdSnapshot(ctx, state, thresholds, reached) {
+  if (!isPlanningThresholdDebugEnabled()) return;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: PLANNING_THRESHOLD_SNAPSHOT_EVENT,
+    detail: {
+      thresholdMode: thresholds.mode,
+      counters: {
+        llmTurns: state.counters.llmTurns,
+        planUpdateTurns: state.counters.planUpdateTurns,
+        phaseAcceptanceTurns: state.counters.phaseAcceptanceTurns,
+      },
+      thresholds: {
+        planUpdateTriggerTurnsThreshold: thresholds.planUpdateTriggerTurnsThreshold,
+        phaseAcceptanceTriggerTurnsThreshold: thresholds.phaseAcceptanceTriggerTurnsThreshold,
+      },
+      thresholdSources: {
+        planUpdate: thresholds.planUpdateThresholdSource,
+        phaseAcceptance: thresholds.phaseAcceptanceThresholdSource,
+      },
+      reached,
+    },
+  });
+}
+
+function markPlanningDecisionReason(decision, reason) {
+  if (decision.reason === PLANNING_DECISION.reason.idle) {
+    decision.reason = reason;
+  }
+}
+
+function schedulePlanUpdateByThreshold(ctx, state, thresholds, decision) {
+  const triggerTurns = thresholds.planUpdateTriggerTurnsThreshold;
+  const blockedByPendingPlanUpdate = resolvePendingPlanUpdate(state).active === true;
+  if (
+    !blockedByPendingPlanUpdate &&
+    canAttemptPlanUpdate(ctx, state, { increment: false, stage: "revision" })
+  ) {
+    setPendingPlanUpdate(state, {
+      active: true,
+      stage: "revision",
+    });
+    setPendingStateWithMeta(state, "planRevision", true);
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: PLANNING_EVENTS.revisionScheduledByTurnThreshold,
+      detail: {
+        triggerTurns,
+        thresholdMode: thresholds.mode,
+        thresholdSource: thresholds.planUpdateThresholdSource,
+        summaryPending: state.pending?.summary === true,
+      },
+    });
+    markPlanningDecisionReason(decision, PLANNING_DECISION.reason.planUpdateThreshold);
+    state.counters.planUpdateTurns = 0;
+    return;
+  }
+  if (blockedByPendingPlanUpdate) {
+    state.counters.planUpdateTurns = triggerTurns;
+    decision.blockedActions.push(PLANNING_DECISION.label.planUpdateRevision);
+    decision.blockedReasons.push("plan_update_blocked_by_pending_plan_update");
+    return;
+  }
+  state.counters.planUpdateTurns = 0;
+}
+
+function canSchedulePhaseAcceptance(state) {
+  return (
+    state.flags.planningCaptured === true &&
+    state.pending?.phaseAcceptance !== true &&
+    state.pending?.summary !== true &&
+    !state.pending?.guidance &&
+    resolvePendingPlanUpdate(state).active !== true
+  );
+}
+
+function schedulePhaseAcceptanceByThreshold(ctx, state, thresholds, decision) {
+  const triggerTurns = thresholds.phaseAcceptanceTriggerTurnsThreshold;
+  if (!canSchedulePhaseAcceptance(state)) {
+    state.counters.phaseAcceptanceTurns = triggerTurns;
+    decision.blockedActions.push(WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance);
+    decision.blockedReasons.push("phase_acceptance_blocked_by_higher_priority_pending");
+    return;
+  }
+  setPendingStateWithMeta(state, "phaseAcceptance", true);
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    event: ACCEPTANCE_EVENTS.phaseAcceptanceScheduledByTurnThreshold,
+    detail: {
+      triggerTurns,
+      thresholdMode: thresholds.mode,
+      thresholdSource: thresholds.phaseAcceptanceThresholdSource,
+      summaryPending: state.pending?.summary === true,
+      guidancePending: Boolean(state.pending?.guidance),
+      planUpdatePending: resolvePendingPlanUpdate(state).active === true,
+    },
+  });
+  state.counters.phaseAcceptanceTurns = 0;
+  markPlanningDecisionReason(decision, PLANNING_DECISION.reason.phaseAcceptanceThreshold);
+}
+
+const EMPTY_PLANNING_PENDING_SNAPSHOT = Object.freeze({
+  summary: false,
+  summaryByCharsPrompted: false,
+  guidance: null,
+  analysis: false,
+  planUpdate: false,
+  phaseAcceptance: false,
+  planningCaptured: false,
+});
+
+function readPlanningPendingSnapshotRaw(state) {
+  return {
+    summary: state.pending?.summary === true,
+    summaryByCharsPrompted: state.flags?.summaryByCharsPrompted === true,
+    guidance: state.pending?.guidance || null,
+    analysis: state.pending?.analysis === true,
+    planUpdate: resolvePendingPlanUpdate(state).active === true,
+    phaseAcceptance: state.pending?.phaseAcceptance === true,
+    planningCaptured: state.flags?.planningCaptured === true,
+  };
+}
+
+function applyPlanningTurnThresholds(ctx, meta, state, decision) {
+  accumulatePlanningTurnCounters(state, ctx);
+  const thresholds = resolvePlanningTurnThresholds(ctx, meta);
+  const reached = {
+    planUpdateTurns: state.counters.planUpdateTurns >= thresholds.planUpdateTriggerTurnsThreshold,
+    phaseAcceptanceTurns:
+      state.counters.phaseAcceptanceTurns >= thresholds.phaseAcceptanceTriggerTurnsThreshold,
+  };
+  logPlanningThresholdSnapshot(ctx, state, thresholds, reached);
+  if (reached.planUpdateTurns) {
+    schedulePlanUpdateByThreshold(ctx, state, thresholds, decision);
+  }
+  if (reached.phaseAcceptanceTurns) {
+    schedulePhaseAcceptanceByThreshold(ctx, state, thresholds, decision);
+  }
+  const pendingSnapshotRaw = readPlanningPendingSnapshotRaw(state);
+  decision.candidateActions = resolvePlanningTriggeredActions({
+    planUpdate: pendingSnapshotRaw.planUpdate,
+    phaseAcceptance: pendingSnapshotRaw.phaseAcceptance,
+  });
+  return pendingSnapshotRaw;
+}
+
+function resolveSummaryPendingReason(pendingSnapshotRaw) {
+  if (pendingSnapshotRaw.summary !== true) return "";
+  return pendingSnapshotRaw.summaryByCharsPrompted === true
+    ? PLANNING_DECISION.label.summaryOverflow
+    : PLANNING_DECISION.label.summaryTurns;
+}
+
+function normalizePlanningPendingSnapshot(pendingSnapshotRaw, state, blockedActions) {
+  const planUpdateSnapshot = resolvePendingPlanUpdate(state || {});
+  return {
+    summary: {
+      active: pendingSnapshotRaw.summary === true,
+      reason: resolveSummaryPendingReason(pendingSnapshotRaw),
+    },
+    guidance: {
+      active: Boolean(pendingSnapshotRaw.guidance),
+      payload: pendingSnapshotRaw.guidance || null,
+    },
+    analysis: {
+      active: pendingSnapshotRaw.analysis === true,
+    },
+    planUpdate: {
+      active: planUpdateSnapshot.active === true,
+      stage: planUpdateSnapshot.stage || "",
+      context: {
+        targetMainStepIndexes: Array.isArray(planUpdateSnapshot.targetMainStepIndexes)
+          ? planUpdateSnapshot.targetMainStepIndexes
+          : [],
+      },
+    },
+    phaseAcceptance: {
+      active: pendingSnapshotRaw.phaseAcceptance === true,
+      blockedBy: blockedActions.includes(
+        WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance,
+      )
+        ? ["summary_or_guidance_or_plan_update_or_planning_not_captured"]
+        : [],
+    },
+    acceptanceSemanticValidation: {
+      active: false,
+    },
+    flags: {
+      planningCaptured: pendingSnapshotRaw.planningCaptured === true,
+      summaryByCharsPrompted: pendingSnapshotRaw.summaryByCharsPrompted === true,
+      overflowForceAcceptancePending: state?.flags?.overflowForceAcceptancePending === true,
+    },
+  };
+}
+
+function resolvePlanningLocale(holder) {
+  return holder?.state?.locale || LOCALE.ZH_CN;
+}
+
+function buildPlanningBeforeDecision(holder, decision, pendingSnapshot) {
+  const { candidateActions, blockedActions, blockedReasons } = decision;
+  return {
+    chosenAction: PLANNING_DECISION.action.planningBootstrap,
+    chosenReason: decision.reason,
+    chosenReasonLabel: resolvePlanningReasonLabel(resolvePlanningLocale(holder), decision.reason),
+    candidateActions,
+    deferredActions: candidateActions,
+    triggeredActions: candidateActions,
+    blockedActions,
+    blockedReasons,
+    blockedReasonLabels: blockedReasons.map((reason) =>
+      resolvePlanningBlockedReasonLabel(resolvePlanningLocale(holder), reason),
+    ),
+    pending: pendingSnapshot,
+  };
+}
+
+async function runPlanningPrimary(ctx, meta) {
+  if (shouldUseSeparateModel(meta)) {
+    return runPlanningBySeparateModel(ctx, meta);
+  }
+  return maybeInjectPlanningPrompt(ctx, meta) || false;
+}
+
+async function executePlanningBeforeLlm(ctx, meta, mode, setupChanged) {
+  let changed = setupChanged;
+  changed = disableBlockedToolsInRegistry(ctx) || changed;
+  changed = synchronizeTaskAcceptanceTool(ctx, meta) || changed;
+  changed = synchronizePlanRefinementTool(ctx, meta) || changed;
+  const primaryChanged = await runPlanningPrimary(ctx, meta);
+  changed = primaryChanged || changed;
+  return {
+    requestedAction:
+      mode === "separate_model"
+        ? PLANNING_DECISION.requestedAction.planningSeparateModel
+        : PLANNING_DECISION.requestedAction.planningInject,
+    executedPrimary: primaryChanged === true,
+    changed,
+  };
+}
+
+function inactivePlanningResult(capability, point) {
+  return { capability, point, status: "active", changed: false };
+}
+
+async function handlePlanningBeforeLlmCall({ capability, point, ctx, meta }) {
+  const current = ensureHarnessBucket(ctx);
+  if (current?.state?.flags?.acceptanceReviewing === true) {
+    return inactivePlanningResult(capability, point);
+  }
+  const setupChanged =
+    enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) === true;
+  const holder = ensureHarnessBucket(ctx);
+  const mode = resolveWorkflowMode(meta);
+  const decision = {
+    reason: PLANNING_DECISION.reason.idle,
+    blockedActions: [],
+    blockedReasons: [],
+    candidateActions: [],
+  };
+  const pendingSnapshotRaw = holder
+    ? applyPlanningTurnThresholds(ctx, meta, holder.state, decision)
+    : { ...EMPTY_PLANNING_PENDING_SNAPSHOT };
+  const pendingSnapshot = normalizePlanningPendingSnapshot(
+    pendingSnapshotRaw,
+    holder?.state,
+    decision.blockedActions,
+  );
+  const lifecycle = await runWorkflowLifecycle(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    mode,
+    resolveDecision: () => buildPlanningBeforeDecision(holder, decision, pendingSnapshot),
+    execute: () => executePlanningBeforeLlm(ctx, meta, mode, setupChanged),
+  });
+  return { capability, point, status: "active", changed: lifecycle.execution.changed };
+}
+
+async function handlePlanningAfterLlmCall({ capability, point, ctx, meta }) {
+  const mode = resolveWorkflowMode(meta);
+  const holder = ensureHarnessBucket(ctx);
+  const lifecycle = await runWorkflowLifecycle(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    point: HOOK_POINT.AGENT.AFTER_LLM_CALL,
+    mode,
+    resolveDecision: () => ({
+      chosenAction: PLANNING_DECISION.action.planningCapture,
+      chosenReason: PLANNING_DECISION.reason.afterLlmCapture,
+      chosenReasonLabel: resolvePlanningReasonLabel(
+        resolvePlanningLocale(holder),
+        PLANNING_DECISION.reason.afterLlmCapture,
+      ),
+    }),
+    execute: async () => {
+      const captureChanged = (await maybeCapturePlanningResult(ctx, meta)) || false;
+      return {
+        requestedAction: PLANNING_DECISION.requestedAction.planningCapture,
+        executedPrimary: captureChanged === true,
+        changed: captureChanged === true,
+      };
+    },
+  });
+  return { capability, point, status: "active", changed: lifecycle.execution.changed };
+}
+
 export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => true } = {}) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
-    if (
-      [
-        HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-        HOOK_POINT.AGENT.AFTER_LLM_CALL,
-        HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
-        HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
-      ].includes(point) &&
-      !shouldProcessPrimaryToolHooks(ctx)
-    ) {
-      return { capability, point, status: "active", changed: false };
+    if (PRIMARY_TOOL_HOOK_POINTS.includes(point) && !shouldProcessPrimaryToolHooks(ctx)) {
+      return inactivePlanningResult(capability, point);
     }
     if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
-      const current = ensureHarnessBucket(ctx);
-      if (current?.state?.flags?.acceptanceReviewing === true) {
-        return { capability, point, status: "active", changed: false };
-      }
-      const invariantChanged =
-        enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) === true;
-      const setupChanged = invariantChanged;
-      const holder = ensureHarnessBucket(ctx);
-      const mode = resolveWorkflowMode(meta);
-      let decisionReason = PLANNING_DECISION.reason.idle;
-      const blockedActions = [];
-      const blockedReasons = [];
-      let candidateActions = [];
-      let pendingSnapshotRaw = {
-        summary: false,
-        summaryByCharsPrompted: false,
-        guidance: null,
-        analysis: false,
-        planUpdate: false,
-        phaseAcceptance: false,
-        planningCaptured: false,
-      };
-      if (holder) {
-        const turnIncrement = consumePlanningTurnIncrement(holder.state, ctx);
-        holder.state.counters.llmTurns += turnIncrement;
-        holder.state.counters.planUpdateTurns =
-          Number(holder.state.counters.planUpdateTurns || 0) + turnIncrement;
-        holder.state.counters.phaseAcceptanceTurns =
-          Number(holder.state.counters.phaseAcceptanceTurns || 0) + turnIncrement;
-        const planningThresholds = resolvePlanningTurnThresholds(ctx, meta);
-        const planUpdateTriggerTurnsThreshold = planningThresholds.planUpdateTriggerTurnsThreshold;
-        const phaseAcceptanceTriggerTurnsThreshold =
-          planningThresholds.phaseAcceptanceTriggerTurnsThreshold;
-        const reachedPlanUpdateTurns =
-          holder.state.counters.planUpdateTurns >= planUpdateTriggerTurnsThreshold;
-        const reachedPhaseAcceptanceTurns =
-          holder.state.counters.phaseAcceptanceTurns >= phaseAcceptanceTriggerTurnsThreshold;
-
-        if (isPlanningThresholdDebugEnabled()) {
-          appendCapabilityLog(ctx, {
-            domain: CAPABILITY_DOMAIN.PLANNING,
-            event: PLANNING_THRESHOLD_SNAPSHOT_EVENT,
-            detail: {
-              thresholdMode: planningThresholds.mode,
-              counters: {
-                llmTurns: holder.state.counters.llmTurns,
-                planUpdateTurns: holder.state.counters.planUpdateTurns,
-                phaseAcceptanceTurns: holder.state.counters.phaseAcceptanceTurns,
-              },
-              thresholds: {
-                planUpdateTriggerTurnsThreshold,
-                phaseAcceptanceTriggerTurnsThreshold,
-              },
-              thresholdSources: {
-                planUpdate: planningThresholds.planUpdateThresholdSource,
-                phaseAcceptance: planningThresholds.phaseAcceptanceThresholdSource,
-              },
-              reached: {
-                planUpdateTurns: reachedPlanUpdateTurns,
-                phaseAcceptanceTurns: reachedPhaseAcceptanceTurns,
-              },
-            },
-          });
-        }
-
-        if (reachedPlanUpdateTurns) {
-          const blockedByPendingPlanUpdate = resolvePendingPlanUpdate(holder.state).active === true;
-          let planUpdateScheduled = false;
-          if (
-            !blockedByPendingPlanUpdate &&
-            canAttemptPlanUpdate(ctx, holder.state, { increment: false, stage: "revision" })
-          ) {
-            setPendingPlanUpdate(holder.state, {
-              active: true,
-              stage: "revision",
-            });
-            setPendingStateWithMeta(holder.state, "planRevision", true);
-            appendCapabilityLog(ctx, {
-              domain: CAPABILITY_DOMAIN.PLANNING,
-              event: PLANNING_EVENTS.revisionScheduledByTurnThreshold,
-              detail: {
-                triggerTurns: planUpdateTriggerTurnsThreshold,
-                thresholdMode: planningThresholds.mode,
-                thresholdSource: planningThresholds.planUpdateThresholdSource,
-                summaryPending: holder.state.pending?.summary === true,
-              },
-            });
-            planUpdateScheduled = true;
-            if (decisionReason === PLANNING_DECISION.reason.idle) {
-              decisionReason = PLANNING_DECISION.reason.planUpdateThreshold;
-            }
-          }
-          if (planUpdateScheduled) {
-            holder.state.counters.planUpdateTurns = 0;
-          } else if (blockedByPendingPlanUpdate) {
-            holder.state.counters.planUpdateTurns = planUpdateTriggerTurnsThreshold;
-            blockedActions.push(PLANNING_DECISION.label.planUpdateRevision);
-            blockedReasons.push("plan_update_blocked_by_pending_plan_update");
-          } else {
-            holder.state.counters.planUpdateTurns = 0;
-          }
-        }
-
-        if (reachedPhaseAcceptanceTurns) {
-          let phaseAcceptanceScheduled = false;
-          if (
-            holder.state.flags.planningCaptured === true &&
-            holder.state.pending?.phaseAcceptance !== true &&
-            holder.state.pending?.summary !== true &&
-            !holder.state.pending?.guidance &&
-            resolvePendingPlanUpdate(holder.state).active !== true
-          ) {
-            setPendingStateWithMeta(holder.state, "phaseAcceptance", true);
-            phaseAcceptanceScheduled = true;
-            appendCapabilityLog(ctx, {
-              domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-              event: ACCEPTANCE_EVENTS.phaseAcceptanceScheduledByTurnThreshold,
-              detail: {
-                triggerTurns: phaseAcceptanceTriggerTurnsThreshold,
-                thresholdMode: planningThresholds.mode,
-                thresholdSource: planningThresholds.phaseAcceptanceThresholdSource,
-                summaryPending: holder.state.pending?.summary === true,
-                guidancePending: Boolean(holder.state.pending?.guidance),
-                planUpdatePending: resolvePendingPlanUpdate(holder.state).active === true,
-              },
-            });
-          }
-          if (phaseAcceptanceScheduled) {
-            holder.state.counters.phaseAcceptanceTurns = 0;
-            if (decisionReason === PLANNING_DECISION.reason.idle) {
-              decisionReason = PLANNING_DECISION.reason.phaseAcceptanceThreshold;
-            }
-          } else {
-            holder.state.counters.phaseAcceptanceTurns = phaseAcceptanceTriggerTurnsThreshold;
-            blockedActions.push(WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance);
-            blockedReasons.push("phase_acceptance_blocked_by_higher_priority_pending");
-          }
-        }
-
-        pendingSnapshotRaw = {
-          summary: holder.state.pending?.summary === true,
-          summaryByCharsPrompted: holder.state.flags?.summaryByCharsPrompted === true,
-          guidance: holder.state.pending?.guidance || null,
-          analysis: holder.state.pending?.analysis === true,
-          planUpdate: resolvePendingPlanUpdate(holder.state).active === true,
-          phaseAcceptance: holder.state.pending?.phaseAcceptance === true,
-          planningCaptured: holder.state.flags?.planningCaptured === true,
-        };
-        candidateActions = resolvePlanningTriggeredActions({
-          planUpdate: pendingSnapshotRaw.planUpdate,
-          phaseAcceptance: pendingSnapshotRaw.phaseAcceptance,
-        });
-      }
-
-      const planUpdateSnapshot = resolvePendingPlanUpdate(holder?.state || {});
-      const normalizedPendingSnapshot = {
-        summary: {
-          active: pendingSnapshotRaw.summary === true,
-          reason:
-            pendingSnapshotRaw.summary === true
-              ? pendingSnapshotRaw.summaryByCharsPrompted === true
-                ? PLANNING_DECISION.label.summaryOverflow
-                : PLANNING_DECISION.label.summaryTurns
-              : "",
-        },
-        guidance: {
-          active: Boolean(pendingSnapshotRaw.guidance),
-          payload: pendingSnapshotRaw.guidance || null,
-        },
-        analysis: {
-          active: pendingSnapshotRaw.analysis === true,
-        },
-        planUpdate: {
-          active: planUpdateSnapshot.active === true,
-          stage: planUpdateSnapshot.stage || "",
-          context: {
-            targetMainStepIndexes: Array.isArray(planUpdateSnapshot.targetMainStepIndexes)
-              ? planUpdateSnapshot.targetMainStepIndexes
-              : [],
-          },
-        },
-        phaseAcceptance: {
-          active: pendingSnapshotRaw.phaseAcceptance === true,
-          blockedBy: blockedActions.includes(
-            WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance,
-          )
-            ? ["summary_or_guidance_or_plan_update_or_planning_not_captured"]
-            : [],
-        },
-        acceptanceSemanticValidation: {
-          active: false,
-        },
-        flags: {
-          planningCaptured: pendingSnapshotRaw.planningCaptured === true,
-          summaryByCharsPrompted: pendingSnapshotRaw.summaryByCharsPrompted === true,
-          overflowForceAcceptancePending:
-            holder?.state?.flags?.overflowForceAcceptancePending === true,
-        },
-      };
-
-      const lifecycle = await runWorkflowLifecycle(ctx, {
-        domain: CAPABILITY_DOMAIN.PLANNING,
-        point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-        mode,
-        resolveDecision: () => ({
-          chosenAction: PLANNING_DECISION.action.planningBootstrap,
-          chosenReason: decisionReason,
-          chosenReasonLabel: resolvePlanningReasonLabel(
-            holder?.state?.locale || LOCALE.ZH_CN,
-            decisionReason,
-          ),
-          candidateActions,
-          deferredActions: candidateActions,
-          triggeredActions: candidateActions,
-          blockedActions,
-          blockedReasons,
-          blockedReasonLabels: blockedReasons.map((reason) =>
-            resolvePlanningBlockedReasonLabel(holder?.state?.locale || LOCALE.ZH_CN, reason),
-          ),
-          pending: normalizedPendingSnapshot,
-        }),
-        execute: async () => {
-          let changed = setupChanged;
-          let planningPrimaryExecuted = false;
-          changed = disableBlockedToolsInRegistry(ctx) || changed;
-          changed = synchronizeTaskAcceptanceTool(ctx, meta) || changed;
-          changed = synchronizePlanRefinementTool(ctx, meta) || changed;
-          if (shouldUseSeparateModel(meta)) {
-            const planningSeparateModelChanged = await runPlanningBySeparateModel(ctx, meta);
-            planningPrimaryExecuted = planningSeparateModelChanged === true;
-            changed = planningSeparateModelChanged || changed;
-          } else {
-            const planningPrimaryChanged = maybeInjectPlanningPrompt(ctx, meta) || false;
-            planningPrimaryExecuted = planningPrimaryChanged === true;
-            changed = planningPrimaryChanged || changed;
-          }
-          return {
-            requestedAction:
-              mode === "separate_model"
-                ? PLANNING_DECISION.requestedAction.planningSeparateModel
-                : PLANNING_DECISION.requestedAction.planningInject,
-            executedPrimary: planningPrimaryExecuted,
-            changed,
-          };
-        },
-      });
-      return { capability, point, status: "active", changed: lifecycle.execution.changed };
+      return handlePlanningBeforeLlmCall({ capability, point, ctx, meta });
     }
     if (point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
-      const mode = resolveWorkflowMode(meta);
-      const holder = ensureHarnessBucket(ctx);
-      const lifecycle = await runWorkflowLifecycle(ctx, {
-        domain: CAPABILITY_DOMAIN.PLANNING,
-        point: HOOK_POINT.AGENT.AFTER_LLM_CALL,
-        mode,
-        resolveDecision: () => ({
-          chosenAction: PLANNING_DECISION.action.planningCapture,
-          chosenReason: PLANNING_DECISION.reason.afterLlmCapture,
-          chosenReasonLabel: resolvePlanningReasonLabel(
-            holder?.state?.locale || LOCALE.ZH_CN,
-            PLANNING_DECISION.reason.afterLlmCapture,
-          ),
-        }),
-        execute: async () => {
-          const captureChanged = (await maybeCapturePlanningResult(ctx, meta)) || false;
-          return {
-            requestedAction: PLANNING_DECISION.requestedAction.planningCapture,
-            executedPrimary: captureChanged === true,
-            changed: captureChanged === true,
-          };
-        },
-      });
-      return { capability, point, status: "active", changed: lifecycle.execution.changed };
+      return handlePlanningAfterLlmCall({ capability, point, ctx, meta });
     }
-    return { capability, point, status: "active", changed: false };
+    return inactivePlanningResult(capability, point);
   };
 }

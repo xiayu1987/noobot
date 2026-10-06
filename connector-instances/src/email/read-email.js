@@ -101,6 +101,117 @@ export async function readEmailSourceBuffer(sourceValue) {
   return Buffer.concat(sourceChunks);
 }
 
+const EMAIL_FETCH_QUERY = Object.freeze({
+  uid: true,
+  envelope: true,
+  source: true,
+  internalDate: true,
+});
+
+const emailFetchQuery = () => ({ ...EMAIL_FETCH_QUERY });
+
+async function fetchEmailByUid(imapClient, resolvedUid) {
+  for await (const messageItem of imapClient.fetch([resolvedUid], emailFetchQuery(), {
+    uid: true,
+  })) {
+    return messageItem;
+  }
+  return imapClient.fetchOne(resolvedUid, emailFetchQuery());
+}
+
+async function fetchLatestEmail(imapClient) {
+  const mailboxExists = Number(imapClient?.mailbox?.exists || 0);
+  if (!Number.isFinite(mailboxExists) || mailboxExists <= 0) return null;
+  return imapClient.fetchOne("*", emailFetchQuery());
+}
+
+async function fetchEmailMessage(imapClient, resolvedUid) {
+  const fetchedMessage = resolvedUid
+    ? await fetchEmailByUid(imapClient, resolvedUid)
+    : await fetchLatestEmail(imapClient);
+  if (fetchedMessage) return fetchedMessage;
+  if (!resolvedUid) throw new Error("Email uid is required when the mailbox is empty");
+  throw new Error(`Email was not found by uid: ${resolvedUid}`);
+}
+
+function describeInlineAttachment(attachmentItem, attachmentIndex) {
+  return {
+    label: `${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}`,
+    name: String(attachmentItem?.name || "unknown").trim(),
+    contentId: String(attachmentItem?.email_content_id || "none").trim(),
+    mimeType: String(attachmentItem?.mimeType || BINARY_MIME_TYPE).trim(),
+  };
+}
+
+function appendInlineAttachmentText(baseText, descriptors) {
+  if (!descriptors.length) return baseText;
+  return [
+    baseText,
+    "",
+    INLINE_ATTACHMENT_BLOCK_START,
+    ...descriptors.map(
+      ({ label, name, contentId, mimeType }) =>
+        `- [${label}] name=${name}, cid=${contentId}, type=${mimeType}`,
+    ),
+    INLINE_ATTACHMENT_BLOCK_END,
+  ]
+    .filter((lineItem) => lineItem !== "")
+    .join("\n");
+}
+
+function appendInlineAttachmentHtml(baseHtml, descriptors) {
+  if (!descriptors.length) return baseHtml;
+  const items = descriptors
+    .map(
+      ({ label, name, contentId, mimeType }) =>
+        `<li>[${label}] ${name} (cid=${contentId}, type=${mimeType})</li>`,
+    )
+    .join("");
+  const separator = baseHtml ? "<hr/>" : "";
+  return `${baseHtml}${separator}<div><strong>${INLINE_ATTACHMENT_TITLE_TEXT}</strong><ul>${items}</ul></div>`;
+}
+
+function formatAddressList(addressField) {
+  if (!Array.isArray(addressField?.value)) return [];
+  return addressField.value.map((addressItem) =>
+    `${String(addressItem?.name || "").trim()} <${String(addressItem?.address || "").trim()}>`.trim(),
+  );
+}
+
+function buildReadEmailHeaders({ folder, resolvedUid, fetchedMessage, parsedEmail }) {
+  return {
+    action: "read",
+    folder,
+    uid: Number(fetchedMessage?.uid || resolvedUid),
+    subject: String(parsedEmail?.subject || fetchedMessage?.envelope?.subject || "").trim(),
+    from: formatAddressList(parsedEmail?.from),
+    to: formatAddressList(parsedEmail?.to),
+    cc: formatAddressList(parsedEmail?.cc),
+    date: String(parsedEmail?.date || fetchedMessage?.internalDate || ""),
+  };
+}
+
+function buildReadEmailBody(parsedEmail, attachments) {
+  const descriptors = attachments
+    .filter((attachmentItem) => attachmentItem?.email_is_inline === true)
+    .map(describeInlineAttachment);
+  return {
+    text: appendInlineAttachmentText(String(parsedEmail?.text || "").trim(), descriptors),
+    html: appendInlineAttachmentHtml(String(parsedEmail?.html || "").trim(), descriptors),
+  };
+}
+
+function buildReadEmailResult({ folder, resolvedUid, fetchedMessage, parsedEmail, persisted }) {
+  const attachments = Array.isArray(persisted?.attachments) ? persisted.attachments : [];
+  const transferEnvelopes = persisted?.transferEnvelopes;
+  return {
+    ...buildReadEmailHeaders({ folder, resolvedUid, fetchedMessage, parsedEmail }),
+    ...buildReadEmailBody(parsedEmail, attachments),
+    attachments,
+    ...(Array.isArray(transferEnvelopes) && transferEnvelopes.length ? { transferEnvelopes } : {}),
+  };
+}
+
 export async function executeReadEmail({
   payload = {},
   connectionInfo = {},
@@ -116,133 +227,13 @@ export async function executeReadEmail({
   try {
     const mailboxLock = await imapClient.getMailboxLock(folder);
     try {
-      let resolvedUid = Number.isFinite(uid) && uid > 0 ? Math.floor(uid) : 0;
-      let fetchedMessages = null;
-
-      if (resolvedUid) {
-        for await (const messageItem of imapClient.fetch(
-          [resolvedUid],
-          {
-            uid: true,
-            envelope: true,
-            source: true,
-            internalDate: true,
-          },
-          { uid: true },
-        )) {
-          fetchedMessages = messageItem;
-          break;
-        }
-        if (!fetchedMessages) {
-          fetchedMessages = await imapClient.fetchOne(resolvedUid, {
-            uid: true,
-            envelope: true,
-            source: true,
-            internalDate: true,
-          });
-        }
-      } else {
-        const mailboxExists = Number(imapClient?.mailbox?.exists || 0);
-        if (Number.isFinite(mailboxExists) && mailboxExists > 0) {
-          fetchedMessages = await imapClient.fetchOne("*", {
-            uid: true,
-            envelope: true,
-            source: true,
-            internalDate: true,
-          });
-        }
-      }
-      if (!fetchedMessages) {
-        if (!resolvedUid) {
-          throw new Error("Email uid is required when the mailbox is empty");
-        }
-        throw new Error(`Email was not found by uid: ${resolvedUid}`);
-      }
-      resolvedUid = Number(fetchedMessages?.uid || resolvedUid);
-      const rawSourceBuffer = await readEmailSourceBuffer(fetchedMessages?.source);
+      const requestedUid = Number.isFinite(uid) && uid > 0 ? Math.floor(uid) : 0;
+      const fetchedMessage = await fetchEmailMessage(imapClient, requestedUid);
+      const resolvedUid = Number(fetchedMessage?.uid || requestedUid);
+      const rawSourceBuffer = await readEmailSourceBuffer(fetchedMessage?.source);
       const parsedEmail = await simpleParser(rawSourceBuffer);
-      const persistedAttachments = await saveEmailAttachments({
-        attachmentHandler,
-        parsedEmail,
-      });
-      const attachments = Array.isArray(persistedAttachments?.attachments)
-        ? persistedAttachments.attachments
-        : [];
-      const inlineAttachments = attachments.filter(
-        (attachmentItem) => attachmentItem?.email_is_inline === true,
-      );
-      const inlineAttachmentTextLines = inlineAttachments.map(
-        (attachmentItem, attachmentIndex) =>
-          `- [${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}] name=${String(
-            attachmentItem?.name || "unknown",
-          ).trim()}, cid=${String(
-            attachmentItem?.email_content_id || "none",
-          ).trim()}, type=${String(attachmentItem?.mimeType || BINARY_MIME_TYPE).trim()}`,
-      );
-      const baseText = String(parsedEmail?.text || "").trim();
-      const textWithInlineAttachmentHint = inlineAttachmentTextLines.length
-        ? [
-            baseText,
-            "",
-            INLINE_ATTACHMENT_BLOCK_START,
-            ...inlineAttachmentTextLines,
-            INLINE_ATTACHMENT_BLOCK_END,
-          ]
-            .filter((lineItem) => lineItem !== "")
-            .join("\n")
-        : baseText;
-      const baseHtml = String(parsedEmail?.html || "").trim();
-      const htmlWithInlineAttachmentHint = inlineAttachmentTextLines.length
-        ? `${baseHtml}${
-            baseHtml ? "<hr/>" : ""
-          }<div><strong>${INLINE_ATTACHMENT_TITLE_TEXT}</strong><ul>${inlineAttachments
-            .map(
-              (attachmentItem, attachmentIndex) =>
-                `<li>[${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}] ${String(
-                  attachmentItem?.name || "unknown",
-                ).trim()} (cid=${String(
-                  attachmentItem?.email_content_id || "none",
-                ).trim()}, type=${String(
-                  attachmentItem?.mimeType || BINARY_MIME_TYPE,
-                ).trim()})</li>`,
-            )
-            .join("")}</ul></div>`
-        : baseHtml;
-      return {
-        action: "read",
-        folder,
-        uid: Number(fetchedMessages?.uid || resolvedUid),
-        subject: String(parsedEmail?.subject || fetchedMessages?.envelope?.subject || "").trim(),
-        from: Array.isArray(parsedEmail?.from?.value)
-          ? parsedEmail.from.value.map((addressItem) =>
-              `${String(addressItem?.name || "").trim()} <${String(
-                addressItem?.address || "",
-              ).trim()}>`.trim(),
-            )
-          : [],
-        to: Array.isArray(parsedEmail?.to?.value)
-          ? parsedEmail.to.value.map((addressItem) =>
-              `${String(addressItem?.name || "").trim()} <${String(
-                addressItem?.address || "",
-              ).trim()}>`.trim(),
-            )
-          : [],
-        cc: Array.isArray(parsedEmail?.cc?.value)
-          ? parsedEmail.cc.value.map((addressItem) =>
-              `${String(addressItem?.name || "").trim()} <${String(
-                addressItem?.address || "",
-              ).trim()}>`.trim(),
-            )
-          : [],
-        date: String(parsedEmail?.date || fetchedMessages?.internalDate || ""),
-        text: textWithInlineAttachmentHint,
-        html: htmlWithInlineAttachmentHint,
-        attachments,
-        ...(Array.isArray(persistedAttachments?.transferEnvelopes) &&
-        persistedAttachments.transferEnvelopes.length
-          ? { transferEnvelopes: persistedAttachments.transferEnvelopes }
-          : {}),
-      };
+      const persisted = await saveEmailAttachments({ attachmentHandler, parsedEmail });
+      return buildReadEmailResult({ folder, resolvedUid, fetchedMessage, parsedEmail, persisted });
     } finally {
       mailboxLock.release();
     }

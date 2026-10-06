@@ -42,41 +42,69 @@ function resolveFailure(value) {
   return value && typeof value === "object" ? value : null;
 }
 
-function buildNodeSessionRecord({ ctx, item, nodeState, semanticNode }) {
-  const step = item?.step || {};
+function count(value) {
+  return Number(value || 0);
+}
+
+function preferText(primary, fallback, key) {
+  return text(primary[key] || fallback[key]);
+}
+
+function buildRunIdentityFields(state, run) {
   return {
-    transition: Number(item?.transition || 0),
-    workflowRunId: text(nodeState?.workflowRunId || item?.workflowRunId),
-    nodeExecutionId: text(nodeState?.nodeExecutionId || item?.nodeExecutionId),
-    commandId: text(nodeState?.commandId || item?.commandId),
-    turnScopeId: text(nodeState?.turnScopeId || item?.turnScopeId),
-    parentSessionId: text(ctx?.sessionId),
-    nodeName: text(step?.nodeName || semanticNode?.name),
-    nodeId: text(step?.nodeId || semanticNode?.id),
-    nodeType: finiteNumber(step?.nodeType),
-    actionNodeStateId: text(item?.actionNodeStateId || step?.actionNodeStateId),
-    stepId: text(item?.stepId || step?.stepId),
-    stepIndex: finiteNumber(item?.stepIndex ?? step?.stepIndex),
-    type: text(semanticNode?.type),
-    stateType: finiteNumber(semanticNode?.stateType),
-    rootSessionId: text(ctx?.sessionId),
+    transition: count(run.transition),
+    workflowRunId: preferText(state, run, "workflowRunId"),
+    nodeExecutionId: preferText(state, run, "nodeExecutionId"),
+    commandId: preferText(state, run, "commandId"),
+    turnScopeId: preferText(state, run, "turnScopeId"),
+  };
+}
+
+function buildStepIdentityFields(run, step, node) {
+  return {
+    nodeName: text(step.nodeName || node.name),
+    nodeId: text(step.nodeId || node.id),
+    nodeType: finiteNumber(step.nodeType),
+    actionNodeStateId: preferText(run, step, "actionNodeStateId"),
+    stepId: preferText(run, step, "stepId"),
+    stepIndex: finiteNumber(run.stepIndex ?? step.stepIndex),
+    type: text(node.type),
+    stateType: finiteNumber(node.stateType),
+  };
+}
+
+function buildNodeStateFields(state) {
+  return {
+    activeChildExecutionId: text(state.activeChildExecutionId),
+    attemptExecutionIds: resolveAttemptExecutionIds(state),
+    status: text(state.status),
+    failure: resolveFailure(state.failure),
+    revision: count(state.revision),
+    sequence: count(state.sequence),
+    eventId: text(state.eventId),
+    startedAt: text(state.startedAt),
+    completedAt: text(state.completedAt),
+    updatedAt: text(state.updatedAt),
+  };
+}
+
+function buildNodeSessionRecord({ ctx, item, nodeState, semanticNode }) {
+  const run = item || {};
+  const state = nodeState || {};
+  const rootSessionId = text(ctx?.sessionId);
+  return {
+    ...buildRunIdentityFields(state, run),
+    parentSessionId: rootSessionId,
+    ...buildStepIdentityFields(run, run.step || {}, semanticNode || {}),
+    rootSessionId,
     dialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-    agentDialogProcessId: text(nodeState?.agentDialogProcessId || item?.agentDialogProcessId),
-    sessionId: text(nodeState?.nodeSessionId || item?.nodeSessionId),
-    activeChildExecutionId: text(nodeState?.activeChildExecutionId),
-    attemptExecutionIds: resolveAttemptExecutionIds(nodeState),
-    status: text(nodeState?.status),
-    failure: resolveFailure(nodeState?.failure),
-    revision: Number(nodeState?.revision || 0),
-    sequence: Number(nodeState?.sequence || 0),
-    eventId: text(nodeState?.eventId),
-    startedAt: text(nodeState?.startedAt),
-    completedAt: text(nodeState?.completedAt),
-    updatedAt: text(nodeState?.updatedAt),
+    agentDialogProcessId: preferText(state, run, "agentDialogProcessId"),
+    sessionId: preferText(state, run, "nodeSessionId"),
+    ...buildNodeStateFields(state),
     transferEnvelopes: pickTransferEnvelopeList(item, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
-    stepFailure: resolveFailure(item?.stepFailure),
-    parallelWave: Number(item?.parallelWave || 0),
-    waveOrder: Number(item?.waveOrder || 0),
+    stepFailure: resolveFailure(run.stepFailure),
+    parallelWave: count(run.parallelWave),
+    waveOrder: count(run.waveOrder),
   };
 }
 

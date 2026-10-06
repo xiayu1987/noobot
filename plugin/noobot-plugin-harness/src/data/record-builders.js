@@ -122,42 +122,57 @@ export function buildEvent({
   };
 }
 
+function arrayLength(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function buildSnapshotIdentity(ctx, identity, execution) {
+  return {
+    userId: ctx.userId || identity.userId || "",
+    sessionId: ctx.sessionId || identity.sessionId || "",
+    parentSessionId: ctx.parentSessionId || identity.parentSessionId || "",
+    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
+    caller: ctx.caller || execution.caller || "",
+  };
+}
+
+function buildSnapshotExecution(execution, runtime) {
+  const model = execution.model || {};
+  return {
+    flags: execution.flags || {},
+    runtimeModel: model.runtimeModel || runtime.runtimeModel || "",
+  };
+}
+
+function buildSnapshotPayload(ctx) {
+  const messageBlocks = ctx.modelContext?.messageBlocks || {};
+  return {
+    systemMessageCount: arrayLength(messageBlocks.system),
+    historyMessageCount: arrayLength(messageBlocks.history),
+  };
+}
+
 export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion = "" } = {}) {
-  const agentContext = ctx.agentContext || {};
+  const context = (ctx.agentContext || {}).context || {};
+  const execution = context.execution || {};
+  const environment = context.environment || {};
   const runtime = extractRuntime(ctx) || {};
 
   return {
     plugin: pluginName,
     version: pluginVersion,
     createdAt: nowIso(),
-    userId: ctx.userId || agentContext?.context?.identity?.userId || "",
-    sessionId: ctx.sessionId || agentContext?.context?.identity?.sessionId || "",
-    parentSessionId: ctx.parentSessionId || agentContext?.context?.identity?.parentSessionId || "",
-    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
-    caller: ctx.caller || agentContext?.context?.execution?.caller || "",
+    ...buildSnapshotIdentity(ctx, context.identity || {}, execution),
     environment: {
-      os: agentContext?.context?.environment?.os || {},
-      workspace: agentContext?.context?.environment?.workspace || {},
+      os: environment.os || {},
+      workspace: environment.workspace || {},
     },
-    execution: {
-      flags: agentContext?.context?.execution?.flags || {},
-      runtimeModel:
-        agentContext?.context?.execution?.model?.runtimeModel || runtime.runtimeModel || "",
-    },
+    execution: buildSnapshotExecution(execution, runtime),
     session: {
-      attachmentCount: Array.isArray(runtime?.userMessageAttachments)
-        ? runtime.userMessageAttachments.length
-        : 0,
-      connectorIds: agentContext?.context?.execution?.selectedConnectorIds || [],
+      attachmentCount: arrayLength(runtime.userMessageAttachments),
+      connectorIds: execution.selectedConnectorIds || [],
     },
-    payload: {
-      systemMessageCount: Array.isArray(ctx?.modelContext?.messageBlocks?.system)
-        ? ctx.modelContext.messageBlocks.system.length
-        : 0,
-      historyMessageCount: Array.isArray(ctx?.modelContext?.messageBlocks?.history)
-        ? ctx.modelContext.messageBlocks.history.length
-        : 0,
-    },
+    payload: buildSnapshotPayload(ctx),
   };
 }
 

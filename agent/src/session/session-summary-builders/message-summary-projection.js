@@ -156,65 +156,93 @@ export function buildThinkingDetailCountByMessage(messages = []) {
   };
 }
 
-export function buildDisplayMessageSummary(message = {}) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return null;
-  const role = String(message?.role || "").trim();
-  if (!role || isInjectedMessage(message)) return null;
-  const type = String(message?.type || "").trim();
-  if (!["user", "assistant"].includes(role)) return null;
-  const hasCanonicalActivity =
+const DISPLAY_ROLES = new Set(["user", "assistant"]);
+const TOOL_MESSAGE_TYPES = new Set(["tool_call", "tool_result"]);
+const DISPLAY_PASSTHROUGH_KEYS = ["pluginMessage", "done", "pending", "error"];
+
+function readDisplayRole(message) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return "";
+  const role = String(message.role || "").trim();
+  if (!role || isInjectedMessage(message)) return "";
+  return DISPLAY_ROLES.has(role) ? role : "";
+}
+
+function isSuppressedDisplayMessage({ message, role, type, presentationMessageId, hasActivity }) {
+  const isAssistant = role === "assistant";
+  if (isAssistant && message.chatPresentation === false && !hasActivity) return true;
+  if (TOOL_MESSAGE_TYPES.has(type) && !hasActivity) return true;
+  const needsPresentationId = message.chatPresentation === true || hasActivity;
+  return isAssistant && needsPresentationId && !presentationMessageId;
+}
+
+function resolveDisplayPresentation(message) {
+  const role = readDisplayRole(message);
+  if (!role) return null;
+  const type = String(message.type || "").trim();
+  const presentationMessageId = String(message.presentationMessageId || "").trim();
+  const hasActivity =
     role === "assistant" &&
-    String(message?.presentationMessageId || "").trim() &&
+    Boolean(presentationMessageId) &&
     selectCanonicalActivityTimeline(message).length > 0;
-  if (role === "assistant" && message?.chatPresentation === false && !hasCanonicalActivity)
-    return null;
-  if (["tool_call", "tool_result"].includes(type) && !hasCanonicalActivity) return null;
-  const presentationMessageId = String(message?.presentationMessageId || "").trim();
-  if (
-    role === "assistant" &&
-    (message?.chatPresentation === true || hasCanonicalActivity) &&
-    !presentationMessageId
-  )
-    return null;
-  const summary = buildMessageSummary(message) || {};
-  summary.content =
-    typeof message?.content === "string" ? message.content : JSON.stringify(message?.content ?? "");
-  if (hasCanonicalActivity && message?.chatPresentation !== true) {
-    summary.type = "message";
-    summary.chatPresentation = true;
-    summary.sourceMessageType = type;
-  }
-  const messageUid = String(message?.messageUid || "").trim();
-  const sourceMessageId = String(message?.messageId || message?.id || "").trim();
-  const messageId = String(presentationMessageId || sourceMessageId || messageUid).trim();
+  const presentation = { message, role, type, presentationMessageId, hasActivity };
+  return isSuppressedDisplayMessage(presentation) ? null : presentation;
+}
+
+function applyDisplayIdentity(summary, message, presentationMessageId) {
+  const messageUid = String(message.messageUid || "").trim();
+  const sourceMessageId = String(message.messageId || message.id || "").trim();
+  const messageId = presentationMessageId || sourceMessageId || messageUid;
   if (messageId) {
     summary.id = messageId;
     summary.messageId = messageId;
   }
-  if (presentationMessageId) {
-    if (sourceMessageId && presentationMessageId !== sourceMessageId) {
-      summary.sourceMessageId = sourceMessageId;
-    }
-    if (messageUid) summary.sourceMessageUid = messageUid;
-  } else if (messageUid) {
-    summary.messageUid = messageUid;
+  if (!presentationMessageId) {
+    if (messageUid) summary.messageUid = messageUid;
+    return;
   }
+  if (sourceMessageId && presentationMessageId !== sourceMessageId) {
+    summary.sourceMessageId = sourceMessageId;
+  }
+  if (messageUid) summary.sourceMessageUid = messageUid;
+}
+
+function projectDisplayToolCalls(toolCalls) {
+  return toolCalls
+    .map((toolCall = {}) => ({
+      id: String(toolCall?.id || "").trim(),
+      name: String(toolCall?.function?.name || toolCall?.name || "").trim(),
+    }))
+    .filter((item) => item.id || item.name);
+}
+
+function applyDisplayMetadata(summary, message) {
   const attachments = pickLightAttachments(message);
   if (attachments.length) summary.attachments = attachments;
-  for (const key of ["pluginMessage", "done", "pending", "error"]) {
-    if (message?.[key] !== undefined) summary[key] = message[key];
+  for (const key of DISPLAY_PASSTHROUGH_KEYS) {
+    if (message[key] !== undefined) summary[key] = message[key];
   }
   const pluginMeta = pickLightPluginMeta(message);
   const transferEnvelopes = pickLightTransferEnvelopes(message);
   if (pluginMeta) summary.pluginMeta = pluginMeta;
   if (transferEnvelopes.length) summary.transferEnvelopes = transferEnvelopes;
-  if (Array.isArray(message?.tool_calls) && message.tool_calls.length) {
-    summary.toolCalls = message.tool_calls
-      .map((toolCall = {}) => ({
-        id: String(toolCall?.id || "").trim(),
-        name: String(toolCall?.function?.name || toolCall?.name || "").trim(),
-      }))
-      .filter((item) => item.id || item.name);
+  if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
+    summary.toolCalls = projectDisplayToolCalls(message.tool_calls);
   }
+}
+
+export function buildDisplayMessageSummary(message = {}) {
+  const presentation = resolveDisplayPresentation(message);
+  if (!presentation) return null;
+  const { type, presentationMessageId, hasActivity } = presentation;
+  const summary = buildMessageSummary(message) || {};
+  summary.content =
+    typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "");
+  if (hasActivity && message.chatPresentation !== true) {
+    summary.type = "message";
+    summary.chatPresentation = true;
+    summary.sourceMessageType = type;
+  }
+  applyDisplayIdentity(summary, message, presentationMessageId);
+  applyDisplayMetadata(summary, message);
   return compactMessageSummary(summary);
 }

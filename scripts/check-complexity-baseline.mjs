@@ -9,10 +9,13 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 458,
-  longFunctionCount: 75,
-  maxComplexity: 60,
+  complexityCount: 441,
+  longFunctionCount: 68,
+  maxComplexity: 54,
   hotspots: Object.freeze({
+    "event-protocol/src/event-registry-validators.js": [0, 0, 0],
+    "agent/src/runtime/state-builder.js": [0, 0, 0],
+    "service/ws/chat-websocket/message-stop-handler.js": [0, 0, 0],
     "agent/src/runtime/capability-runner/index.js": [0, 0, 0],
     "agent/src/runtime/capability-runner/model-step.js": [0, 0, 0],
     "agent/src/runtime/capability-runner/request-context.js": [0, 0, 0],
@@ -63,6 +66,14 @@ const baseline = Object.freeze({
     "service/ws/chat-websocket-server.js": [0, 0, 0],
     "service/ws/chat-websocket/connection-handler.js": [0, 0, 0],
     "service/ws/chat-websocket/outbound-event-sender.js": [0, 0, 0],
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/relay-model-output.js": [
+      0, 0, 0,
+    ],
+    "plugin/noobot-plugin-harness/src/data/record-builders.js": [0, 0, 0],
+    "plugin/noobot-plugin-workflow/src/core/orchestrator/payload-enrichment.js": [0, 0, 0],
+    "client/noobot-chat/src/modules/debug/loggers/workflowDiagnosticsLogger.js": [0, 0, 0],
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/planning/controller.js": [0, 0, 0],
+    "client/noobot-chat/src/modules/chat/runtime/reconnect/reconnectDataReplay.js": [0, 0, 0],
   }),
 });
 

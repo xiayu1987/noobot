@@ -31,6 +31,112 @@ import {
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
 import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
 
+const RUNNING_CONVERSATION_STATES = Object.freeze([
+  CONVERSATION_STATE.SENDING,
+  CONVERSATION_STATE.INTERACTION_PENDING,
+]);
+const TERMINAL_CONVERSATION_STATES = Object.freeze([
+  CONVERSATION_STATE.COMPLETED,
+  CONVERSATION_STATE.USER_STOPPED,
+  CONVERSATION_STATE.ERROR,
+]);
+
+function readAuthoritativeLifecycle(channel, eventData) {
+  const validation = validateProtocolEvent(eventData);
+  if (!channel || !validation.valid) return null;
+  if (validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) return null;
+  const lifecycle = eventData.payload;
+  return isAuthoritativeTurnLifecycleEnvelope(lifecycle) ? lifecycle : null;
+}
+
+function readLifecycleScope(eventData, lifecycle) {
+  const identity = eventData.identity || {};
+  const occurredAt = eventData.occurredAt;
+  return {
+    eventName: String(lifecycle.eventType || "").trim(),
+    dialogProcessId: String(lifecycle.dialogProcessId || "").trim(),
+    turnScopeId: String(identity.turnScopeId || "").trim(),
+    sessionId: String(identity.sessionId || "").trim(),
+    seq: Number(eventData.ordering?.sequence || 0),
+    createdAtMs: Number((occurredAt ? Date.parse(occurredAt) : 0) || 0),
+  };
+}
+
+function resolveTerminalConversationState(eventName, lifecycleState) {
+  if (isFailedTurnState(lifecycleState)) return CONVERSATION_STATE.ERROR;
+  if (lifecycleState === TURN_STATE.STOP_COMPLETED || eventName === TURN_EVENT.STOP_COMPLETED) {
+    return CONVERSATION_STATE.USER_STOPPED;
+  }
+  return CONVERSATION_STATE.COMPLETED;
+}
+
+function resolveLifecycleConversationState(eventName, lifecycle) {
+  const lifecycleState = String(lifecycle.state || "").trim();
+  if ([TURN_STATE.PROCESSING, TURN_STATE.COMPLETION_REQUESTING].includes(lifecycleState)) {
+    return CONVERSATION_STATE.SENDING;
+  }
+  if (lifecycleState === TURN_STATE.STOPPING) return CONVERSATION_STATE.STOPPING;
+  if (isTerminalTurnEvent(eventName) || isTerminalTurnState(lifecycleState)) {
+    return resolveTerminalConversationState(eventName, lifecycleState);
+  }
+  return "";
+}
+
+function resetChannelToRunning(channel) {
+  channel.activity.phase = CHANNEL_STATUS.RUNNING;
+  channel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
+  channel.retention.terminalStatus = "";
+  channel.retention.cleanupAfterMs = 0;
+}
+
+function matchesOptionalScope(expected, actual) {
+  return !expected || String(actual || "").trim() === expected;
+}
+
+function isPendingInteractionInScope(envelope, scope) {
+  const identity = envelope?.identity || {};
+  const interaction = envelope?.payload || {};
+  return (
+    matchesOptionalScope(scope.sessionId, identity.sessionId) &&
+    matchesOptionalScope(scope.dialogProcessId, interaction.dialogProcessId) &&
+    matchesOptionalScope(scope.turnScopeId, identity.turnScopeId)
+  );
+}
+
+function clearScopedPendingInteractions(store, channel, scope) {
+  let clearedCount = 0;
+  for (const [requestId, envelope] of channel.pendingInteractionRequests.entries()) {
+    if (!isPendingInteractionInScope(envelope, scope)) continue;
+    channel.pendingInteractionRequests.delete(requestId);
+    store.requestChannelMap.delete(requestId);
+    clearedCount += 1;
+  }
+  return clearedCount;
+}
+
+function cleanupTerminalChannel(store, channel, scope, nextState) {
+  const channelSessionId = store._extractSessionIdFromChannelKey(channel.key);
+  if (scope.sessionId && scope.sessionId !== channelSessionId) return;
+  const clearedPendingInteractionCount = clearScopedPendingInteractions(store, channel, scope);
+  store.logSessionEvent(channel, {
+    category: "interaction",
+    event: "agentProxy.interaction.terminalCleanup",
+    sessionId: scope.sessionId,
+    dialogProcessId: scope.dialogProcessId,
+    turnScopeId: scope.turnScopeId,
+    data: {
+      lifecycleEventType: scope.eventName,
+      terminalState: nextState,
+      clearedPendingInteractionCount,
+      remainingPendingInteractionCount: channel.pendingInteractionRequests.size,
+    },
+  });
+  store.markChannelTerminal(
+    channel,
+    nextState === CONVERSATION_STATE.COMPLETED ? CHANNEL_STATUS.DONE : nextState,
+  );
+}
+
 function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
   const sequence = Number(knownSequence || 0);
   if (!window.length) return { events: [], hasReplayGap: sequence > 0 };
@@ -508,94 +614,25 @@ class ChannelStoreMethods {
   }
 
   _applyAuthoritativeConversationState(channel, eventData = {}) {
-    const validation = validateProtocolEvent(eventData);
-    if (
-      !channel ||
-      !validation.valid ||
-      validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE
-    )
-      return;
-    const lifecycle = eventData.payload;
-    if (!isAuthoritativeTurnLifecycleEnvelope(lifecycle)) return;
-    const eventName = String(lifecycle?.eventType || "").trim();
-    const dialogProcessId = String(lifecycle?.dialogProcessId || "").trim();
-    const turnScopeId = String(eventData?.identity?.turnScopeId || "").trim();
-    const sessionId = String(eventData?.identity?.sessionId || "").trim();
-    const seq = Number(eventData?.ordering?.sequence || 0);
-    const createdAtMs = Number((eventData?.occurredAt ? Date.parse(eventData.occurredAt) : 0) || 0);
-    let nextState = "";
-    const lifecycleState = String(lifecycle?.state || "").trim();
-    if ([TURN_STATE.PROCESSING, TURN_STATE.COMPLETION_REQUESTING].includes(lifecycleState)) {
-      nextState = CONVERSATION_STATE.SENDING;
-    } else if (lifecycleState === TURN_STATE.STOPPING) {
-      nextState = CONVERSATION_STATE.STOPPING;
-    } else if (isTerminalTurnEvent(eventName) || isTerminalTurnState(lifecycleState)) {
-      nextState = isFailedTurnState(lifecycleState)
-        ? CONVERSATION_STATE.ERROR
-        : lifecycleState === TURN_STATE.STOP_COMPLETED || eventName === TURN_EVENT.STOP_COMPLETED
-          ? CONVERSATION_STATE.USER_STOPPED
-          : CONVERSATION_STATE.COMPLETED;
-    }
+    const lifecycle = readAuthoritativeLifecycle(channel, eventData);
+    if (!lifecycle) return;
+    const scope = readLifecycleScope(eventData, lifecycle);
+    const nextState = resolveLifecycleConversationState(scope.eventName, lifecycle);
     if (!nextState) return;
-    if ([CONVERSATION_STATE.SENDING, CONVERSATION_STATE.INTERACTION_PENDING].includes(nextState)) {
-      channel.activity.phase = CHANNEL_STATUS.RUNNING;
-      channel.retention.phase = CHANNEL_RETENTION_PHASE.ACTIVE;
-      channel.retention.terminalStatus = "";
-      channel.retention.cleanupAfterMs = 0;
-    } else if (
-      [
-        CONVERSATION_STATE.COMPLETED,
-        CONVERSATION_STATE.USER_STOPPED,
-        CONVERSATION_STATE.ERROR,
-      ].includes(nextState)
-    ) {
-      const channelSessionId = this._extractSessionIdFromChannelKey(channel.key);
-      const eventOwnsChannel = !sessionId || sessionId === channelSessionId;
-      if (eventOwnsChannel) {
-        let clearedPendingInteractionCount = 0;
-        for (const [requestId, envelope] of channel.pendingInteractionRequests.entries()) {
-          const interaction = envelope?.payload || {};
-          const sameSession =
-            !sessionId || String(envelope?.identity?.sessionId || "").trim() === sessionId;
-          const sameDialog =
-            !dialogProcessId ||
-            String(interaction.dialogProcessId || "").trim() === dialogProcessId;
-          const sameTurn =
-            !turnScopeId || String(envelope?.identity?.turnScopeId || "").trim() === turnScopeId;
-          if (sameSession && sameDialog && sameTurn) {
-            channel.pendingInteractionRequests.delete(requestId);
-            this.requestChannelMap.delete(requestId);
-            clearedPendingInteractionCount += 1;
-          }
-        }
-        this.logSessionEvent(channel, {
-          category: "interaction",
-          event: "agentProxy.interaction.terminalCleanup",
-          sessionId,
-          dialogProcessId,
-          turnScopeId,
-          data: {
-            lifecycleEventType: eventName,
-            terminalState: nextState,
-            clearedPendingInteractionCount,
-            remainingPendingInteractionCount: channel.pendingInteractionRequests.size,
-          },
-        });
-        this.markChannelTerminal(
-          channel,
-          nextState === CONVERSATION_STATE.COMPLETED ? CHANNEL_STATUS.DONE : nextState,
-        );
-      }
+    if (RUNNING_CONVERSATION_STATES.includes(nextState)) {
+      resetChannelToRunning(channel);
+    } else if (TERMINAL_CONVERSATION_STATES.includes(nextState)) {
+      cleanupTerminalChannel(this, channel, scope, nextState);
     }
     this.updateConversationState(channel, {
-      dialogProcessId,
-      turnScopeId,
+      dialogProcessId: scope.dialogProcessId,
+      turnScopeId: scope.turnScopeId,
       state: nextState,
-      sourceEvent: eventName,
-      seq,
-      createdAtMs,
-      sessionId,
-      requestId: String(lifecycle?.requestId || "").trim(),
+      sourceEvent: scope.eventName,
+      seq: scope.seq,
+      createdAtMs: scope.createdAtMs,
+      sessionId: scope.sessionId,
+      requestId: String(lifecycle.requestId || "").trim(),
       broadcast: false,
     });
   }

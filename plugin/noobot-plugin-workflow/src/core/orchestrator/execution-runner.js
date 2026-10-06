@@ -13,7 +13,7 @@ import {
   releaseWorkflowInstance,
   resolveWorkflowUpstreamActionSteps,
 } from "../../workflow/adapter.js";
-import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
+import { isWorkflowAbortError, normalizeString, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { getWorkflowTransferPayloadFromResult } from "../hooks/attachments.js";
 import {
   resolveSemanticNodeForPendingStep,
@@ -98,6 +98,37 @@ function resolveItemStepFailure(item = {}) {
   return null;
 }
 
+function resolveStepItemRefs(item = {}) {
+  const step = item?.step || {};
+  const subSession = item?.subSession || {};
+  const nodeIdentity = item?.nodeIdentity || {};
+  return {
+    step,
+    subSession,
+    workflowRunId: normalizeString(nodeIdentity.workflowRunId),
+    nodeExecutionId: normalizeString(nodeIdentity.nodeExecutionId),
+    commandId: normalizeString(nodeIdentity.commandId),
+    turnScopeId: normalizeString(nodeIdentity.turnScopeId),
+    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
+    agentDialogProcessId: normalizeString(subSession.dialogProcessId),
+    nodeSessionId: normalizeString(subSession.sessionId),
+    actionNodeStateId: normalizeString(step.actionNodeStateId),
+    stepId: normalizeString(step.stepId),
+    stepIndex: Number.isFinite(Number(step.stepIndex)) ? Number(step.stepIndex) : -1,
+    transferEnvelopes: getWorkflowTransferPayloadFromResult(subSession.result || {})
+      .transferEnvelopes,
+    stepFailure: resolveItemStepFailure(item),
+  };
+}
+
+function resolveWaveFields({ item, snapshot, transitions, parallelEnabled, waveSize }) {
+  return {
+    parallelWave: parallelEnabled ? Math.floor((transitions - 1) / Math.max(1, waveSize)) + 1 : 0,
+    waveOrder: Number(item?.order ?? 0),
+    pendingStepCount: Number(snapshot?.pendingStepCount || 0),
+  };
+}
+
 function buildNodeAgentRunRecord({
   item = {},
   snapshot = {},
@@ -106,36 +137,38 @@ function buildNodeAgentRunRecord({
   waveSize = 1,
   ctx = {},
 } = {}) {
-  const resultTransferPayload = getWorkflowTransferPayloadFromResult(
-    item?.subSession?.result || {},
-  );
-  const stepFailure = resolveItemStepFailure(item);
+  const refs = resolveStepItemRefs(item);
   return {
     transition: transitions,
     step: item?.step || null,
     action: item?.effectiveAction || item?.action || null,
-    workflowRunId: String(item?.nodeIdentity?.workflowRunId || "").trim(),
-    nodeExecutionId: String(item?.nodeIdentity?.nodeExecutionId || "").trim(),
-    commandId: String(item?.nodeIdentity?.commandId || "").trim(),
-    turnScopeId: String(item?.nodeIdentity?.turnScopeId || "").trim(),
-    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-    agentDialogProcessId: String(item?.subSession?.dialogProcessId || "").trim(),
-    nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
-    nodeSessionPersistedPath: String(item?.subSession?.persisted?.outputDir || "").trim(),
-    actionNodeStateId: String(item?.step?.actionNodeStateId || "").trim(),
-    stepId: String(item?.step?.stepId || "").trim(),
-    stepIndex: Number.isFinite(Number(item?.step?.stepIndex)) ? Number(item.step.stepIndex) : -1,
+    workflowRunId: refs.workflowRunId,
+    nodeExecutionId: refs.nodeExecutionId,
+    commandId: refs.commandId,
+    turnScopeId: refs.turnScopeId,
+    nodeDialogProcessId: refs.nodeDialogProcessId,
+    agentDialogProcessId: refs.agentDialogProcessId,
+    nodeSessionId: refs.nodeSessionId,
+    nodeSessionPersistedPath: normalizeString(refs.subSession.persisted?.outputDir),
+    actionNodeStateId: refs.actionNodeStateId,
+    stepId: refs.stepId,
+    stepIndex: refs.stepIndex,
     nodeResultText: truncateWorkflowResultText(
-      stripHarnessReviewAppendix(resolveSubSessionFinalOutput(item?.subSession || {})),
+      stripHarnessReviewAppendix(resolveSubSessionFinalOutput(refs.subSession)),
       4000,
     ),
-    nodeResultTransferEnvelopes: resultTransferPayload.transferEnvelopes,
-    stepFailure,
+    nodeResultTransferEnvelopes: refs.transferEnvelopes,
+    stepFailure: refs.stepFailure,
     upstreamNodeResults: Array.isArray(item?.upstreamNodeResults) ? item.upstreamNodeResults : [],
-    parallelWave: parallelEnabled ? Math.floor((transitions - 1) / Math.max(1, waveSize)) + 1 : 0,
-    waveOrder: Number(item?.order ?? 0),
-    pendingStepCount: Number(snapshot?.pendingStepCount || 0),
+    ...resolveWaveFields({ item, snapshot, transitions, parallelEnabled, waveSize }),
   };
+}
+
+function resolveCompletedNodeTask(step = {}, semanticNode = null) {
+  const node = semanticNode || {};
+  return normalizeString(
+    step.nodeTask || node.task || node.taskText || node.instruction || node.mission,
+  );
 }
 
 function rememberCompletedStepResult({
@@ -145,43 +178,27 @@ function rememberCompletedStepResult({
   transitions = 0,
   ctx = {},
 } = {}) {
-  const completedStepId = String(item?.step?.stepId || "").trim();
-  if (!completedStepId) return;
-
-  const completedSemanticNode = resolveSemanticNodeForPendingStep({
-    semantic,
-    pendingStep: item?.step || {},
-  });
-  const completedNodeId = String(item?.step?.nodeId || completedSemanticNode?.id || "").trim();
-  const completedNodeTask = String(
-    item?.step?.nodeTask ||
-      completedSemanticNode?.task ||
-      completedSemanticNode?.taskText ||
-      completedSemanticNode?.instruction ||
-      completedSemanticNode?.mission ||
-      "",
-  ).trim();
-  const resultTransferPayload = getWorkflowTransferPayloadFromResult(
-    item?.subSession?.result || {},
-  );
-  const stepFailure = resolveItemStepFailure(item);
-  completedStepResults.set(completedStepId, {
+  const refs = resolveStepItemRefs(item);
+  if (!refs.stepId) return;
+  const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep: refs.step });
+  const nodeId = normalizeString(refs.step.nodeId || semanticNode?.id);
+  completedStepResults.set(refs.stepId, {
     transition: transitions,
-    nodeId: completedNodeId,
-    nodeName: String(item?.step?.nodeName || completedSemanticNode?.name || completedNodeId).trim(),
-    nodeTask: completedNodeTask,
-    actionNodeStateId: String(item?.step?.actionNodeStateId || "").trim(),
-    stepId: completedStepId,
-    stepIndex: Number.isFinite(Number(item?.step?.stepIndex)) ? Number(item.step.stepIndex) : -1,
-    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-    agentDialogProcessId: String(item?.subSession?.dialogProcessId || "").trim(),
-    workflowRunId: String(item?.nodeIdentity?.workflowRunId || "").trim(),
-    nodeExecutionId: String(item?.nodeIdentity?.nodeExecutionId || "").trim(),
-    commandId: String(item?.nodeIdentity?.commandId || "").trim(),
-    turnScopeId: String(item?.nodeIdentity?.turnScopeId || "").trim(),
-    nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
-    stepFailure,
-    transferEnvelopes: resultTransferPayload.transferEnvelopes,
+    nodeId,
+    nodeName: normalizeString(refs.step.nodeName || semanticNode?.name || nodeId),
+    nodeTask: resolveCompletedNodeTask(refs.step, semanticNode),
+    actionNodeStateId: refs.actionNodeStateId,
+    stepId: refs.stepId,
+    stepIndex: refs.stepIndex,
+    nodeDialogProcessId: refs.nodeDialogProcessId,
+    agentDialogProcessId: refs.agentDialogProcessId,
+    workflowRunId: refs.workflowRunId,
+    nodeExecutionId: refs.nodeExecutionId,
+    commandId: refs.commandId,
+    turnScopeId: refs.turnScopeId,
+    nodeSessionId: refs.nodeSessionId,
+    stepFailure: refs.stepFailure,
+    transferEnvelopes: refs.transferEnvelopes,
   });
 }
 

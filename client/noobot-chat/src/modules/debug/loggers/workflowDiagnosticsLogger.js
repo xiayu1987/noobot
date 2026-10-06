@@ -11,36 +11,51 @@ export const setWorkflowDiagnosticsLogSink = logger.setSink;
 export const isWorkflowDiagnosticsEnabled = logger.isEnabled;
 export const logWorkflowDiagnostics = logger.log;
 
+function firstText(...values) {
+  return String(values.find(Boolean) || "");
+}
+
+function summarizeTagKeys(tags) {
+  return Array.isArray(tags) ? tags.map((item) => String(item || "")) : Object.keys(tags || {});
+}
+
+function summarizePluginFields(pluginMeta = {}) {
+  return {
+    pluginSource: firstText(pluginMeta.source),
+    pluginKind: firstText(pluginMeta.kind),
+    pluginPhase: firstText(pluginMeta.phase),
+  };
+}
+
+function resolveWorkflowRunId(message, payload) {
+  const execution = payload.execution || {};
+  return firstText(
+    payload.workflowRunId,
+    execution.workflowRunId,
+    execution.instanceId,
+    message.workflowRunId,
+  );
+}
+
 export function summarizeWorkflowMessage(message = {}, index = -1) {
-  const payload = message?.pluginMeta?.payload || {};
+  const source = message || {};
+  const pluginMeta = source.pluginMeta || {};
+  const payload = pluginMeta.payload || {};
+  const planningDialog = payload.planningDialog || {};
   return {
     ...(index >= 0 ? { index } : {}),
-    id: String(message?.id || message?.messageId || ""),
-    role: String(message?.role || ""),
-    type: String(message?.type || ""),
-    pluginMessage: message?.pluginMessage === true,
-    pluginSource: String(message?.pluginMeta?.source || ""),
-    pluginKind: String(message?.pluginMeta?.kind || ""),
-    pluginPhase: String(message?.pluginMeta?.phase || ""),
-    sessionId: String(message?.sessionId || payload?.planningDialog?.sessionId || ""),
-    dialogProcessId: String(
-      message?.dialogProcessId || payload?.planningDialog?.dialogProcessId || "",
-    ),
-    turnScopeId: String(message?.turnScopeId || ""),
-    workflowRunId: String(
-      payload?.workflowRunId ||
-        payload?.execution?.workflowRunId ||
-        payload?.execution?.instanceId ||
-        message?.workflowRunId ||
-        "",
-    ),
-    contentLength: String(message?.content || "").length,
-    presentationMessageId: String(
-      message?.presentationMessageId || message?.messageId || message?.id || "",
-    ),
-    tagKeys: Array.isArray(message?.tags)
-      ? message.tags.map((item) => String(item || ""))
-      : Object.keys(message?.tags || {}),
+    id: firstText(source.id, source.messageId),
+    role: firstText(source.role),
+    type: firstText(source.type),
+    pluginMessage: source.pluginMessage === true,
+    ...summarizePluginFields(pluginMeta),
+    sessionId: firstText(source.sessionId, planningDialog.sessionId),
+    dialogProcessId: firstText(source.dialogProcessId, planningDialog.dialogProcessId),
+    turnScopeId: firstText(source.turnScopeId),
+    workflowRunId: resolveWorkflowRunId(source, payload),
+    contentLength: firstText(source.content).length,
+    presentationMessageId: firstText(source.presentationMessageId, source.messageId, source.id),
+    tagKeys: summarizeTagKeys(source.tags),
   };
 }
 

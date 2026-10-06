@@ -35,6 +35,70 @@ function runtimeState(runtime = {}) {
   return systemRuntime;
 }
 
+function firstText(...values) {
+  return text(values.find(Boolean));
+}
+
+function resolveRequestedStreamIdentity(runConfig, state, requested) {
+  const config = state.config || {};
+  const messageId = firstText(requested.messageId, runConfig.messageId, config.messageId);
+  return {
+    messageId,
+    presentationMessageId: firstText(
+      requested.presentationMessageId,
+      runConfig.presentationMessageId,
+      config.presentationMessageId,
+      messageId,
+    ),
+    parentSessionId: firstText(
+      requested.parentSessionId,
+      runConfig.parentSessionId,
+      state.parentSessionId,
+    ),
+    workflowRunId: firstText(
+      requested.workflowRunId,
+      runConfig.workflowRunId,
+      config.workflowRunId,
+    ),
+    nodeExecutionId: firstText(
+      requested.nodeExecutionId,
+      runConfig.workflowNodeExecutionId,
+      runConfig.nodeExecutionId,
+      config.workflowNodeExecutionId,
+      config.nodeExecutionId,
+    ),
+  };
+}
+
+function assertRequestedStreamIdentity(identity) {
+  if (!identity.messageId || !identity.presentationMessageId) {
+    throw new Error("turn message event identity is incomplete");
+  }
+  if (Boolean(identity.workflowRunId) !== Boolean(identity.nodeExecutionId)) {
+    throw new Error("turn message event workflow identity is incomplete");
+  }
+  if (identity.workflowRunId && !identity.parentSessionId) {
+    throw new Error("turn message event workflow parent session identity is incomplete");
+  }
+}
+
+const STREAM_IDENTITY_BINDINGS = Object.freeze([
+  ["activeMessageId", "messageId"],
+  ["activePresentationMessageId", "presentationMessageId"],
+  ["parentSessionId", "parentSessionId"],
+  ["workflowRunId", "workflowRunId"],
+  ["nodeExecutionId", "nodeExecutionId"],
+]);
+
+function assertStreamIdentityCompatible(stream, identity) {
+  for (const [streamKey, identityKey] of STREAM_IDENTITY_BINDINGS) {
+    const current = text(stream[streamKey]);
+    if (current && current !== identity[identityKey]) {
+      throw new Error(`turn message event ${identityKey} conflict`);
+    }
+  }
+}
+
 export function bindAssistantMessageEventStream(
   runtime = {},
   {
@@ -46,66 +110,19 @@ export function bindAssistantMessageEventStream(
   } = {},
 ) {
   const state = runtimeState(runtime);
-  const requestedMessageId = text(
-    messageId || runtime?.runConfig?.messageId || state?.config?.messageId,
-  );
-  const requestedPresentationMessageId = text(
-    presentationMessageId ||
-      runtime?.runConfig?.presentationMessageId ||
-      state?.config?.presentationMessageId ||
-      requestedMessageId,
-  );
-  const requestedParentSessionId = text(
-    parentSessionId || runtime?.runConfig?.parentSessionId || state?.parentSessionId,
-  );
-  const requestedWorkflowRunId = text(
-    workflowRunId || runtime?.runConfig?.workflowRunId || state?.config?.workflowRunId,
-  );
-  const requestedNodeExecutionId = text(
-    nodeExecutionId ||
-      runtime?.runConfig?.workflowNodeExecutionId ||
-      runtime?.runConfig?.nodeExecutionId ||
-      state?.config?.workflowNodeExecutionId ||
-      state?.config?.nodeExecutionId,
-  );
-  if (!requestedMessageId || !requestedPresentationMessageId) {
-    throw new Error("turn message event identity is incomplete");
-  }
-  if (Boolean(requestedWorkflowRunId) !== Boolean(requestedNodeExecutionId)) {
-    throw new Error("turn message event workflow identity is incomplete");
-  }
-  if (requestedWorkflowRunId && !requestedParentSessionId) {
-    throw new Error("turn message event workflow parent session identity is incomplete");
-  }
+  const identity = resolveRequestedStreamIdentity(runtime?.runConfig || {}, state, {
+    messageId,
+    presentationMessageId,
+    parentSessionId,
+    workflowRunId,
+    nodeExecutionId,
+  });
+  assertRequestedStreamIdentity(identity);
   const stream = state.messageEventStream;
-  const currentMessageId = text(stream.activeMessageId);
-  const currentPresentationMessageId = text(stream.activePresentationMessageId);
-  if (currentMessageId && currentMessageId !== requestedMessageId) {
-    throw new Error("turn message event messageId conflict");
+  assertStreamIdentityCompatible(stream, identity);
+  for (const [streamKey, identityKey] of STREAM_IDENTITY_BINDINGS) {
+    stream[streamKey] = identity[identityKey];
   }
-  if (
-    currentPresentationMessageId &&
-    currentPresentationMessageId !== requestedPresentationMessageId
-  ) {
-    throw new Error("turn message event presentationMessageId conflict");
-  }
-  const currentParentSessionId = text(stream.parentSessionId);
-  const currentWorkflowRunId = text(stream.workflowRunId);
-  const currentNodeExecutionId = text(stream.nodeExecutionId);
-  if (currentParentSessionId && currentParentSessionId !== requestedParentSessionId) {
-    throw new Error("turn message event parentSessionId conflict");
-  }
-  if (currentWorkflowRunId && currentWorkflowRunId !== requestedWorkflowRunId) {
-    throw new Error("turn message event workflowRunId conflict");
-  }
-  if (currentNodeExecutionId && currentNodeExecutionId !== requestedNodeExecutionId) {
-    throw new Error("turn message event nodeExecutionId conflict");
-  }
-  stream.activeMessageId = requestedMessageId;
-  stream.activePresentationMessageId = requestedPresentationMessageId;
-  stream.parentSessionId = requestedParentSessionId;
-  stream.workflowRunId = requestedWorkflowRunId;
-  stream.nodeExecutionId = requestedNodeExecutionId;
   return stream;
 }
 

@@ -48,57 +48,69 @@ export const validateInteractionEnvelope = (envelope) => {
   return { valid: errors.length === 0, errors };
 };
 
-export const validateMessageEnvelope = (envelope) => {
-  const errors = [];
-  const messageId = text(envelope?.identity?.messageId);
+const collectMessageOrderingErrors = (envelope, messageId, errors) => {
+  const ordering = envelope?.ordering;
   if (!messageId) errors.push("missing_message_id");
-  if (envelope?.ordering?.domain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) {
-    errors.push("sequence_domain_mismatch");
-  }
-  if (messageId && envelope?.ordering?.scopeId !== messageId) {
-    errors.push("sequence_scope_mismatch");
-  }
-  const sequence = Number(envelope?.ordering?.sequence);
+  if (ordering?.domain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) errors.push("sequence_domain_mismatch");
+  if (messageId && ordering?.scopeId !== messageId) errors.push("sequence_scope_mismatch");
+  const sequence = Number(ordering?.sequence);
   if (isTransientMessageEventType(envelope?.payload?.eventType)) {
     if (sequence !== TRANSIENT_MESSAGE_EVENT_SEQUENCE) errors.push("transient_event_sequenced");
   } else if (!(sequence >= 1)) {
     errors.push("durable_event_unsequenced");
   }
-  if (envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
-    for (const role of ["user", "assistant"]) {
-      const message = envelope?.payload?.presentation?.[`${role}Message`];
-      if (text(message?.sessionId) !== text(envelope?.identity?.sessionId)) {
-        errors.push(`${role}_session_identity_mismatch`);
-      }
-      if (text(message?.turnScopeId) !== text(envelope?.identity?.turnScopeId)) {
-        errors.push(`${role}_turn_identity_mismatch`);
-      }
+};
+
+const collectPresentationIdentityErrors = (envelope, errors) => {
+  const identity = envelope?.identity;
+  for (const role of ["user", "assistant"]) {
+    const message = envelope?.payload?.presentation?.[`${role}Message`];
+    if (text(message?.sessionId) !== text(identity?.sessionId)) {
+      errors.push(`${role}_session_identity_mismatch`);
+    }
+    if (text(message?.turnScopeId) !== text(identity?.turnScopeId)) {
+      errors.push(`${role}_turn_identity_mismatch`);
     }
   }
-  if (envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
-    const fact = envelope.payload.contentFact || {};
-    const commandId = text(envelope?.causality?.commandId);
-    const causationId = text(envelope?.causality?.causationId);
-    const sourceMessageUid = text(fact.sourceMessageUid);
-    if (!commandId) errors.push("missing_interjection_command_id");
-    if (causationId !== commandId) errors.push("interjection_causation_identity_mismatch");
-    if (sourceMessageUid !== `user-interjection:${commandId}`) {
-      errors.push("interjection_source_identity_mismatch");
+};
+
+const collectInterjectionIdentityErrors = (envelope, errors) => {
+  const { identity, payload, causality } = envelope;
+  const fact = payload.contentFact || {};
+  const commandId = text(causality?.commandId);
+  const sourceMessageUid = text(fact.sourceMessageUid);
+  if (!commandId) errors.push("missing_interjection_command_id");
+  if (text(causality?.causationId) !== commandId) {
+    errors.push("interjection_causation_identity_mismatch");
+  }
+  if (sourceMessageUid !== `user-interjection:${commandId}`) {
+    errors.push("interjection_source_identity_mismatch");
+  }
+  if (text(fact.contentId) !== `message:${sourceMessageUid}`) {
+    errors.push("interjection_content_identity_mismatch");
+  }
+  for (const [factField, envelopeValue] of [
+    ["sessionId", identity?.sessionId],
+    ["turnScopeId", identity?.turnScopeId],
+    ["messageId", identity?.messageId],
+    ["presentationMessageId", payload.presentationMessageId],
+    ["dialogProcessId", payload.dialogProcessId],
+  ]) {
+    if (text(fact[factField]) !== text(envelopeValue)) {
+      errors.push(`interjection_${factField}_mismatch`);
     }
-    if (text(fact.contentId) !== `message:${sourceMessageUid}`) {
-      errors.push("interjection_content_identity_mismatch");
-    }
-    for (const [factField, envelopeValue] of [
-      ["sessionId", envelope?.identity?.sessionId],
-      ["turnScopeId", envelope?.identity?.turnScopeId],
-      ["messageId", envelope?.identity?.messageId],
-      ["presentationMessageId", envelope?.payload?.presentationMessageId],
-      ["dialogProcessId", envelope?.payload?.dialogProcessId],
-    ]) {
-      if (text(fact[factField]) !== text(envelopeValue)) {
-        errors.push(`interjection_${factField}_mismatch`);
-      }
-    }
+  }
+};
+
+export const validateMessageEnvelope = (envelope) => {
+  const errors = [];
+  collectMessageOrderingErrors(envelope, text(envelope?.identity?.messageId), errors);
+  const eventType = envelope?.payload?.eventType;
+  if (eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+    collectPresentationIdentityErrors(envelope, errors);
+  }
+  if (eventType === MESSAGE_EVENT_TYPE.USER_INTERJECTION) {
+    collectInterjectionIdentityErrors(envelope, errors);
   }
   return { valid: errors.length === 0, errors };
 };
