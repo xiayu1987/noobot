@@ -121,7 +121,6 @@ defineExpose({
     :is-running="isMessageRuntimeRunning(messageItem)"
     :grouped-tool-logs="groupedToolLogs"
     :thinking-content-items="thinkingContentItems"
-    :activity-timeline="getAnalysisActivityTimeline(messageItem)"
     :detail-count="getExecutionLogCount(messageItem)"
     :task-check-receipts="taskCheckReceipts"
     :user-id="userId"

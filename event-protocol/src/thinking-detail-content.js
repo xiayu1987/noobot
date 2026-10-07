@@ -93,16 +93,24 @@ function messageContentFact(message = {}, contentKind, index) {
   };
 }
 
+function activityContentKind(activity = {}) {
+  if (!isHostActivity(activity)) return THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY;
+  return text(activity?.eventType) === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS
+    ? THINKING_DETAIL_CONTENT_KIND.MODEL_ANALYSIS
+    : THINKING_DETAIL_CONTENT_KIND.THINKING;
+}
+
 function activityContentFact(activity = {}, index) {
   const eventId = text(activity?.eventId);
   const value = text(activity?.text);
-  if (!eventId || !value || !isHostActivity(activity)) return null;
+  if (!eventId || !value) return null;
+  const contentKind = activityContentKind(activity);
   return {
     contentId: `event:${eventId}`,
-    contentKind:
-      text(activity?.eventType) === MESSAGE_EVENT_TYPE.MODEL_ANALYSIS
-        ? THINKING_DETAIL_CONTENT_KIND.MODEL_ANALYSIS
-        : THINKING_DETAIL_CONTENT_KIND.THINKING,
+    contentKind,
+    ...(contentKind === THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY
+      ? { activityKind: text(activity.activityKind) }
+      : {}),
     sourceEventId: eventId,
     text: value,
     timestamp: text(activity?.timestamp),

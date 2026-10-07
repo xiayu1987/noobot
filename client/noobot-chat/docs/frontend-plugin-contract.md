@@ -84,7 +84,9 @@ export async function activate(host) {
 - `runtime.stream.route`
 - `session.detail.hydrator`、`session.artifact.panel`
 - `right.tool.panel`
-- `thinking.panel.section`：宿主思考面板分析区内的插件区块，上下文含 `messageItem`、`latestGuidanceAnalysis`
+- `thinking.content.item`：provider，返回 `[{ activityKind, label(translate) }]`。宿主投影把插件声明的
+  activity 统一投影为 `plugin_activity` 条目（经过同一套去重与排序），只渲染已注册 `activityKind`
+  的条目，标题取 `label`；未注册的条目（例如插件被关闭）不显示。
 
 ## 4）加载与失败语义
 

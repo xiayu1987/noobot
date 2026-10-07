@@ -105,14 +105,7 @@
             "export": "default"
           }
         },
-        {
-          "id": "harness-guidance-analysis",
-          "point": "thinking.panel.section",
-          "component": {
-            "module": "./frontend/components/HarnessGuidanceAnalysisSection.vue",
-            "export": "default"
-          }
-        }
+        { "id": "harness-guidance-analysis", "point": "thinking.content.item" }
       ]
     }
   },

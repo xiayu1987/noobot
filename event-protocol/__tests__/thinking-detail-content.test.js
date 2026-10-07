@@ -250,7 +250,7 @@ test("activities without relay correlation stay projected for legacy rounds", ()
   );
 });
 
-test("projects host activities only; plugin-declared activity kinds stay out of host thinking", () => {
+test("projects plugin-declared activity kinds as plugin_activity facts carrying their kind", () => {
   const timeline = projectThinkingDetailContentTimeline(
     [],
     [
@@ -271,7 +271,74 @@ test("projects host activities only; plugin-declared activity kinds stay out of 
   );
 
   assert.deepEqual(
-    timeline.map((fact) => fact.contentId),
-    ["event:host-thinking", "event:main-analysis"],
+    timeline.map(({ contentId, contentKind, activityKind }) => ({
+      contentId,
+      contentKind,
+      activityKind,
+    })),
+    [
+      {
+        contentId: "event:host-thinking",
+        contentKind: THINKING_DETAIL_CONTENT_KIND.THINKING,
+        activityKind: undefined,
+      },
+      {
+        contentId: "event:main-analysis",
+        contentKind: THINKING_DETAIL_CONTENT_KIND.THINKING,
+        activityKind: undefined,
+      },
+      {
+        contentId: "event:plugin-analysis",
+        contentKind: THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY,
+        activityKind: "guidance_analysis",
+      },
+    ],
   );
+  assert.equal(timeline.every(isThinkingDetailContentFact), true);
+});
+
+test("plugin activity relayed as an injected message is superseded by that message", () => {
+  const timeline = projectThinkingDetailContentTimeline(
+    [
+      message({
+        messageUid: "guidance-source",
+        role: "user",
+        type: "message",
+        injectedMessage: true,
+        injectedBy: "harness",
+        relayCorrelationId: "rc_plugin",
+        content: "继续检查缓存事实。",
+      }),
+    ],
+    [
+      relayActivity({
+        eventId: "plugin-relayed",
+        relayCorrelationId: "rc_plugin",
+        activityKind: "guidance_analysis",
+      }),
+      relayActivity({
+        eventId: "plugin-unrelayed",
+        sequence: 2,
+        relayCorrelationId: "rc_other",
+        activityKind: "guidance_analysis",
+      }),
+    ],
+  );
+
+  assert.deepEqual(
+    timeline.map((fact) => fact.contentId),
+    ["message:guidance-source", "event:plugin-unrelayed"],
+  );
+});
+
+test("plugin_activity facts require an activityKind", () => {
+  const fact = {
+    contentId: "event:plugin-1",
+    contentKind: THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY,
+    sourceEventId: "plugin-1",
+    text: "插件分析",
+    sequence: 1,
+  };
+  assert.equal(isThinkingDetailContentFact(fact), false);
+  assert.equal(isThinkingDetailContentFact({ ...fact, activityKind: "guidance_analysis" }), true);
 });

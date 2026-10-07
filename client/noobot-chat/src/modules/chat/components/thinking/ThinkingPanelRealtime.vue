@@ -25,9 +25,7 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { isThinkingReplayDebugEnabled } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { toolLogDetailKey } from "../../model/toolLogIdentity.js";
-import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
-import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
-import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
+import { useThinkingContentItemRenderers } from "../../composables/thinkingContentItemRenderers.js";
 import ExecutionReportDrawer from "./ExecutionReportDrawer.vue";
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -51,17 +49,25 @@ const props = defineProps({
 });
 const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
 const executionReportVisible = ref(false);
-const sectionContext = computed(() => ({
-  messageItem: props.messageItem,
-  activityTimeline: props.activityTimeline,
-  variant: "panel",
-}));
-const hasSectionContributions = computed(
-  () =>
-    resolveExtensionPoint(EXTENSION_POINTS.THINKING_PANEL_SECTION, sectionContext.value).length > 0,
-);
+const { rendererFor } = useThinkingContentItemRenderers();
+const latestPluginActivity = computed(() => {
+  const activities = Array.isArray(props.activityTimeline) ? props.activityTimeline : [];
+  for (let index = activities.length - 1; index >= 0; index -= 1) {
+    const activity = activities[index] || {};
+    const renderer = rendererFor(activity);
+    const content = String(activity.text || "").trim();
+    if (renderer && content) {
+      return {
+        activityKind: renderer.activityKind,
+        label: String(renderer.label(props.translate) || ""),
+        content,
+      };
+    }
+  }
+  return null;
+});
 const runningEmptyHintKey = computed(() =>
-  hasSectionContributions.value || props.latestModelAnalysisLog
+  latestPluginActivity.value || props.latestModelAnalysisLog
     ? "message.analyzingRealtimeLog"
     : "message.waitingRealtimeLog",
 );
@@ -167,7 +173,17 @@ watch(
       </div>
     </template>
     <BaseTabPanelBody class="thinking-realtime-body">
-      <ExtensionOutlet :point="EXTENSION_POINTS.THINKING_PANEL_SECTION" :context="sectionContext" />
+      <div
+        v-if="latestPluginActivity"
+        class="thinking-analysis-block"
+        data-thinking-block="plugin-activity"
+        :data-thinking-content-kind="latestPluginActivity.activityKind"
+      >
+        <BaseMetaLabel
+          class="thinking-analysis-title"
+          :text="latestPluginActivity.label"
+        /><BaseNoteBlock :content="latestPluginActivity.content" />
+      </div>
       <div v-if="latestModelAnalysisLog" class="thinking-analysis-block">
         <BaseMetaLabel
           class="thinking-analysis-title"

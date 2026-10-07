@@ -9,6 +9,7 @@ const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
   new Set([
     "contentId",
     "contentKind",
+    "activityKind",
     "sourceMessageUid",
     "sourceEventId",
     "text",
@@ -27,15 +28,18 @@ export const THINKING_DETAIL_CONTENT_KIND = Object.freeze({
   USER_INTERJECTION: "user_interjection",
   MODEL_ANALYSIS: "model_analysis",
   THINKING: "thinking",
+  PLUGIN_ACTIVITY: "plugin_activity",
 });
 
 export function isThinkingDetailContentFact(value = {}) {
+  const contentKind = text(value?.contentKind);
   return Boolean(
     value &&
     typeof value === "object" &&
     !Array.isArray(value) &&
     text(value.contentId) &&
-    Object.values(THINKING_DETAIL_CONTENT_KIND).includes(text(value.contentKind)) &&
+    Object.values(THINKING_DETAIL_CONTENT_KIND).includes(contentKind) &&
+    (contentKind !== THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY || text(value.activityKind)) &&
     (text(value.sourceMessageUid) || text(value.sourceEventId)) &&
     typeof value.text === "string" &&
     text(value.text) &&

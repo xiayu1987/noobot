@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
-import { selectVisibleGuidanceAnalyses } from "./guidance-analysis.js";
+import { useHarnessLocale } from "./i18n/index.js";
+
+const GUIDANCE_ANALYSIS_ACTIVITY_KIND = "guidance_analysis";
 
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
@@ -23,15 +25,15 @@ export async function activate(ctx = {}) {
     when: (context = {}) => context?.selectedPluginKeySet?.has?.("harness") === true,
     resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
   });
-  contribute(points.THINKING_PANEL_SECTION, {
+  const { translate } = useHarnessLocale();
+  contribute(points.THINKING_CONTENT_ITEM, {
     id: "harness-guidance-analysis",
-    capability: "thinking.section.guidance-analysis",
-    priority: 10,
-    when: (context = {}) => selectVisibleGuidanceAnalyses(context).length > 0,
-    resolveProps: (context = {}) => ({
-      guidanceAnalyses: selectVisibleGuidanceAnalyses(context),
-      variant: context?.variant === "details" ? "details" : "panel",
-    }),
+    provide: () => [
+      {
+        activityKind: GUIDANCE_ANALYSIS_ACTIVITY_KIND,
+        label: () => translate("thinkingSection.guidanceAnalysis"),
+      },
+    ],
   });
   return createPluginActivationResult({ pluginId: "harness", surface: PLUGIN_SURFACE.FRONTEND });
 }

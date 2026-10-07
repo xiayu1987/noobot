@@ -39,7 +39,7 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       acceptanceModelDisabled: "启用 Planning Acceptance 后可选择模型",
     }),
     thinkingSection: Object.freeze({
-      analysisFlow: "分析流程",
+      guidanceAnalysis: "引导分析",
     }),
   }),
   "en-US": Object.freeze({
@@ -74,7 +74,7 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       acceptanceModelDisabled: "Enable Planning Acceptance to select a model",
     }),
     thinkingSection: Object.freeze({
-      analysisFlow: "Analysis Flow",
+      guidanceAnalysis: "Guidance Analysis",
     }),
   }),
 });

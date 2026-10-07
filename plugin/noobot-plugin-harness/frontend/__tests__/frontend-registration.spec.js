@@ -6,20 +6,27 @@
 import { describe, expect, it } from "vitest";
 import { activate } from "../index.js";
 
+const EXTENSION_POINTS = Object.freeze({
+  MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
+  COMPOSER_OPTIONS_MODEL: "composer-options-model",
+  MESSAGE_CARD_PRE: "message-card-pre",
+  MESSAGE_CARD_POST: "message-card-post",
+  THINKING_CONTENT_ITEM: "thinking-content-item",
+});
+
+async function collectContributions() {
+  const contributions = [];
+  await activate({
+    contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
+    extensionPoints: EXTENSION_POINTS,
+    services: {},
+  });
+  return contributions;
+}
+
 describe("Harness frontend registration", () => {
   it("shows the model extension only while Harness is selected", async () => {
-    const contributions = [];
-    await activate({
-      contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
-      extensionPoints: {
-        MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
-        COMPOSER_OPTIONS_MODEL: "composer-options-model",
-        MESSAGE_CARD_PRE: "message-card-pre",
-        MESSAGE_CARD_POST: "message-card-post",
-      },
-      services: {},
-    });
-
+    const contributions = await collectContributions();
     const modelExtension = contributions.find(
       ({ point }) => point === "composer-options-model",
     )?.contribution;
@@ -37,18 +44,7 @@ describe("Harness frontend registration", () => {
   });
 
   it("leaves the thinking panel and canonical message assets to the host", async () => {
-    const contributions = [];
-    await activate({
-      contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
-      extensionPoints: {
-        MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
-        COMPOSER_OPTIONS_MODEL: "composer-options-model",
-        MESSAGE_CARD_PRE: "message-card-pre",
-        MESSAGE_CARD_POST: "message-card-post",
-      },
-      services: {},
-    });
-
+    const contributions = await collectContributions();
     expect(contributions.filter(({ point }) => point === "message-card-pre")).toEqual([]);
     expect(contributions.filter(({ point }) => point === "message-card-post")).toEqual([]);
     expect(
@@ -56,40 +52,14 @@ describe("Harness frontend registration", () => {
     ).toBe(false);
   });
 
-  it("contributes the guidance analysis section from the activity timeline", async () => {
-    const contributions = [];
-    await activate({
-      contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
-      extensionPoints: {
-        MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
-        COMPOSER_OPTIONS_MODEL: "composer-options-model",
-        THINKING_PANEL_SECTION: "thinking-panel-section",
-      },
-      services: {},
-    });
-
+  it("registers a guidance analysis renderer for thinking content items", async () => {
+    const contributions = await collectContributions();
     expect(contributions.every(({ point }) => typeof point === "string" && point)).toBe(true);
-    const section = contributions.find(
-      ({ point }) => point === "thinking-panel-section",
-    )?.contribution;
-    expect(section?.id).toBe("harness-guidance-analysis");
-
-    const guidance = (eventId, text) => ({ eventId, activityKind: "guidance_analysis", text });
-    const activityTimeline = [
-      guidance("g-1", "first"),
-      { eventId: "host-1", activityKind: "", text: "host" },
-      guidance("g-2", "second"),
-    ];
-    expect(section.when({ activityTimeline })).toBe(true);
-    expect(section.when({ activityTimeline: [{ eventId: "host-1", text: "host" }] })).toBe(false);
-    expect(section.when({})).toBe(false);
-    expect(section.resolveProps({ activityTimeline, variant: "panel" })).toEqual({
-      guidanceAnalyses: [activityTimeline[2]],
-      variant: "panel",
-    });
-    expect(section.resolveProps({ activityTimeline, variant: "details" })).toEqual({
-      guidanceAnalyses: [activityTimeline[0], activityTimeline[2]],
-      variant: "details",
-    });
+    const item = contributions.find(({ point }) => point === "thinking-content-item")?.contribution;
+    expect(item?.id).toBe("harness-guidance-analysis");
+    expect(item.component).toBeUndefined();
+    const renderers = item.provide();
+    expect(renderers.map(({ activityKind }) => activityKind)).toEqual(["guidance_analysis"]);
+    expect(renderers[0].label()).toBe("Guidance Analysis");
   });
 });

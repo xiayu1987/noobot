@@ -22,8 +22,7 @@ import {
   isStateMachineDebugEnabled,
   logStateMachineDebug,
 } from "../../../debug/loggers/stateMachineLogger.js";
-import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
-import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
+import { useThinkingContentItemRenderers } from "../../composables/thinkingContentItemRenderers.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
@@ -31,7 +30,6 @@ const props = defineProps({
   isRunning: Boolean,
   groupedToolLogs: { type: Array, default: () => [] },
   thinkingContentItems: { type: Array, default: () => [] },
-  activityTimeline: { type: Array, default: () => [] },
   detailCount: { type: Number, default: 0 },
   taskCheckReceipts: { type: Array, default: () => [] },
   getTreePrefix: { type: Function, required: true },
@@ -166,11 +164,10 @@ const rendererProjectionSignature = computed(() =>
           .join("|"),
       ].join("::"),
 );
-const sectionContext = computed(() => ({
-  messageItem: props.messageItem,
-  activityTimeline: props.activityTimeline,
-  variant: "details",
-}));
+const { rendererFor, isRenderable } = useThinkingContentItemRenderers();
+const visibleThinkingContentItems = computed(() =>
+  props.thinkingContentItems.filter((item) => isRenderable(item)),
+);
 const taskCheckItems = computed(() =>
   props.taskCheckReceipts
     .map((receipt = {}, index) => ({
@@ -199,7 +196,12 @@ function formatThinkingContentTitle(item = {}, index = 0) {
     model_analysis: "message.modelAnalysis",
     thinking: "message.analysisFlow",
   };
-  const sourceLabel = sourceKeyByKind[source] ? props.translate(sourceKeyByKind[source]) : source;
+  const pluginRenderer = rendererFor(item);
+  const sourceLabel = pluginRenderer
+    ? String(pluginRenderer.label(props.translate) || "")
+    : sourceKeyByKind[source]
+      ? props.translate(sourceKeyByKind[source])
+      : source;
   const timestamp = String(item?.timestamp || "").trim();
   return `${index + 1}. ${sourceLabel}${timestamp ? ` · ${timestamp}` : ""}`;
 }
@@ -289,14 +291,11 @@ watch(
         :name="DETAIL_TAB.THINKING"
         :label="
           translate('message.thinkingContent', {
-            count: thinkingContentItems.length,
+            count: visibleThinkingContentItems.length,
           })
         "
         ><BaseTabPanelBody class="thinking-details-scroll-body thinking-details-content-body"
-          ><ExtensionOutlet
-            :point="EXTENSION_POINTS.THINKING_PANEL_SECTION"
-            :context="sectionContext" />
-          <div
+          ><div
             v-if="taskCheckItems.length"
             class="thinking-task-check-block"
             data-thinking-block="task-check"
@@ -314,11 +313,12 @@ watch(
             />
           </div>
           <BaseNoteBlock
-            v-for="(item, index) in thinkingContentItems"
+            v-for="(item, index) in visibleThinkingContentItems"
             :key="String(item.contentId)"
+            :data-thinking-content-kind="item.activityKind || item.contentKind"
             :title="formatThinkingContentTitle(item, index)"
             :content="String(item.content || '')" /><BaseEmptyHint
-            v-if="!thinkingContentItems.length"
+            v-if="!visibleThinkingContentItems.length"
             :text="
               translate('message.noThinkingContent')
             " /></BaseTabPanelBody></el-tab-pane></el-tabs
