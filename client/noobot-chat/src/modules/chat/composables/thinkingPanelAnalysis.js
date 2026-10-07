@@ -24,12 +24,12 @@ export function createThinkingAnalysisProjection({
       : null;
   }
 
-  function getLatestGuidanceAnalysisLog(messageItem = {}) {
+  function getAnalysisActivityTimeline(messageItem = {}) {
     const projection =
       messageItem === props.messageItem
         ? currentAnalysisProjection.value
         : selectLatestAnalysisActivities(timelineMessage(messageItem));
-    return getAnalysisLogOutput(projection.latestGuidance || {}) ? projection.latestGuidance : null;
+    return projection.activityTimeline;
   }
 
   function summarizeAnalysisProjection(messageItem = {}) {
@@ -37,13 +37,9 @@ export function createThinkingAnalysisProjection({
       messageItem === props.messageItem
         ? currentAnalysisProjection.value
         : selectLatestAnalysisActivities(timelineMessage(messageItem));
-    const latestGuidance = projection.latestGuidance;
     const latestModelAnalysis = projection.latestModelAnalysis;
     return {
       activityTimelineCount: projection.activityTimelineCount,
-      latestGuidanceEventId: String(latestGuidance?.eventId || ""),
-      latestGuidanceOutputLength: getAnalysisLogOutput(latestGuidance || {}).length,
-      latestGuidanceTimestamp: String(latestGuidance?.timestamp || ""),
       latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
       latestModelAnalysisOutputLength: getAnalysisLogOutput(latestModelAnalysis || {}).length,
       latestModelAnalysisTimestamp: String(latestModelAnalysis?.timestamp || ""),
@@ -52,7 +48,7 @@ export function createThinkingAnalysisProjection({
 
   return {
     getLatestModelAnalysisLog,
-    getLatestGuidanceAnalysisLog,
+    getAnalysisActivityTimeline,
     summarizeAnalysisProjection,
   };
 }

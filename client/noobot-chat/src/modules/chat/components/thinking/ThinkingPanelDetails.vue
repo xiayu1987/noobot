@@ -22,6 +22,8 @@ import {
   isStateMachineDebugEnabled,
   logStateMachineDebug,
 } from "../../../debug/loggers/stateMachineLogger.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
@@ -29,6 +31,7 @@ const props = defineProps({
   isRunning: Boolean,
   groupedToolLogs: { type: Array, default: () => [] },
   thinkingContentItems: { type: Array, default: () => [] },
+  activityTimeline: { type: Array, default: () => [] },
   detailCount: { type: Number, default: 0 },
   taskCheckReceipts: { type: Array, default: () => [] },
   getTreePrefix: { type: Function, required: true },
@@ -163,6 +166,11 @@ const rendererProjectionSignature = computed(() =>
           .join("|"),
       ].join("::"),
 );
+const sectionContext = computed(() => ({
+  messageItem: props.messageItem,
+  activityTimeline: props.activityTimeline,
+  variant: "details",
+}));
 const taskCheckItems = computed(() =>
   props.taskCheckReceipts
     .map((receipt = {}, index) => ({
@@ -285,7 +293,10 @@ watch(
           })
         "
         ><BaseTabPanelBody class="thinking-details-scroll-body thinking-details-content-body"
-          ><div
+          ><ExtensionOutlet
+            :point="EXTENSION_POINTS.THINKING_PANEL_SECTION"
+            :context="sectionContext" />
+          <div
             v-if="taskCheckItems.length"
             class="thinking-task-check-block"
             data-thinking-block="task-check"

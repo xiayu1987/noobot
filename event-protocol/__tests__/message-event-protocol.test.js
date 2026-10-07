@@ -12,11 +12,13 @@ import {
 } from "@noobot/security-assessment-protocol";
 import { createEventEnvelope } from "@noobot/event-protocol";
 import {
+  ACTIVITY_KIND,
   MESSAGE_EVENT_TYPE,
   MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_WIRE_EVENT,
   hasMessageEventToolPayload,
   isAuthoritativeFinalContentEvent,
+  isHostActivity,
   projectMessageEventContent,
   projectMessageEventToolFacets,
   projectTurnPresentation,
@@ -332,4 +334,13 @@ test("message payload validates and projects canonical tool risk", () => {
   assert.deepEqual(validateMessageEventPayload(ended), { valid: true, errors: [] });
   assert.equal(projectMessageEventToolFacets(started).toolCall.riskLevel, "low");
   assert.equal(projectMessageEventToolFacets(ended).toolResult.riskLevel, "high");
+});
+
+test("isHostActivity accepts empty and host kinds and rejects plugin kinds", () => {
+  assert.equal(isHostActivity({}), true);
+  assert.equal(isHostActivity({ activityKind: " " }), true);
+  for (const activityKind of Object.values(ACTIVITY_KIND)) {
+    assert.equal(isHostActivity({ activityKind }), true);
+  }
+  assert.equal(isHostActivity({ activityKind: "guidance_analysis" }), false);
 });

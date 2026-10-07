@@ -84,11 +84,7 @@ function thinkingActivity(eventId, sequence, output) {
   return canonicalActivityFact({
     eventId,
     sequence,
-    activityKind: "guidance_analysis",
     text: output,
-    purpose: "guidance",
-    pluginFlow: "analysis",
-    chain: "auxiliary",
   });
 }
 

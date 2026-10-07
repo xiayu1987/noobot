@@ -84,6 +84,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
               activityTimeline: [
                 canonicalActivity({
                   eventId: "model-content-event",
+                  activityKind: "model_analysis",
                   sessionId: "content-session",
                   dialogProcessId: "content-dialog",
                   turnScopeId: "content-turn",
@@ -118,9 +119,7 @@ test("thinking detail projects only activity facts, not assistant tool-call cont
 
   assert.deepEqual(
     payload.messageItem.thinkingContentTimeline.map((item) => [item.contentKind, item.text]),
-    [
-      ["thinking", "analysis"],
-    ],
+    [["thinking", "analysis"]],
   );
   assert.equal(payload.counts.injectedMessageCount, 0);
   assert.equal(payload.counts.thinkingContentCount, 1);

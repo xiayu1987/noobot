@@ -10,6 +10,7 @@ import {
   contributeExtension,
 } from "../../../../../../src/extensions/extension-registry.js";
 import HarnessGuidanceAnalysisSection from "../../../../../../../../plugin/noobot-plugin-harness/frontend/components/HarnessGuidanceAnalysisSection.vue";
+import { activate as activateHarnessFrontend } from "../../../../../../../../plugin/noobot-plugin-harness/frontend/index.js";
 import { canonicalActivityFact, mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
 function activity(eventId, sequence, event, output, extra = {}) {
@@ -24,22 +25,24 @@ function activity(eventId, sequence, event, output, extra = {}) {
   });
 }
 
-function registerGuidanceSection() {
-  contributeExtension(EXTENSION_POINTS.THINKING_PANEL_SECTION, {
-    pluginId: "harness",
-    id: "harness-guidance-analysis",
-    component: HarnessGuidanceAnalysisSection,
-    when: (context = {}) => Boolean(context?.latestGuidanceAnalysis),
-    resolveProps: (context = {}) => ({
-      latestGuidanceAnalysis: context?.latestGuidanceAnalysis || null,
-    }),
+async function registerGuidanceSection() {
+  await activateHarnessFrontend({
+    extensionPoints: EXTENSION_POINTS,
+    contributeExtension: (point, contribution) => {
+      if (point !== EXTENSION_POINTS.THINKING_PANEL_SECTION) return;
+      contributeExtension(point, {
+        ...contribution,
+        pluginId: "harness",
+        component: HarnessGuidanceAnalysisSection,
+      });
+    },
   });
 }
 
 describe("ThinkingPanel canonical analysis timeline", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
-    registerGuidanceSection();
+    await registerGuidanceSection();
   });
   afterEach(() => clearExtensionRegistry());
 
@@ -180,5 +183,38 @@ describe("ThinkingPanel canonical analysis timeline", () => {
     expect(wrapper.text()).not.toContain("Analysis Flow");
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("must stay hidden");
+  });
+
+  function roundMessages(activityTimeline) {
+    const base = { role: "assistant", sessionId: "session-g", turnScopeId: "turn-g" };
+    return [
+      { ...base, messageUid: "assistant-g-1", activityTimeline },
+      { ...base, messageUid: "assistant-g-2", activityTimeline: [] },
+    ];
+  }
+
+  it("renders every guidance analysis in the details tab through the same section", () => {
+    const messages = roundMessages([
+      activity("host-1", 1, "", "host thinking text"),
+      activity("guidance-1", 2, "guidance_analysis", "first guidance"),
+      activity("guidance-2", 3, "guidance_analysis", "second guidance"),
+    ]);
+    const wrapper = mountThinkingPanel(messages[0], { variant: "details", allMessages: messages });
+    const section = wrapper.find('[data-thinking-block="guidance-analysis"]');
+    expect(section.exists()).toBe(true);
+    expect(section.text()).toContain("first guidance");
+    expect(section.text()).toContain("second guidance");
+    expect(wrapper.text()).toContain("host thinking text");
+  });
+
+  it("keeps guidance analysis out of the host details flow when no plugin contributes", () => {
+    clearExtensionRegistry();
+    const messages = roundMessages([
+      activity("host-1", 1, "", "host thinking text"),
+      activity("guidance-1", 2, "guidance_analysis", "hidden guidance"),
+    ]);
+    const wrapper = mountThinkingPanel(messages[0], { variant: "details", allMessages: messages });
+    expect(wrapper.text()).toContain("host thinking text");
+    expect(wrapper.text()).not.toContain("hidden guidance");
   });
 });

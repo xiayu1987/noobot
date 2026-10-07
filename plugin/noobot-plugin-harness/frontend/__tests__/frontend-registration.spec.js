@@ -56,7 +56,7 @@ describe("Harness frontend registration", () => {
     ).toBe(false);
   });
 
-  it("contributes the guidance analysis section only when guidance analysis exists", async () => {
+  it("contributes the guidance analysis section from the activity timeline", async () => {
     const contributions = [];
     await activate({
       contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
@@ -74,10 +74,22 @@ describe("Harness frontend registration", () => {
     )?.contribution;
     expect(section?.id).toBe("harness-guidance-analysis");
 
-    const latestGuidanceAnalysis = { text: "guidance" };
-    expect(section.when({ latestGuidanceAnalysis })).toBe(true);
-    expect(section.when({ latestGuidanceAnalysis: null })).toBe(false);
+    const guidance = (eventId, text) => ({ eventId, activityKind: "guidance_analysis", text });
+    const activityTimeline = [
+      guidance("g-1", "first"),
+      { eventId: "host-1", activityKind: "", text: "host" },
+      guidance("g-2", "second"),
+    ];
+    expect(section.when({ activityTimeline })).toBe(true);
+    expect(section.when({ activityTimeline: [{ eventId: "host-1", text: "host" }] })).toBe(false);
     expect(section.when({})).toBe(false);
-    expect(section.resolveProps({ latestGuidanceAnalysis })).toEqual({ latestGuidanceAnalysis });
+    expect(section.resolveProps({ activityTimeline, variant: "panel" })).toEqual({
+      guidanceAnalyses: [activityTimeline[2]],
+      variant: "panel",
+    });
+    expect(section.resolveProps({ activityTimeline, variant: "details" })).toEqual({
+      guidanceAnalyses: [activityTimeline[0], activityTimeline[2]],
+      variant: "details",
+    });
   });
 });

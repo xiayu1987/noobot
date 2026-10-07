@@ -249,3 +249,29 @@ test("activities without relay correlation stay projected for legacy rounds", ()
     ["event:activity-legacy", "message:legacy-guidance"],
   );
 });
+
+test("projects host activities only; plugin-declared activity kinds stay out of host thinking", () => {
+  const timeline = projectThinkingDetailContentTimeline(
+    [],
+    [
+      relayActivity({ eventId: "host-thinking", sequence: 1 }),
+      relayActivity({
+        eventId: "main-analysis",
+        sequence: 2,
+        timestamp: "2026-09-05T03:39:02.000Z",
+        activityKind: "main_model_analysis",
+      }),
+      relayActivity({
+        eventId: "plugin-analysis",
+        sequence: 3,
+        timestamp: "2026-09-05T03:39:03.000Z",
+        activityKind: "guidance_analysis",
+      }),
+    ],
+  );
+
+  assert.deepEqual(
+    timeline.map((fact) => fact.contentId),
+    ["event:host-thinking", "event:main-analysis"],
+  );
+});

@@ -9,23 +9,38 @@ import { BaseMetaLabel, BaseNoteBlock } from "noobot-chat/plugin-api/ui";
 import { useHarnessLocale } from "../i18n/index.js";
 
 const props = defineProps({
-  latestGuidanceAnalysis: { type: Object, default: null },
+  guidanceAnalyses: { type: Array, default: () => [] },
+  variant: { type: String, default: "panel" },
 });
 
 const { translate } = useHarnessLocale();
-const analysisText = computed(() => String(props.latestGuidanceAnalysis?.text || "").trim());
+const items = computed(() =>
+  props.guidanceAnalyses.map((activity = {}, index) => ({
+    key: String(activity.eventId || index),
+    title:
+      props.variant === "details"
+        ? `${index + 1}. ${translate("thinkingSection.analysisFlow")}${activity.timestamp ? ` · ${activity.timestamp}` : ""}`
+        : "",
+    content: String(activity.text || "").trim(),
+  })),
+);
 </script>
 
 <template>
   <div
-    v-if="analysisText"
+    v-if="items.length"
     class="harness-guidance-analysis"
     data-thinking-block="guidance-analysis"
   >
     <BaseMetaLabel
       class="harness-guidance-analysis__title"
       :text="translate('thinkingSection.analysisFlow')"
-    /><BaseNoteBlock :content="analysisText" />
+    /><BaseNoteBlock
+      v-for="item in items"
+      :key="item.key"
+      :title="item.title"
+      :content="item.content"
+    />
   </div>
 </template>
 

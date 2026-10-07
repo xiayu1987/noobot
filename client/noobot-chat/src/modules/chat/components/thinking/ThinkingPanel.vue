@@ -68,7 +68,7 @@ const {
   getThinkingDurationLabel,
   isThinkingRuntimeRunning,
   getThinkingModelLoopRound,
-  getLatestGuidanceAnalysisLog,
+  getAnalysisActivityTimeline,
   getLatestModelAnalysisLog,
   currentExecutionLogs,
   latestTaskCheckReceipt,
@@ -99,7 +99,7 @@ defineExpose({
     :thinking-duration-label="getThinkingDurationLabel()"
     :thinking-model-loop-round="getThinkingModelLoopRound(messageItem)"
     :is-running="isThinkingRuntimeRunning(messageItem)"
-    :latest-guidance-analysis-log="getLatestGuidanceAnalysisLog(messageItem)"
+    :activity-timeline="getAnalysisActivityTimeline(messageItem)"
     :latest-model-analysis-log="getLatestModelAnalysisLog(messageItem)"
     :execution-logs="currentExecutionLogs"
     :execution-log-count="getExecutionLogCount(messageItem)"
@@ -121,6 +121,7 @@ defineExpose({
     :is-running="isMessageRuntimeRunning(messageItem)"
     :grouped-tool-logs="groupedToolLogs"
     :thinking-content-items="thinkingContentItems"
+    :activity-timeline="getAnalysisActivityTimeline(messageItem)"
     :detail-count="getExecutionLogCount(messageItem)"
     :task-check-receipts="taskCheckReceipts"
     :user-id="userId"

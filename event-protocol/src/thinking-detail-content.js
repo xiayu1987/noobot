@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { MESSAGE_EVENT_TYPE } from "./message-event.js";
+import { MESSAGE_EVENT_TYPE, isHostActivity } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { text } from "./normalize.js";
 import {
@@ -96,7 +96,7 @@ function messageContentFact(message = {}, contentKind, index) {
 function activityContentFact(activity = {}, index) {
   const eventId = text(activity?.eventId);
   const value = text(activity?.text);
-  if (!eventId || !value) return null;
+  if (!eventId || !value || !isHostActivity(activity)) return null;
   return {
     contentId: `event:${eventId}`,
     contentKind:

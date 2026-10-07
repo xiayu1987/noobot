@@ -39,8 +39,14 @@ export const ACTIVITY_KIND = Object.freeze({
   MODEL_ANALYSIS: "model_analysis",
   MAIN_MODEL_ANALYSIS: "main_model_analysis",
   MCP_MODEL_ANALYSIS: "mcp_model_analysis",
-  GUIDANCE_ANALYSIS: "guidance_analysis",
 });
+
+const HOST_ACTIVITY_KINDS = Object.freeze(new Set(Object.values(ACTIVITY_KIND)));
+
+export function isHostActivity(activity = {}) {
+  const activityKind = text(activity?.activityKind);
+  return !activityKind || HOST_ACTIVITY_KINDS.has(activityKind);
+}
 
 export const TRANSIENT_MESSAGE_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.LLM_DELTA, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),

@@ -27,6 +27,7 @@ import { isThinkingReplayDebugEnabled } from "../../../debug/loggers/thinkingRep
 import { toolLogDetailKey } from "../../model/toolLogIdentity.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
+import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
 import ExecutionReportDrawer from "./ExecutionReportDrawer.vue";
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -36,7 +37,7 @@ const props = defineProps({
   thinkingDurationLabel: { type: String, default: "0s" },
   thinkingModelLoopRound: { type: Number, default: 0 },
   isRunning: Boolean,
-  latestGuidanceAnalysisLog: { type: Object, default: null },
+  activityTimeline: { type: Array, default: () => [] },
   latestModelAnalysisLog: { type: Object, default: null },
   executionLogs: { type: Array, default: () => [] },
   executionLogCount: { type: Number, default: 0 },
@@ -52,10 +53,15 @@ const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames
 const executionReportVisible = ref(false);
 const sectionContext = computed(() => ({
   messageItem: props.messageItem,
-  latestGuidanceAnalysis: props.latestGuidanceAnalysisLog,
+  activityTimeline: props.activityTimeline,
+  variant: "panel",
 }));
+const hasSectionContributions = computed(
+  () =>
+    resolveExtensionPoint(EXTENSION_POINTS.THINKING_PANEL_SECTION, sectionContext.value).length > 0,
+);
 const runningEmptyHintKey = computed(() =>
-  props.latestGuidanceAnalysisLog || props.latestModelAnalysisLog
+  hasSectionContributions.value || props.latestModelAnalysisLog
     ? "message.analyzingRealtimeLog"
     : "message.waitingRealtimeLog",
 );

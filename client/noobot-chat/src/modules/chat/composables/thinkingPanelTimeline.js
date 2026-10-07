@@ -293,7 +293,7 @@ export function useThinkingTimeline(
     return selectTaskCheckReceipts(timelineMessage(loadedThinkingDetail.value?.messageItem || {}));
   });
 
-  const { getLatestModelAnalysisLog, getLatestGuidanceAnalysisLog, summarizeAnalysisProjection } =
+  const { getLatestModelAnalysisLog, getAnalysisActivityTimeline, summarizeAnalysisProjection } =
     createThinkingAnalysisProjection({
       props,
       currentAnalysisProjection,
@@ -318,8 +318,7 @@ export function useThinkingTimeline(
         currentExecutionLogs.value.length,
         lastVisible.eventId || lastVisible.id || "",
         lastVisible.sequence ?? lastVisible.seq ?? "",
-        analysis.latestGuidanceEventId,
-        analysis.latestGuidanceOutputLength,
+        analysis.activityTimelineCount,
         analysis.latestModelAnalysisEventId,
         analysis.latestModelAnalysisOutputLength,
       ].join("|");
@@ -343,10 +342,6 @@ export function useThinkingTimeline(
         visibleLogs: selectedLogs.slice(-10).map(summarizeRealtimeLog),
         ...analysis,
         projectedAt,
-        guidanceSourceToProjectionLatencyMs: sourceToProjectionLatencyMs(
-          analysis.latestGuidanceTimestamp,
-          projectedAtMs,
-        ),
         modelAnalysisSourceToProjectionLatencyMs: sourceToProjectionLatencyMs(
           analysis.latestModelAnalysisTimestamp,
           projectedAtMs,
@@ -501,9 +496,9 @@ export function useThinkingTimeline(
         getCompletedToolLogsForMessage(detailMessage).length > 0;
       reason = result ? "loaded-detail" : "loaded-detail-empty";
     }
-    if (!result && getLatestGuidanceAnalysisLog(messageItem)) {
+    if (!result && getAnalysisActivityTimeline(messageItem).length > 0) {
       result = true;
-      reason = "guidance-analysis";
+      reason = "activity-timeline";
     }
     if (!result && String(props.variant || "panel") === "details") {
       result = getCompletedToolLogsForMessage(messageItem).length > 0;
@@ -550,7 +545,7 @@ export function useThinkingTimeline(
     currentExecutionLogs,
     latestTaskCheckReceipt,
     taskCheckReceipts,
-    getLatestGuidanceAnalysisLog,
+    getAnalysisActivityTimeline,
     getLatestModelAnalysisLog,
     getExecutionLogs,
     getCanonicalExecutionLogs,

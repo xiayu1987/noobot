@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
+import { selectVisibleGuidanceAnalyses } from "./guidance-analysis.js";
 
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
@@ -26,9 +27,10 @@ export async function activate(ctx = {}) {
     id: "harness-guidance-analysis",
     capability: "thinking.section.guidance-analysis",
     priority: 10,
-    when: (context = {}) => Boolean(context?.latestGuidanceAnalysis),
+    when: (context = {}) => selectVisibleGuidanceAnalyses(context).length > 0,
     resolveProps: (context = {}) => ({
-      latestGuidanceAnalysis: context?.latestGuidanceAnalysis || null,
+      guidanceAnalyses: selectVisibleGuidanceAnalyses(context),
+      variant: context?.variant === "details" ? "details" : "panel",
     }),
   });
   return createPluginActivationResult({ pluginId: "harness", surface: PLUGIN_SURFACE.FRONTEND });
