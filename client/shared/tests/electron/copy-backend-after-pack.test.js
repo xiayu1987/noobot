@@ -276,7 +276,7 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing locale
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/prompts\/base\.en-US\.md/,
+      /^Error: Missing required backend runtime files after prepare: node_modules\/noobot-agent\/src\/prompts\/base\.en-US\.md$/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
@@ -326,7 +326,7 @@ test("copyBackendAfterPack keeps legacy bundled agent system prompt required", a
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/prompts\/base\.md/,
+      /^Error: Missing required backend runtime files after prepare: node_modules\/noobot-agent\/src\/prompts\/base\.md$/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
@@ -343,7 +343,7 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing bundle
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/prompts\/base(\.zh-CN)?\.md/,
+      /^Error: Missing required backend runtime files after prepare: node_modules\/noobot-agent\/src\/prompts\/base\.md, node_modules\/noobot-agent\/src\/prompts\/base\.zh-CN\.md, node_modules\/noobot-agent\/src\/prompts\/base\.en-US\.md$/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
@@ -367,7 +367,7 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing bundle
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/noobot-agent\/src\/prompts\/base\.zh-CN\.md/,
+      /^Error: Missing required backend runtime files after prepare: node_modules\/noobot-agent\/src\/prompts\/base\.zh-CN\.md$/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
@@ -402,7 +402,7 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing plugin
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: plugin\/noobot-plugin-harness\/manifest\.json/,
+      /^Error: Missing required backend runtime files after prepare: plugin\/noobot-plugin-harness\/manifest\.json$/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
@@ -416,7 +416,7 @@ test("copyBackendAfterPack fails when prepared backend runtime is missing defaul
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: user-template\/default-user\/services/,
+      /^Error: Missing required backend runtime files after prepare: user-template\/default-user\/services, user-template\/default-user\/skills$/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });

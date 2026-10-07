@@ -29,17 +29,17 @@ const requiredBackendRuntimeFiles = [
 
 async function assertRequiredBackendRuntimeFiles(rootDir, label) {
   await assertPreparedBackendRuntimeWorkspaces({ backendRoot: rootDir, label });
-  await Promise.all(
-    requiredBackendRuntimeFiles.map(async (relativePath) => {
-      try {
-        await stat(path.join(rootDir, relativePath));
-      } catch (error) {
-        throw new Error(`Missing required backend runtime file after ${label}: ${relativePath}`, {
-          cause: error,
-        });
-      }
-    }),
+  const results = await Promise.allSettled(
+    requiredBackendRuntimeFiles.map((relativePath) => stat(path.join(rootDir, relativePath))),
   );
+  const missing = requiredBackendRuntimeFiles.filter(
+    (_, index) => results[index].status === "rejected",
+  );
+  if (missing.length === 0) return;
+  const causes = results.filter((result) => result.status === "rejected").map((r) => r.reason);
+  throw new Error(`Missing required backend runtime files after ${label}: ${missing.join(", ")}`, {
+    cause: new AggregateError(causes),
+  });
 }
 
 function getBackendCopyOptions(context) {
