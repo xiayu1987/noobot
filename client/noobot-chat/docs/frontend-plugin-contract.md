@@ -60,7 +60,7 @@ export async function activate(host) {
 `component` 会直接失败，不存在手工加载分支。
 
 本地组件模块必须使用相对插件根目录的 `./` 路径；宿主公开的插件 API 可以使用包导出名，
-例如 `{ "module": "noobot-chat/plugin-api/chat-ui", "export": "ThinkingPanel" }`。
+例如 `{ "module": "noobot-chat/plugin-api/chat-ui", "export": "AgentExecutionView" }`。
 组件型扩展点必须声明组件模块，投影器、路由器、水合器等 provider 扩展点禁止声明组件。
 
 ## 2）前端 Host 能力
@@ -84,6 +84,7 @@ export async function activate(host) {
 - `runtime.stream.route`
 - `session.detail.hydrator`、`session.artifact.panel`
 - `right.tool.panel`
+- `thinking.panel.section`：宿主思考面板分析区内的插件区块，上下文含 `messageItem`、`latestGuidanceAnalysis`
 
 ## 4）加载与失败语义
 

@@ -53,6 +53,7 @@ import {
 import { chatMessageItemProps } from "../../model/messageItemProps.js";
 import { isWorkflowNodeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import FileMutationPreview from "../thinking/FileMutationPreview.vue";
+import ThinkingPanel from "../thinking/ThinkingPanel.vue";
 import MutationDiffSplit from "../thinking/MutationDiffSplit.vue";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
 import { fileMutationPreviewService } from "../../../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
@@ -275,10 +276,7 @@ const assistantContentExpanded = computed(() => {
 const preMessageCardRenderers = computed(() =>
   resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE, { messageItem: props.messageItem }),
 );
-const thinkingPanelContributionIds = Object.freeze(["thinking-panel"]);
-const hasThinkingPanelContribution = computed(() =>
-  preMessageCardRenderers.value.some((renderer = {}) => renderer.id === "thinking-panel"),
-);
+const isAssistantMessage = computed(() => getMessageRole(props.messageItem) === "assistant");
 const thinkingPanelVisible = ref(false);
 const statusStepRunning = computed(() =>
   Boolean(statusStepState.value && !isTerminalStatusStepState(statusStepState.value)),
@@ -300,7 +298,6 @@ const workflowChildRenderDiagnosticsSignature = computed(() => {
     pending: props.messageItem?.pending === true,
     statusStepState: String(statusStepState.value || ""),
     statusStepRunning: statusStepRunning.value,
-    thinkingPanelContribution: hasThinkingPanelContribution.value,
     thinkingPanelVisible: thinkingPanelVisible.value,
     breathing: unifiedRuntimePanelsRunning.value,
     runtimeState: String(runtime?.state || ""),
@@ -498,10 +495,7 @@ function toggleAssistantContent() {
   >
     <BaseMessageTypeTag v-if="showMessageTypeTag" :type="messageItem.type" />
     <div
-      v-if="
-        getMessageRole(messageItem) === 'assistant' &&
-        (statusStepState || hasThinkingPanelContribution)
-      "
+      v-if="isAssistantMessage"
       class="message-runtime-panels"
       :class="{
         'has-status-steps': Boolean(statusStepState),
@@ -510,21 +504,19 @@ function toggleAssistantContent() {
       }"
     >
       <MessageStatusRow v-if="statusStepState" :status-step-state="statusStepState" />
-      <ExtensionOutlet
-        v-if="hasThinkingPanelContribution"
-        :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
-        :context="extensionRendererContext"
-        :include-contribution-ids="thinkingPanelContributionIds"
-        :extra-listeners="{
-          openThinkingDetails: handleOpenThinkingDetails,
-          panelVisibilityChange: handleThinkingPanelVisibility,
-        }"
+      <ThinkingPanel
+        :message-item="messageItem"
+        :all-messages="allMessages"
+        :runtime="messageRuntime"
+        :user-id="userId"
+        :fetch-execution-report="fetchExecutionReport"
+        @open-thinking-details="handleOpenThinkingDetails"
+        @panel-visibility-change="handleThinkingPanelVisibility"
       />
     </div>
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
       :context="extensionRendererContext"
-      :exclude-contribution-ids="thinkingPanelContributionIds"
       :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
     />
 

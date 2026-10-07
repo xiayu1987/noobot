@@ -5,7 +5,7 @@
  */
 import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, nextTick, onMounted } from "vue";
+import { defineComponent, h, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
@@ -91,6 +91,25 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   };
 });
 
+vi.mock("../../../../../../src/modules/chat/components/thinking/ThinkingPanel.vue", async () => {
+  const { defineComponent, h, onMounted } = await import("vue");
+  return {
+    default: defineComponent({
+      name: "ThinkingPanel",
+      props: {
+        messageItem: { type: Object, default: () => ({}) },
+        fetchExecutionReport: { type: Function, default: null },
+      },
+      emits: ["panel-visibility-change", "open-thinking-details"],
+      setup(props, { emit }) {
+        const visible = props.messageItem?.thinkingProbeVisible === true;
+        onMounted(() => emit("panel-visibility-change", visible));
+        return () => (visible ? h("div", { class: "thinking-panel-probe" }) : null);
+      },
+    }),
+  };
+});
+
 vi.mock("../../../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
     translate: (key = "") => key,
@@ -144,34 +163,6 @@ const RuntimeRenderer = defineComponent({
       });
   },
 });
-
-const VisibleThinkingRenderer = defineComponent({
-  name: "VisibleThinkingRenderer",
-  emits: ["panel-visibility-change"],
-  setup(_, { emit }) {
-    onMounted(() => emit("panel-visibility-change", true));
-    return () => h("div", { class: "thinking-panel-probe" });
-  },
-});
-
-const HiddenThinkingRenderer = defineComponent({
-  name: "HiddenThinkingRenderer",
-  emits: ["panel-visibility-change"],
-  setup(_, { emit }) {
-    onMounted(() => emit("panel-visibility-change", false));
-    return () => null;
-  },
-});
-
-function contributeThinkingPanel(component, messageId) {
-  contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
-    pluginId: "thinking-panel-test",
-    id: "thinking-panel",
-    slot: "pre",
-    component,
-    when: (context = {}) => context?.messageItem?.id === messageId,
-  });
-}
 
 function mountItem(props = {}) {
   const { storeSetup, ...componentProps } = props;
@@ -241,10 +232,10 @@ describe("SharedChatMessageItem", () => {
   });
 
   it("applies one outer breathing state only while both runtime panels are visible and running", async () => {
-    contributeThinkingPanel(VisibleThinkingRenderer, "runtime-panels-running");
     const wrapper = mountItem({
       messageItem: {
         id: "runtime-panels-running",
+        thinkingProbeVisible: true,
         role: "assistant",
         content: "",
         sessionId: "runtime-panels-session",
@@ -271,8 +262,7 @@ describe("SharedChatMessageItem", () => {
     expect(wrapper.get(".message-runtime-panels").classes()).not.toContain("is-running");
   });
 
-  it("does not breathe when the thinking contribution has no visible panel", async () => {
-    contributeThinkingPanel(HiddenThinkingRenderer, "runtime-panel-hidden");
+  it("does not breathe when the host thinking panel has no visible content", async () => {
     const wrapper = mountItem({
       messageItem: {
         id: "runtime-panel-hidden",
@@ -288,6 +278,18 @@ describe("SharedChatMessageItem", () => {
 
     expect(wrapper.get(".message-runtime-panels").classes()).not.toContain("has-thinking-panel");
     expect(wrapper.get(".message-runtime-panels").classes()).not.toContain("is-running");
+  });
+
+  it("hosts the thinking panel for assistant messages without any plugin contribution", () => {
+    const fetchExecutionReport = () => null;
+    const assistant = mountItem({ fetchExecutionReport });
+    const panel = assistant.findComponent({ name: "ThinkingPanel" });
+    expect(panel.exists()).toBe(true);
+    expect(panel.props("fetchExecutionReport")).toBe(fetchExecutionReport);
+
+    const user = mountItem({ messageItem: { id: "user-1", role: "user", content: "hi" } });
+    expect(user.findComponent({ name: "ThinkingPanel" }).exists()).toBe(false);
+    expect(user.find(".message-runtime-panels").exists()).toBe(false);
   });
 
   it("mounts the current assistant body and unmounts it when collapsed", async () => {

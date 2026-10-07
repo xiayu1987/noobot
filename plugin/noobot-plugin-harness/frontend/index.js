@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
-import { matchesThinkingPanel } from "./thinking-panel-matcher.js";
 
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
@@ -23,31 +22,13 @@ export async function activate(ctx = {}) {
     when: (context = {}) => context?.selectedPluginKeySet?.has?.("harness") === true,
     resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
   });
-  contribute(points.MESSAGE_CARD_PRE, {
-    id: "thinking-panel",
-    capability: "message.panel.thinking",
-    exclusiveGroup: "message.panel.thinking",
-    slot: "pre",
+  contribute(points.THINKING_PANEL_SECTION, {
+    id: "harness-guidance-analysis",
+    capability: "thinking.section.guidance-analysis",
     priority: 10,
-    when: (context = {}) => matchesThinkingPanel(context?.messageItem),
+    when: (context = {}) => Boolean(context?.latestGuidanceAnalysis),
     resolveProps: (context = {}) => ({
-      messageItem: context?.messageItem || {},
-      allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
-      runtime: context?.messageRuntime || null,
-      userId: String(context?.userId || ""),
-      fetchExecutionReport:
-        typeof context?.fetchExecutionReport === "function" ? context.fetchExecutionReport : null,
-      renderMarkdown: context?.renderMarkdown,
-      formatTime: context?.formatTime,
-      formatFileSize: context?.formatFileSize,
-      isImageMime: context?.isImageMime,
-    }),
-    resolveListeners: (context = {}) => ({
-      "open-thinking-details": (payload = {}) => {
-        if (typeof context?.onOpenThinkingDetails === "function") {
-          context.onOpenThinkingDetails(payload);
-        }
-      },
+      latestGuidanceAnalysis: context?.latestGuidanceAnalysis || null,
     }),
   });
   return createPluginActivationResult({ pluginId: "harness", surface: PLUGIN_SURFACE.FRONTEND });

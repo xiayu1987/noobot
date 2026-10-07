@@ -25,6 +25,8 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { isThinkingReplayDebugEnabled } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { toolLogDetailKey } from "../../model/toolLogIdentity.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 import ExecutionReportDrawer from "./ExecutionReportDrawer.vue";
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -34,7 +36,7 @@ const props = defineProps({
   thinkingDurationLabel: { type: String, default: "0s" },
   thinkingModelLoopRound: { type: Number, default: 0 },
   isRunning: Boolean,
-  latestPluginAnalysisLog: { type: Object, default: null },
+  latestGuidanceAnalysisLog: { type: Object, default: null },
   latestModelAnalysisLog: { type: Object, default: null },
   executionLogs: { type: Array, default: () => [] },
   executionLogCount: { type: Number, default: 0 },
@@ -48,8 +50,12 @@ const props = defineProps({
 });
 const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
 const executionReportVisible = ref(false);
+const sectionContext = computed(() => ({
+  messageItem: props.messageItem,
+  latestGuidanceAnalysis: props.latestGuidanceAnalysisLog,
+}));
 const runningEmptyHintKey = computed(() =>
-  props.latestPluginAnalysisLog || props.latestModelAnalysisLog
+  props.latestGuidanceAnalysisLog || props.latestModelAnalysisLog
     ? "message.analyzingRealtimeLog"
     : "message.waitingRealtimeLog",
 );
@@ -155,12 +161,7 @@ watch(
       </div>
     </template>
     <BaseTabPanelBody class="thinking-realtime-body">
-      <div v-if="latestPluginAnalysisLog" class="thinking-analysis-block">
-        <BaseMetaLabel
-          class="thinking-analysis-title"
-          :text="translate('message.analysisFlow')"
-        /><BaseNoteBlock :content="latestPluginAnalysisLog.text" />
-      </div>
+      <ExtensionOutlet :point="EXTENSION_POINTS.THINKING_PANEL_SECTION" :context="sectionContext" />
       <div v-if="latestModelAnalysisLog" class="thinking-analysis-block">
         <BaseMetaLabel
           class="thinking-analysis-title"

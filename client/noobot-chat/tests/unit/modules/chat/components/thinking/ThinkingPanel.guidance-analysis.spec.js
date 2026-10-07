@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clearExtensionRegistry } from "../../../../../../src/extensions/extension-registry.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import {
+  clearExtensionRegistry,
+  contributeExtension,
+} from "../../../../../../src/extensions/extension-registry.js";
+import HarnessGuidanceAnalysisSection from "../../../../../../../../plugin/noobot-plugin-harness/frontend/components/HarnessGuidanceAnalysisSection.vue";
 import { canonicalActivityFact, mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
 function activity(eventId, sequence, event, output, extra = {}) {
@@ -19,9 +24,46 @@ function activity(eventId, sequence, event, output, extra = {}) {
   });
 }
 
+function registerGuidanceSection() {
+  contributeExtension(EXTENSION_POINTS.THINKING_PANEL_SECTION, {
+    pluginId: "harness",
+    id: "harness-guidance-analysis",
+    component: HarnessGuidanceAnalysisSection,
+    when: (context = {}) => Boolean(context?.latestGuidanceAnalysis),
+    resolveProps: (context = {}) => ({
+      latestGuidanceAnalysis: context?.latestGuidanceAnalysis || null,
+    }),
+  });
+}
+
 describe("ThinkingPanel canonical analysis timeline", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    registerGuidanceSection();
+  });
   afterEach(() => clearExtensionRegistry());
+
+  it("renders model analysis without any section contribution", () => {
+    clearExtensionRegistry();
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: true,
+        activityTimeline: [
+          activity("guidance-1", 1, "guidance_analysis", "guidance text", {
+            purpose: "guidance",
+            pluginFlow: "analysis",
+            chain: "auxiliary",
+          }),
+          activity("model-1", 2, "model_analysis_delta", "host model analysis"),
+        ],
+      },
+      { runtime: { running: true, terminal: false } },
+    );
+    expect(wrapper.text()).not.toContain("Analysis Flow");
+    expect(wrapper.text()).not.toContain("guidance text");
+    expect(wrapper.text()).toContain("host model analysis");
+  });
 
   it("renders latest guidance and model analysis from one activity timeline", () => {
     const wrapper = mountThinkingPanel(

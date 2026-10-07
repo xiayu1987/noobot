@@ -6,10 +6,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   UI_PREFERENCE_STORAGE_KEYS,
-  applyFrontendPluginModelConfigDefaults,
+  PLUGIN_PREFERENCES_VERSION,
+  applyPluginPreferenceDefaults,
+  loadPluginPreferences,
   loadUiPreferences,
   persistBotScenarioPreference,
-  persistPluginModelConfigPreference,
   persistPluginModelConfigPreferenceByScenario,
   persistSelectedModelPreference,
   persistMemoryModelPreference,
@@ -37,6 +38,7 @@ describe("ui preferences storage", () => {
     vi.stubGlobal("localStorage", {
       getItem: vi.fn((key) => (storage.has(key) ? storage.get(key) : null)),
       setItem: vi.fn((key, value) => storage.set(key, String(value))),
+      removeItem: vi.fn((key) => storage.delete(key)),
     });
   });
 
@@ -77,27 +79,39 @@ describe("ui preferences storage", () => {
     });
   });
 
-  it("defaults harness planning and planning acceptance to disabled", () => {
-    expect(applyFrontendPluginModelConfigDefaults({})).toEqual({
+  it("deep merges manifest preference defaults under stored values", () => {
+    const defaults = {
       harness: {
         capabilityProfile: {
           planning: { enabled: false },
           acceptance: { enabled: false },
         },
       },
-    });
+    };
+    expect(applyPluginPreferenceDefaults({}, defaults)).toEqual(defaults);
     expect(
-      applyFrontendPluginModelConfigDefaults({
-        harness: {
-          capabilityProfile: {
-            planning: { enabled: true },
-            acceptance: { enabled: true },
+      applyPluginPreferenceDefaults(
+        {
+          harness: {
+            stepModels: { planning: "plan-a" },
+            capabilityProfile: { planning: { enabled: true } },
           },
+          workflow: { semanticModel: "wf" },
         },
-      }).harness.capabilityProfile,
+        defaults,
+      ),
     ).toEqual({
-      planning: { enabled: true },
-      acceptance: { enabled: true },
+      harness: {
+        stepModels: { planning: "plan-a" },
+        capabilityProfile: {
+          planning: { enabled: true },
+          acceptance: { enabled: false },
+        },
+      },
+      workflow: { semanticModel: "wf" },
+    });
+    expect(applyPluginPreferenceDefaults({ workflow: { semanticModel: "wf" } }, {})).toEqual({
+      workflow: { semanticModel: "wf" },
     });
   });
 
@@ -315,29 +329,58 @@ describe("ui preferences storage", () => {
     });
   });
 
-  it("falls back to legacy global pluginModelConfig when scenario preference is absent", () => {
-    persistPluginModelConfigPreference({
-      harness: { stepModels: { planning: "legacy-harness" } },
-      workflow: { semanticModel: "legacy-workflow" },
-    });
-
-    expect(readPluginModelConfigPreference("programming")).toEqual({
-      harness: { stepModels: { planning: "legacy-harness" } },
-      workflow: { semanticModel: "legacy-workflow" },
-    });
-
-    persistPluginModelConfigPreferenceByScenario(
-      { workflow: { semanticModel: "scenario-workflow" } },
-      "programming",
+  it("rebuilds versioned plugin preferences from legacy keys and removes them", () => {
+    storage.set(
+      "noobot_plugin_model_config_by_scenario_v2",
+      JSON.stringify({ programming: { workflow: { semanticModel: "wf-programming" } } }),
+    );
+    storage.set(
+      "noobot_plugin_model_config",
+      JSON.stringify({ harness: { stepModels: { planning: "legacy-harness" } } }),
     );
 
-    expect(readPluginModelConfigPreference("programming")).toEqual({
-      workflow: { semanticModel: "scenario-workflow" },
+    expect(loadPluginPreferences()).toEqual({
+      version: PLUGIN_PREFERENCES_VERSION,
+      scenarios: {
+        programming: { workflow: { semanticModel: "wf-programming" } },
+        __default__: { harness: { stepModels: { planning: "legacy-harness" } } },
+      },
     });
-    expect(readPluginModelConfigPreference("writing")).toEqual({
+    expect(storage.has("noobot_plugin_model_config_by_scenario_v2")).toBe(false);
+    expect(storage.has("noobot_plugin_model_config")).toBe(false);
+    expect(JSON.parse(storage.get(UI_PREFERENCE_STORAGE_KEYS.pluginPreferences)).version).toBe(
+      PLUGIN_PREFERENCES_VERSION,
+    );
+  });
+
+  it("does not fall back to the legacy global key for other scenarios", () => {
+    storage.set(
+      "noobot_plugin_model_config",
+      JSON.stringify({ harness: { stepModels: { planning: "legacy-harness" } } }),
+    );
+
+    expect(readPluginModelConfigPreference("writing")).toEqual({});
+    expect(readPluginModelConfigPreference("")).toEqual({
       harness: { stepModels: { planning: "legacy-harness" } },
-      workflow: { semanticModel: "legacy-workflow" },
     });
+  });
+
+  it("rebuilds when the stored version or structure does not match", () => {
+    storage.set(
+      UI_PREFERENCE_STORAGE_KEYS.pluginPreferences,
+      JSON.stringify({ version: 0, scenarios: { programming: { harness: { a: "x" } } } }),
+    );
+    expect(loadPluginPreferences()).toEqual({ version: PLUGIN_PREFERENCES_VERSION, scenarios: {} });
+
+    storage.set(UI_PREFERENCE_STORAGE_KEYS.pluginPreferences, JSON.stringify({ version: 1 }));
+    expect(loadPluginPreferences()).toEqual({ version: PLUGIN_PREFERENCES_VERSION, scenarios: {} });
+
+    persistPluginModelConfigPreferenceByScenario({ harness: { a: "y" } }, "programming");
+    storage.set(
+      "noobot_plugin_model_config_by_scenario_v2",
+      JSON.stringify({ programming: { harness: { a: "stale" } } }),
+    );
+    expect(readPluginModelConfigPreference("programming")).toEqual({ harness: { a: "y" } });
   });
 
   it("loadUiPreferences restores selectedModel and pluginModelConfig for current scenario", () => {
@@ -397,10 +440,10 @@ describe("ui preferences storage", () => {
       workflow: { semanticModel: "workflow-writing" },
     });
   });
-});
 
-it("stores memoryModel by scenario", () => {
-  persistMemoryModelPreference("memory-programming", "programming");
-  localStorage.setItem("noobot_bot_scenario", "programming");
-  expect(loadUiPreferences().memoryModel).toBe("memory-programming");
+  it("stores memoryModel by scenario", () => {
+    persistMemoryModelPreference("memory-programming", "programming");
+    localStorage.setItem("noobot_bot_scenario", "programming");
+    expect(loadUiPreferences().memoryModel).toBe("memory-programming");
+  });
 });

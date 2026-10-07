@@ -74,9 +74,11 @@ export async function installE2eModelPreferences(pageOrContext) {
         JSON.stringify(scenarioSelections),
         { force: true },
       );
-      setInitialValue("noobot_plugin_model_config_by_scenario_v2", JSON.stringify(pluginModels), {
-        force: true,
-      });
+      setInitialValue(
+        "noobot_plugin_preferences",
+        JSON.stringify({ version: 1, scenarios: pluginModels }),
+        { force: true },
+      );
       setInitialValue("noobot_bot_scenario", "full");
       setInitialValue(
         "noobot_memory_model_by_scenario_v1",

@@ -293,7 +293,7 @@ export function useThinkingTimeline(
     return selectTaskCheckReceipts(timelineMessage(loadedThinkingDetail.value?.messageItem || {}));
   });
 
-  const { getLatestModelAnalysisLog, getLatestPluginAnalysisLog, summarizeAnalysisProjection } =
+  const { getLatestModelAnalysisLog, getLatestGuidanceAnalysisLog, summarizeAnalysisProjection } =
     createThinkingAnalysisProjection({
       props,
       currentAnalysisProjection,
@@ -501,9 +501,9 @@ export function useThinkingTimeline(
         getCompletedToolLogsForMessage(detailMessage).length > 0;
       reason = result ? "loaded-detail" : "loaded-detail-empty";
     }
-    if (!result && getLatestPluginAnalysisLog(messageItem)) {
+    if (!result && getLatestGuidanceAnalysisLog(messageItem)) {
       result = true;
-      reason = "plugin-analysis";
+      reason = "guidance-analysis";
     }
     if (!result && String(props.variant || "panel") === "details") {
       result = getCompletedToolLogsForMessage(messageItem).length > 0;
@@ -550,7 +550,7 @@ export function useThinkingTimeline(
     currentExecutionLogs,
     latestTaskCheckReceipt,
     taskCheckReceipts,
-    getLatestPluginAnalysisLog,
+    getLatestGuidanceAnalysisLog,
     getLatestModelAnalysisLog,
     getExecutionLogs,
     getCanonicalExecutionLogs,

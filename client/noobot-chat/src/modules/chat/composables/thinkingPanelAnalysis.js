@@ -4,41 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { selectLatestAnalysisActivities } from "../runtime/engine/activityTimeline.js";
-import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 
-function normalizeLogString(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
-}
-
-export function isPluginAnalysisResponseLog(logItem = {}) {
-  const eventType = normalizeLogString(logItem?.eventType);
-  const activityKind = normalizeLogString(logItem?.activityKind);
-  const purpose = normalizeLogString(logItem?.purpose);
-  const pluginFlow = normalizeLogString(logItem?.pluginFlow);
-  const chain = normalizeLogString(logItem?.chain);
-  return (
-    eventType === MESSAGE_EVENT_TYPE.THINKING &&
-    activityKind === ACTIVITY_KIND.GUIDANCE_ANALYSIS &&
-    purpose === "guidance" &&
-    pluginFlow === "analysis" &&
-    chain === "auxiliary"
-  );
-}
-
-export function isGuidanceAnalysisResponseLog(logItem = {}) {
-  return (
-    normalizeLogString(logItem?.eventType) === MESSAGE_EVENT_TYPE.THINKING &&
-    normalizeLogString(logItem?.activityKind) === ACTIVITY_KIND.GUIDANCE_ANALYSIS
-  );
-}
-
-function getModelAnalysisLogOutput(logItem = {}) {
-  return String(logItem?.text || "").trim();
-}
-
-function getPluginAnalysisLogOutput(logItem = {}) {
+function getAnalysisLogOutput(logItem = {}) {
   return String(logItem?.text || "").trim();
 }
 
@@ -52,19 +19,17 @@ export function createThinkingAnalysisProjection({
       messageItem === props.messageItem
         ? currentAnalysisProjection.value
         : selectLatestAnalysisActivities(timelineMessage(messageItem));
-    return getModelAnalysisLogOutput(projection.latestModelAnalysis || {})
+    return getAnalysisLogOutput(projection.latestModelAnalysis || {})
       ? projection.latestModelAnalysis
       : null;
   }
 
-  function getLatestPluginAnalysisLog(messageItem = {}) {
+  function getLatestGuidanceAnalysisLog(messageItem = {}) {
     const projection =
       messageItem === props.messageItem
         ? currentAnalysisProjection.value
         : selectLatestAnalysisActivities(timelineMessage(messageItem));
-    return getPluginAnalysisLogOutput(projection.latestGuidance || {})
-      ? projection.latestGuidance
-      : null;
+    return getAnalysisLogOutput(projection.latestGuidance || {}) ? projection.latestGuidance : null;
   }
 
   function summarizeAnalysisProjection(messageItem = {}) {
@@ -77,17 +42,17 @@ export function createThinkingAnalysisProjection({
     return {
       activityTimelineCount: projection.activityTimelineCount,
       latestGuidanceEventId: String(latestGuidance?.eventId || ""),
-      latestGuidanceOutputLength: getPluginAnalysisLogOutput(latestGuidance || {}).length,
+      latestGuidanceOutputLength: getAnalysisLogOutput(latestGuidance || {}).length,
       latestGuidanceTimestamp: String(latestGuidance?.timestamp || ""),
       latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
-      latestModelAnalysisOutputLength: getModelAnalysisLogOutput(latestModelAnalysis || {}).length,
+      latestModelAnalysisOutputLength: getAnalysisLogOutput(latestModelAnalysis || {}).length,
       latestModelAnalysisTimestamp: String(latestModelAnalysis?.timestamp || ""),
     };
   }
 
   return {
     getLatestModelAnalysisLog,
-    getLatestPluginAnalysisLog,
+    getLatestGuidanceAnalysisLog,
     summarizeAnalysisProjection,
   };
 }

@@ -38,6 +38,9 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       guidanceAnalysisIntensity: "分析强度",
       acceptanceModelDisabled: "启用 Planning Acceptance 后可选择模型",
     }),
+    thinkingSection: Object.freeze({
+      analysisFlow: "分析流",
+    }),
   }),
   "en-US": Object.freeze({
     common: Object.freeze({
@@ -52,14 +55,16 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       monotonicDeleteConfirm: "Delete this message and all following messages?",
       monotonicDeleteTitle: "Delete monotonic message",
       monotonicEditPlaceholder: "Edit this message and send again",
-      monotonicEditTip: "Sending will delete this message and all following messages, then regenerate.",
+      monotonicEditTip:
+        "Sending will delete this message and all following messages, then regenerate.",
       monotonicSendEdited: "Send",
       monotonicEdit: "Edit",
       monotonicDelete: "Delete",
     }),
     modelExtension: Object.freeze({
       title: "Harness Plugin",
-      description: "Configure separate models for non-main-flow steps such as planning, guidance, and acceptance.",
+      description:
+        "Configure separate models for non-main-flow steps such as planning, guidance, and acceptance.",
       placeholder: "Use main/default model",
       empty: "No enabled chat models are available",
       capabilitySuffix: "Capability",
@@ -67,6 +72,9 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
       disabled: "Disabled",
       guidanceAnalysisIntensity: "Analysis intensity",
       acceptanceModelDisabled: "Enable Planning Acceptance to select a model",
+    }),
+    thinkingSection: Object.freeze({
+      analysisFlow: "Analysis Flow",
     }),
   }),
 });
@@ -86,7 +94,6 @@ function applyParams(text = "", params = {}) {
   return output;
 }
 
-
 export function translateHarnessFallback(key = "", params = {}) {
   const fallbackTable = HARNESS_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
   const raw = resolvePath(fallbackTable, key);
@@ -98,7 +105,8 @@ export function useHarnessLocale() {
   const { locale, translate: translateGlobal } = useLocale();
 
   function translate(key = "", params = {}) {
-    const localTable = HARNESS_FRONTEND_MESSAGES[locale.value] || HARNESS_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
+    const localTable =
+      HARNESS_FRONTEND_MESSAGES[locale.value] || HARNESS_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
     const fallbackTable = HARNESS_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
     const localHit = resolvePath(localTable, key);
     const fallbackHit = resolvePath(fallbackTable, key);

@@ -16,24 +16,10 @@ const props = defineProps({
   context: { type: Object, default: () => ({}) },
   extraProps: { type: Object, default: () => ({}) },
   extraListeners: { type: Object, default: () => ({}) },
-  includeContributionIds: { type: Array, default: null },
-  excludeContributionIds: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(["resolved", "extension-error"]);
-const contributions = computed(() => {
-  const includedIds = Array.isArray(props.includeContributionIds)
-    ? new Set(props.includeContributionIds.map((id) => String(id || "").trim()).filter(Boolean))
-    : null;
-  const excludedIds = new Set(
-    props.excludeContributionIds.map((id) => String(id || "").trim()).filter(Boolean),
-  );
-  const resolved = resolveExtensionPoint(props.point, props.context).filter((contribution = {}) => {
-    const id = String(contribution.id || "").trim();
-    return (!includedIds || includedIds.has(id)) && !excludedIds.has(id);
-  });
-  return resolved;
-});
+const contributions = computed(() => resolveExtensionPoint(props.point, props.context));
 watch(contributions, (resolved) => emit("resolved", resolved), { flush: "post" });
 
 const resolvedContributions = computed(() =>

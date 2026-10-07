@@ -106,9 +106,12 @@
           }
         },
         {
-          "id": "thinking-panel",
-          "point": "message.card.pre",
-          "component": { "module": "noobot-chat/plugin-api/chat-ui", "export": "ThinkingPanel" }
+          "id": "harness-guidance-analysis",
+          "point": "thinking.panel.section",
+          "component": {
+            "module": "./frontend/components/HarnessGuidanceAnalysisSection.vue",
+            "export": "default"
+          }
         }
       ]
     }
@@ -117,6 +120,14 @@
     "ports": ["hooks.register", "policy.patch", "frontend.contribute"],
     "permissions": ["session.delete.observe"]
   },
-  "configuration": { "defaults": { "enabled": true, "mode": "on" } },
+  "configuration": {
+    "defaults": { "enabled": true, "mode": "on" },
+    "preferences": {
+      "capabilityProfile": {
+        "planning": { "enabled": false },
+        "acceptance": { "enabled": false }
+      }
+    }
+  },
   "enabledByDefault": true
 }

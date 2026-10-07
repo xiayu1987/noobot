@@ -13,7 +13,9 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
   const getRuntimeView = () =>
     props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
 
-  const timeline = useThinkingTimeline(props, translate, getRuntimeView, { shouldLoadThinkingDetail });
+  const timeline = useThinkingTimeline(props, translate, getRuntimeView, {
+    shouldLoadThinkingDetail,
+  });
   const runtime = useThinkingRuntime(props, getRuntimeView);
   const presentation = createThinkingPanelPresentation({
     props,
@@ -30,7 +32,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     getThinkingDurationLabel: runtime.getThinkingDurationLabel,
     isThinkingRuntimeRunning: runtime.isThinkingRuntimeRunning,
     getThinkingModelLoopRound: runtime.getThinkingModelLoopRound,
-    getLatestPluginAnalysisLog: timeline.getLatestPluginAnalysisLog,
+    getLatestGuidanceAnalysisLog: timeline.getLatestGuidanceAnalysisLog,
     getLatestModelAnalysisLog: timeline.getLatestModelAnalysisLog,
     getExecutionLogs: timeline.getExecutionLogs,
     getCanonicalExecutionLogs: timeline.getCanonicalExecutionLogs,

@@ -19,10 +19,6 @@ const props = defineProps({
   variant: { type: String, default: "panel" },
   userId: { type: String, default: "" },
   fetchExecutionReport: { type: Function, default: null },
-  renderMarkdown: { type: Function, default: null },
-  formatTime: { type: Function, default: null },
-  formatFileSize: { type: Function, default: null },
-  isImageMime: { type: Function, default: null },
 });
 const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
@@ -72,7 +68,7 @@ const {
   getThinkingDurationLabel,
   isThinkingRuntimeRunning,
   getThinkingModelLoopRound,
-  getLatestPluginAnalysisLog,
+  getLatestGuidanceAnalysisLog,
   getLatestModelAnalysisLog,
   currentExecutionLogs,
   latestTaskCheckReceipt,
@@ -103,7 +99,7 @@ defineExpose({
     :thinking-duration-label="getThinkingDurationLabel()"
     :thinking-model-loop-round="getThinkingModelLoopRound(messageItem)"
     :is-running="isThinkingRuntimeRunning(messageItem)"
-    :latest-plugin-analysis-log="getLatestPluginAnalysisLog(messageItem)"
+    :latest-guidance-analysis-log="getLatestGuidanceAnalysisLog(messageItem)"
     :latest-model-analysis-log="getLatestModelAnalysisLog(messageItem)"
     :execution-logs="currentExecutionLogs"
     :execution-log-count="getExecutionLogCount(messageItem)"

@@ -28,8 +28,9 @@ import {
   persistMemoryModelPreference,
   updateSelectedModelPreference,
   updateStreamOutputPreference,
-  applyFrontendPluginModelConfigDefaults,
+  applyPluginPreferenceDefaults,
 } from "../storage/uiPreferencesStorage.js";
+import { resolvePluginPreferenceDefaults } from "../../plugins/plugin-preference-defaults.js";
 
 function resolveModelValue(value) {
   return String(value || "").trim();
@@ -45,6 +46,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const scenarioConfigRef = ref(scenarioConfig || null);
   const currentScenarioConfig = computed(() => scenarioConfigRef.value?.value || {});
   const uiPreferences = loadUiPreferences();
+  const pluginPreferenceDefaults = resolvePluginPreferenceDefaults();
   const userId = ref(uiPreferences.userId);
   const allowUserInteraction = ref(uiPreferences.allowUserInteraction);
   const safeConfirm = ref(uiPreferences.safeConfirm);
@@ -55,7 +57,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const selectedModel = ref(uiPreferences.selectedModel);
   const memoryModel = ref(uiPreferences.memoryModel);
   const pluginModelConfig = ref(
-    applyFrontendPluginModelConfigDefaults(uiPreferences.pluginModelConfig),
+    applyPluginPreferenceDefaults(uiPreferences.pluginModelConfig, pluginPreferenceDefaults),
   );
   const frontendThresholdsEnabled = ref(false);
   const summaryPolicy = ref({});
@@ -116,8 +118,9 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
 
   function syncPluginModelConfigWithPreference() {
     const currentScenarioKey = String(botScenario.value || "").trim();
-    pluginModelConfig.value = applyFrontendPluginModelConfigDefaults(
+    pluginModelConfig.value = applyPluginPreferenceDefaults(
       readPluginModelConfigPreference(currentScenarioKey),
+      pluginPreferenceDefaults,
     );
     memoryModel.value = readMemoryModelPreference(currentScenarioKey);
   }

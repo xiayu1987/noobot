@@ -20,8 +20,14 @@ export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   selectedModelByScenario: "noobot_selected_model_by_scenario",
   selectedModelSelectionByScenario: "noobot_selected_model_selection_by_scenario_v2",
   memoryModelByScenario: "noobot_memory_model_by_scenario_v1",
-  pluginModelConfig: "noobot_plugin_model_config",
-  pluginModelConfigByScenario: "noobot_plugin_model_config_by_scenario_v2",
+  pluginPreferences: "noobot_plugin_preferences",
+});
+
+export const PLUGIN_PREFERENCES_VERSION = 1;
+
+const LEGACY_PLUGIN_PREFERENCE_STORAGE_KEYS = Object.freeze({
+  global: "noobot_plugin_model_config",
+  byScenario: "noobot_plugin_model_config_by_scenario_v2",
 });
 
 function getStorage() {
@@ -40,6 +46,15 @@ export function readStorageValue(key, fallback = "") {
 export function writeStorageValue(key, value) {
   try {
     getStorage()?.setItem?.(key, String(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeStorageValue(key) {
+  try {
+    getStorage()?.removeItem?.(key);
     return true;
   } catch {
     return false;
@@ -129,31 +144,28 @@ export function normalizePluginModelConfig(value = {}) {
   return normalizeNode(value) || {};
 }
 
-export function applyFrontendPluginModelConfigDefaults(value = {}) {
-  const normalized = normalizePluginModelConfig(value);
-  const harness =
-    normalized?.harness && typeof normalized.harness === "object" ? normalized.harness : {};
-  const capabilityProfile =
-    harness?.capabilityProfile && typeof harness.capabilityProfile === "object"
-      ? harness.capabilityProfile
-      : {};
-  return {
-    ...normalized,
-    harness: {
-      ...harness,
-      capabilityProfile: {
-        ...capabilityProfile,
-        planning: {
-          ...(capabilityProfile?.planning || {}),
-          enabled: capabilityProfile?.planning?.enabled === true,
-        },
-        acceptance: {
-          ...(capabilityProfile?.acceptance || {}),
-          enabled: capabilityProfile?.acceptance?.enabled === true,
-        },
-      },
-    },
-  };
+function isPlainPreferenceObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergePreferenceNode(defaults, value) {
+  if (!isPlainPreferenceObject(defaults) || !isPlainPreferenceObject(value)) {
+    return typeof value === "undefined" ? defaults : value;
+  }
+  const merged = { ...defaults };
+  for (const [key, child] of Object.entries(value)) {
+    merged[key] = mergePreferenceNode(defaults[key], child);
+  }
+  return merged;
+}
+
+export function applyPluginPreferenceDefaults(value = {}, defaultsByPluginId = {}) {
+  return normalizePluginModelConfig(
+    mergePreferenceNode(
+      normalizePluginModelConfig(defaultsByPluginId),
+      normalizePluginModelConfig(value),
+    ),
+  );
 }
 
 export function normalizePluginModelConfigByScenarioPreference(value = {}) {
@@ -294,48 +306,51 @@ export function persistMemoryModelPreference(value = "", scenarioKey = "") {
   );
 }
 
-export function persistPluginModelConfigPreference(value = {}) {
-  return writeJsonStorageValue(
-    UI_PREFERENCE_STORAGE_KEYS.pluginModelConfig,
-    normalizePluginModelConfig(value),
+function rebuildPluginPreferencesFromLegacy() {
+  const scenarios = normalizePluginModelConfigByScenarioPreference(
+    readJsonStorageValue(LEGACY_PLUGIN_PREFERENCE_STORAGE_KEYS.byScenario, {}),
   );
+  const legacyGlobal = normalizePluginModelConfig(
+    readJsonStorageValue(LEGACY_PLUGIN_PREFERENCE_STORAGE_KEYS.global, {}),
+  );
+  const defaultScenarioKey = normalizeScenarioPreferenceKey("");
+  if (Object.keys(legacyGlobal).length && !scenarios[defaultScenarioKey]) {
+    scenarios[defaultScenarioKey] = legacyGlobal;
+  }
+  return { version: PLUGIN_PREFERENCES_VERSION, scenarios };
 }
 
-export function loadPluginModelConfigByScenarioPreference() {
-  return normalizePluginModelConfigByScenarioPreference(
-    readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginModelConfigByScenario, {}),
-  );
+function writePluginPreferences(preferences) {
+  const written = writeJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginPreferences, preferences);
+  for (const legacyKey of Object.values(LEGACY_PLUGIN_PREFERENCE_STORAGE_KEYS)) {
+    removeStorageValue(legacyKey);
+  }
+  return written;
 }
 
-export function hasStoredPluginModelConfigPreference(scenarioKey = "") {
-  return Object.prototype.hasOwnProperty.call(
-    loadPluginModelConfigByScenarioPreference(),
-    normalizeScenarioPreferenceKey(scenarioKey),
-  );
-}
-
-export function readLegacyPluginModelConfigPreference() {
-  return normalizePluginModelConfig(
-    readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginModelConfig, {}),
-  );
+export function loadPluginPreferences() {
+  const stored = readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.pluginPreferences, null);
+  if (stored?.version === PLUGIN_PREFERENCES_VERSION && isPlainPreferenceObject(stored.scenarios)) {
+    return {
+      version: PLUGIN_PREFERENCES_VERSION,
+      scenarios: normalizePluginModelConfigByScenarioPreference(stored.scenarios),
+    };
+  }
+  const rebuilt = rebuildPluginPreferencesFromLegacy();
+  writePluginPreferences(rebuilt);
+  return rebuilt;
 }
 
 export function readPluginModelConfigPreference(scenarioKey = "") {
-  const pluginModelConfigByScenario = loadPluginModelConfigByScenarioPreference();
-  const normalizedScenarioKey = normalizeScenarioPreferenceKey(scenarioKey);
-  return Object.prototype.hasOwnProperty.call(pluginModelConfigByScenario, normalizedScenarioKey)
-    ? normalizePluginModelConfig(pluginModelConfigByScenario[normalizedScenarioKey])
-    : readLegacyPluginModelConfigPreference();
+  const { scenarios } = loadPluginPreferences();
+  return normalizePluginModelConfig(scenarios[normalizeScenarioPreferenceKey(scenarioKey)]);
 }
 
 export function persistPluginModelConfigPreferenceByScenario(value = {}, scenarioKey = "") {
-  const pluginModelConfigByScenario = loadPluginModelConfigByScenarioPreference();
-  pluginModelConfigByScenario[normalizeScenarioPreferenceKey(scenarioKey)] =
+  const preferences = loadPluginPreferences();
+  preferences.scenarios[normalizeScenarioPreferenceKey(scenarioKey)] =
     normalizePluginModelConfig(value);
-  return writeJsonStorageValue(
-    UI_PREFERENCE_STORAGE_KEYS.pluginModelConfigByScenario,
-    pluginModelConfigByScenario,
-  );
+  return writePluginPreferences(preferences);
 }
 
 export function normalizeAvailableBotScenarios(definitions = {}) {
@@ -490,7 +505,6 @@ export function updatePluginModelConfigPreference({ preferenceRef, value = {}, s
   if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
     preferenceRef.value = nextConfig;
   }
-  if (typeof scenarioKey === "undefined") persistPluginModelConfigPreference(nextConfig);
-  else persistPluginModelConfigPreferenceByScenario(nextConfig, scenarioKey);
+  persistPluginModelConfigPreferenceByScenario(nextConfig, scenarioKey);
   return nextConfig;
 }

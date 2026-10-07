@@ -308,6 +308,7 @@ export const pluginManifestSchema = z
     configuration: z
       .object({
         defaults: z.record(z.string(), z.unknown()).default({}),
+        preferences: z.record(z.string(), z.unknown()).optional(),
       })
       .strict()
       .optional(),

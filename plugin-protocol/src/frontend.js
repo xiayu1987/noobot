@@ -17,6 +17,7 @@ export const EXTENSION_POINTS = Object.freeze({
   SESSION_ARTIFACT_PANEL: "session.artifact.panel",
   RIGHT_TOOL_PANEL: "right.tool.panel",
   COMPOSER_MORE_ACTIONS: "composer.more.actions",
+  THINKING_PANEL_SECTION: "thinking.panel.section",
 });
 
 export const EXTENSION_ARBITRATION = Object.freeze({
@@ -40,6 +41,7 @@ const COMPONENT_EXTENSION_POINTS = new Set([
   EXTENSION_POINTS.SESSION_ARTIFACT_PANEL,
   EXTENSION_POINTS.RIGHT_TOOL_PANEL,
   EXTENSION_POINTS.COMPOSER_MORE_ACTIONS,
+  EXTENSION_POINTS.THINKING_PANEL_SECTION,
 ]);
 
 export const EXTENSION_POINT_DEFINITIONS = Object.freeze(
