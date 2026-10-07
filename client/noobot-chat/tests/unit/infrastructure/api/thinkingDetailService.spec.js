@@ -10,7 +10,7 @@ vi.mock("../../../../src/infrastructure/api/chat/chatApi.js", () => ({
   getSessionThinkingDetailApi: (...args) => getSessionThinkingDetailApi(...args),
 }));
 
-const { thinkingDetailService } =
+const { thinkingDetailService, THINKING_DETAIL_NOT_FOUND, THINKING_DETAIL_REQUEST_FAILED } =
   await import("../../../../src/infrastructure/api/thinking/thinkingDetailService.js");
 
 function jsonResponse(payload, { ok = true, status = 200 } = {}) {
@@ -43,23 +43,25 @@ describe("thinkingDetailService.getDetail", () => {
 
   it("throws with the HTTP status when the response is not ok", async () => {
     getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({}, { ok: false, status: 404 }));
-    await expect(thinkingDetailService.getDetail()).rejects.toThrow(
-      "failed to load thinking detail: 404",
-    );
+    const error = await thinkingDetailService.getDetail().catch((caught) => caught);
+    expect(error.message).toBe("failed to load thinking detail: 404");
+    expect(error.code).toBe(THINKING_DETAIL_REQUEST_FAILED);
+    expect(error.status).toBe(404);
   });
 
   it("falls back to status 500 when there is no response", async () => {
     getSessionThinkingDetailApi.mockResolvedValue(null);
-    await expect(thinkingDetailService.getDetail()).rejects.toThrow(
-      "failed to load thinking detail: 500",
-    );
+    const error = await thinkingDetailService.getDetail().catch((caught) => caught);
+    expect(error.message).toBe("failed to load thinking detail: 500");
+    expect(error.code).toBe(THINKING_DETAIL_REQUEST_FAILED);
+    expect(error.status).toBe(500);
   });
 
   it("marks missing details with thinking_detail_not_found", async () => {
     getSessionThinkingDetailApi.mockResolvedValue(jsonResponse({ ok: true, exists: false }));
     const error = await thinkingDetailService.getDetail().catch((caught) => caught);
     expect(error.message).toBe("thinking detail not found");
-    expect(error.code).toBe("thinking_detail_not_found");
+    expect(error.code).toBe(THINKING_DETAIL_NOT_FOUND);
   });
 
   it("surfaces the server error without a code when ok is false", async () => {

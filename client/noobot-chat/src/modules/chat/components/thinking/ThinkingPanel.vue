@@ -18,7 +18,6 @@ const props = defineProps({
   runtime: { type: Object, default: null },
   variant: { type: String, default: "panel" },
   userId: { type: String, default: "" },
-  thinkingDetailService: { type: Object, default: null },
   renderMarkdown: { type: Function, default: null },
   formatTime: { type: Function, default: null },
   formatFileSize: { type: Function, default: null },

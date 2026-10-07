@@ -503,7 +503,6 @@ const drawerPanels = computed(() =>
     thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {},
     thinkingDetailsAllMessages: thinkingDetailsAllMessages.value,
     thinkingDetailsRuntime: thinkingDetailsRuntime.value,
-    thinkingDetailService,
     getThinkingDetailsTitle,
     handleWorkspaceReset,
   }),

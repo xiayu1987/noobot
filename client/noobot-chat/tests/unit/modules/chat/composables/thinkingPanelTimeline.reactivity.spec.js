@@ -3,8 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, reactive } from "vue";
+const detailServiceMock = vi.hoisted(() => ({ getDetail: null }));
+vi.mock("../../../../../src/infrastructure/api/thinking/thinkingDetailService.js", () => ({
+  thinkingDetailService: {
+    getDetail: (...args) => detailServiceMock.getDetail(...args),
+  },
+}));
 import { useThinkingTimeline } from "../../../../../src/modules/chat/composables/thinkingPanelTimeline.js";
 import { __resetThinkingDetailCacheForTests } from "../../../../../src/modules/chat/model/thinkingDetailCache.js";
 import {
@@ -56,6 +62,7 @@ describe("thinking panel round timeline reactivity", () => {
     scope?.stop();
     scope = null;
     __resetThinkingDetailCacheForTests();
+    detailServiceMock.getDetail = null;
   });
 
   function mountRound() {
@@ -140,17 +147,14 @@ describe("thinking panel round timeline reactivity", () => {
       activityTimeline: [],
     };
     const allMessages = reactive([settled]);
-    const thinkingDetailService = {
-      getDetail: async () => ({
-        exists: true,
-        revision: "revision-1",
-        messageItem: { ...settled, thinkingContentTimeline: [interjectionFact(1)] },
-      }),
-    };
+    detailServiceMock.getDetail = async () => ({
+      exists: true,
+      revision: "revision-1",
+      messageItem: { ...settled, thinkingContentTimeline: [interjectionFact(1)] },
+    });
     const props = reactive({
       messageItem: allMessages[0],
       allMessages,
-      thinkingDetailService,
       userId: "user-a",
     });
     scope = effectScope();

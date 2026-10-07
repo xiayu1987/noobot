@@ -114,11 +114,8 @@
     }
   },
   "requires": {
-    "ports": ["hooks.register", "policy.patch", "authenticated_request", "frontend.contribute"],
-    "permissions": ["session.delete.observe", "http.authenticated"],
-    "authenticatedRoutes": [
-      { "method": "GET", "path": "/api/internal/session/:userId/:sessionId/thinking-detail" }
-    ]
+    "ports": ["hooks.register", "policy.patch", "frontend.contribute"],
+    "permissions": ["session.delete.observe"]
   },
   "configuration": { "defaults": { "enabled": true, "mode": "on" } },
   "enabledByDefault": true

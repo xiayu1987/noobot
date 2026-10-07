@@ -16,6 +16,13 @@ import { normalizeThinkingToolLogs } from "../../../../../../src/modules/chat/mo
 import ThinkingPanelRealtime from "../../../../../../src/modules/chat/components/thinking/ThinkingPanelRealtime.vue";
 import { setTurnThinkingOpenNames } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 
+const detailServiceMock = vi.hoisted(() => ({ getDetail: null }));
+vi.mock("../../../../../../src/infrastructure/api/thinking/thinkingDetailService.js", () => ({
+  thinkingDetailService: {
+    getDetail: (...args) => detailServiceMock.getDetail(...args),
+  },
+}));
+
 async function flushAsync() {
   for (let index = 0; index < 20; index += 1) {
     await Promise.resolve();
@@ -53,6 +60,7 @@ function persistedToolTimeline(text, id = "call-1") {
 describe("ThinkingPanel thinking-detail recovery", () => {
   afterEach(() => {
     __resetThinkingDetailCacheForTests();
+    detailServiceMock.getDetail = null;
     vi.restoreAllMocks();
   });
 
@@ -72,6 +80,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       });
     });
 
+    detailServiceMock.getDetail = getDetail;
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
@@ -82,7 +91,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       },
       {
         userId: "user-1",
-        thinkingDetailService: { getDetail },
         runtime: {
           running: false,
           terminal: true,
@@ -165,9 +173,9 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         ],
       }),
     );
+    detailServiceMock.getDetail = getDetail;
     const wrapper = mountThinkingPanel(messageItem, {
       userId: "user-1",
-      thinkingDetailService: { getDetail },
       runtime: { running: false, terminal: true },
     });
 
@@ -201,6 +209,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         }),
       );
 
+    detailServiceMock.getDetail = getDetail;
     const detail = await loadThinkingDetail({
       userId: "user-1",
       sessionId: "session-eventual-detail",
@@ -208,7 +217,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         sessionId: "session-eventual-detail",
         turnScopeId: "client-turn:eventual-detail",
       },
-      thinkingDetailService: { getDetail },
       retryLimit: 1,
       retryDelayMs: 0,
     });
@@ -229,6 +237,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       }),
     );
 
+    detailServiceMock.getDetail = getDetail;
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
@@ -240,7 +249,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       {
         variant: "details",
         userId: "user-1",
-        thinkingDetailService: { getDetail },
       },
     );
     await flushAsync();
@@ -271,10 +279,10 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       }),
     );
 
+    detailServiceMock.getDetail = getDetail;
     const wrapper = mountThinkingPanel(messageItem, {
       variant: "details",
       userId: "user-1",
-      thinkingDetailService: { getDetail },
     });
     await flushAsync();
 
@@ -287,6 +295,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
   it("does not fetch canonical details while a message is pending or local logs exist", async () => {
     const getDetail = vi.fn(async () => thinkingDetailPayload({ role: "assistant" }));
 
+    detailServiceMock.getDetail = getDetail;
     mountThinkingPanel(
       {
         role: "assistant",
@@ -298,7 +307,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       },
       {
         userId: "user-1",
-        thinkingDetailService: { getDetail },
         runtime: {
           running: true,
           terminal: false,
@@ -320,7 +328,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       },
       {
         userId: "user-1",
-        thinkingDetailService: { getDetail },
         runtime: {
           running: false,
           terminal: true,
@@ -344,6 +351,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       }),
     );
 
+    detailServiceMock.getDetail = getDetail;
     const wrapper = mountThinkingPanel(
       {
         role: "assistant",
@@ -353,7 +361,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       },
       {
         userId: "user-1",
-        thinkingDetailService: { getDetail },
         runtime: {
           running: false,
           terminal: true,

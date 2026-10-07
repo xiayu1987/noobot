@@ -12,7 +12,7 @@ import {
   getMessageSessionId,
   getMessageTurnScopeId,
 } from "./messageIdentity.js";
-import { thinkingDetailService as defaultThinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
+import { thinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();
@@ -81,12 +81,10 @@ export async function loadThinkingDetail({
   dialogProcessId = "",
   turnScopeId = "",
   fetchThinkingDetail = null,
-  thinkingDetailService = defaultThinkingDetailService,
   expectedRevision = "",
   retryLimit = QUANTITY_THRESHOLDS.client.thinkingDetailRetryLimit,
   retryDelayMs = TIME_THRESHOLDS.client.thinkingDetailRetryDelayMs,
 } = {}) {
-  const detailService = thinkingDetailService || defaultThinkingDetailService;
   const identity = resolveThinkingDetailIdentity(
     {
       ...messageItem,
@@ -106,7 +104,7 @@ export async function loadThinkingDetail({
       typeof fetchThinkingDetail === "function"
         ? fetchThinkingDetail
         : async (sid, params) =>
-            detailService.getDetail({
+            thinkingDetailService.getDetail({
               userId,
               sessionId: sid,
               dialogProcessId: params.dialogProcessId,

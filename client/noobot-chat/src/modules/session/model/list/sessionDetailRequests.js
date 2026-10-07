@@ -7,6 +7,11 @@ import { nowMs } from "../../../chat/model/timeFields.js";
 import { findSessionByAnyId as findSessionByAnyIdInList } from "../../../chat/model/sessionIdentity.js";
 import { normalizeSessionId } from "./sessionIdentity.js";
 import {
+  thinkingDetailService,
+  THINKING_DETAIL_NOT_FOUND,
+  THINKING_DETAIL_REQUEST_FAILED,
+} from "../../../../infrastructure/api/thinking/thinkingDetailService.js";
+import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
@@ -19,7 +24,6 @@ export function createSessionDetailRequests({
   userId,
   authFetch,
   getSessionDetailApi,
-  getSessionThinkingDetailApi = null,
   applySessionDetail,
   isSameSessionIdentity,
   translate,
@@ -94,7 +98,6 @@ export function createSessionDetailRequests({
     {
       requireExists = true,
       missingMessage = translate("chat.sessionNotFound"),
-      missingErrorCode = "",
       failedMessageFromPayload = true,
     } = {},
   ) {
@@ -109,9 +112,7 @@ export function createSessionDetailRequests({
       );
     }
     if (requireExists && !data.exists) {
-      const error = new Error(data.error || missingMessage);
-      if (missingErrorCode) error.code = missingErrorCode;
-      throw error;
+      throw new Error(data.error || missingMessage);
     }
     return data;
   }
@@ -189,22 +190,24 @@ export function createSessionDetailRequests({
     if (!normalizedDialogProcessId && !normalizedTurnScopeId) {
       throw new Error("dialogProcessId or turnScopeId is required");
     }
-    if (typeof getSessionThinkingDetailApi !== "function") {
-      throw new Error("thinking detail api is unavailable");
+    try {
+      return await thinkingDetailService.getDetail({
+        userId: userId.value,
+        sessionId: normalizedSessionId || sessionId,
+        dialogProcessId: normalizedDialogProcessId,
+        turnScopeId: normalizedTurnScopeId,
+      });
+    } catch (error) {
+      if (error?.code === THINKING_DETAIL_REQUEST_FAILED) {
+        throw new Error(translate("chat.getSessionFailed", { status: error.status }));
+      }
+      if (error?.code === THINKING_DETAIL_NOT_FOUND && !error.serverMessage) {
+        const missing = new Error(translate("chat.sessionNotFound"));
+        missing.code = THINKING_DETAIL_NOT_FOUND;
+        throw missing;
+      }
+      throw error;
     }
-    return requestSessionDetailData(
-      () =>
-        getSessionThinkingDetailApi(
-          {
-            userId: userId.value,
-            sessionId: normalizedSessionId || sessionId,
-            dialogProcessId: normalizedDialogProcessId,
-            turnScopeId: normalizedTurnScopeId,
-          },
-          { fetcher: authFetch },
-        ),
-      { missingErrorCode: "thinking_detail_not_found" },
-    );
   }
 
   return {

@@ -3,16 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createThinkingDetailService } from "./services/thinkingDetailService.js";
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { matchesThinkingPanel } from "./thinking-panel-matcher.js";
 
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
-  const thinkingDetailService = createThinkingDetailService(
-    ctx?.services?.authenticatedRequest?.request,
-  );
   if (typeof contribute !== "function" || !points) {
     throw new Error("frontend contribution API is required");
   }
@@ -39,7 +35,6 @@ export async function activate(ctx = {}) {
       allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
       runtime: context?.messageRuntime || null,
       userId: String(context?.userId || ""),
-      thinkingDetailService,
       renderMarkdown: context?.renderMarkdown,
       formatTime: context?.formatTime,
       formatFileSize: context?.formatFileSize,

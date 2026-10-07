@@ -100,7 +100,6 @@ describe("drawerPanelsState", () => {
       runtime: null,
       variant: "details",
       userId: undefined,
-      thinkingDetailService: null,
     });
     expect(panels[3].props.active).toBe(false);
   });

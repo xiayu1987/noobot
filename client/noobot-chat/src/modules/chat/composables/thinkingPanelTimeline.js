@@ -426,7 +426,6 @@ export function useThinkingTimeline(
           messageItem,
           dialogProcessId: identity.dialogProcessId,
           turnScopeId: identity.turnScopeId,
-          thinkingDetailService: props.thinkingDetailService,
           expectedRevision: String(cached?.revision || "").trim(),
         });
         if (!detail) {
