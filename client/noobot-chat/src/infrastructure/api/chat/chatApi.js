@@ -172,6 +172,17 @@ export async function getSessionThinkingDetailApi(
   );
 }
 
+export async function getSessionExecutionReportApi(
+  { userId = "", sessionId = "", dialogProcessId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const query = `?dialogProcessId=${encodeURIComponent(String(dialogProcessId || "").trim())}`;
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/execution-report${query}`,
+  );
+}
+
 export async function deleteSessionMessagesFromApi(
   {
     userId = "",

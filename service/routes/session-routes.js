@@ -5,7 +5,10 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
-import { normalizeSessionThinkingRouteText as normalizeRouteText } from "noobot-agent/session";
+import {
+  normalizeExecutionReportKey,
+  normalizeSessionThinkingRouteText as normalizeRouteText,
+} from "noobot-agent/session";
 import crypto from "node:crypto";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -323,6 +326,26 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
         turnScopeId,
       });
       res.json({ ok: true, ...detail });
+    }),
+  );
+
+  app.get(
+    "/internal/session/:userId/:sessionId/execution-report",
+    jsonRoute(async (req, res) => {
+      const { userId, sessionId } = req.params;
+      const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
+      if (!normalizeExecutionReportKey(dialogProcessId)) {
+        const error = new Error("valid dialogProcessId is required");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+      const report = await bot.session.getExecutionReport({ userId, sessionId, dialogProcessId });
+      if (!report) {
+        const error = new Error(translateText("common.notFound", req.locale));
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+      res.json({ ok: true, report });
     }),
   );
 

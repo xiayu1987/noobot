@@ -10,6 +10,11 @@ import { CALLER_ROLE } from "../config/constants.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
+  buildExecutionReport,
+  EXECUTION_REPORT_STATUS,
+  saveExecutionReportBestEffort,
+} from "../../observability/execution-log/execution-report.js";
+import {
   canonicalMessageId,
   emitContextIdentityDebug,
 } from "../../observability/context-identity-debug.js";
@@ -257,6 +262,17 @@ export class SessionExecutionFinalizer {
       executionLogs = [];
     }
     const executionSummary = summarizeExecutionLogs(executionLogs, { dialogProcessId });
+    await this.saveCompletedReport({
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+      dialogProcessId,
+      turnScopeId,
+      caller,
+      startedAt: thinkingStartedAt,
+      executionSummary,
+    });
     return {
       sessionId,
       parentSessionId: normalizeParentSessionId(parentSessionId),
@@ -271,5 +287,27 @@ export class SessionExecutionFinalizer {
       dialogProcessId,
       turnScopeId: String(turnScopeId || "").trim(),
     };
+  }
+
+  async saveCompletedReport({ userId, persistenceContext, ...reportFields }) {
+    const save =
+      typeof this.session?.saveExecutionReport === "function"
+        ? (payload) => this.session.saveExecutionReport(payload)
+        : null;
+    await saveExecutionReportBestEffort(
+      save,
+      {
+        userId,
+        sessionId: reportFields.sessionId,
+        parentSessionId: reportFields.parentSessionId,
+        persistenceContext,
+        report: buildExecutionReport({
+          ...reportFields,
+          status: EXECUTION_REPORT_STATUS.COMPLETED,
+          finishedAt: this.now(),
+        }),
+      },
+      runBestEffort,
+    );
   }
 }

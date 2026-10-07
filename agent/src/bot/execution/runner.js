@@ -45,6 +45,8 @@ export class SessionExecutionRunner {
     getSessionTurns,
     getTurnSummaryCheckpointState,
     finalizeRunSession,
+    saveExecutionReport = null,
+    getExecutionBundle = null,
     upsertParentAsyncTask,
     now,
   } = {}) {
@@ -67,6 +69,8 @@ export class SessionExecutionRunner {
     this.getSessionTurns = getSessionTurns;
     this.getTurnSummaryCheckpointState = getTurnSummaryCheckpointState;
     this.finalizeRunSession = finalizeRunSession;
+    this.saveExecutionReport = saveExecutionReport;
+    this.getExecutionBundle = getExecutionBundle;
     this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
   }
@@ -111,6 +115,7 @@ export class SessionExecutionRunner {
     let resolvedRunConfig = runConfig;
     let resolvedUsedSessionId = sessionId;
     let resolvedDialogProcessId = parentDialogProcessId;
+    let failureTurnScopeId = turnScopeId;
     let resolvedRuntimeEventListener = eventListener;
     let executionEventListener = null;
     let lifecycle = null;
@@ -183,6 +188,7 @@ export class SessionExecutionRunner {
       delete initializedRunConfig.pluginActivationScope;
       resolvedUsedSessionId = usedSessionId;
       resolvedDialogProcessId = dialogProcessId;
+      failureTurnScopeId = resolvedTurnScopeId;
       resolvedRuntimeEventListener = runtimeEventListener;
       lifecycle = initializedLifecycle;
 
@@ -378,6 +384,10 @@ export class SessionExecutionRunner {
         resolvedDialogProcessId,
         resolvedParentAsyncResultContainer,
         upsertParentAsyncTask: this.upsertParentAsyncTask,
+        saveExecutionReport: this.saveExecutionReport,
+        getExecutionBundle: this.getExecutionBundle,
+        persistenceContext,
+        turnScopeId: failureTurnScopeId,
         errorLogger: this.errorLogger,
         now: this.now,
         userId,

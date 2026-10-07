@@ -88,6 +88,9 @@ export function createRunner({
   bindSessionTurnAttachments = async () => ({}),
   assertReusedUserTurnIdentity = async () => ({}),
   assertPersistenceContextIdentity = null,
+  finalizeRunSession = async () => ({ answer: "ok" }),
+  saveExecutionReport = null,
+  upsertParentAsyncTask = () => {},
 } = {}) {
   let authorityEventSequence = 0;
   const committedUserMessages = new Map();
@@ -291,8 +294,9 @@ export function createRunner({
     commitSessionTurn: commitCanonicalUserMessage,
     bindSessionTurnAttachments: bindCanonicalUserMessageAttachments,
     assertReusedUserTurnIdentity: assertCanonicalReusedUserMessage,
-    finalizeRunSession: async () => ({ answer: "ok" }),
-    upsertParentAsyncTask: () => {},
+    finalizeRunSession,
+    saveExecutionReport,
+    upsertParentAsyncTask,
     now: () => new Date().toISOString(),
   });
 }

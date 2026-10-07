@@ -198,6 +198,14 @@ export class SessionExecutionEngine {
       getTurnSummaryCheckpointState: (payload = {}) =>
         this.session.getTurnSummaryCheckpointState(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
+      saveExecutionReport:
+        typeof this.session?.saveExecutionReport === "function"
+          ? (payload = {}) => this.session.saveExecutionReport(payload)
+          : null,
+      getExecutionBundle:
+        typeof this.session?.getExecutionBundle === "function"
+          ? (payload = {}) => this.session.getExecutionBundle(payload)
+          : null,
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };
     return new SessionExecutionRunner({

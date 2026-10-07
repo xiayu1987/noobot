@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { resolveData, resolveEvent, resolveToolName } from "./execution-log-fields.js";
+import { summarizeExecutionMetrics } from "./execution-report-metrics.js";
 
 function stringifyBrief(value, maxLength = LENGTH_THRESHOLDS.display.executionLogBriefChars) {
   if (value == null) return "";
@@ -53,15 +55,6 @@ function getToolLabel(tool = "") {
   return TOOL_LABELS[tool] || tool || "工具";
 }
 
-function resolveData(log = {}) {
-  return log?.data && typeof log.data === "object" ? log.data : {};
-}
-
-function resolveEvent(log = {}) {
-  const data = resolveData(log);
-  return String(data.rawEvent || data.event || log?.event || "").trim();
-}
-
 function isNoisySystemLog(log = {}) {
   const data = resolveData(log);
   const event = resolveEvent(log);
@@ -99,18 +92,16 @@ function resolveToolActionText(tool = "", data = {}) {
   return label;
 }
 
-function resolveToolName(log = {}) {
-  const data = resolveData(log);
-  return String(data.tool || data.toolName || log.tool || log.toolName || "").trim();
-}
-
 function resolveStatus(log = {}) {
   const event = String(log?.event || log?.data?.rawEvent || "").toLowerCase();
   const type = String(log?.type || log?.data?.type || "").toLowerCase();
   const category = String(log?.category || log?.data?.category || "").toLowerCase();
   if (category === "error" || type.includes("error") || event.includes("error")) return "error";
   if (event === "tool_call_start" || type === "tool_call") return "running";
-  if (event === "tool_call_end" || type === "tool_result") return "completed";
+  if (event === "tool_call_end" || type === "tool_result") {
+    const data = resolveData(log);
+    return data.success === false || data.ok === false ? "error" : "completed";
+  }
   return "info";
 }
 
@@ -154,6 +145,44 @@ function pickDetails(log = {}) {
   return details;
 }
 
+function resolveToolPhase(log = {}) {
+  if (!resolveToolName(log)) return "";
+  const event = String(log?.event || log?.data?.rawEvent || "").toLowerCase();
+  const type = String(log?.type || log?.data?.type || "").toLowerCase();
+  if (event === "tool_call_start" || type === "tool_call") return "call";
+  if (event === "tool_call_end" || type === "tool_result") return "result";
+  return "";
+}
+
+function toolStatEntry(toolStats = {}, tool = "") {
+  if (!toolStats[tool]) toolStats[tool] = { calls: 0, failures: 0 };
+  return toolStats[tool];
+}
+
+function countVisibleActivity(visibleLogs = []) {
+  const seen = { call: new Set(), result: new Set() };
+  const counts = { toolCallCount: 0, toolResultCount: 0, errorCount: 0, toolStats: {} };
+  for (const log of visibleLogs) {
+    const tool = resolveToolName(log);
+    const phase = resolveToolPhase(log);
+    const toolCallId = String(log?.data?.toolCallId || "").trim();
+    if (phase && toolCallId) {
+      if (seen[phase].has(toolCallId)) continue;
+      seen[phase].add(toolCallId);
+    }
+    if (phase === "call") {
+      counts.toolCallCount += 1;
+      toolStatEntry(counts.toolStats, tool).calls += 1;
+      continue;
+    }
+    if (phase === "result") counts.toolResultCount += 1;
+    if (resolveStatus(log) !== "error") continue;
+    counts.errorCount += 1;
+    if (tool) toolStatEntry(counts.toolStats, tool).failures += 1;
+  }
+  return counts;
+}
+
 export function summarizeExecutionLogs(logs = [], { maxSteps = 80, dialogProcessId = "" } = {}) {
   const sourceLogs = Array.isArray(logs) ? logs : [];
   const wantedDialogProcessId = String(dialogProcessId || "").trim();
@@ -176,17 +205,19 @@ export function summarizeExecutionLogs(logs = [], { maxSteps = 80, dialogProcess
     details: pickDetails(log),
   }));
 
-  const toolCalls = steps.filter((step) => step.category === "tool" || step.details.tool);
-  const errors = steps.filter((step) => step.status === "error");
+  const { toolCallCount, toolResultCount, errorCount, toolStats } =
+    countVisibleActivity(visibleLogs);
 
   return {
     total: sourceLogs.length,
     scopedTotal: scopedLogs.length,
     visibleTotal: visibleLogs.length,
     returned: steps.length,
-    toolCallCount: toolCalls.filter((step) => step.status === "running").length,
-    toolResultCount: toolCalls.filter((step) => step.status === "completed").length,
-    errorCount: errors.length,
+    toolCallCount,
+    toolResultCount,
+    errorCount,
+    toolStats,
+    metrics: summarizeExecutionMetrics(scopedLogs),
     latestText: steps.length ? steps[steps.length - 1].text : "",
     steps,
   };

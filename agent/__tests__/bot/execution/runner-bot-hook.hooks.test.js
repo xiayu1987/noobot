@@ -193,3 +193,53 @@ test("SessionExecutionRunner emits bot error hooks", async () => {
   );
   assert.deepEqual(events, ["bot.agent_dispatch_error", "bot.session_run_error"]);
 });
+
+function createReportingRunner(overrides = {}) {
+  const reports = [];
+  const runner = createRunner({
+    finalizeRunSession: async () => {
+      reports.push({ status: "completed", sessionId: "s1" });
+      return { answer: "ok" };
+    },
+    saveExecutionReport: async (payload = {}) => {
+      reports.push(payload.report);
+      return { saved: true };
+    },
+    ...overrides,
+  });
+  return { reports, runner };
+}
+
+const reportRunPayload = { userId: "u1", sessionId: "s1", message: "task", runConfig: {} };
+
+test("after_session_run hook failures stay isolated and keep the completed report", async () => {
+  const botHookManager = createTestBotHookManager();
+  botHookManager.on(HOOK_POINT.BOT.AFTER_SESSION_RUN, () => {
+    throw new Error("after hook failed");
+  });
+  const { reports, runner } = createReportingRunner({ botHookManager });
+
+  const result = await runner.runSession(reportRunPayload);
+
+  assert.equal(result.answer, "ok");
+  assert.deepEqual(
+    reports.map((report) => report.status),
+    ["completed"],
+  );
+});
+
+test("a failure after finalize overwrites the completed report with a failed report", async () => {
+  const { reports, runner } = createReportingRunner({
+    upsertParentAsyncTask: () => {
+      throw new Error("post finalize failed");
+    },
+  });
+
+  await assert.rejects(() => runner.runSession(reportRunPayload), /post finalize failed/);
+  assert.deepEqual(
+    reports.map((report) => report.status),
+    ["completed", "failed"],
+  );
+  assert.equal(reports.at(-1).sessionId, "s1");
+  assert.equal(reports.at(-1).error?.message, "post finalize failed");
+});

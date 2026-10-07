@@ -527,3 +527,102 @@ test("scoped metadata contributor failures abort the locked mutation", async () 
     await harness.cleanup();
   }
 });
+
+test("session facade writes per-turn execution reports into the scoped session directory", async () => {
+  const harness = buildHarness();
+  const { root, pathResolver, sessionRepo, executionRepo } = await harness.setup();
+  try {
+    const resolver = new ScopedSessionLocationResolver({
+      pathResolver,
+      userId: "alice",
+      sessionId: "child-report",
+      parentSessionId: "parent-report",
+      scopeId: "workflow:child-report",
+      allowedRoot: "runtime/plugin-data/workflow/session",
+      relativeDir: "runtime/plugin-data/workflow/session/run-report/node-report",
+    });
+    const persistenceContext = createPersistenceContext({ locationResolver: resolver });
+    const session = createSessionFacade({
+      sessionTreeService: {},
+      sessionCrudService: {},
+      sessionMessageService: {},
+      executionReadService: {},
+      sessionContextService: {},
+      taskService: {},
+      executionLogService: new ExecutionLogService({
+        executionRepo: new ExecutionLogRepository({ executionRepository: executionRepo }),
+        sessionRepo,
+      }),
+    });
+    const scopePayload = {
+      userId: "alice",
+      sessionId: "child-report",
+      parentSessionId: "parent-report",
+      persistenceContext,
+    };
+
+    for (const [dialogProcessId, status] of [
+      ["dp-1", "completed"],
+      ["dp-2", "failed"],
+    ]) {
+      assert.deepEqual(
+        await session.saveExecutionReport({ ...scopePayload, report: { dialogProcessId, status } }),
+        { saved: true },
+      );
+    }
+
+    const scope = await resolver.resolveSessionScope("alice", "child-report", "parent-report");
+    assert.equal(
+      (await readJson(path.join(scope.sessionDir, "execution-reports/dp-1.json"))).status,
+      "completed",
+    );
+    assert.equal(
+      (await session.getExecutionReport({ ...scopePayload, dialogProcessId: "dp-2" })).status,
+      "failed",
+    );
+    assert.equal(
+      await session.getExecutionReport({ ...scopePayload, dialogProcessId: "missing" }),
+      null,
+    );
+    assert.equal(
+      await sessionRepo.storageService.exists(
+        path.join(root, "alice/runtime/session/child-report/execution-reports"),
+      ),
+      false,
+    );
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("execution report writes are skipped for deleted sessions and invalid turn keys", async () => {
+  const harness = buildHarness();
+  const { root, sessionRepo, executionRepo } = await harness.setup();
+  try {
+    await sessionRepo.markSessionsDeleted("alice", ["gone"]);
+    assert.equal(
+      await executionRepo.saveReport("alice", "gone", {
+        dialogProcessId: "dp-1",
+        status: "failed",
+      }),
+      false,
+    );
+    for (const dialogProcessId of ["", "../escape", "a/b"]) {
+      assert.equal(
+        await executionRepo.saveReport("alice", "live", { dialogProcessId, status: "failed" }),
+        false,
+      );
+      assert.equal(await executionRepo.getReport("alice", "live", dialogProcessId), null);
+    }
+    for (const sessionId of ["gone", "live"]) {
+      assert.equal(
+        await sessionRepo.storageService.exists(
+          path.join(root, `alice/runtime/session/${sessionId}/execution-reports`),
+        ),
+        false,
+      );
+    }
+  } finally {
+    await harness.cleanup();
+  }
+});

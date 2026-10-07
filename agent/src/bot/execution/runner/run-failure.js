@@ -18,6 +18,66 @@ import {
 } from "@noobot/session-protocol/execution-abort";
 import { syncLifecycleRuntimeState } from "../../../runtime/lifecycle/state-machine.js";
 import { createExecutionFailure } from "../../../shared/errors/index.js";
+import { runBestEffort } from "@noobot/shared/best-effort";
+import {
+  buildExecutionReport,
+  EXECUTION_REPORT_STATUS,
+  saveExecutionReportBestEffort,
+} from "../../../observability/execution-log/execution-report.js";
+import { summarizeExecutionLogs } from "../../../observability/execution-log/execution-log-summary.js";
+
+function resolveFailureReportStatus(error, abortSignal) {
+  if (!isAbortError(error, abortSignal)) return EXECUTION_REPORT_STATUS.FAILED;
+  return isUserStopAbort(error, abortSignal)
+    ? EXECUTION_REPORT_STATUS.USER_STOPPED
+    : EXECUTION_REPORT_STATUS.INTERRUPTED;
+}
+
+async function loadFailureSummary(context, sessionId) {
+  if (typeof context.getExecutionBundle !== "function") return null;
+  const execution = await runBestEffort(
+    () =>
+      context.getExecutionBundle({
+        userId: context.userId,
+        sessionId,
+        parentSessionId: context.parentSessionId,
+        persistenceContext: context.persistenceContext,
+      }),
+    { operationName: "executionReport.loadFailureLogs", context: { sessionId } },
+  );
+  if (!Array.isArray(execution?.logs)) return null;
+  return summarizeExecutionLogs(execution.logs, {
+    dialogProcessId: context.resolvedDialogProcessId,
+  });
+}
+
+async function saveFailureReport(context, failure) {
+  const sessionId = context.resolvedUsedSessionId || context.sessionId;
+  if (typeof context.saveExecutionReport !== "function") return;
+  const executionSummary = await loadFailureSummary(context, sessionId);
+  await saveExecutionReportBestEffort(
+    context.saveExecutionReport,
+    {
+      userId: context.userId,
+      sessionId,
+      parentSessionId: context.parentSessionId,
+      persistenceContext: context.persistenceContext,
+      report: buildExecutionReport({
+        status: resolveFailureReportStatus(context.error, context.abortSignal),
+        sessionId,
+        parentSessionId: context.parentSessionId,
+        dialogProcessId: context.resolvedDialogProcessId,
+        turnScopeId: context.turnScopeId || context.resolvedRunConfig?.turnScopeId,
+        caller: context.caller,
+        startedAt: context.resolvedRunConfig?.thinkingStartedAt,
+        finishedAt: context.now?.(),
+        executionSummary,
+        error: failure,
+      }),
+    },
+    runBestEffort,
+  );
+}
 
 async function recordSessionRunFailure({
   error,
@@ -133,9 +193,14 @@ export async function handleSessionRunFailure({ executionEventListener, ...conte
       context.lifecycle?.snapshot || null,
     );
   }
+  let flushError = null;
   try {
     await executionEventListener?.flush();
-  } catch (flushError) {
+  } catch (error) {
+    flushError = error;
+  }
+  await saveFailureReport(context, failure);
+  if (flushError) {
     throw createExecutionFailure(
       new AggregateError([failure, flushError], failure.message, { cause: failure }),
       context.lifecycle?.snapshot || null,

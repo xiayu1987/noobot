@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -25,8 +25,10 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { isThinkingReplayDebugEnabled } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { toolLogDetailKey } from "../../model/toolLogIdentity.js";
+import ExecutionReportDrawer from "./ExecutionReportDrawer.vue";
 const props = defineProps({
   messageItem: { type: Object, required: true },
+  userId: { type: String, default: "" },
   translate: { type: Function, required: true },
   thinkingDurationLabel: { type: String, default: "0s" },
   thinkingModelLoopRound: { type: Number, default: 0 },
@@ -44,6 +46,7 @@ const props = defineProps({
   toggleExpanded: { type: Function, required: true },
 });
 const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
+const executionReportVisible = ref(false);
 const runningEmptyHintKey = computed(() =>
   props.latestPluginAnalysisLog || props.latestModelAnalysisLog
     ? "message.analyzingRealtimeLog"
@@ -217,7 +220,20 @@ watch(
           :label="thinkingDetailLabel"
           @click="emit('open-thinking-details')"
         />
+        <BasePillButton
+          class="thinking-detail-action-button execution-report-action-button"
+          :label="translate('message.executionReport')"
+          :disabled="isRunning"
+          @click="executionReportVisible = true"
+        />
       </div>
+      <ExecutionReportDrawer
+        v-if="executionReportVisible"
+        v-model:visible="executionReportVisible"
+        :message-item="messageItem"
+        :user-id="userId"
+        :translate="translate"
+      />
     </BaseTabPanelBody>
     <template #footer
       ><BasePillButton :label="translate('message.collapse')" @click="emit('collapse')"
@@ -308,9 +324,11 @@ watch(
 }
 .thinking-execution-actions {
   justify-content: stretch;
+  gap: var(--noobot-space-sm);
 }
 .thinking-detail-action-button {
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 42px;
   justify-content: center;
 }

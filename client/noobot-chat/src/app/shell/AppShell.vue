@@ -35,6 +35,7 @@ import {
 import { selectTurnMessageRuntime } from "../../modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { attachmentService } from "../../infrastructure/api/attachments/attachmentService.js";
 import { thinkingDetailService } from "../../infrastructure/api/thinking/thinkingDetailService.js";
+import { executionReportService } from "../../infrastructure/api/thinking/executionReportService.js";
 import { fileMutationPreviewService } from "../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
 import { authenticatedHttpService } from "../../infrastructure/http/authenticatedHttpService.js";
 import {
@@ -147,6 +148,7 @@ const {
 });
 attachmentService.configure({ fetcher: authFetch });
 thinkingDetailService.configure({ fetcher: authFetch });
+executionReportService.configure({ fetcher: authFetch });
 fileMutationPreviewService.configure({ fetcher: authFetch });
 authenticatedHttpService.configure({ fetcher: authFetch });
 bindScenarioConfig(scenarioConfig);

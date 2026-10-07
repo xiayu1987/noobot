@@ -188,6 +188,55 @@ export class ExecutionLogRepository {
     return this._getBundleStore(userId, normalizedSessionId, parentSessionId, persistenceContext);
   }
 
+  async getReport(
+    userId,
+    sessionId,
+    dialogProcessId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) {
+      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
+      });
+    }
+    if (typeof this.executionRepository?.getReport !== "function") return null;
+    return this.executionRepository.getReport(
+      userId,
+      normalizedSessionId,
+      dialogProcessId,
+      parentSessionId,
+      persistenceContext,
+    );
+  }
+
+  async saveReport(
+    userId,
+    sessionId,
+    report = {},
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) {
+      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
+      });
+    }
+    if (typeof this.executionRepository?.saveReport !== "function") return false;
+    const queueKey = this._appendQueueKey(userId, normalizedSessionId, parentSessionId);
+    return this._withAppendQueue(queueKey, () =>
+      this.executionRepository.saveReport(
+        userId,
+        normalizedSessionId,
+        report,
+        parentSessionId,
+        persistenceContext,
+      ),
+    );
+  }
+
   async appendLog(
     userId,
     sessionId,

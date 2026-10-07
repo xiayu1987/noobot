@@ -24,7 +24,10 @@ if (!globalThis.localStorage?.getItem) {
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
+  const { useMobileViewport } =
+    await import("../../../../../../src/shared/composables/useMobileViewport.js");
   return {
+    useMobileViewport,
     BaseThinkingPanelShell: defineComponent({
       name: "BaseThinkingPanelShell",
       setup(_, { slots }) {
@@ -162,7 +165,7 @@ const ElTabPaneStub = defineComponent({
   },
 });
 
-export function mountThinkingPanel(messageItem, props = {}) {
+export function mountThinkingPanel(messageItem, props = {}, { stubs = {} } = {}) {
   return mount(ThinkingPanel, {
     props: { messageItem, allMessages: [], ...props },
     global: {
@@ -206,6 +209,7 @@ export function mountThinkingPanel(messageItem, props = {}) {
           template: "<article><h4>{{ title }}</h4><p>{{ content }}</p></article>",
         },
         BasePillButton: { props: ["label"], template: "<button><slot />{{ label }}</button>" },
+        ...stubs,
       },
     },
   });

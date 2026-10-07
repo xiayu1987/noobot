@@ -478,6 +478,14 @@ export function createSessionFacade(runtime = {}) {
       return executionLogService.appendExecutionLog(payload);
     },
 
+    async saveExecutionReport(payload = {}) {
+      return executionLogService.saveExecutionReport(payload);
+    },
+
+    async getExecutionReport(payload = {}) {
+      return executionLogService.getExecutionReport(payload);
+    },
+
     async getRecentSessionMessages(payload = {}) {
       return sessionContextService.getRecentSessionMessages({
         ...normalizeContextServicePayload(payload),
@@ -603,6 +611,9 @@ export {
   readSessionDisplaySummaryArtifact,
   rebuildSessionDisplaySummaryArtifact,
   writeExecutionArtifact,
+  writeExecutionReportArtifact,
+  readExecutionReportArtifact,
+  normalizeExecutionReportKey,
   writeJsonArtifactFile,
   writeJsonlArtifactFile,
   writeSessionArtifact,

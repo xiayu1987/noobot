@@ -72,3 +72,57 @@ test("summarizeExecutionLogs renders tool results as readable frontend text", ()
   assert.equal(summary.toolCallCount, 1);
   assert.equal(summary.toolResultCount, 1);
 });
+
+function toolLog(phase, tool, toolCallId, extra = {}) {
+  return {
+    event: phase === "call" ? "tool_call_start" : "tool_call_end",
+    category: "tool",
+    type: phase === "call" ? "tool_call" : "tool_result",
+    data: { tool, toolCallId, ...extra },
+  };
+}
+
+test("summarizeExecutionLogs counts all visible logs beyond the step window", () => {
+  const logs = [];
+  for (let index = 0; index < 60; index += 1) {
+    logs.push(toolLog("call", "read_file", `call-${index}`));
+    logs.push(toolLog("result", "read_file", `call-${index}`, { success: true }));
+  }
+  const summary = summarizeExecutionLogs(logs, { maxSteps: 80 });
+
+  assert.equal(summary.returned, 80);
+  assert.equal(summary.toolCallCount, 60);
+  assert.equal(summary.toolResultCount, 60);
+  assert.equal(summary.errorCount, 0);
+  assert.deepEqual(summary.toolStats, { read_file: { calls: 60, failures: 0 } });
+});
+
+test("summarizeExecutionLogs treats unsuccessful tool results as errors", () => {
+  const summary = summarizeExecutionLogs([
+    toolLog("call", "execute_script", "call-1"),
+    toolLog("result", "execute_script", "call-1", { success: false }),
+    toolLog("call", "search", "call-2"),
+    toolLog("result", "search", "call-2", { ok: false }),
+  ]);
+
+  assert.equal(summary.toolResultCount, 2);
+  assert.equal(summary.errorCount, 2);
+  assert.deepEqual(summary.toolStats, {
+    execute_script: { calls: 1, failures: 1 },
+    search: { calls: 1, failures: 1 },
+  });
+  assert.equal(summary.steps[1].text, "失败：执行命令");
+});
+
+test("summarizeExecutionLogs de-duplicates replayed tool events by toolCallId", () => {
+  const summary = summarizeExecutionLogs([
+    toolLog("call", "read_file", "call-1"),
+    toolLog("call", "read_file", "call-1"),
+    toolLog("result", "read_file", "call-1", { success: false }),
+    toolLog("result", "read_file", "call-1", { success: false }),
+  ]);
+
+  assert.equal(summary.toolCallCount, 1);
+  assert.equal(summary.toolResultCount, 1);
+  assert.equal(summary.errorCount, 1);
+});

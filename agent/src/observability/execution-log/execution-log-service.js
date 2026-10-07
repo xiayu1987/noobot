@@ -93,4 +93,49 @@ export class ExecutionLogService {
     );
     return { appended: true, skipped: false };
   }
+
+  async saveExecutionReport({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    report = {},
+    persistenceContext = null,
+  }) {
+    const resolvedParentSessionId = await this._resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    const saved = await this.executionRepo.saveReport(
+      userId,
+      sessionId,
+      report,
+      resolvedParentSessionId,
+      persistenceContext,
+    );
+    return { saved: saved !== false };
+  }
+
+  async getExecutionReport({
+    userId,
+    sessionId,
+    dialogProcessId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  }) {
+    const resolvedParentSessionId = await this._resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    return this.executionRepo.getReport(
+      userId,
+      sessionId,
+      dialogProcessId,
+      resolvedParentSessionId,
+      persistenceContext,
+    );
+  }
 }

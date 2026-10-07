@@ -97,6 +97,7 @@ defineExpose({
   <ThinkingPanelRealtime
     v-if="variant !== 'details' && (hasThinking || loadedThinkingDetail)"
     :message-item="messageItem"
+    :user-id="userId"
     :translate="translate"
     :thinking-duration-label="getThinkingDurationLabel()"
     :thinking-model-loop-round="getThinkingModelLoopRound(messageItem)"
