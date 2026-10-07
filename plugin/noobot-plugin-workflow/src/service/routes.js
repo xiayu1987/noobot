@@ -115,13 +115,56 @@ function logDetail({
   });
 }
 
+function createThinkingDetailHandler(sessions, badRequestStatus) {
+  return async (req, res) => {
+    const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
+    const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
+    const turnScopeId = normalizeRouteText(req.query?.turnScopeId);
+    if (!dialogProcessId && !turnScopeId) {
+      const error = new Error("dialogProcessId or turnScopeId is required");
+      error.statusCode = badRequestStatus;
+      throw error;
+    }
+    const detail = await sessions.readThinkingDetail({
+      userId,
+      segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
+      dialogProcessId,
+      turnScopeId,
+      locale: req.locale,
+    });
+    res.json({
+      ok: true,
+      userId: String(userId || "").trim(),
+      rootSessionId: String(sessionId || "").trim(),
+      dialogProcessId: String(routeDialogProcessId || "").trim(),
+      ...detail,
+    });
+  };
+}
+
+function createExecutionReportHandler(sessions) {
+  return async (req, res) => {
+    const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
+    const dialogProcessId =
+      normalizeRouteText(req.query?.dialogProcessId) || normalizeRouteText(routeDialogProcessId);
+    const report = await sessions.readExecutionReport({
+      userId,
+      segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
+      dialogProcessId,
+      locale: req.locale,
+    });
+    res.json({ ok: true, report: report || null });
+  };
+}
+
 export function createWorkflowServiceRouteHandlers(context = {}) {
   const sessions = context?.ports?.sessions;
   const badRequestStatus = context?.ports?.http?.status?.BAD_REQUEST || 400;
   if (
     !sessions ||
     typeof sessions.readSnapshot !== "function" ||
-    typeof sessions.readThinkingDetail !== "function"
+    typeof sessions.readThinkingDetail !== "function" ||
+    typeof sessions.readExecutionReport !== "function"
   ) {
     throw new Error("workflow service session ports are required");
   }
@@ -231,33 +274,12 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     });
   };
 
-  const thinkingDetailHandler = async (req, res) => {
-    const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
-    const turnScopeId = normalizeRouteText(req.query?.turnScopeId);
-    if (!dialogProcessId && !turnScopeId) {
-      const error = new Error("dialogProcessId or turnScopeId is required");
-      error.statusCode = badRequestStatus;
-      throw error;
-    }
-    const detail = await sessions.readThinkingDetail({
-      userId,
-      segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
-      dialogProcessId,
-      turnScopeId,
-      locale: req.locale,
-    });
-    res.json({
-      ok: true,
-      userId: String(userId || "").trim(),
-      rootSessionId: String(sessionId || "").trim(),
-      dialogProcessId: String(routeDialogProcessId || "").trim(),
-      ...detail,
-    });
-  };
+  const thinkingDetailHandler = createThinkingDetailHandler(sessions, badRequestStatus);
+  const executionReportHandler = createExecutionReportHandler(sessions);
 
   return {
     "workflow.detail": sessionDetailHandler,
     "workflow.thinking-detail": thinkingDetailHandler,
+    "workflow.execution-report": executionReportHandler,
   };
 }

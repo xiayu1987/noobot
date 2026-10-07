@@ -18,6 +18,7 @@ const props = defineProps({
   runtime: { type: Object, default: null },
   variant: { type: String, default: "panel" },
   userId: { type: String, default: "" },
+  fetchExecutionReport: { type: Function, default: null },
   renderMarkdown: { type: Function, default: null },
   formatTime: { type: Function, default: null },
   formatFileSize: { type: Function, default: null },
@@ -98,6 +99,7 @@ defineExpose({
     :message-item="messageItem"
     :user-id="userId"
     :translate="translate"
+    :fetch-execution-report="fetchExecutionReport"
     :thinking-duration-label="getThinkingDurationLabel()"
     :thinking-model-loop-round="getThinkingModelLoopRound(messageItem)"
     :is-running="isThinkingRuntimeRunning(messageItem)"

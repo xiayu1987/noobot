@@ -62,6 +62,21 @@ function createWorkflowSessionService(authenticatedRequest) {
         { method: "GET" },
       );
     },
+    getExecutionReport({
+      userId = "",
+      sessionId = "",
+      routeDialogProcessId = "",
+      dialogProcessId = "",
+    } = {}) {
+      const routeId = String(routeDialogProcessId || dialogProcessId).trim();
+      const query = String(dialogProcessId || "").trim()
+        ? `?dialogProcessId=${encodeURIComponent(String(dialogProcessId).trim())}`
+        : "";
+      return request(
+        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeId)}/execution-report${query}`,
+        { method: "GET" },
+      );
+    },
     getThinkingDetail({
       userId = "",
       sessionId = "",

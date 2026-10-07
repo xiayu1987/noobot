@@ -69,6 +69,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   });
 
   const {
+    fetchSelectedNodeExecutionReport,
     handleOpenThinkingDetails,
     resolveStatusLabel,
     resolveStatusClass,
@@ -136,6 +137,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     displayNodeMessages,
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
+    fetchSelectedNodeExecutionReport,
     handleOpenThinkingDetails,
     resolveStatusLabel,
     resolveStatusClass,

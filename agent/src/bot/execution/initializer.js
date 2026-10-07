@@ -90,6 +90,7 @@ export class SessionExecutionInitializer {
       sessionId: usedSessionId,
       parentSessionId,
       turnScopeId,
+      persistenceContext,
       upstream: { ...upstreamListener, dialogProcessId: resolvedDialogProcessId },
     });
 

@@ -30,6 +30,7 @@ const props = defineProps({
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
   translate: { type: Function, required: true },
+  fetchExecutionReport: { type: Function, default: null },
   thinkingDurationLabel: { type: String, default: "0s" },
   thinkingModelLoopRound: { type: Number, default: 0 },
   isRunning: Boolean,
@@ -233,6 +234,7 @@ watch(
         :message-item="messageItem"
         :user-id="userId"
         :translate="translate"
+        :fetch-execution-report="fetchExecutionReport"
       />
     </BaseTabPanelBody>
     <template #footer

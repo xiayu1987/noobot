@@ -54,4 +54,26 @@ describe("Harness frontend registration", () => {
       contributions.some(({ contribution }) => contribution.suppressDefaultAssets === true),
     ).toBe(false);
   });
+
+  it("forwards the data-owner execution report fetcher to the thinking panel", async () => {
+    const contributions = [];
+    await activate({
+      contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
+      extensionPoints: {
+        MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
+        COMPOSER_OPTIONS_MODEL: "composer-options-model",
+        MESSAGE_CARD_PRE: "message-card-pre",
+        MESSAGE_CARD_POST: "message-card-post",
+      },
+      services: {},
+    });
+    const thinkingPanel = contributions.find(
+      ({ contribution }) => contribution.id === "thinking-panel",
+    )?.contribution;
+    const fetchExecutionReport = () => null;
+    expect(thinkingPanel.resolveProps({ fetchExecutionReport }).fetchExecutionReport).toBe(
+      fetchExecutionReport,
+    );
+    expect(thinkingPanel.resolveProps({}).fetchExecutionReport).toBe(null);
+  });
 });

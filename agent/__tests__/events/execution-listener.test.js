@@ -591,3 +591,31 @@ test("execution listener does not collect delivery timing without onDeliveryTimi
   assert.equal(forwarded.length, 1);
   assert.equal(nowCalls, 0);
 });
+
+test("execution listener persists runtime events into the scoped persistence context", async () => {
+  const persisted = [];
+  const persistenceContext = { locationResolver: { resolve: () => "scoped" } };
+  const scoped = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    userId: "user-a",
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+    persistenceContext,
+    upstream: { dialogProcessId: "child-dialog" },
+  });
+  const unscoped = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    userId: "user-a",
+    sessionId: "root-session",
+    upstream: { dialogProcessId: "root-dialog" },
+  });
+
+  await scoped.onEvent({ event: "llm_call_start", data: {} });
+  await unscoped.onEvent({ event: "llm_call_start", data: {} });
+  await scoped.flush();
+  await unscoped.flush();
+
+  assert.equal(persisted.length, 2);
+  assert.equal(persisted[0].persistenceContext, persistenceContext);
+  assert.equal("persistenceContext" in persisted[1], false);
+});

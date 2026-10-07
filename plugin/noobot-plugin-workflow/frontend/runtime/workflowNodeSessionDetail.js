@@ -282,3 +282,36 @@ export async function fetchWorkflowNodeThinkingDetail({
   }
   return payload;
 }
+
+export async function fetchWorkflowNodeExecutionReport({
+  props,
+  translate,
+  rootSessionId = "",
+  routeDialogProcessId = "",
+  dialogProcessId = "",
+}) {
+  const normalizedRouteDialogProcessId = String(
+    routeDialogProcessId || dialogProcessId || "",
+  ).trim();
+  if (!props.userId || !rootSessionId || !normalizedRouteDialogProcessId) {
+    throw new Error(translate("workflow.nodeSessionMissing"));
+  }
+  const service = props?.workflowSessionService;
+  if (typeof service?.getExecutionReport !== "function") {
+    throw new Error("workflow session service is unavailable");
+  }
+  const response = await service.getExecutionReport({
+    userId: props.userId,
+    sessionId: rootSessionId,
+    routeDialogProcessId: normalizedRouteDialogProcessId,
+    dialogProcessId,
+  });
+  if (!response.ok) {
+    throw new Error(translate("workflow.readNodeSessionFailed"));
+  }
+  const payload = await response.json();
+  if (!payload?.ok) {
+    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
+  }
+  return payload.report || null;
+}

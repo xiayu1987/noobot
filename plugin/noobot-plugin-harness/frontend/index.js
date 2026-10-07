@@ -35,6 +35,8 @@ export async function activate(ctx = {}) {
       allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
       runtime: context?.messageRuntime || null,
       userId: String(context?.userId || ""),
+      fetchExecutionReport:
+        typeof context?.fetchExecutionReport === "function" ? context.fetchExecutionReport : null,
       renderMarkdown: context?.renderMarkdown,
       formatTime: context?.formatTime,
       formatFileSize: context?.formatFileSize,

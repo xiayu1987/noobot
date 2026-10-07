@@ -12,6 +12,7 @@ import { pipeline } from "node:stream/promises";
 import {
   buildThinkingDetailPayload,
   iterateExecutionLogs,
+  readExecutionReportArtifact,
   readSessionArtifactSnapshot,
 } from "noobot-agent/session";
 import { HTTP_STATUS } from "noobot-agent/constants";
@@ -317,6 +318,10 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
         },
         { dialogProcessId, turnScopeId },
       );
+    },
+    async readExecutionReport({ userId, segments, dialogProcessId, locale }) {
+      const { outputDir } = resolveSessionDir({ userId, segments, locale });
+      return readExecutionReportArtifact({ sessionDir: outputDir, dialogProcessId });
     },
   });
 }

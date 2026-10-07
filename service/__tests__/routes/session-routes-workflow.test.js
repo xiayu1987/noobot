@@ -255,3 +255,37 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     assert.equal(Object.hasOwn(payload, "allMessages"), false);
   });
 });
+
+test("session-routes: workflow execution-report reads the scoped node report", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-report-route-"));
+  const reportDir = path.join(
+    workspaceRoot,
+    "runtime/plugin-data/workflow/session/root-s/wf_node_1/execution-reports",
+  );
+  await fs.mkdir(reportDir, { recursive: true });
+  await fs.writeFile(
+    path.join(reportDir, "wf_node_1.json"),
+    JSON.stringify({ dialogProcessId: "wf_node_1", status: "completed" }),
+  );
+  const app = express();
+  const bot = { session: {}, getWorkspacePath: () => workspaceRoot };
+  const translateText = (key) => key;
+  await registerWorkflowPluginRoutes(app, { bot, translateText });
+
+  await withTestServer(app, async (baseUrl) => {
+    const found = await fetch(
+      `${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1/execution-report`,
+    );
+    const payload = await found.json();
+    assert.equal(found.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.report.status, "completed");
+
+    const missing = await fetch(
+      `${baseUrl}/internal/workflow/session/u1/root-s/wf_node_2/execution-report`,
+    );
+    const missingPayload = await missing.json();
+    assert.equal(missing.status, 200);
+    assert.equal(missingPayload.report, null);
+  });
+});

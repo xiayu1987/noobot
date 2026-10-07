@@ -212,4 +212,24 @@ describe("ThinkingPanel execution report", () => {
     expect(dialog.find('[data-testid="execution-report-body"]').exists()).toBe(false);
     expect(dialog.find(".empty-hint").text()).toMatch(/本轮暂无执行报告|No execution report/);
   });
+
+  it("loads the report through the data-owner fetcher instead of the host endpoint", async () => {
+    const fetchExecutionReport = vi.fn(async () => ({ status: "completed", durationMs: 1000 }));
+    const wrapper = mountThinkingPanel(
+      finishedMessage,
+      { userId: "user-1", fetchExecutionReport },
+      { stubs: drawerStub },
+    );
+
+    await findReportButton(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(getReport).not.toHaveBeenCalled();
+    expect(fetchExecutionReport).toHaveBeenCalledWith({
+      userId: "user-1",
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+    });
+    expect(wrapper.find('[data-testid="execution-report-body"]').exists()).toBe(true);
+  });
 });

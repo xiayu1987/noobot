@@ -116,6 +116,7 @@ const {
   displayNodeMessages,
   nodeSessionAllMessages,
   selectedRuntimeBoxes,
+  fetchSelectedNodeExecutionReport,
   handleOpenThinkingDetails,
   resolveStatusLabel,
   resolveStatusClass,
@@ -155,6 +156,7 @@ const {
     :execution-directory="executionDirectory"
     :attempt-execution-ids="attemptExecutionIds"
     :stop-execution="stopExecution"
+    :fetch-execution-report="fetchSelectedNodeExecutionReport"
     :selected-runtime-node="selectedRuntimeNode"
     :selected-runtime-step="selectedRuntimeStep"
     :selected-runtime-boxes="selectedRuntimeBoxes"

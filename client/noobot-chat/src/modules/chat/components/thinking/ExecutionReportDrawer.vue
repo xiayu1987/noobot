@@ -19,6 +19,7 @@ const props = defineProps({
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
   translate: { type: Function, required: true },
+  fetchExecutionReport: { type: Function, default: null },
 });
 const emit = defineEmits(["update:visible"]);
 
@@ -43,11 +44,15 @@ async function loadReport() {
   errorText.value = "";
   report.value = null;
   try {
-    report.value = await executionReportService.getReport({
+    const request = {
       userId: props.userId,
       sessionId: getMessageSessionId(props.messageItem),
       dialogProcessId: getMessageDialogProcessId(props.messageItem),
-    });
+    };
+    report.value =
+      (typeof props.fetchExecutionReport === "function"
+        ? await props.fetchExecutionReport(request)
+        : await executionReportService.getReport(request)) || null;
   } catch (error) {
     errorText.value = String(error?.message || error);
   } finally {

@@ -74,6 +74,7 @@ function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
         :delete-monotonic-message="deleteMonotonicMessage"
         :resend-monotonic-message="resendMonotonicMessage"
         :stop-execution="stopExecution"
+        :fetch-execution-report="fetchExecutionReport"
         :attachment-preview-dialog-class="attachmentPreviewDialogClass"
         :file-preview-dialog-class="filePreviewDialogClass"
         @open-thinking-details="openThinkingDetails($event, messageItem)"

@@ -110,6 +110,7 @@ function mountViewer({
     workflowSessionService: {
       getDetail: (...args) => fetcher(...args),
       getThinkingDetail: (...args) => fetcher(...args),
+      getExecutionReport: (...args) => fetcher(...args),
     },
     selectExecutionDetail: selectExecutionDetail || vi.fn(() => null),
     selectSessionMessages: vi.fn(

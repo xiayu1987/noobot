@@ -24,6 +24,7 @@ const props = defineProps({
   executionDirectory: { type: Array, default: () => [] },
   attemptExecutionIds: { type: Array, default: () => [] },
   stopExecution: { type: Function, default: null },
+  fetchExecutionReport: { type: Function, default: null },
   selectedRuntimeNode: { type: Object, default: null },
   selectedRuntimeStep: { type: Object, default: null },
   selectedRuntimeBoxes: { type: Array, default: () => [] },
@@ -392,6 +393,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             :format-file-size="formatFileSize"
             :is-image-mime="isImageMime"
             :stop-execution="stopExecution"
+            :fetch-execution-report="fetchExecutionReport"
             :empty-text="
               viewerLoading
                 ? ''

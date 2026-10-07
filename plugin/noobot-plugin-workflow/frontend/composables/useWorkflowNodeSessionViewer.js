@@ -7,7 +7,10 @@ import { ref, watch } from "vue";
 import { useWorkflowNodeSessionHistory } from "../runtime/workflowNodeSessionHistory.js";
 import { useWorkflowNodeSessionLabels } from "../runtime/workflowNodeSessionLabels.js";
 import { useWorkflowDrawerHistory } from "../services/workflowDrawerHistory.js";
-import { fetchWorkflowNodeThinkingDetail } from "../runtime/workflowNodeSessionDetail.js";
+import {
+  fetchWorkflowNodeExecutionReport,
+  fetchWorkflowNodeThinkingDetail,
+} from "../runtime/workflowNodeSessionDetail.js";
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { createWorkflowNodeViewTransaction } from "../runtime/workflowNodeViewTransaction.js";
 import {
@@ -105,6 +108,17 @@ function createViewerCommands(context) {
     });
   }
 
+  async function fetchSelectedNodeExecutionReport({ dialogProcessId = "" } = {}) {
+    const route = buildWorkflowDrawerRoute(refs.selectedNode.value || {});
+    return fetchWorkflowNodeExecutionReport({
+      props,
+      translate: context.translate,
+      rootSessionId: route.rootSessionId,
+      routeDialogProcessId: route.dialogProcessId,
+      dialogProcessId,
+    });
+  }
+
   function handleOpenThinkingDetails(payload = {}) {
     emit("open-thinking-details", {
       ...(payload && typeof payload === "object" ? payload : {}),
@@ -150,6 +164,7 @@ function createViewerCommands(context) {
   }
 
   return {
+    fetchSelectedNodeExecutionReport,
     handleOpenThinkingDetails,
     openWorkflowNodePanel,
     handleRuntimeStepClick,

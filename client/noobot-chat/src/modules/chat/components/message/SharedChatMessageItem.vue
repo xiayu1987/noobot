@@ -391,6 +391,7 @@ function resolveRendererContext() {
     turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
     selectExecutionDetail: chatStore.selectExecutionDetail,
     stopExecution: props.stopExecution,
+    fetchExecutionReport: props.fetchExecutionReport,
     selectSessionMessages,
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     logWorkflowDiagnostics,

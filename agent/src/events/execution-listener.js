@@ -45,6 +45,7 @@ export function createExecutionEventListener({
   sessionId = "",
   parentSessionId = "",
   turnScopeId = "",
+  persistenceContext = null,
   upstream = null,
 }) {
   const dialogProcessId = normalizeDialogProcessId(upstream?.dialogProcessId);
@@ -80,6 +81,7 @@ export function createExecutionEventListener({
       dialogProcessId: data.dialogProcessId,
       turnScopeId: data.turnScopeId,
       data,
+      ...(persistenceContext ? { persistenceContext } : {}),
     };
     persistenceTail = persistenceTail.then(async () => {
       try {
