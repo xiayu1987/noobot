@@ -44,7 +44,7 @@ export function buildEngineErrorPayload({
   classification,
   metadata = {},
 } = {}) {
-  const normalizedClassification = classification || classifyEngineError(error);
+  const normalizedClassification = classification || classifyEngineError(error, abortSignal);
   const status = resolveErrorStatus(error);
   const code =
     error?.code ??
@@ -98,7 +98,7 @@ export function handleEngineError({
   event = "agent_error",
   metadata = {},
 } = {}) {
-  const classification = classifyEngineError(error);
+  const classification = classifyEngineError(error, abortSignal);
   const payload = buildEngineErrorPayload({
     error,
     abortSignal,

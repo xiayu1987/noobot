@@ -30,7 +30,12 @@ function structuredAbortReason(value) {
 export function createExecutionAbortReason(source = {}) {
   const reason = structuredAbortReason(source);
   if (!reason) throw new TypeError("execution abort reason requires a supported type");
-  return reason;
+  const error = Object.assign(new Error(reason.reason || reason.type), reason);
+  Object.defineProperties(error, {
+    name: { value: "AbortError", configurable: true, writable: true },
+    code: { value: "ABORT_ERR", configurable: true, writable: true },
+  });
+  return error;
 }
 
 export function resolveExecutionAbortReason({ error = null, abortSignal = null } = {}) {

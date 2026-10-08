@@ -134,6 +134,31 @@ test("structured signal reason is authoritative over a generic SDK abort error",
   assert.equal(isExecutionAbortError({ error, abortSignal: controller.signal }), true);
 });
 
+test("execution abort reason is an extensible AbortError accepted by fetch", async () => {
+  const reason = createExecutionAbortReason({
+    type: EXECUTION_ABORT_TYPE.USER_STOP,
+    reason: "user stop action",
+  });
+  assert.ok(reason instanceof Error);
+  assert.equal(reason.name, "AbortError");
+  assert.equal(reason.code, "ABORT_ERR");
+  assert.equal(reason.message, "user stop action");
+  assert.equal(Object.isExtensible(reason), true);
+
+  const controller = new AbortController();
+  controller.abort(reason);
+  assert.throws(
+    () => controller.signal.throwIfAborted(),
+    (error) => error === reason,
+  );
+  await assert.rejects(fetch("http://127.0.0.1:9", { signal: controller.signal }), (error) => {
+    assert.equal(error, reason);
+    return true;
+  });
+  assert.equal(isExecutionAbortError({ error: reason }), true);
+  assert.equal(resolveExecutionAbortType({ error: reason }), EXECUTION_ABORT_TYPE.USER_STOP);
+});
+
 test("structured abort type remains authoritative when reason text is absent", () => {
   const controller = new AbortController();
   controller.abort({ type: EXECUTION_ABORT_TYPE.SYSTEM_ABORT });

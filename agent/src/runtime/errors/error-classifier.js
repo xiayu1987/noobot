@@ -5,8 +5,8 @@
  */
 import { isAbortError } from "../../shared/utils/error-utils.js";
 
-export function classifyEngineError(error = null) {
-  if (isAbortError(error) || isAbortError(error?.cause)) {
+export function classifyEngineError(error = null, abortSignal = null) {
+  if (abortSignal?.aborted || isAbortError(error) || isAbortError(error?.cause)) {
     return "abort";
   }
 

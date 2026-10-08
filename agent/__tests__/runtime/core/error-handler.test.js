@@ -52,6 +52,19 @@ test("engine abort payload uses the structured signal reason", () => {
   assert.equal(payload.error.type, "run_timeout");
 });
 
+test("errors raised after a user stop are classified as abort", () => {
+  const controller = new AbortController();
+  controller.abort({ type: "user_stop", reason: "user stop action" });
+  const error = new TypeError("Cannot define property stack, object is not extensible");
+
+  const payload = buildEngineErrorPayload({ error, abortSignal: controller.signal });
+
+  assert.equal(payload.classification, "abort");
+  assert.equal(payload.error.fatal, false);
+  assert.equal(payload.error.type, "user_stop");
+  assert.equal(payload.message, "user stop action");
+});
+
 test("engine payload preserves the recoverable tool error classification", () => {
   const error = recoverableToolError("configured model was not found", {
     code: "RECOVERABLE_MODEL_NOT_FOUND",
