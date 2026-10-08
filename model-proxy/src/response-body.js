@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import zlib from 'node:zlib';
-import util from 'node:util';
-import { tryParseJson } from './common.js';
+import zlib from "node:zlib";
+import util from "node:util";
+import { tryParseJson } from "./common.js";
 
 const gunzip = util.promisify(zlib.gunzip);
 const inflate = util.promisify(zlib.inflate);
@@ -16,19 +16,19 @@ async function decodeBodyByEncoding(buffer, encoding) {
   const enc = String(encoding).toLowerCase();
 
   try {
-    if (enc.includes('gzip')) return await gunzip(buffer);
-    if (enc.includes('deflate')) return await inflate(buffer);
-    if (enc.includes('br')) return await brotliDecompress(buffer);
+    if (enc.includes("gzip")) return await gunzip(buffer);
+    if (enc.includes("deflate")) return await inflate(buffer);
+    if (enc.includes("br")) return await brotliDecompress(buffer);
     return buffer;
   } catch (_) {
     return buffer;
   }
 }
 
-function normalizeBodyText(text, contentType = '') {
+function normalizeBodyText(text, contentType = "") {
   const ct = String(contentType).toLowerCase();
 
-  if (ct.includes('application/json')) {
+  if (ct.includes("application/json")) {
     try {
       const obj = JSON.parse(text);
       return JSON.stringify(obj, null, 2);
@@ -41,16 +41,17 @@ function normalizeBodyText(text, contentType = '') {
 }
 
 function normalizeToolCallItem(toolCallItem = {}) {
-  if (!toolCallItem || typeof toolCallItem !== 'object') return null;
-  const normalizedFunction = toolCallItem.function && typeof toolCallItem.function === 'object'
-    ? {
-        name: String(toolCallItem.function.name || '').trim(),
-        arguments: String(toolCallItem.function.arguments || ''),
-      }
-    : {};
+  if (!toolCallItem || typeof toolCallItem !== "object") return null;
+  const normalizedFunction =
+    toolCallItem.function && typeof toolCallItem.function === "object"
+      ? {
+          name: String(toolCallItem.function.name || "").trim(),
+          arguments: String(toolCallItem.function.arguments || ""),
+        }
+      : {};
   const normalized = {
-    id: String(toolCallItem.id || '').trim(),
-    type: String(toolCallItem.type || '').trim() || 'function',
+    id: String(toolCallItem.id || "").trim(),
+    type: String(toolCallItem.type || "").trim() || "function",
     function: normalizedFunction,
   };
   if (!normalized.id && !normalized.function?.name && !normalized.function?.arguments) return null;
@@ -58,9 +59,9 @@ function normalizeToolCallItem(toolCallItem = {}) {
 }
 
 function extractToolCallsFromJsonPayload(payloadObject = null) {
-  if (!payloadObject || typeof payloadObject !== 'object') return [];
+  if (!payloadObject || typeof payloadObject !== "object") return [];
   const choices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
-  const firstChoice = choices[0] && typeof choices[0] === 'object' ? choices[0] : null;
+  const firstChoice = choices[0] && typeof choices[0] === "object" ? choices[0] : null;
   const messageToolCalls = Array.isArray(firstChoice?.message?.tool_calls)
     ? firstChoice.message.tool_calls
     : [];
@@ -77,14 +78,14 @@ function extractToolCallsFromJsonPayload(payloadObject = null) {
 }
 
 function normalizeResponsesOutputItem(item = {}) {
-  if (!item || typeof item !== 'object') return null;
-  if (item.type === 'function_call') {
+  if (!item || typeof item !== "object") return null;
+  if (item.type === "function_call") {
     return {
-      id: String(item.call_id || item.id || '').trim(),
-      type: 'function',
+      id: String(item.call_id || item.id || "").trim(),
+      type: "function",
       function: {
-        name: String(item.name || '').trim(),
-        arguments: String(item.arguments || '{}'),
+        name: String(item.name || "").trim(),
+        arguments: String(item.arguments || "{}"),
       },
     };
   }
@@ -92,87 +93,89 @@ function normalizeResponsesOutputItem(item = {}) {
 }
 
 function extractResponsesOutput(payloadObject = null) {
-  if (!Array.isArray(payloadObject?.output)) return { text: '', toolCalls: [], reasoning: [] };
+  if (!Array.isArray(payloadObject?.output)) return { text: "", toolCalls: [], reasoning: [] };
   const text = [];
   const toolCalls = [];
   const reasoning = [];
   for (const item of payloadObject.output) {
-    if (!item || typeof item !== 'object') continue;
-    if (item.type === 'function_call') {
+    if (!item || typeof item !== "object") continue;
+    if (item.type === "function_call") {
       const normalized = normalizeResponsesOutputItem(item);
       if (normalized) toolCalls.push(normalized);
       continue;
     }
-    if (item.type === 'reasoning') {
+    if (item.type === "reasoning") {
       const summaries = Array.isArray(item.summary) ? item.summary : [];
       for (const summary of summaries) {
-        const value = typeof summary === 'string' ? summary : summary?.text;
-        if (String(value || '').trim()) reasoning.push(String(value).trim());
+        const value = typeof summary === "string" ? summary : summary?.text;
+        if (String(value || "").trim()) reasoning.push(String(value).trim());
       }
       continue;
     }
-    if (item.type === 'message' && Array.isArray(item.content)) {
+    if (item.type === "message" && Array.isArray(item.content)) {
       for (const block of item.content) {
-        if (block?.type === 'output_text' || block?.type === 'text') {
-          if (String(block.text || '').trim()) text.push(String(block.text).trim());
+        if (block?.type === "output_text" || block?.type === "text") {
+          if (String(block.text || "").trim()) text.push(String(block.text).trim());
         }
       }
     }
   }
-  return { text: text.join(''), toolCalls, reasoning };
+  return { text: text.join(""), toolCalls, reasoning };
 }
 
 function extractAnthropicContent(payloadObject = null) {
-  if (!Array.isArray(payloadObject?.content)) return { text: '', toolCalls: [], reasoning: [] };
+  if (!Array.isArray(payloadObject?.content)) return { text: "", toolCalls: [], reasoning: [] };
   const text = [];
   const toolCalls = [];
   const reasoning = [];
   for (const block of payloadObject.content) {
-    if (block?.type === 'text' && String(block.text || '').trim()) text.push(String(block.text).trim());
-    if (block?.type === 'thinking' && String(block.thinking || '').trim()) reasoning.push(String(block.thinking).trim());
-    if (block?.type === 'tool_use') {
+    if (block?.type === "text" && String(block.text || "").trim())
+      text.push(String(block.text).trim());
+    if (block?.type === "thinking" && String(block.thinking || "").trim())
+      reasoning.push(String(block.thinking).trim());
+    if (block?.type === "tool_use") {
       toolCalls.push({
-        id: String(block.id || '').trim(),
-        type: 'function',
+        id: String(block.id || "").trim(),
+        type: "function",
         function: {
-          name: String(block.name || '').trim(),
+          name: String(block.name || "").trim(),
           arguments: JSON.stringify(block.input ?? {}),
         },
       });
     }
   }
-  return { text: text.join(''), toolCalls, reasoning };
+  return { text: text.join(""), toolCalls, reasoning };
 }
 
-function formatResponseProjection({ text = '', toolCalls = [], reasoning = [] } = {}) {
-  if (String(text || '').trim()) return String(text).trim();
+function formatResponseProjection({ text = "", toolCalls = [], reasoning = [] } = {}) {
+  if (String(text || "").trim()) return String(text).trim();
   if (toolCalls.length) {
-    return JSON.stringify({ type: 'tool_calls', tool_calls: toolCalls }, null, 2);
+    return JSON.stringify({ type: "tool_calls", tool_calls: toolCalls }, null, 2);
   }
   if (reasoning.length) {
-    return JSON.stringify({ type: 'reasoning', summary: reasoning }, null, 2);
+    return JSON.stringify({ type: "reasoning", summary: reasoning }, null, 2);
   }
-  return '';
+  return "";
 }
 
 function extractFinalTextFromJsonPayload(payloadObject = null) {
-  if (!payloadObject || typeof payloadObject !== 'object') return '';
+  if (!payloadObject || typeof payloadObject !== "object") return "";
 
   const choices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
-  const firstChoice = choices[0] && typeof choices[0] === 'object' ? choices[0] : null;
-  const messageContent = String(firstChoice?.message?.content || '').trim();
+  const firstChoice = choices[0] && typeof choices[0] === "object" ? choices[0] : null;
+  const messageContent = String(firstChoice?.message?.content || "").trim();
   if (messageContent) return messageContent;
 
-  const deltaContent = String(firstChoice?.delta?.content || '').trim();
+  const deltaContent = String(firstChoice?.delta?.content || "").trim();
   if (deltaContent) return deltaContent;
 
   const outputText = payloadObject?.output_text;
-  if (typeof outputText === 'string' && outputText.trim()) return outputText.trim();
+  if (typeof outputText === "string" && outputText.trim()) return outputText.trim();
   if (Array.isArray(outputText)) {
     const joinedOutputText = outputText
-      .map((itemValue) => String(itemValue || '').trim())
+      .map((itemValue) => String(itemValue || "").trim())
       .filter(Boolean)
-      .join('\n');
+      .join("\n");
     if (joinedOutputText) return joinedOutputText;
   }
 
@@ -180,7 +183,7 @@ function extractFinalTextFromJsonPayload(payloadObject = null) {
   if (toolCalls.length) {
     return JSON.stringify(
       {
-        type: 'tool_calls',
+        type: "tool_calls",
         tool_calls: toolCalls,
       },
       null,
@@ -188,46 +191,47 @@ function extractFinalTextFromJsonPayload(payloadObject = null) {
     );
   }
 
-  return '';
+  return "";
 }
 
-function extractFinalTextFromSseBody(sseText = '') {
-  const lines = String(sseText || '').split(/\r?\n/);
+function extractFinalTextFromSseBody(sseText = "") {
+  const lines = String(sseText || "").split(/\r?\n/);
   const dataPayloads = lines
-    .map((lineValue) => String(lineValue || '').trim())
-    .filter((lineValue) => lineValue.startsWith('data:'))
+    .map((lineValue) => String(lineValue || "").trim())
+    .filter((lineValue) => lineValue.startsWith("data:"))
     .map((lineValue) => lineValue.slice(5).trim())
-    .filter((lineValue) => lineValue && lineValue !== '[DONE]');
+    .filter((lineValue) => lineValue && lineValue !== "[DONE]");
 
-  if (!dataPayloads.length) return '';
+  if (!dataPayloads.length) return "";
 
-  let deltaTextBuffer = '';
-  let latestResolvedText = '';
+  let deltaTextBuffer = "";
+  let latestResolvedText = "";
   const toolCallBufferByIndex = new Map();
 
   function upsertToolCallDelta(deltaToolCallItem = {}, fallbackIndex = 0) {
-    if (!deltaToolCallItem || typeof deltaToolCallItem !== 'object') return;
+    if (!deltaToolCallItem || typeof deltaToolCallItem !== "object") return;
     const index = Number.isInteger(deltaToolCallItem.index)
       ? deltaToolCallItem.index
       : fallbackIndex;
     const existed = toolCallBufferByIndex.get(index) || {
-      id: '',
-      type: 'function',
-      function: { name: '', arguments: '' },
+      id: "",
+      type: "function",
+      function: { name: "", arguments: "" },
     };
-    const normalizedType = String(deltaToolCallItem.type || '').trim();
+    const normalizedType = String(deltaToolCallItem.type || "").trim();
     if (normalizedType) existed.type = normalizedType;
-    const normalizedId = String(deltaToolCallItem.id || '').trim();
+    const normalizedId = String(deltaToolCallItem.id || "").trim();
     if (normalizedId) existed.id = normalizedId;
 
-    const fn = deltaToolCallItem.function && typeof deltaToolCallItem.function === 'object'
-      ? deltaToolCallItem.function
-      : null;
+    const fn =
+      deltaToolCallItem.function && typeof deltaToolCallItem.function === "object"
+        ? deltaToolCallItem.function
+        : null;
     if (fn) {
-      const namePart = String(fn.name || '');
-      if (namePart) existed.function.name = `${existed.function.name || ''}${namePart}`;
-      const argsPart = String(fn.arguments || '');
-      if (argsPart) existed.function.arguments = `${existed.function.arguments || ''}${argsPart}`;
+      const namePart = String(fn.name || "");
+      if (namePart) existed.function.name = `${existed.function.name || ""}${namePart}`;
+      const argsPart = String(fn.arguments || "");
+      if (argsPart) existed.function.arguments = `${existed.function.arguments || ""}${argsPart}`;
     }
     toolCallBufferByIndex.set(index, existed);
   }
@@ -241,15 +245,12 @@ function extractFinalTextFromSseBody(sseText = '') {
     const payloadResolvedText = extractFinalTextFromJsonPayload(payloadObject);
     if (!payloadResolvedText) continue;
 
-    const payloadChoices = Array.isArray(payloadObject?.choices)
-      ? payloadObject.choices
-      : [];
-    const firstChoice = payloadChoices[0] && typeof payloadChoices[0] === 'object'
-      ? payloadChoices[0]
-      : null;
-    const hasDeltaContent = typeof firstChoice?.delta?.content === 'string';
+    const payloadChoices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
+    const firstChoice =
+      payloadChoices[0] && typeof payloadChoices[0] === "object" ? payloadChoices[0] : null;
+    const hasDeltaContent = typeof firstChoice?.delta?.content === "string";
     if (hasDeltaContent) {
-      deltaTextBuffer += String(firstChoice?.delta?.content || '');
+      deltaTextBuffer += String(firstChoice?.delta?.content || "");
       latestResolvedText = deltaTextBuffer;
     } else {
       latestResolvedText = payloadResolvedText;
@@ -260,11 +261,11 @@ function extractFinalTextFromSseBody(sseText = '') {
       : [];
     if (deltaToolCalls.length) {
       deltaToolCalls.forEach((item, idx) => upsertToolCallDelta(item, idx));
-      if (!latestResolvedText) latestResolvedText = '[tool_calls_streaming]';
+      if (!latestResolvedText) latestResolvedText = "[tool_calls_streaming]";
     }
   }
 
-  if (toolCallBufferByIndex.size && !String(latestResolvedText || '').trim()) {
+  if (toolCallBufferByIndex.size && !String(latestResolvedText || "").trim()) {
     const toolCalls = Array.from(toolCallBufferByIndex.entries())
       .sort((left, right) => left[0] - right[0])
       .map(([, item]) => normalizeToolCallItem(item))
@@ -272,7 +273,7 @@ function extractFinalTextFromSseBody(sseText = '') {
     if (toolCalls.length) {
       return JSON.stringify(
         {
-          type: 'tool_calls',
+          type: "tool_calls",
           tool_calls: toolCalls,
         },
         null,
@@ -284,16 +285,16 @@ function extractFinalTextFromSseBody(sseText = '') {
   return latestResolvedText || dataPayloads[dataPayloads.length - 1];
 }
 
-function resolveFinalResponseBodyText(bodyText = '', contentType = '') {
-  const normalizedContentType = String(contentType || '').toLowerCase();
-  const normalizedBodyText = String(bodyText || '');
+function resolveFinalResponseBodyText(bodyText = "", contentType = "") {
+  const normalizedContentType = String(contentType || "").toLowerCase();
+  const normalizedBodyText = String(bodyText || "");
 
-  if (normalizedContentType.includes('text/event-stream')) {
+  if (normalizedContentType.includes("text/event-stream")) {
     const finalSseText = extractFinalTextFromSseBody(normalizedBodyText);
     return finalSseText || normalizedBodyText;
   }
 
-  if (normalizedContentType.includes('application/json')) {
+  if (normalizedContentType.includes("application/json")) {
     const payloadObject = tryParseJson(normalizedBodyText);
     const finalJsonText = extractFinalTextFromJsonPayload(payloadObject);
     if (finalJsonText) return finalJsonText;
