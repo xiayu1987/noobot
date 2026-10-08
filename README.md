@@ -2,7 +2,7 @@
 
 Say goodbye to the 1-dollar hello-world era.
 
-**Cheapest Money-Saving Self-hosted AI agent workspace for tool calling, multi-model routing, MCP, and multi-agent workflows.**
+**Cheap Money-Saving Self-hosted AI agent workspace for tool calling, multi-model routing, MCP, and multi-agent workflows.**
 
 [中文](./README.zh-CN.md) | English
 
