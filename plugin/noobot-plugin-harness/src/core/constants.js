@@ -10,7 +10,7 @@ import { resolvePluginDataRelativePath } from "@noobot/workspace-protocol";
 
 export const PLUGIN_ID = "harness";
 export const PLUGIN_NAME = "noobot-plugin-harness";
-export const PLUGIN_VERSION = "4.3.8";
+export const PLUGIN_VERSION = "4.3.9";
 
 export const HARNESS_DATA_SCOPE = Object.freeze({
   RUNS: "runs",

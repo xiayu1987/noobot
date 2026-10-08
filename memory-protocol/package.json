@@ -1,6 +1,6 @@
 {
   "name": "@noobot/memory-protocol",
-  "version": "4.3.8",
+  "version": "4.3.9",
   "private": true,
   "type": "module",
   "description": "Canonical Noobot short memory, long memory and experience text protocols",
