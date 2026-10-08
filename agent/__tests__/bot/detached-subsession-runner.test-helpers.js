@@ -14,6 +14,8 @@ export function createDeps(overrides = {}) {
     loadedWorkspacePath: "",
     emitted: [],
     lifecyclePayloads: [],
+    executionLogs: [],
+    persistenceContexts: [],
   };
   const deps = {
     workspaceService: {
@@ -45,6 +47,10 @@ export function createDeps(overrides = {}) {
       async getSessionLifecycle({ sessionId = "" } = {}) {
         return { sessionId, state: "active", generation: 1 };
       },
+      async appendExecutionLog(payload = {}) {
+        calls.executionLogs.push(payload);
+        return { appended: true };
+      },
       async applyTurnLifecycleEvent(payload = {}) {
         calls.lifecyclePayloads.push(payload);
         const sequence = calls.lifecyclePayloads.length;
@@ -68,10 +74,12 @@ export function createDeps(overrides = {}) {
       },
       createScopedPersistenceContext(payload = {}) {
         calls.persistencePayloads.push(payload);
-        return Object.freeze({
+        const context = Object.freeze({
           locationResolver: { marker: payload.relativeDir },
           metadataContributor: payload.metadataContributor,
         });
+        calls.persistenceContexts.push(context);
+        return context;
       },
     },
     mergeRunConfigPluginPolicy(payload = {}) {

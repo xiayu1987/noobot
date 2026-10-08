@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { AGENT_RUN_EVENT, emitEvent } from "../../events/index.js";
+import { AGENT_RUN_EVENT, createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import {
@@ -81,7 +81,7 @@ async function runDetachedSubSession(dependencies, request) {
         commandId: lifecycle.commandId,
         sessionId: identity.subSessionId,
         turnScopeId: identity.turnScopeId,
-        dialogProcessId: accepted.dialogProcessId || identity.subDialogProcessId,
+        dialogProcessId: identity.subDialogProcessId,
         messageUid: accepted.userMessage.messageUid,
         aggregateVersion: accepted.aggregateVersion,
         committedEventPublished: false,
@@ -160,7 +160,7 @@ function resolveDetachedIdentity(request, inheritedRuntime) {
     userId: identity.userId,
     sessionId: identity.subSessionId,
     parentSessionId: identity.parentSessionId,
-    dialogProcessId: identity.subDialogProcessId || identity.subSessionId,
+    dialogProcessId: identity.subDialogProcessId,
     turnScopeId: identity.turnScopeId,
   });
   return identity;
@@ -217,7 +217,6 @@ async function prepareDetachedExecution(dependencies, request, inheritedRuntime,
     request.systemMessageFactory,
     subSessionAttachments,
   );
-  emitDetachedIdentityEvents(dependencies, request, identity, effectiveRunConfig);
   return { mergedRunConfig, effectiveRunConfig, subSessionAttachments, systemMessages };
 }
 
@@ -282,27 +281,6 @@ async function resolveDetachedSystemMessages(systemMessageFactory, attachments) 
   return messages;
 }
 
-function emitDetachedIdentityEvents(dependencies, request, identity, effectiveRunConfig) {
-  emitEvent(request.eventListener, "detached_sub_session_message_identity_bound", {
-    userId: identity.userId,
-    sessionId: identity.subSessionId,
-    parentSessionId: identity.parentSessionId,
-    dialogProcessId: identity.subDialogProcessId,
-    turnScopeId: identity.turnScopeId,
-    workflowRunId: String(effectiveRunConfig.workflowRunId || "").trim(),
-    nodeExecutionId: String(
-      effectiveRunConfig.workflowNodeExecutionId || effectiveRunConfig.nodeExecutionId || "",
-    ).trim(),
-    messageId: effectiveRunConfig.messageId,
-    presentationMessageId: effectiveRunConfig.presentationMessageId,
-  });
-  const runtimePluginState = buildRuntimePluginState({
-    effectiveRunConfig,
-    disabledPlugins: request.strategy?.disabledPlugins,
-  });
-  emitEvent(request.eventListener, "plugin_runtime_resolved", runtimePluginState);
-}
-
 async function createDetachedLifecycle(dependencies, request, identity, prepared) {
   const { session } = dependencies;
   const generation = await resolveDetachedSessionGeneration(session, identity);
@@ -336,6 +314,15 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
   return {
     persistenceContext,
     persistenceScope,
+    factListener: createExecutionEventListener({
+      sessionManager: session,
+      userId: identity.userId,
+      sessionId: identity.subSessionId,
+      parentSessionId: identity.parentSessionId,
+      turnScopeId: identity.turnScopeId,
+      persistenceContext,
+      upstream: { dialogProcessId: identity.subDialogProcessId },
+    }),
     commandId: String(
       request.strategy?.commandId ||
         request.runConfigPatch?.commandId ||
@@ -361,7 +348,7 @@ function createDetachedMetadata(request, identity, runtimePluginState) {
     sessionId: identity.subSessionId,
     parentSessionId: identity.parentSessionId,
     parentDialogProcessId: identity.parentDialogProcessId,
-    dialogProcessId: identity.subDialogProcessId || identity.subSessionId,
+    dialogProcessId: identity.subDialogProcessId,
     ...(isObjectRecord(request.metadata) ? request.metadata : {}),
     runtimePluginState,
   };
@@ -375,7 +362,7 @@ function createLifecycleIdentity(request, identity, config, persistenceContext, 
     persistenceContext,
     persistenceScope,
     turnScopeId: identity.turnScopeId,
-    dialogProcessId: identity.subDialogProcessId || identity.subSessionId,
+    dialogProcessId: identity.subDialogProcessId,
     messageId: config.messageId,
     presentationMessageId: config.presentationMessageId,
     executionId: identity.executionId,
@@ -461,18 +448,18 @@ async function executeDetachedSession(
     persistenceContext: lifecycle.persistenceContext,
     persistenceScope: lifecycle.persistenceScope,
   });
-  assertDetachedDialogIdentity(result, request, identity);
+  assertDetachedDialogIdentity(result, identity, lifecycle);
   return result;
 }
 
-function assertDetachedDialogIdentity(result, request, identity) {
+function assertDetachedDialogIdentity(result, identity, lifecycle) {
   const returnedDialogProcessId = String(result?.dialogProcessId || "").trim();
   if (!returnedDialogProcessId || returnedDialogProcessId === identity.subDialogProcessId) return;
   const error = new Error(
     "detached sub-session returned a dialogProcessId different from its authoritative turn identity",
   );
   error.code = "DETACHED_DIALOG_IDENTITY_MISMATCH";
-  emitEvent(request.eventListener, "detached_sub_session_identity_mismatch", {
+  emitEvent(lifecycle.factListener, "detached_sub_session_identity_mismatch", {
     userId: identity.userId,
     sessionId: identity.subSessionId,
     parentSessionId: identity.parentSessionId,
@@ -496,7 +483,14 @@ async function commitDetachedError(error, dependencies, request, runtime, identi
     failed: !stopped,
   });
   const executionFailure = createExecutionFailure(error, receipt);
-  emitDetachedTerminalEvent(request, identity, terminalLifecycle, executionFailure, stopped);
+  emitDetachedTerminalEvent(
+    lifecycle.factListener,
+    identity,
+    terminalLifecycle,
+    executionFailure,
+    stopped,
+  );
+  await lifecycle.factListener.flush();
   return executionFailure;
 }
 
@@ -538,9 +532,9 @@ function commitDetachedFailure(error, lifecycle) {
   });
 }
 
-function emitDetachedTerminalEvent(request, identity, terminalLifecycle, error, stopped) {
+function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, error, stopped) {
   emitEvent(
-    request.eventListener,
+    factListener,
     stopped ? "detached_sub_session_stop_committed" : "detached_sub_session_failure_committed",
     {
       userId: identity.userId,
@@ -578,9 +572,7 @@ async function commitDetachedCompletion(dependencies, lifecycle) {
 }
 
 function projectDetachedResult(result, identity, prepared, terminalLifecycle) {
-  const dialogProcessId = String(
-    result?.dialogProcessId || identity.subDialogProcessId || identity.subSessionId,
-  ).trim();
+  const dialogProcessId = identity.subDialogProcessId;
   const transferEnvelopes = collectTransferEnvelopes(result?.turnMessages);
   return {
     userId: identity.userId,

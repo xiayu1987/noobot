@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { parseTaskCheckContent } from "@noobot/context-protocol/task/check";
 import { resolveContextInternalMessageType } from "@noobot/context-protocol/policy/injected-message";
@@ -302,7 +303,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     phaseSummaryLoopTurns: 12,
     taskCheckLoopTurns: 12,
   });
-  const resumedChainStatePath = `runtime/ops_workdir/pbe035-resumed-chain-${Date.now()}-${testInfo.workerIndex}.json`;
+  const resumedChainStatePath = `runtime/ops_workdir/pbe035-${randomUUID().slice(0, 6)}.json`;
   const resumedChainCommand = [
     'node -e "',
     "const fs=require('fs');",

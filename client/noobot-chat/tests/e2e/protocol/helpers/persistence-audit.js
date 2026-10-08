@@ -25,6 +25,13 @@ export function sessionRoot(userId, sessionId) {
   return path.join(workspaceRoot(), userId, "runtime/session", sessionId);
 }
 
+function sessionTreeRoots(userId, rootSessionId) {
+  return [
+    sessionRoot(userId, rootSessionId),
+    path.join(workspaceRoot(), userId, "runtime/plugin-data/workflow/session", rootSessionId),
+  ];
+}
+
 export async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, "utf8"));
 }
@@ -325,7 +332,13 @@ export async function readSessionExecutionEventTree(
   const normalizedRootSessionId = String(rootSessionId || normalizedSessionId).trim();
   if (!normalizedSessionId || !normalizedRootSessionId) return [];
 
-  const segments = await findExecutionEventSegments(sessionRoot(userId, normalizedRootSessionId));
+  const segments = (
+    await Promise.all(
+      sessionTreeRoots(userId, normalizedRootSessionId).map((root) =>
+        findExecutionEventSegments(root),
+      ),
+    )
+  ).flat();
   const records = (
     await Promise.all(
       segments
@@ -426,12 +439,11 @@ async function findFileMutationRecords(directory) {
 export async function readFileMutationRecords(userId, sessionId, { rootSessionId = "" } = {}) {
   const scopeId = String(rootSessionId || sessionId || "").trim();
   if (!scopeId) return [];
-  const roots = [
-    sessionRoot(userId, scopeId),
-    path.join(workspaceRoot(), userId, "runtime/plugin-data/workflow/session", scopeId),
-  ];
-  const records = (await Promise.all(roots.map((root) => findFileMutationRecords(root)))).flat();
-  return records;
+  return (
+    await Promise.all(
+      sessionTreeRoots(userId, scopeId).map((root) => findFileMutationRecords(root)),
+    )
+  ).flat();
 }
 
 export async function waitForPluginRuntimeEvents(

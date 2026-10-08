@@ -11,14 +11,12 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import {
   buildThinkingDetailPayload,
-  iterateExecutionLogs,
   readExecutionReportArtifact,
   readSessionArtifactSnapshot,
 } from "noobot-agent/session";
 import { HTTP_STATUS } from "noobot-agent/constants";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
-  WORKSPACE_LAYOUT,
   WORKSPACE_PATH_SEGMENT_PATTERN,
   resolvePluginAssetsRelativePath,
   resolvePluginDataRelativePath,
@@ -196,50 +194,6 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
   });
 }
 
-async function readSegmentedExecutionLogs({
-  workspacePath,
-  rootSessionId,
-  childSessionId,
-  skip = 0,
-  limit = Infinity,
-}) {
-  const sessionsRoot = path.resolve(workspacePath, WORKSPACE_LAYOUT.SESSION_DIR);
-  const eventsDir = path.resolve(sessionsRoot, rootSessionId, childSessionId, "execution-events");
-  const relative = path.relative(sessionsRoot, eventsDir);
-  if (
-    !rootSessionId ||
-    !childSessionId ||
-    !relative ||
-    relative.startsWith("..") ||
-    path.isAbsolute(relative)
-  )
-    return [];
-  let entries = [];
-  try {
-    entries = await fs.readdir(eventsDir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const names = entries
-    .filter((entry) => entry.isFile() && /^segment-\d+\.jsonl$/.test(entry.name))
-    .map((entry) => entry.name)
-    .sort();
-  const logs = [];
-  let seen = 0;
-  for (const name of names) {
-    try {
-      for await (const log of iterateExecutionLogs(path.join(eventsDir, name))) {
-        if (seen++ < skip) continue;
-        if (logs.length >= limit) return logs;
-        logs.push(log);
-      }
-    } catch {
-      continue;
-    }
-  }
-  return logs;
-}
-
 function createPluginSessionPort({ bot, pluginId, translateText }) {
   const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
   function resolveSessionDir({ userId, segments, locale = "" }) {
@@ -255,11 +209,11 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
     } catch {
       throw notFound();
     }
-    return { workspacePath, outputDir: path.resolve(workspacePath, relativeDir) };
+    return { outputDir: path.resolve(workspacePath, relativeDir) };
   }
   return Object.freeze({
-    async readSnapshot({ userId, rootSessionId, segments, locale, executionPage = null }) {
-      const { workspacePath, outputDir } = resolveSessionDir({ userId, segments, locale });
+    async readSnapshot({ userId, segments, locale, executionPage = null }) {
+      const { outputDir } = resolveSessionDir({ userId, segments, locale });
       let entries = [];
       try {
         entries = await fs.readdir(outputDir);
@@ -275,20 +229,7 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
       const childSessionId = String(
         snapshot.sessionSummary?.sessionId || snapshot.session?.sessionId || "",
       ).trim();
-      const scopedLogs = Array.isArray(snapshot.executionLogs) ? snapshot.executionLogs : [];
-      const hasScopedArtifacts =
-        entries.includes("execution-events") || entries.includes("execution-events.jsonl");
-      const executionLogs =
-        scopedLogs.length || (executionPage && hasScopedArtifacts)
-          ? scopedLogs
-          : await readSegmentedExecutionLogs({
-              workspacePath,
-              rootSessionId,
-              childSessionId,
-              skip: executionPage?.cursor || 0,
-              limit: executionPage ? executionPage.limit + 1 : Infinity,
-            });
-      return { ...snapshot, executionLogs, childSessionId, artifactNames: entries };
+      return { ...snapshot, childSessionId, artifactNames: entries };
     },
     async readThinkingDetail({ userId, segments, dialogProcessId, turnScopeId, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });

@@ -21,7 +21,10 @@ test("@full PBE-015 双标签页生命周期一致性", async ({
   browser,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
-  await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page session provision"));
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(testInfo, "reply with exactly OK and do not use tools"),
+  );
   const provision = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForLifecycle(
     protocolCapture,
@@ -92,7 +95,10 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
   browser,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
-  await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page workflow provision"));
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(testInfo, "reply with exactly OK and do not use tools"),
+  );
   const provision = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForLifecycle(
     protocolCapture,

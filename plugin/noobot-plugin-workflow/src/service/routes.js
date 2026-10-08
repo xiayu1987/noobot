@@ -177,7 +177,6 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     try {
       snapshot = await sessions.readSnapshot({
         userId,
-        rootSessionId: sessionId,
         segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, dialogProcessId],
         locale: req.locale,
         executionPage,

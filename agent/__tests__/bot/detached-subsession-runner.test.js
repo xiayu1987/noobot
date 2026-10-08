@@ -106,8 +106,8 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(metadata.sessionId, "sub1");
   assert.equal(metadata.runtimePluginState.scope, "detached_sub_session");
   assert.equal(
-    events.some((event) => event?.event === "plugin_runtime_resolved"),
-    true,
+    events.some((event) => event?.data?.sessionId === "sub1" && !event?.data?.envelope),
+    false,
   );
   assert.deepEqual(
     calls.lifecyclePayloads.map((payload) => payload.eventType),
@@ -454,18 +454,26 @@ test("detached sub-session rejects a runner result with a second dialog identity
       error?.lifecycle?.state === "processing_failed" &&
       error?.lifecycle?.executionId === "agent:turn-identity-mismatch",
   );
+  const childFacts = calls.executionLogs.filter(
+    (record) => record.persistenceContext === calls.persistenceContexts[0],
+  );
+  assert.equal(childFacts.length, calls.executionLogs.length);
   assert.equal(
-    events.some((event) => event?.event === "detached_sub_session_identity_mismatch"),
+    childFacts.some((record) => record.event === "detached_sub_session_identity_mismatch"),
     true,
   );
   assert.equal(
-    events.some(
-      (event) =>
-        event?.event === "detached_sub_session_failure_committed" &&
-        event?.data?.errorCode === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
-        event?.data?.revision > 0,
+    childFacts.some(
+      (record) =>
+        record.event === "detached_sub_session_failure_committed" &&
+        record.data?.errorCode === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
+        record.data?.revision > 0,
     ),
     true,
+  );
+  assert.equal(
+    events.some((event) => String(event?.event || "").startsWith("detached_sub_session_")),
+    false,
   );
   assert.equal(calls.lifecyclePayloads.at(-1)?.eventType, "turn.failed");
   assert.equal(calls.lifecyclePayloads.at(-1)?.failure?.code, "DETACHED_DIALOG_IDENTITY_MISMATCH");
@@ -610,16 +618,22 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   });
   assert.equal(Object.hasOwn(abortError, "lifecycle"), false);
   assert.equal(
-    events.some(
-      (event) =>
-        event?.event === "detached_sub_session_stop_committed" &&
-        event?.data?.reason === "user_stop" &&
-        event?.data?.state === "stop_completed",
+    calls.executionLogs.some(
+      (record) =>
+        record.event === "detached_sub_session_stop_committed" &&
+        record.sessionId === "sub1" &&
+        record.persistenceContext === calls.persistenceContexts[0] &&
+        record.data?.reason === "user_stop" &&
+        record.data?.state === "stop_completed",
     ),
     true,
   );
   assert.equal(
-    events.some((event) => event?.event === "detached_sub_session_failure_committed"),
+    calls.executionLogs.some((record) => record.event === "detached_sub_session_failure_committed"),
+    false,
+  );
+  assert.equal(
+    events.some((event) => String(event?.event || "").startsWith("detached_sub_session_")),
     false,
   );
 });

@@ -240,12 +240,12 @@ watch(
       </div>
       <div class="thinking-execution-actions">
         <BasePillButton
-          class="thinking-detail-action-button noobot-primary-pill-action"
+          class="thinking-execution-action-button thinking-detail-action-button noobot-primary-pill-action"
           :label="thinkingDetailLabel"
           @click="emit('open-thinking-details')"
         />
         <BasePillButton
-          class="thinking-detail-action-button execution-report-action-button"
+          class="thinking-execution-action-button execution-report-action-button"
           :label="translate('message.executionReport')"
           :disabled="isRunning"
           @click="executionReportVisible = true"
@@ -334,10 +334,6 @@ watch(
   padding-top: var(--noobot-space-sm);
   border-top: 1px solid var(--noobot-divider);
 }
-.thinking-detail-action-button {
-  min-height: 34px;
-  padding: 0 var(--noobot-space-lg);
-}
 .thinking-realtime-body {
   max-height: none;
 }
@@ -351,10 +347,11 @@ watch(
   justify-content: stretch;
   gap: var(--noobot-space-sm);
 }
-.thinking-detail-action-button {
+.thinking-execution-action-button {
   flex: 1 1 0;
   min-width: 0;
   min-height: 42px;
+  padding: 0 var(--noobot-space-lg);
   justify-content: center;
 }
 </style>
