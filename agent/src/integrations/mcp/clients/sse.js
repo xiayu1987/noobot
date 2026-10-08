@@ -5,6 +5,7 @@
  */
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
+import { streamServerSentEvents } from "@noobot/shared/event-stream";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
@@ -13,32 +14,6 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
-
-function parseSseEventBlock(rawBlock = "") {
-  const normalized = String(rawBlock || "").replace(/\r/g, "");
-  const lines = normalized.split("\n");
-  let eventName = "message";
-  const dataLines = [];
-  let seenData = false;
-  for (const line of lines) {
-    if (line.startsWith("event:")) {
-      eventName = line.slice(6).trim() || "message";
-      continue;
-    }
-    if (line.startsWith("data:")) {
-      seenData = true;
-      dataLines.push(line.slice(5).trimStart());
-      continue;
-    }
-    if (seenData) {
-      dataLines.push(line);
-    }
-  }
-  return {
-    event: eventName,
-    data: dataLines.join("\n").trim(),
-  };
-}
 
 export class SseMcpClient extends BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
@@ -150,22 +125,9 @@ export class SseMcpClient extends BaseMcpClient {
       });
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
     try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let splitIndex = buffer.indexOf("\n\n");
-        while (splitIndex >= 0) {
-          const block = buffer.slice(0, splitIndex);
-          buffer = buffer.slice(splitIndex + 2);
-          const parsed = parseSseEventBlock(block);
-          this._handleSseEvent(parsed.event, parsed.data);
-          splitIndex = buffer.indexOf("\n\n");
-        }
+      for await (const { event, data } of streamServerSentEvents(response.body)) {
+        this._handleSseEvent(event, data);
       }
       if (!this._endpointResolved) {
         throw recoverableToolError(tSystem("mcp.sseEndpointMissing"), {
@@ -177,8 +139,6 @@ export class SseMcpClient extends BaseMcpClient {
       if (!this._endpointResolved) this._endpointRejecter(error);
       this._rejectAllPending(error);
       throw error;
-    } finally {
-      reader.releaseLock();
     }
   }
 

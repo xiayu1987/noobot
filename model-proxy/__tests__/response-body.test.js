@@ -69,6 +69,23 @@ test("keeps ordinary provider errors available when no known response projection
   assert.match(resolveFinalResponseBodyText(body, "application/json"), /bad input/);
 });
 
+test("projects OpenAI chat SSE deltas across CR-framed events and skips [DONE]", () => {
+  const chunk = (content) => JSON.stringify({ choices: [{ delta: { content } }] });
+  const body = `data: ${chunk("Hel")}\r\rdata: ${chunk("lo")}\r\n\r\ndata: [DONE]\n\n`;
+  assert.equal(resolveFinalResponseBodyText(body, "text/event-stream"), "Hello");
+});
+
+test("joins multi-line SSE data into one payload", () => {
+  const body = 'data: {"choices":[{"delta":\ndata: {"content":"ok"}}]}\n\n';
+  assert.equal(resolveFinalResponseBodyText(body, "text/event-stream"), "ok");
+});
+
+test("ignores an SSE event without its terminating blank line", () => {
+  const chunk = (content) => JSON.stringify({ choices: [{ delta: { content } }] });
+  const body = `data: ${chunk("done")}\n\ndata: ${chunk(" partial")}`;
+  assert.equal(resolveFinalResponseBodyText(body, "text/event-stream"), "done");
+});
+
 test("cache diagnostics project scalar usage facts without provider envelopes", () => {
   const diagnostics = normalizeUsageCacheDiagnostics({
     usage: {

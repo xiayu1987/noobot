@@ -5,6 +5,7 @@
  */
 import zlib from "node:zlib";
 import util from "node:util";
+import { parseServerSentEvents } from "@noobot/shared/event-stream";
 import { tryParseJson } from "./common.js";
 
 const gunzip = util.promisify(zlib.gunzip);
@@ -195,12 +196,9 @@ function extractFinalTextFromJsonPayload(payloadObject = null) {
 }
 
 function extractFinalTextFromSseBody(sseText = "") {
-  const lines = String(sseText || "").split(/\r?\n/);
-  const dataPayloads = lines
-    .map((lineValue) => String(lineValue || "").trim())
-    .filter((lineValue) => lineValue.startsWith("data:"))
-    .map((lineValue) => lineValue.slice(5).trim())
-    .filter((lineValue) => lineValue && lineValue !== "[DONE]");
+  const dataPayloads = parseServerSentEvents(sseText)
+    .map(({ data }) => data.trim())
+    .filter((payloadText) => payloadText && payloadText !== "[DONE]");
 
   if (!dataPayloads.length) return "";
 

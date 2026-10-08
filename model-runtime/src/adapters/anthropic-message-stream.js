@@ -2,50 +2,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { streamServerSentEvents } from "@noobot/shared/event-stream";
 
 function invalidStream(message) {
   return Object.assign(new Error(`invalid Anthropic message stream: ${message}`), {
     code: "ANTHROPIC_STREAM_INVALID",
   });
-}
-
-async function* streamLines(body) {
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  let line = "";
-  let skipLineFeed = false;
-  for await (const chunk of body) {
-    for (const character of decoder.decode(chunk, { stream: true })) {
-      if (skipLineFeed) {
-        skipLineFeed = false;
-        if (character === "\n") continue;
-      }
-      if (character === "\r" || character === "\n") {
-        skipLineFeed = character === "\r";
-        yield line;
-        line = "";
-      } else {
-        line += character;
-      }
-    }
-  }
-  line += decoder.decode();
-  if (line) yield line;
-}
-
-async function* streamEvents(body) {
-  let data = [];
-  for await (const line of streamLines(body)) {
-    if (!line) {
-      if (data.length) yield JSON.parse(data.join("\n"));
-      data = [];
-      continue;
-    }
-    const separator = line.indexOf(":");
-    const field = separator < 0 ? line : line.slice(0, separator);
-    if (field !== "data") continue;
-    const value = separator < 0 ? "" : line.slice(separator + 1);
-    data.push(value.startsWith(" ") ? value.slice(1) : value);
-  }
 }
 
 async function applyBlockDelta(entry, delta, onText) {
@@ -90,7 +52,8 @@ export async function readAnthropicMessageStream(response, { onText, signal }) {
   }
   let message = null;
   const openBlocks = new Map();
-  for await (const event of streamEvents(response.body)) {
+  for await (const { data } of streamServerSentEvents(response.body)) {
+    const event = JSON.parse(data);
     signal?.throwIfAborted();
     if (event.type === "ping") continue;
     if (event.type === "error") {
