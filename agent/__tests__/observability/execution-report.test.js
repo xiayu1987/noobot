@@ -23,14 +23,13 @@ test("buildExecutionReport keeps aggregate metrics, duration and error only", ()
     error: Object.assign(new Error("boom"), { code: "E1" }),
   });
   assert.equal(report.protocol, "noobot.execution-report");
-  assert.equal(report.version, 2);
+  assert.equal(report.version, 3);
   assert.equal(report.durationMs, 1500);
   assert.deepEqual(report.summary, {
     visibleTotal: 3,
     toolCallCount: 2,
     toolResultCount: 0,
     errorCount: 1,
-    toolStats: {},
     metrics: null,
   });
   assert.equal("steps" in report.summary, false);

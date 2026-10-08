@@ -154,16 +154,10 @@ function resolveToolPhase(log = {}) {
   return "";
 }
 
-function toolStatEntry(toolStats = {}, tool = "") {
-  if (!toolStats[tool]) toolStats[tool] = { calls: 0, failures: 0 };
-  return toolStats[tool];
-}
-
 function countVisibleActivity(visibleLogs = []) {
   const seen = { call: new Set(), result: new Set() };
-  const counts = { toolCallCount: 0, toolResultCount: 0, errorCount: 0, toolStats: {} };
+  const counts = { toolCallCount: 0, toolResultCount: 0, errorCount: 0 };
   for (const log of visibleLogs) {
-    const tool = resolveToolName(log);
     const phase = resolveToolPhase(log);
     const toolCallId = String(log?.data?.toolCallId || "").trim();
     if (phase && toolCallId) {
@@ -172,13 +166,11 @@ function countVisibleActivity(visibleLogs = []) {
     }
     if (phase === "call") {
       counts.toolCallCount += 1;
-      toolStatEntry(counts.toolStats, tool).calls += 1;
       continue;
     }
     if (phase === "result") counts.toolResultCount += 1;
     if (resolveStatus(log) !== "error") continue;
     counts.errorCount += 1;
-    if (tool) toolStatEntry(counts.toolStats, tool).failures += 1;
   }
   return counts;
 }
@@ -205,8 +197,7 @@ export function summarizeExecutionLogs(logs = [], { maxSteps = 80, dialogProcess
     details: pickDetails(log),
   }));
 
-  const { toolCallCount, toolResultCount, errorCount, toolStats } =
-    countVisibleActivity(visibleLogs);
+  const { toolCallCount, toolResultCount, errorCount } = countVisibleActivity(visibleLogs);
 
   return {
     total: sourceLogs.length,
@@ -216,7 +207,6 @@ export function summarizeExecutionLogs(logs = [], { maxSteps = 80, dialogProcess
     toolCallCount,
     toolResultCount,
     errorCount,
-    toolStats,
     metrics: summarizeExecutionMetrics(scopedLogs),
     latestText: steps.length ? steps[steps.length - 1].text : "",
     steps,

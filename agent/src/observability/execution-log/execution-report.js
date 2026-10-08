@@ -5,7 +5,7 @@
  */
 
 export const EXECUTION_REPORT_PROTOCOL = "noobot.execution-report";
-export const EXECUTION_REPORT_VERSION = 2;
+export const EXECUTION_REPORT_VERSION = 3;
 
 export const EXECUTION_REPORT_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -28,7 +28,6 @@ function pickSummaryMetrics(executionSummary) {
     toolCallCount: Number(executionSummary.toolCallCount) || 0,
     toolResultCount: Number(executionSummary.toolResultCount) || 0,
     errorCount: Number(executionSummary.errorCount) || 0,
-    toolStats: executionSummary.toolStats || {},
     metrics: executionSummary.metrics || null,
   };
 }

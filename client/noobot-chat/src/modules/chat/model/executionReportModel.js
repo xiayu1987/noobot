@@ -63,7 +63,7 @@ function buildOverviewCards(report, metrics, translate) {
     card("toolCalls", translate("message.executionReportToolCalls"), summary.toolCallCount),
     card(
       "errors",
-      translate("message.executionReportErrors"),
+      translate("message.executionReportError"),
       errorCount,
       errorCount ? "error" : "",
     ),
@@ -107,24 +107,21 @@ function buildPhaseRows(metrics, translate) {
   ];
 }
 
-function buildToolRows(summary = {}) {
-  const timings = summary.metrics?.tools?.toolTimings || {};
-  const names = new Set([...Object.keys(summary.toolStats || {}), ...Object.keys(timings)]);
-  const maxTotal = Math.max(
-    0,
-    ...Object.values(timings).map((timing) => timing?.totalDurationMs || 0),
+function buildToolRows(toolStats = {}) {
+  const entries = Object.entries(toolStats).sort(
+    ([, left], [, right]) => right.totalDurationMs - left.totalDurationMs,
   );
-  return [...names].map((tool) => {
-    const stats = summary.toolStats?.[tool] || {};
-    const timing = timings[tool];
+  const maxTotal = Math.max(0, ...entries.map(([, stats]) => stats.totalDurationMs));
+  return entries.map(([tool, stats]) => {
+    const timed = stats.timedCount > 0;
     return {
       tool,
-      calls: Number(stats.calls) || 0,
-      failures: Number(stats.failures) || 0,
-      totalDuration: formatDuration(timing?.totalDurationMs),
-      totalRatio: ratioOf(timing?.totalDurationMs, maxTotal),
-      avgDuration: timing?.count ? formatDuration(timing.totalDurationMs / timing.count) : "-",
-      maxDuration: formatDuration(timing?.maxDurationMs),
+      calls: stats.calls,
+      failures: stats.failures,
+      totalDuration: timed ? formatDuration(stats.totalDurationMs) : "-",
+      totalRatio: ratioOf(stats.totalDurationMs, maxTotal),
+      avgDuration: timed ? formatDuration(stats.totalDurationMs / stats.timedCount) : "-",
+      maxDuration: timed ? formatDuration(stats.maxDurationMs) : "-",
     };
   });
 }
@@ -141,8 +138,9 @@ function buildRiskChips(riskLevels = {}) {
 
 function buildSlowestCalls(calls = []) {
   const maxDuration = Math.max(0, ...calls.map((call) => call.durationMs || 0));
-  return calls.map((call) => ({
+  return calls.map((call, index) => ({
     key: call.toolCallId,
+    rank: index + 1,
     tool: call.tool,
     subject: call.subject,
     duration: formatDuration(call.durationMs),
@@ -162,7 +160,7 @@ export function buildExecutionReportView(report, translate) {
     model: buildModelRows(metrics?.model, translate),
     phases: buildPhaseRows(metrics, translate),
     risks: buildRiskChips(metrics?.tools?.riskLevels),
-    tools: buildToolRows(summary),
+    tools: buildToolRows(metrics?.tools?.toolStats),
     slowest: buildSlowestCalls(metrics?.tools?.slowestToolCalls),
   };
 }

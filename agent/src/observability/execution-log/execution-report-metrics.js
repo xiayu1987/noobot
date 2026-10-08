@@ -97,18 +97,26 @@ const EVENT_HANDLERS = {
 };
 
 function summarizeToolCalls(toolCalls) {
-  const toolTimings = {};
+  const toolStats = {};
   const riskLevels = {};
   const timedCalls = [];
   for (const [toolCallId, entry] of toolCalls) {
+    const stats = (toolStats[entry.tool] ||= {
+      calls: 0,
+      failures: 0,
+      timedCount: 0,
+      totalDurationMs: 0,
+      maxDurationMs: 0,
+    });
+    stats.calls += 1;
     if (entry.endMs === undefined) continue;
+    if (entry.success === false) stats.failures += 1;
     increment(riskLevels, entry.riskLevel);
     const durationMs = resolveSpanMs(entry.startMs, entry.endMs);
     if (durationMs == null) continue;
-    const timing = (toolTimings[entry.tool] ||= { count: 0, totalDurationMs: 0, maxDurationMs: 0 });
-    timing.count += 1;
-    timing.totalDurationMs += durationMs;
-    timing.maxDurationMs = Math.max(timing.maxDurationMs, durationMs);
+    stats.timedCount += 1;
+    stats.totalDurationMs += durationMs;
+    stats.maxDurationMs = Math.max(stats.maxDurationMs, durationMs);
     timedCalls.push({
       toolCallId,
       tool: entry.tool,
@@ -121,7 +129,7 @@ function summarizeToolCalls(toolCalls) {
     .sort((left, right) => right.durationMs - left.durationMs)
     .slice(0, SLOWEST_TOOL_CALL_LIMIT);
   const totalToolDurationMs = timedCalls.reduce((sum, call) => sum + call.durationMs, 0);
-  return { toolTimings, riskLevels, slowestToolCalls, totalToolDurationMs };
+  return { toolStats, riskLevels, slowestToolCalls, totalToolDurationMs };
 }
 
 export function summarizeExecutionMetrics(scopedLogs = []) {

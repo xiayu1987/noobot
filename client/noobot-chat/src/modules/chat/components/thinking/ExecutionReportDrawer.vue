@@ -192,6 +192,7 @@ watch(
           data-testid="execution-report-slowest"
         >
           <li v-for="call in view.slowest" :key="call.key">
+            <span class="execution-report-rank" aria-hidden="true">{{ call.rank }}</span>
             <span class="execution-report-slowest-call">
               <span class="execution-report-tool-name">{{ call.tool }}</span>
               <span
@@ -257,6 +258,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--noobot-space-2xs);
+  border-left: 3px solid var(--execution-report-tone, var(--noobot-accent));
 }
 .execution-report-card-value {
   font-size: var(--noobot-font-size-xl);
@@ -273,6 +275,9 @@ watch(
 .execution-report-error {
   border: 1px solid var(--noobot-preview-danger-border);
   background: var(--noobot-danger-soft);
+}
+.execution-report-card[data-tone="error"] {
+  border-left: 3px solid var(--noobot-status-error);
 }
 .execution-report-card[data-tone="error"] .execution-report-card-value,
 .execution-report-error,
@@ -343,10 +348,17 @@ watch(
 }
 .execution-report-table th,
 .execution-report-table td {
-  padding: var(--noobot-space-xs) var(--noobot-space-md);
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
   border-bottom: 1px solid var(--noobot-divider);
   text-align: left;
   white-space: nowrap;
+}
+.execution-report-table thead th {
+  background: var(--noobot-panel-muted);
+  font-weight: var(--noobot-font-weight-medium);
+}
+.execution-report-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--noobot-accent) 6%, transparent);
 }
 .execution-report-table tbody tr:last-child td {
   border-bottom: none;
@@ -359,12 +371,11 @@ watch(
   display: flex;
   align-items: center;
   gap: var(--noobot-space-sm);
-  min-width: 140px;
 }
 .execution-report-bar {
-  flex: 1;
+  flex: none;
+  width: 96px;
   height: 6px;
-  min-width: 48px;
   border-radius: var(--noobot-radius-pill);
   background: var(--noobot-panel-muted);
   overflow: hidden;
@@ -379,26 +390,58 @@ watch(
   background: var(--noobot-status-error);
 }
 .execution-report-bar-text {
+  min-width: 5ch;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .execution-report-slowest {
   display: flex;
   flex-direction: column;
-  gap: var(--noobot-space-sm);
+  gap: var(--noobot-space-md);
   margin: 0;
   list-style: none;
 }
 .execution-report-slowest li {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(60px, 1fr) max-content;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-areas:
+    "rank call time"
+    "rank bar bar";
   align-items: center;
-  gap: var(--noobot-space-md);
+  gap: var(--noobot-space-2xs) var(--noobot-space-sm);
+}
+.execution-report-slowest li + li {
+  padding-top: var(--noobot-space-md);
+  border-top: 1px solid var(--noobot-divider);
+}
+.execution-report-rank {
+  grid-area: rank;
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--noobot-panel-muted);
+  color: var(--noobot-text-secondary);
+  font-size: var(--noobot-font-size-xs);
+  font-variant-numeric: tabular-nums;
 }
 .execution-report-slowest-call {
+  grid-area: call;
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+.execution-report-slowest .execution-report-bar {
+  grid-area: bar;
+  width: 100%;
+}
+.execution-report-slowest .execution-report-bar-text {
+  grid-area: time;
+  align-self: start;
 }
 .execution-report-slowest-subject {
   overflow: hidden;

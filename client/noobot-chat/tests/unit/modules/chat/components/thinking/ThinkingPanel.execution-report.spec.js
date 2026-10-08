@@ -105,7 +105,6 @@ describe("ThinkingPanel execution report", () => {
       summary: {
         toolCallCount: 3,
         errorCount: 1,
-        toolStats: { read_file: { calls: 2, failures: 0 }, execute: { calls: 1, failures: 1 } },
         metrics: {
           model: {
             llmCalls: 4,
@@ -117,9 +116,28 @@ describe("ThinkingPanel execution report", () => {
             models: { claude: 4 },
           },
           tools: {
-            toolTimings: {
-              read_file: { count: 2, totalDurationMs: 400, maxDurationMs: 300 },
-              execute: { count: 1, totalDurationMs: 3000, maxDurationMs: 3000 },
+            toolStats: {
+              read_file: {
+                calls: 2,
+                failures: 0,
+                timedCount: 2,
+                totalDurationMs: 400,
+                maxDurationMs: 300,
+              },
+              execute: {
+                calls: 1,
+                failures: 1,
+                timedCount: 1,
+                totalDurationMs: 3000,
+                maxDurationMs: 3000,
+              },
+              search: {
+                calls: 1,
+                failures: 0,
+                timedCount: 0,
+                totalDurationMs: 0,
+                maxDurationMs: 0,
+              },
             },
             riskLevels: { critical: 1, low: 2 },
             slowestToolCalls: [
@@ -166,8 +184,9 @@ describe("ThinkingPanel execution report", () => {
       .findAll('[data-testid="execution-report-tools"] tbody tr')
       .map((row) => row.findAll("td").map((td) => td.text()));
     expect(rows).toEqual([
-      ["read_file", "2", "0", "400ms", "200ms", "300ms"],
       ["execute", "1", "1", "3.0s", "3.0s", "3.0s"],
+      ["read_file", "2", "0", "400ms", "200ms", "300ms"],
+      ["search", "1", "0", "-", "-", "-"],
     ]);
     expect(drawer.find('[data-testid="execution-report-slowest"]').text()).toContain("execute");
     const subject = drawer.find('[data-testid="execution-report-slowest-subject"]');
@@ -189,7 +208,8 @@ describe("ThinkingPanel execution report", () => {
     const barWidths = drawer
       .findAll('[data-testid="execution-report-tools"] .execution-report-bar-fill')
       .map((node) => node.attributes("style"));
-    expect(barWidths).toEqual(["width: 13%;", "width: 100%;"]);
+    expect(barWidths).toEqual(["width: 100%;", "width: 13%;", "width: 0%;"]);
+    expect(drawer.find(".execution-report-rank").text()).toBe("1");
   });
 
   it("renders legacy reports without metrics", async () => {

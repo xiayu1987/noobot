@@ -94,7 +94,7 @@ test("summarizeExecutionLogs counts all visible logs beyond the step window", ()
   assert.equal(summary.toolCallCount, 60);
   assert.equal(summary.toolResultCount, 60);
   assert.equal(summary.errorCount, 0);
-  assert.deepEqual(summary.toolStats, { read_file: { calls: 60, failures: 0 } });
+  assert.equal("toolStats" in summary, false);
 });
 
 test("summarizeExecutionLogs treats unsuccessful tool results as errors", () => {
@@ -107,10 +107,6 @@ test("summarizeExecutionLogs treats unsuccessful tool results as errors", () => 
 
   assert.equal(summary.toolResultCount, 2);
   assert.equal(summary.errorCount, 2);
-  assert.deepEqual(summary.toolStats, {
-    execute_script: { calls: 1, failures: 1 },
-    search: { calls: 1, failures: 1 },
-  });
   assert.equal(summary.steps[1].text, "失败：执行命令");
 });
 
