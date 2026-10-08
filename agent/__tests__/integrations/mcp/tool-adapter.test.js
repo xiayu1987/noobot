@@ -68,3 +68,37 @@ test("MCP tool adapter normalizes schemas and args defensively", () => {
     citys: "北京",
   });
 });
+
+test("MCP tool adapter binds dotted tool names and calls with the original name", async () => {
+  const { adaptToolsForBinding } = await import("../../../src/models/tool/binding-adapter.js");
+  const calls = [];
+  const longName = `ns.${"x".repeat(80)}`;
+  const tools = buildLangChainMcpTools({
+    mcpTools: [
+      { name: "weather.search_local" },
+      { name: "weather/search_local" },
+      { name: longName },
+      { name: `${longName}!` },
+    ],
+    client: {
+      async callTool(payload) {
+        calls.push(payload);
+        return { content: [{ type: "text", text: "ok" }] };
+      },
+    },
+  });
+
+  const names = tools.map((tool) => tool.name);
+  assert.deepEqual(names.slice(0, 2), ["weather_search_local", "weather_search_local_2"]);
+  assert.equal(names[2].length, 64);
+  assert.equal(names[3].length, 64);
+  assert.ok(names[3].endsWith("_2"));
+  assert.deepEqual(adaptToolsForBinding(tools).droppedToolNames, []);
+
+  await tools[0].invoke({});
+  await tools[1].invoke({});
+  assert.deepEqual(
+    calls.map((call) => call.name),
+    ["weather.search_local", "weather/search_local"],
+  );
+});

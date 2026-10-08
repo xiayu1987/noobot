@@ -5,7 +5,8 @@
  */
 import { mergeConfig } from "../../config/index.js";
 
-const OPENAI_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+export const TOOL_BINDING_NAME_MAX_LENGTH = 64;
+const TOOL_BINDING_NAME_PATTERN = new RegExp(`^[a-zA-Z0-9_-]{1,${TOOL_BINDING_NAME_MAX_LENGTH}}$`);
 const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
 
 function isCodexLikeModel(modelName = "", modelAlias = "") {
@@ -94,7 +95,7 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
       droppedToolNames.push(toolName || toolType || "tool_search");
       continue;
     }
-    if (!toolName || !OPENAI_TOOL_NAME_PATTERN.test(toolName)) {
+    if (!toolName || !TOOL_BINDING_NAME_PATTERN.test(toolName)) {
       droppedToolNames.push(toolName || "(empty)");
       continue;
     }

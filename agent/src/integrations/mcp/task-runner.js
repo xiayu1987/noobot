@@ -35,7 +35,7 @@ export async function createMcpAgentTools({
     mcpName: server.name,
     server,
     tools,
-    toolNames: mcpTools.map((item) => String(item?.name || "").trim()).filter(Boolean),
+    toolNames: tools.map((tool) => tool.name),
     close: () => client.close(),
   };
 }

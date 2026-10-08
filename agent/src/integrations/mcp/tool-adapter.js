@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { TOOL_BINDING_NAME_MAX_LENGTH } from "../../models/tool/binding-adapter.js";
 
 export function buildMcpToolDescription(toolSpec = {}) {
   const description = String(toolSpec?.description || "").trim();
@@ -65,9 +66,7 @@ export function normalizeMcpToolCallArgs(args = {}) {
     }
   }
   if (!isPlainObject(args)) return {};
-  return Object.fromEntries(
-    Object.entries(args).filter(([, value]) => value !== undefined),
-  );
+  return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined));
 }
 
 export function normalizeMcpToolResult(result = {}) {
@@ -84,13 +83,29 @@ export function normalizeMcpToolResult(result = {}) {
   return JSON.stringify(result || {});
 }
 
+export function resolveMcpToolBindingName(toolName = "", usedNames = new Set()) {
+  const base =
+    String(toolName || "")
+      .trim()
+      .replaceAll(/[^a-zA-Z0-9_-]/g, "_")
+      .slice(0, TOOL_BINDING_NAME_MAX_LENGTH) || "mcp_tool";
+  let candidate = base;
+  for (let index = 2; usedNames.has(candidate); index += 1) {
+    const suffix = `_${index}`;
+    candidate = `${base.slice(0, TOOL_BINDING_NAME_MAX_LENGTH - suffix.length)}${suffix}`;
+  }
+  usedNames.add(candidate);
+  return candidate;
+}
+
 export function buildLangChainMcpTools({ mcpTools = [], client }) {
+  const usedNames = new Set();
   return (mcpTools || [])
     .map((toolSpec) => {
       const toolName = String(toolSpec?.name || "").trim();
       if (!toolName) return null;
       return new DynamicStructuredTool({
-        name: toolName,
+        name: resolveMcpToolBindingName(toolName, usedNames),
         description: buildMcpToolDescription(toolSpec),
         schema: normalizeMcpInputSchema(toolSpec?.inputSchema || {}),
         func: async (args = {}) => {
