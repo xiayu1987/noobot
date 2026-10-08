@@ -144,6 +144,7 @@ function buildSlowestCalls(calls = []) {
   return calls.map((call) => ({
     key: call.toolCallId,
     tool: call.tool,
+    subject: call.subject,
     duration: formatDuration(call.durationMs),
     ratio: ratioOf(call.durationMs, maxDuration),
     success: call.success !== false,

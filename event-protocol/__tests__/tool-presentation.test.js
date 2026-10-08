@@ -6,7 +6,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { projectToolFileDisplay, projectToolOperationSummary } from "../src/tool-presentation.js";
+import {
+  projectToolFileDisplay,
+  projectToolOperationSubject,
+  projectToolOperationSummary,
+} from "../src/tool-presentation.js";
+
+test("operation subject is the summary without the tool name prefix", () => {
+  const args = { command: "npm test" };
+  assert.equal(projectToolOperationSubject("execute_script", args), "npm test");
+  assert.equal(projectToolOperationSummary("execute_script", args), "execute_script · npm test");
+  assert.equal(projectToolOperationSubject("execute_script", {}), "");
+  assert.equal(projectToolOperationSummary("execute_script", {}), "execute_script");
+});
 
 test("tool file display projects paths, resources, and attachment identities", () => {
   assert.equal(

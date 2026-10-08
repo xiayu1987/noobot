@@ -36,8 +36,18 @@ test("summarizeExecutionMetrics aggregates model calls, retries and switches", (
 
 test("summarizeExecutionMetrics pairs tool calls by id and uses end risk level", () => {
   const metrics = summarizeExecutionMetrics([
-    log("tool_call_start", 0, { tool: "read_file", toolCallId: "a", riskLevel: "low" }),
-    log("tool_call_start", 1, { tool: "execute_script", toolCallId: "b", riskLevel: "medium" }),
+    log("tool_call_start", 0, {
+      tool: "read_file",
+      toolCallId: "a",
+      riskLevel: "low",
+      args: { filePath: "src/a.js" },
+    }),
+    log("tool_call_start", 1, {
+      tool: "execute_script",
+      toolCallId: "b",
+      riskLevel: "medium",
+      args: { command: "npm test" },
+    }),
     log("tool_call_end", 2, {
       tool: "read_file",
       toolCallId: "a",
@@ -59,10 +69,14 @@ test("summarizeExecutionMetrics pairs tool calls by id and uses end risk level",
   assert.deepEqual(metrics.tools.riskLevels, { low: 1, critical: 1 });
   assert.equal(metrics.tools.totalToolDurationMs, 7000);
   assert.deepEqual(
-    metrics.tools.slowestToolCalls.map(({ toolCallId, success }) => [toolCallId, success]),
+    metrics.tools.slowestToolCalls.map(({ toolCallId, subject, success }) => [
+      toolCallId,
+      subject,
+      success,
+    ]),
     [
-      ["b", false],
-      ["a", true],
+      ["b", "npm test", false],
+      ["a", "src/a.js", true],
     ],
   );
 });

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { projectToolOperationSubject } from "@noobot/event-protocol/tool-presentation";
 import { resolveData, resolveEvent, resolveToolName } from "./execution-log-fields.js";
 
 const SLOWEST_TOOL_CALL_LIMIT = QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls;
@@ -46,7 +47,10 @@ function trackToolCall(acc, log, data, phase) {
   if (!toolCallId) return;
   const entry = acc.toolCalls.get(toolCallId) || { tool: resolveToolName(log) };
   const ts = resolveTimestampMs(log);
-  if (phase === "start" && entry.startMs == null) entry.startMs = ts;
+  if (phase === "start" && entry.startMs == null) {
+    entry.startMs = ts;
+    entry.subject = projectToolOperationSubject(entry.tool, data.args);
+  }
   if (phase === "end") {
     entry.endMs = ts;
     entry.success = data.success !== false && data.ok !== false;
@@ -105,7 +109,13 @@ function summarizeToolCalls(toolCalls) {
     timing.count += 1;
     timing.totalDurationMs += durationMs;
     timing.maxDurationMs = Math.max(timing.maxDurationMs, durationMs);
-    timedCalls.push({ toolCallId, tool: entry.tool, durationMs, success: entry.success });
+    timedCalls.push({
+      toolCallId,
+      tool: entry.tool,
+      subject: entry.subject || "",
+      durationMs,
+      success: entry.success,
+    });
   }
   const slowestToolCalls = timedCalls
     .sort((left, right) => right.durationMs - left.durationMs)

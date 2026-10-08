@@ -5,7 +5,7 @@
  */
 
 export const EXECUTION_REPORT_PROTOCOL = "noobot.execution-report";
-export const EXECUTION_REPORT_VERSION = 1;
+export const EXECUTION_REPORT_VERSION = 2;
 
 export const EXECUTION_REPORT_STATUS = Object.freeze({
   COMPLETED: "completed",

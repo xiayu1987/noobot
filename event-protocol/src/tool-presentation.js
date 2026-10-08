@@ -128,7 +128,7 @@ function patchSummary(value, result) {
     .join(" · ");
 }
 
-export function projectToolOperationSummary(
+export function projectToolOperationSubject(
   tool = "",
   detail,
   { result = false, maxLength = 96 } = {},
@@ -179,6 +179,11 @@ export function projectToolOperationSummary(
           value.stdout;
   }
 
-  const compactSubject = compact(subject, Math.max(1, Number(maxLength) || 96));
-  return compactSubject ? `${toolName} · ${compactSubject}` : toolName;
+  return compact(subject, Math.max(1, Number(maxLength) || 96));
+}
+
+export function projectToolOperationSummary(tool = "", detail, options = {}) {
+  const toolName = text(tool) || "tool";
+  const subject = projectToolOperationSubject(toolName, detail, options);
+  return subject ? `${toolName} · ${subject}` : toolName;
 }

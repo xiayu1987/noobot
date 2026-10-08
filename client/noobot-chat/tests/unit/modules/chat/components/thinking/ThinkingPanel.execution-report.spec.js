@@ -123,7 +123,13 @@ describe("ThinkingPanel execution report", () => {
             },
             riskLevels: { critical: 1, low: 2 },
             slowestToolCalls: [
-              { toolCallId: "c1", tool: "execute", durationMs: 3000, success: false },
+              {
+                toolCallId: "c1",
+                tool: "execute",
+                subject: "npm run build",
+                durationMs: 3000,
+                success: false,
+              },
             ],
             totalToolDurationMs: 3400,
           },
@@ -164,6 +170,9 @@ describe("ThinkingPanel execution report", () => {
       ["execute", "1", "1", "3.0s", "3.0s", "3.0s"],
     ]);
     expect(drawer.find('[data-testid="execution-report-slowest"]').text()).toContain("execute");
+    const subject = drawer.find('[data-testid="execution-report-slowest-subject"]');
+    expect(subject.text()).toBe("npm run build");
+    expect(subject.attributes("title")).toBe("npm run build");
     expect(drawer.find(".execution-report-status").attributes("data-tone")).toBe("success");
     const cards = drawer.findAll(".execution-report-card");
     expect(cards.map((node) => node.find(".execution-report-card-value").text())).toEqual([

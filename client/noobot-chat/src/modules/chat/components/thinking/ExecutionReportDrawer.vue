@@ -192,7 +192,16 @@ watch(
           data-testid="execution-report-slowest"
         >
           <li v-for="call in view.slowest" :key="call.key">
-            <span class="execution-report-tool-name">{{ call.tool }}</span>
+            <span class="execution-report-slowest-call">
+              <span class="execution-report-tool-name">{{ call.tool }}</span>
+              <span
+                v-if="call.subject"
+                class="execution-report-slowest-subject"
+                data-testid="execution-report-slowest-subject"
+                :title="call.subject"
+                >{{ call.subject }}</span
+              >
+            </span>
             <span class="execution-report-bar" aria-hidden="true">
               <span
                 class="execution-report-bar-fill"
@@ -382,9 +391,21 @@ watch(
 }
 .execution-report-slowest li {
   display: grid;
-  grid-template-columns: minmax(80px, max-content) 1fr max-content;
+  grid-template-columns: minmax(0, 2fr) minmax(60px, 1fr) max-content;
   align-items: center;
   gap: var(--noobot-space-md);
+}
+.execution-report-slowest-call {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.execution-report-slowest-subject {
+  overflow: hidden;
+  color: var(--noobot-text-secondary);
+  font-size: var(--noobot-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (max-width: 768px) {
   .execution-report-body {
