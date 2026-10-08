@@ -39,6 +39,10 @@ Sunburst 沿用项目中 Flare 已配置的 `images_async` 图片网关协议，
 
 下架状态交叉核对：[OpenAI](https://developers.openai.com/api/docs/deprecations)、[Anthropic](https://platform.claude.com/docs/en/about-claude/model-deprecations)、[Google](https://ai.google.dev/gemini-api/docs/deprecations)、[xAI](https://docs.x.ai/developers/migration/may-15-retirement)。不把“未来计划下架”“legacy”直接视为“已经下架”。
 
+## 2026-10-08 补充：GPT-6.1 Sol
+
+新增 `gpt_6_1_sol` / `gpt-6.1-sol`，依据：[OpenAI](https://developers.openai.com/api/docs/models/gpt-6.1-sol)。官方模型页中 GPT-6.1 系列目前只有 Sol；Astra、Luna 仍为 GPT-6。推理档位为 low/medium/high/xhigh/max（默认 medium），**不支持 none/minimal**；工具调用必须走 Responses，因此配置 `use_responses_api: true`。支持图片输入、文本输出，上下文 1.05M。`gpt_6_sol` 仍在官方列表且未被标记下架，按清理规则保留；`default_provider` 不变。
+
 ## 同步范围
 
 - 版本管理内：模型库、`service/config/global.config.example.json`、`user-template/default-user/config.example.json`。

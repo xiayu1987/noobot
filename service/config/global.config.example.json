@@ -457,6 +457,33 @@
         }
       }
     },
+    "gpt_6_1_sol": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-6.1-sol",
+      "prompt_cache_fields": ["prompt_cache_key", "prompt_cache_options"],
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "use_responses_api": true,
+      "description": "OpenAI GPT-6.1 Sol for near-Astra complex coding and agentic work at lower cost",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "gpt_6_luna": {
       "enabled": true,
       "used_for_conversation": true,

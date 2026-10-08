@@ -13,7 +13,8 @@
     "**/*.svg",
     "**/*.txt",
     "**/workspace/**",
-    "**/report/**"
+    "**/report/**",
+    "**/service/config/global.config.example.json"
   ],
   "minLines": 5,
   "minTokens": 70,

@@ -83,6 +83,7 @@ test("model library exposes copy-safe provider templates", () => {
     [
       "gpt_5_6_sol",
       "gpt_6_sol",
+      "gpt_6_1_sol",
       "gpt_6_luna",
       "gpt_6_astra",
       "gpt_5_6_terra",

@@ -10,6 +10,7 @@ import { resolveModelLibraryProvider } from "../src/index.js";
 
 const additions = {
   gpt_6_sol: "gpt-6-sol",
+  gpt_6_1_sol: "gpt-6.1-sol",
   gpt_6_luna: "gpt-6-luna",
   claude_opus_5_5: "claude-opus-5-5",
   gemini_3_8_flash: "gemini-3.8-flash",
@@ -68,6 +69,12 @@ test("GPT-6 Sol and Luna use Responses for reasoning with tools and the current 
 });
 
 test("new models declare supported reasoning levels and modality boundaries", () => {
+  const gpt61Sol = resolveModelLibraryProvider("gpt_6_1_sol");
+  assert.equal(gpt61Sol.use_responses_api, true);
+  assert.equal(gpt61Sol.reasoning_effort, "medium");
+  assert.deepEqual(gpt61Sol.reasoning_effort_options, ["low", "medium", "high", "xhigh", "max"]);
+  assert.deepEqual(gpt61Sol.prompt_cache_fields, ["prompt_cache_key", "prompt_cache_options"]);
+  assert.deepEqual(gpt61Sol.multimodal_parsing.input_modalities, ["image"]);
   assert.deepEqual(resolveModelLibraryProvider("claude_opus_5_5").reasoning_effort_options, [
     "low",
     "medium",
