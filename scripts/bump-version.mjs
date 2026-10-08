@@ -4,6 +4,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -54,10 +55,21 @@ async function writeJson(relativeFile, data) {
   await fs.writeFile(filePath, source, "utf8");
 }
 
+export function replaceJsonVersion(source = "", version = "") {
+  const versionPattern = /^( {2}"version": )"[^"]*"/m;
+  if (!versionPattern.test(source)) {
+    throw new Error("Could not find a version field");
+  }
+  const nextSource = source.replace(versionPattern, `$1"${version}"`);
+  const expected = { ...JSON.parse(source), version };
+  assert.deepEqual(JSON.parse(nextSource), expected, "Version replacement changed other fields");
+  return nextSource;
+}
+
 async function updateJsonVersion(relativeFile, version) {
-  const data = await readJson(relativeFile);
-  data.version = version;
-  await writeJson(relativeFile, data);
+  const filePath = path.resolve(repoRoot, relativeFile);
+  const source = await fs.readFile(filePath, "utf8");
+  await fs.writeFile(filePath, replaceJsonVersion(source, version), "utf8");
 }
 
 async function resolveProjectJsonFiles() {
