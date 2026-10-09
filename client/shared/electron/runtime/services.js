@@ -29,6 +29,7 @@ export function createDesktopServiceManager({
   startupTimeoutMs,
   pollIntervalMs,
   sendStatus = () => {},
+  onBackendRecovered = async () => {},
   getLogFilePath = () => "",
   appendServiceLog = () => {},
   appendAgentProxyLog = () => {},
@@ -54,15 +55,12 @@ export function createDesktopServiceManager({
   let crashRestartPromise = null;
   let crashRestartPending = false;
   let crashRestartSpawning = false;
+  let startupInterruption = "";
   const crashRestartTimes = [];
 
-  // Service and agent proxy usually die together; coalesce into one restart run,
-  // with backoff and a sliding-window cap so a crash loop cannot spin forever.
   function scheduleCrashRestart(reason) {
     if (stopping) return;
     if (crashRestartPromise) {
-      // Exits during the backoff delay are covered by the upcoming restart run;
-      // only exits after it began spawning need another run.
       if (crashRestartSpawning) crashRestartPending = true;
       return;
     }
@@ -73,27 +71,29 @@ export function createDesktopServiceManager({
     if (crashRestartTimes.length >= crashRestartDelaysMs.length) {
       sendStatus({
         phase: "error",
+        retryable: true,
         message: `Noobot backend crashed repeatedly; automatic restart stopped (${reason}).`,
       });
       return;
     }
     const delayMs = crashRestartDelaysMs[crashRestartTimes.length];
-    crashRestartTimes.push(currentTime);
     crashRestartPromise = (async () => {
       sendStatus({
         phase: "starting",
         message: `Restarting Noobot backend in ${delayMs}ms (${reason})...`,
       });
       await sleep(delayMs);
-      if (stopping) return;
-      if (serviceStartupPromise) await serviceStartupPromise.catch(() => {});
+      if (stopping || serviceStartupPromise) return;
+      crashRestartTimes.push(currentTime);
       crashRestartSpawning = true;
       await restartCrashedProcesses();
       sendStatus({ phase: "ready", message: "Noobot backend restarted after crash." });
+      await onBackendRecovered();
     })()
       .catch((error) => {
         sendStatus({
           phase: "error",
+          retryable: true,
           message: `Noobot backend restart failed: ${error?.message || String(error)}`,
         });
         crashRestartPending = true;
@@ -108,7 +108,6 @@ export function createDesktopServiceManager({
       });
   }
 
-  // Non-interactive restart: config/dependency prompts already passed at boot.
   async function restartCrashedProcesses() {
     if (!managedServiceProcess && !(await isServiceHealthy())) {
       startNoobotService();
@@ -128,6 +127,17 @@ export function createDesktopServiceManager({
   function stopManagedChildProcess(child) {
     if (!child) return;
     void terminateProcess(child, "SIGTERM", { processGroup: false });
+  }
+
+  function handleManagedChildExit(label, code, signal) {
+    if (code === 0 && !signal) return;
+    const detail = `code=${code ?? ""}, signal=${signal || ""}`;
+    sendStatus({ phase: "error", message: `Noobot ${label} exited unexpectedly (${detail}).` });
+    if (serviceStartupPromise) {
+      startupInterruption = `Noobot ${label} exited during startup (${detail}).`;
+      return;
+    }
+    scheduleCrashRestart(`${label} exit ${detail}`);
   }
 
   function syncPackagedProxyConfig(proxyName) {
@@ -340,13 +350,7 @@ export function createDesktopServiceManager({
     managedServiceProcess.once("exit", (code, signal) => {
       const wasManaged = managedServiceProcess;
       managedServiceProcess = null;
-      if (wasManaged && code !== 0 && code !== null) {
-        sendStatus({
-          phase: "error",
-          message: `Noobot service exited early (code=${code}, signal=${signal || ""}).`,
-        });
-      }
-      if (wasManaged && code !== 0) scheduleCrashRestart(`service exit code=${code}`);
+      if (wasManaged) handleManagedChildExit("service", code, signal);
     });
   }
 
@@ -419,19 +423,13 @@ export function createDesktopServiceManager({
     managedAgentProxyProcess.once("exit", (code, signal) => {
       const wasManaged = managedAgentProxyProcess;
       managedAgentProxyProcess = null;
-      if (wasManaged && code !== 0 && code !== null) {
-        sendStatus({
-          phase: "error",
-          message: `Noobot agent proxy exited early (code=${code}, signal=${signal || ""}).`,
-        });
-      }
-      if (wasManaged && code !== 0) scheduleCrashRestart(`agent proxy exit code=${code}`);
+      if (wasManaged) handleManagedChildExit("agent proxy", code, signal);
     });
   }
 
   async function waitForHealthyService() {
     const startedAt = Date.now();
-    while (Date.now() - startedAt < startupTimeoutMs) {
+    while (!startupInterruption && Date.now() - startedAt < startupTimeoutMs) {
       if (await isServiceHealthy()) return true;
       await sleep(pollIntervalMs);
     }
@@ -440,15 +438,20 @@ export function createDesktopServiceManager({
 
   async function waitForHealthyAgentProxy() {
     const startedAt = Date.now();
-    while (Date.now() - startedAt < startupTimeoutMs) {
+    while (!startupInterruption && Date.now() - startedAt < startupTimeoutMs) {
       if (await isAgentProxyHealthy()) return true;
       await sleep(pollIntervalMs);
     }
     return false;
   }
 
+  function throwIfStartupInterrupted() {
+    if (startupInterruption) throw new Error(startupInterruption);
+  }
+
   async function ensureServiceStarted() {
     if (serviceStartupPromise) return serviceStartupPromise;
+    startupInterruption = "";
     serviceStartupPromise = (async () => {
       setDesktopConfigState(
         ensureDesktopGlobalConfig({
@@ -487,6 +490,7 @@ export function createDesktopServiceManager({
       sendStatus({ phase: "starting", message: "Starting Noobot service..." });
       startNoobotService();
       const healthy = await waitForHealthyService();
+      throwIfStartupInterrupted();
       if (!healthy) {
         throw new Error(`Noobot service did not become healthy within ${startupTimeoutMs}ms.`);
       }
@@ -496,12 +500,14 @@ export function createDesktopServiceManager({
         syncPackagedProxyConfigs();
         if (!(await isAgentProxyHealthy())) startAgentProxy();
         const proxyHealthy = await waitForHealthyAgentProxy();
+        throwIfStartupInterrupted();
         if (!proxyHealthy)
           throw new Error(
             `Noobot agent proxy did not become healthy within ${startupTimeoutMs}ms.`,
           );
         sendStatus({ phase: "ready", message: "Noobot agent proxy is ready." });
       }
+      throwIfStartupInterrupted();
     })().finally(() => {
       serviceStartupPromise = null;
     });

@@ -271,6 +271,7 @@ test("desktop boot flow reports error and keeps startup page when service startu
   assert.deepEqual(statuses, [
     {
       phase: "error",
+      retryable: true,
       message: "service boom",
       healthUrl: "http://127.0.0.1:10061/health",
       clientUrl: "http://127.0.0.1:10060",
@@ -310,5 +311,58 @@ test("desktop startup offers missing dependencies even when the service is alrea
   assert.deepEqual(
     statuses.map((status) => status.phase),
     ["checking", "ready"],
+  );
+});
+
+test("openNoobot reports retry failures through the status protocol", async () => {
+  const statuses = [];
+  const loadedUrls = [];
+  const bootstrap = createDesktopBootstrap({
+    createWindow: () => ({}),
+    ensureServiceStarted: async () => {
+      throw new Error("retry boom");
+    },
+    resolveNoobotUrl: async () => "http://127.0.0.1:10062",
+    loadNoobotUrl: async (url) => loadedUrls.push(url),
+    sendStatus: (status) => statuses.push(status),
+    healthUrl: "http://127.0.0.1:10061/health",
+    defaultClientUrl: "http://127.0.0.1:10060",
+  });
+
+  await bootstrap.openNoobot();
+
+  assert.deepEqual(loadedUrls, []);
+  assert.deepEqual(
+    statuses.map((status) => [status.phase, status.retryable, status.message]),
+    [["error", true, "retry boom"]],
+  );
+});
+
+test("recoverNoobot restores Noobot only when the window fell back to the startup page", async () => {
+  const statuses = [];
+  const loadedUrls = [];
+  let ensureCalls = 0;
+  let showingStartupPage = false;
+  const bootstrap = createDesktopBootstrap({
+    createWindow: () => ({}),
+    ensureServiceStarted: async () => {
+      ensureCalls += 1;
+    },
+    resolveNoobotUrl: async () => "http://127.0.0.1:10062/?session=94c1af8d",
+    loadNoobotUrl: async (url) => loadedUrls.push(url),
+    isShowingStartupPage: () => showingStartupPage,
+    sendStatus: (status) => statuses.push(status),
+  });
+
+  await bootstrap.recoverNoobot();
+  assert.deepEqual(loadedUrls, []);
+
+  showingStartupPage = true;
+  await bootstrap.recoverNoobot();
+  assert.deepEqual(loadedUrls, ["http://127.0.0.1:10062/?session=94c1af8d"]);
+  assert.equal(ensureCalls, 0);
+  assert.deepEqual(
+    statuses.map((status) => status.phase),
+    ["loading"],
   );
 });

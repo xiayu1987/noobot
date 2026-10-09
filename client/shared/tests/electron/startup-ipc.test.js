@@ -18,18 +18,17 @@ function createIpcMainMock() {
   };
 }
 
-test("startup retry loads the app through the window manager", async () => {
+test("startup retry delegates to the single openNoobot entry", async () => {
   const ipcMain = createIpcMainMock();
-  const calls = [];
-  const url = "http://127.0.0.1:23456/";
+  let openCalls = 0;
   registerStartupIpcHandlers({
     ipcMain,
-    ensureServiceStarted: async () => calls.push("ready"),
-    resolveNoobotUrl: async () => url,
-    loadNoobotUrl: async (target) => calls.push(target),
+    openNoobot: async () => {
+      openCalls += 1;
+    },
   });
   await ipcMain.handlers.get("noobot:retry-startup")();
-  assert.deepEqual(calls, ["ready", url]);
+  assert.equal(openCalls, 1);
 });
 
 test("save super admin refreshes desktop config before writing the global config", async () => {

@@ -71,6 +71,7 @@ const {
   createWindow,
   resolveNoobotUrl,
   loadNoobotUrl,
+  isShowingStartupPage,
   reloadWebContents,
   getMainWindow,
   allowQuit,
@@ -82,7 +83,7 @@ const {
   defaultClientUrl,
   appendEarlyLog,
   appendDesktopLog,
-  onMainFrameLoadFailed: (status) => sendStatus(status),
+  sendStatus,
 });
 
 function sendStatus(status) {
@@ -158,6 +159,7 @@ const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager
   startupTimeoutMs,
   pollIntervalMs,
   sendStatus,
+  onBackendRecovered: () => recoverNoobot(),
   getLogFilePath,
   appendServiceLog,
   appendAgentProxyLog,
@@ -172,11 +174,12 @@ const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager
   inspectDependencies,
 });
 
-const { boot, hasBootStarted } = createDesktopBootstrap({
+const { boot, openNoobot, recoverNoobot, hasBootStarted } = createDesktopBootstrap({
   createWindow,
   ensureServiceStarted,
   resolveNoobotUrl,
   loadNoobotUrl,
+  isShowingStartupPage,
   sendStatus,
   appendEarlyLog,
   appendDesktopLog,
@@ -224,10 +227,8 @@ registerStartupIpcHandlers({
   saveConfigParamValues,
   saveSuperAdminConfig,
   ensureSelectedDependencies,
-  ensureServiceStarted,
   reloadWebContents,
-  resolveNoobotUrl,
-  loadNoobotUrl,
+  openNoobot,
   sendStatus,
   runProcess: runDependencyProcess,
 });

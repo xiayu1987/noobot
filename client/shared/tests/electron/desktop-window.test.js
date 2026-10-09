@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { clientFilePath as path } from "../../path-resolver.js";
 import { createDesktopWindowManager } from "../../electron/runtime/window.js";
+import { createDesktopBootstrap } from "../../electron/runtime/bootstrap.js";
 
 const appUrl = "http://127.0.0.1:23456/";
 
@@ -71,7 +72,7 @@ function createHarness(t, platform) {
     platform,
     electron: { BrowserWindow, Tray, Menu, shell },
     appendDesktopLog: (line) => logs.push(line),
-    onMainFrameLoadFailed: (status) => loadFailures.push(status),
+    sendStatus: (status) => loadFailures.push(status),
   });
   const window = manager.createWindow();
   function navigate(url, { eventName = "will-navigate", isMainFrame = true } = {}) {
@@ -217,28 +218,66 @@ for (const platform of ["win32", "darwin"]) {
     assert.equal(h.getReloads(), 2);
   });
 
-  test(`${platform}: failed Noobot page falls back to startup and restores the session on retry`, async (t) => {
+  test(`${platform}: failed Noobot page falls back to startup and stays the page to restore`, async (t) => {
     const h = createHarness(t, platform);
     const sessionUrl = `${appUrl}?session=94c1af8d`;
+    assert.equal(h.manager.isShowingStartupPage(), true);
     await h.manager.loadNoobotUrl(appUrl);
     assert.equal(h.window.loadFileCount, 1);
+    assert.equal(h.manager.isShowingStartupPage(), false);
 
-    // Ignored: aborted navigation, sub frames, foreign origins.
     h.webContents.emit("did-fail-load", {}, -3, "ERR_ABORTED", sessionUrl, true);
     h.webContents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", sessionUrl, false);
-    h.webContents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", "https://example.com/", true);
+    h.webContents.emit(
+      "did-fail-load",
+      {},
+      -102,
+      "ERR_CONNECTION_REFUSED",
+      "https://example.com/",
+      true,
+    );
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(h.window.loadFileCount, 1);
     assert.deepEqual(h.loadFailures, []);
+    assert.equal(h.manager.isShowingStartupPage(), false);
 
     h.webContents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", sessionUrl, true);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(h.window.loadFileCount, 2);
+    assert.equal(h.manager.isShowingStartupPage(), true);
     assert.equal(h.loadFailures.length, 1);
     assert.equal(h.loadFailures[0].phase, "error");
     assert.equal(h.loadFailures[0].retryable, true);
 
     assert.equal(await h.manager.resolveNoobotUrl(), sessionUrl);
-    assert.equal(await h.manager.resolveNoobotUrl(), appUrl);
+    assert.equal(await h.manager.resolveNoobotUrl(), sessionUrl);
+    await h.manager.loadNoobotUrl(sessionUrl);
+    assert.equal(h.manager.isShowingStartupPage(), false);
+    assert.equal(h.window.loadedUrls.at(-1), sessionUrl);
+  });
+
+  test(`${platform}: crash recovery reopens the failed Noobot page from the startup fallback`, async (t) => {
+    const h = createHarness(t, platform);
+    const sessionUrl = `${appUrl}?session=94c1af8d`;
+    const bootstrap = createDesktopBootstrap({
+      createWindow: () => h.window,
+      ensureServiceStarted: async () => {},
+      resolveNoobotUrl: h.manager.resolveNoobotUrl,
+      loadNoobotUrl: h.manager.loadNoobotUrl,
+      isShowingStartupPage: h.manager.isShowingStartupPage,
+      sendStatus: () => {},
+    });
+    await h.manager.loadNoobotUrl(appUrl);
+
+    await bootstrap.recoverNoobot();
+    assert.deepEqual(h.window.loadedUrls, [appUrl]);
+
+    h.webContents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", sessionUrl, true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.manager.isShowingStartupPage(), true);
+
+    await bootstrap.recoverNoobot();
+    assert.deepEqual(h.window.loadedUrls, [appUrl, sessionUrl]);
+    assert.equal(h.manager.isShowingStartupPage(), false);
   });
 }

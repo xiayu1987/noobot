@@ -73,11 +73,11 @@ async function createFixture({
   let desktopConfigState = null;
   const calls = [];
   const startupEvents = [];
+  const statuses = [];
   const terminateCalls = [];
   let healthCalls = 0;
   const originalResourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
   Object.defineProperty(process, "resourcesPath", { value: resourcesPath, configurable: true });
-  // Health follows liveness of the spawned mock children.
   const hasLiveChild = (pattern) =>
     calls.some(
       (call) =>
@@ -106,7 +106,10 @@ async function createFixture({
       startupEvents.push("config-loaded");
       return configState;
     },
-    sendStatus: (status) => startupEvents.push(`status:${status.phase}`),
+    sendStatus: (status) => {
+      statuses.push(status);
+      startupEvents.push(`status:${status.phase}`);
+    },
     getDesktopConfigState: () => desktopConfigState,
     setDesktopConfigState: (state) => {
       desktopConfigState = state;
@@ -156,6 +159,7 @@ async function createFixture({
     terminateCalls,
     getHealthCalls: () => healthCalls,
     startupEvents,
+    statuses,
     manager,
     restore: async () => {
       if (originalResourcesPath) {
@@ -312,7 +316,6 @@ test("crashed service and agent proxy are restarted once when they exit together
       assert.match(fixture.calls[3].args[0], /agent-proxy[/\\]agent-proxy\.js$/);
       assert.equal(fixture.startupEvents.at(-1), "status:ready");
 
-      // A coalesced crash consumes one restart slot; the second crash still restarts.
       fixture.calls[2].child.emit("exit", 1, null);
       fixture.calls[3].child.emit("exit", 1, null);
       await waitFor(() => fixture.calls.length === 6);
@@ -358,6 +361,114 @@ test("crash restart stops after the restart budget is exhausted", async () => {
       await settle();
       assert.equal(fixture.calls.length, 2);
       assert.equal(fixture.startupEvents.at(-1), "status:error");
+      assert.equal(fixture.statuses.at(-1).retryable, true);
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("signal-terminated service is reported and restarted, then recovery is notified", async () => {
+  await withPlatform("darwin", async () => {
+    let recoveries = 0;
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        crashRestartDelaysMs: [0],
+        onBackendRecovered: async () => {
+          recoveries += 1;
+        },
+      },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      fixture.calls[0].child.emit("exit", null, "SIGKILL");
+      await waitFor(() => recoveries === 1);
+      assert.equal(fixture.calls.length, 2);
+      const exitStatus = fixture.statuses.find((status) =>
+        String(status.message).includes("exited unexpectedly"),
+      );
+      assert.equal(exitStatus.phase, "error");
+      assert.match(exitStatus.message, /signal=SIGKILL/);
+      assert.equal(fixture.startupEvents.at(-1), "status:ready");
+
+      fixture.calls[1].child.emit("exit", 0, null);
+      await settle();
+      assert.equal(fixture.calls.length, 2);
+      assert.equal(recoveries, 1);
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("child exit during startup fails startup with the exit reason instead of auto restarting", async () => {
+  await withPlatform("darwin", async () => {
+    let recoveries = 0;
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        crashRestartDelaysMs: [0, 0],
+        startupTimeoutMs: 5000,
+        fetchImpl: async () => ({ ok: true, json: async () => ({ ok: false }) }),
+        onBackendRecovered: async () => {
+          recoveries += 1;
+        },
+      },
+    });
+    try {
+      const startup = fixture.manager.ensureServiceStarted();
+      await waitFor(() => fixture.calls.length === 1);
+      fixture.calls[0].child.emit("exit", 1, null);
+      await assert.rejects(startup, /service exited during startup \(code=1, signal=\)/);
+      await settle();
+      assert.equal(fixture.calls.length, 1);
+      assert.equal(recoveries, 0);
+      assert.equal(
+        fixture.statuses.some((status) => String(status.message).startsWith("Restarting")),
+        false,
+      );
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("crash restart yielded to an in-flight startup does not consume restart budget", async () => {
+  await withPlatform("darwin", async () => {
+    let inspections = 0;
+    let releaseStartup = () => {};
+    const startupGate = new Promise((resolve) => {
+      releaseStartup = resolve;
+    });
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: {
+        crashRestartDelaysMs: [10],
+        inspectDependencies: async () => {
+          inspections += 1;
+          if (inspections === 2) await startupGate;
+          return [];
+        },
+      },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      fixture.calls[0].child.emit("exit", 1, null);
+      const startup = fixture.manager.ensureServiceStarted();
+      await settle();
+      assert.equal(fixture.calls.length, 1);
+      releaseStartup();
+      await startup;
+      assert.equal(fixture.calls.length, 2);
+
+      fixture.calls[1].child.emit("exit", 1, null);
+      await waitFor(() => fixture.calls.length === 3);
+      await settle();
+      assert.equal(fixture.startupEvents.at(-1), "status:ready");
     } finally {
       fixture.manager.stopManagedService();
       await fixture.restore();

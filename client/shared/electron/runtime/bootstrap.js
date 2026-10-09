@@ -9,6 +9,7 @@ export function createDesktopBootstrap({
   ensureServiceStarted,
   resolveNoobotUrl,
   loadNoobotUrl,
+  isShowingStartupPage = () => false,
   sendStatus,
   appendEarlyLog = () => {},
   appendDesktopLog = () => {},
@@ -17,6 +18,32 @@ export function createDesktopBootstrap({
   defaultClientUrl,
 } = {}) {
   let bootStarted = false;
+
+  async function showNoobot(prepare = async () => {}) {
+    try {
+      await prepare();
+      const noobotUrl = await resolveNoobotUrl();
+      sendStatus({ phase: "loading", message: `Loading ${noobotUrl}` });
+      await loadNoobotUrl(noobotUrl);
+    } catch (error) {
+      sendStatus({
+        phase: "error",
+        retryable: true,
+        message: error?.message || String(error),
+        healthUrl,
+        clientUrl: defaultClientUrl,
+      });
+    }
+  }
+
+  function openNoobot() {
+    return showNoobot(ensureServiceStarted);
+  }
+
+  async function recoverNoobot() {
+    if (!isShowingStartupPage()) return;
+    await showNoobot();
+  }
 
   async function boot() {
     appendEarlyLog(`[main:boot] enter; bootStarted=${bootStarted}`);
@@ -30,24 +57,14 @@ export function createDesktopBootstrap({
     appendEarlyLog("[main:boot] before createWindow");
     createWindow();
     appendEarlyLog("[main:boot] after createWindow; before ensureServiceStarted");
-    try {
-      await ensureServiceStarted();
-      appendEarlyLog("[main:boot] after ensureServiceStarted");
-      const noobotUrl = await resolveNoobotUrl();
-      sendStatus({ phase: "loading", message: `Loading ${noobotUrl}` });
-      await loadNoobotUrl(noobotUrl);
-    } catch (error) {
-      sendStatus({
-        phase: "error",
-        message: error?.message || String(error),
-        healthUrl,
-        clientUrl: defaultClientUrl,
-      });
-    }
+    await openNoobot();
+    appendEarlyLog("[main:boot] after openNoobot");
   }
 
   return {
     boot,
+    openNoobot,
+    recoverNoobot,
     hasBootStarted: () => bootStarted,
   };
 }

@@ -10,6 +10,7 @@ import { clientFilePath as path } from "../../path-resolver.js";
 import { installDesktopNavigation } from "./navigation.js";
 
 const require = createRequire(import.meta.url);
+const ERR_ABORTED = -3;
 
 export function createDesktopWindowManager({
   app,
@@ -20,7 +21,7 @@ export function createDesktopWindowManager({
   platform = process.platform,
   appendEarlyLog = () => {},
   appendDesktopLog = () => {},
-  onMainFrameLoadFailed = () => {},
+  sendStatus = () => {},
 } = {}) {
   const { BrowserWindow, Menu, shell, Tray } = electron;
   let mainWindow = null;
@@ -28,9 +29,8 @@ export function createDesktopWindowManager({
   let isQuitting = false;
   let startupUrl = "";
   let startupFile = "";
+  let showingStartupPage = false;
   let noobotUrl = "";
-  // Noobot page that failed to load (backend down); restored by the next retry-startup.
-  let recoveryUrl = "";
 
   function getTrayIconPath() {
     if (process.env.NOOBOT_DESKTOP_TRAY_ICON) return process.env.NOOBOT_DESKTOP_TRAY_ICON;
@@ -77,7 +77,13 @@ export function createDesktopWindowManager({
   async function loadNoobotUrl(url) {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("Noobot window unavailable");
     noobotUrl = new URL(url).href;
+    showingStartupPage = false;
     await mainWindow.loadURL(noobotUrl);
+  }
+
+  function loadStartupPage() {
+    showingStartupPage = true;
+    return mainWindow.loadFile(startupFile);
   }
 
   function createContextMenuTemplate(params = {}, webContents = mainWindow?.webContents) {
@@ -208,21 +214,17 @@ export function createDesktopWindowManager({
     startupUrl = pathToFileURL(startupFile).href;
     appendDesktopLog(`[main:create-window] loading ${startupFile}`);
     appendEarlyLog(`[main:create-window] before loadFile ${startupFile}`);
-    mainWindow
-      .loadFile(startupFile)
-      .catch((error) =>
-        appendDesktopLog(
-          `[main:create-window] loadFile failed: ${error?.stack || error?.message || String(error)}`,
-        ),
-      );
+    loadStartupPage().catch((error) =>
+      appendDesktopLog(
+        `[main:create-window] loadFile failed: ${error?.stack || error?.message || String(error)}`,
+      ),
+    );
     appendEarlyLog("[main:create-window] after loadFile call");
     return mainWindow;
   }
 
-  // A failed Noobot page leaves a blank window; fall back to the startup page,
-  // which shows the error and a retry button.
   function handleMainFrameLoadFailure({ code, description, url, isMainFrame }) {
-    if (!isMainFrame || code === -3) return; // -3 = ERR_ABORTED (superseded navigation)
+    if (!isMainFrame || code === ERR_ABORTED) return;
     if (!noobotUrl || !mainWindow || mainWindow.isDestroyed()) return;
     let failedUrl;
     try {
@@ -231,12 +233,11 @@ export function createDesktopWindowManager({
       return;
     }
     if (failedUrl.origin !== new URL(noobotUrl).origin) return;
-    recoveryUrl = failedUrl.href;
-    appendDesktopLog(`[main:window] main frame load failed; showing startup page (${recoveryUrl})`);
-    mainWindow
-      .loadFile(startupFile)
+    noobotUrl = failedUrl.href;
+    appendDesktopLog(`[main:window] main frame load failed; showing startup page (${noobotUrl})`);
+    loadStartupPage()
       .then(() =>
-        onMainFrameLoadFailed({
+        sendStatus({
           phase: "error",
           retryable: true,
           message: `Failed to load Noobot (${code} ${description}). The backend may have stopped; retry to restart it.`,
@@ -248,11 +249,7 @@ export function createDesktopWindowManager({
   }
 
   async function resolveNoobotUrl() {
-    if (recoveryUrl) {
-      const url = recoveryUrl;
-      recoveryUrl = "";
-      return url;
-    }
+    if (noobotUrl) return noobotUrl;
     if (app.isPackaged) {
       const packagedFrontendIndex = path.join(process.resourcesPath, "frontend", "index.html");
       if (fs.existsSync(packagedFrontendIndex)) return agentProxyOrigin;
@@ -271,6 +268,7 @@ export function createDesktopWindowManager({
     showMainWindow,
     resolveNoobotUrl,
     loadNoobotUrl,
+    isShowingStartupPage: () => showingStartupPage,
     reloadWebContents,
     getMainWindow: () => mainWindow,
   };

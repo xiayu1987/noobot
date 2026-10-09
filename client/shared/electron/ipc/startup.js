@@ -68,10 +68,8 @@ export function registerStartupIpcHandlers({
   saveConfigParamValues,
   saveSuperAdminConfig,
   ensureSelectedDependencies,
-  ensureServiceStarted,
   reloadWebContents = () => ({ ok: false, error: "reload unavailable" }),
-  resolveNoobotUrl,
-  loadNoobotUrl,
+  openNoobot,
   sendStatus = () => {},
   runProcess,
 } = {}) {
@@ -84,11 +82,7 @@ export function registerStartupIpcHandlers({
     return state;
   }
 
-  ipcMain.handle("noobot:retry-startup", async () => {
-    await ensureServiceStarted();
-    const noobotUrl = await resolveNoobotUrl();
-    await loadNoobotUrl(noobotUrl);
-  });
+  ipcMain.handle("noobot:retry-startup", () => openNoobot());
 
   ipcMain.handle("noobot:get-startup-statuses", () => getStartupStatuses());
 
