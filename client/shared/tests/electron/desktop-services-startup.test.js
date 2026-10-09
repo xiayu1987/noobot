@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
+import { RUNTIME_INSTANCE_PATH_ENV_KEYS } from "@noobot/runtime-topology-protocol/instance-paths";
 import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
 import { createDesktopServiceManager } from "../../electron/runtime/services.js";
@@ -64,6 +65,7 @@ async function createFixture({
   );
 
   const configState = {
+    configDir: path.join(userDataPath, "config"),
     globalConfigPath: path.join(userDataPath, "config", "global.config.json"),
     workspaceRootPath: path.join(userDataPath, "workspace"),
     workspaceTemplatePath: path.join(userDataPath, "template"),
@@ -186,6 +188,23 @@ test("desktop startup uses npm.cmd for Windows development service launch", asyn
       assert.equal(fixture.calls[0].options.env.NOOBOT_SERVICE_HOST, "127.0.0.1");
       assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
       assert.match(fixture.calls[0].options.env.NOOBOT_GLOBAL_CONFIG_PATH, /global\.config\.json$/);
+      assert.equal(
+        fixture.calls[0].options.env.NOOBOT_CONFIG_DIR,
+        path.join(fixture.userDataPath, "config"),
+      );
+      assert.equal(
+        fixture.calls[0].options.env.NOOBOT_DATA_DIR,
+        path.join(fixture.userDataPath, "data"),
+      );
+      const backendEnv = fixture.calls[0].options.env;
+      const userDataKeys = Object.keys(backendEnv).filter((key) =>
+        String(backendEnv[key]).startsWith(fixture.userDataPath),
+      );
+      assert.ok(userDataKeys.length > 0);
+      assert.deepEqual(
+        userDataKeys.filter((key) => !RUNTIME_INSTANCE_PATH_ENV_KEYS.includes(key)),
+        [],
+      );
       assert.ok(fixture.getHealthCalls() >= 2);
       assert.deepEqual(fixture.startupEvents.slice(0, 2), ["config-loaded", "status:checking"]);
     } finally {

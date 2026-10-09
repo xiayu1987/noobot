@@ -11,6 +11,7 @@ import { pipeline } from "node:stream/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
+import { RUNTIME_INSTANCE_PATH_ENV_KEYS } from "@noobot/runtime-topology-protocol/instance-paths";
 import { createDependencyDetector } from "../../electron/dependencies/detect.js";
 import { createDependencyInstaller } from "../../electron/dependencies/installer.js";
 import { createMacDependencyInstallerTools } from "../../electron/dependencies/managed-mac.js";
@@ -681,5 +682,12 @@ test("dependency runtime env exposes the browser profile root under user data", 
   assert.equal(
     runtimeEnv.NOOBOT_BROWSER_PROFILE_ROOT,
     "/home/tester/.config/noobot/browser-profiles",
+  );
+  const userDataKeys = Object.keys(runtimeEnv).filter((key) =>
+    String(runtimeEnv[key]).startsWith("/home/tester/.config/noobot"),
+  );
+  assert.deepEqual(
+    userDataKeys.filter((key) => !RUNTIME_INSTANCE_PATH_ENV_KEYS.includes(key)),
+    [],
   );
 });

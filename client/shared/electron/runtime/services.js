@@ -172,7 +172,6 @@ export function createDesktopServiceManager({
     isPackaged,
     userDataPath,
     cwd,
-    configDir,
     configState,
     globalConfigPath,
   } = {}) {
@@ -209,9 +208,9 @@ export function createDesktopServiceManager({
         frontendRoot,
         pluginRootDir: path.join(backendRoot, "plugin"),
         userDataDir: userDataPath,
-        configDir,
-        dataDir: process.env.NOOBOT_DATA_DIR || path.join(userDataPath, "data"),
-        logDir: process.env.NOOBOT_LOG_DIR || path.join(userDataPath, "logs"),
+        configDir: configState.configDir,
+        dataDir: path.join(userDataPath, "data"),
+        logDir: path.join(userDataPath, "logs"),
         workspaceRoot: configState?.workspaceRootPath || "",
         workspaceTemplatePath: configState?.workspaceTemplatePath || "",
         globalConfigPath,
@@ -276,7 +275,6 @@ export function createDesktopServiceManager({
       : resolveCommandShimExecutable("npm", process.platform);
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const userDataPath = app.getPath("userData");
-    const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
     const configState =
       getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged, userDataPath });
     setDesktopConfigState(configState);
@@ -285,7 +283,6 @@ export function createDesktopServiceManager({
       isPackaged,
       userDataPath,
       cwd,
-      configDir,
       configState,
       globalConfigPath,
     });
@@ -319,9 +316,9 @@ export function createDesktopServiceManager({
         NOOBOT_SERVICE_HOST: "127.0.0.1",
         NOOBOT_DESKTOP: "1",
         NOOBOT_USER_DATA_DIR: userDataPath,
-        NOOBOT_CONFIG_DIR: configDir,
-        NOOBOT_DATA_DIR: process.env.NOOBOT_DATA_DIR || path.join(userDataPath, "data"),
-        NOOBOT_LOG_DIR: process.env.NOOBOT_LOG_DIR || path.join(userDataPath, "logs"),
+        NOOBOT_CONFIG_DIR: configState.configDir,
+        NOOBOT_DATA_DIR: path.join(userDataPath, "data"),
+        NOOBOT_LOG_DIR: path.join(userDataPath, "logs"),
         NOOBOT_GLOBAL_CONFIG_PATH: globalConfigPath,
         NOOBOT_WORKSPACE_ROOT: configState.workspaceRootPath,
         NOOBOT_WORKSPACE_TEMPLATE_PATH: configState.workspaceTemplatePath,

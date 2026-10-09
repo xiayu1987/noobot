@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./ports": "./src/ports.js",
+    "./instance-paths": "./src/instance-paths.js",
     "./package.json": "./package.json"
   },
   "scripts": {

@@ -280,19 +280,15 @@ export function createDesktopConfigManager({
   }
 
   function ensureDesktopGlobalConfig({ isPackaged, userDataPath }) {
-    const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
-    const targetPath =
-      process.env.NOOBOT_GLOBAL_CONFIG_PATH || path.join(configDir, "global.config.json");
+    const configDir = path.join(userDataPath, "config");
+    const targetPath = path.join(configDir, "global.config.json");
     const examplePath = isPackaged
       ? path.join(packagedBackendRoot, "service", "config", "global.config.example.json")
       : path.join(repoRoot, "service", "config", "global.config.example.json");
-    const workspaceRootPath =
-      process.env.NOOBOT_WORKSPACE_ROOT || path.join(userDataPath, "workspace");
-    const workspaceTemplatePath =
-      process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH ||
-      (isPackaged
-        ? path.join(packagedBackendRoot, "user-template", "default-user")
-        : path.join(repoRoot, "user-template", "default-user"));
+    const workspaceRootPath = path.join(userDataPath, "workspace");
+    const workspaceTemplatePath = isPackaged
+      ? path.join(packagedBackendRoot, "user-template", "default-user")
+      : path.join(repoRoot, "user-template", "default-user");
 
     const exampleConfig = readJsonFile(examplePath, null);
     if (!isPlainObject(exampleConfig))
@@ -330,6 +326,7 @@ export function createDesktopConfigManager({
       configFiles: [targetPath, ...listUserConfigPaths(workspaceRootPath)],
     });
     return {
+      configDir,
       globalConfigPath: targetPath,
       workspaceRootPath,
       workspaceTemplatePath,

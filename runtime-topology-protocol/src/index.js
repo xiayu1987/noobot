@@ -12,3 +12,4 @@ export {
   shellExports,
   toProcessEnv,
 } from "./ports.js";
+export { RUNTIME_INSTANCE_PATH_ENV_KEYS, withoutRuntimeInstancePaths } from "./instance-paths.js";

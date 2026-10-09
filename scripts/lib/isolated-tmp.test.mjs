@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync } from "node:fs
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { RUNTIME_INSTANCE_PATH_ENV_KEYS } from "@noobot/runtime-topology-protocol/instance-paths";
 import {
   ISOLATED_TMP_ENV,
   acquireIsolatedTmpDir,
@@ -76,4 +77,14 @@ test("buildIsolatedTmpEnv points all tmp variables and marker at dir", () => {
     TMP: "/x",
     TEMP: "/x",
   });
+});
+
+test("buildIsolatedTmpEnv drops inherited runtime instance paths", () => {
+  const inherited = Object.fromEntries(
+    RUNTIME_INSTANCE_PATH_ENV_KEYS.map((key) => [key, `/real/${key}`]),
+  );
+  const env = buildIsolatedTmpEnv("/x", { KEEP: "1", ...inherited });
+  for (const key of RUNTIME_INSTANCE_PATH_ENV_KEYS) assert.equal(Object.hasOwn(env, key), false);
+  assert.equal(env.KEEP, "1");
+  assert.equal(env.TMPDIR, "/x");
 });

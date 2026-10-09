@@ -537,3 +537,54 @@ test("packaged desktop points the workspace asset package at the bundled templat
     await fixture.restore();
   }
 });
+
+test("desktop config paths derive only from userData and ignore inherited backend env", async () => {
+  const fixture = await createFixture();
+  const externalRoot = path.join(fixture.rootDir, "external");
+  const externalConfigPath = path.join(externalRoot, "config", "global.config.json");
+  const externalConfig = `${JSON.stringify({ super_admin: { user_id: "real-owner" } })}\n`;
+  await mkdir(path.dirname(externalConfigPath), { recursive: true });
+  await writeFile(externalConfigPath, externalConfig);
+  const inheritedEnv = {
+    NOOBOT_CONFIG_DIR: path.dirname(externalConfigPath),
+    NOOBOT_GLOBAL_CONFIG_PATH: externalConfigPath,
+    NOOBOT_WORKSPACE_ROOT: path.join(externalRoot, "workspace"),
+    NOOBOT_WORKSPACE_TEMPLATE_PATH: path.join(externalRoot, "template"),
+  };
+  const previousEnv = Object.fromEntries(
+    Object.keys(inheritedEnv).map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, inheritedEnv);
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const state = manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+    manager.saveSuperAdminConfig({
+      globalConfigPath: state.globalConfigPath,
+      userId: "owner",
+      connectCode: "secret",
+      language: "en-US",
+      model: "openai",
+    });
+    assert.equal(state.configDir, path.join(fixture.userDataPath, "config"));
+    assert.equal(state.globalConfigPath, path.join(state.configDir, "global.config.json"));
+    assert.equal(state.workspaceRootPath, path.join(fixture.userDataPath, "workspace"));
+    assert.equal(
+      state.workspaceTemplatePath,
+      path.join(fixture.packagedBackendRoot, "user-template", "default-user"),
+    );
+    assert.equal(await readFile(externalConfigPath, "utf8"), externalConfig);
+    assert.equal(fs.existsSync(inheritedEnv.NOOBOT_WORKSPACE_ROOT), false);
+  } finally {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await fixture.restore();
+  }
+});

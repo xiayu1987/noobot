@@ -61,7 +61,7 @@ function onRemoveUpload(draftAttachmentId) {
       <span class="selected-attachment-text">{{ uploadFile.name }}</span>
       <button
         type="button"
-        class="selected-attachment-remove-btn noobot-icon-button noobot-flat-icon-btn"
+        class="selected-attachment-remove-btn noobot-icon-button"
         :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
         :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
         @click.stop="onRemoveUpload(uploadFile.draftAttachmentId)"
@@ -117,12 +117,12 @@ function onRemoveUpload(draftAttachmentId) {
 }
 
 .selected-attachment-remove-btn {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  padding: 0;
+  width: 1lh;
+  height: 1lh;
   border: 0;
+  background: transparent;
   color: var(--noobot-text-secondary);
+  cursor: pointer;
   flex: 0 0 auto;
 }
 
@@ -144,12 +144,6 @@ function onRemoveUpload(draftAttachmentId) {
   .selected-connector-name {
     max-width: 168px;
     flex: 0 0 auto;
-  }
-
-  .selected-attachment-remove-btn {
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
   }
 }
 </style>
