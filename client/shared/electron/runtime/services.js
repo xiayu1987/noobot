@@ -43,10 +43,87 @@ export function createDesktopServiceManager({
   terminateProcess = terminateProcessTree,
   fetchImpl = fetch,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  crashRestartDelaysMs = [1000, 3000, 10000],
+  crashRestartWindowMs = 10 * 60 * 1000,
+  now = () => Date.now(),
 } = {}) {
   let managedServiceProcess = null;
   let managedAgentProxyProcess = null;
   let serviceStartupPromise = null;
+  let stopping = false;
+  let crashRestartPromise = null;
+  let crashRestartPending = false;
+  let crashRestartSpawning = false;
+  const crashRestartTimes = [];
+
+  // Service and agent proxy usually die together; coalesce into one restart run,
+  // with backoff and a sliding-window cap so a crash loop cannot spin forever.
+  function scheduleCrashRestart(reason) {
+    if (stopping) return;
+    if (crashRestartPromise) {
+      // Exits during the backoff delay are covered by the upcoming restart run;
+      // only exits after it began spawning need another run.
+      if (crashRestartSpawning) crashRestartPending = true;
+      return;
+    }
+    const currentTime = now();
+    while (crashRestartTimes.length && currentTime - crashRestartTimes[0] > crashRestartWindowMs) {
+      crashRestartTimes.shift();
+    }
+    if (crashRestartTimes.length >= crashRestartDelaysMs.length) {
+      sendStatus({
+        phase: "error",
+        message: `Noobot backend crashed repeatedly; automatic restart stopped (${reason}).`,
+      });
+      return;
+    }
+    const delayMs = crashRestartDelaysMs[crashRestartTimes.length];
+    crashRestartTimes.push(currentTime);
+    crashRestartPromise = (async () => {
+      sendStatus({
+        phase: "starting",
+        message: `Restarting Noobot backend in ${delayMs}ms (${reason})...`,
+      });
+      await sleep(delayMs);
+      if (stopping) return;
+      if (serviceStartupPromise) await serviceStartupPromise.catch(() => {});
+      crashRestartSpawning = true;
+      await restartCrashedProcesses();
+      sendStatus({ phase: "ready", message: "Noobot backend restarted after crash." });
+    })()
+      .catch((error) => {
+        sendStatus({
+          phase: "error",
+          message: `Noobot backend restart failed: ${error?.message || String(error)}`,
+        });
+        crashRestartPending = true;
+      })
+      .finally(() => {
+        crashRestartPromise = null;
+        crashRestartSpawning = false;
+        if (crashRestartPending) {
+          crashRestartPending = false;
+          scheduleCrashRestart(reason);
+        }
+      });
+  }
+
+  // Non-interactive restart: config/dependency prompts already passed at boot.
+  async function restartCrashedProcesses() {
+    if (!managedServiceProcess && !(await isServiceHealthy())) {
+      startNoobotService();
+      if (!(await waitForHealthyService())) {
+        throw new Error(`Noobot service did not become healthy within ${startupTimeoutMs}ms.`);
+      }
+    }
+    if (stopping || !app.isPackaged) return;
+    if (!managedAgentProxyProcess && !(await isAgentProxyHealthy())) {
+      startAgentProxy();
+      if (!(await waitForHealthyAgentProxy())) {
+        throw new Error(`Noobot agent proxy did not become healthy within ${startupTimeoutMs}ms.`);
+      }
+    }
+  }
 
   function stopManagedChildProcess(child) {
     if (!child) return;
@@ -269,6 +346,7 @@ export function createDesktopServiceManager({
           message: `Noobot service exited early (code=${code}, signal=${signal || ""}).`,
         });
       }
+      if (wasManaged && code !== 0) scheduleCrashRestart(`service exit code=${code}`);
     });
   }
 
@@ -347,6 +425,7 @@ export function createDesktopServiceManager({
           message: `Noobot agent proxy exited early (code=${code}, signal=${signal || ""}).`,
         });
       }
+      if (wasManaged && code !== 0) scheduleCrashRestart(`agent proxy exit code=${code}`);
     });
   }
 
@@ -430,6 +509,7 @@ export function createDesktopServiceManager({
   }
 
   function stopManagedService() {
+    stopping = true;
     if (managedAgentProxyProcess) {
       const child = managedAgentProxyProcess;
       managedAgentProxyProcess = null;

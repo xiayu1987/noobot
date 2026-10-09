@@ -33,10 +33,18 @@ function createMockChildProcess() {
   child.kill = (signal) => {
     child.killCalls.push(signal);
   };
+  child.exited = false;
+  child.once("exit", () => {
+    child.exited = true;
+  });
   return child;
 }
 
-async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {}) {
+async function createFixture({
+  packaged = false,
+  dependencyProxyUrl = "",
+  managerOptions = {},
+} = {}) {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-services-startup-"));
   const repoRoot = path.join(rootDir, "repo");
   const userDataPath = path.join(rootDir, "user-data");
@@ -69,6 +77,13 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
   let healthCalls = 0;
   const originalResourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
   Object.defineProperty(process, "resourcesPath", { value: resourcesPath, configurable: true });
+  // Health follows liveness of the spawned mock children.
+  const hasLiveChild = (pattern) =>
+    calls.some(
+      (call) =>
+        !call.child.exited &&
+        (!pattern || call.args.join(" ").replaceAll("\\", "/").includes(pattern)),
+    );
   const manager = createDesktopServiceManager({
     app: {
       isPackaged: packaged,
@@ -106,7 +121,7 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
           return {
             ok: true,
             json: async () => ({
-              ok: calls.some((call) => call.args.join(" ").includes("service/app.js")),
+              ok: hasLiveChild("service/app.js"),
             }),
           };
         }
@@ -114,12 +129,12 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
           return {
             ok: true,
             json: async () => ({
-              ok: calls.some((call) => call.args.join(" ").includes("agent-proxy.js")),
+              ok: hasLiveChild("agent-proxy.js"),
             }),
           };
         }
       }
-      return { ok: true, json: async () => ({ ok: calls.length > 0 }) };
+      return { ok: true, json: async () => ({ ok: hasLiveChild() }) };
     },
     spawnProcess: (command, args, options) => {
       const child = createMockChildProcess();
@@ -129,6 +144,7 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
     terminateProcess: (child, signal, options) => {
       terminateCalls.push({ child, signal, options });
     },
+    ...managerOptions,
   });
 
   return {
@@ -262,6 +278,88 @@ test("packaged desktop startup uses Electron node runtime for service and agent 
         "ws://127.0.0.1:10061/chat/ws",
       );
     } finally {
+      await fixture.restore();
+    }
+  });
+});
+
+async function waitFor(predicate, timeoutMs = 1000) {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) throw new Error("waitFor timed out");
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+test("crashed service and agent proxy are restarted once when they exit together", async () => {
+  await withPlatform("darwin", async () => {
+    const fixture = await createFixture({
+      packaged: true,
+      managerOptions: { crashRestartDelaysMs: [0, 0] },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      const [serviceCall, agentProxyCall] = fixture.calls;
+      serviceCall.child.emit("exit", 4294930435, null);
+      agentProxyCall.child.emit("exit", 4294930435, null);
+
+      await waitFor(() => fixture.calls.length === 4);
+      await settle();
+      assert.equal(fixture.calls.length, 4);
+      assert.match(fixture.calls[2].args[0], /service[/\\]app\.js$/);
+      assert.match(fixture.calls[3].args[0], /agent-proxy[/\\]agent-proxy\.js$/);
+      assert.equal(fixture.startupEvents.at(-1), "status:ready");
+
+      // A coalesced crash consumes one restart slot; the second crash still restarts.
+      fixture.calls[2].child.emit("exit", 1, null);
+      fixture.calls[3].child.emit("exit", 1, null);
+      await waitFor(() => fixture.calls.length === 6);
+      await settle();
+      assert.equal(fixture.calls.length, 6);
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
+test("intentional stop does not trigger crash restart", async () => {
+  await withPlatform("darwin", async () => {
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: { crashRestartDelaysMs: [0, 0, 0] },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      fixture.manager.stopManagedService();
+      fixture.calls[0].child.emit("exit", 1, null);
+      await settle();
+      assert.equal(fixture.calls.length, 1);
+    } finally {
+      await fixture.restore();
+    }
+  });
+});
+
+test("crash restart stops after the restart budget is exhausted", async () => {
+  await withPlatform("darwin", async () => {
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: { crashRestartDelaysMs: [0] },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      fixture.calls[0].child.emit("exit", 1, null);
+      await waitFor(() => fixture.calls.length === 2);
+      await settle();
+      fixture.calls[1].child.emit("exit", 1, null);
+      await settle();
+      assert.equal(fixture.calls.length, 2);
+      assert.equal(fixture.startupEvents.at(-1), "status:error");
+    } finally {
+      fixture.manager.stopManagedService();
       await fixture.restore();
     }
   });

@@ -20,13 +20,17 @@ export function createDesktopWindowManager({
   platform = process.platform,
   appendEarlyLog = () => {},
   appendDesktopLog = () => {},
+  onMainFrameLoadFailed = () => {},
 } = {}) {
   const { BrowserWindow, Menu, shell, Tray } = electron;
   let mainWindow = null;
   let tray = null;
   let isQuitting = false;
   let startupUrl = "";
+  let startupFile = "";
   let noobotUrl = "";
+  // Noobot page that failed to load (backend down); restored by the next retry-startup.
+  let recoveryUrl = "";
 
   function getTrayIconPath() {
     if (process.env.NOOBOT_DESKTOP_TRAY_ICON) return process.env.NOOBOT_DESKTOP_TRAY_ICON;
@@ -158,11 +162,12 @@ export function createDesktopWindowManager({
     mainWindow.webContents.once("did-finish-load", () =>
       appendDesktopLog(`[main:window] did-finish-load ${mainWindow?.webContents.getURL() || ""}`),
     );
-    mainWindow.webContents.on("did-fail-load", (_event, code, description, url) =>
+    mainWindow.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
       appendDesktopLog(
         `[main:window] did-fail-load code=${code} description=${description} url=${url}`,
-      ),
-    );
+      );
+      handleMainFrameLoadFailure({ code, description, url, isMainFrame });
+    });
     mainWindow.webContents.on("preload-error", (_event, preloadPath, error) =>
       appendDesktopLog(
         `[main:window] preload-error path=${preloadPath} error=${error?.stack || error?.message || String(error)}`,
@@ -197,7 +202,7 @@ export function createDesktopWindowManager({
       });
     });
     const builtStartupFile = path.join(dirname, "startup", "index.html");
-    const startupFile = fs.existsSync(builtStartupFile)
+    startupFile = fs.existsSync(builtStartupFile)
       ? builtStartupFile
       : path.join(dirname, "startup.html");
     startupUrl = pathToFileURL(startupFile).href;
@@ -214,7 +219,40 @@ export function createDesktopWindowManager({
     return mainWindow;
   }
 
+  // A failed Noobot page leaves a blank window; fall back to the startup page,
+  // which shows the error and a retry button.
+  function handleMainFrameLoadFailure({ code, description, url, isMainFrame }) {
+    if (!isMainFrame || code === -3) return; // -3 = ERR_ABORTED (superseded navigation)
+    if (!noobotUrl || !mainWindow || mainWindow.isDestroyed()) return;
+    let failedUrl;
+    try {
+      failedUrl = new URL(url);
+    } catch {
+      return;
+    }
+    if (failedUrl.origin !== new URL(noobotUrl).origin) return;
+    recoveryUrl = failedUrl.href;
+    appendDesktopLog(`[main:window] main frame load failed; showing startup page (${recoveryUrl})`);
+    mainWindow
+      .loadFile(startupFile)
+      .then(() =>
+        onMainFrameLoadFailed({
+          phase: "error",
+          retryable: true,
+          message: `Failed to load Noobot (${code} ${description}). The backend may have stopped; retry to restart it.`,
+        }),
+      )
+      .catch((error) =>
+        appendDesktopLog(`[main:window] startup fallback failed: ${error?.message || error}`),
+      );
+  }
+
   async function resolveNoobotUrl() {
+    if (recoveryUrl) {
+      const url = recoveryUrl;
+      recoveryUrl = "";
+      return url;
+    }
     if (app.isPackaged) {
       const packagedFrontendIndex = path.join(process.resourcesPath, "frontend", "index.html");
       if (fs.existsSync(packagedFrontendIndex)) return agentProxyOrigin;

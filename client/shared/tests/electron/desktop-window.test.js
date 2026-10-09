@@ -21,6 +21,7 @@ function createHarness(t, platform) {
   });
   const externalUrls = [];
   const logs = [];
+  const loadFailures = [];
   const menus = [];
   let contextMenu;
   let reloads = 0;
@@ -52,6 +53,7 @@ function createHarness(t, platform) {
     }
     async loadFile(file) {
       this.startupFile = file;
+      this.loadFileCount = (this.loadFileCount || 0) + 1;
     }
     async loadURL(url) {
       this.loadedUrls.push(url);
@@ -69,6 +71,7 @@ function createHarness(t, platform) {
     platform,
     electron: { BrowserWindow, Tray, Menu, shell },
     appendDesktopLog: (line) => logs.push(line),
+    onMainFrameLoadFailed: (status) => loadFailures.push(status),
   });
   const window = manager.createWindow();
   function navigate(url, { eventName = "will-navigate", isMainFrame = true } = {}) {
@@ -100,6 +103,7 @@ function createHarness(t, platform) {
     shell,
     externalUrls,
     logs,
+    loadFailures,
     menus,
     navigate,
     input,
@@ -211,5 +215,30 @@ for (const platform of ["win32", "darwin"]) {
     assert.equal(h.input({ ...modifier, alt: true }), false);
     assert.equal(h.input({ ...modifier, key: "c" }), false);
     assert.equal(h.getReloads(), 2);
+  });
+
+  test(`${platform}: failed Noobot page falls back to startup and restores the session on retry`, async (t) => {
+    const h = createHarness(t, platform);
+    const sessionUrl = `${appUrl}?session=94c1af8d`;
+    await h.manager.loadNoobotUrl(appUrl);
+    assert.equal(h.window.loadFileCount, 1);
+
+    // Ignored: aborted navigation, sub frames, foreign origins.
+    h.webContents.emit("did-fail-load", {}, -3, "ERR_ABORTED", sessionUrl, true);
+    h.webContents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", sessionUrl, false);
+    h.webContents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", "https://example.com/", true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.window.loadFileCount, 1);
+    assert.deepEqual(h.loadFailures, []);
+
+    h.webContents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", sessionUrl, true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.window.loadFileCount, 2);
+    assert.equal(h.loadFailures.length, 1);
+    assert.equal(h.loadFailures[0].phase, "error");
+    assert.equal(h.loadFailures[0].retryable, true);
+
+    assert.equal(await h.manager.resolveNoobotUrl(), sessionUrl);
+    assert.equal(await h.manager.resolveNoobotUrl(), appUrl);
   });
 }

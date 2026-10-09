@@ -82,6 +82,7 @@ const {
   defaultClientUrl,
   appendEarlyLog,
   appendDesktopLog,
+  onMainFrameLoadFailed: (status) => sendStatus(status),
 });
 
 function sendStatus(status) {
