@@ -6,10 +6,88 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { createReadStream } from "node:fs";
-import { appendFile, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { appendFile, cp, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { requireDialogProcessKey } from "@noobot/session-protocol";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { SESSION_ARTIFACT_FILE_NAMES, writeJsonArtifactFile } from "./session-artifact-files.js";
+
+export const EXECUTION_EVENT_TURNS_DIR = "turns";
+const EXECUTION_EVENT_INDEX_FILE = "index.json";
+const EXECUTION_EVENT_INDEX_SCHEMA_VERSION = 2;
+
+function indexCorrupted(message) {
+  const failure = new Error(message);
+  failure.code = "EXECUTION_EVENT_INDEX_CORRUPTED";
+  return failure;
+}
+
+export function resolveExecutionEventsDir(sessionDir = "") {
+  return path.join(String(sessionDir || ""), SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
+}
+
+export function resolveExecutionTurnDir(sessionDir = "", dialogProcessId) {
+  return path.join(
+    resolveExecutionEventsDir(sessionDir),
+    EXECUTION_EVENT_TURNS_DIR,
+    requireDialogProcessKey(dialogProcessId),
+  );
+}
+
+function assertSafeEntryName(name = "", label = "entry") {
+  const value = String(name || "");
+  if (!value || value.includes("..") || value.includes("/") || value.includes("\\")) {
+    throw indexCorrupted(`execution event ${label} reference is invalid`);
+  }
+  return value;
+}
+
+async function readIndexFile(filePath, { required = false } = {}) {
+  let raw;
+  try {
+    raw = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (!required && (error?.code === "ENOENT" || error?.code === "ENOTDIR")) return null;
+    throw error;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw indexCorrupted("execution event index is corrupted");
+  }
+}
+
+export async function listExecutionEventTurns(sessionDir = "") {
+  const index = await readIndexFile(
+    path.join(resolveExecutionEventsDir(sessionDir), EXECUTION_EVENT_INDEX_FILE),
+  );
+  if (!index) return [];
+  if (!Array.isArray(index.turns)) throw indexCorrupted("execution event index has no turns");
+  return index.turns.map((turn) => {
+    try {
+      return { dialogProcessId: requireDialogProcessKey(turn?.dialogProcessId) };
+    } catch (error) {
+      const failure = indexCorrupted("execution event turn reference is invalid");
+      failure.cause = error;
+      throw failure;
+    }
+  });
+}
+
+export async function readExecutionTurnIndex(turnDir = "") {
+  const index = await readIndexFile(path.join(turnDir, EXECUTION_EVENT_INDEX_FILE));
+  if (!index) return null;
+  if (!Array.isArray(index.segments)) throw indexCorrupted("execution event index has no segments");
+  for (const segment of index.segments) assertSafeEntryName(segment?.file, "segment");
+  return index;
+}
+
+export async function writeArtifactIndex(directory, index) {
+  const target = path.join(directory, EXECUTION_EVENT_INDEX_FILE);
+  const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
+  await writeJsonArtifactFile(temporary, index);
+  await rename(temporary, target);
+}
 
 async function* iterateJsonlLines(filePath = "", { signal = null } = {}) {
   const stream = createReadStream(filePath, { encoding: "utf8" });
@@ -33,221 +111,155 @@ async function* iterateJsonlLines(filePath = "", { signal = null } = {}) {
   }
 }
 
-export async function* iterateExecutionLogs(
-  filePath = "",
-  { limit = Infinity, skip = 0, signal = null } = {},
-) {
-  const segmentDir = path.join(
-    path.dirname(filePath),
-    SESSION_ARTIFACT_FILE_NAMES.executionEventsDir,
-  );
-  let yielded = 0;
-  let skipped = 0;
-  const maximum = Number.isFinite(Number(limit))
-    ? Math.max(0, Math.floor(Number(limit)))
-    : Infinity;
-  const offset = Math.max(0, Math.floor(Number(skip) || 0));
+async function* iterateSegmentRecords(segmentPath, file, { signal }) {
   try {
-    let index;
-    try {
-      index = JSON.parse(await readFile(path.join(segmentDir, "index.json"), "utf8"));
-    } catch (error) {
-      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") throw error;
-      const failure = new Error("execution event index is corrupted");
-      failure.code = "EXECUTION_EVENT_INDEX_CORRUPTED";
-      throw failure;
-    }
-    if (!Array.isArray(index?.segments)) {
-      const failure = new Error("execution event index has no segments");
-      failure.code = "EXECUTION_EVENT_INDEX_CORRUPTED";
-      throw failure;
-    }
-    for (const segment of index.segments) {
-      const file = String(segment?.file || "");
-      if (!file || file.includes("..") || path.isAbsolute(file)) {
-        const failure = new Error("execution event segment reference is invalid");
-        failure.code = "EXECUTION_EVENT_INDEX_CORRUPTED";
-        throw failure;
-      }
+    for await (const line of iterateJsonlLines(segmentPath, { signal })) {
       try {
-        for await (const line of iterateJsonlLines(path.join(segmentDir, file), { signal })) {
-          if (signal?.aborted || yielded >= maximum) return;
-          if (skipped < offset) {
-            skipped += 1;
-            continue;
-          }
-          try {
-            yield JSON.parse(line);
-            yielded += 1;
-          } catch (error) {
-            const failure = new Error(`execution event segment is invalid JSONL: ${file}`);
-            failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
-            failure.cause = error;
-            throw failure;
-          }
-        }
+        yield JSON.parse(line);
       } catch (error) {
-        if (error?.code === "EXECUTION_EVENT_JSONL_CORRUPTED") throw error;
-        const failure = new Error(`execution event segment is missing: ${file}`);
-        failure.code = "EXECUTION_EVENT_SEGMENT_MISSING";
+        const failure = new Error(`execution event segment is invalid JSONL: ${file}`);
+        failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
         failure.cause = error;
         throw failure;
       }
     }
-    return;
   } catch (error) {
-    if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
-  }
-  try {
-    for await (const line of iterateJsonlLines(filePath, { signal })) {
-      if (signal?.aborted || yielded >= maximum) return;
-      if (skipped < offset) {
-        skipped += 1;
-        continue;
-      }
-      yield JSON.parse(line);
-      yielded += 1;
-    }
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return;
-    const failure = new Error("legacy execution event JSONL is corrupted");
-    failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
+    if (error?.code === "EXECUTION_EVENT_JSONL_CORRUPTED") throw error;
+    const failure = new Error(`execution event segment is missing: ${file}`);
+    failure.code = "EXECUTION_EVENT_SEGMENT_MISSING";
     failure.cause = error;
     throw failure;
   }
 }
 
-export async function readJsonlArtifactFile(filePath = "", options = {}) {
+async function* iterateTurnRecords(turnDir, { signal }) {
+  const index = await readExecutionTurnIndex(turnDir);
+  if (!index) return;
+  for (const segment of index.segments) {
+    if (signal?.aborted) return;
+    const segmentPath = path.join(turnDir, segment.file);
+    for await (const record of iterateSegmentRecords(segmentPath, segment.file, { signal })) {
+      if (signal?.aborted) return;
+      yield record;
+    }
+  }
+}
+
+export async function* iterateExecutionLogs(
+  sessionDir = "",
+  { dialogProcessId = undefined, signal = null } = {},
+) {
+  if (dialogProcessId !== undefined) {
+    yield* iterateTurnRecords(resolveExecutionTurnDir(sessionDir, dialogProcessId), { signal });
+    return;
+  }
+  const eventsDir = resolveExecutionEventsDir(sessionDir);
+  for (const turn of await listExecutionEventTurns(sessionDir)) {
+    if (signal?.aborted) return;
+    const turnDir = path.join(eventsDir, EXECUTION_EVENT_TURNS_DIR, turn.dialogProcessId);
+    yield* iterateTurnRecords(turnDir, { signal });
+  }
+}
+
+export async function readExecutionLogs(sessionDir = "", options = {}) {
   const logs = [];
-  for await (const log of iterateExecutionLogs(filePath, options)) logs.push(log);
+  for await (const log of iterateExecutionLogs(sessionDir, options)) logs.push(log);
   return logs;
+}
+
+export async function copyExecutionEvents(sourceSessionDir = "", targetSessionDir = "") {
+  const sourceDir = resolveExecutionEventsDir(sourceSessionDir);
+  const targetDir = resolveExecutionEventsDir(targetSessionDir);
+  await rm(targetDir, { recursive: true, force: true });
+  if (!(await listExecutionEventTurns(sourceSessionDir)).length) return;
+  await cp(sourceDir, targetDir, {
+    recursive: true,
+    filter: (entry) => !String(entry).endsWith(".tmp"),
+  });
 }
 
 function serializeJsonl(log) {
   return `${JSON.stringify(log && typeof log === "object" ? log : { value: log })}\n`;
 }
 
-export async function writeArtifactIndex(directory, index) {
-  const target = path.join(directory, "index.json");
-  const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
-  await writeJsonArtifactFile(temporary, index);
-  await rename(temporary, target);
+async function registerExecutionTurn(eventsDir, dialogProcessId) {
+  const indexPath = path.join(eventsDir, EXECUTION_EVENT_INDEX_FILE);
+  const index = (await readIndexFile(indexPath)) || {
+    schemaVersion: EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
+    turns: [],
+  };
+  if (!Array.isArray(index.turns)) throw indexCorrupted("execution event index has no turns");
+  if (index.turns.some((turn) => turn?.dialogProcessId === dialogProcessId)) return;
+  index.turns.push({ dialogProcessId });
+  await writeArtifactIndex(eventsDir, index);
 }
 
-const rollingLogQueues = new Map();
-
-export async function appendRollingJsonlArtifactLog({
-  sessionDir = "",
-  log = {},
-  reset = false,
-  maxSegmentBytes = LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
-  mutationCoordinator = sessionMutationCoordinator,
-  alreadyLocked = false,
-} = {}) {
-  if (!alreadyLocked && mutationCoordinator?.run) {
-    return mutationCoordinator.run(path.join(sessionDir, ".mutation-lock"), () =>
-      appendRollingJsonlArtifactLog({
-        sessionDir,
-        log,
-        reset,
-        maxSegmentBytes,
-        mutationCoordinator,
-        alreadyLocked: true,
-      }),
-    );
-  }
-  const queueKey = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
-  const previous = rollingLogQueues.get(queueKey) || Promise.resolve();
-  const append = () =>
-    appendRollingJsonlArtifactLogUnlocked({ sessionDir, log, reset, maxSegmentBytes });
-  const operation = previous.then(append, append);
-  rollingLogQueues.set(queueKey, operation);
+async function reconcileActiveSegment(turnDir, active) {
+  const activePath = path.join(turnDir, active.file);
+  let handle = null;
   try {
-    return await operation;
-  } finally {
-    if (rollingLogQueues.get(queueKey) === operation) rollingLogQueues.delete(queueKey);
-  }
-}
-
-async function appendRollingJsonlArtifactLogUnlocked({
-  sessionDir = "",
-  log = {},
-  reset = false,
-  maxSegmentBytes = LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
-} = {}) {
-  const directory = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
-  const line = serializeJsonl(log);
-  const lineBytes = Buffer.byteLength(line, "utf8");
-  if (reset) await rm(directory, { recursive: true, force: true });
-  await mkdir(directory, { recursive: true });
-
-  let index;
-  try {
-    index = JSON.parse(await readFile(path.join(directory, "index.json"), "utf8"));
-  } catch {
-    index = null;
-  }
-  if (!index || !Array.isArray(index.segments)) {
-    index = {
-      schemaVersion: 1,
-      maxSegmentBytes: Number(maxSegmentBytes),
-      activeSequence: 0,
-      segments: [],
-    };
-  }
-
-  let active = index.segments[index.segments.length - 1];
-  if (active) {
-    const activePath = path.join(directory, String(active.file || ""));
-    let handle = null;
-    try {
-      handle = await open(activePath, "r");
-      const fileStat = await handle.stat();
-      const actualBytes = Number(fileStat.size || 0);
-      if (actualBytes > 0) {
-        const tail = Buffer.allocUnsafe(1);
-        await handle.read(tail, 0, 1, actualBytes - 1);
-        if (tail[0] !== 0x0a) {
-          const failure = new Error("active execution segment has a torn final record");
-          failure.code = "EXECUTION_EVENT_SEGMENT_TORN_WRITE";
-          throw failure;
-        }
-      }
-      if (
-        Number(active.bytes) !== actualBytes ||
-        !Number.isInteger(Number(active.records)) ||
-        Number(active.records) < 0
-      ) {
-        const raw = await handle.readFile("utf8");
-        const records = raw ? raw.split("\n").filter(Boolean) : [];
-        try {
-          for (const record of records) JSON.parse(record);
-        } catch (error) {
-          const failure = new Error("active execution segment is invalid JSONL");
-          failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
-          failure.cause = error;
-          throw failure;
-        }
-        active.bytes = actualBytes;
-        active.records = records.length;
-      }
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-      active.bytes = 0;
-      active.records = 0;
-    } finally {
-      if (handle) {
-        await runBestEffort(() => handle.close(), {
-          operationName: "sessionArtifactExecutionLog.closeActiveSegment",
-          context: { activePath },
-        });
+    handle = await open(activePath, "r");
+    const actualBytes = Number((await handle.stat()).size || 0);
+    if (actualBytes > 0) {
+      const tail = Buffer.allocUnsafe(1);
+      await handle.read(tail, 0, 1, actualBytes - 1);
+      if (tail[0] !== 0x0a) {
+        const failure = new Error("active execution segment has a torn final record");
+        failure.code = "EXECUTION_EVENT_SEGMENT_TORN_WRITE";
+        throw failure;
       }
     }
+    const records = Number(active.records);
+    if (Number(active.bytes) === actualBytes && Number.isInteger(records) && records >= 0) return;
+    const raw = await handle.readFile("utf8");
+    const lines = raw ? raw.split("\n").filter(Boolean) : [];
+    try {
+      for (const line of lines) JSON.parse(line);
+    } catch (error) {
+      const failure = new Error("active execution segment is invalid JSONL");
+      failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
+      failure.cause = error;
+      throw failure;
+    }
+    active.bytes = actualBytes;
+    active.records = lines.length;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    active.bytes = 0;
+    active.records = 0;
+  } finally {
+    if (handle) {
+      await runBestEffort(() => handle.close(), {
+        operationName: "sessionArtifactExecutionLog.closeActiveSegment",
+        context: { activePath },
+      });
+    }
   }
+}
+
+async function appendTurnExecutionLogUnlocked({ sessionDir, log, maxSegmentBytes }) {
+  const dialogProcessId = requireDialogProcessKey(log?.dialogProcessId);
+  const eventsDir = resolveExecutionEventsDir(sessionDir);
+  const turnDir = path.join(eventsDir, EXECUTION_EVENT_TURNS_DIR, dialogProcessId);
   const limit = Math.max(
     1,
     Number(maxSegmentBytes) || LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
   );
+  let index = await readExecutionTurnIndex(turnDir);
+  if (!index) {
+    await mkdir(turnDir, { recursive: true });
+    await registerExecutionTurn(eventsDir, dialogProcessId);
+    index = {
+      schemaVersion: EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
+      dialogProcessId,
+      activeSequence: 0,
+      segments: [],
+    };
+  }
+  const line = serializeJsonl(log);
+  const lineBytes = Buffer.byteLength(line, "utf8");
+  let active = index.segments[index.segments.length - 1];
+  if (active) await reconcileActiveSegment(turnDir, active);
   if (!active || (Number(active.bytes || 0) > 0 && Number(active.bytes || 0) + lineBytes > limit)) {
     const sequence = Number(active?.sequence || index.activeSequence || 0) + 1;
     if (active) active.sealed = true;
@@ -260,14 +272,41 @@ async function appendRollingJsonlArtifactLogUnlocked({
     };
     index.segments.push(active);
   }
-
-  await appendFile(path.join(directory, active.file), line, "utf8");
+  await appendFile(path.join(turnDir, active.file), line, "utf8");
   active.bytes = Number(active.bytes || 0) + lineBytes;
   active.records = Number(active.records || 0) + 1;
   if (lineBytes > limit) active.oversized = true;
   index.maxSegmentBytes = limit;
   index.activeSequence = active.sequence;
-  await writeArtifactIndex(directory, index);
-  await rm(path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.executionEvents), { force: true });
+  await writeArtifactIndex(turnDir, index);
   return index;
+}
+
+const rollingLogQueues = new Map();
+
+export async function appendRollingJsonlArtifactLog({
+  sessionDir = "",
+  log = {},
+  maxSegmentBytes = LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
+  mutationCoordinator = sessionMutationCoordinator,
+  alreadyLocked = false,
+} = {}) {
+  if (!String(sessionDir || "").trim()) {
+    throw new Error("appendRollingJsonlArtifactLog requires sessionDir");
+  }
+  if (!alreadyLocked && mutationCoordinator?.run) {
+    return mutationCoordinator.run(path.join(sessionDir, ".mutation-lock"), () =>
+      appendRollingJsonlArtifactLog({ sessionDir, log, maxSegmentBytes, alreadyLocked: true }),
+    );
+  }
+  const queueKey = path.resolve(resolveExecutionEventsDir(sessionDir));
+  const previous = rollingLogQueues.get(queueKey) || Promise.resolve();
+  const append = () => appendTurnExecutionLogUnlocked({ sessionDir, log, maxSegmentBytes });
+  const operation = previous.then(append, append);
+  rollingLogQueues.set(queueKey, operation);
+  try {
+    return await operation;
+  } finally {
+    if (rollingLogQueues.get(queueKey) === operation) rollingLogQueues.delete(queueKey);
+  }
 }

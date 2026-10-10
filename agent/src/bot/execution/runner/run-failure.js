@@ -18,12 +18,10 @@ import {
 } from "@noobot/session-protocol/execution-abort";
 import { syncLifecycleRuntimeState } from "../../../runtime/lifecycle/state-machine.js";
 import { createExecutionFailure } from "../../../shared/errors/index.js";
-import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   buildExecutionReport,
   EXECUTION_REPORT_STATUS,
-  saveExecutionReportBestEffort,
-} from "../../../observability/execution-log/execution-report.js";
+} from "@noobot/session-protocol/execution-report";
 import { summarizeExecutionLogs } from "../../../observability/execution-log/execution-log-summary.js";
 
 function resolveFailureReportStatus(error, abortSignal) {
@@ -33,50 +31,46 @@ function resolveFailureReportStatus(error, abortSignal) {
     : EXECUTION_REPORT_STATUS.INTERRUPTED;
 }
 
-async function loadFailureSummary(context, sessionId) {
-  if (typeof context.getExecutionBundle !== "function") return null;
-  const execution = await runBestEffort(
-    () =>
-      context.getExecutionBundle({
-        userId: context.userId,
-        sessionId,
-        parentSessionId: context.parentSessionId,
-        persistenceContext: context.persistenceContext,
-      }),
-    { operationName: "executionReport.loadFailureLogs", context: { sessionId } },
-  );
-  if (!Array.isArray(execution?.logs)) return null;
-  return summarizeExecutionLogs(execution.logs, {
-    dialogProcessId: context.resolvedDialogProcessId,
-  });
+async function readFailureSummary(context, persistence, dialogProcessId) {
+  try {
+    const logs = await context.getExecutionTurnLogs({ ...persistence, dialogProcessId });
+    return { executionSummary: summarizeExecutionLogs(logs), summaryError: null };
+  } catch (summaryError) {
+    return { executionSummary: null, summaryError };
+  }
 }
 
 async function saveFailureReport(context, failure) {
+  const dialogProcessId = context.resolvedDialogProcessId;
+  if (!dialogProcessId) return;
   const sessionId = context.resolvedUsedSessionId || context.sessionId;
-  if (typeof context.saveExecutionReport !== "function") return;
-  const executionSummary = await loadFailureSummary(context, sessionId);
-  await saveExecutionReportBestEffort(
-    context.saveExecutionReport,
-    {
-      userId: context.userId,
+  const persistence = {
+    userId: context.userId,
+    sessionId,
+    parentSessionId: context.parentSessionId,
+    persistenceContext: context.persistenceContext,
+  };
+  const { executionSummary, summaryError } = await readFailureSummary(
+    context,
+    persistence,
+    dialogProcessId,
+  );
+  await context.saveExecutionReport({
+    ...persistence,
+    report: buildExecutionReport({
+      status: resolveFailureReportStatus(context.error, context.abortSignal),
       sessionId,
       parentSessionId: context.parentSessionId,
-      persistenceContext: context.persistenceContext,
-      report: buildExecutionReport({
-        status: resolveFailureReportStatus(context.error, context.abortSignal),
-        sessionId,
-        parentSessionId: context.parentSessionId,
-        dialogProcessId: context.resolvedDialogProcessId,
-        turnScopeId: context.turnScopeId || context.resolvedRunConfig?.turnScopeId,
-        caller: context.caller,
-        startedAt: context.resolvedRunConfig?.thinkingStartedAt,
-        finishedAt: context.now?.(),
-        executionSummary,
-        error: failure,
-      }),
-    },
-    runBestEffort,
-  );
+      dialogProcessId,
+      turnScopeId: context.turnScopeId || context.resolvedRunConfig?.turnScopeId,
+      caller: context.caller,
+      startedAt: context.resolvedRunConfig?.thinkingStartedAt,
+      finishedAt: context.now(),
+      executionSummary,
+      summaryError,
+      error: failure,
+    }),
+  });
 }
 
 async function recordSessionRunFailure({
@@ -193,16 +187,20 @@ export async function handleSessionRunFailure({ executionEventListener, ...conte
       context.lifecycle?.snapshot || null,
     );
   }
-  let flushError = null;
+  const followUpErrors = [];
   try {
     await executionEventListener?.flush();
   } catch (error) {
-    flushError = error;
+    followUpErrors.push(error);
   }
-  await saveFailureReport(context, failure);
-  if (flushError) {
+  try {
+    await saveFailureReport(context, failure);
+  } catch (error) {
+    followUpErrors.push(error);
+  }
+  if (followUpErrors.length) {
     throw createExecutionFailure(
-      new AggregateError([failure, flushError], failure.message, { cause: failure }),
+      new AggregateError([failure, ...followUpErrors], failure.message, { cause: failure }),
       context.lifecycle?.snapshot || null,
     );
   }

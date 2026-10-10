@@ -12,6 +12,7 @@ const RETIRED_CONFIG_PATHS = Object.freeze(
     ["attachments", "attachment_models"],
     ["session", "use_last_running_task_range"],
     ["session", "use_last_completed_task_range"],
+    ["session", "executionBundleTimeoutMs"],
     ["tools", "set_skill_task"],
     ["tools", "web_to_data"],
     ["tools", "doc_to_data"],

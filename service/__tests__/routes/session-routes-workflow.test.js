@@ -10,8 +10,12 @@ import os from "node:os";
 import path from "node:path";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
-import { assumeSessionWritable, persistSessionArtifactSnapshot } from "noobot-agent/session";
+import { appendExecutionLogArtifact, persistSessionArtifactSnapshot } from "noobot-agent/session";
+import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
+import { summarizeExecutionLogs } from "noobot-agent/tracking";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+
+const allowSessionWrite = async () => {};
 
 async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
   const pluginHost = createServicePluginHost();
@@ -24,23 +28,19 @@ async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
 
 test("workflow service reads child execution events only from the workflow scope", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-child-events-"));
-  const hostEventsDir = path.join(workspaceRoot, "runtime/session/root-s/child-s/execution-events");
-  await fs.mkdir(hostEventsDir, { recursive: true });
-  await fs.writeFile(
-    path.join(hostEventsDir, "segment-000001.jsonl"),
-    `${JSON.stringify({ event: "host_tree_event", data: {} })}\n`,
-    "utf8",
-  );
+  await appendExecutionLogArtifact({
+    sessionDir: path.join(workspaceRoot, "runtime/session/root-s/child-s"),
+    executionLog: { event: "host_tree_event", dialogProcessId: "host-turn", data: {} },
+  });
   const workflowDir = path.join(
     workspaceRoot,
     "runtime/plugin-data/workflow/session/root-s/wf_node_1",
   );
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
-    assertSessionWritable: assumeSessionWritable,
+    assertSessionWritable: allowSessionWrite,
     sessionPayload: { sessionId: "child-s", aggregateVersion: 0, messages: [] },
     taskPayload: { sessionId: "child-s", tasks: [] },
-    executionPayload: { sessionId: "child-s", logs: [] },
   });
   const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => workspaceRoot } });
   const { executionLogs: logs } = await ports.sessions.forPlugin("workflow").readSnapshot({
@@ -59,7 +59,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
   );
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
-    assertSessionWritable: assumeSessionWritable,
+    assertSessionWritable: allowSessionWrite,
     sessionPayload: {
       sessionId: "node-s",
       aggregateVersion: 1,
@@ -76,7 +76,6 @@ test("session-routes: workflow session returns summary and execution jsonl from 
       ],
     },
     taskPayload: { sessionId: "node-s", tasks: [] },
-    executionPayload: { sessionId: "node-s", logs: [{ event: "x" }] },
     metadata: {
       nodeId: "n1",
       workflowRunId: "workflow-run-1",
@@ -84,6 +83,10 @@ test("session-routes: workflow session returns summary and execution jsonl from 
       executionId: "agent:node-execution-1",
       turnScopeId: "workflow-node:wf_node_1",
     },
+  });
+  await appendExecutionLogArtifact({
+    sessionDir: workflowDir,
+    executionLog: { event: "x", dialogProcessId: "wf_node_1" },
   });
 
   const app = express();
@@ -119,7 +122,9 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     );
     assert.equal(payload.workflowSession.snapshotEnvelope.identity.sessionId, "root-s");
     assert.equal(payload.workflowSession.snapshotEnvelope.payload.nodeSessionId, "node-s");
-    assert.deepEqual(payload.workflowSession.executionLogs, [{ event: "x" }]);
+    assert.deepEqual(payload.workflowSession.executionLogs, [
+      { event: "x", dialogProcessId: "wf_node_1" },
+    ]);
     assert.equal("dir" in payload.workflowSession, false);
   });
 });
@@ -132,7 +137,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
   const turnScopeId = "workflow-node:wf_node_1";
   await persistSessionArtifactSnapshot({
     outputDir: workflowDir,
-    assertSessionWritable: assumeSessionWritable,
+    assertSessionWritable: allowSessionWrite,
     sessionPayload: {
       sessionId: "node-s",
       aggregateVersion: 1,
@@ -206,7 +211,6 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
       ],
     },
     taskPayload: { sessionId: "node-s", tasks: [] },
-    executionPayload: { sessionId: "node-s", logs: [] },
   });
 
   const app = express();
@@ -253,7 +257,14 @@ test("session-routes: workflow execution-report reads the scoped node report", a
   await fs.mkdir(reportDir, { recursive: true });
   await fs.writeFile(
     path.join(reportDir, "wf_node_1.json"),
-    JSON.stringify({ dialogProcessId: "wf_node_1", status: "completed" }),
+    JSON.stringify(
+      buildExecutionReport({
+        status: "completed",
+        sessionId: "node-s",
+        dialogProcessId: "wf_node_1",
+        executionSummary: summarizeExecutionLogs([]),
+      }),
+    ),
   );
   const app = express();
   const bot = { session: {}, getWorkspacePath: () => workspaceRoot };

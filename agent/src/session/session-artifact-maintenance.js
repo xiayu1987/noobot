@@ -13,13 +13,28 @@ import {
   resolveArtifactMutationLockDir,
   SESSION_ARTIFACT_FILE_NAMES,
 } from "./session-artifact-files.js";
-import { writeArtifactIndex } from "./session-artifact-execution-logs.js";
+import {
+  EXECUTION_EVENT_TURNS_DIR,
+  listExecutionEventTurns,
+  readExecutionTurnIndex,
+  writeArtifactIndex,
+} from "./session-artifact-execution-logs.js";
 import { resolveTurnArtifactPath, readRecentSessionTurns } from "./session-artifact-session.js";
 import { reconcileExecutionSegmentIndex } from "@noobot/session-repair";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 
 function diagnostic(code, message, extra = {}) {
   return { code, message, ...extra };
+}
+
+async function readExecutionTurnIndexes(sessionDir) {
+  const eventsDir = buildSessionArtifactFileMap(sessionDir).executionEventsDir;
+  const turns = [];
+  for (const turn of await listExecutionEventTurns(sessionDir)) {
+    const turnDir = path.join(eventsDir, EXECUTION_EVENT_TURNS_DIR, turn.dialogProcessId);
+    turns.push({ ...turn, turnDir, index: await readExecutionTurnIndex(turnDir) });
+  }
+  return turns;
 }
 
 export async function inspectSessionArtifacts({ sessionDir = "" } = {}) {
@@ -106,25 +121,36 @@ export async function inspectSessionArtifacts({ sessionDir = "" } = {}) {
     }
   }
   try {
-    const index = await readJsonArtifactFile(
-      path.join(files.executionEventsDir, "index.json"),
-      null,
-    );
-    result.execution = { segments: index?.segments?.length || 0, index };
-    if (index?.segments)
-      for (const segment of index.segments) {
-        const raw = await readFile(path.join(files.executionEventsDir, segment.file), "utf8");
+    const turns = await readExecutionTurnIndexes(sessionDir);
+    result.execution = {
+      turns: turns.length,
+      segments: turns.reduce((total, turn) => total + (turn.index?.segments?.length || 0), 0),
+    };
+    for (const turn of turns) {
+      if (!turn.index) {
+        result.ok = false;
+        result.issues.push(
+          diagnostic("EXECUTION_TURN_INDEX_MISSING", "execution turn index is missing", {
+            turn: turn.dialogProcessId,
+          }),
+        );
+        continue;
+      }
+      for (const segment of turn.index.segments) {
+        const raw = await readFile(path.join(turn.turnDir, segment.file), "utf8");
         const records = raw ? raw.split("\n").filter(Boolean) : [];
         const bytes = Buffer.byteLength(raw, "utf8");
         if (bytes !== Number(segment.bytes) || records.length !== Number(segment.records)) {
           result.ok = false;
           result.issues.push(
             diagnostic("EXECUTION_INDEX_MISMATCH", "execution index does not match segment", {
+              turn: turn.dialogProcessId,
               file: segment.file,
             }),
           );
         }
       }
+    }
   } catch (error) {
     if (error.code !== "ENOENT") {
       result.ok = false;
@@ -141,17 +167,14 @@ export async function cleanupSessionArtifacts({
   mutationCoordinator = sessionMutationCoordinator,
   mutationLockDir = "",
   assertSessionWritable,
-  allowDeletedCleanup = false,
 } = {}) {
   const run = async () => {
-    if (!allowDeletedCleanup) {
-      await assertArtifactSessionWritable({
-        assertSessionWritable,
-        sessionId,
-        sessionDir,
-        operation: "cleanup_session_artifacts",
-      });
-    }
+    await assertArtifactSessionWritable({
+      assertSessionWritable,
+      sessionId,
+      sessionDir,
+      operation: "cleanup_session_artifacts",
+    });
     const report = await inspectSessionArtifacts({ sessionDir });
     const files = buildSessionArtifactFileMap(sessionDir);
     const removed = [];
@@ -163,7 +186,15 @@ export async function cleanupSessionArtifacts({
       await removePath(path.join(files.turnsDir, name), { recursive: false });
     for (const name of report.summarySnapshots.orphaned)
       await removePath(path.join(sessionDir, name), { recursive: false });
-    for (const dir of [sessionDir, files.turnsDir, files.executionEventsDir]) {
+    const executionTurnDirs = (await listExecutionEventTurns(sessionDir)).map((turn) =>
+      path.join(files.executionEventsDir, EXECUTION_EVENT_TURNS_DIR, turn.dialogProcessId),
+    );
+    for (const dir of [
+      sessionDir,
+      files.turnsDir,
+      files.executionEventsDir,
+      ...executionTurnDirs,
+    ]) {
       try {
         for (const entry of await readdir(dir, { withFileTypes: true })) {
           if (entry.isFile() && (entry.name.endsWith(".tmp") || entry.name.includes(".tmp-")))
@@ -208,16 +239,13 @@ export async function repairSessionArtifacts({
       operation: "repair_session_artifacts",
     });
     const before = await inspectSessionArtifacts({ sessionDir });
-    const files = buildSessionArtifactFileMap(sessionDir);
-    const index = await readJsonArtifactFile(
-      path.join(files.executionEventsDir, "index.json"),
-      null,
-    );
-    let repaired = [];
-    if (index?.segments) {
+    const repaired = [];
+    for (const turn of await readExecutionTurnIndexes(sessionDir)) {
+      const index = turn.index;
+      if (!index) continue;
       const segmentMetadata = [];
       for (const segment of index.segments) {
-        const segmentPath = path.join(files.executionEventsDir, segment.file);
+        const segmentPath = path.join(turn.turnDir, segment.file);
         const raw = await readFile(segmentPath, "utf8");
         if (raw && !raw.endsWith("\n")) {
           const error = new Error(`execution segment has a torn final record: ${segment.file}`);
@@ -230,9 +258,15 @@ export async function repairSessionArtifacts({
         segmentMetadata.push({ file: segment.file, bytes, records: records.length });
       }
       const reconciled = reconcileExecutionSegmentIndex(index, segmentMetadata);
-      repaired = reconciled.repaired;
       Object.assign(index, reconciled.index);
-      if (repaired.length) await writeArtifactIndex(files.executionEventsDir, index);
+      if (reconciled.repaired.length) {
+        await writeArtifactIndex(turn.turnDir, index);
+        repaired.push(
+          ...reconciled.repaired.map(
+            (file) => `${EXECUTION_EVENT_TURNS_DIR}/${turn.dialogProcessId}/${file}`,
+          ),
+        );
+      }
     }
     return { before, repaired, after: await inspectSessionArtifacts({ sessionDir }) };
   };

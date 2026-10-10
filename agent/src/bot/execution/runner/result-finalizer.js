@@ -21,16 +21,12 @@ export async function finalizeAgentTurn({
   parentDialogProcessId,
   caller,
   agentResult,
-  executionStartIndex,
   userConfig,
   lifecycle,
   persistenceContext,
 }) {
   const finalizeThinkingStartedAt = String(resolvedRunConfig?.thinkingStartedAt || "").trim();
   emitEvent(runtimeEventListener, "debug_resend_runner_finalize", {
-    sessionId: usedSessionId,
-    dialogProcessId,
-    turnScopeId: resolvedTurnScopeId,
     resolvedThinkingStartedAt: finalizeThinkingStartedAt,
   });
   const checkpointPersistedTotal = Math.max(
@@ -120,7 +116,6 @@ export async function finalizeAgentTurn({
     )
       ? dispatchRuntime.summaryCheckpointPromotionSources
       : [],
-    executionStartIndex,
     runtimeEventListener,
     userConfig: {
       ...(userConfig && typeof userConfig === "object" ? userConfig : {}),

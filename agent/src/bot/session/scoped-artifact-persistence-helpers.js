@@ -85,25 +85,22 @@ export class ScopedArtifactPersistenceHelpers {
       sessionId,
       parentSessionId,
     });
-    const executionBundle = await this.session.getExecutionBundle({
+    const { sessionDir: executionEventsSourceDir } = await this.session.resolveSessionScope({
       userId,
       sessionId,
+      parentSessionId,
     });
     const session =
       sessionBundle?.session && typeof sessionBundle.session === "object"
         ? sessionBundle.session
         : null;
     const tasks = Array.isArray(sessionBundle?.turnTasks) ? sessionBundle.turnTasks : [];
-    const execution =
-      executionBundle && typeof executionBundle === "object"
-        ? executionBundle
-        : { sessionId, logs: [] };
     return this.session.withSessionLifecycleMutation({ userId, sessionId }, () =>
       persistSnapshotJsonFiles({
         outputDir,
         sessionPayload: session || { sessionId, messages: [] },
         taskPayload: { sessionId, currentTaskId: "", tasks, updatedAt: this.now() },
-        executionPayload: execution,
+        executionEventsSourceDir,
         metadata,
         assertSessionWritable: () => this.session.assertSessionWritable({ userId, sessionId }),
       }),

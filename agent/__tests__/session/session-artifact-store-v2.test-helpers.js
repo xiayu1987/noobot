@@ -3,11 +3,26 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { writeSessionArtifact as writeSessionArtifactCanonical } from "../../src/session/session-artifact-store.js";
+import {
+  buildSessionArtifactFileMap,
+  writeSessionArtifact as writeSessionArtifactCanonical,
+} from "../../src/session/session-artifact-store.js";
+
+export const TEST_TURN = "turn-1";
+
+export function turnDirOf(root, dialogProcessId) {
+  return path.join(buildSessionArtifactFileMap(root).executionEventsDir, "turns", dialogProcessId);
+}
+
+export async function readTurnIndex(root, dialogProcessId) {
+  return JSON.parse(
+    await readFile(path.join(turnDirOf(root, dialogProcessId), "index.json"), "utf8"),
+  );
+}
 
 export async function withTemp(fn) {
   const root = await mkdtemp(path.join(tmpdir(), "noobot-artifact-v2-"));

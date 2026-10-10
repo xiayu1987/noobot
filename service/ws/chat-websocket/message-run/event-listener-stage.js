@@ -13,59 +13,41 @@ import { recordServiceWebSocketLifecycle } from "../runtime-events.js";
 
 const text = (value) => String(value || "").trim();
 const REPLAYABLE_DISPATCH_FAILURES = new Set(["authority_event_send_failed"]);
-const TIMELINE_EVENT_TYPES = new Set([
-  "tool_call_start",
-  "tool_call_end",
-  "guidance_analysis_response",
-  "guidance_analysis",
-  "timeline_checkpoint_persisted",
+const TIMELINE_EVENT_TYPES = new Set(["tool_call_start", "tool_call_end"]);
+const WORKFLOW_DIAGNOSTIC_EVENT_TYPES = new Set([
+  WORKFLOW_RUNTIME_EVENT.PLANNING,
+  WORKFLOW_RUNTIME_EVENT.NODE_STATE,
 ]);
 
-function recordTimelineEvent(context, run, eventData, eventType) {
-  if (!TIMELINE_EVENT_TYPES.has(eventType)) return;
-  const guidance = eventType === "guidance_analysis_response" || eventType === "guidance_analysis";
+function recordEventAudit(context, run, audit, { debugType, event }) {
   void recordServiceWebSocketLifecycle({
     sessionLogConfig: context.sessionLogConfig,
     category: "debug",
     level: "debug",
-    debugType: "timeline-pipeline",
-    event:
-      eventType === "timeline_checkpoint_persisted"
-        ? "service.timelinePipeline.checkpointPersisted"
-        : guidance
-          ? "service.timelinePipeline.activityReceived"
-          : "service.websocket.runEvent.timelineReceived",
+    debugType,
+    event,
     userId: run.userId,
-    sessionId: eventData.sessionId || run.sessionId,
-    dialogProcessId:
-      eventData.dialogProcessId || context.state.currentRunMeta?.dialogProcessId || "",
-    turnScopeId: eventData.turnScopeId || context.state.currentTurnScopeId || "",
-    data: eventData,
+    sessionId: audit.sessionId,
+    dialogProcessId: audit.dialogProcessId,
+    turnScopeId: audit.turnScopeId,
+    data: audit,
   });
 }
 
-function onEventReceived(context, run, eventData = {}) {
-  const eventType = text(eventData.eventType || eventData.eventName);
-  if (
-    eventType === WORKFLOW_RUNTIME_EVENT.PLANNING ||
-    eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE
-  ) {
-    void recordServiceWebSocketLifecycle({
-      sessionLogConfig: context.sessionLogConfig,
-      category: "debug",
-      level: "debug",
+function onEventReceived(context, run, audit) {
+  if (WORKFLOW_DIAGNOSTIC_EVENT_TYPES.has(audit.eventType)) {
+    recordEventAudit(context, run, audit, {
       debugType: "workflow-diagnostics",
       event: "service.workflowTransport.sourceEventReceived",
-      userId: run.userId,
-      sessionId: eventData.sessionId || run.sessionId,
-      dialogProcessId:
-        eventData.dialogProcessId || context.state.currentRunMeta?.dialogProcessId || "",
-      turnScopeId: eventData.turnScopeId || context.state.currentTurnScopeId || "",
-      data: eventData,
     });
     return;
   }
-  recordTimelineEvent(context, run, eventData, eventType);
+  if (TIMELINE_EVENT_TYPES.has(audit.payloadEventType)) {
+    recordEventAudit(context, run, audit, {
+      debugType: "timeline-pipeline",
+      event: "service.websocket.runEvent.timelineReceived",
+    });
+  }
 }
 
 function recordDispatchFailure(
@@ -205,7 +187,7 @@ function createRootRunningHandler(context, run, accepted, lifecycle) {
 
 const DELIVERY_TIMING_DEBUG_TYPE = "delivery-timing";
 
-function recordDeliveryTiming(context, run, active, summary) {
+function recordDeliveryTiming(context, run, summary) {
   void recordServiceWebSocketLifecycle({
     sessionLogConfig: context.sessionLogConfig,
     category: "debug",
@@ -213,9 +195,9 @@ function recordDeliveryTiming(context, run, active, summary) {
     debugType: DELIVERY_TIMING_DEBUG_TYPE,
     event: "service.websocket.upstreamDelivery.timing",
     userId: run.userId,
-    sessionId: summary.sessionId || run.sessionId,
-    dialogProcessId: summary.dialogProcessId || active.runMeta?.dialogProcessId || "",
-    turnScopeId: summary.turnScopeId || active.runMeta?.turnScopeId || "",
+    sessionId: summary.sessionId,
+    dialogProcessId: summary.dialogProcessId,
+    turnScopeId: summary.turnScopeId,
     data: { queueWaitMs: summary.queueWaitMs, runMs: summary.runMs },
   });
 }
@@ -229,12 +211,12 @@ export function createMessageRunEventListener(context, run, accepted, active) {
     getCurrentRunMeta: () => active.runMeta,
     getCurrentRunHandle: () => active.runHandle,
     getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
-    onEventReceived: (eventData) => onEventReceived(context, run, eventData),
+    onEventReceived: (audit) => onEventReceived(context, run, audit),
     onDeliveryTiming: isSessionLogDebugTypeEnabled(
       DELIVERY_TIMING_DEBUG_TYPE,
       context.sessionLogConfig,
     )
-      ? (summary = {}) => recordDeliveryTiming(context, run, active, summary)
+      ? (summary) => recordDeliveryTiming(context, run, summary)
       : null,
     onCommittedTurnLifecycle: (envelope, dispatchContext) =>
       dispatchCommittedTurn(context, run, envelope, dispatchContext),

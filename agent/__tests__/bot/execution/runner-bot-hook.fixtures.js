@@ -72,7 +72,6 @@ export function createRunner({
     sessionLoadState: "created",
     userConfig: {},
     currentSessionModelAlias: "",
-    executionStartIndex: 0,
     runtimeEventListener: eventListener || NOOP_EVENT_LISTENER,
   }),
   resolveScenarioRunConfig = (runConfig = {}) => runConfig,
@@ -89,7 +88,8 @@ export function createRunner({
   assertReusedUserTurnIdentity = async () => ({}),
   assertPersistenceContextIdentity = null,
   finalizeRunSession = async () => ({ answer: "ok" }),
-  saveExecutionReport = null,
+  saveExecutionReport = async () => {},
+  getExecutionTurnLogs = async () => [],
   upsertParentAsyncTask = () => {},
 } = {}) {
   let authorityEventSequence = 0;
@@ -296,6 +296,7 @@ export function createRunner({
     assertReusedUserTurnIdentity: assertCanonicalReusedUserMessage,
     finalizeRunSession,
     saveExecutionReport,
+    getExecutionTurnLogs,
     upsertParentAsyncTask,
     now: () => new Date().toISOString(),
   });

@@ -102,7 +102,6 @@ test("SessionExecutionRunner commits a normal send for a new turn in an existing
       sessionLoadState: "loaded",
       userConfig: {},
       currentSessionModelAlias: "",
-      executionStartIndex: 0,
       runtimeEventListener: eventListener,
     }),
     commitSessionTurn: async (payload = {}) => {
@@ -140,7 +139,6 @@ test("SessionExecutionRunner commits continue only for a stopped snapshot resume
       sessionLoadState: "loaded",
       userConfig: {},
       currentSessionModelAlias: "",
-      executionStartIndex: 0,
       runtimeEventListener: eventListener,
     }),
     commitSessionTurn: async (payload = {}) => {
@@ -178,7 +176,6 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
       sessionLoadState: "loaded",
       userConfig: {},
       currentSessionModelAlias: "",
-      executionStartIndex: 0,
       runtimeEventListener: eventListener,
     }),
     assertReusedUserTurnIdentity: async (payload = {}) => {
@@ -259,7 +256,6 @@ test("SessionExecutionRunner preserves the precommitted reused Turn dialogProces
       sessionLoadState: "loaded",
       userConfig: {},
       currentSessionModelAlias: "",
-      executionStartIndex: 0,
       runtimeEventListener: eventListener,
     }),
     assertReusedUserTurnIdentity: async (payload = {}) => {

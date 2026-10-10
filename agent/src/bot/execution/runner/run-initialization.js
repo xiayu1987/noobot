@@ -102,7 +102,6 @@ export async function initializeSessionRun({
     sessionLoadState,
     userConfig,
     currentSessionModelAlias,
-    executionStartIndex,
     sessionDir,
     runtimeEventListener,
   } = initialized;
@@ -189,7 +188,6 @@ export async function initializeSessionRun({
     dialogProcessId,
     sessionLoadState,
     userConfig,
-    executionStartIndex,
     sessionDir,
     runtimeEventListener,
     requestRunConfig,

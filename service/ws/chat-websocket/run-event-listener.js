@@ -57,22 +57,23 @@ function auditMessage(message = {}) {
   };
 }
 
-function auditEnvelopeIdentity(canonicalEnvelope, eventData, sessionId, turnScopeId) {
+function auditEnvelopeIdentity(canonicalEnvelope, eventData) {
   const protocol = canonicalEnvelope?.protocol;
-  const identity = canonicalEnvelope?.identity || {};
-  const payload = canonicalEnvelope?.payload || eventData;
+  const identity = canonicalEnvelope ? canonicalEnvelope.identity : eventData;
+  const payload = canonicalEnvelope ? canonicalEnvelope.payload : eventData;
   return {
     protocolName: trimmedText(protocol?.name),
     protocolVersion: countOf(protocol?.version),
     eventFamily: trimmedText(protocol?.family),
     schemaVersion: countOf(protocol?.schemaVersion),
-    eventType: trimmedText(identity.eventType || eventData?.eventType),
-    sessionId: trimmedText(identity.sessionId || eventData?.sessionId || sessionId),
+    eventType: trimmedText(identity?.eventType),
+    payloadEventType: trimmedText(payload?.eventType),
+    sessionId: trimmedText(identity?.sessionId),
     dialogProcessId: trimmedText(payload?.dialogProcessId),
-    turnScopeId: trimmedText(identity.turnScopeId || eventData?.turnScopeId || turnScopeId),
-    messageId: trimmedText(identity.messageId),
+    turnScopeId: trimmedText(identity?.turnScopeId),
+    messageId: trimmedText(identity?.messageId),
     presentationMessageId: trimmedText(payload?.presentationMessageId),
-    eventId: trimmedText(identity.eventId),
+    eventId: trimmedText(identity?.eventId),
   };
 }
 
@@ -111,11 +112,11 @@ function auditOrderingAndFlags(canonicalEnvelope, eventData) {
   };
 }
 
-function buildEventAudit(eventName, eventData, sessionId, turnScopeId) {
-  const canonicalEnvelope = asEventProtocolEnvelope(eventData);
+function buildEventAudit(eventName, eventData) {
+  const canonicalEnvelope = asEventProtocolEnvelope(eventData?.envelope);
   return {
     eventName,
-    ...auditEnvelopeIdentity(canonicalEnvelope, eventData, sessionId, turnScopeId),
+    ...auditEnvelopeIdentity(canonicalEnvelope, eventData),
     ...auditMessageCounts(eventData),
     ...auditWorkflow(eventData),
     ...auditOrderingAndFlags(canonicalEnvelope, eventData),
@@ -186,7 +187,7 @@ export function createRunEventListener({
         throw new Error(`unsupported agent run event: ${eventName || "missing"}`);
       }
       const eventData = eventPayload?.data || {};
-      onEventReceived?.(buildEventAudit(eventName, eventData, sessionId, resolveTurnScopeId()));
+      onEventReceived?.(buildEventAudit(eventName, eventData));
       const currentRunMeta = getCurrentRunMeta();
       const currentRunHandle = getCurrentRunHandle();
       if (eventName === AGENT_RUN_EVENT.TURN_LIFECYCLE_COMMITTED) {
@@ -211,19 +212,11 @@ export function createRunEventListener({
         });
       }
       if (eventName === AGENT_RUN_EVENT.TURN_COMMITTED) {
-        const committedTurn = assertTurnCommittedEventData({
-          ...eventData,
-          sessionId: String(eventData?.sessionId || sessionId || "").trim(),
-          turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
-        });
+        const committedTurn = assertTurnCommittedEventData(eventData);
         return sendEvent(TURN_COMMITTED_WIRE_EVENT, committedTurn);
       }
       if (eventName === AGENT_RUN_EVENT.TURN_ATTACHMENTS_BOUND) {
-        const boundTurn = assertTurnAttachmentsBoundEventData({
-          ...eventData,
-          sessionId: String(eventData?.sessionId || sessionId || "").trim(),
-          turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
-        });
+        const boundTurn = assertTurnAttachmentsBoundEventData(eventData);
         return sendEvent(TURN_ATTACHMENTS_BOUND_WIRE_EVENT, boundTurn);
       }
       const childRunEvent = isChildRunEventData(eventData, {

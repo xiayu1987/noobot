@@ -7,128 +7,32 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import {
+  SESSION_ARTIFACT_SCHEMA_VERSION,
+  createSessionDeletedError,
+} from "@noobot/session-protocol";
 
 import {
   appendRollingJsonlArtifactLog,
-  assumeSessionWritable,
   buildSessionArtifactFileMap,
   cleanupSessionArtifacts,
   inspectSessionArtifacts,
   persistSessionArtifactSnapshot,
-  readJsonlArtifactFile,
+  readExecutionLogs,
   readSessionArtifact,
   readSessionArtifactSnapshot,
   repairSessionArtifacts,
   writeSessionArtifact as writeSessionArtifactCanonical,
 } from "../../src/session/session-artifact-store.js";
 import {
+  TEST_TURN,
   canonicalMessages,
+  turnDirOf,
   withTemp,
   writeSessionArtifact,
 } from "./session-artifact-store-v2.test-helpers.js";
 
-test("execution events roll by UTF-8 byte size and preserve order", async () =>
-  withTemp(async (root) => {
-    await appendRollingJsonlArtifactLog({
-      sessionDir: root,
-      log: { id: 1, text: "中文" },
-      maxSegmentBytes: 25,
-    });
-    await appendRollingJsonlArtifactLog({
-      sessionDir: root,
-      log: { id: 2, text: "中文" },
-      maxSegmentBytes: 25,
-    });
-    const files = buildSessionArtifactFileMap(root);
-    const index = JSON.parse(
-      await readFile(path.join(files.executionEventsDir, "index.json"), "utf8"),
-    );
-    assert.equal(index.segments.length, 2);
-    assert.deepEqual(await readJsonlArtifactFile(files.executionEvents), [
-      { id: 1, text: "中文" },
-      { id: 2, text: "中文" },
-    ]);
-  }));
-
-test("execution event reader streams ordered pages across segments", async () =>
-  withTemp(async (root) => {
-    for (let id = 0; id < 12; id += 1) {
-      await appendRollingJsonlArtifactLog({
-        sessionDir: root,
-        log: { id, text: `event-${id}` },
-        maxSegmentBytes: 65,
-      });
-    }
-    const files = buildSessionArtifactFileMap(root);
-    assert.deepEqual(
-      (await readJsonlArtifactFile(files.executionEvents, { skip: 4, limit: 5 })).map(
-        (item) => item.id,
-      ),
-      [4, 5, 6, 7, 8],
-    );
-    assert.deepEqual(
-      await readJsonlArtifactFile(files.executionEvents, { skip: 20, limit: 5 }),
-      [],
-    );
-    assert.deepEqual(await readJsonlArtifactFile(files.executionEvents, { limit: 0 }), []);
-  }));
-
-test("execution reset and concurrent appends keep a valid index", async () =>
-  withTemp(async (root) => {
-    await Promise.all(
-      Array.from({ length: 20 }, (_, id) =>
-        appendRollingJsonlArtifactLog({
-          sessionDir: root,
-          log: { id },
-          maxSegmentBytes: 80,
-        }),
-      ),
-    );
-    let logs = await readJsonlArtifactFile(buildSessionArtifactFileMap(root).executionEvents);
-    assert.equal(logs.length, 20);
-    await appendRollingJsonlArtifactLog({
-      sessionDir: root,
-      log: { id: 99 },
-      reset: true,
-      maxSegmentBytes: 80,
-    });
-    logs = await readJsonlArtifactFile(buildSessionArtifactFileMap(root).executionEvents);
-    assert.deepEqual(logs, [{ id: 99 }]);
-  }));
-
-test("execution append repairs stale index counters before writing", async () =>
-  withTemp(async (root) => {
-    const files = buildSessionArtifactFileMap(root);
-    await appendRollingJsonlArtifactLog({ sessionDir: root, log: { id: 1 } });
-    const indexPath = path.join(files.executionEventsDir, "index.json");
-    const index = JSON.parse(await readFile(indexPath, "utf8"));
-    index.segments[0].bytes = 0;
-    index.segments[0].records = 0;
-    await writeFile(indexPath, JSON.stringify(index), "utf8");
-
-    await appendRollingJsonlArtifactLog({ sessionDir: root, log: { id: 2 } });
-
-    assert.deepEqual(await readJsonlArtifactFile(files.executionEvents), [{ id: 1 }, { id: 2 }]);
-    const repairedIndex = JSON.parse(await readFile(indexPath, "utf8"));
-    assert.equal(repairedIndex.segments[0].records, 2);
-  }));
-
-test("an oversized execution event stays whole in its own segment", async () =>
-  withTemp(async (root) => {
-    await appendRollingJsonlArtifactLog({
-      sessionDir: root,
-      log: { text: "x".repeat(100) },
-      maxSegmentBytes: 20,
-    });
-    const files = buildSessionArtifactFileMap(root);
-    const index = JSON.parse(
-      await readFile(path.join(files.executionEventsDir, "index.json"), "utf8"),
-    );
-    assert.equal(index.segments.length, 1);
-    assert.equal(index.segments[0].oversized, true);
-    assert.equal((await readJsonlArtifactFile(files.executionEvents))[0].text.length, 100);
-  }));
+const allowSessionWrite = async () => {};
 
 test("session manifest stores ordered turn references and rejects noncanonical sessions", async () =>
   withTemp(async (root) => {
@@ -161,43 +65,6 @@ test("session manifest stores ordered turn references and rejects noncanonical s
     );
     await assert.rejects(readSessionArtifact({ sessionDir: legacy }), {
       code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
-    });
-  }));
-
-test("execution event readers report corrupted indexes, missing segments, and invalid JSONL", async () =>
-  withTemp(async (root) => {
-    const files = buildSessionArtifactFileMap(root);
-    await mkdir(files.executionEventsDir, { recursive: true });
-
-    await writeFile(path.join(files.executionEventsDir, "index.json"), "{broken", "utf8");
-    await assert.rejects(readJsonlArtifactFile(files.executionEvents), {
-      code: "EXECUTION_EVENT_INDEX_CORRUPTED",
-    });
-
-    await writeFile(
-      path.join(files.executionEventsDir, "index.json"),
-      JSON.stringify({
-        segments: [{ file: "segment-000001.jsonl" }],
-      }),
-      "utf8",
-    );
-    await assert.rejects(readJsonlArtifactFile(files.executionEvents), {
-      code: "EXECUTION_EVENT_SEGMENT_MISSING",
-    });
-
-    await writeFile(
-      path.join(files.executionEventsDir, "segment-000001.jsonl"),
-      "{broken\n",
-      "utf8",
-    );
-    await assert.rejects(readJsonlArtifactFile(files.executionEvents), {
-      code: "EXECUTION_EVENT_JSONL_CORRUPTED",
-    });
-
-    await rm(files.executionEventsDir, { recursive: true, force: true });
-    await writeFile(files.executionEvents, "{broken\n", "utf8");
-    await assert.rejects(readJsonlArtifactFile(files.executionEvents), {
-      code: "EXECUTION_EVENT_JSONL_CORRUPTED",
     });
   }));
 
@@ -660,8 +527,8 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
       sessionPayload: { sessionId: "a", messages: [{ role: "user", content: "x" }] },
     });
     const files = buildSessionArtifactFileMap(sessionDir);
-    await appendRollingJsonlArtifactLog({ sessionDir, log: { id: 1 } });
-    const indexPath = path.join(files.executionEventsDir, "index.json");
+    await appendRollingJsonlArtifactLog({ sessionDir, log: { id: 1, dialogProcessId: TEST_TURN } });
+    const indexPath = path.join(turnDirOf(sessionDir, TEST_TURN), "index.json");
     const index = JSON.parse(await readFile(indexPath, "utf8"));
     index.segments[0].bytes = 0;
     index.segments[0].records = 0;
@@ -679,17 +546,17 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
     assert.equal(await readFile(indexPath, "utf8"), beforeIndex);
     const firstRepair = await repairSessionArtifacts({
       sessionDir,
-      assertSessionWritable: assumeSessionWritable,
+      assertSessionWritable: allowSessionWrite,
     });
-    assert.deepEqual(firstRepair.repaired, ["segment-000001.jsonl"]);
+    assert.deepEqual(firstRepair.repaired, [`turns/${TEST_TURN}/segment-000001.jsonl`]);
     assert.deepEqual(
-      (await repairSessionArtifacts({ sessionDir, assertSessionWritable: assumeSessionWritable }))
+      (await repairSessionArtifacts({ sessionDir, assertSessionWritable: allowSessionWrite }))
         .repaired,
       [],
     );
     const dry = await cleanupSessionArtifacts({
       sessionDir,
-      assertSessionWritable: assumeSessionWritable,
+      assertSessionWritable: allowSessionWrite,
     });
     assert.equal(dry.dryRun, true);
     await access(orphan);
@@ -698,7 +565,7 @@ test("inspect is read-only, repair is idempotent, and cleanup honors dry-run and
     const cleaned = await cleanupSessionArtifacts({
       sessionDir,
       dryRun: false,
-      assertSessionWritable: assumeSessionWritable,
+      assertSessionWritable: allowSessionWrite,
     });
     assert.equal(cleaned.removed.includes(orphan), true);
     await assert.rejects(access(orphan), { code: "ENOENT" });
@@ -720,12 +587,13 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
       }),
       "utf8",
     );
-    await writeFile(files.executionEvents, '{"id":1}\n', "utf8");
     const lockDir = path.join(root, ".lifecycle", "deleted-session.lock");
-    const assertDeleted = () => false;
+    const assertDeleted = async () => {
+      throw createSessionDeletedError({ sessionId: "deleted-session", operation: "test" });
+    };
 
-    await appendRollingJsonlArtifactLog({ sessionDir, log: { id: 2 } });
-    const indexPath = path.join(files.executionEventsDir, "index.json");
+    await appendRollingJsonlArtifactLog({ sessionDir, log: { id: 2, dialogProcessId: TEST_TURN } });
+    const indexPath = path.join(turnDirOf(sessionDir, TEST_TURN), "index.json");
     const indexBefore = await readFile(indexPath, "utf8");
     await assert.rejects(
       repairSessionArtifacts({
@@ -751,20 +619,19 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
       { code: "SESSION_DELETED" },
     );
     await access(temp);
-    const cleaned = await cleanupSessionArtifacts({
-      sessionDir,
-      sessionId: "deleted-session",
-      dryRun: false,
-      mutationLockDir: lockDir,
-      assertSessionWritable: assertDeleted,
-      allowDeletedCleanup: true,
-    });
-    assert.equal(cleaned.removed.includes(temp), true);
-    await assert.rejects(access(temp), { code: "ENOENT" });
   }));
 
 test("snapshot publishes committed artifacts and rejects incomplete new snapshots", async () =>
   withTemp(async (root) => {
+    const sourceDir = path.join(root, "source");
+    await appendRollingJsonlArtifactLog({
+      sessionDir: sourceDir,
+      log: { id: 1, dialogProcessId: "turn-a" },
+    });
+    await appendRollingJsonlArtifactLog({
+      sessionDir: sourceDir,
+      log: { id: 2, dialogProcessId: "turn-b" },
+    });
     const outputDir = path.join(root, "snapshot");
     await persistSessionArtifactSnapshot({
       outputDir,
@@ -772,13 +639,21 @@ test("snapshot publishes committed artifacts and rejects incomplete new snapshot
         sessionId: "snapshot-session",
         messages: canonicalMessages([{ role: "user", content: "hello" }]),
       },
-      executionPayload: { logs: [{ id: 1 }] },
-      assertSessionWritable: assumeSessionWritable,
+      executionEventsSourceDir: sourceDir,
+      assertSessionWritable: allowSessionWrite,
     });
-    const snapshot = await readSessionArtifactSnapshot({ outputDir, allowLegacy: false });
+    const snapshot = await readSessionArtifactSnapshot({ outputDir });
     assert.equal(snapshot.session.sessionId, "snapshot-session");
+    assert.deepEqual(
+      (await readExecutionLogs(outputDir)).map((log) => log.id),
+      [1, 2],
+    );
+    assert.deepEqual(
+      (await readExecutionLogs(outputDir, { dialogProcessId: "turn-b" })).map((log) => log.id),
+      [2],
+    );
     await rm(path.join(outputDir, "COMMITTED"));
-    await assert.rejects(readSessionArtifactSnapshot({ outputDir, allowLegacy: false }), {
+    await assert.rejects(readSessionArtifactSnapshot({ outputDir }), {
       code: "SNAPSHOT_NOT_COMMITTED",
     });
   }));
@@ -792,7 +667,7 @@ test("snapshot publish rejects deleted sessions and cleans staging without resto
         sessionId: "zombie-snapshot",
         messages: canonicalMessages([{ role: "user", content: "old" }]),
       },
-      assertSessionWritable: assumeSessionWritable,
+      assertSessionWritable: allowSessionWrite,
     });
     let deleted = false;
     const lockDir = path.join(root, ".lifecycle", "zombie.lock");
@@ -804,15 +679,16 @@ test("snapshot publish rejects deleted sessions and cleans staging without resto
           messages: canonicalMessages([{ role: "user", content: "new" }]),
         },
         mutationLockDir: lockDir,
-        assertSessionWritable: () => {
-          if (deleted) return false;
+        assertSessionWritable: async () => {
+          if (deleted) {
+            throw createSessionDeletedError({ sessionId: "zombie-snapshot", operation: "test" });
+          }
           deleted = true;
-          return true;
         },
       }),
       { code: "SESSION_DELETED" },
     );
-    const snapshot = await readSessionArtifactSnapshot({ outputDir, allowLegacy: false });
+    const snapshot = await readSessionArtifactSnapshot({ outputDir });
     assert.equal(snapshot.session.messages[0].content, "old");
     const entries = await import("node:fs/promises").then(({ readdir }) => readdir(root));
     assert.equal(

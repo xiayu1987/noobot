@@ -34,12 +34,13 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       return { exists: false, session: { messages: [] } };
     },
     async createSession() {},
-    async getExecutionBundle() {
-      return { logs: [...appendedExecutionLogs] };
+    async getExecutionTurnLogs() {
+      return [...appendedExecutionLogs];
     },
     async resolveSessionScope({ userId, sessionId }) {
       return { sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId) };
     },
+    async saveExecutionReport() {},
     async appendExecutionLog(payload = {}) {
       appendedExecutionLogs.push(payload);
     },
@@ -393,12 +394,13 @@ test("continue mode closed-loop: should build continue context and persist paren
       };
     },
     async createSession() {},
-    async getExecutionBundle() {
-      return { logs: [] };
+    async getExecutionTurnLogs() {
+      return [];
     },
     async resolveSessionScope({ userId, sessionId }) {
       return { sessionDir: path.join(workspaceRoot, userId, "runtime", "session", sessionId) };
     },
+    async saveExecutionReport() {},
     async appendExecutionLog() {},
     async appendTurns(payload = {}) {
       persistedBatches.push(payload);

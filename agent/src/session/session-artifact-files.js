@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { createSessionDeletedError } from "@noobot/session-protocol";
-import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
@@ -13,9 +12,7 @@ export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   sessionSummary: "session-summary.json",
   sessionSummaryDetailsDir: "session-summary-details",
   task: "task.json",
-  execution: "execution.json",
   executionReportsDir: "execution-reports",
-  executionEvents: "execution.jsonl",
   executionEventsDir: "execution-events",
   turnsDir: "turns",
   turnSnapshotsDir: "turn-snapshots",
@@ -29,9 +26,7 @@ export function buildSessionArtifactFileMap(sessionDir = "") {
     sessionSummary: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.sessionSummary),
     sessionSummaryDetailsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir),
     task: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.task),
-    execution: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.execution),
     executionReportsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.executionReportsDir),
-    executionEvents: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.executionEvents),
     executionEventsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.executionEventsDir),
     turnsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.turnsDir),
     turnSnapshotsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir),
@@ -51,8 +46,6 @@ export async function readJsonArtifactFile(filePath = "", fallback = null) {
   return readPersistedJsonFile({ filePath, fallback, readFile });
 }
 
-export const assumeSessionWritable = async () => true;
-
 export function requireSessionWritableGuard(assertSessionWritable) {
   if (typeof assertSessionWritable !== "function") {
     throw new TypeError("assertSessionWritable is required for session artifact mutation");
@@ -67,27 +60,9 @@ export async function assertArtifactSessionWritable({
   operation = "session artifact mutation",
 } = {}) {
   requireSessionWritableGuard(assertSessionWritable);
-  const result = await assertSessionWritable({ sessionId, sessionDir, operation });
-  if (result === false) throw createSessionDeletedError({ sessionId, operation });
-  return true;
+  await assertSessionWritable({ sessionId, sessionDir, operation });
 }
 
 export function resolveArtifactMutationLockDir(sessionDir = "", mutationLockDir = "") {
   return String(mutationLockDir || "").trim() || path.join(sessionDir, ".mutation-lock");
-}
-
-export async function writeJsonlArtifactFile(filePath = "", logs = []) {
-  const lines = (Array.isArray(logs) ? logs : [])
-    .map((log) => JSON.stringify(log && typeof log === "object" ? log : { value: log }))
-    .join("\n");
-  await writeFile(filePath, lines ? `${lines}\n` : "", "utf8");
-}
-
-export async function appendJsonlArtifactLog(filePath = "", log = {}, { reset = false } = {}) {
-  const serializedLog = `${JSON.stringify(log && typeof log === "object" ? log : { value: log })}\n`;
-  if (reset) {
-    await writeFile(filePath, serializedLog, "utf8");
-  } else {
-    await appendFile(filePath, serializedLog, "utf8");
-  }
 }

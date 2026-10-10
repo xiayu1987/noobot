@@ -4,19 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
-
 export function normalizeExecutionLogEntity(
   executionLog = {},
   now = () => new Date().toISOString(),
 ) {
   const data = executionLog?.data && typeof executionLog.data === "object" ? executionLog.data : {};
   return {
-    userId: String(executionLog?.userId || data?.userId || "").trim(),
-    sessionId: String(executionLog?.sessionId || data?.sessionId || "").trim(),
-    parentSessionId: String(executionLog?.parentSessionId || data?.parentSessionId || "").trim(),
-    dialogProcessId: resolveContextMessageDialogProcessId(executionLog),
-    turnScopeId: String(executionLog?.turnScopeId || data?.turnScopeId || "").trim(),
+    userId: String(executionLog?.userId || "").trim(),
+    sessionId: String(executionLog?.sessionId || "").trim(),
+    parentSessionId: String(executionLog?.parentSessionId || "").trim(),
+    dialogProcessId: String(executionLog?.dialogProcessId || "").trim(),
+    turnScopeId: String(executionLog?.turnScopeId || "").trim(),
     event: String(executionLog?.event || "").trim(),
     category: String(executionLog?.category || "").trim(),
     type: String(executionLog?.type || "").trim(),

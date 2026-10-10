@@ -45,11 +45,17 @@ export class SessionExecutionRunner {
     getSessionTurns,
     getTurnSummaryCheckpointState,
     finalizeRunSession,
-    saveExecutionReport = null,
-    getExecutionBundle = null,
+    saveExecutionReport,
+    getExecutionTurnLogs,
     upsertParentAsyncTask,
     now,
   } = {}) {
+    for (const [name, dependency] of Object.entries({
+      saveExecutionReport,
+      getExecutionTurnLogs,
+    })) {
+      if (typeof dependency !== "function") throw new TypeError(`${name} is required`);
+    }
     this.agentRunner = agentRunner;
     this.errorLogger = errorLogger;
     this.normalizeRunMessage = normalizeRunMessage;
@@ -70,7 +76,7 @@ export class SessionExecutionRunner {
     this.getTurnSummaryCheckpointState = getTurnSummaryCheckpointState;
     this.finalizeRunSession = finalizeRunSession;
     this.saveExecutionReport = saveExecutionReport;
-    this.getExecutionBundle = getExecutionBundle;
+    this.getExecutionTurnLogs = getExecutionTurnLogs;
     this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
   }
@@ -114,7 +120,7 @@ export class SessionExecutionRunner {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     let resolvedRunConfig = runConfig;
     let resolvedUsedSessionId = sessionId;
-    let resolvedDialogProcessId = parentDialogProcessId;
+    let resolvedDialogProcessId = "";
     let failureTurnScopeId = turnScopeId;
     let resolvedRuntimeEventListener = eventListener;
     let executionEventListener = null;
@@ -167,7 +173,6 @@ export class SessionExecutionRunner {
         dialogProcessId,
         sessionLoadState,
         userConfig,
-        executionStartIndex,
         sessionDir,
         runtimeEventListener,
         requestRunConfig,
@@ -268,9 +273,6 @@ export class SessionExecutionRunner {
         lifecycleRuntime = dispatchRuntime;
       }
       emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {
-        sessionId: usedSessionId,
-        dialogProcessId,
-        turnScopeId: resolvedTurnScopeId,
         resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
         requestAttachments: summarizeDebugAttachments(attachments),
@@ -278,15 +280,9 @@ export class SessionExecutionRunner {
       });
       if (resolvedRunConfig?.reuseExistingUserTurn === true) {
         emitEvent(runtimeEventListener, "debug_resend_runner_reuse_before_stamp", {
-          sessionId: usedSessionId,
-          dialogProcessId,
-          turnScopeId: resolvedTurnScopeId,
           attachments: summarizeDebugAttachments(userMessageAttachments),
         });
         emitEvent(runtimeEventListener, "debug_resend_runner_reuse_after_stamp", {
-          sessionId: usedSessionId,
-          dialogProcessId,
-          turnScopeId: resolvedTurnScopeId,
           attachments: summarizeDebugAttachments(userMessageAttachments),
         });
       }
@@ -330,7 +326,6 @@ export class SessionExecutionRunner {
         parentDialogProcessId,
         caller,
         agentResult,
-        executionStartIndex,
         userConfig,
         lifecycle,
         persistenceContext,
@@ -385,7 +380,7 @@ export class SessionExecutionRunner {
         resolvedParentAsyncResultContainer,
         upsertParentAsyncTask: this.upsertParentAsyncTask,
         saveExecutionReport: this.saveExecutionReport,
-        getExecutionBundle: this.getExecutionBundle,
+        getExecutionTurnLogs: this.getExecutionTurnLogs,
         persistenceContext,
         turnScopeId: failureTurnScopeId,
         errorLogger: this.errorLogger,

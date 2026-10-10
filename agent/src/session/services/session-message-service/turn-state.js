@@ -194,6 +194,48 @@ function materializeAcceptedUserMessage({
   return userMessage;
 }
 
+function acceptCommittedTurn({
+  service,
+  result,
+  session,
+  rejectedSession,
+  lifecycleEvent,
+  acceptedUserMessageInput,
+  actualVersion,
+  nextAggregateVersion,
+  userId,
+  sessionId,
+  resolvedParentSessionId,
+}) {
+  if (!result.applied) {
+    const userMessage = acceptedUserMessageInput
+      ? findTurnScopeUserMessage(session, lifecycleEvent.turnScopeId)
+      : null;
+    return {
+      rejected: {
+        ...result,
+        session: rejectedSession,
+        userMessage,
+        dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
+        aggregateVersion: actualVersion,
+      },
+    };
+  }
+  session.turnLifecycle = result.lifecycle;
+  const nowValue = service.now();
+  const userMessage = materializeAcceptedUserMessage({
+    session,
+    event: lifecycleEvent,
+    input: acceptedUserMessageInput,
+    userId,
+    sessionId,
+    parentSessionId: resolvedParentSessionId,
+    nowValue,
+  });
+  if (userMessage) session.aggregateVersion = nextAggregateVersion;
+  return { userMessage, nowValue };
+}
+
 export async function getTurnLifecycleSnapshot({
   userId,
   sessionId,
@@ -287,30 +329,20 @@ export async function applyTurnLifecycleEvent({
             previousSummaryVersion,
           }),
       });
-      if (!result.applied) {
-        const userMessage = acceptedUserMessageInput
-          ? findTurnScopeUserMessage(session, lifecycleEvent.turnScopeId)
-          : null;
-        return {
-          ...result,
-          session,
-          userMessage,
-          dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
-          aggregateVersion: actualVersion,
-        };
-      }
-      session.turnLifecycle = result.lifecycle;
-      const nowValue = this.now();
-      const userMessage = materializeAcceptedUserMessage({
+      const { rejected, userMessage, nowValue } = acceptCommittedTurn({
+        service: this,
+        result,
         session,
-        event: lifecycleEvent,
-        input: acceptedUserMessageInput,
+        rejectedSession: session,
+        lifecycleEvent,
+        acceptedUserMessageInput,
+        actualVersion,
+        nextAggregateVersion,
         userId,
         sessionId,
-        parentSessionId: resolvedParentSessionId,
-        nowValue,
+        resolvedParentSessionId,
       });
-      if (userMessage) session.aggregateVersion = nextAggregateVersion;
+      if (rejected) return rejected;
       if (result.terminalMaterialization)
         session.messages = [...result.terminalMaterialization.messages];
       session.updatedAt = nowValue;
@@ -383,30 +415,20 @@ export async function provisionSessionWithInitialTurn({
         session,
         lifecycleEvent,
       });
-      if (!result.applied) {
-        const userMessage = acceptedUserMessageInput
-          ? findTurnScopeUserMessage(session, lifecycleEvent.turnScopeId)
-          : null;
-        return {
-          ...result,
-          session: isNew ? null : session,
-          userMessage,
-          dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
-          aggregateVersion: actualVersion,
-        };
-      }
-      session.turnLifecycle = result.lifecycle;
-      const nowValue = this.now();
-      const userMessage = materializeAcceptedUserMessage({
+      const { rejected, userMessage, nowValue } = acceptCommittedTurn({
+        service: this,
+        result,
         session,
-        event: lifecycleEvent,
-        input: acceptedUserMessageInput,
+        rejectedSession: isNew ? null : session,
+        lifecycleEvent,
+        acceptedUserMessageInput,
+        actualVersion,
+        nextAggregateVersion,
         userId,
         sessionId,
-        parentSessionId: resolvedParentSessionId,
-        nowValue,
+        resolvedParentSessionId,
       });
-      if (userMessage) session.aggregateVersion = nextAggregateVersion;
+      if (rejected) return rejected;
       session.updatedAt = nowValue;
       const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: isNew ? undefined : actualVersion,

@@ -87,12 +87,6 @@ function buildDispatchModelContext({
       emitContextIdentityDebug(
         runtimeEventListener,
         "canonicalMessageAdded",
-        {
-          userId: usedSessionId ? String(normalizedMessage?.userId || "").trim() : "",
-          sessionId: usedSessionId,
-          dialogProcessId,
-          turnScopeId: resolvedTurnScopeId,
-        },
         canonicalMessageIdentityDebugData(message, meta),
       );
     },
@@ -244,7 +238,6 @@ function acceptAgentResultMessages({
   dispatchRuntime,
   dispatchOutcome,
   runtimeEventListener,
-  identity,
 }) {
   const dispatchedSummarizedMessageIds = summarizedMessageIds(agentResult?.turnMessages);
   const acceptedTurnMessages = acceptDispatchedTurnMessages(
@@ -252,7 +245,7 @@ function acceptAgentResultMessages({
     agentResult?.turnMessages,
   );
   agentResult.turnMessages = acceptedTurnMessages.messages;
-  emitContextIdentityDebug(runtimeEventListener, "completedTurnSummaryAccepted", identity, {
+  emitContextIdentityDebug(runtimeEventListener, "completedTurnSummaryAccepted", {
     resultMessageCount: Array.isArray(agentResult?.turnMessages)
       ? agentResult.turnMessages.length
       : 0,
@@ -260,7 +253,6 @@ function acceptAgentResultMessages({
     acceptedSummarizedMessageIds: summarizedMessageIds(acceptedTurnMessages.messages),
   });
   emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
-    ...identity,
     disposition: dispatchOutcome.disposition,
     owner: dispatchOutcome.owner || "root_agent",
     assistantMessageId: String(agentResult?.assistantMessageId || "").trim(),
@@ -293,7 +285,6 @@ export async function dispatchAgentTurn({
   resolvedTurnScopeId,
   syncLifecycleRuntimeState,
 }) {
-  const identity = { sessionId: usedSessionId, dialogProcessId, turnScopeId: resolvedTurnScopeId };
   const dispatchModelContext = buildDispatchModelContext({
     context: getAgentContextEnvelope(runtimeAgentContext),
     dispatchRuntime,
@@ -309,7 +300,7 @@ export async function dispatchAgentTurn({
     syncLifecycleRuntimeState,
   });
   if (resolvedRunConfig?.reuseExistingUserTurn === true) {
-    emitEvent(runtimeEventListener, "user_message_reused", { ...identity });
+    emitEvent(runtimeEventListener, "user_message_reused", {});
   }
   const baseContext = { ...botHookBase, userMessage: normalizedMessage, agentContextSummary };
   const beforeAgentDispatchResult = await runBotRuntimeHook({
@@ -346,7 +337,6 @@ export async function dispatchAgentTurn({
     dispatchRuntime,
     dispatchOutcome,
     runtimeEventListener,
-    identity,
   });
   await runBotRuntimeHook({
     runtime: botHookRuntime,

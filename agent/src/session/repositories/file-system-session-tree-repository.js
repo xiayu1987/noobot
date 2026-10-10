@@ -38,8 +38,7 @@ export class FileSystemSessionTreeRepository {
   resolveRootSessionIdFromTree(sessionId = "", tree = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return "";
-    const nodes =
-      tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
+    const nodes = tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
     if (!nodes?.[normalizedSessionId]) return normalizedSessionId;
     const chain = this.loopSession(normalizedSessionId, tree, []);
     return String(chain?.[chain.length - 1] || normalizedSessionId).trim();

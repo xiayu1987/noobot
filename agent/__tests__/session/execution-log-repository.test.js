@@ -24,62 +24,50 @@ async function readJsonLines(filePath) {
     .map((line) => JSON.parse(line));
 }
 
-function createInMemorySessionRepository() {
-  const store = new Map();
+function createInMemoryExecutionRepository() {
+  const turns = new Map();
   const keyOf = (userId = "", sessionId = "", parentSessionId = "") =>
     `${userId}::${parentSessionId}::${sessionId}`;
   return {
-    async getExecutionBundle(userId, sessionId, parentSessionId = "") {
-      const key = keyOf(userId, sessionId, parentSessionId);
-      if (!store.has(key)) {
-        store.set(key, { logs: [], updatedAt: "" });
-      }
-      return store.get(key);
+    async appendLog(userId, sessionId, log, parentSessionId = "") {
+      const turnKey = `${keyOf(userId, sessionId, parentSessionId)}::${log.dialogProcessId}`;
+      turns.set(turnKey, [...(turns.get(turnKey) || []), log]);
     },
-    async saveExecutionBundle(userId, sessionId, bundle, parentSessionId = "") {
-      const key = keyOf(userId, sessionId, parentSessionId);
-      store.set(key, bundle);
+    async getTurnLogs(userId, sessionId, dialogProcessId, parentSessionId = "") {
+      return turns.get(`${keyOf(userId, sessionId, parentSessionId)}::${dialogProcessId}`) || [];
     },
   };
 }
 
-test("appendLog preserves logs and dialogProcessId for each dialog", async () => {
-  const sessionRepository = createInMemorySessionRepository();
+test("appendLog keeps each dialog's logs in its own turn", async () => {
   const repo = new ExecutionLogRepository({
-    sessionRepository,
+    executionRepository: createInMemoryExecutionRepository(),
     now: () => "2026-05-13T00:00:00.000Z",
   });
 
-  await repo.appendLog("u1", "s1", {
-    dialogProcessId: "d1",
-    event: "start",
-  });
-  await repo.appendLog("u1", "s1", {
-    dialogProcessId: "d1",
-    event: "tool_called",
-  });
-  await repo.appendLog("u1", "s1", {
-    dialogProcessId: "d2",
-    event: "start",
-  });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "start" });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "tool_called" });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d2", event: "start" });
 
-  const bundle = await repo.getBundle("u1", "s1");
-  assert.equal(bundle.logs.length, 3);
-  assert.equal(bundle.dialogProcessId, "d2");
-  assert.equal(bundle.logs[0].event, "start");
-  assert.equal(bundle.logs[0].dialogProcessId, "d1");
-  assert.equal(bundle.logs[1].dialogProcessId, "d1");
-  assert.equal(bundle.logs[2].event, "start");
-  assert.equal(bundle.logs[2].dialogProcessId, "d2");
+  const d1 = await repo.getTurnLogs("u1", "s1", "d1");
+  const d2 = await repo.getTurnLogs("u1", "s1", "d2");
+  assert.deepEqual(
+    d1.map((log) => log.event),
+    ["start", "tool_called"],
+  );
+  assert.deepEqual(
+    d2.map((log) => [log.event, log.dialogProcessId]),
+    [["start", "d2"]],
+  );
 });
 
-test("getBundle and appendLog preserve scoped persistence context", async () => {
+test("getTurnLogs and appendLog preserve scoped persistence context", async () => {
   const calls = [];
   const persistenceContext = { locationResolver: { scopeId: "workflow-node" } };
   const executionRepository = {
-    async getBundle(...args) {
-      calls.push(["getBundle", args]);
-      return { logs: [], updatedAt: "" };
+    async getTurnLogs(...args) {
+      calls.push(["getTurnLogs", args]);
+      return [];
     },
     async appendLog(...args) {
       calls.push(["appendLog", args]);
@@ -87,73 +75,48 @@ test("getBundle and appendLog preserve scoped persistence context", async () => 
   };
   const repo = new ExecutionLogRepository({ executionRepository });
 
-  await repo.getBundle("u1", "child-1", "parent-1", persistenceContext);
-  await repo.appendLog("u1", "child-1", { event: "start" }, "parent-1", persistenceContext);
-
-  assert.equal(calls[0][0], "getBundle");
-  assert.equal(calls[0][1][3], persistenceContext);
-  assert.equal(calls[1][0], "getBundle");
-  assert.equal(calls[1][1][3], persistenceContext);
-  assert.equal(calls[2][0], "appendLog");
-  assert.equal(calls[2][1][5], persistenceContext);
-});
-
-test("appendLog uses metadata-only reads when the execution store supports them", async () => {
-  const calls = [];
-  const executionRepository = {
-    async getBundle() {
-      throw new Error("append path must not load execution history");
-    },
-    async getBundleMetadata(...args) {
-      calls.push(["getBundleMetadata", args]);
-      return { sessionId: "s1", dialogProcessId: "d1", updatedAt: "" };
-    },
-    async appendLog(...args) {
-      calls.push(["appendLog", args]);
-    },
-  };
-  const repo = new ExecutionLogRepository({
-    executionRepository,
-    now: () => "2026-05-13T00:00:00.000Z",
-  });
-
-  await repo.appendLog("u1", "s1", { event: "heartbeat" }, "p1");
-
-  assert.deepEqual(
-    calls.map(([name]) => name),
-    ["getBundleMetadata", "appendLog"],
+  await repo.getTurnLogs("u1", "child-1", "d1", "parent-1", persistenceContext);
+  await repo.appendLog(
+    "u1",
+    "child-1",
+    { event: "start", dialogProcessId: "d1" },
+    "parent-1",
+    persistenceContext,
   );
-  assert.equal(calls[1][1][2].dialogProcessId, "d1");
-  assert.equal("logs" in calls[1][1][3], false);
+
+  assert.equal(calls[0][0], "getTurnLogs");
+  assert.equal(calls[0][1][2], "d1");
+  assert.equal(calls[0][1][4], persistenceContext);
+  assert.equal(calls[1][0], "appendLog");
+  assert.equal(calls[1][1][3], "parent-1");
+  assert.equal(calls[1][1][4], persistenceContext);
 });
 
-test("appendLog without dialogProcessId stays in current latest dialog", async () => {
-  const sessionRepository = createInMemorySessionRepository();
+test("appendLog forwards logs without deriving a dialogProcessId", async () => {
+  const appended = [];
   const repo = new ExecutionLogRepository({
-    sessionRepository,
+    executionRepository: {
+      async getTurnLogs() {
+        throw new Error("append path must not load execution history");
+      },
+      async appendLog(_userId, _sessionId, log) {
+        appended.push(log);
+      },
+    },
     now: () => "2026-05-13T00:00:00.000Z",
   });
 
-  await repo.appendLog("u1", "s1", {
-    dialogProcessId: "d1",
-    event: "start",
-  });
-  await repo.appendLog("u1", "s1", {
-    event: "heartbeat",
-  });
+  await repo.appendLog("u1", "s1", { dialogProcessId: "d1", event: "start" });
+  await repo.appendLog("u1", "s1", { event: "heartbeat" });
 
-  const bundle = await repo.getBundle("u1", "s1");
-  assert.equal(bundle.logs.length, 2);
-  assert.equal(bundle.dialogProcessId, "d1");
-  assert.equal(bundle.logs[0].dialogProcessId, "d1");
-  assert.equal(bundle.logs[1].dialogProcessId, "d1");
+  assert.equal(appended[0].dialogProcessId, "d1");
+  assert.equal(appended[1].dialogProcessId, "");
 });
 
 test("appendLog mirrors session execution logs to runtime-events session events", async () => {
   const workspaceRoot = await makeTempDir();
-  const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({
-    sessionRepository,
+    executionRepository: createInMemoryExecutionRepository(),
     now: () => "2026-05-13T00:00:00.000Z",
     workspaceRoot,
   });
@@ -197,9 +160,8 @@ test("appendLog mirrors session execution logs to runtime-events session events"
 
 test("appendLog mirrors context identity diagnostics to their dedicated runtime-events file", async () => {
   const workspaceRoot = await makeTempDir();
-  const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({
-    sessionRepository,
+    executionRepository: createInMemoryExecutionRepository(),
     workspaceRoot,
     runtimeEventsConfig: { env: {}, sessionLogControls: { debug: { contextIdentity: true } } },
   });
@@ -209,11 +171,11 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
     "s1",
     {
       dialogProcessId: "d1",
+      turnScopeId: "t1",
       event: "agent.contextIdentity.modelContextCreated",
       category: "context_identity",
       type: "context_identity_debug",
       data: {
-        turnScopeId: "t1",
         sourceMessageUid: "sm_1",
         contentProjectionId: "sm_1",
         userMetaProjectionId: "sm_1::user_meta",
@@ -241,9 +203,8 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
 
 test("appendLog routes model context traces to the registry-derived debug file, not system", async () => {
   const workspaceRoot = await makeTempDir();
-  const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({
-    sessionRepository,
+    executionRepository: createInMemoryExecutionRepository(),
     workspaceRoot,
     runtimeEventsConfig: { env: {}, sessionLogControls: { debug: { modelContextTrace: true } } },
   });
@@ -273,8 +234,10 @@ test("appendLog routes model context traces to the registry-derived debug file, 
 
 test("appendLog routes durable activity events to the message channel, not system", async () => {
   const workspaceRoot = await makeTempDir();
-  const sessionRepository = createInMemorySessionRepository();
-  const repo = new ExecutionLogRepository({ sessionRepository, workspaceRoot });
+  const repo = new ExecutionLogRepository({
+    executionRepository: createInMemoryExecutionRepository(),
+    workspaceRoot,
+  });
 
   await repo.appendLog(
     "u1",

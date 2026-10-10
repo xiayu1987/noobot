@@ -175,17 +175,8 @@ function countVisibleActivity(visibleLogs = []) {
   return counts;
 }
 
-export function summarizeExecutionLogs(logs = [], { maxSteps = 80, dialogProcessId = "" } = {}) {
-  const sourceLogs = Array.isArray(logs) ? logs : [];
-  const wantedDialogProcessId = String(dialogProcessId || "").trim();
-  const scopedLogs = wantedDialogProcessId
-    ? sourceLogs.filter(
-        (log) =>
-          String(log?.dialogProcessId || log?.data?.dialogProcessId || "") ===
-          wantedDialogProcessId,
-      )
-    : sourceLogs;
-  const visibleLogs = scopedLogs.filter(isVisibleExecutionLog);
+export function summarizeExecutionLogs(logs, { maxSteps = 80 } = {}) {
+  const visibleLogs = logs.filter(isVisibleExecutionLog);
   const steps = visibleLogs.slice(-maxSteps).map((log, index) => ({
     index,
     ts: String(log?.ts || log?.data?.ts || ""),
@@ -200,14 +191,13 @@ export function summarizeExecutionLogs(logs = [], { maxSteps = 80, dialogProcess
   const { toolCallCount, toolResultCount, errorCount } = countVisibleActivity(visibleLogs);
 
   return {
-    total: sourceLogs.length,
-    scopedTotal: scopedLogs.length,
+    total: logs.length,
     visibleTotal: visibleLogs.length,
     returned: steps.length,
     toolCallCount,
     toolResultCount,
     errorCount,
-    metrics: summarizeExecutionMetrics(scopedLogs),
+    metrics: summarizeExecutionMetrics(logs),
     latestText: steps.length ? steps[steps.length - 1].text : "",
     steps,
   };

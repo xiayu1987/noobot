@@ -110,7 +110,6 @@ export function createRunner({
       sessionLoadState: "created",
       userConfig: {},
       currentSessionModelAlias: "",
-      executionStartIndex: 0,
       runtimeEventListener: { flush: async () => {}, ...eventListener },
     }),
     resolveScenarioRunConfig: (runConfig) => runConfig,
@@ -163,6 +162,8 @@ export function createRunner({
     getTurnSummaryCheckpointState,
     appendAgentMessages,
     finalizeRunSession,
+    saveExecutionReport: async () => {},
+    getExecutionTurnLogs: async () => [],
     upsertParentAsyncTask: () => {
       callOrder.push("upsertParentAsyncTask");
     },

@@ -148,29 +148,23 @@ function createAgentModelContext({
       emitContextIdentityDebug(
         eventListener,
         "canonicalMessageAdded",
-        activeTurnIdentity,
         canonicalMessageIdentityDebugData(message, meta),
       );
     },
     onMutationConsumed(result) {
-      emitAgentContextProtocolDebug(
-        eventListener,
-        "mutationConsumed",
-        { ...context.identity, ...activeTurnIdentity },
-        {
-          consumer: "agent-runtime",
-          commandType: result.commandType,
-          commandId: result.commandId,
-          revision: result.revision,
-        },
-      );
+      emitAgentContextProtocolDebug(eventListener, "mutationConsumed", {
+        consumer: "agent-runtime",
+        commandType: result.commandType,
+        commandId: result.commandId,
+        revision: result.revision,
+      });
     },
     messageBlocks: normalizeMessageBlocks(messageBlocks),
   });
   if (!modelContext) {
     throw new Error("agent state requires a versioned modelContext");
   }
-  emitAgentContextProtocolDebug(eventListener, "documentCreated", context.identity, {
+  emitAgentContextProtocolDebug(eventListener, "documentCreated", {
     consumer: "agent-state-builder",
     revision: 0,
     blockCounts: Object.fromEntries(
@@ -246,7 +240,7 @@ function emitAgentStateDiagnostics({
   const sourceMessageUid = trimmedText(currentUserMessage?.messageUid);
   const userMetaId = `${sourceMessageUid}::user_meta`;
   const modelMessageIds = modelContext.messages.map(canonicalMessageId).filter(Boolean);
-  emitContextIdentityDebug(eventListener, "modelContextCreated", identity, {
+  emitContextIdentityDebug(eventListener, "modelContextCreated", {
     sourceMessageUid,
     contentProjectionFound: modelMessageIds.includes(sourceMessageUid),
     userMetaProjectionFound: modelMessageIds.includes(userMetaId),
@@ -257,7 +251,7 @@ function emitAgentStateDiagnostics({
     historyCount: modelContext.messageBlocks.history.length,
     incrementalCount: modelContext.messageBlocks.incremental.length,
   });
-  emitContextIdentityDebug(eventListener, "snapshotCandidateCreated", identity, {
+  emitContextIdentityDebug(eventListener, "snapshotCandidateCreated", {
     sourceMessageUid,
     currentProjectionFound: modelMessageIds.includes(sourceMessageUid),
     messageCount: modelMessageIds.length,

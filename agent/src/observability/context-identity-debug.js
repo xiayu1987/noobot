@@ -49,13 +49,6 @@ export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
   };
 }
 
-export function emitContextIdentityDebug(eventListener, event, identity = {}, data = {}) {
-  emitEvent(eventListener, `agent.contextIdentity.${String(event || "observed").trim()}`, {
-    ...(data && typeof data === "object" ? data : {}),
-    userId: String(identity?.userId || "").trim(),
-    sessionId: String(identity?.sessionId || "").trim(),
-    parentSessionId: String(identity?.parentSessionId || "").trim(),
-    dialogProcessId: String(identity?.dialogProcessId || "").trim(),
-    turnScopeId: String(identity?.turnScopeId || "").trim(),
-  });
+export function emitContextIdentityDebug(eventListener, event, data = {}) {
+  emitEvent(eventListener, `agent.contextIdentity.${String(event || "observed").trim()}`, data);
 }

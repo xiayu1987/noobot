@@ -38,7 +38,7 @@ test("before_final_output retains the supplied authoritative modelContext entity
   );
 });
 
-test("non-model hook context and diagnostics use the canonical runtime turn identity", () => {
+test("non-model hook context uses the canonical runtime turn identity and diagnostics leave identity to the route", () => {
   const events = [];
   const modelContext = createModelContext({
     messageBlocks: {
@@ -69,8 +69,15 @@ test("non-model hook context and diagnostics use the canonical runtime turn iden
   const diagnostic = events.find(
     (event) => event.event === "agent.contextProtocol.hookDocumentConsumed",
   );
-  assert.equal(diagnostic.data.dialogProcessId, "d1");
-  assert.equal(diagnostic.data.turnScopeId, "t1");
+  for (const field of [
+    "userId",
+    "sessionId",
+    "parentSessionId",
+    "dialogProcessId",
+    "turnScopeId",
+  ]) {
+    assert.equal(Object.hasOwn(diagnostic.data, field), false, field);
+  }
   assert.equal(diagnostic.data.hasModelContext, true);
   assert.equal(diagnostic.data.modelContextProtocolVersion, modelContext.protocolVersion);
 });

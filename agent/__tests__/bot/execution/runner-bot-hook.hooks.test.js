@@ -203,8 +203,8 @@ function createReportingRunner(overrides = {}) {
     },
     saveExecutionReport: async (payload = {}) => {
       reports.push(payload.report);
-      return { saved: true };
     },
+    getExecutionTurnLogs: async () => [],
     ...overrides,
   });
   return { reports, runner };

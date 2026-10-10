@@ -56,7 +56,6 @@ export const TIME_THRESHOLDS = deepFreeze({
 
   memory: {
     summaryTimeoutMs: TIME_TIERS.fiveMinutesMs,
-    executionBundleTimeoutMs: TIME_TIERS.fiveSecondsMs,
   },
 
   tools: {

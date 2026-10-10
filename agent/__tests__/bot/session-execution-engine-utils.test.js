@@ -8,8 +8,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import {
-  assumeSessionWritable,
-  readJsonlArtifactFile,
+  appendRollingJsonlArtifactLog,
+  readExecutionLogs,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
@@ -30,6 +30,8 @@ import {
   resolveTransferEnvelopesFromMessage,
   selectHookManager,
 } from "../../src/bot/session/session-execution-engine-utils.js";
+
+const allowSessionWrite = async () => {};
 
 async function createTempRoot() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-engine-utils-"));
@@ -227,10 +229,16 @@ test("session-execution-engine-utils selects only the canonical manager or creat
 });
 
 test("session-execution-engine-utils persists snapshot json files", async () => {
-  const outputDir = path.join(await createTempRoot(), "snapshot");
+  const tempRoot = await createTempRoot();
+  const outputDir = path.join(tempRoot, "snapshot");
+  const sourceSessionDir = path.join(tempRoot, "source");
+  await appendRollingJsonlArtifactLog({
+    sessionDir: sourceSessionDir,
+    log: { event: "started", dialogProcessId: "dialog-snapshot" },
+  });
   const persisted = await persistSnapshotJsonFiles({
     outputDir,
-    assertSessionWritable: assumeSessionWritable,
+    assertSessionWritable: allowSessionWrite,
     sessionPayload: {
       sessionId: "s1",
       parentSessionId: "p1",
@@ -254,7 +262,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
       ],
     },
     taskPayload: { sessionId: "s1", tasks: [] },
-    executionPayload: { sessionId: "s1", logs: [{ event: "started" }] },
+    executionEventsSourceDir: sourceSessionDir,
     metadata: { node: "n1" },
     now: () => "2026-05-14T00:00:00.000Z",
   });
@@ -295,12 +303,8 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
     sessionId: "s1",
     tasks: [],
   });
-  assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.execution, "utf8")), {
-    sessionId: "s1",
-    logs: [{ event: "started" }],
-  });
-  assert.deepEqual(await readJsonlArtifactFile(persisted.files.executionEvents), [
-    { event: "started" },
+  assert.deepEqual(await readExecutionLogs(outputDir), [
+    { event: "started", dialogProcessId: "dialog-snapshot" },
   ]);
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.meta, "utf8")), {
     node: "n1",

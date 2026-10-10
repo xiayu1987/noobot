@@ -72,14 +72,13 @@ export class AsyncSessionRunner {
       sessionId,
     });
 
-    if (!bundle?.exists) {
-      return {
-        ok: false,
-        status: SESSION_ASYNC_STATUS.NOT_FOUND,
-        sessionId,
-        parentSessionId,
-      };
-    }
+    const notFound = {
+      ok: false,
+      status: SESSION_ASYNC_STATUS.NOT_FOUND,
+      sessionId,
+      parentSessionId,
+    };
+    if (!bundle?.exists) return notFound;
 
     const sessionData = bundle.sessions?.find((s) => s.sessionId === sessionId);
     const messages = sessionData?.messages || [];
@@ -87,17 +86,16 @@ export class AsyncSessionRunner {
     const assistantMessage = [...messages]
       .reverse()
       .find((m) => m.role === MESSAGE_ROLE.ASSISTANT && m.type === MESSAGE_TYPE.MESSAGE);
+    if (!assistantMessage) return notFound;
 
-    const answer = assistantMessage?.content || "";
+    const answer = assistantMessage.content;
     const dialogProcessId = resolveContextMessageDialogProcessId(assistantMessage);
-
-    const executionBundle = await this.session.getExecutionBundle({
+    const executionLogs = await this.session.getExecutionTurnLogs({
       userId,
       parentSessionId,
       sessionId,
+      dialogProcessId,
     });
-
-    const executionLogs = executionBundle?.logs || [];
     return {
       ok: true,
       status: SESSION_ASYNC_STATUS.COMPLETED,
@@ -107,7 +105,7 @@ export class AsyncSessionRunner {
         answer,
         dialogProcessId,
         executionLogs,
-        executionSummary: summarizeExecutionLogs(executionLogs, { dialogProcessId }),
+        executionSummary: summarizeExecutionLogs(executionLogs),
       },
     };
   }

@@ -18,8 +18,6 @@ describe("sessionMessageState", () => {
       event: "tool_result",
       text: "\u001b[31m[tool] done\u001b[0m",
       dialogProcessId: 123,
-      subAgentCall: 1,
-      subAgentSessionId: " child ",
     });
 
     expect(item.event).toBe("tool_result");
@@ -27,8 +25,6 @@ describe("sessionMessageState", () => {
     expect(item.category).toBe("tool");
     expect(item.text).toContain("[tool] done");
     expect(item.dialogProcessId).toBe("123");
-    expect(item.subAgentCall).toBe(true);
-    expect(item.subAgentSessionId).toBe(" child ");
     expect(item.ts).toEqual(expect.any(String));
   });
 
@@ -64,8 +60,6 @@ describe("sessionMessageState", () => {
     expect(item.event).toBe("system");
     expect(item.type).toBe("system");
     expect(item.category).toBe("system");
-    expect(item.subAgentLabel).toBe("");
-    expect(item.subAgentTask).toBe("");
   });
 
   it("preserves plugin analysis text from output fallback fields", () => {
@@ -97,8 +91,20 @@ describe("sessionMessageState", () => {
 
   it("allows reconnect only after a backend session identity exists", () => {
     expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: "" })).toBe(false);
-    expect(hasActiveSessionForReconnect({ activeSession: { sessionId: " backend " }, activeSessionId: "" })).toBe(true);
-    expect(hasActiveSessionForReconnect({ activeSession: { id: " local ", isLocal: true }, activeSessionId: "local" })).toBe(false);
-    expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: " active " })).toBe(false);
+    expect(
+      hasActiveSessionForReconnect({
+        activeSession: { sessionId: " backend " },
+        activeSessionId: "",
+      }),
+    ).toBe(true);
+    expect(
+      hasActiveSessionForReconnect({
+        activeSession: { id: " local ", isLocal: true },
+        activeSessionId: "local",
+      }),
+    ).toBe(false);
+    expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: " active " })).toBe(
+      false,
+    );
   });
 });

@@ -15,9 +15,10 @@ function isPlainObject(value) {
 }
 
 function validatedEnvelopes(value) {
-  const source = isPlainObject(value) && Array.isArray(value.transferEnvelopes)
-    ? value.transferEnvelopes
-    : value;
+  const source =
+    isPlainObject(value) && Array.isArray(value.transferEnvelopes)
+      ? value.transferEnvelopes
+      : value;
   return normalizeTransferEnvelopes(source);
 }
 

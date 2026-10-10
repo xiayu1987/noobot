@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { projectExecutionTransportPayload } from "../../events/transport-payload.js";
 import { TURN_STATE, TURN_TERMINAL_STATUS } from "@noobot/session-protocol";
 
 export function createDetachedTerminalReceipt({
@@ -57,15 +56,7 @@ export function createScopedSubSessionEventListener(eventListener = null, identi
   return {
     onEvent(event = {}) {
       const source = event && typeof event === "object" ? event : {};
-      const data = source.data && typeof source.data === "object" ? source.data : {};
-      return target.forwardEvent({
-        ...source,
-        data: projectExecutionTransportPayload({
-          event: source.event,
-          data,
-          route: identity,
-        }),
-      });
+      return target.forwardEvent({ ...source, route: identity });
     },
   };
 }

@@ -139,7 +139,6 @@ export function createSessionServices(
     storageService,
     normalizeTask: normalizeTaskEntity,
     sessionRepository,
-    now: nowFn,
   });
 
   const fileSystemExecutionRepository = new FileSystemExecutionRepository({
@@ -147,7 +146,6 @@ export function createSessionServices(
     sessionPathResolver,
     storageService,
     sessionRepository,
-    now: nowFn,
   });
 
   const executionLogRuntimeEventsConfig = {};
@@ -470,8 +468,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.hasDialogProcessIdInSession(payload);
     },
 
-    async getExecutionBundle(payload = {}) {
-      return executionLogService.getExecutionBundle(payload);
+    async getExecutionTurnLogs(payload = {}) {
+      return executionLogService.getTurnLogs(payload);
     },
 
     async appendExecutionLog(payload = {}) {
@@ -592,16 +590,14 @@ export {
 } from "./session-summary-builders.js";
 export {
   SESSION_ARTIFACT_FILE_NAMES,
-  assumeSessionWritable,
   appendExecutionLogArtifact,
-  appendJsonlArtifactLog,
   buildSessionArtifactFileMap,
   persistSessionArtifactSnapshot,
   inspectSessionArtifacts,
   repairSessionArtifacts,
   cleanupSessionArtifacts,
   readJsonArtifactFile,
-  readJsonlArtifactFile,
+  readExecutionLogs,
   iterateExecutionLogs,
   readRecentSessionTurns,
   readSessionArtifact,
@@ -610,12 +606,9 @@ export {
   readSessionArtifactSnapshot,
   readSessionDisplaySummaryArtifact,
   rebuildSessionDisplaySummaryArtifact,
-  writeExecutionArtifact,
   writeExecutionReportArtifact,
   readExecutionReportArtifact,
-  normalizeExecutionReportKey,
   writeJsonArtifactFile,
-  writeJsonlArtifactFile,
   writeSessionArtifact,
   writeTaskArtifact,
 } from "./session-artifact-store.js";

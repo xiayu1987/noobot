@@ -44,15 +44,8 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   const historyMessages = rawHistoryMessages;
   const resolvedDialogProcessId = context.identity.dialogProcessId;
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
-  const identity = {
-    userId: context.identity.userId,
-    sessionId: context.identity.sessionId,
-    parentSessionId: runtimeParentSessionId,
-    dialogProcessId: resolvedDialogProcessId,
-    turnScopeId: currentTurnScopeId,
-  };
   const currentCanonicalId = canonicalMessageId(currentUserMessage);
-  emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", identity, {
+  emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", {
     messageUid: String(currentUserMessage?.messageUid || "").trim(),
     currentCanonicalId,
     systemCount: systemMessages.length,
@@ -69,7 +62,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     currentUserMessage,
     historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
   });
-  emitContextIdentityDebug(runtime?.eventListener, "canonicalBlocksResolved", identity, {
+  emitContextIdentityDebug(runtime?.eventListener, "canonicalBlocksResolved", {
     currentCanonicalId,
     currentMessagePresent: Boolean(currentCanonicalId),
     currentAlreadyInIncremental: restoredIncrementalMessages.some(
@@ -103,7 +96,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     allowMessageAttachments: true,
   });
   const projectedIds = incremental.map(canonicalMessageId).filter(Boolean);
-  emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", identity, {
+  emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {
     sourceMessageUid: String(currentUserMessage?.messageUid || "").trim(),
     contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",
     userMetaProjectionId:

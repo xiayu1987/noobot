@@ -316,12 +316,13 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       return { exists: false, session: {} };
     },
     async createSession() {},
-    async getExecutionBundle() {
-      return { logs: executionLogs };
+    async getExecutionTurnLogs() {
+      return executionLogs;
     },
     async resolveSessionScope({ userId, sessionId }) {
       return { sessionDir: path.join(tempRoot, userId, "runtime", "session", sessionId) };
     },
+    async saveExecutionReport() {},
     async appendExecutionLog(payload = {}) {
       executionLogs.push(payload);
     },

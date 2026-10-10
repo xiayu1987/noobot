@@ -12,6 +12,7 @@ import { normalizeTurnIdentity } from "./identity/turn-identity.js";
 import { text as clean } from "./normalize.js";
 
 const SESSION_ID_MAX_LENGTH = 200;
+const DIALOG_PROCESS_KEY_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function normalizeSessionId(value = "") {
   return clean(value).slice(0, SESSION_ID_MAX_LENGTH);
@@ -23,6 +24,18 @@ export function normalizeParentSessionId(value = "") {
 
 export function normalizeDialogProcessId(value = "") {
   return clean(value);
+}
+
+export function isDialogProcessKey(value) {
+  return DIALOG_PROCESS_KEY_PATTERN.test(clean(value));
+}
+
+export function requireDialogProcessKey(value) {
+  const key = clean(value);
+  if (DIALOG_PROCESS_KEY_PATTERN.test(key)) return key;
+  const error = new TypeError(`invalid dialogProcessId: "${key}"`);
+  error.code = "DIALOG_PROCESS_ID_INVALID";
+  throw error;
 }
 
 export function createSessionScope({ userId = "", sessionId = "", parentSessionId = "" } = {}) {

@@ -186,8 +186,6 @@ export const zhCNMessages = {
     chooseFileLeftTree: "请在左侧目录树中选择文件",
   },
   configFields: {
-    session: "会话",
-    executionBundleTimeoutMs: "执行包超时（毫秒）",
     context: "上下文",
     default_provider: "默认模型",
     providers: "模型配置",

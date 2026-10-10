@@ -6,7 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { readJsonlArtifactFile } from "../../src/session/session-artifact-store.js";
+import {
+  appendRollingJsonlArtifactLog,
+  readExecutionLogs,
+} from "../../src/session/session-artifact-store.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -101,6 +104,11 @@ test("ScopedArtifactPersistenceHelpers scoped writer and event logger write insi
 test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot from session service", async () => {
   const tempRoot = await createTempRoot();
   const outputDir = path.join(tempRoot, "u1", "plugin/node-c");
+  const sourceSessionDir = path.join(tempRoot, "u1", "runtime/session/p1/s1");
+  await appendRollingJsonlArtifactLog({
+    sessionDir: sourceSessionDir,
+    log: { event: "x", dialogProcessId: "dialog-scoped-snapshot" },
+  });
   const guardCalls = [];
   const helpers = createHelpers({
     baseDir: tempRoot,
@@ -132,8 +140,9 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
           turnTasks: [{ taskId: "t1" }],
         };
       },
-      async getExecutionBundle() {
-        return { sessionId: "s1", logs: [{ event: "x" }] };
+      async resolveSessionScope(payload = {}) {
+        assert.equal(payload.parentSessionId, "p1");
+        return { sessionDir: sourceSessionDir };
       },
     },
   });
@@ -152,11 +161,11 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
   );
 
   const taskJson = JSON.parse(await fs.readFile(persisted.files.task, "utf8"));
-  const executionJson = JSON.parse(await fs.readFile(persisted.files.execution, "utf8"));
   assert.deepEqual(taskJson.tasks, [{ taskId: "t1" }]);
   assert.equal(taskJson.updatedAt, "2026-01-02T03:04:05.000Z");
-  assert.deepEqual(executionJson.logs, [{ event: "x" }]);
-  assert.deepEqual(await readJsonlArtifactFile(persisted.files.executionEvents), [{ event: "x" }]);
+  assert.deepEqual(await readExecutionLogs(outputDir), [
+    { event: "x", dialogProcessId: "dialog-scoped-snapshot" },
+  ]);
 });
 
 test("ScopedArtifactPersistenceHelpers generated artifact persister maps records to metas", async () => {

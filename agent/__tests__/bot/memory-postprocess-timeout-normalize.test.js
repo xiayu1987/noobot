@@ -31,15 +31,3 @@ test("memory-postprocess: resolveMemorySummaryTimeoutMs supports canonical keys"
   });
   assert.equal(fromUserCanonical, 33333);
 });
-
-test("memory-postprocess: resolveExecutionBundleTimeoutMs supports canonical session key", () => {
-  const service = new MemoryPostProcessService({
-    globalConfig: {
-      session: {
-        executionBundleTimeoutMs: 7777,
-      },
-    },
-  });
-  const resolved = service.resolveExecutionBundleTimeoutMs({});
-  assert.equal(resolved, 7777);
-});

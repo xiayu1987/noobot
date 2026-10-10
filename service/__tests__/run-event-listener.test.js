@@ -30,7 +30,7 @@ function createListener(overrides = {}) {
   return { listener, frames };
 }
 
-function messageEnvelope() {
+function messageEnvelope(payload = null) {
   return createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
     identity: {
@@ -49,7 +49,7 @@ function messageEnvelope() {
     },
     producer: { type: "agent", id: "agent-1" },
     occurredAt: "2026-08-17T00:00:00.000Z",
-    payload: {
+    payload: payload || {
       eventType: MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
       presentationMessageId: "presentation-1",
       text: "complete body",
@@ -178,4 +178,63 @@ test("run event listener exposes onDeliveryTiming only when delivery-timing debu
   assert.equal(enabled.onDeliveryTiming, callback);
   enabled.onDeliveryTiming({ queueWaitMs: { n: 1 } });
   assert.deepEqual(received, [{ queueWaitMs: { n: 1 } }]);
+});
+
+test("run-event-listener audits authority commits from the committed envelope identity", () => {
+  const audits = [];
+  const { listener } = createListener({
+    onAuthorityEventCommitted: () => true,
+    onEventReceived: (audit) => audits.push(audit),
+  });
+  const envelope = messageEnvelope({
+    eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_START,
+    tool: "read_file",
+    toolCallId: "call-1",
+    dialogProcessId: "dialog-1",
+    presentationMessageId: "presentation-1",
+  });
+  listener.onEvent({ event: "authority_event_committed", data: { envelope } });
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0].eventType, MESSAGE_EVENT_WIRE_EVENT);
+  assert.equal(audits[0].payloadEventType, MESSAGE_EVENT_TYPE.TOOL_CALL_START);
+  assert.equal(audits[0].sessionId, "root-session");
+  assert.equal(audits[0].turnScopeId, "turn-1");
+  assert.equal(audits[0].dialogProcessId, "dialog-1");
+  assert.equal(audits[0].eventId, "event-1");
+});
+
+test("run-event-listener audits envelope-free run events from their route-projected data", () => {
+  const audits = [];
+  const { listener } = createListener({ onEventReceived: (audit) => audits.push(audit) });
+  listener.onEvent({
+    event: "agent_lifecycle_state_changed",
+    data: { state: "idle", sessionId: "root-session", turnScopeId: "turn-1", dialogProcessId: "d" },
+  });
+  assert.equal(audits[0].sessionId, "root-session");
+  assert.equal(audits[0].turnScopeId, "turn-1");
+  assert.equal(audits[0].dialogProcessId, "d");
+});
+
+test("run-event-listener ignores child-session lifecycle for root run coordination", () => {
+  const running = [];
+  const registered = [];
+  const runMeta = { turnScopeId: "turn-1", dialogProcessId: "dialog-1" };
+  const { listener } = createListener({
+    onRootRunning: (data) => running.push(data),
+    getCurrentRunMeta: () => runMeta,
+    registerActiveRun: (handle) => registered.push(handle),
+  });
+  listener.onEvent({
+    event: "agent_lifecycle_state_changed",
+    data: {
+      state: "running",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      turnScopeId: "turn-1",
+      dialogProcessId: "child-dialog",
+    },
+  });
+  assert.deepEqual(running, []);
+  assert.equal(runMeta.dialogProcessId, "dialog-1");
+  assert.deepEqual(registered, []);
 });

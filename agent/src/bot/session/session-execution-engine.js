@@ -120,8 +120,6 @@ export class SessionExecutionEngine {
       resolveMemoryPostProcessAsyncEnabled: (userConfig = {}) =>
         this._resolveMemoryPostProcessAsyncEnabled(userConfig),
       runMemoryPostProcessFlow: (payload = {}) => this._runMemoryPostProcessFlow(payload),
-      resolveExecutionBundleTimeoutMs: (userConfig = {}) =>
-        this._resolveExecutionBundleTimeoutMs(userConfig),
       now: () => this._now(),
     });
   }
@@ -198,14 +196,8 @@ export class SessionExecutionEngine {
       getTurnSummaryCheckpointState: (payload = {}) =>
         this.session.getTurnSummaryCheckpointState(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
-      saveExecutionReport:
-        typeof this.session?.saveExecutionReport === "function"
-          ? (payload = {}) => this.session.saveExecutionReport(payload)
-          : null,
-      getExecutionBundle:
-        typeof this.session?.getExecutionBundle === "function"
-          ? (payload = {}) => this.session.getExecutionBundle(payload)
-          : null,
+      saveExecutionReport: (payload = {}) => this.session.saveExecutionReport(payload),
+      getExecutionTurnLogs: (payload = {}) => this.session.getExecutionTurnLogs(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };
     return new SessionExecutionRunner({
@@ -294,10 +286,6 @@ export class SessionExecutionEngine {
 
   _resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
     return this.memoryPostProcessService.resolveMemoryPostProcessAsyncEnabled(userConfig);
-  }
-
-  _resolveExecutionBundleTimeoutMs(userConfig = {}) {
-    return this.memoryPostProcessService.resolveExecutionBundleTimeoutMs(userConfig);
   }
 
   async _runMemorySummarizeFlow({

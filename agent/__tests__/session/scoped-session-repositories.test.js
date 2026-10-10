@@ -8,11 +8,17 @@ import test from "node:test";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import {
+  buildExecutionReport,
+  EXECUTION_REPORT_PROTOCOL,
+  EXECUTION_REPORT_VERSION,
+} from "@noobot/session-protocol/execution-report";
 
 import { FileSystemSessionRepository } from "../../src/session/repositories/file-system-session-repository.js";
 import { FileSystemTaskRepository } from "../../src/session/repositories/file-system-task-repository.js";
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
+import { summarizeExecutionLogs } from "../../src/observability/execution-log/execution-log-summary.js";
 import { ExecutionLogService } from "../../src/observability/execution-log/execution-log-service.js";
 import { createSessionFacade } from "../../src/session/index.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
@@ -27,7 +33,7 @@ import {
 } from "../../src/session/session-location-resolver.js";
 import {
   buildSessionArtifactFileMap,
-  readJsonlArtifactFile,
+  readExecutionLogs,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
 
@@ -52,8 +58,6 @@ function buildHarness() {
         sessionFile: path.join(sessionDir, "session.json"),
         sessionSummaryFile: path.join(sessionDir, "session-summary.json"),
         taskFile: path.join(sessionDir, "task.json"),
-        executionFile: path.join(sessionDir, "execution.json"),
-        executionEventsFile: path.join(sessionDir, "execution.jsonl"),
         metadataFile: path.join(sessionDir, "meta.json"),
         mutationLockDir: `${sessionDir}.mutation-lock`,
       };
@@ -150,7 +154,10 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     assert.equal(["turn-a", "turn-b"].includes(restored.messages[1].turnScopeId), true);
 
     for (const turn of manifest.turnOrder) {
-      const records = await readJsonlArtifactFile(path.join(scope.sessionDir, turn.file));
+      const records = (await readFile(path.join(scope.sessionDir, turn.file), "utf8"))
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
       const recordTurnScopes = new Set(
         records.map((record) => record?.message?.turnScopeId).filter(Boolean),
       );
@@ -211,8 +218,7 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
         await executionRepo.appendLog(
           "alice",
           "child-a",
-          { type: "event", value: 1 },
-          {},
+          { type: "event", value: 1, dialogProcessId: "dp-a" },
           "parent-a",
           context,
         );
@@ -234,7 +240,7 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal((await readJson(scope.sessionFile)).parentSessionId, "parent-a");
     assert.equal((await readJson(scope.sessionSummaryFile)).sessionId, "child-a");
     assert.equal((await readJson(scope.taskFile)).tasks[0].taskId, "task-a");
-    assert.equal((await readJsonlArtifactFile(scope.executionEventsFile))[0].value, 1);
+    assert.equal((await readExecutionLogs(scope.sessionDir))[0].value, 1);
 
     const defaultRoot = path.join(root, "alice/runtime/session");
     assert.equal(
@@ -287,9 +293,10 @@ test("session facade execution reads do not create a default shadow session for 
       executionLogService,
     });
 
-    await session.getExecutionBundle({
+    await session.getExecutionTurnLogs({
       userId: "alice",
       sessionId: "child-facade",
+      dialogProcessId: "dp-facade",
       parentSessionId: "parent-facade",
       persistenceContext,
     });
@@ -297,16 +304,14 @@ test("session facade execution reads do not create a default shadow session for 
       userId: "alice",
       sessionId: "child-facade",
       parentSessionId: "parent-facade",
+      dialogProcessId: "dp-facade",
       persistenceContext,
       event: "workflow_started",
     });
 
     const scope = await resolver.resolveSessionScope("alice", "child-facade", "parent-facade");
     assert.equal(await sessionRepo.storageService.exists(scope.sessionFile), true);
-    assert.equal(
-      (await readJsonlArtifactFile(scope.executionEventsFile))[0].event,
-      "workflow_started",
-    );
+    assert.equal((await readExecutionLogs(scope.sessionDir))[0].event, "workflow_started");
     assert.equal(
       await sessionRepo.storageService.exists(
         path.join(root, "alice/runtime/session/child-facade/session.json"),
@@ -347,8 +352,12 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
           executionRepo.appendLog(
             payload.userId,
             payload.sessionId,
-            { event: payload.event, type: payload.type, data: payload.data },
-            {},
+            {
+              event: payload.event,
+              type: payload.type,
+              data: payload.data,
+              dialogProcessId: payload.dialogProcessId,
+            },
             payload.parentSessionId,
             payload.persistenceContext,
           ),
@@ -395,7 +404,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
     );
     assert.equal(scopedSession.messages.at(-1).content, "done");
     assert.equal(
-      (await readJsonlArtifactFile(scope.executionEventsFile)).some((item) =>
+      (await readExecutionLogs(scope.sessionDir)).some((item) =>
         JSON.stringify(item).includes("session_turn_full"),
       ),
       true,
@@ -459,8 +468,7 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
             await executionRepo.appendLog(
               "alice",
               `child-${index}`,
-              { index },
-              {},
+              { index, dialogProcessId: `dp-${index}` },
               "parent",
               context,
             );
@@ -561,14 +569,21 @@ test("session facade writes per-turn execution reports into the scoped session d
       persistenceContext,
     };
 
-    for (const [dialogProcessId, status] of [
-      ["dp-1", "completed"],
-      ["dp-2", "failed"],
+    for (const [dialogProcessId, status, error] of [
+      ["dp-1", "completed", null],
+      ["dp-2", "failed", new Error("boom")],
     ]) {
-      assert.deepEqual(
-        await session.saveExecutionReport({ ...scopePayload, report: { dialogProcessId, status } }),
-        { saved: true },
-      );
+      await session.saveExecutionReport({
+        ...scopePayload,
+        report: buildExecutionReport({
+          status,
+          sessionId: "child-report",
+          parentSessionId: "parent-report",
+          dialogProcessId,
+          executionSummary: summarizeExecutionLogs([]),
+          error,
+        }),
+      });
     }
 
     const scope = await resolver.resolveSessionScope("alice", "child-report", "parent-report");
@@ -595,24 +610,38 @@ test("session facade writes per-turn execution reports into the scoped session d
   }
 });
 
-test("execution report writes are skipped for deleted sessions and invalid turn keys", async () => {
+test("execution report writes reject deleted sessions and invalid turn keys", async () => {
   const harness = buildHarness();
   const { root, sessionRepo, executionRepo } = await harness.setup();
+  const reportFor = (sessionId, dialogProcessId) => ({
+    protocol: EXECUTION_REPORT_PROTOCOL,
+    version: EXECUTION_REPORT_VERSION,
+    status: "failed",
+    sessionId,
+    parentSessionId: "",
+    dialogProcessId,
+    turnScopeId: "",
+    caller: "",
+    startedAt: "",
+    finishedAt: "",
+    durationMs: null,
+    summary: null,
+    summaryError: { name: "Error", message: "missing" },
+    error: { name: "Error", message: "boom" },
+  });
   try {
     await sessionRepo.markSessionsDeleted("alice", ["gone"]);
-    assert.equal(
-      await executionRepo.saveReport("alice", "gone", {
-        dialogProcessId: "dp-1",
-        status: "failed",
-      }),
-      false,
-    );
+    await assert.rejects(executionRepo.saveReport("alice", "gone", reportFor("gone", "dp-1")), {
+      code: "SESSION_DELETED",
+    });
     for (const dialogProcessId of ["", "../escape", "a/b"]) {
-      assert.equal(
-        await executionRepo.saveReport("alice", "live", { dialogProcessId, status: "failed" }),
-        false,
+      await assert.rejects(
+        executionRepo.saveReport("alice", "live", reportFor("live", dialogProcessId)),
+        { code: "DIALOG_PROCESS_ID_INVALID" },
       );
-      assert.equal(await executionRepo.getReport("alice", "live", dialogProcessId), null);
+      await assert.rejects(executionRepo.getReport("alice", "live", dialogProcessId), {
+        code: "DIALOG_PROCESS_ID_INVALID",
+      });
     }
     for (const sessionId of ["gone", "live"]) {
       assert.equal(
@@ -622,6 +651,26 @@ test("execution report writes are skipped for deleted sessions and invalid turn 
         false,
       );
     }
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("session save rejects entity parentSessionId that conflicts with the explicit scope", async () => {
+  const harness = buildHarness();
+  const { root, sessionRepo } = await harness.setup();
+  const sessionFile = (sessionId) =>
+    path.join(root, `alice/runtime/session/${sessionId}/session.json`);
+  try {
+    for (const explicitParent of ["p2", ""]) {
+      await assert.rejects(
+        sessionRepo.save("alice", { sessionId: "child", parentSessionId: "p1" }, explicitParent),
+        { code: "SESSION_PARENT_SESSION_SCOPE_CONFLICT", statusCode: 409 },
+      );
+    }
+    assert.equal(await sessionRepo.storageService.exists(sessionFile("child")), false);
+    await sessionRepo.save("alice", { sessionId: "child", parentSessionId: "p1" }, "p1");
+    assert.equal((await readJson(sessionFile("child"))).parentSessionId, "p1");
   } finally {
     await harness.cleanup();
   }

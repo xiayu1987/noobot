@@ -93,7 +93,6 @@ export class FileSystemTaskRepository {
   }
 
   async _mutateBundle(userId, sessionId, parentSessionId, persistenceContext, mutate) {
-    if (await this.sessionRepository.isSessionDeleted(userId, sessionId)) return false;
     await this.sessionRepository.withSessionMutation(
       userId,
       sessionId,

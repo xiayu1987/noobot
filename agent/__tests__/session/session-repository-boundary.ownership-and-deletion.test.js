@@ -10,7 +10,7 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { readJsonlArtifactFile } from "../../src/session/session-artifact-store.js";
+import { readExecutionLogs } from "../../src/session/session-artifact-store.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -50,7 +50,6 @@ test("session/task/execution repositories should keep file ownership boundaries"
 
     assert.equal(await exists(sessionScope.sessionFile), true);
     assert.equal(await exists(sessionScope.taskFile), false);
-    assert.equal(await exists(sessionScope.executionFile), false);
 
     await runtime.repositories.taskRepository.save(userId, sessionId, {
       taskId: "t1",
@@ -63,36 +62,33 @@ test("session/task/execution repositories should keep file ownership boundaries"
       event: "start",
       dialogProcessId: "dp-1",
     });
-    assert.equal(await exists(sessionScope.executionFile), true);
-    const executionEventsFile = path.join(sessionScope.sessionDir, "execution.jsonl");
     assert.equal(
       await exists(path.join(sessionScope.sessionDir, "execution-events/index.json")),
+      true,
+    );
+    assert.equal(
+      await exists(path.join(sessionScope.sessionDir, "execution-events/turns/dp-1/index.json")),
       true,
     );
 
     const taskBundle = JSON.parse(await readFile(sessionScope.taskFile, "utf8"));
     assert.equal(taskBundle.currentTaskId, "t1");
-    const executionBundle = JSON.parse(await readFile(sessionScope.executionFile, "utf8"));
-    assert.equal("logs" in executionBundle, false);
-    assert.equal(executionBundle.dialogProcessId, "dp-1");
-    const executionEvents = await readJsonlArtifactFile(executionEventsFile);
+    const executionEvents = await readExecutionLogs(sessionScope.sessionDir);
     assert.equal(executionEvents.length, 1);
     assert.equal(executionEvents[0].event, "start");
     assert.equal(executionEvents[0].dialogProcessId, "dp-1");
-    const restoredBundle = await runtime.repositories.executionRepository.getBundle(
+    const turnLogs = await runtime.repositories.executionRepository.getTurnLogs(
       userId,
       sessionId,
+      "dp-1",
     );
-    assert.equal(restoredBundle.dialogProcessId, "dp-1");
-    assert.equal(restoredBundle.logs.length, 1);
-    assert.equal(restoredBundle.logs[0].event, "start");
-    assert.equal(restoredBundle.logs[0].dialogProcessId, "dp-1");
-    const metadata = await runtime.repositories.fileSystemExecutionRepository.getBundleMetadata(
-      userId,
-      sessionId,
+    assert.equal(turnLogs.length, 1);
+    assert.equal(turnLogs[0].event, "start");
+    assert.equal(turnLogs[0].dialogProcessId, "dp-1");
+    assert.deepEqual(
+      await runtime.repositories.executionRepository.getTurnLogs(userId, sessionId, "dp-other"),
+      [],
     );
-    assert.equal(metadata.dialogProcessId, "dp-1");
-    assert.equal("logs" in metadata, false);
   });
 });
 
@@ -200,15 +196,14 @@ test("deleteSessionBranch tombstones persisted child Sessions outside the Sessio
       await runtime.repositories.sessionRepository.isSessionDeleted(userId, childSessionId),
       true,
     );
-    assert.equal(
-      await runtime.repositories.fileSystemExecutionRepository.appendLog(
+    await assert.rejects(
+      runtime.repositories.fileSystemExecutionRepository.appendLog(
         userId,
         childSessionId,
-        { event: "late-workflow-log" },
-        {},
+        { event: "late-workflow-log", dialogProcessId: "dp-late" },
         rootSessionId,
       ),
-      false,
+      { code: "SESSION_DELETED" },
     );
     assert.equal(await exists(rootScope.sessionDir), false);
   });
@@ -259,23 +254,20 @@ test("task and execution writes should not recreate a deleted session directory"
     );
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
-    assert.equal(
-      await runtime.repositories.taskRepository.save(userId, sessionId, {
+    await assert.rejects(
+      runtime.repositories.taskRepository.save(userId, sessionId, {
         taskId: "late-task",
         taskName: "late task",
         taskStatus: "start",
       }),
-      false,
+      { code: "SESSION_DELETED" },
     );
-    assert.equal(
-      await runtime.repositories.fileSystemExecutionRepository.saveBundle(userId, sessionId, {}),
-      false,
-    );
-    assert.equal(
-      await runtime.repositories.fileSystemExecutionRepository.appendLog(userId, sessionId, {
+    await assert.rejects(
+      runtime.repositories.fileSystemExecutionRepository.appendLog(userId, sessionId, {
         event: "late-log",
+        dialogProcessId: "dp-late",
       }),
-      false,
+      { code: "SESSION_DELETED" },
     );
     assert.equal(await exists(scope.sessionDir), false);
 
@@ -284,13 +276,12 @@ test("task and execution writes should not recreate a deleted session directory"
       await restartedRuntime.repositories.sessionRepository.isSessionDeleted(userId, sessionId),
       true,
     );
-    assert.equal(
-      await restartedRuntime.repositories.fileSystemExecutionRepository.appendLog(
-        userId,
-        sessionId,
-        { event: "late-log-after-restart" },
-      ),
-      false,
+    await assert.rejects(
+      restartedRuntime.repositories.fileSystemExecutionRepository.appendLog(userId, sessionId, {
+        event: "late-log-after-restart",
+        dialogProcessId: "dp-late",
+      }),
+      { code: "SESSION_DELETED" },
     );
     assert.equal(await exists(scope.sessionDir), false);
   });
@@ -337,13 +328,13 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
     };
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
-    assert.equal(
-      await runtime.repositories.sessionRepository.ensureSession({
+    await assert.rejects(
+      runtime.repositories.sessionRepository.ensureSession({
         userId,
         sessionId,
         persistenceContext,
       }),
-      false,
+      { code: "SESSION_DELETED" },
     );
     assert.equal(
       await runtime.repositories.sessionRepository.findById(
@@ -354,45 +345,34 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
       ),
       null,
     );
-    assert.equal(
-      await runtime.repositories.sessionRepository.save(
+    await assert.rejects(
+      runtime.repositories.sessionRepository.save(
         userId,
         { sessionId, messages: [{ role: "user", content: "late" }] },
         "",
         { persistenceContext },
       ),
-      false,
+      { code: "SESSION_DELETED" },
     );
-    assert.equal(
-      await runtime.repositories.taskRepository.save(
+    await assert.rejects(
+      runtime.repositories.taskRepository.save(
         userId,
         sessionId,
         { taskId: "late-task", taskName: "late", taskStatus: "start" },
         "",
         persistenceContext,
       ),
-      false,
+      { code: "SESSION_DELETED" },
     );
-    assert.equal(
-      await runtime.repositories.fileSystemExecutionRepository.saveBundle(
+    await assert.rejects(
+      runtime.repositories.fileSystemExecutionRepository.appendLog(
         userId,
         sessionId,
-        {},
+        { event: "late", dialogProcessId: "dp-late" },
         "",
         persistenceContext,
       ),
-      false,
-    );
-    assert.equal(
-      await runtime.repositories.fileSystemExecutionRepository.appendLog(
-        userId,
-        sessionId,
-        { event: "late" },
-        {},
-        "",
-        persistenceContext,
-      ),
-      false,
+      { code: "SESSION_DELETED" },
     );
     assert.equal(await exists(scope.sessionDir), false);
     assert.deepEqual(await runtime.repositories.sessionRepository.listSessionIds(userId), []);
@@ -468,8 +448,7 @@ test("stale generation token blocks session, task, and execution writes without 
       runtime.repositories.fileSystemExecutionRepository.appendLog(
         userId,
         sessionId,
-        { event: "late" },
-        {},
+        { event: "late", dialogProcessId: "dp-late" },
         "",
         staleContext,
       ),

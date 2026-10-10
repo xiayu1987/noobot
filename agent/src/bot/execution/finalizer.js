@@ -7,13 +7,12 @@
 import { emitEvent } from "../../events/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { CALLER_ROLE } from "../config/constants.js";
-import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { normalizeParentSessionId, requireDialogProcessKey } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
   buildExecutionReport,
   EXECUTION_REPORT_STATUS,
-  saveExecutionReportBestEffort,
-} from "../../observability/execution-log/execution-report.js";
+} from "@noobot/session-protocol/execution-report";
 import {
   canonicalMessageId,
   emitContextIdentityDebug,
@@ -33,14 +32,12 @@ export class SessionExecutionFinalizer {
     turnPersister = null,
     resolveMemoryPostProcessAsyncEnabled = () => true,
     runMemoryPostProcessFlow = async () => {},
-    resolveExecutionBundleTimeoutMs = () => 5000,
     now = () => new Date().toISOString(),
   } = {}) {
     this.session = session;
     this.turnPersister = turnPersister;
     this.resolveMemoryPostProcessAsyncEnabled = resolveMemoryPostProcessAsyncEnabled;
     this.runMemoryPostProcessFlow = runMemoryPostProcessFlow;
-    this.resolveExecutionBundleTimeoutMs = resolveExecutionBundleTimeoutMs;
     this.now = now;
   }
 
@@ -50,7 +47,7 @@ export class SessionExecutionFinalizer {
     parentSessionId = "",
     parentDialogProcessId = "",
     caller = CALLER_ROLE.USER,
-    dialogProcessId = "",
+    dialogProcessId,
     turnScopeId = "",
     thinkingStartedAt = "",
     agentResult = {},
@@ -59,12 +56,12 @@ export class SessionExecutionFinalizer {
     persistedTurnMessages = null,
     durableTurnMessages = null,
     summaryCheckpointPromotionSources = [],
-    executionStartIndex = 0,
     runtimeEventListener = null,
     userConfig = {},
     lifecycle = null,
     persistenceContext = null,
   }) {
+    requireDialogProcessKey(dialogProcessId);
     const activeTurnMessages =
       Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
         ? agentResult.turnMessages
@@ -148,26 +145,15 @@ export class SessionExecutionFinalizer {
             return JSON.stringify(persistedMessage) !== JSON.stringify(message);
           })
         : promotedMessages.slice(promotionSourceCount + persistedResultPrefixCount);
-    emitContextIdentityDebug(
-      runtimeEventListener,
-      "completedTurnSummaryPersistencePlanned",
-      {
-        userId,
-        sessionId,
-        parentSessionId,
-        dialogProcessId,
-        turnScopeId,
-      },
-      {
-        activeMessageCount: activeTurnMessages.length,
-        durableMessageCount: persistedMessagesByUid.size,
-        persistedUidCount: persistedUidSet.size,
-        messageToPersistCount: messagesToPersist.length,
-        activeSummarizedMessageIds: summarizedMessageIds(activeTurnMessages),
-        durableSummarizedMessageIds: summarizedMessageIds(durableMessages),
-        persistedSummarizedMessageIds: summarizedMessageIds(messagesToPersist),
-      },
-    );
+    emitContextIdentityDebug(runtimeEventListener, "completedTurnSummaryPersistencePlanned", {
+      activeMessageCount: activeTurnMessages.length,
+      durableMessageCount: persistedMessagesByUid.size,
+      persistedUidCount: persistedUidSet.size,
+      messageToPersistCount: messagesToPersist.length,
+      activeSummarizedMessageIds: summarizedMessageIds(activeTurnMessages),
+      durableSummarizedMessageIds: summarizedMessageIds(durableMessages),
+      persistedSummarizedMessageIds: summarizedMessageIds(messagesToPersist),
+    });
     const thinkingFinishedAt = this.now();
     lifecycle?.enterPersisting?.();
     await this.turnPersister.appendAgentMessages({
@@ -235,33 +221,14 @@ export class SessionExecutionFinalizer {
 
     await runtimeEventListener?.flush();
 
-    const executionBundleTimeoutMs = this.resolveExecutionBundleTimeoutMs(userConfig);
-    let executionLogs = [];
-    try {
-      const execution = await Promise.race([
-        this.session.getExecutionBundle({
-          userId,
-          sessionId,
-          parentSessionId,
-          persistenceContext,
-        }),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`execution bundle timeout after ${executionBundleTimeoutMs}ms`)),
-            executionBundleTimeoutMs,
-          ),
-        ),
-      ]);
-      executionLogs = (execution?.logs || []).slice(executionStartIndex);
-    } catch (error) {
-      emitEvent(runtimeEventListener, "execution_bundle_unavailable", {
-        sessionId,
-        timeoutMs: executionBundleTimeoutMs,
-        error: error?.message || String(error),
-      });
-      executionLogs = [];
-    }
-    const executionSummary = summarizeExecutionLogs(executionLogs, { dialogProcessId });
+    const executionLogs = await this.session.getExecutionTurnLogs({
+      userId,
+      sessionId,
+      dialogProcessId,
+      parentSessionId,
+      persistenceContext,
+    });
+    const executionSummary = summarizeExecutionLogs(executionLogs);
     await this.saveCompletedReport({
       userId,
       sessionId,
@@ -290,24 +257,17 @@ export class SessionExecutionFinalizer {
   }
 
   async saveCompletedReport({ userId, persistenceContext, ...reportFields }) {
-    const save =
-      typeof this.session?.saveExecutionReport === "function"
-        ? (payload) => this.session.saveExecutionReport(payload)
-        : null;
-    await saveExecutionReportBestEffort(
-      save,
-      {
-        userId,
-        sessionId: reportFields.sessionId,
-        parentSessionId: reportFields.parentSessionId,
-        persistenceContext,
-        report: buildExecutionReport({
-          ...reportFields,
-          status: EXECUTION_REPORT_STATUS.COMPLETED,
-          finishedAt: this.now(),
-        }),
-      },
-      runBestEffort,
-    );
+    const report = buildExecutionReport({
+      ...reportFields,
+      status: EXECUTION_REPORT_STATUS.COMPLETED,
+      finishedAt: this.now(),
+    });
+    await this.session.saveExecutionReport({
+      userId,
+      sessionId: reportFields.sessionId,
+      parentSessionId: reportFields.parentSessionId,
+      persistenceContext,
+      report,
+    });
   }
 }

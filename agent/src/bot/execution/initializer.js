@@ -67,16 +67,6 @@ export class SessionExecutionInitializer {
       persistenceContext,
     });
 
-    const executionStartIndex =
-      (
-        await this.session.getExecutionBundle({
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId,
-          persistenceContext,
-        })
-      )?.logs?.length || 0;
-
     const sessionScope = await this.session.resolveSessionScope({
       userId,
       sessionId: usedSessionId,
@@ -111,7 +101,6 @@ export class SessionExecutionInitializer {
       sessionLoadState,
       userConfig,
       currentSessionModelAlias: String(sessionBundle?.session?.modelAlias || "").trim(),
-      executionStartIndex,
       sessionDir: sessionScope.sessionDir,
       runtimeEventListener,
     };

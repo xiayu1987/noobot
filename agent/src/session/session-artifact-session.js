@@ -20,9 +20,7 @@ export {
 } from "./session-artifact-session/session-display-artifact.js";
 export {
   appendExecutionLogArtifact,
-  normalizeExecutionReportKey,
   readExecutionReportArtifact,
-  writeExecutionArtifact,
   writeExecutionReportArtifact,
   writeTaskArtifact,
 } from "./session-artifact-session/related-artifact-writer.js";

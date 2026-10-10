@@ -267,7 +267,6 @@ export const CONFIG_STRUCTURE = object({
     { summarizeTimeoutMs: integer({ minimum: 1 }), postprocess_async: boolean() },
     builtin({ scopes: GLOBAL_SCOPE_ONLY }),
   ),
-  session: object({ executionBundleTimeoutMs: integer({ minimum: 1 }) }, builtin()),
   context: object({}, builtin({ open: true })),
   default_provider: string({ nonEmpty: true, modelReference: "conversation" }),
   providers: collection(MODEL_PROVIDER_STRUCTURE_REF),

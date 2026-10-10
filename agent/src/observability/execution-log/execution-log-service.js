@@ -29,7 +29,13 @@ export class ExecutionLogService {
     );
   }
 
-  async getExecutionBundle({ userId, sessionId, parentSessionId = "", persistenceContext = null }) {
+  async getTurnLogs({
+    userId,
+    sessionId,
+    dialogProcessId,
+    parentSessionId = "",
+    persistenceContext = null,
+  }) {
     const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
@@ -42,9 +48,10 @@ export class ExecutionLogService {
       parentSessionId: resolvedParentSessionId,
       persistenceContext,
     });
-    return this.executionRepo.getBundle(
+    return this.executionRepo.getTurnLogs(
       userId,
       sessionId,
+      dialogProcessId,
       resolvedParentSessionId,
       persistenceContext,
     );
@@ -53,7 +60,8 @@ export class ExecutionLogService {
   async appendExecutionLog({
     userId,
     sessionId,
-    dialogProcessId = "",
+    dialogProcessId,
+    turnScopeId = "",
     event = "",
     category = "",
     type = "",
@@ -81,7 +89,7 @@ export class ExecutionLogService {
         sessionId,
         parentSessionId: resolvedParentSessionId,
         dialogProcessId,
-        turnScopeId: String(data?.turnScopeId || "").trim(),
+        turnScopeId,
         event,
         category,
         type,
@@ -107,20 +115,19 @@ export class ExecutionLogService {
       parentSessionId,
       persistenceContext,
     );
-    const saved = await this.executionRepo.saveReport(
+    return this.executionRepo.saveReport(
       userId,
       sessionId,
       report,
       resolvedParentSessionId,
       persistenceContext,
     );
-    return { saved: saved !== false };
   }
 
   async getExecutionReport({
     userId,
     sessionId,
-    dialogProcessId = "",
+    dialogProcessId,
     parentSessionId = "",
     persistenceContext = null,
   }) {

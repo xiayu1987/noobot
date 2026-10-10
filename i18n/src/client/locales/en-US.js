@@ -186,8 +186,6 @@ export const enUSMessages = {
     chooseFileLeftTree: "Please select a file from the left tree",
   },
   configFields: {
-    session: "Session",
-    executionBundleTimeoutMs: "Execution bundle timeout (ms)",
     context: "Context",
     default_provider: "Default provider",
     providers: "Model providers",

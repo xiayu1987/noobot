@@ -27,8 +27,6 @@ test("buildSessionLocationScope uses the canonical artifact map", () => {
     sessionFile: "/tmp/session/session.json",
     sessionSummaryFile: "/tmp/session/session-summary.json",
     taskFile: "/tmp/session/task.json",
-    executionFile: "/tmp/session/execution.json",
-    executionEventsFile: "/tmp/session/execution.jsonl",
     executionEventsDir: "/tmp/session/execution-events",
     turnsDir: "/tmp/session/turns",
     turnSnapshotsDir: "/tmp/session/turn-snapshots",

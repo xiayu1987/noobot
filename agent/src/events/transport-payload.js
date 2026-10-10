@@ -9,16 +9,29 @@ import {
 } from "@noobot/attachment-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 
-export function projectExecutionRouteIdentity(data = {}, route = {}) {
+const ROUTE_IDENTITY_FIELDS = Object.freeze([
+  "userId",
+  "sessionId",
+  "parentSessionId",
+  "dialogProcessId",
+  "turnScopeId",
+]);
+
+export function omitExecutionRouteIdentity(data = {}) {
   const eventData = data && typeof data === "object" && !Array.isArray(data) ? data : {};
-  const userId = String(eventData.userId || route.userId || "").trim();
+  const payload = { ...eventData };
+  for (const field of ROUTE_IDENTITY_FIELDS) delete payload[field];
+  return payload;
+}
+
+export function projectExecutionRouteIdentity(data = {}, route = {}) {
   return {
-    ...eventData,
-    ...(userId ? { userId } : {}),
-    dialogProcessId: String(eventData.dialogProcessId || route.dialogProcessId || "").trim(),
-    sessionId: String(eventData.sessionId || route.sessionId || ""),
-    turnScopeId: String(eventData.turnScopeId || route.turnScopeId || ""),
-    parentSessionId: normalizeParentSessionId(eventData.parentSessionId || route.parentSessionId),
+    ...omitExecutionRouteIdentity(data),
+    userId: String(route.userId || "").trim(),
+    dialogProcessId: String(route.dialogProcessId || "").trim(),
+    sessionId: String(route.sessionId || "").trim(),
+    turnScopeId: String(route.turnScopeId || "").trim(),
+    parentSessionId: normalizeParentSessionId(route.parentSessionId),
   };
 }
 

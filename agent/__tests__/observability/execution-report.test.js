@@ -6,50 +6,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  buildExecutionReport,
-  EXECUTION_REPORT_STATUS,
-} from "../../src/observability/execution-log/execution-report.js";
+import { EXECUTION_REPORT_STATUS } from "@noobot/session-protocol/execution-report";
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 import { handleSessionRunFailure } from "../../src/bot/execution/runner/run-failure.js";
-
-test("buildExecutionReport keeps aggregate metrics, duration and error only", () => {
-  const report = buildExecutionReport({
-    status: EXECUTION_REPORT_STATUS.FAILED,
-    sessionId: "s1",
-    startedAt: "2026-01-01T00:00:00.000Z",
-    finishedAt: "2026-01-01T00:00:01.500Z",
-    executionSummary: { visibleTotal: 3, toolCallCount: 2, errorCount: 1, steps: [{ x: 1 }] },
-    error: Object.assign(new Error("boom"), { code: "E1" }),
-  });
-  assert.equal(report.protocol, "noobot.execution-report");
-  assert.equal(report.version, 3);
-  assert.equal(report.durationMs, 1500);
-  assert.deepEqual(report.summary, {
-    visibleTotal: 3,
-    toolCallCount: 2,
-    toolResultCount: 0,
-    errorCount: 1,
-    metrics: null,
-  });
-  assert.equal("steps" in report.summary, false);
-  assert.deepEqual(report.error, { name: "Error", code: "E1", message: "boom" });
-});
-
-test("buildExecutionReport tolerates missing timestamps and summary", () => {
-  const report = buildExecutionReport({ status: EXECUTION_REPORT_STATUS.COMPLETED });
-  assert.equal(report.durationMs, null);
-  assert.equal(report.summary, null);
-  assert.equal(report.error, null);
-});
 
 function createFinalizer(session) {
   return new SessionExecutionFinalizer({
     session: {
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
       ...session,
     },
@@ -90,22 +57,13 @@ test("SessionExecutionFinalizer writes a completed execution report", async () =
   assert.equal(saved[0].report.summary.toolCallCount, 0);
 });
 
-test("SessionExecutionFinalizer completes even when the report write fails", async () => {
-  const originalWarn = console.warn;
-  const warnings = [];
-  console.warn = (...args) => warnings.push(args);
-  try {
-    const finalizer = createFinalizer({
-      async saveExecutionReport() {
-        throw new Error("disk full");
-      },
-    });
-    const result = await finalizer.finalizeRunSession(finalizePayload);
-    assert.equal(result.answer, "done");
-    assert.equal(warnings.length, 1);
-  } finally {
-    console.warn = originalWarn;
-  }
+test("SessionExecutionFinalizer propagates execution report write failures", async () => {
+  const finalizer = createFinalizer({
+    async saveExecutionReport() {
+      throw new Error("disk full");
+    },
+  });
+  await assert.rejects(finalizer.finalizeRunSession(finalizePayload), /disk full/);
 });
 
 function failureContext(overrides = {}) {
@@ -133,6 +91,7 @@ function failureContext(overrides = {}) {
       message: "hi",
       turnScopeId: "turn-1",
       saveExecutionReport: async (payload) => saved.push(payload),
+      getExecutionTurnLogs: async () => [],
       executionEventListener: null,
       ...overrides,
     },
@@ -166,23 +125,19 @@ for (const [label, overrides, expectedStatus] of [
   });
 }
 
-test("handleSessionRunFailure skips the report when no writer is injected", async () => {
-  const { context } = failureContext({ saveExecutionReport: null });
+test("handleSessionRunFailure writes no report before the turn identity exists", async () => {
+  const { saved, context } = failureContext({ resolvedDialogProcessId: "" });
   await assert.rejects(handleSessionRunFailure(context), /boom/);
+  assert.equal(saved.length, 0);
 });
 
 test("handleSessionRunFailure flushes logs before summarizing the failed turn", async () => {
   const order = [];
   const { saved, context } = failureContext({
     executionEventListener: { flush: async () => order.push("flush") },
-    getExecutionBundle: async () => {
+    getExecutionTurnLogs: async () => {
       order.push("read");
-      return {
-        logs: [
-          { event: "llm_call_start", dialogProcessId: "dp1", data: { modelLoopRound: 2 } },
-          { event: "llm_call_start", dialogProcessId: "other", data: { modelLoopRound: 9 } },
-        ],
-      };
+      return [{ event: "llm_call_start", dialogProcessId: "dp1", data: { modelLoopRound: 2 } }];
     },
   });
   await assert.rejects(handleSessionRunFailure(context), /boom/);
@@ -191,13 +146,28 @@ test("handleSessionRunFailure flushes logs before summarizing the failed turn", 
   assert.equal(saved[0].report.summary.metrics.model.maxLoopRound, 2);
 });
 
-test("handleSessionRunFailure still writes the report when log reading fails", async () => {
+test("handleSessionRunFailure records summaryError when turn logs cannot be read", async () => {
   const { saved, context } = failureContext({
-    getExecutionBundle: async () => {
+    getExecutionTurnLogs: async () => {
       throw new Error("disk");
     },
   });
   await assert.rejects(handleSessionRunFailure(context), /boom/);
   assert.equal(saved.length, 1);
   assert.equal(saved[0].report.summary, null);
+  assert.equal(saved[0].report.summaryError.message, "disk");
+  assert.equal(saved[0].report.error.message, "boom");
+});
+
+test("handleSessionRunFailure aggregates report write failures with the run failure", async () => {
+  const { context } = failureContext({
+    saveExecutionReport: async () => {
+      throw new Error("report disk");
+    },
+  });
+  await assert.rejects(handleSessionRunFailure(context), (error) => {
+    const errors = error.cause?.errors || error.errors || [];
+    assert.ok(errors.some((entry) => /report disk/.test(entry?.message)));
+    return true;
+  });
 });

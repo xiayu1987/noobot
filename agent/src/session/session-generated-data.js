@@ -15,6 +15,7 @@ export function resolveSessionGeneratedDataRoot(sessionDir = "", kind = "") {
   const normalizedSessionDir = String(sessionDir || "").trim();
   const relativeDir = String(SESSION_GENERATED_DATA_DIRS[kind] || "").trim();
   if (!normalizedSessionDir) throw new Error("session directory is required");
-  if (!relativeDir) throw new Error(`unsupported session generated data kind: ${String(kind || "")}`);
+  if (!relativeDir)
+    throw new Error(`unsupported session generated data kind: ${String(kind || "")}`);
   return path.join(normalizedSessionDir, relativeDir);
 }

@@ -10,7 +10,7 @@ import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { fsMkdir, fsReaddir, fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import { writeSessionArtifact } from "../../session-artifact-store.js";
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { SESSION_ERROR_CODE, normalizeParentSessionId } from "@noobot/session-protocol";
 
 class SessionCrudMethods {
   async listPersistedSessionBranchIds(userId, sessionId) {
@@ -81,7 +81,6 @@ class SessionCrudMethods {
     meta = {},
     persistenceContext = null,
   }) {
-    if (await this.isSessionDeleted(userId, sessionId)) return false;
     return this.withSessionMutation(
       userId,
       sessionId,
@@ -222,18 +221,24 @@ class SessionCrudMethods {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
-    if (await this.isSessionDeleted(userId, sessionId)) return false;
     return this.withSessionMutation(
       userId,
       sessionId,
-      parentSessionId || session?.parentSessionId || "",
+      parentSessionId,
       async () => {
         const { resolvedParentSessionId, sessionDir } = await this.resolveSessionScope(
           userId,
           sessionId,
-          parentSessionId || session?.parentSessionId || "",
+          parentSessionId,
           persistenceContext,
         );
+        const entityParentSessionId = normalizeParentSessionId(session?.parentSessionId);
+        if (entityParentSessionId && entityParentSessionId !== resolvedParentSessionId) {
+          const error = new Error("session entity parentSessionId conflicts with resolved scope");
+          error.statusCode = 409;
+          error.code = SESSION_ERROR_CODE.PARENT_SESSION_SCOPE_CONFLICT;
+          throw error;
+        }
         const persistedForChecks =
           createOnly ||
           (expectedAggregateVersion !== undefined && expectedAggregateVersion !== null)
@@ -259,9 +264,7 @@ class SessionCrudMethods {
           {
             ...session,
             sessionId,
-            parentSessionId: String(
-              session?.parentSessionId || resolvedParentSessionId || "",
-            ).trim(),
+            parentSessionId: resolvedParentSessionId,
             updatedAt: this.now(),
           },
           { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },

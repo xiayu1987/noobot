@@ -90,24 +90,13 @@ function normalizeHookFields(point = "", safeRaw = {}, hookFields = {}) {
 
 function emitHookDocumentConsumed(runtime = {}, context = {}) {
   const modelContext = context.modelContext;
-  const identity = modelContext?.activeTurnIdentity;
-  emitAgentContextProtocolDebug(
-    runtime?.eventListener || null,
-    "hookDocumentConsumed",
-    {
-      userId: context.userId,
-      sessionId: context.sessionId,
-      dialogProcessId: identity?.dialogProcessId || context.dialogProcessId,
-      turnScopeId: identity?.turnScopeId || context.turnScopeId,
-    },
-    {
-      consumer: `hook:${context.point}`,
-      contextProtocolVersion: context.contextProtocolVersion,
-      hasModelContext: modelContext != null,
-      modelContextProtocolVersion: Number(modelContext?.protocolVersion || 0),
-      messageCount: Array.isArray(modelContext?.messages) ? modelContext.messages.length : 0,
-    },
-  );
+  emitAgentContextProtocolDebug(runtime?.eventListener || null, "hookDocumentConsumed", {
+    consumer: `hook:${context.point}`,
+    contextProtocolVersion: context.contextProtocolVersion,
+    hasModelContext: modelContext != null,
+    modelContextProtocolVersion: Number(modelContext?.protocolVersion || 0),
+    messageCount: Array.isArray(modelContext?.messages) ? modelContext.messages.length : 0,
+  });
 }
 
 function emitHookContextTrace(point = "", runtime = {}, context = {}) {

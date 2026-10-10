@@ -42,9 +42,9 @@ function assertActivationIdentity(record, command, sessionId) {
   expect(record.sessionId).toBe(sessionId);
   expect(record.turnScopeId).toBe(command.identity.turnScopeId);
   expect(record.dialogProcessId).toBeTruthy();
-  expect(record.data.sessionId).toBe(record.sessionId);
-  expect(record.data.dialogProcessId).toBe(record.dialogProcessId);
-  expect(record.data.turnScopeId).toBe(record.turnScopeId);
+  expect(record.data).not.toHaveProperty("sessionId");
+  expect(record.data).not.toHaveProperty("dialogProcessId");
+  expect(record.data).not.toHaveProperty("turnScopeId");
 }
 
 async function assertExecutionProjection(userId, sessionId, command, pluginIds) {

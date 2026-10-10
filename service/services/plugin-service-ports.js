@@ -212,7 +212,7 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
     return { outputDir: path.resolve(workspacePath, relativeDir) };
   }
   return Object.freeze({
-    async readSnapshot({ userId, segments, locale, executionPage = null }) {
+    async readSnapshot({ userId, segments, locale }) {
       const { outputDir } = resolveSessionDir({ userId, segments, locale });
       let entries = [];
       try {
@@ -220,12 +220,7 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
       } catch (error) {
         if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
       }
-      const snapshot = await readSessionArtifactSnapshot({
-        outputDir,
-        executionLogOptions: executionPage
-          ? { skip: executionPage.cursor, limit: executionPage.limit + 1 }
-          : {},
-      });
+      const snapshot = await readSessionArtifactSnapshot({ outputDir });
       const childSessionId = String(
         snapshot.sessionSummary?.sessionId || snapshot.session?.sessionId || "",
       ).trim();

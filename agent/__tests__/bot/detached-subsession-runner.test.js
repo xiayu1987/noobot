@@ -379,6 +379,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       async getSessionLifecycle({ sessionId = "" } = {}) {
         return { sessionId, state: "active", generation: 1 };
       },
+      async appendExecutionLog() {},
       applyTurnLifecycleEvent: (payload) => messageService.applyTurnLifecycleEvent(payload),
       createScopedPersistenceContext(payload = {}) {
         return Object.freeze({
@@ -739,34 +740,14 @@ test("createScopedSubSessionEventListener injects child session coordinates", ()
     },
   );
   listener.onEvent({ type: "model_delta", data: { content: "x" } });
-  assert.deepEqual(received[0].data, {
-    content: "x",
+  assert.deepEqual(received[0].data, { content: "x" });
+  assert.deepEqual(received[0].route, {
     userId: "u1",
     sessionId: "sub1",
     parentSessionId: "parent1",
     dialogProcessId: "dialog1",
     turnScopeId: "turn1",
   });
-});
-
-test("createScopedSubSessionEventListener preserves explicit event coordinates", () => {
-  const received = [];
-  const listener = createScopedSubSessionEventListener(
-    { onEvent() {}, forwardEvent: (event) => received.push(event) },
-    { userId: "fallback-user", sessionId: "fallback-session" },
-  );
-  listener.onEvent({
-    type: "model_delta",
-    data: {
-      userId: "u2",
-      sessionId: "sub2",
-      parentSessionId: "parent2",
-      dialogProcessId: "dialog2",
-      turnScopeId: "turn2",
-    },
-  });
-  assert.equal(received[0].data.userId, "u2");
-  assert.equal(received[0].data.sessionId, "sub2");
 });
 
 test("createScopedSubSessionEventListener returns null without a listener", () => {

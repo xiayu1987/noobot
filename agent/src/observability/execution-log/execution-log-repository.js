@@ -7,7 +7,6 @@ import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -30,13 +29,11 @@ function mapExecutionLogToSessionChannel(normalizedLog = {}) {
 export class ExecutionLogRepository {
   constructor({
     executionRepository = null,
-    sessionRepository = null,
     now = () => new Date().toISOString(),
     workspaceRoot = "",
     runtimeEventsConfig = {},
   } = {}) {
     this.executionRepository = executionRepository;
-    this.sessionRepository = sessionRepository;
     this.now = now;
     this.workspaceRoot = workspaceRoot;
     this.runtimeEventsConfig = runtimeEventsConfig;
@@ -44,7 +41,6 @@ export class ExecutionLogRepository {
   }
 
   async _appendSessionChannelLog(userId, sessionId, normalizedLog = {}, parentSessionId = "") {
-    if (!sessionId) return;
     const route = mapExecutionLogToSessionChannel(normalizedLog);
     const logData =
       normalizedLog.data && typeof normalizedLog.data === "object" ? normalizedLog.data : {};
@@ -54,7 +50,7 @@ export class ExecutionLogRepository {
         userId,
         sessionId,
         parentSessionId,
-        dialogProcessId: resolveContextMessageDialogProcessId(normalizedLog),
+        dialogProcessId: normalizedLog.dialogProcessId,
         turnScopeId: normalizedLog.turnScopeId,
         source: "agent",
         category: route.category,
@@ -96,115 +92,49 @@ export class ExecutionLogRepository {
     }
   }
 
-  async _getBundleStore(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    if (this.executionRepository?.getBundle) {
-      return this.executionRepository.getBundle(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-    }
-    return this.sessionRepository.getExecutionBundle(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-  }
-
-  async _getAppendMetadataStore(
-    userId,
-    sessionId,
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    if (this.executionRepository?.getBundleMetadata) {
-      return this.executionRepository.getBundleMetadata(
-        userId,
-        sessionId,
-        parentSessionId,
-        persistenceContext,
-      );
-    }
-    return this._getBundleStore(userId, sessionId, parentSessionId, persistenceContext);
-  }
-
-  async _saveBundleStore(
-    userId,
-    sessionId,
-    bundle = {},
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    if (this.executionRepository?.saveBundle) {
-      return this.executionRepository.saveBundle(
-        userId,
-        sessionId,
-        bundle,
-        parentSessionId,
-        persistenceContext,
-      );
-    }
-    return this.sessionRepository.saveExecutionBundle(
-      userId,
-      sessionId,
-      bundle,
-      parentSessionId,
-      persistenceContext,
-    );
-  }
-
-  async _appendLogStore(
-    userId,
-    sessionId,
-    normalizedLog = {},
-    bundle = {},
-    parentSessionId = "",
-    persistenceContext = null,
-  ) {
-    if (this.executionRepository?.appendLog) {
-      return this.executionRepository.appendLog(
-        userId,
-        sessionId,
-        normalizedLog,
-        bundle,
-        parentSessionId,
-        persistenceContext,
-      );
-    }
-    bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
-    bundle.logs.push(normalizedLog);
-    return this._saveBundleStore(userId, sessionId, bundle, parentSessionId, persistenceContext);
-  }
-
-  async getBundle(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+  _requireSessionId(sessionId) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
-    return this._getBundleStore(userId, normalizedSessionId, parentSessionId, persistenceContext);
+    return normalizedSessionId;
+  }
+
+  _withSessionAppendQueue(userId, sessionId, parentSessionId, operation) {
+    return this._withAppendQueue(
+      this._appendQueueKey(userId, sessionId, parentSessionId),
+      operation,
+    );
+  }
+
+  async getTurnLogs(
+    userId,
+    sessionId,
+    dialogProcessId,
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    return this.executionRepository.getTurnLogs(
+      userId,
+      this._requireSessionId(sessionId),
+      dialogProcessId,
+      parentSessionId,
+      persistenceContext,
+    );
   }
 
   async getReport(
     userId,
     sessionId,
-    dialogProcessId = "",
+    dialogProcessId,
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) {
-      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
-      });
-    }
-    if (typeof this.executionRepository?.getReport !== "function") return null;
     return this.executionRepository.getReport(
       userId,
-      normalizedSessionId,
+      this._requireSessionId(sessionId),
       dialogProcessId,
       parentSessionId,
       persistenceContext,
@@ -218,15 +148,8 @@ export class ExecutionLogRepository {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) {
-      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
-      });
-    }
-    if (typeof this.executionRepository?.saveReport !== "function") return false;
-    const queueKey = this._appendQueueKey(userId, normalizedSessionId, parentSessionId);
-    return this._withAppendQueue(queueKey, () =>
+    const normalizedSessionId = this._requireSessionId(sessionId);
+    return this._withSessionAppendQueue(userId, normalizedSessionId, parentSessionId, () =>
       this.executionRepository.saveReport(
         userId,
         normalizedSessionId,
@@ -244,51 +167,14 @@ export class ExecutionLogRepository {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) {
-      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
-      });
-    }
-    const queueKey = this._appendQueueKey(userId, normalizedSessionId, parentSessionId);
-    return this._withAppendQueue(queueKey, async () => {
-      const bundle = await this._getAppendMetadataStore(
-        userId,
-        normalizedSessionId,
-        parentSessionId,
-        persistenceContext,
-      );
+    const normalizedSessionId = this._requireSessionId(sessionId);
+    return this._withSessionAppendQueue(userId, normalizedSessionId, parentSessionId, async () => {
       const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
-      const incomingDialogProcessId = resolveContextMessageDialogProcessId(normalizedLog);
-      const existingLatestDialogProcessId = Array.isArray(bundle.logs)
-        ? bundle.logs.findLast((logItem) => Boolean(resolveContextMessageDialogProcessId(logItem)))
-        : null;
-      const bundleDialogProcessId = resolveContextMessageDialogProcessId(bundle);
-      const targetDialogProcessId =
-        incomingDialogProcessId ||
-        bundleDialogProcessId ||
-        resolveContextMessageDialogProcessId(existingLatestDialogProcessId);
-      const resetExecutionLogs = false;
-      if (!incomingDialogProcessId && targetDialogProcessId) {
-        normalizedLog.dialogProcessId = targetDialogProcessId;
-      }
-      if (targetDialogProcessId) {
-        bundle.dialogProcessId = targetDialogProcessId;
-      } else {
-        delete bundle.dialogProcessId;
-      }
-      bundle.updatedAt = this.now();
-      if (resetExecutionLogs) {
-        bundle.resetExecutionLogs = true;
-      } else {
-        delete bundle.resetExecutionLogs;
-      }
       await Promise.all([
-        this._appendLogStore(
+        this.executionRepository.appendLog(
           userId,
           normalizedSessionId,
           normalizedLog,
-          bundle,
           parentSessionId,
           persistenceContext,
         ),

@@ -44,8 +44,8 @@ test("session execution preserves every user interjection into the next model hi
       return { exists: false, session: { messages: [] } };
     },
     async createSession() {},
-    async getExecutionBundle() {
-      return { logs: [] };
+    async getExecutionTurnLogs() {
+      return [];
     },
     async resolveSessionScope({ userId, sessionId: resolvedSessionId }) {
       return { sessionDir: path.join(root, userId, "runtime", "session", resolvedSessionId) };

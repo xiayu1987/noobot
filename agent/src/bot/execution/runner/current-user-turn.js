@@ -26,9 +26,6 @@ function emitPreparedTurnDebug({
   userMessageAttachments,
 }) {
   emitEvent(eventListener, "debug_resend_runner_received", {
-    sessionId,
-    dialogProcessId,
-    turnScopeId,
     requestThinkingStartedAt: String(requestRunConfig?.thinkingStartedAt || "").trim(),
     scenarioThinkingStartedAt: String(scenarioResolvedRunConfig?.thinkingStartedAt || "").trim(),
     resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
@@ -70,7 +67,6 @@ function emitCurrentUserIdentityDebug({
   emitContextIdentityDebug(
     eventListener,
     resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
-    { userId, sessionId, parentSessionId, dialogProcessId, turnScopeId },
     {
       messageUid: persistedMessageUid,
       persistedMessageId: String(
@@ -239,7 +235,7 @@ export async function prepareCurrentUserTurn({
       eventListener,
       AGENT_RUN_EVENT.TURN_COMMITTED,
       assertTurnCommittedEventData({
-        sessionId: committedTurnResult?.sessionId || sessionId,
+        sessionId,
         aggregateVersion: committedTurnResult?.aggregateVersion,
         dialogProcessId,
         turnScopeId,
@@ -275,7 +271,7 @@ export async function prepareCurrentUserTurn({
         eventListener,
         AGENT_RUN_EVENT.TURN_ATTACHMENTS_BOUND,
         assertTurnAttachmentsBoundEventData({
-          sessionId: attachmentBinding?.session?.sessionId || sessionId,
+          sessionId,
           aggregateVersion: attachmentBinding?.aggregateVersion,
           dialogProcessId,
           turnScopeId,

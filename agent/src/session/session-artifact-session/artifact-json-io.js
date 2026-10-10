@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { rename } from "node:fs/promises";
-import {
-  readJsonArtifactFile,
-  writeJsonArtifactFile,
-} from "../session-artifact-files.js";
+import { readJsonArtifactFile, writeJsonArtifactFile } from "../session-artifact-files.js";
 
 export async function writeJsonWithStorage({
   storageService = null,

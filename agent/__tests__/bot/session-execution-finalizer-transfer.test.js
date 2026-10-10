@@ -57,11 +57,12 @@ test("SessionExecutionFinalizer waits for execution event durability before read
   const order = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
+      async getExecutionTurnLogs() {
         order.push("bundle");
-        return { logs: [] };
+        return [];
       },
     },
     turnPersister: {
@@ -98,11 +99,12 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
   let bundleReads = 0;
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
+      async getExecutionTurnLogs() {
         bundleReads += 1;
-        return { logs: [] };
+        return [];
       },
     },
     turnPersister: {
@@ -115,6 +117,7 @@ test("SessionExecutionFinalizer rejects completion when execution event persiste
 
   await assert.rejects(
     finalizer.finalizeRunSession({
+      dialogProcessId: "dp1",
       userId: "u1",
       sessionId: "s1",
       turnScopeId: "turn-1",
@@ -142,10 +145,11 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -205,10 +209,11 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -277,11 +282,12 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async flushSessionMessagesToArchive() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -295,6 +301,7 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
   });
 
   const result = await finalizer.finalizeRunSession({
+    dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
     alreadyPersistedTurnMessageCount: 1,
@@ -338,11 +345,12 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async flushSessionMessagesToArchive() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -356,6 +364,7 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
   });
 
   const result = await finalizer.finalizeRunSession({
+    dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
     persistedTurnMessages: [
@@ -382,10 +391,11 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -399,6 +409,7 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
   });
 
   const result = await finalizer.finalizeRunSession({
+    dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
     persistedTurnMessageUids: ["sm_old", "sm_retained"],
@@ -430,10 +441,11 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
   const events = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -447,6 +459,7 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
   });
 
   const result = await finalizer.finalizeRunSession({
+    dialogProcessId: "dp1",
     userId: "u1",
     sessionId: "s1",
     persistedTurnMessageUids: ["sm_guidance"],
@@ -503,10 +516,11 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
   };
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -581,10 +595,11 @@ test("completed turn summary policy marks are durably upserted before the next d
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -621,10 +636,11 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
   let appendCalled = false;
   const finalizer = new SessionExecutionFinalizer({
     session: {
+      async saveExecutionReport() {},
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() {
-        return { logs: [] };
+      async getExecutionTurnLogs() {
+        return [];
       },
     },
     turnPersister: {
@@ -639,6 +655,7 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
 
   await assert.rejects(
     finalizer.finalizeRunSession({
+      dialogProcessId: "dp1",
       userId: "u1",
       sessionId: "s1",
       persistedTurnMessageUids: ["sm_missing"],

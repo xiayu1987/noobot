@@ -54,7 +54,7 @@ test("_buildWaitAsyncFallbackResult returns not_found when session does not exis
       async getSessionBundle() {
         return { exists: false };
       },
-      async getExecutionBundle() {
+      async getExecutionTurnLogs() {
         throw new Error("should not be called when bundle does not exist");
       },
     },
@@ -97,8 +97,8 @@ test("_buildWaitAsyncFallbackResult returns completed payload with assistant ans
           ],
         };
       },
-      async getExecutionBundle() {
-        return { logs: [{ event: "done" }] };
+      async getExecutionTurnLogs() {
+        return [{ event: "done" }];
       },
     },
   });

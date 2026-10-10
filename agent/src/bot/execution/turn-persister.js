@@ -234,6 +234,7 @@ async function appendSessionTurnDiagnostics(session, input, fullTurnPayload) {
     sessionId: input.sessionId,
     parentSessionId: input.parentSessionId,
     dialogProcessId: input.dialogProcessId,
+    turnScopeId: input.turnScopeId,
     event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
     category: MESSAGE_ROLE.SYSTEM,
     type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
@@ -246,6 +247,7 @@ async function appendSessionTurnDiagnostics(session, input, fullTurnPayload) {
     sessionId: input.sessionId,
     parentSessionId: input.parentSessionId,
     dialogProcessId: input.dialogProcessId,
+    turnScopeId: input.turnScopeId,
     event: "debug_turn_timing_append",
     category: MESSAGE_ROLE.SYSTEM,
     type: "system",
@@ -259,10 +261,6 @@ async function tryAppendSessionTurnDiagnostics(session, input, fullTurnPayload) 
     await appendSessionTurnDiagnostics(session, input, fullTurnPayload);
   } catch (error) {
     emitEvent(input.eventListener, "session_turn_diagnostic_persistence_failed", {
-      sessionId: input.sessionId,
-      parentSessionId: input.parentSessionId,
-      dialogProcessId: input.dialogProcessId,
-      turnScopeId: input.turnScopeId,
       error: error?.message || String(error || ""),
     });
   }
@@ -430,9 +428,7 @@ export class SessionTurnPersister {
     });
     if (!appendResult.appended) return appendResult.turns;
     for (const turnPayload of turnPayloads) {
-      emitEvent(input.eventListener, `${turnPayload.role}_message_saved`, {
-        sessionId: input.sessionId,
-      });
+      emitEvent(input.eventListener, `${turnPayload.role}_message_saved`, {});
     }
     return appendResult.turns;
   }

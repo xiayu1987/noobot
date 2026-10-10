@@ -179,19 +179,38 @@ test("execution listener forwarding port delivers without taking persistence own
 
   await listener.forwardEvent({
     event: "model_context_trace",
-    data: { sessionId: "child-session", invocationId: "invoke-1" },
+    data: { sessionId: "spoofed-session", invocationId: "invoke-1" },
+    route: { userId: "user-a", sessionId: "child-session", dialogProcessId: "child-dialog" },
   });
+  await listener.onEvent({ event: "turn_lifecycle_committed", data: { sessionId: "spoofed" } });
   await listener.flush();
 
-  assert.equal(persisted.length, 0);
-  assert.equal(forwarded.length, 1);
+  assert.deepEqual(
+    persisted.map((record) => record.sessionId),
+    ["parent-session"],
+  );
+  assert.equal(forwarded.length, 2);
   assert.equal(forwarded[0].data.sessionId, "child-session");
+  assert.equal(forwarded[0].data.dialogProcessId, "child-dialog");
   assert.equal(forwarded[0].data.invocationId, "invoke-1");
+  assert.equal(forwarded[1].data.sessionId, "parent-session");
+});
+
+test("execution listener forwarding port rejects events without a route identity", () => {
+  const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async () => {} },
+    upstream: { onEvent: async () => true },
+  });
+  assert.throws(
+    () => listener.forwardEvent({ event: "model_context_trace", data: {} }),
+    /explicit route identity/,
+  );
 });
 
 test("execution listener keeps strict attachment lifecycle payloads unchanged upstream", async () => {
   let forwarded;
   const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async () => {} },
     sessionId: "session-a",
     turnScopeId: "turn-a",
     upstream: {
@@ -377,9 +396,9 @@ test("execution listener classifies context identity diagnostics under one proto
   assert.equal(persisted[0].sessionId, "session-a");
   assert.equal(persisted[0].dialogProcessId, "dialog-a");
   assert.equal(persisted[0].turnScopeId, "turn-a");
-  assert.equal(persisted[0].data.sessionId, persisted[0].sessionId);
-  assert.equal(persisted[0].data.dialogProcessId, persisted[0].dialogProcessId);
-  assert.equal(persisted[0].data.turnScopeId, persisted[0].turnScopeId);
+  assert.equal("sessionId" in persisted[0].data, false);
+  assert.equal("dialogProcessId" in persisted[0].data, false);
+  assert.equal("turnScopeId" in persisted[0].data, false);
   assert.equal(persisted[0].category, "context_identity");
   assert.equal(persisted[0].type, "context_identity_debug");
   assert.equal(persisted[0].data.sourceMessageUid, "sm_1");
@@ -414,6 +433,7 @@ test("execution listener classifies agent context diagnostics under the dedicate
 
 test("execution listener exposes rejected asynchronous upstream delivery at the final barrier", async () => {
   const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async () => {} },
     sessionId: "session-a",
     turnScopeId: "turn-a",
     upstream: {
@@ -477,6 +497,7 @@ test("execution listener drains delivery failure diagnostics before rejecting fl
         identity: { eventId: "failed-delivery" },
       },
     },
+    route: {},
   });
   let settled = false;
   const completion = assert
@@ -555,8 +576,26 @@ test("execution listener reports delivery timing once at flush without writing e
       onDeliveryTiming: (summary) => timings.push(summary),
     },
   });
-  listener.forwardEvent({ event: "turn_lifecycle_committed", data: {} });
-  listener.forwardEvent({ event: "turn_lifecycle_committed", data: {} });
+  listener.forwardEvent({
+    event: "turn_lifecycle_committed",
+    data: {},
+    route: {
+      userId: "user-a",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-a",
+    },
+  });
+  listener.forwardEvent({
+    event: "turn_lifecycle_committed",
+    data: {},
+    route: {
+      userId: "user-a",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-a",
+    },
+  });
   await listener.flush();
   await listener.flush();
   assert.equal(persisted.length, 0);
@@ -583,7 +622,16 @@ test("execution listener does not collect delivery timing without onDeliveryTimi
     return originalNow.call(performance);
   };
   try {
-    listener.forwardEvent({ event: "turn_lifecycle_committed", data: {} });
+    listener.forwardEvent({
+      event: "turn_lifecycle_committed",
+      data: {},
+      route: {
+        userId: "user-a",
+        sessionId: "session-a",
+        turnScopeId: "turn-a",
+        dialogProcessId: "dialog-a",
+      },
+    });
     await listener.flush();
   } finally {
     performance.now = originalNow;

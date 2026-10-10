@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { buildThinkingDetailPayload } from "noobot-agent/session";
+import { appendExecutionLogArtifact, buildThinkingDetailPayload } from "noobot-agent/session";
 import express, {
   createSessionApp,
   registerSessionRoutes,
@@ -211,11 +211,13 @@ test("session-routes: session detail does not project workflow state from observ
       },
     },
   ];
-  await fs.writeFile(
-    path.join(sessionDir, "execution.jsonl"),
-    `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
-    "utf8",
-  );
+  for (const record of records) {
+    await appendExecutionLogArtifact({
+      sessionDir,
+      executionLog: { ...record, dialogProcessId: "dialog-1" },
+      executionPayload: { sessionId: "s-workflow" },
+    });
+  }
   const app = createSessionApp({
     session: {
       getSessionDisplayData: async () => ({
@@ -254,9 +256,10 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
   );
   const sessionDir = path.join(workspaceRoot, "runtime/session/s-deleted-workflow");
   await fs.mkdir(sessionDir, { recursive: true });
-  await fs.writeFile(
-    path.join(sessionDir, "execution.jsonl"),
-    `${JSON.stringify({
+  await appendExecutionLogArtifact({
+    sessionDir,
+    executionLog: {
+      dialogProcessId: "dialog-deleted",
       event: "workflow_planning_message_prepared",
       data: {
         sessionId: "s-deleted-workflow",
@@ -266,9 +269,9 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
         workflowRunId: "workflow-deleted",
         nodeSessions: [{ nodeExecutionId: "node-deleted" }],
       },
-    })}\n`,
-    "utf8",
-  );
+    },
+    executionPayload: { sessionId: "s-deleted-workflow" },
+  });
   const app = createSessionApp({
     session: {
       getSessionDisplayData: async () => ({

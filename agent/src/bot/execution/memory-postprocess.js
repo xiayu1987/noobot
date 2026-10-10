@@ -6,13 +6,12 @@
 
 import { emitEvent } from "../../events/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
-import { mergeConfig, normalizeTimeMs, resolveTimeMs } from "../../config/index.js";
+import { resolveTimeMs } from "../../config/index.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 
 const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = TIME_THRESHOLDS.memory.summaryTimeoutMs;
-const DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS = TIME_THRESHOLDS.memory.executionBundleTimeoutMs;
 
 export class MemoryPostProcessService {
   constructor({ globalConfig = {}, memory = null, errorLogger = null } = {}) {
@@ -28,27 +27,11 @@ export class MemoryPostProcessService {
       min: 1,
     });
     if (userMemoryTimeout > 0) return userMemoryTimeout;
-
-    const userFlatTimeout = normalizeTimeMs(userConfig?.memorySummarizeTimeoutMs, {
-      fallback: 0,
-      min: 1,
-    });
-    if (userFlatTimeout > 0) return userFlatTimeout;
-
-    const globalMemoryTimeout = resolveTimeMs(this.globalConfig?.memory, {
+    return resolveTimeMs(this.globalConfig?.memory, {
       key: "summarizeTimeoutMs",
-      fallback: 0,
+      fallback: DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS,
       min: 1,
     });
-    if (globalMemoryTimeout > 0) return globalMemoryTimeout;
-
-    const globalFlatTimeout = normalizeTimeMs(this.globalConfig?.memorySummarizeTimeoutMs, {
-      fallback: 0,
-      min: 1,
-    });
-    if (globalFlatTimeout > 0) return globalFlatTimeout;
-
-    return DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS;
   }
 
   resolveMemorySummaryAsyncEnabled(userConfig = {}) {
@@ -57,23 +40,9 @@ export class MemoryPostProcessService {
 
   resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
     const configured =
-      userConfig?.memory?.postprocess_async ??
-      userConfig?.memory?.postprocessAsync ??
-      userConfig?.memoryPostprocessAsync ??
-      this.globalConfig?.memory?.postprocess_async ??
-      this.globalConfig?.memory?.postprocessAsync ??
-      this.globalConfig?.memoryPostprocessAsync;
+      userConfig?.memory?.postprocess_async ?? this.globalConfig?.memory?.postprocess_async;
     if (configured === undefined || configured === null) return true;
     return configured !== false;
-  }
-
-  resolveExecutionBundleTimeoutMs(userConfig = {}) {
-    const effectiveConfig = mergeConfig(this.globalConfig || {}, userConfig || {});
-    return resolveTimeMs(effectiveConfig?.session, {
-      key: "executionBundleTimeoutMs",
-      fallback: DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS,
-      min: 1,
-    });
   }
 
   async recordMemorySummaryFailure({

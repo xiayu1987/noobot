@@ -67,11 +67,7 @@ export class SessionPathResolver {
       sessionId,
       parentSessionId,
     );
-    const sessionDir = await this.resolveSessionDir(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-    );
+    const sessionDir = await this.resolveSessionDir(userId, sessionId, resolvedParentSessionId);
     return buildSessionLocationScope(sessionDir, resolvedParentSessionId);
   }
 }

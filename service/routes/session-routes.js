@@ -5,17 +5,18 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
+import { normalizeSessionThinkingRouteText as normalizeRouteText } from "noobot-agent/session";
 import {
-  normalizeExecutionReportKey,
-  normalizeSessionThinkingRouteText as normalizeRouteText,
-} from "noobot-agent/session";
+  assertSessionCommand,
+  isDialogProcessKey,
+  SESSION_COMMAND,
+} from "@noobot/session-protocol";
 import crypto from "node:crypto";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
-import { assertSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 import { pipeline } from "node:stream/promises";
 
@@ -334,7 +335,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
       const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
-      if (!normalizeExecutionReportKey(dialogProcessId)) {
+      if (!isDialogProcessKey(dialogProcessId)) {
         const error = new Error("valid dialogProcessId is required");
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;

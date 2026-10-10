@@ -278,24 +278,36 @@ export async function readSessionRuntimeEvents(userId, sessionId) {
   ).flat();
 }
 
-export async function readSessionExecutionEvents(userId, sessionId) {
-  const executionDir = path.join(sessionRoot(userId, sessionId), "execution-events");
-  let names = [];
+async function listExecutionEventSegmentFiles(executionDir) {
+  let index = null;
   try {
-    names = (await fs.readdir(executionDir))
-      .filter((name) => /^segment-\d+\.jsonl$/.test(name))
-      .sort();
+    index = JSON.parse(await fs.readFile(path.join(executionDir, "index.json"), "utf8"));
   } catch (error) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
+  const files = [];
+  for (const turn of Array.isArray(index?.turns) ? index.turns : []) {
+    const turnDir = path.join(executionDir, "turns", String(turn?.dialogProcessId || ""));
+    const names = (await fs.readdir(turnDir))
+      .filter((name) => /^segment-\d+\.jsonl$/.test(name))
+      .sort();
+    files.push(...names.map((name) => path.join(turnDir, name)));
+  }
+  return files;
+}
+
+async function readExecutionEventSegmentFiles(files) {
   return (
     await Promise.all(
-      names.map((name) =>
-        readJsonLinesIfPresent(path.join(executionDir, name), { committedFramesOnly: true }),
-      ),
+      files.map((file) => readJsonLinesIfPresent(file, { committedFramesOnly: true })),
     )
   ).flat();
+}
+
+export async function readSessionExecutionEvents(userId, sessionId) {
+  const executionDir = path.join(sessionRoot(userId, sessionId), "execution-events");
+  return readExecutionEventSegmentFiles(await listExecutionEventSegmentFiles(executionDir));
 }
 
 async function findExecutionEventSegments(directory) {
@@ -311,10 +323,7 @@ async function findExecutionEventSegments(directory) {
     if (!entry.isDirectory()) continue;
     const child = path.join(directory, entry.name);
     if (entry.name === "execution-events") {
-      const names = (await fs.readdir(child))
-        .filter((name) => /^segment-\d+\.jsonl$/.test(name))
-        .sort();
-      segments.push(...names.map((name) => path.join(child, name)));
+      segments.push(...(await listExecutionEventSegmentFiles(child)));
       continue;
     }
     segments.push(...(await findExecutionEventSegments(child)));
@@ -339,13 +348,7 @@ export async function readSessionExecutionEventTree(
       ),
     )
   ).flat();
-  const records = (
-    await Promise.all(
-      segments
-        .sort()
-        .map((segment) => readJsonLinesIfPresent(segment, { committedFramesOnly: true })),
-    )
-  ).flat();
+  const records = await readExecutionEventSegmentFiles(segments);
   return hasExplicitRoot
     ? records.filter((record) => String(record?.sessionId || "").trim() === normalizedSessionId)
     : records;

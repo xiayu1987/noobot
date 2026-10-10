@@ -373,40 +373,4 @@ describe("4. 落盘字段完整性测试", () => {
       }
     });
   });
-
-  describe("execution.json 落盘结构", () => {
-    it("落盘 execution.json 应包含完整字段", () => {
-      const diskExecution = {
-        sessionId: "sess-1",
-        turnId: "turn-1",
-        status: "completed",
-        model: "openai:gpt-4",
-        inputMessages: [{ role: "user", content: "hello" }],
-        outputMessage: { role: "assistant", content: "hi" },
-        toolCalls: [],
-        tokenUsage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-        startTime: Date.now(),
-        endTime: Date.now(),
-        duration: 2000,
-      };
-
-      const requiredFields = [
-        "sessionId",
-        "turnId",
-        "status",
-        "model",
-        "inputMessages",
-        "outputMessage",
-        "toolCalls",
-        "tokenUsage",
-        "startTime",
-        "endTime",
-        "duration",
-      ];
-
-      for (const field of requiredFields) {
-        assert.ok(field in diskExecution, `execution.json 应包含字段: ${field}`);
-      }
-    });
-  });
 });

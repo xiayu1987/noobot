@@ -16,7 +16,6 @@ test("initializeRunSessionRuntime persists thinking start before execution begin
       getSessionBundle: async () => ({ exists: true, session: {} }),
       createSession: async () => {},
       upsertTurnTiming: async (payload) => calls.push(payload),
-      getExecutionBundle: async () => ({ logs: [] }),
       resolveSessionScope: async () => ({ sessionDir: "/workspace/u1/runtime/session/s1" }),
       appendExecutionLog: async () => {},
     },

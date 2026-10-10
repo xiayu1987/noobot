@@ -68,26 +68,6 @@ function createSessionSnapshotEnvelope({
   });
 }
 
-function parseExecutionPage(query = {}) {
-  const rawCursor = normalizeRouteText(query?.executionCursor);
-  const rawLimit = normalizeRouteText(query?.executionLimit);
-  if (!rawCursor && !rawLimit) return null;
-  const cursor = rawCursor ? Number(rawCursor) : 0;
-  const limit = rawLimit ? Number(rawLimit) : 500;
-  if (
-    !Number.isSafeInteger(cursor) ||
-    cursor < 0 ||
-    !Number.isSafeInteger(limit) ||
-    limit < 1 ||
-    limit > 5000
-  ) {
-    const error = new Error("executionCursor and executionLimit must be valid integers");
-    error.statusCode = 400;
-    throw error;
-  }
-  return { cursor, limit };
-}
-
 function logDetail({
   userId = "",
   sessionId = "",
@@ -153,7 +133,7 @@ function createExecutionReportHandler(sessions) {
       dialogProcessId,
       locale: req.locale,
     });
-    res.json({ ok: true, report: report || null });
+    res.json({ ok: true, report });
   };
 }
 
@@ -172,14 +152,12 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
   const sessionDetailHandler = async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;
     const traceId = normalizeRouteText(req.query?.traceId);
-    const executionPage = parseExecutionPage(req.query);
     let snapshot;
     try {
       snapshot = await sessions.readSnapshot({
         userId,
         segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, dialogProcessId],
         locale: req.locale,
-        executionPage,
       });
     } catch (error) {
       void logDetail({
@@ -197,26 +175,11 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       });
       throw error;
     }
-    const {
-      session,
-      sessionSummary,
-      task,
-      execution,
-      executionLogs = [],
-      meta,
-      childSessionId,
-    } = snapshot;
+    const { session, sessionSummary, task, executionLogs, meta, childSessionId } = snapshot;
     const aggregateVersion = Number(sessionSummary?.aggregateVersion || 0);
     if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
       throw new Error("workflow session snapshot is missing an authoritative aggregateVersion");
     }
-    const restoredExecutionLogs = executionLogs;
-    const hasMoreExecutionLogs = Boolean(
-      executionPage && restoredExecutionLogs.length > executionPage.limit,
-    );
-    const responseExecutionLogs = executionPage
-      ? restoredExecutionLogs.slice(0, executionPage.limit)
-      : restoredExecutionLogs;
     const snapshotEnvelope = createSessionSnapshotEnvelope({
       authoritySessionId: sessionId,
       dialogProcessId,
@@ -236,13 +199,12 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
         childSessionId,
         snapshotSessionId: String(session?.sessionId || ""),
         summarySessionId: String(sessionSummary?.sessionId || ""),
-        executionSessionId: String(execution?.sessionId || ""),
         messageCount: Array.isArray(sessionSummary?.messages)
           ? sessionSummary.messages.length
           : Array.isArray(session?.messages)
             ? session.messages.length
             : 0,
-        executionLogCount: responseExecutionLogs.length,
+        executionLogCount: executionLogs.length,
       },
     });
     res.json({
@@ -256,18 +218,7 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
         session,
         sessionSummary,
         task,
-        execution,
-        executionLogs: responseExecutionLogs,
-        executionLogsPage: executionPage
-          ? {
-              cursor: executionPage.cursor,
-              nextCursor: hasMoreExecutionLogs
-                ? executionPage.cursor + responseExecutionLogs.length
-                : null,
-              limit: executionPage.limit,
-              hasMore: hasMoreExecutionLogs,
-            }
-          : null,
+        executionLogs,
         meta,
       },
     });

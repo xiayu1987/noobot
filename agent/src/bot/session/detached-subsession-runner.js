@@ -114,19 +114,11 @@ function assertDetachedRunnerDependencies({ sessionRunner, session }) {
 }
 
 function resolveDetachedRuntime(request) {
-  const {
-    parentExecutionScope,
-    eventListener,
-    strategy = {},
-    parentContext = {},
-    metadata = {},
-  } = request;
+  const { parentExecutionScope, eventListener, metadata = {} } = request;
   try {
     return getRuntimeFromAgentContext(parentExecutionScope);
   } catch (error) {
     emitEvent(eventListener, "detached_sub_session_scope_rejected", {
-      userId: String(strategy.userId || parentContext?.userId || "").trim(),
-      parentSessionId: String(strategy.parentSessionId || parentContext?.sessionId || "").trim(),
       scopeId: String(metadata.scope || "detached_sub_session").trim(),
       reason: "bindings.runtime_missing",
       error: error?.message || String(error),
@@ -460,10 +452,6 @@ function assertDetachedDialogIdentity(result, identity, lifecycle) {
   );
   error.code = "DETACHED_DIALOG_IDENTITY_MISMATCH";
   emitEvent(lifecycle.factListener, "detached_sub_session_identity_mismatch", {
-    userId: identity.userId,
-    sessionId: identity.subSessionId,
-    parentSessionId: identity.parentSessionId,
-    turnScopeId: identity.turnScopeId,
     executionId: identity.executionId,
     authoritativeDialogProcessId: identity.subDialogProcessId,
     returnedDialogProcessId,
@@ -537,11 +525,6 @@ function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, er
     factListener,
     stopped ? "detached_sub_session_stop_committed" : "detached_sub_session_failure_committed",
     {
-      userId: identity.userId,
-      sessionId: identity.subSessionId,
-      parentSessionId: identity.parentSessionId,
-      dialogProcessId: identity.subDialogProcessId,
-      turnScopeId: identity.turnScopeId,
       executionId: identity.executionId,
       ...(stopped
         ? { reason: "user_stop" }

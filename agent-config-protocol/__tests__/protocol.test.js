@@ -41,7 +41,7 @@ test("config source and edit access form four independent quadrants", () => {
       CONFIG_ITEM_TYPE.BUILTIN,
       CONFIG_NODE_ACCESS.USER,
     ],
-    [CONFIG_STRUCTURE.fields.session, CONFIG_ITEM_TYPE.BUILTIN, CONFIG_NODE_ACCESS.SYSTEM],
+    [CONFIG_STRUCTURE.fields.context, CONFIG_ITEM_TYPE.BUILTIN, CONFIG_NODE_ACCESS.SYSTEM],
     [CONFIG_STRUCTURE.fields.workspace_root, CONFIG_ITEM_TYPE.EXPLICIT, CONFIG_NODE_ACCESS.SYSTEM],
   ];
   for (const [node, itemType, access] of quadrants) {
@@ -436,6 +436,7 @@ test("current config migration removes every retired config path and prunes empt
     session: {
       use_last_running_task_range: false,
       use_last_completed_task_range: false,
+      executionBundleTimeoutMs: 5000,
     },
     security: {
       execution_isolation: { mode: "host" },
@@ -698,7 +699,6 @@ test("config repair enforces defaulted, optional, and system-owned node policies
         execute_native_script: { enabled: false },
       },
       context: { customSection: { enabled: true } },
-      session: { executionBundleTimeoutMs: "1000" },
       unknown_root: true,
     },
   });
@@ -783,13 +783,11 @@ test("global repair preserves supported optional runtime nodes without adding mi
     target: {
       ...template,
       memory: { summarizeTimeoutMs: 5000, postprocess_async: false },
-      session: { executionBundleTimeoutMs: 3000 },
     },
   });
   assert.deepEqual(configured.document.memory, {
     summarizeTimeoutMs: 5000,
     postprocess_async: false,
   });
-  assert.deepEqual(configured.document.session, { executionBundleTimeoutMs: 3000 });
   assert.equal(configured.report.changed, false);
 });

@@ -22,9 +22,10 @@ function createEngine({
     appendTurns,
     async upsertTurnTiming() {},
     async saveCurrentTurnTasks() {},
-    async getExecutionBundle() {
-      return { logs: [] };
+    async getExecutionTurnLogs() {
+      return [];
     },
+    async saveExecutionReport() {},
   };
   const memory = {
     async captureSessionToShortMemory(...args) {
@@ -77,7 +78,6 @@ function buildFinalizeInput(userConfig = {}) {
       turnMessages: [{ role: "assistant", type: "message", content: "ok" }],
       turnTasks: [],
     },
-    executionStartIndex: 0,
     runtimeEventListener: null,
     userConfig,
     resolvedParentAsyncResultContainer: null,
@@ -257,38 +257,6 @@ test("_finalizeRunSession ignores user memory summarize async false and still ru
     ._finalizeRunSession(
       buildFinalizeInput({
         memory: { postprocess_async: false, summarize_async: false },
-      }),
-    )
-    .then(() => {
-      finalizeCompleted = true;
-    });
-
-  await waitFor(() => summarizeStarted === true);
-  await waitFor(() => finalizeCompleted === true);
-  assert.equal(typeof resolveSummarize, "function");
-
-  resolveSummarize?.();
-  await finalizePromise;
-});
-
-test("_finalizeRunSession ignores legacy user memorySummarizeAsync false and still runs background", async () => {
-  let finalizeCompleted = false;
-  let summarizeStarted = false;
-  let resolveSummarize = null;
-  const engine = createEngine({
-    maybeSummarize: async () => {
-      summarizeStarted = true;
-      await new Promise((resolve) => {
-        resolveSummarize = resolve;
-      });
-    },
-  });
-
-  const finalizePromise = engine
-    ._finalizeRunSession(
-      buildFinalizeInput({
-        memory: { postprocess_async: false },
-        memorySummarizeAsync: false,
       }),
     )
     .then(() => {

@@ -7,6 +7,7 @@
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
 import {
+  omitExecutionRouteIdentity,
   projectExecutionRouteIdentity,
   projectExecutionTransportPayload,
 } from "./transport-payload.js";
@@ -26,8 +27,6 @@ function projectExecutionLogRecord(event = "", data = {}) {
     data: {
       ...envelope.payload,
       eventId: envelope.identity.eventId,
-      sessionId: envelope.identity.sessionId,
-      turnScopeId: envelope.identity.turnScopeId,
       messageId: envelope.identity.messageId,
       executionId: envelope.identity.executionId,
       sequence: envelope.ordering.sequence,
@@ -40,7 +39,7 @@ function projectExecutionLogRecord(event = "", data = {}) {
 }
 
 export function createExecutionEventListener({
-  sessionManager = null,
+  sessionManager,
   userId = "",
   sessionId = "",
   parentSessionId = "",
@@ -48,8 +47,11 @@ export function createExecutionEventListener({
   persistenceContext = null,
   upstream = null,
 }) {
+  if (typeof sessionManager?.appendExecutionLog !== "function") {
+    throw new TypeError("sessionManager.appendExecutionLog is required");
+  }
   const dialogProcessId = normalizeDialogProcessId(upstream?.dialogProcessId);
-  const defaults = { dialogProcessId, sessionId, parentSessionId, turnScopeId };
+  const defaults = { userId, dialogProcessId, sessionId, parentSessionId, turnScopeId };
   let persistenceTail = Promise.resolve();
   let deliveryTail = Promise.resolve();
   const persistenceFailures = [];
@@ -72,20 +74,20 @@ export function createExecutionEventListener({
   };
 
   const appendExecutionLog = (record) => {
-    const data = projectExecutionRouteIdentity(record?.data, defaults);
+    const route = projectExecutionRouteIdentity({}, defaults);
     const canonicalRecord = {
       ...record,
-      userId,
-      sessionId: data.sessionId,
-      parentSessionId: data.parentSessionId,
-      dialogProcessId: data.dialogProcessId,
-      turnScopeId: data.turnScopeId,
-      data,
+      userId: route.userId,
+      sessionId: route.sessionId,
+      parentSessionId: route.parentSessionId,
+      dialogProcessId: route.dialogProcessId,
+      turnScopeId: route.turnScopeId,
+      data: omitExecutionRouteIdentity(record?.data),
       ...(persistenceContext ? { persistenceContext } : {}),
     };
     persistenceTail = persistenceTail.then(async () => {
       try {
-        await sessionManager?.appendExecutionLog?.(canonicalRecord);
+        await sessionManager.appendExecutionLog(canonicalRecord);
       } catch (error) {
         persistenceFailures.push({
           event: canonicalRecord.event,
@@ -97,18 +99,16 @@ export function createExecutionEventListener({
     return persistenceTail;
   };
 
-  const summarizeDelivery = (event, data = {}) => ({
+  const summarizeDelivery = (event, data, route) => ({
     sourceEvent: event,
     eventId: String(data?.envelope?.identity?.eventId || "").trim(),
     eventType: String(data?.envelope?.identity?.eventType || event || "").trim(),
-    sessionId: String(
-      data?.envelope?.identity?.sessionId || data?.sessionId || sessionId || "",
-    ).trim(),
-    parentSessionId: String(data?.parentSessionId || parentSessionId || "").trim(),
-    dialogProcessId: String(data?.dialogProcessId || dialogProcessId || "").trim(),
-    turnScopeId: String(
-      data?.envelope?.identity?.turnScopeId || data?.turnScopeId || turnScopeId || "",
-    ).trim(),
+    route: {
+      sessionId: String(route.sessionId || "").trim(),
+      parentSessionId: String(route.parentSessionId || "").trim(),
+      dialogProcessId: String(route.dialogProcessId || "").trim(),
+      turnScopeId: String(route.turnScopeId || "").trim(),
+    },
     messageId: String(data?.envelope?.identity?.messageId || "").trim(),
     presentationMessageId: String(data?.presentationMessageId || "").trim(),
     sequence: Number(data?.envelope?.ordering?.sequence || 0),
@@ -119,9 +119,9 @@ export function createExecutionEventListener({
       : 0,
   });
 
-  const forwardUpstream = ({ event, data, ts }) => {
-    const transportData = projectExecutionTransportPayload({ event, data, route: defaults });
-    const diagnostic = summarizeDelivery(event, transportData);
+  const forwardUpstream = ({ event, data, ts, route }) => {
+    const transportData = projectExecutionTransportPayload({ event, data, route });
+    const diagnostic = summarizeDelivery(event, transportData, route);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.messageId);
     const enqueuedAt = deliveryTiming ? performance.now() : 0;
     const task = deliveryTail.then(async () => {
@@ -140,10 +140,6 @@ export function createExecutionEventListener({
         deliveryFailures.push(failure);
         if (shouldDiagnose) {
           appendExecutionLog({
-            userId,
-            sessionId,
-            parentSessionId,
-            dialogProcessId,
             event: "execution_upstream_forward_failed",
             category: "system",
             type: "execution_upstream_forward_failed",
@@ -160,12 +156,17 @@ export function createExecutionEventListener({
     return task;
   };
 
-  const forwardEvent = (evt = {}) =>
-    forwardUpstream({
+  const forwardEvent = (evt = {}) => {
+    if (!evt?.route || typeof evt.route !== "object") {
+      throw new TypeError("forwardEvent requires an explicit route identity");
+    }
+    return forwardUpstream({
       event: evt?.event || "",
       data: evt?.data || {},
       ts: evt?.ts || new Date().toISOString(),
+      route: evt.route,
     });
+  };
 
   return {
     flush: async () => {
@@ -228,10 +229,6 @@ export function createExecutionEventListener({
         const executionRecord = projectExecutionLogRecord(event, data);
         const { category, type } = classifyExecutionEvent(executionRecord.event);
         appendExecutionLog({
-          userId,
-          sessionId,
-          parentSessionId,
-          dialogProcessId,
           event: executionRecord.event,
           category,
           type,
@@ -241,7 +238,7 @@ export function createExecutionEventListener({
       }
 
       if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
-      return forwardEvent({ event, data, ts });
+      return forwardUpstream({ event, data, ts, route: defaults });
     },
   };
 }
