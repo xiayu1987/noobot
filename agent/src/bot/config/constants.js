@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -21,16 +20,7 @@ export const SESSION_ASYNC_STATUS = {
   COMPLETED: TASK_STATUS.COMPLETED,
   FAILED: TASK_STATUS.FAILED,
   USER_STOPPED: TASK_STATUS.USER_STOPPED,
-  ERROR: "error",
-  NOT_FOUND: "not_found",
-  INVALID_REQUEST: "invalid_request",
 };
-
-export const SESSION_ASYNC_TERMINAL_STATUSES = [
-  SESSION_ASYNC_STATUS.COMPLETED,
-  SESSION_ASYNC_STATUS.FAILED,
-  SESSION_ASYNC_STATUS.USER_STOPPED,
-];
 
 export const MESSAGE_ROLE = {
   USER: "user",
@@ -49,7 +39,6 @@ export const EXECUTION_LOG_EVENT = {
 
 export const BOT_MANAGE_LOG_SOURCE = {
   RUN_SESSION: "BotManager.runSession",
-  ASYNC_RUN_SESSION: "AsyncSessionRunner.runAsyncSession",
   MEMORY_SUMMARIZE: "SessionExecutionEngine._runMemorySummarizeFlow",
   MEMORY_POSTPROCESS: "SessionExecutionEngine._runMemoryPostProcessFlow",
   MEMORY_INJECTION: "ContextBuilder._resolveLongMemoryForInjection",
@@ -57,7 +46,6 @@ export const BOT_MANAGE_LOG_SOURCE = {
 
 export const BOT_MANAGE_LOG_EVENT = {
   RUN_SESSION_FAILED: "run_session_failed",
-  RUN_ASYNC_SESSION_FAILED: "run_async_session_failed",
   MEMORY_SUMMARY_FAILED: "memory_summary_failed",
   MEMORY_POSTPROCESS_FAILED: "memory_postprocess_failed",
   MEMORY_INJECTION_FAILED: "memory_injection_failed",
@@ -69,6 +57,3 @@ export const CALLER_ROLE = {
 };
 
 export const VALID_CALLER_ROLES = Object.freeze(Object.values(CALLER_ROLE));
-
-export const DEFAULT_WAIT_ASYNC_TIMEOUT_MS = TIME_THRESHOLDS.async.waitTimeoutMs;
-export const MIN_WAIT_ASYNC_TIMEOUT_MS = TIME_THRESHOLDS.async.minWaitTimeoutMs;

@@ -46,14 +46,6 @@ export const TIME_THRESHOLDS = deepFreeze({
     authorityOutboxCompactIntervalMs: TIME_TIERS.standardCommandMs,
   },
 
-  async: {
-    waitTimeoutMs: TIME_TIERS.fiveMinutesMs,
-    minWaitTimeoutMs: TIME_TIERS.oneSecondMs,
-    defaultPollIntervalMs: TIME_TIERS.oneSecondMs,
-    defaultMaxWaitTimeMs: TIME_TIERS.standardCommandMs,
-    sessionRunnerPollIntervalMs: TIME_TIERS.shortDelayMs,
-  },
-
   memory: {
     summaryTimeoutMs: TIME_TIERS.fiveMinutesMs,
   },

@@ -50,16 +50,8 @@ test("BotManager should delegate workspace/config/session calls", async () => {
   assert.equal(typeof manager.continueSession, "undefined");
 });
 
-test("BotManager should delegate async-job and attachment operations", async () => {
+test("BotManager should delegate attachment and error-log operations", async () => {
   const manager = createBotManagerWithMocks({
-    asyncSessionRunner: {
-      runAsyncSession(payload = {}) {
-        return { queued: true, payload };
-      },
-      async waitAsyncSession(payload = {}) {
-        return { done: true, payload };
-      },
-    },
     attach: {
       getAttachmentById(payload = {}) {
         return { found: true, payload };
@@ -75,8 +67,6 @@ test("BotManager should delegate async-job and attachment operations", async () 
     },
   });
 
-  assert.equal(manager.runAsyncSession({ sessionId: "s1" }).queued, true);
-  assert.equal((await manager.waitAsyncSession({ sessionId: "s1" })).done, true);
   assert.equal(manager.getAttachmentById({ attachmentId: "a1" }).found, true);
   assert.equal(
     manager.deleteScopedAttachmentsBySessionIds({ userId: "u1", sessionIds: ["s1"] }).deleted,

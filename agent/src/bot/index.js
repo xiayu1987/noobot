@@ -9,7 +9,6 @@ import { AttachmentService } from "../artifacts/index.js";
 import { SkillService } from "../skills/index.js";
 import { ConfigService, WORKSPACE_SANDBOX_PATHS, mergeConfig } from "../config/index.js";
 import { SystemErrorLogger } from "../observability/index.js";
-import { AsyncSessionRunner } from "./async/session-runner.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
 import { filePath as path } from "@noobot/path-resolver";
@@ -61,12 +60,6 @@ export class BotManager {
       errorLogger: this.errorLogger,
       botManager: this,
       pluginRuntimeBundle: this.pluginRuntimeBundle,
-    });
-    this.asyncSessionRunner = new AsyncSessionRunner({
-      session: this.session,
-      runSession: (payload = {}) => this.sessionRunner.runSession(payload),
-      upsertParentAsyncTask: (payload = {}) => this.sessionRunner._upsertParentAsyncTask(payload),
-      errorLogger: this.errorLogger,
     });
   }
 
@@ -228,13 +221,5 @@ export class BotManager {
 
   async getExecutionTree(payload = {}) {
     return this.sessionRunner.getExecutionTree(payload);
-  }
-
-  runAsyncSession(payload = {}) {
-    return this.asyncSessionRunner.runAsyncSession(payload);
-  }
-
-  async waitAsyncSession(payload = {}) {
-    return this.asyncSessionRunner.waitAsyncSession(payload);
   }
 }
