@@ -67,7 +67,6 @@ describe("applyReconnectEventReplay", () => {
         isCurrentActiveSession: vi.fn(() => true),
         consumeReplayCacheForSession: vi.fn(),
         applyReconnectMessagesToActiveSession,
-        applyChannelState: vi.fn(),
         applyWorkflowRuntimeEvent,
       });
 
@@ -120,7 +119,6 @@ describe("applyReconnectEventReplay", () => {
       isCurrentActiveSession: vi.fn(() => false),
       consumeReplayCacheForSession: vi.fn(),
       applyReconnectMessagesToActiveSession: vi.fn(),
-      applyChannelState: vi.fn(),
       applyTurnLifecycleEnvelope,
     });
 
@@ -283,7 +281,6 @@ describe("applyReconnectEventReplay", () => {
       isCurrentActiveSession: vi.fn((sessionId) => sessionId === "s-1"),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
-      applyChannelState: vi.fn(),
     });
 
     expect(consumeReplayCacheForSession).toHaveBeenCalledWith("s-1");
@@ -311,7 +308,6 @@ describe("applyReconnectEventReplay", () => {
       isCurrentActiveSession: vi.fn(() => false),
       consumeReplayCacheForSession: vi.fn(),
       applyReconnectMessagesToActiveSession: vi.fn(),
-      applyChannelState: vi.fn(),
     });
 
     expect(replayCache).toEqual({
@@ -333,7 +329,6 @@ describe("applyReconnectEventReplay", () => {
       isCurrentActiveSession: vi.fn(() => false),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
-      applyChannelState: vi.fn(),
     });
 
     expect(consumeReplayCacheForSession).not.toHaveBeenCalled();

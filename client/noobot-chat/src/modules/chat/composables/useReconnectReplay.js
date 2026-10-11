@@ -86,20 +86,22 @@ export function useReconnectReplay({
     });
 
   const applyWorkflowRuntimeEvent = (record = {}, { source = "reconnect" } = {}) => {
-    const event = String(record?.identity?.eventType || "");
+    const identity = record?.identity || {};
     const data = record?.payload || {};
     sessionLogWebSocketClient?.log?.({
       category: "debug",
       level: "debug",
       debugType: "workflow-diagnostics",
       event: "frontend.workflowTransport.reconnectRuntimeReceived",
-      sessionId: String(data?.parentSessionId || data?.sessionId || ""),
-      dialogProcessId: String(data?.dialogProcessId || ""),
-      turnScopeId: String(data?.turnScopeId || ""),
+      sessionId: String(identity.sessionId || ""),
+      dialogProcessId: "",
+      turnScopeId: String(identity.turnScopeId || ""),
       data: {
-        workflowEvent: String(event || ""),
+        workflowEvent: String(identity.eventType || ""),
         workflowRunId: String(data?.workflowRunId || ""),
         nodeExecutionId: String(data?.nodeExecutionId || ""),
+        eventDialogProcessId: String(data?.dialogProcessId || ""),
+        eventTurnScopeId: String(data?.turnScopeId || ""),
         nodeSessionCount: Array.isArray(data?.nodeSessions) ? data.nodeSessions.length : 0,
       },
     });
@@ -281,15 +283,6 @@ export function useReconnectReplay({
     return detailApplied;
   }
 
-  function applyChannelState(stateData = {}) {
-    return Promise.resolve({
-      applied: false,
-      reason: "transport_channel_state_ignored",
-      sessionId: String(stateData?.sessionId || "").trim(),
-      turnScopeId: String(stateData?.turnScopeId || "").trim(),
-    });
-  }
-
   async function consumeReplayCacheForSession(sessionId = "") {
     return consumeReconnectReplayCacheForSession({
       replayCache,
@@ -303,9 +296,9 @@ export function useReconnectReplay({
     sessionLogWebSocketClient?.log?.({
       category: "system",
       event,
-      sessionId: payload?.sessionId || String(activeSession.value?.sessionId || ""),
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
+      sessionId: String(payload.sessionId),
+      dialogProcessId: "",
+      turnScopeId: "",
       data: {
         event,
         at: new Date().toISOString(),
@@ -390,7 +383,6 @@ export function useReconnectReplay({
   return createReconnectReplayPublicApi({
     applyReconnectData,
     applyReconnectEvent,
-    applyChannelState,
     replayCache,
     isTestMode: import.meta.env.MODE === "test",
   });

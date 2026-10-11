@@ -7,14 +7,12 @@
 export function createReconnectReplayPublicApi({
   applyReconnectData,
   applyReconnectEvent,
-  applyChannelState,
   replayCache,
   isTestMode = false,
 }) {
   return {
     applyReconnectData,
     applyReconnectEvent,
-    applyChannelState,
     __test: isTestMode
       ? {
           replayCache,

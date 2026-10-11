@@ -171,7 +171,7 @@ export function useAppShellPseudoRoute({
 
   watch(
     [
-      activeSessionId,
+      resolveRoutableSessionId,
       workspaceVisible,
       userSettingsVisible,
       configParamsVisible,

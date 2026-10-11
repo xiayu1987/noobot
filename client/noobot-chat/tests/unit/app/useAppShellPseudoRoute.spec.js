@@ -98,6 +98,20 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
     expect(new URL(window.location.href).searchParams.has("session")).toBe(false);
   });
 
+  it("publishes the Session URL once the local Session is provisioned in place", async () => {
+    window.history.replaceState({}, "", "/");
+    const { route, activeSessionId, activeSession } = createRouteHarness();
+    activeSessionId.value = "local-session";
+    activeSession.value = { sessionId: "local-session", isLocal: true, loaded: true };
+    await route.applyInitialPseudoRoute({ sessionId: "", panel: "", anchor: "" });
+    expect(new URL(window.location.href).searchParams.has("session")).toBe(false);
+
+    activeSession.value.isLocal = false;
+    await nextTick();
+
+    expect(new URL(window.location.href).searchParams.get("session")).toBe("local-session");
+  });
+
   it("collapses the default navigator when restoring the connector overview", async () => {
     const { route, connectorVisible, chatNavigatorVisible, openConnectorsRaw } =
       createRouteHarness();

@@ -18,14 +18,12 @@ describe("reconnectReplay support modules", () => {
     const api = createReconnectReplayPublicApi({
       applyReconnectData: vi.fn(),
       applyReconnectEvent: vi.fn(),
-      applyChannelState: vi.fn(),
       ...internals,
       isTestMode: true,
     });
     const productionApi = createReconnectReplayPublicApi({
       applyReconnectData: vi.fn(),
       applyReconnectEvent: vi.fn(),
-      applyChannelState: vi.fn(),
       ...internals,
       isTestMode: false,
     });
@@ -66,7 +64,10 @@ describe("reconnectReplay support modules", () => {
 
   it.each([
     ["empty detail", { sessions: [] }],
-    ["mismatched top-level identity", { sessionId: "s-other", sessions: [{ sessionId: "s-other" }] }],
+    [
+      "mismatched top-level identity",
+      { sessionId: "s-other", sessions: [{ sessionId: "s-other" }] },
+    ],
     ["mismatched session document", { sessionId: "s-1", sessions: [{ sessionId: "s-other" }] }],
   ])("rejects %s before applying reconnect hydration", async (_label, detail) => {
     const applySessionDetail = vi.fn();
@@ -101,5 +102,4 @@ describe("reconnectReplay support modules", () => {
     expect(result).toBe(false);
     expect(applySessionDetail).not.toHaveBeenCalled();
   });
-
 });
