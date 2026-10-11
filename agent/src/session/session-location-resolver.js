@@ -21,7 +21,6 @@ function buildScope(sessionDir, resolvedParentSessionId = "") {
     turnsDir: files.turnsDir,
     turnSnapshotsDir: files.turnSnapshotsDir,
     metadataFile: files.meta,
-    mutationLockDir: `${sessionDir}.mutation-lock`,
   });
 }
 

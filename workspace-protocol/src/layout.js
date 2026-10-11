@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const WORKSPACE_LAYOUT_VERSION = 1;
+export const WORKSPACE_LAYOUT_VERSION = 2;
 
 export const WORKSPACE_LAYOUT = Object.freeze({
   CONFIG_FILE: "config.json",
@@ -14,6 +14,7 @@ export const WORKSPACE_LAYOUT = Object.freeze({
   SKILLS_DIR: "skills",
   RUNTIME_DIR: "runtime",
   SESSION_DIR: "runtime/session",
+  SESSION_TREE_FILE: "runtime/session/session-tree.json",
   ATTACH_DIR: "runtime/attach",
   SCOPED_ATTACH_DIR: "runtime/attach/scoped",
   CONNECTORS_DIR: "runtime/connectors",
@@ -27,6 +28,7 @@ export const WORKSPACE_LAYOUT = Object.freeze({
   MEMORY_REPAIR_BACKUPS_DIR: "runtime/memory-repair-backups",
   WORKSPACE_BACKUPS_DIR: "runtime/workspace-backups",
   ASSET_STATE_FILE: "runtime/workspace-asset-state.json",
+  LAYOUT_STATE_FILE: "runtime/workspace-layout-state.json",
 });
 
 export const WORKSPACE_RUNTIME_DIRECTORIES = Object.freeze([

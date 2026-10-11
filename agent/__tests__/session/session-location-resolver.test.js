@@ -31,7 +31,6 @@ test("buildSessionLocationScope uses the canonical artifact map", () => {
     turnsDir: "/tmp/session/turns",
     turnSnapshotsDir: "/tmp/session/turn-snapshots",
     metadataFile: "/tmp/session/meta.json",
-    mutationLockDir: "/tmp/session.mutation-lock",
   });
   assert.ok(Object.isFrozen(scope));
 });
@@ -48,7 +47,6 @@ test("scoped resolver confines a run to its allowed user-relative root", async (
   });
   const scope = await resolver.resolveSessionScope("alice", "child", "parent");
   assert.equal(scope.sessionDir, "/workspace/alice/runtime/plugin-data/workflow/session/run/node");
-  assert.equal(scope.mutationLockDir, `${scope.sessionDir}.mutation-lock`);
   await assert.rejects(() => resolver.resolveSessionScope("bob", "child"), /user does not match/);
   await assert.rejects(() => resolver.resolveSessionScope("alice", ""), /requires a sessionId/);
   await assert.rejects(() => resolver.resolveSessionScope("alice", "other"), /id does not match/);

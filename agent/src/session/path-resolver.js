@@ -31,7 +31,7 @@ export class PathResolver {
   }
 
   sessionTreeFile(basePath = "") {
-    return path.join(this.sessionRoot(basePath), "session-tree.json");
+    return path.join(String(basePath || ""), WORKSPACE_LAYOUT.SESSION_TREE_FILE);
   }
 
   sessionsSummaryFile(basePath = "") {

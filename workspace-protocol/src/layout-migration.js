@@ -3,7 +3,59 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { WORKSPACE_LAYOUT, resolvePluginDataRelativePath } from "./layout.js";
+import {
+  WORKSPACE_LAYOUT,
+  WORKSPACE_LAYOUT_VERSION,
+  resolvePluginDataRelativePath,
+} from "./layout.js";
+
+export const WORKSPACE_LAYOUT_UNMARKED_VERSION = 1;
+
+export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
+  SESSION_STORAGE: "session-storage",
+});
+
+export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
+  Object.freeze({
+    id: "session-storage-v2",
+    toVersion: 2,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE,
+  }),
+]);
+
+function layoutStateError(message) {
+  const error = new TypeError(message);
+  error.code = "WORKSPACE_LAYOUT_STATE_INVALID";
+  return error;
+}
+
+export function parseWorkspaceLayoutState(text) {
+  let value;
+  try {
+    value = JSON.parse(String(text ?? ""));
+  } catch {
+    throw layoutStateError("workspace layout state is not valid JSON");
+  }
+  const version = value?.version;
+  if (!Number.isInteger(version) || version < 1 || version > WORKSPACE_LAYOUT_VERSION) {
+    throw layoutStateError(`workspace layout state version is unsupported: ${version}`);
+  }
+  return { version };
+}
+
+export function renderWorkspaceLayoutState({ version } = {}) {
+  if (!Number.isInteger(version) || version < 1 || version > WORKSPACE_LAYOUT_VERSION) {
+    throw layoutStateError(`workspace layout state version is unsupported: ${version}`);
+  }
+  return `${JSON.stringify({ version }, null, 2)}\n`;
+}
+
+export function planWorkspaceLayoutUpgrades({ installedVersion } = {}) {
+  if (!Number.isInteger(installedVersion)) {
+    throw new TypeError("installedVersion must be an integer");
+  }
+  return WORKSPACE_LAYOUT_UPGRADES.filter((upgrade) => upgrade.toVersion > installedVersion);
+}
 
 export const WORKSPACE_LAYOUT_MIGRATIONS = Object.freeze([
   Object.freeze({

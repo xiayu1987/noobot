@@ -96,6 +96,7 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 try {
   const results = [];
   for (const userId of await readSessionUserIds()) {
+    await getBot().ensureUserWorkspace(userId);
     results.push(await getBot().session.maintainSessionDisplaySummaries({ userId }));
   }
   const failures = results.flatMap((result) => result.failures || []);

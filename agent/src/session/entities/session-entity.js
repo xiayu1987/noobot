@@ -203,7 +203,7 @@ function assertSessionTreeSchema(tree, nodes) {
   const legacyNode = Object.values(nodes).some((node) => node && "children" in node);
   if (tree && ("roots" in tree || legacyNode)) {
     throw new TypeError(
-      "legacy session tree fields roots/children are not supported; run scripts/migrate-session-tree-parent-only.mjs",
+      "legacy session tree fields roots/children are not supported; the workspace layout upgrade maps them to parentSessionId",
     );
   }
 }

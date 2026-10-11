@@ -10,7 +10,7 @@ import {
   assertArtifactSessionWritable,
   buildSessionArtifactFileMap,
   readJsonArtifactFile,
-  resolveArtifactMutationLockDir,
+  resolveSessionArtifactMutationLock,
   SESSION_ARTIFACT_FILE_NAMES,
 } from "./session-artifact-files.js";
 import {
@@ -165,7 +165,6 @@ export async function cleanupSessionArtifacts({
   sessionId = "",
   dryRun = true,
   mutationCoordinator = sessionMutationCoordinator,
-  mutationLockDir = "",
   assertSessionWritable,
 } = {}) {
   const run = async () => {
@@ -220,7 +219,7 @@ export async function cleanupSessionArtifacts({
     }
     return { ...report, dryRun, removed };
   };
-  const lockDir = resolveArtifactMutationLockDir(sessionDir, mutationLockDir);
+  const lockDir = resolveSessionArtifactMutationLock(sessionDir);
   return dryRun || !mutationCoordinator?.run ? run() : mutationCoordinator.run(lockDir, run);
 }
 
@@ -228,7 +227,6 @@ export async function repairSessionArtifacts({
   sessionDir = "",
   sessionId = "",
   mutationCoordinator = sessionMutationCoordinator,
-  mutationLockDir = "",
   assertSessionWritable,
 } = {}) {
   const run = async () => {
@@ -270,6 +268,6 @@ export async function repairSessionArtifacts({
     }
     return { before, repaired, after: await inspectSessionArtifacts({ sessionDir }) };
   };
-  const lockDir = resolveArtifactMutationLockDir(sessionDir, mutationLockDir);
+  const lockDir = resolveSessionArtifactMutationLock(sessionDir);
   return mutationCoordinator?.run ? mutationCoordinator.run(lockDir, run) : run();
 }

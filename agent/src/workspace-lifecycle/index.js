@@ -23,6 +23,8 @@ import {
   migrateWorkspaceLayout,
   repairConfigSection,
   repairMemorySection,
+  resolveWorkspaceBackupBase,
+  upgradeWorkspaceLayout,
 } from "./sections.js";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
@@ -97,14 +99,23 @@ function normalizeSections(sections) {
   }
 }
 
-async function runWorkspaceOperation({ base, assetPackageBase, operation, baseValues, sections }) {
-  const backup = createSectionBackup(base);
+async function runWorkspaceOperation({
+  base,
+  assetPackageBase,
+  operation,
+  baseValues,
+  sections,
+  created,
+}) {
+  const backupBase = resolveWorkspaceBackupBase(base);
+  const backup = createSectionBackup(backupBase, base);
   const selected = new Set(sections);
   await mkdir(base, { recursive: true });
   if (operation === WORKSPACE_OPERATION.RESET) {
     for (const section of sections) await clearSection({ base, section, backup });
   }
   const report = { operation, layoutMigrations: await migrateWorkspaceLayout({ base, backup }) };
+  report.layoutUpgrades = await upgradeWorkspaceLayout({ base, backupBase, created });
   await ensureRuntimeDirectories(base);
   report.memory = await repairMemorySection(base);
   if (operation !== WORKSPACE_OPERATION.RESET || selected.has(WORKSPACE_SECTION.CONFIG)) {
@@ -137,6 +148,7 @@ async function withWorkspace(options, operation, sections) {
       operation: effectiveOperation,
       baseValues: options.baseValues ?? {},
       sections,
+      created: !existed,
     });
     return { base, report };
   });

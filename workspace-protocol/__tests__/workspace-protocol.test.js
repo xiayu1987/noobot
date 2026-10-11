@@ -7,6 +7,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   WORKSPACE_LAYOUT,
+  WORKSPACE_LAYOUT_UNMARKED_VERSION,
+  WORKSPACE_LAYOUT_UPGRADES,
+  WORKSPACE_LAYOUT_VERSION,
   WORKSPACE_RUNTIME_DIRECTORIES,
   WORKSPACE_OPERATION,
   WORKSPACE_SECTIONS,
@@ -19,6 +22,9 @@ import {
   parseWorkspaceAssetState,
   planWorkspaceAssetSync,
   planWorkspaceLayoutMigrations,
+  planWorkspaceLayoutUpgrades,
+  parseWorkspaceLayoutState,
+  renderWorkspaceLayoutState,
   renderWorkspaceAssetState,
   resolvePluginDataRelativePath,
 } from "../src/index.js";
@@ -144,4 +150,30 @@ test("layout migration moves legacy plugin data and rejects conflicts", () => {
   assert.throws(() => planWorkspaceLayoutMigrations({ exists: () => true }), {
     code: "WORKSPACE_LAYOUT_MIGRATION_CONFLICT",
   });
+});
+
+test("layout state round-trips the current version and rejects unknown versions", () => {
+  const text = renderWorkspaceLayoutState({ version: WORKSPACE_LAYOUT_VERSION });
+  assert.deepEqual(parseWorkspaceLayoutState(text), { version: WORKSPACE_LAYOUT_VERSION });
+  for (const bad of ["not json", "{}", JSON.stringify({ version: WORKSPACE_LAYOUT_VERSION + 1 })]) {
+    assert.throws(() => parseWorkspaceLayoutState(bad), { code: "WORKSPACE_LAYOUT_STATE_INVALID" });
+  }
+  assert.throws(() => renderWorkspaceLayoutState({ version: 0 }), {
+    code: "WORKSPACE_LAYOUT_STATE_INVALID",
+  });
+  assert.ok(
+    WORKSPACE_SECTIONS.runtime.preserveOnReset.includes(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE),
+  );
+});
+
+test("layout upgrades run every step above the installed version and end at the current one", () => {
+  assert.deepEqual(
+    planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_UNMARKED_VERSION }).map(
+      (item) => item.id,
+    ),
+    ["session-storage-v2"],
+  );
+  assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);
+  assert.equal(WORKSPACE_LAYOUT_UPGRADES.at(-1).toVersion, WORKSPACE_LAYOUT_VERSION);
+  assert.throws(() => planWorkspaceLayoutUpgrades({}), TypeError);
 });

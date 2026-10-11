@@ -4,7 +4,7 @@
 
 ## 布局（`./layout`）
 
-`WORKSPACE_LAYOUT` 定义所有相对路径，`WORKSPACE_LAYOUT_VERSION` 当前为 `1`。主系统、service 和插件都引用这里的常量，不再手写 `runtime/...` 字面量（由 `scripts/check-workspace-protocol-boundary.mjs` 守卫）。
+`WORKSPACE_LAYOUT` 定义所有相对路径，`WORKSPACE_LAYOUT_VERSION` 当前为 `2`。主系统、service 和插件都引用这里的常量，不再手写 `runtime/...` 字面量（由 `scripts/check-workspace-protocol-boundary.mjs` 守卫）。
 
 - `WORKSPACE_RUNTIME_DIRECTORIES`：创建和修复时保证存在的 runtime 目录。
 - `resolvePluginDataRelativePath(pluginId, ...segments)`：插件数据统一放在 `runtime/plugin-data/<pluginId>/`。
@@ -21,7 +21,7 @@
 | `service` | `services/`   | 资产包 `user-template/default-user`                 | 是         |
 | `skill`   | `skills/`     | 资产包 `user-template/default-user`                 | 是         |
 
-`config.example.json` 已下线，作为 `config` 区段的 `retiredPaths`，存在时备份后删除。`runtime` 重置时保留 `runtime/memory-repair-backups`、`runtime/workspace-backups` 和 `runtime/workspace-asset-state.json`。
+`config.example.json` 已下线，作为 `config` 区段的 `retiredPaths`，存在时备份后删除。`runtime` 重置时保留 `runtime/memory-repair-backups`、`runtime/workspace-backups`、`runtime/workspace-asset-state.json` 和 `runtime/workspace-layout-state.json`。
 
 本包只记录负责方标识，不依赖其他协议包；负责方的绑定写在 lifecycle 里。
 
@@ -60,5 +60,17 @@
 - `runtime/harness` → `runtime/plugin-data/harness`
 
 `planWorkspaceLayoutMigrations({ exists })` 在每个操作开始时执行：源存在、目标不存在则移动；源和目标同时存在时抛 `WORKSPACE_LAYOUT_MIGRATION_CONFLICT`，需要人工合并。
+
+## 布局升级（`./layout-migration`）
+
+已安装的布局版本记录在 `runtime/workspace-layout-state.json`（`parseWorkspaceLayoutState` / `renderWorkspaceLayoutState`）。没有该文件的已有工作区视为 `WORKSPACE_LAYOUT_UNMARKED_VERSION`（`1`）；新建工作区直接写入当前版本，不执行升级。
+
+`planWorkspaceLayoutUpgrades({ installedVersion })` 返回 `WORKSPACE_LAYOUT_UPGRADES` 中高于已安装版本的步骤。本包只记录步骤和负责方标识，处理函数在 lifecycle 中绑定。每个操作（含 service 启动时对每个用户执行的 `ensureUserWorkspace`）都会在工作区锁内执行升级，全部成功后写入当前版本。
+
+| 步骤                 | 目标版本 | 负责方            | 内容                                                                                                                                                                          |
+| -------------------- | -------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session-storage-v2` | `2`      | `session-storage` | 会话树以各节点的 `parentSessionId` 为唯一事实源，映射为 parent-only 结构（丢弃 `roots`/`children`）；index 不是 v2 的 `execution-events` 和版本不是当前协议的执行报告整体退役 |
+
+升级不修复历史执行记录：原件按原相对路径移入 `runtime/workspace-backups/<时间>/`，与同一操作的其他备份共用时间戳目录。
 
 运行测试：`npm run -w @noobot/workspace-protocol test`

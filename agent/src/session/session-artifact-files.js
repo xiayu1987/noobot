@@ -63,6 +63,8 @@ export async function assertArtifactSessionWritable({
   await assertSessionWritable({ sessionId, sessionDir, operation });
 }
 
-export function resolveArtifactMutationLockDir(sessionDir = "", mutationLockDir = "") {
-  return String(mutationLockDir || "").trim() || path.join(sessionDir, ".mutation-lock");
+export function resolveSessionArtifactMutationLock(sessionDir = "") {
+  const normalized = String(sessionDir || "").trim();
+  if (!normalized) throw new Error("session artifact mutation lock requires sessionDir");
+  return `${path.resolve(normalized)}.mutation-lock`;
 }

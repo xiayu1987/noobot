@@ -15,6 +15,7 @@ import {
 } from "@noobot/session-protocol/execution-report";
 
 import { FileSystemSessionRepository } from "../../src/session/repositories/file-system-session-repository.js";
+import { resolveSessionArtifactMutationLock } from "../../src/session/session-artifact-files.js";
 import { FileSystemTaskRepository } from "../../src/session/repositories/file-system-task-repository.js";
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
@@ -59,7 +60,6 @@ function buildHarness() {
         sessionSummaryFile: path.join(sessionDir, "session-summary.json"),
         taskFile: path.join(sessionDir, "task.json"),
         metadataFile: path.join(sessionDir, "meta.json"),
-        mutationLockDir: `${sessionDir}.mutation-lock`,
       };
     },
   };
@@ -259,7 +259,10 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       await sessionRepo.storageService.exists(path.join(defaultRoot, "session-tree.json")),
       false,
     );
-    assert.equal(await sessionRepo.storageService.exists(scope.mutationLockDir), false);
+    assert.equal(
+      await sessionRepo.storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
+      false,
+    );
   } finally {
     await harness.cleanup();
   }
@@ -481,7 +484,6 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
     const firstScope = await first.resolver.resolveSessionScope("alice", "child-0", "parent");
     const secondScope = await second.resolver.resolveSessionScope("alice", "child-1", "parent");
     assert.notEqual(firstScope.sessionDir, secondScope.sessionDir);
-    assert.notEqual(firstScope.mutationLockDir, secondScope.mutationLockDir);
     assert.equal((await readJson(firstScope.metadataFile)).node, "node-1");
     assert.equal((await readJson(secondScope.metadataFile)).node, "node-2");
     assert.equal((await readJson(firstScope.taskFile)).tasks[0].taskId, "task-0");
@@ -530,7 +532,10 @@ test("scoped metadata contributor failures abort the locked mutation", async () 
     );
     const scope = await resolver.resolveSessionScope("alice", "child", "parent");
     assert.equal(await sessionRepo.storageService.exists(scope.metadataFile), false);
-    assert.equal(await sessionRepo.storageService.exists(scope.mutationLockDir), false);
+    assert.equal(
+      await sessionRepo.storageService.exists(resolveSessionArtifactMutationLock(scope.sessionDir)),
+      false,
+    );
   } finally {
     await harness.cleanup();
   }

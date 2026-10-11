@@ -9,13 +9,24 @@ import { filePath as path } from "@noobot/path-resolver";
 import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
 import {
   WORKSPACE_LAYOUT,
+  WORKSPACE_LAYOUT_UNMARKED_VERSION,
+  WORKSPACE_LAYOUT_UPGRADE_OWNER,
+  WORKSPACE_LAYOUT_VERSION,
   WORKSPACE_RUNTIME_DIRECTORIES,
   WORKSPACE_SECTION,
   WORKSPACE_SECTIONS,
+  parseWorkspaceLayoutState,
   planWorkspaceLayoutMigrations,
+  planWorkspaceLayoutUpgrades,
+  renderWorkspaceLayoutState,
 } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { repairWorkspaceMemoryDocuments } from "../memory/storage/repair.js";
+import { upgradeSessionStorage } from "./session-storage-upgrade.js";
+
+const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE]: upgradeSessionStorage,
+});
 
 async function pathExists(filePath) {
   try {
@@ -42,6 +53,34 @@ export async function migrateWorkspaceLayout({ base, backup }) {
   return migrated;
 }
 
+async function readInstalledLayoutVersion(base, created) {
+  try {
+    const text = await readFile(path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE), "utf8");
+    return parseWorkspaceLayoutState(text).version;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    return created ? WORKSPACE_LAYOUT_VERSION : WORKSPACE_LAYOUT_UNMARKED_VERSION;
+  }
+}
+
+export async function upgradeWorkspaceLayout({ base, backupBase, created }) {
+  const installedVersion = await readInstalledLayoutVersion(base, created);
+  const applied = [];
+  for (const upgrade of planWorkspaceLayoutUpgrades({ installedVersion })) {
+    const result = await LAYOUT_UPGRADE_HANDLERS[upgrade.owner]({ base, backupBase });
+    applied.push({ id: upgrade.id, toVersion: upgrade.toVersion, result });
+  }
+  const statePath = path.join(base, WORKSPACE_LAYOUT.LAYOUT_STATE_FILE);
+  if (created || applied.length || !(await pathExists(statePath))) {
+    await mkdir(path.dirname(statePath), { recursive: true });
+    await writeConfigDocumentText(
+      statePath,
+      renderWorkspaceLayoutState({ version: WORKSPACE_LAYOUT_VERSION }),
+    );
+  }
+  return applied;
+}
+
 export async function ensureRuntimeDirectories(base) {
   for (const relativePath of WORKSPACE_RUNTIME_DIRECTORIES) {
     await mkdir(path.join(base, relativePath), { recursive: true });
@@ -52,14 +91,18 @@ export function repairMemorySection(base) {
   return repairWorkspaceMemoryDocuments({ base });
 }
 
-function writeConfigDocument(filePath, document) {
+function writeConfigDocumentText(filePath, content) {
   return writeFileAtomic({
     filePath,
-    content: `${JSON.stringify(document, null, 2)}\n`,
+    content,
     writeFile,
     rename,
     remove: rm,
   });
+}
+
+function writeConfigDocument(filePath, document) {
+  return writeConfigDocumentText(filePath, `${JSON.stringify(document, null, 2)}\n`);
 }
 
 async function readConfigTarget(filePath) {
@@ -104,9 +147,12 @@ export async function repairConfigSection({ base, baseValues, backup, onlyInvali
   return { retired, repair: repaired.report };
 }
 
-export function createSectionBackup(base, now = new Date()) {
+export function resolveWorkspaceBackupBase(base, now = new Date()) {
   const stamp = now.toISOString().replace(/[:.]/g, "-");
-  const backupBase = path.join(base, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR, stamp);
+  return path.join(base, WORKSPACE_LAYOUT.WORKSPACE_BACKUPS_DIR, stamp);
+}
+
+export function createSectionBackup(backupBase, base) {
   return async function backup(relativePath) {
     const source = path.join(base, relativePath);
     if (!(await pathExists(source))) return null;
