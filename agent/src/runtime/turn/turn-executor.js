@@ -83,10 +83,9 @@ function assertHookContextRetainsModelContext(loopState = {}, hookContext = {}) 
 
 function traceLoopStateContext(runtime = {}, stage = "", loopState = {}, extra = {}) {
   const modelContext = requireLoopStateModelContext(loopState);
-  emitModelContextTrace(runtime, stage, {
+  emitModelContextTrace(runtime.eventListener, stage, {
     turn: extra.turn,
     mode: extra.mode,
-    dialogProcessId: loopState?.dialogProcessId || "",
     blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
     messages: summarizeDiagnosticMessages(modelContext.messages),
     ...extra,
@@ -140,14 +139,14 @@ export async function invokeNoToolsTurn({
     forceToolChoiceNone,
     modelContext,
     maxTurns: Number(loopState?.maxTurns || 0),
-    agentContext: modelState?.agentContext || null,
+    agentContext: modelState.agentContext,
   });
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
     context: beforeLlmHookContext,
   });
-  emitModelContextTrace(runtime, "before_llm_hook_context_output", {
+  emitModelContextTrace(runtime.eventListener, "before_llm_hook_context_output", {
     turn,
     mode: "no_tools",
     hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.modelContext?.messageBlocks),
@@ -205,7 +204,7 @@ export async function invokeNoToolsTurn({
         error,
         modelContext,
         maxTurns: Number(loopState?.maxTurns || 0),
-        agentContext: modelState?.agentContext || null,
+        agentContext: modelState.agentContext,
       }),
     });
     throw error;
@@ -226,7 +225,7 @@ export async function invokeNoToolsTurn({
       modelResponse,
       modelContext,
       maxTurns: Number(loopState?.maxTurns || 0),
-      agentContext: modelState?.agentContext || null,
+      agentContext: modelState.agentContext,
     }),
   });
   await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
@@ -302,14 +301,14 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
     modelContext,
     maxTurns: Number(loopState?.maxTurns || 0),
-    agentContext: modelState?.agentContext || null,
+    agentContext: modelState.agentContext,
   });
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
     context: beforeLlmHookContext,
   });
-  emitModelContextTrace(runtime, "before_llm_hook_context_output", {
+  emitModelContextTrace(runtime.eventListener, "before_llm_hook_context_output", {
     turn,
     mode: "with_tools",
     hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.modelContext?.messageBlocks),
@@ -379,7 +378,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
           error,
           modelContext,
           maxTurns: Number(loopState?.maxTurns || 0),
-          agentContext: modelState?.agentContext || null,
+          agentContext: modelState.agentContext,
         }),
       });
       throw error;
@@ -403,7 +402,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
           error: retryError,
           modelContext,
           maxTurns: Number(loopState?.maxTurns || 0),
-          agentContext: modelState?.agentContext || null,
+          agentContext: modelState.agentContext,
         }),
       });
       throw retryError;
@@ -437,7 +436,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       calls,
       modelContext,
       maxTurns: Number(loopState?.maxTurns || 0),
-      agentContext: modelState?.agentContext || null,
+      agentContext: modelState.agentContext,
     }),
   });
   const finalAiContentText = normalizedAiContentText;
@@ -469,7 +468,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turnMessageStore,
     dialogProcessId,
     runtime,
-    agentContext: modelState?.agentContext || null,
+    agentContext: modelState.agentContext,
   });
 
   await stateCommitter.pushAssistantMessage({

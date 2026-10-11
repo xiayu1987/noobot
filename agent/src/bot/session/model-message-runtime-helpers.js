@@ -8,6 +8,7 @@ import {
   MODEL_CONTEXT_LANE,
 } from "@noobot/context-protocol/assembly/dual-lane";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
@@ -61,7 +62,7 @@ export class ModelMessageRuntimeHelpers {
         primaryHistoryLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
       });
       emitModelContextTrace(
-        ctx?.agentContext?.bindings?.runtime || null,
+        getRuntimeFromAgentContext(ctx.agentContext).eventListener,
         "resolve_model_messages",
         {
           purpose: String(purpose || "").trim(),

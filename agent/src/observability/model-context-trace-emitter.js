@@ -6,14 +6,8 @@
 
 import { emitEvent } from "../events/index.js";
 
-export function emitModelContextTrace(runtimeOrListener = null, stage = "", payload = {}) {
-  const runtime = runtimeOrListener && typeof runtimeOrListener === "object" && !runtimeOrListener.onEvent
-    ? runtimeOrListener
-    : {};
-  const listener = runtime?.eventListener || (runtimeOrListener?.onEvent ? runtimeOrListener : null);
-  emitEvent(listener, "model_context_trace", {
-    stage: String(stage || "unknown").trim() || "unknown",
-    ...payload,
-  });
-  return true;
+export function emitModelContextTrace(eventListener, stage, payload) {
+  const normalizedStage = String(stage || "").trim();
+  if (!normalizedStage) throw new TypeError("model context trace stage is required");
+  emitEvent(eventListener, "model_context_trace", { ...payload, stage: normalizedStage });
 }

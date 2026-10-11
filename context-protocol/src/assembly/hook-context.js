@@ -143,8 +143,3 @@ export function resolveHookClientEmitter(context = {}) {
   if (typeof context?.emitHookClientEvent !== "function") return null;
   return (event, data) => context.emitHookClientEvent(event, data);
 }
-
-export function resolveModelContextTraceEmitter(context = {}) {
-  if (typeof context?.emitModelContextTrace !== "function") return null;
-  return (stage, payload) => context.emitModelContextTrace(stage, payload);
-}

@@ -9,11 +9,14 @@ import { createModelContext } from "@noobot/context-protocol";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 
+const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
+
 test("_createPluginResolveModelMessages uses authoritative modelContext blocks", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [],
@@ -52,6 +55,7 @@ test("_createPluginResolveModelMessages keeps unsummarized injected blocks appen
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [],
@@ -91,6 +95,7 @@ test("_createPluginResolveModelMessages accepts a versioned modelContext", () =>
 
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [],
@@ -112,6 +117,7 @@ test("_createPluginResolveModelMessages no longer clips agent context to plugin 
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [],
@@ -137,6 +143,7 @@ test("_createPluginResolveModelMessages uses main-flow blocks when available", (
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [{ role: "system", content: "sys" }],
@@ -166,6 +173,7 @@ test("_createPluginResolveModelMessages does not mutate source messages or messa
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages({ agentPluginOptions: {} });
   const ctx = {
+    agentContext,
     modelContext: createModelContext({
       messageBlocks: {
         system: [{ role: "system", content: "sys" }],

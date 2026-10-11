@@ -9,6 +9,8 @@ import { createModelContext } from "@noobot/context-protocol";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
 
+const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
+
 test("ModelMessageRuntimeHelpers deep-merges selected plugin option objects", () => {
   const helpers = new ModelMessageRuntimeHelpers();
 
@@ -42,6 +44,7 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", ()
 
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [{ role: "system", content: "sys" }],
@@ -81,7 +84,7 @@ test("ModelMessageRuntimeHelpers preserves canonical identity across normalized 
     (message) => message.additional_kwargs.noobotMessageId,
   );
 
-  const resolved = resolver({ ctx: { modelContext } });
+  const resolved = resolver({ ctx: { agentContext, modelContext } });
 
   assert.equal(resolved[0], modelContext.messageBlocks.history[0]);
   assert.equal(resolved[1], modelContext.messageBlocks.incremental[0]);
@@ -102,6 +105,7 @@ test("ModelMessageRuntimeHelpers resolves non-main history from authoritative mo
   const resolved = resolver({
     purpose: "planning",
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [{ role: "system", content: "sys" }],
@@ -139,6 +143,7 @@ test("ModelMessageRuntimeHelpers does not clip authoritative non-main blocks", (
   const resolved = resolver({
     purpose: "planning",
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [{ role: "system", content: "sys" }],
@@ -161,6 +166,7 @@ test("ModelMessageRuntimeHelpers does not clip non-main model context by default
 
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [],
@@ -187,6 +193,7 @@ test("ModelMessageRuntimeHelpers never clips non-main model context in injected 
 
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [],
@@ -213,6 +220,7 @@ test("ModelMessageRuntimeHelpers keeps unsummarized incremental injections appen
 
   const resolved = resolver({
     ctx: {
+      agentContext,
       modelContext: createModelContext({
         messageBlocks: {
           system: [],

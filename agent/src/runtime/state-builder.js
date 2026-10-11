@@ -258,8 +258,7 @@ function emitAgentStateDiagnostics({
     messageIds: modelMessageIds.slice(-12),
     truncatedMessageIdCount: Math.max(0, modelMessageIds.length - 12),
   });
-  emitModelContextTrace(runtime, "agent_state_built", {
-    dialogProcessId: activeTurnIdentity.dialogProcessId,
+  emitModelContextTrace(runtime.eventListener, "agent_state_built", {
     payloadMessages: {
       systemCount: context.modelContext.messageBlocks.system.length,
       historyCount: context.modelContext.messageBlocks.history.length,

@@ -313,17 +313,10 @@ export class ContextBuilder {
   async _buildSessionContext({ dialogProcessId = "", mode = "" } = {}) {
     const sessionProjection = await this._resolveSessionRecords({ dialogProcessId });
     const sessionRecords = sessionProjection.messages;
-    emitModelContextTrace(
-      { ...(this.runConfig || {}), eventListener: this.eventListener },
-      "context_records_resolved",
-      {
-        mode,
-        sessionId: this.sessionId || "",
-        dialogProcessId,
-        currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
-        records: summarizeDiagnosticMessages(sessionRecords),
-      },
-    );
+    emitModelContextTrace(this.eventListener, "context_records_resolved", {
+      mode,
+      records: summarizeDiagnosticMessages(sessionRecords),
+    });
     const longMemory = await this._resolveLongMemoryForInjection();
     const { systemContext, runtimeBasePath, attachments } = await this._buildSystemContext({
       dialogProcessId,

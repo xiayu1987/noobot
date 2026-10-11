@@ -193,7 +193,7 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
     controlKey: "modelContextTrace",
     exposeToClient: false,
     executionCategory: "model_context_trace",
-    gatesExecutionBundle: false,
+    gatesExecutionBundle: true,
   },
 
   [STREAM_DELTA_DEBUG_TYPE]: { controlKey: "frontendStreamDelta", exposeToClient: true },

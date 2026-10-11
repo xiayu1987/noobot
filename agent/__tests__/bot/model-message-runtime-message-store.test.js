@@ -9,11 +9,14 @@ import { createModelContext } from "@noobot/context-protocol";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
 
+const agentContext = { bindings: { runtime: { eventListener: { onEvent() {} } }, tools: [] } };
+
 test("ModelMessageRuntimeHelpers resolveModelMessages uses explicit block arrays only", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
   const canonicalIncremental = { role: "assistant", content: "drop-by-id", summarized: true };
   const ctx = {
+    agentContext,
     modelContext: createModelContext({
       messageBlocks: {
         system: [{ role: "system", content: "sys" }],
@@ -35,6 +38,7 @@ test("ModelMessageRuntimeHelpers ignores stray block id views", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
   const ctx = {
+    agentContext,
     modelContext: createModelContext({
       messageBlocks: {
         system: [{ role: "system", content: "sys" }],

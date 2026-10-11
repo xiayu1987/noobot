@@ -36,13 +36,14 @@ test("execution-log debug categories derive their debugType from the single regi
   assert.equal(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES["model-context-trace"].exposeToClient, false);
 });
 
-test("bundle-gated debug categories follow their switch; model context trace keeps the bundle", () => {
+test("bundle-gated debug categories follow their switch", () => {
   const off = {
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: "false",
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.modelContextTrace]: "false",
   };
   const on = {
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: "true",
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.modelContextTrace]: "true",
   };
   assert.equal(
     shouldRecordRuntimeExecutionLog({ category: "context_identity" }, { env: off }),
@@ -61,6 +62,14 @@ test("bundle-gated debug categories follow their switch; model context trace kee
       { event: "model_context_trace", category: "model_context_trace" },
       { env: off },
     ),
+    false,
+  );
+  assert.equal(
+    shouldRecordRuntimeExecutionLog({ category: "model_context_trace" }, { env: {} }),
+    false,
+  );
+  assert.equal(
+    shouldRecordRuntimeExecutionLog({ category: "model_context_trace" }, { env: on }),
     true,
   );
 });

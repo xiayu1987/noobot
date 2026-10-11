@@ -102,7 +102,7 @@ function emitHookDocumentConsumed(runtime = {}, context = {}) {
 function emitHookContextTrace(point = "", runtime = {}, context = {}) {
   const normalizedPoint = String(point || "").trim();
   if (normalizedPoint !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
-  emitModelContextTrace(runtime, "hook_context_built", {
+  emitModelContextTrace(runtime.eventListener, "hook_context_built", {
     point: normalizedPoint,
     mode: context.mode,
     turn: context.turn,

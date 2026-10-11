@@ -129,6 +129,7 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
     sessionId: "s1",
     dialogProcessId: "d1",
     contextProtocolVersion: 2,
+    agentContext: createTestAgentExecutionScope({ eventListener: { onEvent() {} } }),
     modelContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: messages },
     }),
