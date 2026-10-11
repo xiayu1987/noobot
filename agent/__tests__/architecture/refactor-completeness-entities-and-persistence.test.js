@@ -172,12 +172,22 @@ describe("2. 字段对齐测试", () => {
   });
 
   describe("normalizeSessionTreeEntity 字段对齐", () => {
-    it("只包含 nodes 与 updatedAt 字段", () => {
+    it("只包含 nodes 字段", () => {
       const normalized = normalizeSessionTreeEntity({
         nodes: { "session-1": { sessionId: "session-1", parentSessionId: "" } },
       });
-      assert.deepEqual(Object.keys(normalized).sort(), ["nodes", "updatedAt"]);
-      assert.ok(typeof normalized.nodes === "object", "nodes 应为对象");
+      assert.deepEqual(normalized, {
+        nodes: { "session-1": { sessionId: "session-1", parentSessionId: "" } },
+      });
+    });
+
+    it("拒绝带时间戳的旧版会话树", () => {
+      assert.throws(() => normalizeSessionTreeEntity({ nodes: {}, updatedAt: "t" }), TypeError);
+      assert.throws(
+        () =>
+          normalizeSessionTreeEntity({ nodes: { s1: { parentSessionId: "", createdAt: "t" } } }),
+        TypeError,
+      );
     });
 
     it("nodes 中每个节点应规范化 sessionId 和 parentSessionId", () => {

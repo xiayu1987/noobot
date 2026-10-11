@@ -200,15 +200,17 @@ export function normalizeSessionEntity(
 }
 
 function assertSessionTreeSchema(tree, nodes) {
-  const legacyNode = Object.values(nodes).some((node) => node && "children" in node);
-  if (tree && ("roots" in tree || legacyNode)) {
+  const legacyNode = Object.values(nodes).some(
+    (node) => node && ("children" in node || "createdAt" in node || "updatedAt" in node),
+  );
+  if (tree && ("roots" in tree || "updatedAt" in tree || legacyNode)) {
     throw new TypeError(
-      "legacy session tree fields roots/children are not supported; the workspace layout upgrade maps them to parentSessionId",
+      "legacy session tree fields roots/children/createdAt/updatedAt are not supported; the workspace layout upgrade maps them to parentSessionId",
     );
   }
 }
 
-export function normalizeSessionTreeEntity(tree = {}, now = () => new Date().toISOString()) {
+export function normalizeSessionTreeEntity(tree = {}) {
   const nodes = tree?.nodes && typeof tree.nodes === "object" ? { ...tree.nodes } : {};
   assertSessionTreeSchema(tree, nodes);
   for (const [nodeId, node] of Object.entries(nodes)) {
@@ -220,14 +222,8 @@ export function normalizeSessionTreeEntity(tree = {}, now = () => new Date().toI
     nodes[normalizedNodeId] = {
       sessionId: normalizedNodeId,
       parentSessionId: String(node?.parentSessionId || "").trim(),
-      createdAt: node?.createdAt,
-      updatedAt: node?.updatedAt,
     };
     if (normalizedNodeId !== nodeId) delete nodes[nodeId];
   }
-
-  return {
-    nodes,
-    updatedAt: tree?.updatedAt || now(),
-  };
+  return { nodes };
 }

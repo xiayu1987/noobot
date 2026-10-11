@@ -9,10 +9,9 @@ import { normalizeSessionTreeEntity } from "../entities/session-entity.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 export class FileSystemSessionTreeRepository {
-  constructor({ pathResolver, storageService, now = () => new Date().toISOString() } = {}) {
+  constructor({ pathResolver, storageService } = {}) {
     this.pathResolver = pathResolver;
     this.storageService = storageService;
-    this.now = now;
     this._locks = new Map();
   }
 
@@ -48,13 +47,10 @@ export class FileSystemSessionTreeRepository {
     const basePath = this._basePath(userId);
     const ensured = await this.storageService.ensureRuntimeDirsByBasePath(basePath);
     if (!ensured) {
-      return { nodes: {}, updatedAt: this.now() };
+      return { nodes: {} };
     }
-    const tree = await this.storageService.readJson(this._treeFile(userId), {
-      nodes: {},
-      updatedAt: this.now(),
-    });
-    return normalizeSessionTreeEntity(tree, this.now);
+    const tree = await this.storageService.readJson(this._treeFile(userId), { nodes: {} });
+    return normalizeSessionTreeEntity(tree);
   }
 
   async saveTree(userId, tree = {}) {
@@ -66,11 +62,10 @@ export class FileSystemSessionTreeRepository {
         details: { basePath },
       });
     }
-    const normalizedTree = normalizeSessionTreeEntity(tree, this.now);
-    await this.storageService.writeJsonAtomic(this._treeFile(userId), {
-      nodes: normalizedTree.nodes,
-      updatedAt: this.now(),
-    });
+    await this.storageService.writeJsonAtomic(
+      this._treeFile(userId),
+      normalizeSessionTreeEntity(tree),
+    );
   }
 
   async withLock(userId, callback) {

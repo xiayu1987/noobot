@@ -7,6 +7,12 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { EXECUTION_REPORT_VERSION } from "@noobot/session-protocol/execution-report";
+import {
+  SESSION_TREE_UNRECOVERABLE,
+  isLegacySessionTree,
+  mapLegacySessionTree,
+  rebuildSessionTree,
+} from "@noobot/session-repair";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { sessionMutationCoordinator } from "../session/session-mutation-coordinator.js";
 import {
@@ -61,49 +67,47 @@ function createRetirement(base, backupBase) {
   };
 }
 
-export function mapLegacySessionTree(tree) {
-  const nodes = tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
-  return {
-    nodes: Object.fromEntries(
-      Object.entries(nodes).map(([sessionId, node]) => [
-        sessionId,
-        {
-          sessionId,
-          parentSessionId: String(node?.parentSessionId || "").trim(),
-          createdAt: node?.createdAt,
-          updatedAt: node?.updatedAt,
-        },
-      ]),
-    ),
-    updatedAt: tree?.updatedAt,
-  };
+async function readSessionDocuments(sessionRoot) {
+  const documents = [];
+  for (const entry of await listDirectories(sessionRoot)) {
+    const session = await readJsonDocument(
+      path.join(sessionRoot, entry.name, SESSION_ARTIFACT_FILE_NAMES.session),
+    );
+    if (!session.exists) continue;
+    documents.push({ directoryName: entry.name, document: session.document });
+  }
+  return documents;
 }
 
-function isLegacySessionTree(tree) {
-  const nodes = tree?.nodes && typeof tree.nodes === "object" ? Object.values(tree.nodes) : [];
-  return Boolean(tree) && ("roots" in tree || nodes.some((node) => node && "children" in node));
+async function resolveSessionTreeUpgrade({ base, document }) {
+  if (document && !isLegacySessionTree(document)) return null;
+  if (document) return { action: "mapped", tree: mapLegacySessionTree(document) };
+  try {
+    const sessionRoot = path.join(base, WORKSPACE_LAYOUT.SESSION_DIR);
+    return { action: "rebuilt", tree: rebuildSessionTree(await readSessionDocuments(sessionRoot)) };
+  } catch (error) {
+    if (error?.code !== SESSION_TREE_UNRECOVERABLE) throw error;
+    return { action: "retired", reason: error.message };
+  }
 }
 
-async function upgradeSessionTree({ base, backupBase }) {
+async function upgradeSessionTree({ base, retire }) {
   const treeFile = path.join(base, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
   const current = await readJsonDocument(treeFile);
-  if (!current.exists || !isLegacySessionTree(current.document)) return null;
-  const backupPath = path.join(backupBase, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
-  await mkdir(path.dirname(backupPath), { recursive: true });
-  await writeFile(backupPath, `${JSON.stringify(current.document, null, 2)}\n`, { flag: "wx" });
-  const next = mapLegacySessionTree(current.document);
+  if (!current.exists) return null;
+  const upgrade = await resolveSessionTreeUpgrade({ base, document: current.document });
+  if (!upgrade) return null;
+  const backupPath = await retire(WORKSPACE_LAYOUT.SESSION_TREE_FILE);
+  const report = { path: WORKSPACE_LAYOUT.SESSION_TREE_FILE, action: upgrade.action, backupPath };
+  if (upgrade.action === "retired") return { ...report, reason: upgrade.reason };
   await writeFileAtomic({
     filePath: treeFile,
-    content: `${JSON.stringify(next, null, 2)}\n`,
+    content: `${JSON.stringify(upgrade.tree, null, 2)}\n`,
     writeFile,
     rename,
     remove: rm,
   });
-  return {
-    path: WORKSPACE_LAYOUT.SESSION_TREE_FILE,
-    nodes: Object.keys(next.nodes).length,
-    backupPath,
-  };
+  return { ...report, nodes: Object.keys(upgrade.tree.nodes).length };
 }
 
 async function isRetiredExecutionEvents(sessionDir) {
@@ -177,8 +181,8 @@ async function* walkSessionDirectories(base, directory) {
 }
 
 export async function upgradeSessionStorage({ base, backupBase }) {
-  const sessionTree = await upgradeSessionTree({ base, backupBase });
   const retire = createRetirement(base, backupBase);
+  const sessionTree = await upgradeSessionTree({ base, retire });
   const retired = [];
   const runtimeRoot = path.join(base, WORKSPACE_LAYOUT.RUNTIME_DIR);
   for await (const sessionDir of walkSessionDirectories(base, runtimeRoot)) {

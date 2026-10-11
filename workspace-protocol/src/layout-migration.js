@@ -21,6 +21,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     toVersion: 2,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE,
   }),
+  Object.freeze({
+    id: "session-tree-parent-only-v3",
+    toVersion: 3,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE,
+  }),
 ]);
 
 function layoutStateError(message) {

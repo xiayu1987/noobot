@@ -171,7 +171,11 @@ test("layout upgrades run every step above the installed version and end at the 
     planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_UNMARKED_VERSION }).map(
       (item) => item.id,
     ),
-    ["session-storage-v2"],
+    ["session-storage-v2", "session-tree-parent-only-v3"],
+  );
+  assert.deepEqual(
+    planWorkspaceLayoutUpgrades({ installedVersion: 2 }).map((item) => item.id),
+    ["session-tree-parent-only-v3"],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);
   assert.equal(WORKSPACE_LAYOUT_UPGRADES.at(-1).toVersion, WORKSPACE_LAYOUT_VERSION);

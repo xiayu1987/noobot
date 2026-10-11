@@ -15,3 +15,9 @@ export {
 } from "./document-migration.js";
 export { reconcileExecutionSegmentIndex, reconcileSessionSummaryIndex } from "./index-reconcile.js";
 export { runAtomicSessionRepair } from "./atomic-repair.js";
+export {
+  SESSION_TREE_UNRECOVERABLE,
+  isLegacySessionTree,
+  mapLegacySessionTree,
+  rebuildSessionTree,
+} from "./session-tree-rebuild.js";

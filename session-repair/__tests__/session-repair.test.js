@@ -14,8 +14,12 @@ import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
 import {
+  SESSION_TREE_UNRECOVERABLE,
+  isLegacySessionTree,
+  mapLegacySessionTree,
   migrateSessionDocument,
   readSessionForProtocolRepair,
+  rebuildSessionTree,
   reconcileCompletedTurnSummaryMarks,
   reconcileDuplicateCanonicalAssistantPresentations,
   reconcileExecutionSegmentIndex,
@@ -24,6 +28,51 @@ import {
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
 } from "../src/index.js";
+
+test("session tree rules keep only parent identity and reject unrecoverable documents", () => {
+  assert.equal(
+    isLegacySessionTree({ nodes: { s: { sessionId: "s", parentSessionId: "" } } }),
+    false,
+  );
+  assert.equal(isLegacySessionTree({ nodes: {}, updatedAt: "t" }), true);
+  assert.equal(isLegacySessionTree({ roots: [], nodes: {} }), true);
+  assert.deepEqual(
+    mapLegacySessionTree({
+      roots: ["a"],
+      nodes: {
+        a: { parentSessionId: "", children: ["b"], createdAt: "t" },
+        b: { parentSessionId: "a" },
+      },
+      updatedAt: "t",
+    }),
+    {
+      nodes: {
+        a: { sessionId: "a", parentSessionId: "" },
+        b: { sessionId: "b", parentSessionId: "a" },
+      },
+    },
+  );
+  assert.deepEqual(
+    rebuildSessionTree([
+      { directoryName: "a", document: { sessionId: "a", parentSessionId: "", createdAt: "t" } },
+      { directoryName: "b", document: { sessionId: "b", parentSessionId: "a" } },
+    ]),
+    {
+      nodes: {
+        a: { sessionId: "a", parentSessionId: "" },
+        b: { sessionId: "b", parentSessionId: "a" },
+      },
+    },
+  );
+  for (const documents of [
+    [{ directoryName: "a", document: null }],
+    [{ directoryName: "a", document: { sessionId: "other" } }],
+    [{ directoryName: "a", document: { sessionId: "a", parentSessionId: 1 } }],
+    [{ directoryName: "b", document: { sessionId: "b", parentSessionId: "missing" } }],
+  ]) {
+    assert.throws(() => rebuildSessionTree(documents), { code: SESSION_TREE_UNRECOVERABLE });
+  }
+});
 
 test("session repair demotes older duplicate canonical assistant presentations", () => {
   const result = reconcileDuplicateCanonicalAssistantPresentations({

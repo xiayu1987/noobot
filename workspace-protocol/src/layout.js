@@ -4,10 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const WORKSPACE_LAYOUT_VERSION = 2;
+export const WORKSPACE_LAYOUT_VERSION = 3;
+
+export const WORKSPACE_ROOT_LAYOUT = Object.freeze({
+  USERS_FILE: "user.json",
+  CONFIG_PARAMS_FILE: "config-params.json",
+});
 
 export const WORKSPACE_LAYOUT = Object.freeze({
   CONFIG_FILE: "config.json",
+  CONFIG_PARAMS_FILE: "config-params.json",
   RETIRED_CONFIG_EXAMPLE_FILE: "config.example.json",
   MEMORY_DIR: "memory",
   SERVICES_DIR: "services",
@@ -42,6 +48,14 @@ export const WORKSPACE_RUNTIME_DIRECTORIES = Object.freeze([
   WORKSPACE_LAYOUT.BROWSER_PROFILES_DIR,
   WORKSPACE_LAYOUT.PLUGIN_ASSETS_DIR,
   WORKSPACE_LAYOUT.PLUGIN_DATA_DIR,
+]);
+
+export const WORKSPACE_USER_CONFIGURATION_ENTRIES = Object.freeze([
+  WORKSPACE_LAYOUT.CONFIG_FILE,
+  WORKSPACE_LAYOUT.CONFIG_PARAMS_FILE,
+  WORKSPACE_LAYOUT.MEMORY_DIR,
+  WORKSPACE_LAYOUT.SERVICES_DIR,
+  WORKSPACE_LAYOUT.SKILLS_DIR,
 ]);
 
 export const WORKSPACE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/;

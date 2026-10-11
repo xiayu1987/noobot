@@ -78,10 +78,9 @@ test("unmarked workspace maps the legacy session tree and retires v1 artifacts",
 
     assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
       nodes: {
-        "s-1": { sessionId: "s-1", parentSessionId: "", createdAt: "t0" },
-        "s-2": { sessionId: "s-2", parentSessionId: "s-1", createdAt: "t1" },
+        "s-1": { sessionId: "s-1", parentSessionId: "" },
+        "s-2": { sessionId: "s-2", parentSessionId: "s-1" },
       },
-      updatedAt: "t2",
     });
     const stamp = await readBackupStamp(fixture);
     assert.deepEqual(
@@ -147,6 +146,90 @@ test("upgrade is applied once and later ensures are no-ops", async () => {
     const stamp = await readBackupStamp(fixture);
     await ensureUserWorkspace(fixture.options);
     assert.equal(await readBackupStamp(fixture), stamp);
+  } finally {
+    await fixture.restore();
+  }
+});
+
+async function upgradeFromV2(fixture, tree) {
+  await fixture.write(WORKSPACE_LAYOUT.LAYOUT_STATE_FILE, { version: 2 });
+  await fixture.write(WORKSPACE_LAYOUT.SESSION_TREE_FILE, tree);
+  await ensureUserWorkspace(fixture.options);
+  return readBackupStamp(fixture);
+}
+
+async function writeSessionDocument(fixture, sessionId, parentSessionId) {
+  await fixture.write(`runtime/session/${sessionId}/session.json`, { sessionId, parentSessionId });
+}
+
+test("v2 workspace drops session tree timestamps duplicated from session documents", async () => {
+  const fixture = await createFixture();
+  try {
+    const tree = {
+      nodes: { "s-1": { sessionId: "s-1", parentSessionId: "", createdAt: "t0", updatedAt: "t1" } },
+      updatedAt: "t2",
+    };
+    const stamp = await upgradeFromV2(fixture, tree);
+    assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
+      nodes: { "s-1": { sessionId: "s-1", parentSessionId: "" } },
+    });
+    assert.deepEqual(
+      await fixture.readJson(`${stamp}/${WORKSPACE_LAYOUT.SESSION_TREE_FILE}`),
+      tree,
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("corrupt session tree is rebuilt from session documents", async () => {
+  const fixture = await createFixture();
+  try {
+    await writeSessionDocument(fixture, "s-1", "");
+    await writeSessionDocument(fixture, "s-2", "s-1");
+    await fixture.write("runtime/session/orphan/events/x.jsonl", "{}\n");
+    const stamp = await upgradeFromV2(fixture, "{not json");
+    assert.deepEqual(await fixture.readJson(WORKSPACE_LAYOUT.SESSION_TREE_FILE), {
+      nodes: {
+        "s-1": { sessionId: "s-1", parentSessionId: "" },
+        "s-2": { sessionId: "s-2", parentSessionId: "s-1" },
+      },
+    });
+    assert.equal(
+      await readFile(fixture.at(`${stamp}/${WORKSPACE_LAYOUT.SESSION_TREE_FILE}`), "utf8"),
+      "{not json",
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("corrupt session tree is retired when session documents cannot rebuild it", async () => {
+  const fixture = await createFixture();
+  try {
+    await writeSessionDocument(fixture, "s-2", "missing-parent");
+    const stamp = await upgradeFromV2(fixture, "{not json");
+    assert.equal(await fixture.exists(WORKSPACE_LAYOUT.SESSION_TREE_FILE), false);
+    assert.equal(
+      await readFile(fixture.at(`${stamp}/${WORKSPACE_LAYOUT.SESSION_TREE_FILE}`), "utf8"),
+      "{not json",
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("corrupt execution index has no other fact source and is retired", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.write(`${SESSION_DIR}/execution-events/index.json`, "{not json");
+    await ensureUserWorkspace(fixture.options);
+    const stamp = await readBackupStamp(fixture);
+    assert.equal(await fixture.exists(`${SESSION_DIR}/execution-events`), false);
+    assert.equal(
+      await readFile(fixture.at(`${stamp}/${SESSION_DIR}/execution-events/index.json`), "utf8"),
+      "{not json",
+    );
   } finally {
     await fixture.restore();
   }

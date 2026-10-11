@@ -116,7 +116,6 @@ export function createSessionServices(
     async getSessionLifecycle({ userId = "", sessionId = "", initialize = true } = {}) {
       return sessionRepository.getSessionLifecycle(userId, sessionId, { initialize });
     },
-    now: nowFn,
   });
 
   const sessionPathResolver = new SessionPathResolver({
@@ -159,7 +158,6 @@ export function createSessionServices(
   const sessionTreeService = new SessionTreeService({
     sessionRepo: sessionRepository,
     treeRepo: sessionTreeRepository,
-    now: nowFn,
   });
 
   const sessionCrudService = new SessionCrudService({

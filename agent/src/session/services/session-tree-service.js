@@ -8,10 +8,9 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 export class SessionTreeService {
-  constructor({ sessionRepo, treeRepo, now = () => new Date().toISOString() } = {}) {
+  constructor({ sessionRepo, treeRepo } = {}) {
     this.sessionRepo = sessionRepo;
     this.treeRepo = treeRepo;
-    this.now = now;
   }
 
   async ensureRuntimeDirs(userId) {
@@ -28,7 +27,6 @@ export class SessionTreeService {
         return false;
       }
       const sessionTree = await this.treeRepo.getTree(userId);
-      const now = this.now();
       const normalizedParentSessionId = String(parentSessionId || "").trim();
 
       if (
@@ -47,12 +45,9 @@ export class SessionTreeService {
           },
         );
       }
-      const existingNode = sessionTree.nodes[normalizedSessionId];
       sessionTree.nodes[normalizedSessionId] = {
         sessionId: normalizedSessionId,
         parentSessionId: normalizedParentSessionId,
-        createdAt: existingNode?.createdAt || now,
-        updatedAt: now,
       };
 
       await this.treeRepo.saveTree(userId, sessionTree);
@@ -128,10 +123,7 @@ export class SessionTreeService {
           for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
             if (!deleteSet.has(id)) nextNodes[id] = node;
           }
-          await this.treeRepo.saveTree(userId, {
-            nodes: nextNodes,
-            updatedAt: this.now(),
-          });
+          await this.treeRepo.saveTree(userId, { nodes: nextNodes });
         }
       };
       await this.sessionRepo.withSessionLifecycleMutations(
