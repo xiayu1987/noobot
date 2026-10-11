@@ -30,11 +30,13 @@ export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
 export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENT_PLUGIN_RUN_CONFIG_DEBUG='true'
+export NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG='true'
 ```
 
 `NOOBOT_WORKSPACE_ROOT` is the single workspace-root fact. The E2E and runtime-event variables
 declare reader responsibilities only and must derive from that root. Explicit roots must be
-absolute. Using different roots for the proxy and the audit process makes the configuration
+absolute. `NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG` must be enabled on the service under
+test: `model_context_trace` is off by default and the model invocation audit requires it. Using different roots for the proxy and the audit process makes the configuration
 invalid because the evidence chain cannot close.
 
 Services must be started outside the tests. Tests do not use a mock backend or create business
@@ -109,12 +111,14 @@ export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
 export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENT_PLUGIN_RUN_CONFIG_DEBUG='true'
+export NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG='true'
 ```
 
 `NOOBOT_E2E_WORKSPACE_ROOT` 是审计进程读取 Session、快照和 runtime-events 的根目录。
 所有被测服务和 E2E 审计必须使用同一个 `NOOBOT_WORKSPACE_ROOT`。两个专用变量只声明各进程的
 读取职责，其值必须派生自该唯一根目录。禁止让代理和 E2E 审计使用不同的 workspace 根目录，
 否则 runtime-events 数据链不闭合，测试配置应视为无效。三个变量只要显式设置就必须使用绝对路径。
+被测服务必须打开 `NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG`：`model_context_trace` 默认不落盘，而模型调用审计依赖它。
 
 服务应由测试外部启动。测试不使用模拟后端，也不通过文件系统或内部接口创建业务事实。
 协议场景固定使用单 worker 串行执行；PBE-014、PBE-015、PBE-023 和 PBE-024 在场景内部

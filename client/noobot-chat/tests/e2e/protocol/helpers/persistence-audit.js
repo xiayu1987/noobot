@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { readSessionArtifact } from "noobot-agent/session";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
@@ -22,13 +23,54 @@ export function workspaceRoot() {
 }
 
 export function sessionRoot(userId, sessionId) {
-  return path.join(workspaceRoot(), userId, "runtime/session", sessionId);
+  return path.join(workspaceRoot(), userId, WORKSPACE_LAYOUT.SESSION_DIR, sessionId);
 }
 
-function sessionTreeRoots(userId, rootSessionId) {
+async function readParentSessionId(sessionDir) {
+  try {
+    const fact = await readJson(path.join(sessionDir, "session.json"));
+    return String(fact?.parentSessionId || "").trim();
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+async function detachedDescendantRoots(userId, rootSessionId) {
+  const agentSessionDir = path.join(workspaceRoot(), userId, WORKSPACE_LAYOUT.AGENT_SESSION_DIR);
+  let names = [];
+  try {
+    names = await fs.readdir(agentSessionDir);
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const parentById = new Map(
+    await Promise.all(
+      names.map(async (name) => [
+        name,
+        await readParentSessionId(path.join(agentSessionDir, name)),
+      ]),
+    ),
+  );
+  const belongsToRoot = (sessionId) => {
+    const visited = new Set();
+    let current = parentById.get(sessionId);
+    while (current && !visited.has(current)) {
+      if (current === rootSessionId) return true;
+      visited.add(current);
+      current = parentById.get(current);
+    }
+    return false;
+  };
+  return names.filter(belongsToRoot).map((name) => path.join(agentSessionDir, name));
+}
+
+async function sessionTreeRoots(userId, rootSessionId) {
   return [
     sessionRoot(userId, rootSessionId),
     path.join(workspaceRoot(), userId, "runtime/plugin-data/workflow/session", rootSessionId),
+    ...(await detachedDescendantRoots(userId, rootSessionId)),
   ];
 }
 
@@ -343,7 +385,7 @@ export async function readSessionExecutionEventTree(
 
   const segments = (
     await Promise.all(
-      sessionTreeRoots(userId, normalizedRootSessionId).map((root) =>
+      (await sessionTreeRoots(userId, normalizedRootSessionId)).map((root) =>
         findExecutionEventSegments(root),
       ),
     )
@@ -444,7 +486,7 @@ export async function readFileMutationRecords(userId, sessionId, { rootSessionId
   if (!scopeId) return [];
   return (
     await Promise.all(
-      sessionTreeRoots(userId, scopeId).map((root) => findFileMutationRecords(root)),
+      (await sessionTreeRoots(userId, scopeId)).map((root) => findFileMutationRecords(root)),
     )
   ).flat();
 }

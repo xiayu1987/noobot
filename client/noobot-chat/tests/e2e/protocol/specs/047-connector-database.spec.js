@@ -17,6 +17,10 @@ import { commandsForSession, waitForCommand } from "../helpers/scenario-assertio
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
+function mysqlHost() {
+  return String(process.env.NOOBOT_E2E_MYSQL_HOST || "127.0.0.1").trim();
+}
+
 function requiredMysqlPassword() {
   const password = String(process.env.NOOBOT_E2E_MYSQL_PASSWORD || "");
   if (!password) throw new Error("NOOBOT_E2E_MYSQL_PASSWORD is required");
@@ -108,7 +112,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
   const connectorTypeSelects = drawer.locator(".type-grid .el-select");
   await selectOption(connectorTypeSelects.nth(0), "database");
   await selectOption(connectorTypeSelects.nth(1), "mysql");
-  await drawer.getByRole("textbox", { name: /^\*?(主机|Host)$/i }).fill("127.0.0.1");
+  await drawer.getByRole("textbox", { name: /^\*?(主机|Host)$/i }).fill(mysqlHost());
   await drawer.getByRole("spinbutton", { name: /^(端口|Port)$/i }).fill("3306");
   await drawer.getByRole("textbox", { name: /^\*?(用户名|Username)$/i }).fill("root");
   await drawer
