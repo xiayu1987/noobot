@@ -6,15 +6,19 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { createReadStream } from "node:fs";
-import { appendFile, cp, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { requireDialogProcessKey } from "@noobot/session-protocol";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
-import { SESSION_ARTIFACT_FILE_NAMES, writeJsonArtifactFile } from "./session-artifact-files.js";
+import {
+  SESSION_ARTIFACT_FILE_NAMES,
+  resolveSessionArtifactMutationLock,
+  writeJsonArtifactFile,
+} from "./session-artifact-files.js";
 
 export const EXECUTION_EVENT_TURNS_DIR = "turns";
-const EXECUTION_EVENT_INDEX_FILE = "index.json";
-const EXECUTION_EVENT_INDEX_SCHEMA_VERSION = 2;
+export const EXECUTION_EVENT_INDEX_FILE = "index.json";
+export const EXECUTION_EVENT_INDEX_SCHEMA_VERSION = 2;
 
 function indexCorrupted(message) {
   const failure = new Error(message);
@@ -25,7 +29,7 @@ function indexCorrupted(message) {
 function assertIndexSchema(index, indexPath) {
   if (index.schemaVersion === EXECUTION_EVENT_INDEX_SCHEMA_VERSION) return;
   const failure = new Error(
-    `execution event index schemaVersion ${index.schemaVersion} is unsupported (expected ${EXECUTION_EVENT_INDEX_SCHEMA_VERSION}): ${indexPath}; run scripts/migrate-execution-events-v2.mjs`,
+    `execution event index schemaVersion ${index.schemaVersion} is unsupported (expected ${EXECUTION_EVENT_INDEX_SCHEMA_VERSION}): ${indexPath}`,
   );
   failure.code = "EXECUTION_EVENT_INDEX_SCHEMA_UNSUPPORTED";
   throw failure;
@@ -185,17 +189,6 @@ export async function readExecutionLogs(sessionDir = "", options = {}) {
   return logs;
 }
 
-export async function copyExecutionEvents(sourceSessionDir = "", targetSessionDir = "") {
-  const sourceDir = resolveExecutionEventsDir(sourceSessionDir);
-  const targetDir = resolveExecutionEventsDir(targetSessionDir);
-  await rm(targetDir, { recursive: true, force: true });
-  if (!(await listExecutionEventTurns(sourceSessionDir)).length) return;
-  await cp(sourceDir, targetDir, {
-    recursive: true,
-    filter: (entry) => !String(entry).endsWith(".tmp"),
-  });
-}
-
 function serializeJsonl(log) {
   return `${JSON.stringify(log && typeof log === "object" ? log : { value: log })}\n`;
 }
@@ -312,7 +305,7 @@ export async function appendRollingJsonlArtifactLog({
     throw new Error("appendRollingJsonlArtifactLog requires sessionDir");
   }
   if (!alreadyLocked && mutationCoordinator?.run) {
-    return mutationCoordinator.run(path.join(sessionDir, ".mutation-lock"), () =>
+    return mutationCoordinator.run(resolveSessionArtifactMutationLock(sessionDir), () =>
       appendRollingJsonlArtifactLog({ sessionDir, log, maxSegmentBytes, alreadyLocked: true }),
     );
   }

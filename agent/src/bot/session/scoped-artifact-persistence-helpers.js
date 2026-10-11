@@ -8,7 +8,6 @@ import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
-import { persistSnapshotJsonFiles } from "./session-execution-engine-utils.js";
 
 const assertInsideWorkspace = (resolvedWorkspacePath, resolvedDir) => {
   const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedDir);
@@ -70,41 +69,6 @@ export class ScopedArtifactPersistenceHelpers {
       outputDir,
       outputFile: path.join(outputDir, normalizedFileName),
     };
-  }
-
-  async persistSubSessionSnapshot({
-    userId = "",
-    sessionId = "",
-    parentSessionId = "",
-    outputDir = "",
-    metadata = null,
-  } = {}) {
-    if (!userId || !sessionId || !outputDir) return null;
-    const sessionBundle = await this.session.getSessionBundle({
-      userId,
-      sessionId,
-      parentSessionId,
-    });
-    const { sessionDir: executionEventsSourceDir } = await this.session.resolveSessionScope({
-      userId,
-      sessionId,
-      parentSessionId,
-    });
-    const session =
-      sessionBundle?.session && typeof sessionBundle.session === "object"
-        ? sessionBundle.session
-        : null;
-    const tasks = Array.isArray(sessionBundle?.turnTasks) ? sessionBundle.turnTasks : [];
-    return this.session.withSessionLifecycleMutation({ userId, sessionId }, () =>
-      persistSnapshotJsonFiles({
-        outputDir,
-        sessionPayload: session || { sessionId, messages: [] },
-        taskPayload: { sessionId, currentTaskId: "", tasks, updatedAt: this.now() },
-        executionEventsSourceDir,
-        metadata,
-        assertSessionWritable: () => this.session.assertSessionWritable({ userId, sessionId }),
-      }),
-    );
   }
 
   createScopedJsonWriter() {

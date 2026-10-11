@@ -17,16 +17,12 @@ import {
   buildSessionArtifactFileMap,
   cleanupSessionArtifacts,
   inspectSessionArtifacts,
-  persistSessionArtifactSnapshot,
-  readExecutionLogs,
   readSessionArtifact,
-  readSessionArtifactSnapshot,
   repairSessionArtifacts,
   writeSessionArtifact as writeSessionArtifactCanonical,
 } from "../../src/session/session-artifact-store.js";
 import {
   TEST_TURN,
-  canonicalMessages,
   turnDirOf,
   withTemp,
   writeSessionArtifact,
@@ -587,7 +583,6 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
       }),
       "utf8",
     );
-    const lockDir = path.join(root, ".lifecycle", "deleted-session.lock");
     const assertDeleted = async () => {
       throw createSessionDeletedError({ sessionId: "deleted-session", operation: "test" });
     };
@@ -599,7 +594,6 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
       repairSessionArtifacts({
         sessionDir,
         sessionId: "deleted-session",
-        mutationLockDir: lockDir,
         assertSessionWritable: assertDeleted,
       }),
       { code: "SESSION_DELETED" },
@@ -613,90 +607,9 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
         sessionDir,
         sessionId: "deleted-session",
         dryRun: false,
-        mutationLockDir: lockDir,
         assertSessionWritable: assertDeleted,
       }),
       { code: "SESSION_DELETED" },
     );
     await access(temp);
-  }));
-
-test("snapshot publishes committed artifacts and rejects incomplete new snapshots", async () =>
-  withTemp(async (root) => {
-    const sourceDir = path.join(root, "source");
-    await appendRollingJsonlArtifactLog({
-      sessionDir: sourceDir,
-      log: { id: 1, dialogProcessId: "turn-a" },
-    });
-    await appendRollingJsonlArtifactLog({
-      sessionDir: sourceDir,
-      log: { id: 2, dialogProcessId: "turn-b" },
-    });
-    const outputDir = path.join(root, "snapshot");
-    await persistSessionArtifactSnapshot({
-      outputDir,
-      sessionPayload: {
-        sessionId: "snapshot-session",
-        messages: canonicalMessages([{ role: "user", content: "hello" }]),
-      },
-      executionEventsSourceDir: sourceDir,
-      assertSessionWritable: allowSessionWrite,
-    });
-    const snapshot = await readSessionArtifactSnapshot({ outputDir });
-    assert.equal(snapshot.session.sessionId, "snapshot-session");
-    assert.deepEqual(
-      (await readExecutionLogs(outputDir)).map((log) => log.id),
-      [1, 2],
-    );
-    assert.deepEqual(
-      (await readExecutionLogs(outputDir, { dialogProcessId: "turn-b" })).map((log) => log.id),
-      [2],
-    );
-    await rm(path.join(outputDir, "COMMITTED"));
-    await assert.rejects(readSessionArtifactSnapshot({ outputDir }), {
-      code: "SNAPSHOT_NOT_COMMITTED",
-    });
-  }));
-
-test("snapshot publish rejects deleted sessions and cleans staging without restoring backup", async () =>
-  withTemp(async (root) => {
-    const outputDir = path.join(root, "snapshot-zombie");
-    await persistSessionArtifactSnapshot({
-      outputDir,
-      sessionPayload: {
-        sessionId: "zombie-snapshot",
-        messages: canonicalMessages([{ role: "user", content: "old" }]),
-      },
-      assertSessionWritable: allowSessionWrite,
-    });
-    let deleted = false;
-    const lockDir = path.join(root, ".lifecycle", "zombie.lock");
-    await assert.rejects(
-      persistSessionArtifactSnapshot({
-        outputDir,
-        sessionPayload: {
-          sessionId: "zombie-snapshot",
-          messages: canonicalMessages([{ role: "user", content: "new" }]),
-        },
-        mutationLockDir: lockDir,
-        assertSessionWritable: async () => {
-          if (deleted) {
-            throw createSessionDeletedError({ sessionId: "zombie-snapshot", operation: "test" });
-          }
-          deleted = true;
-        },
-      }),
-      { code: "SESSION_DELETED" },
-    );
-    const snapshot = await readSessionArtifactSnapshot({ outputDir });
-    assert.equal(snapshot.session.messages[0].content, "old");
-    const entries = await import("node:fs/promises").then(({ readdir }) => readdir(root));
-    assert.equal(
-      entries.some((name) => name.startsWith("snapshot-zombie.staging-")),
-      false,
-    );
-    assert.equal(
-      entries.some((name) => name.startsWith("snapshot-zombie.backup-")),
-      false,
-    );
   }));

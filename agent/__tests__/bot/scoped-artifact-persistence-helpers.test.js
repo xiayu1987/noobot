@@ -6,10 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import {
-  appendRollingJsonlArtifactLog,
-  readExecutionLogs,
-} from "../../src/session/session-artifact-store.js";
+
 import os from "node:os";
 import path from "node:path";
 
@@ -99,73 +96,6 @@ test("ScopedArtifactPersistenceHelpers scoped writer and event logger write insi
     () => writer({ userId: "u1", relativeDir: "plugin/node-a", fileName: "../bad.json" }),
     /plugin scoped writer fileName must be plain file name/,
   );
-});
-
-test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot from session service", async () => {
-  const tempRoot = await createTempRoot();
-  const outputDir = path.join(tempRoot, "u1", "plugin/node-c");
-  const sourceSessionDir = path.join(tempRoot, "u1", "runtime/session/p1/s1");
-  await appendRollingJsonlArtifactLog({
-    sessionDir: sourceSessionDir,
-    log: { event: "x", dialogProcessId: "dialog-scoped-snapshot" },
-  });
-  const guardCalls = [];
-  const helpers = createHelpers({
-    baseDir: tempRoot,
-    session: {
-      async withSessionLifecycleMutation(payload, operation) {
-        guardCalls.push(["lock", payload.userId, payload.sessionId]);
-        return operation();
-      },
-      async assertSessionWritable(payload = {}) {
-        guardCalls.push(["writable", payload.userId, payload.sessionId]);
-        return true;
-      },
-      async getSessionBundle(payload = {}) {
-        assert.equal(payload.userId, "u1");
-        assert.equal(payload.sessionId, "s1");
-        return {
-          session: {
-            sessionId: "s1",
-            messages: [
-              {
-                messageUid: "sm_scoped_snapshot",
-                role: "assistant",
-                content: "ok",
-                dialogProcessId: "dialog-scoped-snapshot",
-                turnScopeId: "turn-scoped-snapshot",
-              },
-            ],
-          },
-          turnTasks: [{ taskId: "t1" }],
-        };
-      },
-      async resolveSessionScope(payload = {}) {
-        assert.equal(payload.parentSessionId, "p1");
-        return { sessionDir: sourceSessionDir };
-      },
-    },
-  });
-
-  const persisted = await helpers.persistSubSessionSnapshot({
-    userId: "u1",
-    sessionId: "s1",
-    parentSessionId: "p1",
-    outputDir,
-    metadata: { kind: "snapshot" },
-  });
-  assert.deepEqual(guardCalls[0], ["lock", "u1", "s1"]);
-  assert.equal(
-    guardCalls.slice(1).every((call) => call[0] === "writable" && call[2] === "s1"),
-    true,
-  );
-
-  const taskJson = JSON.parse(await fs.readFile(persisted.files.task, "utf8"));
-  assert.deepEqual(taskJson.tasks, [{ taskId: "t1" }]);
-  assert.equal(taskJson.updatedAt, "2026-01-02T03:04:05.000Z");
-  assert.deepEqual(await readExecutionLogs(outputDir), [
-    { event: "x", dialogProcessId: "dialog-scoped-snapshot" },
-  ]);
 });
 
 test("ScopedArtifactPersistenceHelpers generated artifact persister maps records to metas", async () => {

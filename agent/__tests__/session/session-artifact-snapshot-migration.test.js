@@ -8,18 +8,15 @@ import test from "node:test";
 import { readFile, writeFile } from "node:fs/promises";
 import {
   buildSessionArtifactFileMap,
-  persistSessionArtifactSnapshot,
+  writeSessionArtifact,
   readSessionArtifactSnapshot,
 } from "../../src/session/session-artifact-store.js";
 import { canonicalMessages, withTemp } from "./session-artifact-store-v2.test-helpers.js";
 
-const allowSessionWrite = async () => {};
-
 test("snapshot reads legacy transfer reasons only after canonical Session migration", async () =>
   withTemp(async (root) => {
-    await persistSessionArtifactSnapshot({
-      outputDir: root,
-      assertSessionWritable: allowSessionWrite,
+    await writeSessionArtifact({
+      sessionDir: root,
       sessionPayload: {
         sessionId: "legacy-transfer-session",
         messages: [

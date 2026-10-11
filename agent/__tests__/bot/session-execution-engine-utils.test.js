@@ -6,36 +6,18 @@
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import {
-  appendRollingJsonlArtifactLog,
-  readExecutionLogs,
-  readSessionArtifact,
-} from "../../src/session/session-artifact-store.js";
-import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
-import os from "node:os";
-import path from "node:path";
-import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
-
 import {
   applyNormalizedMessageFlags,
   isPlainObject,
   normalizeMessageForModelRuntime,
   normalizePluginSelectorSet,
   normalizeTrimmedStringList,
-  persistSnapshotJsonFiles,
   resolvePluginOptionsFromConfig,
   resolvePreferredAttachments,
   resolveTransferEnvelopeListFromMessage,
   resolveTransferEnvelopesFromMessage,
   selectHookManager,
 } from "../../src/bot/session/session-execution-engine-utils.js";
-
-const allowSessionWrite = async () => {};
-
-async function createTempRoot() {
-  return fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-engine-utils-"));
-}
 
 test("session-execution-engine-utils normalizes plugin selectors and resolves plugin options", () => {
   const selectors = normalizePluginSelectorSet([" agentPlugin ", "", "agentPlugin", "plugin-key"]);
@@ -226,87 +208,4 @@ test("session-execution-engine-utils selects only the canonical manager or creat
     }),
     created,
   );
-});
-
-test("session-execution-engine-utils persists snapshot json files", async () => {
-  const tempRoot = await createTempRoot();
-  const outputDir = path.join(tempRoot, "snapshot");
-  const sourceSessionDir = path.join(tempRoot, "source");
-  await appendRollingJsonlArtifactLog({
-    sessionDir: sourceSessionDir,
-    log: { event: "started", dialogProcessId: "dialog-snapshot" },
-  });
-  const persisted = await persistSnapshotJsonFiles({
-    outputDir,
-    assertSessionWritable: allowSessionWrite,
-    sessionPayload: {
-      sessionId: "s1",
-      parentSessionId: "p1",
-      messages: [
-        {
-          messageUid: "sm_snapshot_assistant",
-          role: "assistant",
-          content: "canonical attachment",
-          dialogProcessId: "dialog-snapshot",
-          turnScopeId: "turn-snapshot",
-          attachments: [
-            {
-              attachmentId: "att-1",
-              sessionId: "s1",
-              attachmentSource: "user",
-              name: "a.txt",
-              mimeType: "text/plain",
-            },
-          ],
-        },
-      ],
-    },
-    taskPayload: { sessionId: "s1", tasks: [] },
-    executionEventsSourceDir: sourceSessionDir,
-    metadata: { node: "n1" },
-    now: () => "2026-05-14T00:00:00.000Z",
-  });
-
-  assert.equal(persisted.outputDir, outputDir);
-  const sessionPayload = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
-  assert.equal(sessionPayload.sessionId, "s1");
-  assert.equal(sessionPayload.parentSessionId, "p1");
-  assert.equal(sessionPayload.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
-  assert.equal(sessionPayload.messageIdentityVersion, 1);
-  assert.equal("messages" in sessionPayload, false);
-  assert.equal(sessionPayload.turnOrder.length, 1);
-  assert.deepEqual(sessionPayload.messageOrder, [{ messageUid: "sm_snapshot_assistant" }]);
-  assert.equal(sessionPayload.turnOrder[0].turnId, "turn-000001");
-  assert.equal(sessionPayload.turnOrder[0].artifactOrdinal, 1);
-  assert.equal(sessionPayload.turnOrder[0].turnScopeId, "turn-snapshot");
-  assert.equal(sessionPayload.turnOrder[0].file, "turns/turn-000001.jsonl");
-  assert.equal(sessionPayload.turnOrder[0].messageCount, 1);
-  assert.equal(typeof sessionPayload.turnOrder[0].committedBytes, "number");
-  assert.equal(typeof sessionPayload.turnOrder[0].recordCount, "number");
-  assert.deepEqual(sessionPayload.turnOrder[0].messageOrder, ["sm_snapshot_assistant"]);
-  assert.equal(typeof sessionPayload.turnOrder[0].messageHashes.sm_snapshot_assistant, "string");
-  assert.match(sessionPayload.turnOrder[0].messageHashes.sm_snapshot_assistant, /^sha256:/);
-  assert.equal(sessionPayload.turnOrder[0].compacted, false);
-  assert.equal(sessionPayload.createdAt, "2026-05-14T00:00:00.000Z");
-  assert.equal(sessionPayload.updatedAt, "2026-05-14T00:00:00.000Z");
-  assert.equal(JSON.stringify(sessionPayload).includes("attachmentMetas"), false);
-  const aggregatedSession = await readSessionArtifact({ sessionDir: persisted.outputDir });
-  assert.equal("id" in aggregatedSession.messages[0].attachments[0], false);
-  const sessionSummary = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
-  assert.equal(sessionSummary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
-  assert.equal(sessionSummary.sessionId, "s1");
-  assert.equal(sessionSummary.parentSessionId, "p1");
-  assert.equal(sessionSummary.stats.messageCount, 1);
-  assert.equal(sessionSummary.messages[0].attachments[0].attachmentId, "att-1");
-  assert.equal(JSON.stringify(sessionSummary).includes("attachmentMetas"), false);
-  assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.task, "utf8")), {
-    sessionId: "s1",
-    tasks: [],
-  });
-  assert.deepEqual(await readExecutionLogs(outputDir), [
-    { event: "started", dialogProcessId: "dialog-snapshot" },
-  ]);
-  assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.meta, "utf8")), {
-    node: "n1",
-  });
 });

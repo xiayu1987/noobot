@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { persistSessionArtifactSnapshot } from "../../session/session-artifact-store.js";
 import { resolveMessageRole } from "@noobot/context-protocol/policy/message";
 import {
   projectContextMessageIdentityMetadata,
@@ -123,24 +122,4 @@ export function selectHookManager({ runConfig = {}, managerKey = "", createManag
     return runConfig[managerKey];
   }
   return typeof createManager === "function" ? createManager() : null;
-}
-
-export async function persistSnapshotJsonFiles({
-  outputDir = "",
-  sessionPayload = {},
-  taskPayload = {},
-  executionEventsSourceDir = "",
-  metadata = null,
-  now = undefined,
-  assertSessionWritable,
-} = {}) {
-  return persistSessionArtifactSnapshot({
-    outputDir,
-    sessionPayload,
-    taskPayload,
-    executionEventsSourceDir,
-    metadata,
-    assertSessionWritable,
-    ...(typeof now === "function" ? { now } : {}),
-  });
 }

@@ -592,7 +592,6 @@ export {
   SESSION_ARTIFACT_FILE_NAMES,
   appendExecutionLogArtifact,
   buildSessionArtifactFileMap,
-  persistSessionArtifactSnapshot,
   inspectSessionArtifacts,
   repairSessionArtifacts,
   cleanupSessionArtifacts,

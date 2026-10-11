@@ -374,10 +374,6 @@ export class SessionExecutionEngine {
     return this.scopedArtifactPersistenceHelpers.resolveScopedFileTarget(payload);
   }
 
-  async _persistSubSessionSnapshot(payload = {}) {
-    return this.scopedArtifactPersistenceHelpers.persistSubSessionSnapshot(payload);
-  }
-
   _createScopedJsonWriter() {
     return this.scopedArtifactPersistenceHelpers.createScopedJsonWriter();
   }
