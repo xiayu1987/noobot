@@ -8,7 +8,9 @@ import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId
 
 export function useWorkflowNodeSessionLabels(translate) {
   function resolveStatusLabel(nodeItem = {}) {
-    const status = String(nodeItem?._status || nodeItem?.status || "").trim().toLowerCase();
+    const status = String(nodeItem?._status || nodeItem?.status || "")
+      .trim()
+      .toLowerCase();
     if (status === "success") return translate("workflow.statusSuccess");
     if (status === "failed" || status === "error") return translate("workflow.statusFailed");
     if (status === "running") return translate("workflow.statusRunning");
@@ -16,7 +18,9 @@ export function useWorkflowNodeSessionLabels(translate) {
   }
 
   function resolveStatusClass(nodeItem = {}) {
-    const status = String(nodeItem?._status || nodeItem?.status || "").trim().toLowerCase();
+    const status = String(nodeItem?._status || nodeItem?.status || "")
+      .trim()
+      .toLowerCase();
     if (status === "success") return "success";
     if (status === "failed" || status === "error") return "failed";
     if (status === "running") return "running";
@@ -24,7 +28,9 @@ export function useWorkflowNodeSessionLabels(translate) {
   }
 
   function resolveStepLabel(stepItem = {}, stepIndex = 0) {
-    const order = Number.isFinite(Number(stepItem?.stepIndex)) ? Number(stepItem.stepIndex) + 1 : stepIndex + 1;
+    const order = Number.isFinite(Number(stepItem?.stepIndex))
+      ? Number(stepItem.stepIndex) + 1
+      : stepIndex + 1;
     return translate("workflow.stepBoxLabel", { order });
   }
 
@@ -36,8 +42,9 @@ export function useWorkflowNodeSessionLabels(translate) {
 
   function stepHasSession(stepItem = {}) {
     return Boolean(
-      String(stepItem?.activeChildExecutionId || stepItem?.childExecutionId || "").trim() ||
-      (Array.isArray(stepItem?.attemptExecutionIds) && stepItem.attemptExecutionIds.some(Boolean)) ||
+      String(stepItem?.activeChildExecutionId || "").trim() ||
+      (Array.isArray(stepItem?.attemptExecutionIds) &&
+        stepItem.attemptExecutionIds.some(Boolean)) ||
       resolveWorkflowDialogProcessId(stepItem),
     );
   }

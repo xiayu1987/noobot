@@ -30,7 +30,7 @@ describe("workflow child unified session detail", () => {
     const detail = buildUnifiedSessionDetail({
       nodeItem: {
         ...childIdentity,
-        childExecutionId: "execution-a",
+        activeChildExecutionId: "execution-a",
         status: "succeeded",
       },
       selectExecutionDetail: () => ({
@@ -58,7 +58,7 @@ describe("workflow child unified session detail", () => {
     const detail = buildUnifiedSessionDetail({
       nodeItem: {
         ...childIdentity,
-        childExecutionId: "execution-a",
+        activeChildExecutionId: "execution-a",
         status: "running",
       },
       selectExecutionDetail: () => ({

@@ -12,7 +12,12 @@ function ref(value) {
   return { value };
 }
 
-function buildSessions({ workflowPayload, nodeSessions = [], executionMeta = {}, registry = null }) {
+function buildSessions({
+  workflowPayload,
+  nodeSessions = [],
+  executionMeta = {},
+  registry = null,
+}) {
   return createRuntimeNodeSessions({
     workflowPayload: ref(workflowPayload),
     nodeSessions: ref(nodeSessions),
@@ -52,7 +57,7 @@ test("createRuntimeNodeSessions merges committed node facts by workflowRunId and
         workflowRunId: "run-1",
         nodeExecutionId: "node-exec-1",
         commandId: "command-1",
-        sessionId: "session-1",
+        nodeSessionId: "session-1",
         parentSessionId: "parent-1",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
@@ -97,7 +102,7 @@ test("createRuntimeNodeSessions isolates committed facts by workflowRunId", () =
         workflowRunId: "run-other",
         nodeExecutionId: "node-exec-1",
         commandId: "wrong-command",
-        sessionId: "wrong-session",
+        nodeSessionId: "wrong-session",
         status: "succeeded",
       },
     }),
@@ -120,7 +125,7 @@ test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
         nodeId: "node-orphan",
         nodeName: "Orphan Node",
         commandId: "command-orphan",
-        sessionId: "session-orphan",
+        nodeSessionId: "session-orphan",
         dialogProcessId: "dialog-orphan",
         turnScopeId: "turn-orphan",
         status: "failed",
@@ -142,7 +147,6 @@ test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
   assert.equal(sessions[0].nodeName, "Orphan Node");
   assert.equal(sessions[0].stepId, "node-exec-orphan");
   assert.equal(sessions[0].activeChildExecutionId, "child-exec-orphan");
-  assert.equal(sessions[0].childExecutionId, "child-exec-orphan");
 });
 
 test("createRuntimeNodeSessions preserves enough identity to render a running registry-only step", () => {
@@ -165,7 +169,7 @@ test("createRuntimeNodeSessions preserves enough identity to render a running re
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].nodeId, "node-live");
   assert.equal(sessions[0].stepId, "node-exec-live");
-  assert.equal(sessions[0].childExecutionId, "agent-exec-live");
+  assert.equal(sessions[0].activeChildExecutionId, "agent-exec-live");
 });
 
 test("createRuntimeNodeSessions prevents nodeAgentRuns from overwriting committed node facts", () => {
@@ -199,7 +203,7 @@ test("createRuntimeNodeSessions prevents nodeAgentRuns from overwriting committe
         workflowRunId: "run-1",
         nodeExecutionId: "node-exec-1",
         commandId: "committed-command",
-        sessionId: "committed-session",
+        nodeSessionId: "committed-session",
         dialogProcessId: "committed-dialog",
         status: "running",
       },
@@ -254,14 +258,16 @@ test("createRuntimeNodeSessions accepts Vue ref-like registry objects", () => {
         status: "pending",
       },
     ],
-    registry: ref(registryWith("run-ref", {
-      "node-ref": {
-        workflowRunId: "run-ref",
-        nodeExecutionId: "node-ref",
-        status: "succeeded",
-        sessionId: "session-ref",
-      },
-    })),
+    registry: ref(
+      registryWith("run-ref", {
+        "node-ref": {
+          workflowRunId: "run-ref",
+          nodeExecutionId: "node-ref",
+          status: "succeeded",
+          nodeSessionId: "session-ref",
+        },
+      }),
+    ),
   });
 
   assert.equal(sessions.length, 1);

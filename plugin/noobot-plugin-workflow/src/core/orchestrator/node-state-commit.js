@@ -98,7 +98,7 @@ export async function commitAndPublishWorkflowNodeState({
   expectedRevision = null,
   nodeSessionId = "",
   agentDialogProcessId = "",
-  childExecutionId = "",
+  activeChildExecutionId = "",
   failure = null,
 } = {}) {
   const fact = await repository.commit({
@@ -108,7 +108,7 @@ export async function commitAndPublishWorkflowNodeState({
     expectedRevision,
     nodeSessionId,
     agentDialogProcessId,
-    childExecutionId,
+    activeChildExecutionId,
     failure,
   });
   if (fact?.applied === true) {

@@ -52,7 +52,7 @@ export function createWorkflowNodeIdentity({
     attempt: Math.max(1, Number(attempt) || 1),
     dialogProcessId,
     turnScopeId,
-    childExecutionId: deriveAgentExecutionId({ turnScopeId }),
+    activeChildExecutionId: deriveAgentExecutionId({ turnScopeId }),
     commandId: `workflow-node:${nodeExecutionId}:send`,
   };
 }

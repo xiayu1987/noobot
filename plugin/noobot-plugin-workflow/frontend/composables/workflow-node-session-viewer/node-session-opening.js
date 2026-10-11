@@ -48,9 +48,7 @@ function logOpenStarted(context, prepared) {
     nodeExecutionId: text(canonicalNodeItem.nodeExecutionId),
     clickedSessionId: text(nodeItem.sessionId || nodeItem.nodeSessionId),
     canonicalSessionId: text(canonicalNodeItem.sessionId || canonicalNodeItem.nodeSessionId),
-    activeChildExecutionId: text(
-      canonicalNodeItem.activeChildExecutionId || canonicalNodeItem.childExecutionId,
-    ),
+    activeChildExecutionId: text(canonicalNodeItem.activeChildExecutionId),
     runtimeNodeCount: Array.isArray(runtimeNodeSessions?.value)
       ? runtimeNodeSessions.value.length
       : 0,

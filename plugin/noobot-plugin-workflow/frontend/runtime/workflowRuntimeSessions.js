@@ -89,16 +89,15 @@ function normalizeCommittedNodeFact(item = {}) {
     nodeExecutionId: firstText(source.nodeExecutionId),
     nodeId: firstText(source.nodeId),
     nodeName: firstText(source.nodeName, source.nodeId),
-    actionNodeStateId: firstText(source.actionNodeStateId, source.nodeStateId),
+    actionNodeStateId: firstText(source.actionNodeStateId),
     stepId: firstText(source.stepId, source.nodeExecutionId),
     stepIndex: finiteNumberFrom(source.stepIndex),
     commandId: firstText(source.commandId),
-    sessionId: firstText(source.sessionId, source.nodeSessionId),
+    sessionId: firstText(source.nodeSessionId),
     parentSessionId: firstText(source.parentSessionId),
     dialogProcessId: firstText(source.dialogProcessId),
     turnScopeId: firstText(source.turnScopeId),
-    activeChildExecutionId: firstText(source.activeChildExecutionId, source.childExecutionId),
-    childExecutionId: firstText(source.childExecutionId, source.activeChildExecutionId),
+    activeChildExecutionId: firstText(source.activeChildExecutionId),
     attemptExecutionIds: Array.isArray(source.attemptExecutionIds)
       ? source.attemptExecutionIds.map(String)
       : [],
@@ -112,15 +111,14 @@ function normalizeCommittedNodeFact(item = {}) {
 }
 
 const BASE_FALLBACK_FIELDS = [
-  ["sessionId", "sessionId", "nodeSessionId"],
+  ["sessionId", "sessionId"],
   ["dialogProcessId", "dialogProcessId"],
   ["turnScopeId", "turnScopeId"],
   ["nodeId", "nodeId"],
   ["nodeName", "nodeName", "nodeId"],
-  ["actionNodeStateId", "actionNodeStateId", "nodeStateId"],
+  ["actionNodeStateId", "actionNodeStateId"],
   ["stepId", "stepId"],
-  ["activeChildExecutionId", "activeChildExecutionId", "childExecutionId"],
-  ["childExecutionId", "childExecutionId", "activeChildExecutionId"],
+  ["activeChildExecutionId", "activeChildExecutionId"],
 ];
 
 function mergeCommittedNodeFact(base = {}, fact = {}) {

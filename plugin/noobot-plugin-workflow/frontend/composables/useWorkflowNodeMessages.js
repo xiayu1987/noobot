@@ -181,7 +181,7 @@ export function useWorkflowNodeMessages({
         0,
       ),
       boxIds: selectedRuntimeBoxes.value.map((box = {}) =>
-        String(box?.actionNodeStateId || box?.nodeStateId || "").trim(),
+        String(box?.actionNodeStateId || "").trim(),
       ),
     }),
     (projection) => {

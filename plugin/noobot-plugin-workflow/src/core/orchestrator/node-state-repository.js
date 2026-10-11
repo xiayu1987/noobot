@@ -50,9 +50,7 @@ function normalizeIdentity(input = {}) {
     agentDialogProcessId: normalizeText(identity.agentDialogProcessId),
     turnScopeId: normalizeText(identity.turnScopeId),
     nodeSessionId: normalizeText(identity.nodeSessionId),
-    activeChildExecutionId: normalizeText(
-      identity.activeChildExecutionId || identity.childExecutionId,
-    ),
+    activeChildExecutionId: normalizeText(identity.activeChildExecutionId),
     attemptExecutionIds: Array.isArray(identity.attemptExecutionIds)
       ? identity.attemptExecutionIds.map(normalizeText).filter(Boolean)
       : [],
@@ -132,7 +130,7 @@ function isSameTarget(current = {}, next = {}) {
     normalizeText(current.agentDialogProcessId) ===
       normalizeText(next.agentDialogProcessId || current.agentDialogProcessId) &&
     normalizeText(current.activeChildExecutionId) ===
-      normalizeText(next.childExecutionId || current.activeChildExecutionId) &&
+      normalizeText(next.activeChildExecutionId || current.activeChildExecutionId) &&
     JSON.stringify(current.failure || null) === JSON.stringify(normalizeFailure(next.failure))
   );
 }
@@ -225,7 +223,7 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
       expectedRevision = null,
       nodeSessionId = "",
       agentDialogProcessId = "",
-      childExecutionId = "",
+      activeChildExecutionId = "",
       failure = null,
     } = {}) {
       const runId = normalizeText(workflowRunId);
@@ -241,7 +239,7 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
             status: nextStatus,
             nodeSessionId,
             agentDialogProcessId,
-            childExecutionId,
+            activeChildExecutionId,
             failure,
           })
         ) {
@@ -261,7 +259,7 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
           status: nextStatus,
           nodeSessionId,
           agentDialogProcessId,
-          childExecutionId,
+          activeChildExecutionId,
           failure,
         })
       ) {
@@ -284,10 +282,15 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
         eventId: createEventId({ workflowRunId: runId, nodeExecutionId: executionId, revision }),
         nodeSessionId: normalizeText(nodeSessionId || current.nodeSessionId),
         agentDialogProcessId: normalizeText(agentDialogProcessId || current.agentDialogProcessId),
-        activeChildExecutionId: normalizeText(childExecutionId || current.activeChildExecutionId),
-        attemptExecutionIds: normalizeText(childExecutionId)
+        activeChildExecutionId: normalizeText(
+          activeChildExecutionId || current.activeChildExecutionId,
+        ),
+        attemptExecutionIds: normalizeText(activeChildExecutionId)
           ? Array.from(
-              new Set([...(current.attemptExecutionIds || []), normalizeText(childExecutionId)]),
+              new Set([
+                ...(current.attemptExecutionIds || []),
+                normalizeText(activeChildExecutionId),
+              ]),
             )
           : current.attemptExecutionIds || [],
         failure: normalizeFailure(failure),

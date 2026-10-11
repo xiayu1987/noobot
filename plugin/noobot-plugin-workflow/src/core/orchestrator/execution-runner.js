@@ -5,7 +5,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import { WORKFLOW_ACTION, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
 import {
   advanceWorkflowInstance,
@@ -208,16 +207,9 @@ function resolveWaveNodeIdentity({ planningNodeSessions = [], step = {} } = {}) 
     pendingStep: step,
   });
   const nodeIdentity = planningNodeIdentity
-    ? {
-        ...planningNodeIdentity,
-        sessionId: String(planningNodeIdentity?.sessionId || "").trim() || randomUUID(),
-      }
+    ? { ...planningNodeIdentity, sessionId: randomUUID() }
     : null;
-  const childExecutionId = deriveAgentExecutionId({
-    executionId: nodeIdentity?.childExecutionId,
-    turnScopeId: nodeIdentity?.turnScopeId,
-  });
-  return { nodeIdentity, childExecutionId };
+  return { nodeIdentity, activeChildExecutionId: nodeIdentity?.activeChildExecutionId || "" };
 }
 
 function findNodeStateByExecutionId(snapshot = null, nodeExecutionId = "") {
@@ -267,9 +259,9 @@ async function commitWaveChildTerminal({
   ctx,
   action,
   runningFact,
-  childExecutionId,
+  activeChildExecutionId,
 } = {}) {
-  const childTerminal = resolveCommittedChildTerminal(action?.subSession, childExecutionId);
+  const childTerminal = resolveCommittedChildTerminal(action?.subSession, activeChildExecutionId);
   await commitWaveNodeState({
     nodeState,
     nodeIdentity,
@@ -278,7 +270,7 @@ async function commitWaveChildTerminal({
     expectedRevision: runningFact?.node?.revision ?? null,
     nodeSessionId: action?.subSession?.sessionId || "",
     agentDialogProcessId: action?.subSession?.dialogProcessId || "",
-    childExecutionId,
+    activeChildExecutionId,
     failure:
       childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
         ? childTerminal.lifecycle.failure || { message: "child execution failed" }
@@ -308,7 +300,7 @@ async function commitWaveNodeFailure({
   ctx,
   action,
   runningFact,
-  childExecutionId,
+  activeChildExecutionId,
 } = {}) {
   if (!shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFact })) return;
   const stopped = isWorkflowAbortError(error, ctx);
@@ -320,7 +312,7 @@ async function commitWaveNodeFailure({
     expectedRevision: runningFact.node.revision,
     nodeSessionId: action?.subSession?.sessionId || "",
     agentDialogProcessId: action?.subSession?.dialogProcessId || "",
-    childExecutionId,
+    activeChildExecutionId,
     failure: toWaveNodeFailure(error),
   });
 }
@@ -347,7 +339,7 @@ async function runWaveStep({
     upstreamActionSteps,
     completedStepResults,
   });
-  const { nodeIdentity, childExecutionId } = resolveWaveNodeIdentity({
+  const { nodeIdentity, activeChildExecutionId } = resolveWaveNodeIdentity({
     planningNodeSessions,
     step,
   });
@@ -365,7 +357,7 @@ async function runWaveStep({
       status: WORKFLOW_NODE_STATUS.RUNNING,
       expectedRevision: currentNodeState?.revision ?? null,
       nodeSessionId: nodeIdentity.sessionId,
-      childExecutionId,
+      activeChildExecutionId,
     });
   }
   let action = null;
@@ -389,7 +381,7 @@ async function runWaveStep({
         ctx,
         action,
         runningFact,
-        childExecutionId,
+        activeChildExecutionId,
       });
     }
   } catch (error) {
@@ -400,7 +392,7 @@ async function runWaveStep({
       ctx,
       action,
       runningFact,
-      childExecutionId,
+      activeChildExecutionId,
     });
     throw error;
   }

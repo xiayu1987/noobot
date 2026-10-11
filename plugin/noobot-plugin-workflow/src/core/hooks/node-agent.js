@@ -12,7 +12,6 @@ import {
   resolveWorkflowDataRelativePath,
 } from "../constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   mergeAttachmentReferences,
@@ -166,8 +165,11 @@ function resolveNodeAgentIdentity({ nodeIdentity, instanceId, pendingStep, ctx }
   }
   const dialogProcessId = String(nodeIdentity.dialogProcessId || "").trim();
   const turnScopeId = String(nodeIdentity.turnScopeId || "").trim();
-  if (!dialogProcessId || !turnScopeId) {
-    throw new TypeError("workflow node identity requires dialogProcessId and turnScopeId");
+  const activeChildExecutionId = String(nodeIdentity.activeChildExecutionId || "").trim();
+  if (!dialogProcessId || !turnScopeId || !activeChildExecutionId) {
+    throw new TypeError(
+      "workflow node identity requires dialogProcessId, turnScopeId and activeChildExecutionId",
+    );
   }
   const workflowRunId = firstText(nodeIdentity.workflowRunId, instanceId);
   const workflowExecutionId = firstText(
@@ -185,10 +187,7 @@ function resolveNodeAgentIdentity({ nodeIdentity, instanceId, pendingStep, ctx }
     commandId: firstText(nodeIdentity.commandId),
     dialogProcessId,
     turnScopeId,
-    childExecutionId: firstText(
-      nodeIdentity.childExecutionId,
-      deriveAgentExecutionId({ turnScopeId }),
-    ),
+    activeChildExecutionId,
     sessionId: firstText(nodeIdentity.sessionId),
     nodeId: firstText(nodeIdentity.nodeId, pendingStep?.nodeId),
     nodeName: firstText(nodeIdentity.nodeName, pendingStep?.nodeName),
@@ -351,7 +350,7 @@ function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
     dialogProcessId: identity.dialogProcessId,
     turnScopeId: identity.turnScopeId,
     commandId: identity.commandId,
-    executionId: identity.childExecutionId,
+    executionId: identity.activeChildExecutionId,
     parentExecutionId: identity.workflowExecutionId,
     rootExecutionId: String(ctx?.rootExecutionId || identity.workflowExecutionId).trim(),
     disabledPlugins: [PLUGIN_ID],
@@ -366,7 +365,7 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     scope: "workflow_node",
     instanceId: String(params.instanceId || "").trim(),
     workflowRunId: identity.workflowRunId,
-    executionId: identity.childExecutionId,
+    executionId: identity.activeChildExecutionId,
     parentExecutionId: identity.workflowExecutionId,
     rootExecutionId: String(ctx?.rootExecutionId || identity.workflowExecutionId).trim(),
     origin: {

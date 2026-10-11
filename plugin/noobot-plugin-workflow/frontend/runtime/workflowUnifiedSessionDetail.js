@@ -123,21 +123,12 @@ export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
 }
 
 export function hasNewProtocolNodeIdentity(nodeItem = {}) {
-  return Boolean(
-    text(
-      nodeItem?.activeChildExecutionId || nodeItem?.childExecutionId || nodeItem?.nodeExecutionId,
-    ),
-  );
+  return Boolean(text(nodeItem?.activeChildExecutionId || nodeItem?.nodeExecutionId));
 }
 
 export function resolveNodeChildExecutionIds(nodeItem = {}, runtimeNodeSessions = []) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
-  const current = text(
-    runtimeNode?.activeChildExecutionId ||
-      runtimeNode?.childExecutionId ||
-      nodeItem?.activeChildExecutionId ||
-      nodeItem?.childExecutionId,
-  );
+  const current = text(runtimeNode?.activeChildExecutionId || nodeItem?.activeChildExecutionId);
   const attempts = [
     ...(Array.isArray(runtimeNode?.attemptExecutionIds) ? runtimeNode.attemptExecutionIds : []),
     ...(Array.isArray(nodeItem?.attemptExecutionIds) ? nodeItem.attemptExecutionIds : []),
@@ -179,7 +170,6 @@ export function resolveIsolatedNodeSessionId(nodeItem = {}, runtimeNode = {}) {
 function resolveDialogProcessId(nodeItem, runtimeNode, execution = {}) {
   return text(
     execution.dialogProcessId ||
-      runtimeNode?.dialogProcessId ||
       resolveWorkflowDialogProcessId(runtimeNode) ||
       resolveWorkflowDialogProcessId(nodeItem),
   );

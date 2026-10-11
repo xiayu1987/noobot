@@ -9,9 +9,6 @@ import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId
 export function makeActionStateKey(item = {}, index = 0) {
   return String(
     item?.actionNodeStateId ||
-      item?.nodeStateId ||
-      item?.actionStateId ||
-      item?.nodeBoxId ||
       item?.dialogProcessId ||
       item?.sessionId ||
       resolveWorkflowDialogProcessId(item) ||
@@ -19,10 +16,18 @@ export function makeActionStateKey(item = {}, index = 0) {
   ).trim();
 }
 
-export function makeRuntimeStep({ item = {}, index = 0, workflowPayload, nodeRunByDialogProcessId, resolveStepStatus }) {
+export function makeRuntimeStep({
+  item = {},
+  index = 0,
+  workflowPayload,
+  nodeRunByDialogProcessId,
+  resolveStepStatus,
+}) {
   const dialogProcessId = resolveWorkflowDialogProcessId(item);
   const runItem = dialogProcessId ? nodeRunByDialogProcessId.value.get(dialogProcessId) : null;
-  const stepId = String(item?.stepId || runItem?.stepId || dialogProcessId || item?.sessionId || `step_${index + 1}`).trim();
+  const stepId = String(
+    item?.stepId || runItem?.stepId || dialogProcessId || item?.sessionId || `step_${index + 1}`,
+  ).trim();
   const stepIndex = Number.isFinite(Number(item?.stepIndex ?? runItem?.stepIndex))
     ? Number(item?.stepIndex ?? runItem?.stepIndex)
     : index;
@@ -52,7 +57,9 @@ export function stripRuntimeInternal(runtime = {}) {
     nodeName: String(runtime?.nodeName || "").trim(),
     actionNodeStates: Array.isArray(runtime?.actionNodeStates)
       ? runtime.actionNodeStates.map((stateBox = {}, stateIndex) => ({
-          actionNodeStateId: String(stateBox?.actionNodeStateId || `node_box_${stateIndex + 1}`).trim(),
+          actionNodeStateId: String(
+            stateBox?.actionNodeStateId || `node_box_${stateIndex + 1}`,
+          ).trim(),
           nodeId: String(stateBox?.nodeId || runtime?.nodeId || "").trim(),
           nodeName: String(stateBox?.nodeName || runtime?.nodeName || "").trim(),
           steps: Array.isArray(stateBox?.steps) ? stateBox.steps : [],

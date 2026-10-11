@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  resolveWorkflowDialogProcessId,
-  summarizeWorkflowDialogProcessIdFields,
-} from "../utils/workflowDialogProcessId.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import {
   resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,
@@ -24,24 +21,31 @@ export function summarizeWorkflowNodeIdentity(node = {}) {
   return {
     sessionId: text(node?.sessionId),
     nodeSessionId: text(node?.nodeSessionId),
-    ...summarizeWorkflowDialogProcessIdFields(node),
+    dialogProcessId: resolveWorkflowDialogProcessId(node),
     turnScopeId: text(node?.turnScopeId),
     workflowRunId: text(node?.workflowRunId),
     nodeExecutionId: text(node?.nodeExecutionId),
-    activeChildExecutionId: text(node?.activeChildExecutionId || node?.childExecutionId),
+    activeChildExecutionId: text(node?.activeChildExecutionId),
   };
 }
 
-export function logWorkflowNodeDetailProjection({ props, runtimeNodeSessions }, stage = "", nodeItem = {}, detail = {}) {
+export function logWorkflowNodeDetailProjection(
+  { props, runtimeNodeSessions },
+  stage = "",
+  nodeItem = {},
+  detail = {},
+) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
-  const executionSessionId = text(detail?.execution?.sessionId || detail?.session?.sessionId || detail?.session?.id);
+  const executionSessionId = text(
+    detail?.execution?.sessionId || detail?.session?.sessionId || detail?.session?.id,
+  );
   const messages = Array.isArray(detail?.messages) ? detail.messages : [];
   const identity = {
-    sessionId: text(detail?.sessionId || detail?.sessionSummary?.sessionId),
-    dialogProcessId: resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem),
-    turnScopeId: text(runtimeNode?.turnScopeId || nodeItem?.turnScopeId),
-    workflowRunId: text(runtimeNode?.workflowRunId || nodeItem?.workflowRunId),
-    nodeExecutionId: text(runtimeNode?.nodeExecutionId || nodeItem?.nodeExecutionId),
+    sessionId: text(detail?.sessionId),
+    dialogProcessId: resolveWorkflowDialogProcessId(runtimeNode),
+    turnScopeId: text(runtimeNode?.turnScopeId),
+    workflowRunId: text(runtimeNode?.workflowRunId),
+    nodeExecutionId: text(runtimeNode?.nodeExecutionId),
     stage,
   };
   props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.projected", {
@@ -51,9 +55,12 @@ export function logWorkflowNodeDetailProjection({ props, runtimeNodeSessions }, 
     subSessionMessageRegistryVersion: Number(props.subSessionMessageRegistryVersion || 0),
     messageCount: messages.length,
     messages: messages.map((message = {}) => ({
-      id: text(message?.id || message?.messageId), role: text(message?.role),
-      sessionId: text(message?.sessionId), turnScopeId: text(message?.turnScopeId),
-      dialogProcessId: text(message?.dialogProcessId), pending: message?.pending === true,
+      id: text(message?.id || message?.messageId),
+      role: text(message?.role),
+      sessionId: text(message?.sessionId),
+      turnScopeId: text(message?.turnScopeId),
+      dialogProcessId: text(message?.dialogProcessId),
+      pending: message?.pending === true,
       contentLength: String(message?.content || "").length,
     })),
   });

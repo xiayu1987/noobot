@@ -27,7 +27,7 @@ export function createWorkflowNodeViewKey(nodeItem = {}, workflowPayload = {}) {
   const rootSessionId = resolveWorkflowRootSessionId(nodeItem, workflowPayload);
   const identity = [
     text(nodeItem?.nodeExecutionId),
-    text(nodeItem?.activeChildExecutionId || nodeItem?.childExecutionId),
+    text(nodeItem?.activeChildExecutionId),
     text(nodeItem?.turnScopeId),
     resolveWorkflowDialogProcessId(nodeItem),
     text(nodeItem?.nodeSessionId || nodeItem?.sessionId),

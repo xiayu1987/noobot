@@ -17,10 +17,3 @@ export function collectWorkflowDialogProcessIds(...items) {
     .map((value) => String(value || "").trim())
     .filter(Boolean);
 }
-
-export function summarizeWorkflowDialogProcessIdFields(item = {}) {
-  return {
-    dialogProcessId: String(item?.dialogProcessId || "").trim(),
-    resolvedDialogProcessId: resolveWorkflowDialogProcessId(item),
-  };
-}

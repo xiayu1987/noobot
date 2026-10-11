@@ -88,7 +88,7 @@ function step(id) {
   return {
     rootSessionId: "root-session",
     nodeExecutionId: `node-${id}`,
-    childExecutionId: `execution-${id}`,
+    activeChildExecutionId: `execution-${id}`,
     sessionId: `session-${id}`,
     dialogProcessId: `dialog-${id}`,
     stepId: `step-${id}`,
@@ -315,7 +315,7 @@ describe("workflow node session view ownership", () => {
     const restoredStep = {
       rootSessionId: "root-session",
       nodeExecutionId: "node-restored",
-      childExecutionId: "execution-restored",
+      activeChildExecutionId: "execution-restored",
       dialogProcessId: "dialog-restored",
       turnScopeId: "workflow-node:node-restored",
       stepId: "step-restored",
@@ -360,7 +360,7 @@ describe("workflow node session view ownership", () => {
     const clickedStep = {
       rootSessionId: "root-session",
       nodeExecutionId: "node-dual-dialog",
-      childExecutionId: "execution-dual-dialog",
+      activeChildExecutionId: "execution-dual-dialog",
       sessionId: "child-dual-dialog",
       dialogProcessId: "wf_node_dual_dialog",
       stepId: "step-dual-dialog",
@@ -608,7 +608,7 @@ describe("workflow node session view ownership", () => {
   it("does not downgrade a terminal execution detail from ready to streaming", async () => {
     const completedStep = { ...step("terminal"), status: "succeeded" };
     const execution = {
-      executionId: completedStep.childExecutionId,
+      executionId: completedStep.activeChildExecutionId,
       sessionId: completedStep.sessionId,
       state: "completed",
       terminal: true,
