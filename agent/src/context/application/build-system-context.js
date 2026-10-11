@@ -108,7 +108,6 @@ export async function buildSystemContext({
   const scenarioProfile = resolveScenarioProfile({ runConfig });
 
   const rootSessionId = await resolveRootSessionId({
-    runtimeBasePath,
     sessionManager,
     userId: identity.userId,
     sessionId: identity.sessionId,

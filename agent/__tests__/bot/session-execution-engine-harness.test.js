@@ -312,6 +312,12 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
 
   const session = {
     async upsertSessionTree() {},
+    async getRootSessionId({ sessionId }) {
+      return sessionId;
+    },
+    async getContextProjection() {
+      return { messages: [], sourceRevision: "" };
+    },
     async getSessionBundle() {
       return { exists: false, session: {} };
     },

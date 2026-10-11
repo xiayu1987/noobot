@@ -318,8 +318,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionTreeService.getSessionTree({ userId });
     },
 
-    async getRootSessionId({ userId, sessionId, sessionTree = null }) {
-      return sessionTreeService.getRootSessionId({ userId, sessionId, sessionTree });
+    async getRootSessionId({ userId, sessionId }) {
+      return sessionTreeService.getRootSessionId({ userId, sessionId });
     },
 
     async getSessionData({ userId, sessionId }) {

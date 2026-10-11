@@ -4,19 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 export async function resolveRootSessionId({
-  runtimeBasePath = "",
   sessionManager = null,
   userId = "",
   sessionId = "",
   parentSessionId = "",
 } = {}) {
-  const rootAnchorSessionId = String(parentSessionId || sessionId || "").trim();
-  if (!runtimeBasePath || !sessionManager?.getRootSessionId || !userId || !rootAnchorSessionId) {
-    return rootAnchorSessionId;
+  if (typeof sessionManager?.getRootSessionId !== "function") {
+    throw new TypeError("resolveRootSessionId requires sessionManager.getRootSessionId");
   }
-  const rootSessionId = await sessionManager.getRootSessionId({
-    userId,
+  const normalizedUserId = String(userId || "").trim();
+  const rootAnchorSessionId = String(parentSessionId || sessionId || "").trim();
+  if (!normalizedUserId || !rootAnchorSessionId) {
+    throw new TypeError("resolveRootSessionId requires userId and sessionId");
+  }
+  return sessionManager.getRootSessionId({
+    userId: normalizedUserId,
     sessionId: rootAnchorSessionId,
   });
-  return String(rootSessionId || rootAnchorSessionId).trim();
 }

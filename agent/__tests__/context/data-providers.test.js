@@ -12,20 +12,24 @@ import { resolveLongMemory } from "../../src/context/providers/memory-resolver.j
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
 
-test("resolveRootSessionId uses the anchor when sessionManager is missing", async () => {
-  const rootSessionId = await resolveRootSessionId({
-    runtimeBasePath: "",
-    sessionManager: null,
-    userId: "u1",
-    sessionId: "s1",
-  });
-  assert.equal(rootSessionId, "s1");
+test("resolveRootSessionId rejects a missing session authority", async () => {
+  await assert.rejects(
+    resolveRootSessionId({ sessionManager: null, userId: "u1", sessionId: "s1" }),
+    /requires sessionManager\.getRootSessionId/,
+  );
+  await assert.rejects(
+    resolveRootSessionId({
+      sessionManager: { async getRootSessionId() {} },
+      userId: "",
+      sessionId: "s1",
+    }),
+    /requires userId and sessionId/,
+  );
 });
 
 test("resolveRootSessionId anchors detached sessions at their durable parent", async () => {
   const calls = [];
   const rootSessionId = await resolveRootSessionId({
-    runtimeBasePath: "/workspace/u1",
     sessionManager: {
       async getRootSessionId({ userId, sessionId }) {
         calls.push([userId, sessionId]);

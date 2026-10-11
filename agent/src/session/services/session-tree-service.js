@@ -64,13 +64,10 @@ export class SessionTreeService {
     return this.treeRepo.getTree(userId);
   }
 
-  async getRootSessionId({ userId, sessionId, sessionTree = null }) {
+  async getRootSessionId({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return "";
-    const tree =
-      sessionTree && typeof sessionTree === "object"
-        ? sessionTree
-        : await this.treeRepo.getTree(userId);
+    const tree = await this.treeRepo.getTree(userId);
     return this.treeRepo.resolveRootSessionIdFromTree(normalizedSessionId, tree);
   }
 

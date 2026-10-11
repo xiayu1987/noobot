@@ -11,6 +11,19 @@ import { buildSystemRuntime } from "../../src/context/application/build-system-c
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 
+function createContextSessionManager({ getContextProjection = null } = {}) {
+  return {
+    async getRootSessionId({ sessionId }) {
+      return sessionId;
+    },
+    async getContextProjection(payload = {}) {
+      if (getContextProjection) return getContextProjection(payload);
+      return { messages: [], sourceRevision: "" };
+    },
+    async upsertSessionTree() {},
+  };
+}
+
 function executionRunConfig(turnScopeId, extra = {}) {
   return {
     turnScopeId,
@@ -41,7 +54,7 @@ function createBuilderForAttachmentRuntimeTest({
       userConfig: {},
     },
     serviceContainer: {
-      sessionManager: null,
+      sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: {
         async ingest() {
@@ -221,7 +234,7 @@ test("buildNewSessionContext marks normalized superAdmin user as super user", as
       userConfig: {},
     },
     serviceContainer: {
-      sessionManager: null,
+      sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: {
         async ingest() {
@@ -268,7 +281,7 @@ test("buildNewSessionContext keeps turn identity in runtime but excludes it from
   const builder = new ContextBuilder({
     config: { globalConfig: {}, userConfig: {} },
     serviceContainer: {
-      sessionManager: null,
+      sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: null,
       skillService: null,
@@ -311,7 +324,7 @@ test("buildNewSessionContext keeps super user identity in system message when sy
       userConfig: {},
     },
     serviceContainer: {
-      sessionManager: null,
+      sessionManager: createContextSessionManager(),
       memoryService: null,
       attachmentService: {
         async ingest() {
@@ -435,6 +448,9 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
     },
     serviceContainer: {
       sessionManager: {
+        async getRootSessionId({ sessionId }) {
+          return sessionId;
+        },
         async getContextProjection(payload = {}) {
           calls.push(payload);
           return {
@@ -572,7 +588,7 @@ function createBuilderForLongMemoryTest(
       userConfig: {},
     },
     serviceContainer: {
-      sessionManager: null,
+      sessionManager: createContextSessionManager(),
       memoryService: {
         async readLongMemory(payload = {}) {
           readLongMemoryCalls.push(payload);

@@ -174,7 +174,6 @@ export class ContextBuilder {
     ];
     const resolvedRuntimeBasePath = runtimeBasePath || this._resolveRuntimeBasePath();
     const resolvedRootSessionId = await resolveRootSessionId({
-      runtimeBasePath: resolvedRuntimeBasePath,
       sessionManager: this.sessionManager,
       userId: this.userId,
       sessionId: this.sessionId,
@@ -247,14 +246,10 @@ export class ContextBuilder {
     });
   }
 
-  async _resolveSessionRecords({ sessionId, dialogProcessId = "" } = {}) {
-    const resolvedSessionId = sessionId || this.sessionId || "";
-    const runtimeBasePath = this._resolveRuntimeBasePath();
-    if (!this.sessionManager || !runtimeBasePath || !resolvedSessionId)
-      return { messages: [], sourceRevision: "" };
+  async _resolveSessionRecords({ dialogProcessId = "" } = {}) {
     return this.sessionManager.getContextProjection({
       userId: this.userId,
-      sessionId: resolvedSessionId,
+      sessionId: this.sessionId,
       parentSessionId: normalizeParentSessionId(this.parentSessionId),
       userConfig: this.userConfig,
       currentDialogProcessId: dialogProcessId,
@@ -316,11 +311,8 @@ export class ContextBuilder {
   }
 
   async _buildSessionContext({ dialogProcessId = "", mode = "" } = {}) {
-    const sessionProjection = await this._resolveSessionRecords({
-      sessionId: this.sessionId || "",
-      dialogProcessId,
-    });
-    const sessionRecords = sessionProjection?.messages || [];
+    const sessionProjection = await this._resolveSessionRecords({ dialogProcessId });
+    const sessionRecords = sessionProjection.messages;
     emitModelContextTrace(
       { ...(this.runConfig || {}), eventListener: this.eventListener },
       "context_records_resolved",
