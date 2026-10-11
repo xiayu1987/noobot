@@ -5,6 +5,7 @@
  */
 import { flushPromises } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildExecutionReport } from "@noobot/session-protocol/execution-report";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
 const getReport = vi.hoisted(() => vi.fn());
@@ -69,6 +70,38 @@ const finishedMessage = {
   ],
 };
 
+const EMPTY_METRICS = Object.freeze({
+  model: {
+    llmCalls: 0,
+    llmCallsWithTools: 0,
+    maxLoopRound: 0,
+    invocations: 0,
+    retries: 0,
+    switches: 0,
+    models: {},
+  },
+  tools: { toolStats: {}, riskLevels: {}, slowestToolCalls: [], totalToolDurationMs: 0 },
+  hooks: { count: 0, errorCount: 0, totalDurationMs: 0 },
+  phases: { contextBuildMs: null },
+});
+
+function v4Report({ status = "completed", durationMs, executionSummary = null, ...rest }) {
+  const startedAt = "2026-07-25T01:00:00.000Z";
+  return buildExecutionReport({
+    status,
+    sessionId: "session-1",
+    dialogProcessId: "dialog-1",
+    startedAt,
+    finishedAt: new Date(Date.parse(startedAt) + durationMs).toISOString(),
+    executionSummary,
+    ...rest,
+  });
+}
+
+function summaryOf({ toolCallCount = 0, errorCount = 0, metrics = EMPTY_METRICS } = {}) {
+  return { visibleTotal: 0, toolCallCount, toolResultCount: toolCallCount, errorCount, metrics };
+}
+
 function findReportButton(wrapper) {
   return wrapper.find(".execution-report-action-button");
 }
@@ -99,63 +132,64 @@ describe("ThinkingPanel execution report", () => {
   });
 
   it("opens the right drawer and renders every report dimension", async () => {
-    getReport.mockResolvedValue({
-      status: "completed",
-      durationMs: 2500,
-      summary: {
-        toolCallCount: 3,
-        errorCount: 1,
-        metrics: {
-          model: {
-            llmCalls: 4,
-            llmCallsWithTools: 3,
-            maxLoopRound: 4,
-            invocations: 4,
-            retries: 1,
-            switches: 0,
-            models: { claude: 4 },
-          },
-          tools: {
-            toolStats: {
-              read_file: {
-                calls: 2,
-                failures: 0,
-                timedCount: 2,
-                totalDurationMs: 400,
-                maxDurationMs: 300,
-              },
-              execute: {
-                calls: 1,
-                failures: 1,
-                timedCount: 1,
-                totalDurationMs: 3000,
-                maxDurationMs: 3000,
-              },
-              search: {
-                calls: 1,
-                failures: 0,
-                timedCount: 0,
-                totalDurationMs: 0,
-                maxDurationMs: 0,
-              },
+    getReport.mockResolvedValue(
+      v4Report({
+        durationMs: 2500,
+        executionSummary: summaryOf({
+          toolCallCount: 3,
+          errorCount: 1,
+          metrics: {
+            model: {
+              llmCalls: 4,
+              llmCallsWithTools: 3,
+              maxLoopRound: 4,
+              invocations: 4,
+              retries: 1,
+              switches: 0,
+              models: { claude: 4 },
             },
-            riskLevels: { critical: 1, low: 2 },
-            slowestToolCalls: [
-              {
-                toolCallId: "c1",
-                tool: "execute",
-                subject: "npm run build",
-                durationMs: 3000,
-                success: false,
+            tools: {
+              toolStats: {
+                read_file: {
+                  calls: 2,
+                  failures: 0,
+                  timedCount: 2,
+                  totalDurationMs: 400,
+                  maxDurationMs: 300,
+                },
+                execute: {
+                  calls: 1,
+                  failures: 1,
+                  timedCount: 1,
+                  totalDurationMs: 3000,
+                  maxDurationMs: 3000,
+                },
+                search: {
+                  calls: 1,
+                  failures: 0,
+                  timedCount: 0,
+                  totalDurationMs: 0,
+                  maxDurationMs: 0,
+                },
               },
-            ],
-            totalToolDurationMs: 3400,
+              riskLevels: { critical: 1, low: 2 },
+              slowestToolCalls: [
+                {
+                  toolCallId: "c1",
+                  tool: "execute",
+                  subject: "npm run build",
+                  durationMs: 3000,
+                  success: false,
+                },
+              ],
+              totalToolDurationMs: 3400,
+            },
+            hooks: { count: 5, errorCount: 0, totalDurationMs: 120 },
+            phases: { contextBuildMs: 800 },
           },
-          hooks: { count: 5, errorCount: 0, totalDurationMs: 120 },
-          phases: { contextBuildMs: 800 },
-        },
-      },
-    });
+        }),
+      }),
+    );
     const wrapper = mountThinkingPanel(finishedMessage, { userId: "admin" }, { stubs: drawerStub });
     expect(wrapper.find(".execution-report-drawer").exists()).toBe(false);
 
@@ -212,22 +246,30 @@ describe("ThinkingPanel execution report", () => {
     expect(drawer.find(".execution-report-rank").text()).toBe("1");
   });
 
-  it("renders legacy reports without metrics", async () => {
-    getReport.mockResolvedValue({
-      status: "failed",
-      durationMs: 900,
-      summary: { toolCallCount: 0, errorCount: 0, toolStats: {} },
-      error: { message: "boom" },
-    });
+  it("renders the summary error when execution statistics are unavailable", async () => {
+    getReport.mockResolvedValue(
+      v4Report({
+        status: "failed",
+        durationMs: 900,
+        summaryError: { message: "summary unreadable" },
+        error: { message: "boom" },
+      }),
+    );
     const wrapper = mountThinkingPanel(finishedMessage, {}, { stubs: drawerStub });
 
     await findReportButton(wrapper).trigger("click");
     await flushPromises();
 
     const drawer = wrapper.find(".execution-report-drawer");
-    expect(drawer.find('[data-testid="execution-report-overview"]').text()).toContain("900ms");
+    const cards = drawer.findAll(".execution-report-card");
+    expect(cards.map((node) => node.find(".execution-report-card-value").text())).toEqual([
+      "900ms",
+    ]);
     expect(drawer.find('[data-testid="execution-report-model"]').exists()).toBe(false);
+    expect(drawer.find(".execution-report-status").attributes("data-tone")).toBe("error");
     expect(drawer.text()).toContain("boom");
+    expect(drawer.text()).toContain("summary unreadable");
+    expect(drawer.text()).toMatch(/执行统计不可用|Execution statistics unavailable/);
   });
 
   it("shows the empty hint when the report has not been generated", async () => {
@@ -243,7 +285,9 @@ describe("ThinkingPanel execution report", () => {
   });
 
   it("loads the report through the data-owner fetcher instead of the host endpoint", async () => {
-    const fetchExecutionReport = vi.fn(async () => ({ status: "completed", durationMs: 1000 }));
+    const fetchExecutionReport = vi.fn(async () =>
+      v4Report({ durationMs: 1000, executionSummary: summaryOf() }),
+    );
     const wrapper = mountThinkingPanel(
       finishedMessage,
       { userId: "user-1", fetchExecutionReport },

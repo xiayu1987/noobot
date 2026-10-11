@@ -14,12 +14,27 @@ import {
 } from "../src/execution-report.js";
 import { isDialogProcessKey, requireDialogProcessKey } from "../src/identity.js";
 
+const metrics = {
+  model: {
+    llmCalls: 1,
+    llmCallsWithTools: 1,
+    maxLoopRound: 1,
+    invocations: 1,
+    retries: 0,
+    switches: 0,
+    models: { m1: 1 },
+  },
+  tools: { toolStats: {}, riskLevels: {}, slowestToolCalls: [], totalToolDurationMs: 0 },
+  hooks: { count: 0, errorCount: 0, totalDurationMs: 0 },
+  phases: { contextBuildMs: null },
+};
+
 const summary = {
   visibleTotal: 3,
   toolCallCount: 2,
   toolResultCount: 2,
   errorCount: 1,
-  metrics: { model: { llmCalls: 1 } },
+  metrics,
   steps: [{ index: 0 }],
 };
 
@@ -46,7 +61,7 @@ test("buildExecutionReport keeps aggregate metrics, duration and error only", ()
     toolCallCount: 2,
     toolResultCount: 2,
     errorCount: 1,
-    metrics: { model: { llmCalls: 1 } },
+    metrics,
   });
   assert.equal(report.summaryError, null);
   assert.deepEqual(report.error, { name: "Error", code: "E1", message: "boom" });
@@ -75,6 +90,27 @@ test("buildExecutionReport rejects a summary without the aggregate shape", () =>
   assert.throws(
     () => failedReport({ executionSummary: { ...summary, metrics: null } }),
     /summary\.metrics/,
+  );
+  assert.throws(
+    () => failedReport({ executionSummary: { ...summary, metrics: { ...metrics, hooks: null } } }),
+    /summary\.metrics\.hooks must be an object/,
+  );
+  assert.throws(
+    () =>
+      failedReport({
+        executionSummary: {
+          ...summary,
+          metrics: { ...metrics, tools: { ...metrics.tools, slowestToolCalls: null } },
+        },
+      }),
+    /slowestToolCalls must be an array/,
+  );
+  assert.throws(
+    () =>
+      failedReport({
+        executionSummary: { ...summary, metrics: { ...metrics, phases: { contextBuildMs: "1" } } },
+      }),
+    /contextBuildMs must be a number or null/,
   );
 });
 

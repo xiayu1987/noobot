@@ -49,6 +49,47 @@ const SUMMARY_COUNT_FIELDS = Object.freeze([
   "errorCount",
 ]);
 
+const METRICS_SECTION_FIELDS = Object.freeze({
+  model: ["llmCalls", "llmCallsWithTools", "maxLoopRound", "invocations", "retries", "switches"],
+  tools: ["totalToolDurationMs"],
+  hooks: ["count", "errorCount", "totalDurationMs"],
+});
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function assertMetricsShape(metrics) {
+  if (!isPlainObject(metrics)) throw invalidReport("summary.metrics must be an object");
+  for (const [section, fields] of Object.entries(METRICS_SECTION_FIELDS)) {
+    if (!isPlainObject(metrics[section])) {
+      throw invalidReport(`summary.metrics.${section} must be an object`);
+    }
+    for (const field of fields) {
+      if (!Number.isFinite(metrics[section][field])) {
+        throw invalidReport(`summary.metrics.${section}.${field} must be a number`);
+      }
+    }
+  }
+  if (!isPlainObject(metrics.model.models)) {
+    throw invalidReport("summary.metrics.model.models must be an object");
+  }
+  for (const field of ["toolStats", "riskLevels"]) {
+    if (!isPlainObject(metrics.tools[field])) {
+      throw invalidReport(`summary.metrics.tools.${field} must be an object`);
+    }
+  }
+  if (!Array.isArray(metrics.tools.slowestToolCalls)) {
+    throw invalidReport("summary.metrics.tools.slowestToolCalls must be an array");
+  }
+  if (!isPlainObject(metrics.phases))
+    throw invalidReport("summary.metrics.phases must be an object");
+  const { contextBuildMs } = metrics.phases;
+  if (contextBuildMs !== null && !Number.isFinite(contextBuildMs)) {
+    throw invalidReport("summary.metrics.phases.contextBuildMs must be a number or null");
+  }
+}
+
 function assertSummaryShape(summary) {
   if (typeof summary !== "object" || Array.isArray(summary)) {
     throw invalidReport("summary must be an object");
@@ -58,9 +99,7 @@ function assertSummaryShape(summary) {
       throw invalidReport(`summary.${field} must be a non-negative integer`);
     }
   }
-  if (!summary.metrics || typeof summary.metrics !== "object" || Array.isArray(summary.metrics)) {
-    throw invalidReport("summary.metrics must be an object");
-  }
+  assertMetricsShape(summary.metrics);
 }
 
 function resolveDurationMs(startedAt, finishedAt) {

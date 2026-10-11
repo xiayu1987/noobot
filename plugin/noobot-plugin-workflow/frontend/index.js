@@ -68,30 +68,24 @@ function createWorkflowSessionService(authenticatedRequest) {
       routeDialogProcessId = "",
       dialogProcessId = "",
     } = {}) {
-      const routeId = String(routeDialogProcessId || dialogProcessId).trim();
-      const query = String(dialogProcessId || "").trim()
-        ? `?dialogProcessId=${encodeURIComponent(String(dialogProcessId).trim())}`
-        : "";
+      const query = new URLSearchParams({ dialogProcessId });
       return request(
-        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeId)}/execution-report${query}`,
+        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/execution-report?${query.toString()}`,
         { method: "GET" },
       );
     },
     getThinkingDetail({
       userId = "",
       sessionId = "",
-      dialogProcessId = "",
       routeDialogProcessId = "",
+      dialogProcessId = "",
       turnScopeId = "",
     } = {}) {
-      const routeId = String(routeDialogProcessId || dialogProcessId).trim();
       const query = new URLSearchParams();
-      if (String(dialogProcessId).trim())
-        query.set("dialogProcessId", String(dialogProcessId).trim());
-      if (String(turnScopeId).trim()) query.set("turnScopeId", String(turnScopeId).trim());
-      const suffix = query.size ? `?${query.toString()}` : "";
+      if (dialogProcessId) query.set("dialogProcessId", dialogProcessId);
+      if (turnScopeId) query.set("turnScopeId", turnScopeId);
       return request(
-        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeId)}/thinking-detail${suffix}`,
+        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeDialogProcessId)}/thinking-detail?${query.toString()}`,
         { method: "GET" },
       );
     },

@@ -41,43 +41,35 @@ function formatCounter(counter = {}) {
 
 function buildStatus(report, translate) {
   const statusView = STATUS_VIEW[report.status];
-  return {
-    text: statusView ? translate(statusView.key) : String(report.status || "-"),
-    tone: statusView?.tone || "idle",
-  };
+  return { text: translate(statusView.key), tone: statusView.tone };
 }
 
 function card(key, label, value, tone = "") {
   return { key, label, value: value ?? "-", tone };
 }
 
-function buildOverviewCards(report, metrics, translate) {
-  const summary = report.summary || {};
-  const errorCount = Number(summary.errorCount) || 0;
-  const cards = [
-    card(
-      "duration",
-      translate("message.executionReportDuration"),
-      formatDuration(report.durationMs),
-    ),
+function buildOverviewCards(report, translate) {
+  const durationCard = card(
+    "duration",
+    translate("message.executionReportDuration"),
+    formatDuration(report.durationMs),
+  );
+  const { summary } = report;
+  if (!summary) return [durationCard];
+  return [
+    durationCard,
     card("toolCalls", translate("message.executionReportToolCalls"), summary.toolCallCount),
     card(
       "errors",
       translate("message.executionReportError"),
-      errorCount,
-      errorCount ? "error" : "",
+      summary.errorCount,
+      summary.errorCount ? "error" : "",
     ),
+    card("llmCalls", translate("message.executionReportLlmCalls"), summary.metrics.model.llmCalls),
   ];
-  if (metrics?.model) {
-    cards.push(
-      card("llmCalls", translate("message.executionReportLlmCalls"), metrics.model.llmCalls),
-    );
-  }
-  return cards;
 }
 
 function buildModelRows(model, translate) {
-  if (!model) return [];
   return [
     row(translate("message.executionReportLlmCallsWithTools"), model.llmCallsWithTools),
     row(translate("message.executionReportLoopRounds"), model.maxLoopRound),
@@ -88,26 +80,25 @@ function buildModelRows(model, translate) {
 }
 
 function buildPhaseRows(metrics, translate) {
-  if (!metrics) return [];
   return [
     row(
       translate("message.executionReportContextBuild"),
-      formatDuration(metrics.phases?.contextBuildMs),
+      formatDuration(metrics.phases.contextBuildMs),
     ),
     row(
       translate("message.executionReportToolDuration"),
-      formatDuration(metrics.tools?.totalToolDurationMs),
+      formatDuration(metrics.tools.totalToolDurationMs),
     ),
     row(
       translate("message.executionReportHookDuration"),
-      formatDuration(metrics.hooks?.totalDurationMs),
+      formatDuration(metrics.hooks.totalDurationMs),
     ),
-    row(translate("message.executionReportHooks"), metrics.hooks?.count),
-    row(translate("message.executionReportHookErrors"), metrics.hooks?.errorCount),
+    row(translate("message.executionReportHooks"), metrics.hooks.count),
+    row(translate("message.executionReportHookErrors"), metrics.hooks.errorCount),
   ];
 }
 
-function buildToolRows(toolStats = {}) {
+function buildToolRows(toolStats) {
   const entries = Object.entries(toolStats).sort(
     ([, left], [, right]) => right.totalDurationMs - left.totalDurationMs,
   );
@@ -126,18 +117,16 @@ function buildToolRows(toolStats = {}) {
   });
 }
 
-function buildRiskChips(riskLevels = {}) {
-  const known = SECURITY_RISK_LEVELS.filter((level) => riskLevels[level]);
-  const other = Object.keys(riskLevels).filter((level) => !SECURITY_RISK_LEVELS.includes(level));
-  return [...known, ...other].map((level) => ({
+function buildRiskChips(riskLevels) {
+  return SECURITY_RISK_LEVELS.filter((level) => riskLevels[level]).map((level) => ({
     level,
     count: riskLevels[level],
-    tone: RISK_TONES[level] || "idle",
+    tone: RISK_TONES[level],
   }));
 }
 
-function buildSlowestCalls(calls = []) {
-  const maxDuration = Math.max(0, ...calls.map((call) => call.durationMs || 0));
+function buildSlowestCalls(calls) {
+  const maxDuration = Math.max(0, ...calls.map((call) => call.durationMs));
   return calls.map((call, index) => ({
     key: call.toolCallId,
     rank: index + 1,
@@ -145,22 +134,28 @@ function buildSlowestCalls(calls = []) {
     subject: call.subject,
     duration: formatDuration(call.durationMs),
     ratio: ratioOf(call.durationMs, maxDuration),
-    success: call.success !== false,
+    success: call.success,
   }));
 }
 
+function buildMetricsView(metrics, translate) {
+  if (!metrics) return { model: [], phases: [], risks: [], tools: [], slowest: [] };
+  return {
+    model: buildModelRows(metrics.model, translate),
+    phases: buildPhaseRows(metrics, translate),
+    risks: buildRiskChips(metrics.tools.riskLevels),
+    tools: buildToolRows(metrics.tools.toolStats),
+    slowest: buildSlowestCalls(metrics.tools.slowestToolCalls),
+  };
+}
+
 export function buildExecutionReportView(report, translate) {
-  if (!report) return null;
-  const summary = report.summary || {};
-  const metrics = summary.metrics || null;
+  if (report === null) return null;
   return {
     status: buildStatus(report, translate),
-    cards: buildOverviewCards(report, metrics, translate),
-    error: report.error?.message || "",
-    model: buildModelRows(metrics?.model, translate),
-    phases: buildPhaseRows(metrics, translate),
-    risks: buildRiskChips(metrics?.tools?.riskLevels),
-    tools: buildToolRows(metrics?.tools?.toolStats),
-    slowest: buildSlowestCalls(metrics?.tools?.slowestToolCalls),
+    cards: buildOverviewCards(report, translate),
+    error: report.error?.message ?? "",
+    summaryError: report.summaryError?.message ?? "",
+    ...buildMetricsView(report.summary?.metrics ?? null, translate),
   };
 }

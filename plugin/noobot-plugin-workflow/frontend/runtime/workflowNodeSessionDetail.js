@@ -3,15 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-function requireSessionService(props = {}) {
+import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
+
+function requireSessionMethod(props, method) {
   const service = props?.workflowSessionService;
-  if (
-    typeof service?.getDetail !== "function" ||
-    typeof service?.getThinkingDetail !== "function"
-  ) {
+  if (typeof service?.[method] !== "function") {
     throw new Error("workflow session service is unavailable");
   }
-  return service;
+  return service[method].bind(service);
 }
 
 function sessionSummaryWithoutMutableRuntime(summary = {}) {
@@ -63,7 +62,7 @@ async function requestExecutionSessionDetail(context) {
     requestedChildSessionId: context.requestedChildSessionId,
   });
   try {
-    const response = await requireSessionService(context.props).getDetail(context.request);
+    const response = await requireSessionMethod(context.props, "getDetail")(context.request);
     logExecutionDetail(context, "responseReceived", {
       httpOk: response?.ok === true,
       httpStatus: Number(response?.status || 0),
@@ -252,33 +251,56 @@ export async function fetchExecutionSessionDetail({
   return normalizeExecutionDetail(context, payload);
 }
 
+function requireTurnTarget(translate, values) {
+  const normalized = Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, String(value || "").trim()]),
+  );
+  if (!normalized.userId || !normalized.rootSessionId || !normalized.routeDialogProcessId) {
+    throw new Error(translate("workflow.nodeSessionMissing"));
+  }
+  return normalized;
+}
+
+async function readWorkflowRoutePayload(response, translate) {
+  if (!response.ok) throw new Error(translate("workflow.readNodeSessionFailed"));
+  const payload = await response.json();
+  if (!payload?.ok) {
+    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
+  }
+  return payload;
+}
+
 export async function fetchWorkflowNodeThinkingDetail({
   props,
   translate,
   rootSessionId = "",
-  dialogProcessId = "",
   routeDialogProcessId = "",
+  dialogProcessId = "",
   turnScopeId = "",
 }) {
-  const normalizedRouteDialogProcessId = String(
-    routeDialogProcessId || dialogProcessId || "",
-  ).trim();
-  if (!props.userId || !rootSessionId || !normalizedRouteDialogProcessId) {
-    throw new Error(translate("workflow.nodeSessionMissing"));
-  }
-  const response = await requireSessionService(props).getThinkingDetail({
+  const target = requireTurnTarget(translate, {
     userId: props.userId,
-    sessionId: rootSessionId,
-    routeDialogProcessId: normalizedRouteDialogProcessId,
+    rootSessionId,
+    routeDialogProcessId,
     dialogProcessId,
     turnScopeId,
   });
-  if (!response.ok) {
-    throw new Error(translate("workflow.readNodeSessionFailed"));
+  if (!target.dialogProcessId && !target.turnScopeId) {
+    throw new Error(translate("workflow.nodeSessionMissing"));
   }
-  const payload = await response.json();
-  if (!payload?.ok || !payload?.exists) {
-    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
+  const response = await requireSessionMethod(
+    props,
+    "getThinkingDetail",
+  )({
+    userId: target.userId,
+    sessionId: target.rootSessionId,
+    routeDialogProcessId: target.routeDialogProcessId,
+    dialogProcessId: target.dialogProcessId,
+    turnScopeId: target.turnScopeId,
+  });
+  const payload = await readWorkflowRoutePayload(response, translate);
+  if (!payload.exists) {
+    throw new Error(String(payload.error || translate("workflow.readNodeSessionFailed")));
   }
   return payload;
 }
@@ -290,28 +312,23 @@ export async function fetchWorkflowNodeExecutionReport({
   routeDialogProcessId = "",
   dialogProcessId = "",
 }) {
-  const normalizedRouteDialogProcessId = String(
-    routeDialogProcessId || dialogProcessId || "",
-  ).trim();
-  if (!props.userId || !rootSessionId || !normalizedRouteDialogProcessId) {
-    throw new Error(translate("workflow.nodeSessionMissing"));
-  }
-  const service = props?.workflowSessionService;
-  if (typeof service?.getExecutionReport !== "function") {
-    throw new Error("workflow session service is unavailable");
-  }
-  const response = await service.getExecutionReport({
+  const target = requireTurnTarget(translate, {
     userId: props.userId,
-    sessionId: rootSessionId,
-    routeDialogProcessId: normalizedRouteDialogProcessId,
+    rootSessionId,
+    routeDialogProcessId,
     dialogProcessId,
   });
-  if (!response.ok) {
-    throw new Error(translate("workflow.readNodeSessionFailed"));
-  }
-  const payload = await response.json();
-  if (!payload?.ok) {
-    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
-  }
-  return payload.report || null;
+  if (!target.dialogProcessId) throw new Error(translate("workflow.nodeSessionMissing"));
+  const response = await requireSessionMethod(
+    props,
+    "getExecutionReport",
+  )({
+    userId: target.userId,
+    sessionId: target.rootSessionId,
+    routeDialogProcessId: target.routeDialogProcessId,
+    dialogProcessId: target.dialogProcessId,
+  });
+  if (response.status === 404) return null;
+  const payload = await readWorkflowRoutePayload(response, translate);
+  return decodeExecutionReport(payload.report);
 }

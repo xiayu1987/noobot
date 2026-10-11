@@ -95,15 +95,13 @@ function logDetail({
   });
 }
 
-function createThinkingDetailHandler(sessions, badRequestStatus) {
+function createThinkingDetailHandler(sessions, httpStatus) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
     const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
     const turnScopeId = normalizeRouteText(req.query?.turnScopeId);
     if (!dialogProcessId && !turnScopeId) {
-      const error = new Error("dialogProcessId or turnScopeId is required");
-      error.statusCode = badRequestStatus;
-      throw error;
+      throw routeError("dialogProcessId or turnScopeId is required", httpStatus.BAD_REQUEST);
     }
     const detail = await sessions.readThinkingDetail({
       userId,
@@ -122,24 +120,33 @@ function createThinkingDetailHandler(sessions, badRequestStatus) {
   };
 }
 
-function createExecutionReportHandler(sessions) {
+function routeError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function createExecutionReportHandler(sessions, httpStatus) {
   return async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
-    const dialogProcessId =
-      normalizeRouteText(req.query?.dialogProcessId) || normalizeRouteText(routeDialogProcessId);
+    const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
+    if (!dialogProcessId) {
+      throw routeError("dialogProcessId is required", httpStatus.BAD_REQUEST);
+    }
     const report = await sessions.readExecutionReport({
       userId,
       segments: [WORKFLOW_DATA_SCOPE.SESSION, sessionId, routeDialogProcessId],
       dialogProcessId,
       locale: req.locale,
     });
+    if (!report) throw routeError("execution report not found", httpStatus.NOT_FOUND);
     res.json({ ok: true, report });
   };
 }
 
 export function createWorkflowServiceRouteHandlers(context = {}) {
   const sessions = context?.ports?.sessions;
-  const badRequestStatus = context?.ports?.http?.status?.BAD_REQUEST || 400;
+  const httpStatus = context?.ports?.http?.status;
   if (
     !sessions ||
     typeof sessions.readSnapshot !== "function" ||
@@ -147,6 +154,9 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     typeof sessions.readExecutionReport !== "function"
   ) {
     throw new Error("workflow service session ports are required");
+  }
+  if (!Number.isInteger(httpStatus?.BAD_REQUEST) || !Number.isInteger(httpStatus?.NOT_FOUND)) {
+    throw new Error("workflow service http status port is required");
   }
 
   const sessionDetailHandler = async (req, res) => {
@@ -224,8 +234,8 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     });
   };
 
-  const thinkingDetailHandler = createThinkingDetailHandler(sessions, badRequestStatus);
-  const executionReportHandler = createExecutionReportHandler(sessions);
+  const thinkingDetailHandler = createThinkingDetailHandler(sessions, httpStatus);
+  const executionReportHandler = createExecutionReportHandler(sessions, httpStatus);
 
   return {
     "workflow.detail": sessionDetailHandler,

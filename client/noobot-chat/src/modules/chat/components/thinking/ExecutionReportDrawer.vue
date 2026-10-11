@@ -50,9 +50,9 @@ async function loadReport() {
       dialogProcessId: getMessageDialogProcessId(props.messageItem),
     };
     report.value =
-      (typeof props.fetchExecutionReport === "function"
+      typeof props.fetchExecutionReport === "function"
         ? await props.fetchExecutionReport(request)
-        : await executionReportService.getReport(request)) || null;
+        : await executionReportService.getReport(request);
   } catch (error) {
     errorText.value = String(error?.message || error);
   } finally {
@@ -106,6 +106,11 @@ watch(
       <section v-if="view.error" class="execution-report-section">
         <BaseSectionHeader :title="translate('message.executionReportError')" />
         <p class="execution-report-error">{{ view.error }}</p>
+      </section>
+
+      <section v-if="view.summaryError" class="execution-report-section">
+        <BaseSectionHeader :title="translate('message.executionReportSummaryError')" />
+        <p class="execution-report-error">{{ view.summaryError }}</p>
       </section>
 
       <div v-if="metaSections.length" class="execution-report-grid">

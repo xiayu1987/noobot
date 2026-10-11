@@ -5,6 +5,7 @@
  */
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { projectToolOperationSubject } from "@noobot/event-protocol/tool-presentation";
+import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { resolveData, resolveTimestampMs, resolveToolName } from "./execution-log-fields.js";
 
 const SLOWEST_TOOL_CALL_LIMIT = QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls;
@@ -49,7 +50,7 @@ function trackToolCall(acc, log, data, phase) {
   if (phase === "end") {
     entry.endMs = ts;
     entry.success = data.success === true;
-    entry.riskLevel = String(data.riskLevel || "").trim();
+    entry.riskLevel = normalizeSecurityRiskLevel(data.riskLevel);
   }
   acc.toolCalls.set(toolCallId, entry);
 }
