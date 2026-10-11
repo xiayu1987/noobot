@@ -32,25 +32,14 @@ export function isEventForStreamScope(data = {}, payload = {}, channelSessionId 
   if (payloadSessionId && eventSessionId && payloadSessionId !== eventSessionId) return false;
   const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
   const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
-  if (payloadTurnScopeId && eventTurnScopeId && payloadTurnScopeId !== eventTurnScopeId) return false;
+  if (payloadTurnScopeId && eventTurnScopeId && payloadTurnScopeId !== eventTurnScopeId)
+    return false;
   const payloadDialogProcessId = normalizeTrimmedString(identity.dialogProcessId);
   const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
   return !(
     payloadDialogProcessId &&
     eventDialogProcessId &&
     payloadDialogProcessId !== eventDialogProcessId
-  );
-}
-
-export function canSettleStreamForEvent(data = {}, payload = {}, channelSessionId = "") {
-  if (!isEventForStreamScope(data, payload, channelSessionId)) return false;
-  const identity = getAgentCommandIdentity(payload);
-  const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
-  const payloadDialogProcessId = normalizeTrimmedString(identity.dialogProcessId);
-  if (!payloadTurnScopeId && !payloadDialogProcessId) return true;
-  return Boolean(
-    normalizeTrimmedString(data?.turnScopeId) ||
-      normalizeTrimmedString(data?.dialogProcessId),
   );
 }
 
@@ -62,8 +51,8 @@ export function isCommandReceiptForPayload(event = "", data = {}, payload = {}) 
 }
 
 export function createCommandReceiptError(data = {}, translateText = (key = "") => key) {
-  const fallback = normalizeTrimmedString(data?.error?.code) ||
-    translateText("infra.websocketStreamError");
+  const fallback =
+    normalizeTrimmedString(data?.error?.code) || translateText("infra.websocketStreamError");
   const error = new Error(normalizeErrorMessage(data?.error?.message, fallback));
   error.event = AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT;
   error.data = data || {};

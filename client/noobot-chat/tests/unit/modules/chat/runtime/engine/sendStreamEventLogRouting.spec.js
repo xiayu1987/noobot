@@ -37,12 +37,7 @@ const entry = {
 };
 const routeArgs = (authoritativeEvent, routed) => ({
   routed,
-  data: {},
   authoritativeEvent,
-  authoritativeIdentity: authoritativeEvent.identity,
-  authoritativePayload: authoritativeEvent.payload,
-  sessionId: "s1",
-  turnScopeId: "t1",
 });
 
 afterEach(() => setStreamDeltaDebugLogSink(null));

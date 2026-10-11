@@ -18,16 +18,7 @@ function num(value) {
   return Number(value || 0);
 }
 
-function resolveLifecycleSessionIds({ activeSession, data, event, sessionId }) {
-  const childSessionId =
-    event === StreamEventEnum.TURN_LIFECYCLE ? normalizeTrimmedString(data?.sessionId) : "";
-  const rootSessionId = normalizeTrimmedString(
-    data?.parentSessionId || activeSession?.value?.sessionId || sessionId,
-  );
-  return { childSessionId, rootSessionId };
-}
-
-function buildStreamEventLogData({ authoritativeEvent, data, event, childSessionId }) {
+function buildStreamEventLogData({ authoritativeEvent, data, event }) {
   const source = authoritativeEvent || {};
   const identity = orDefault(source.identity, {});
   const ordering = orDefault(source.ordering, {});
@@ -53,7 +44,11 @@ function buildStreamEventLogData({ authoritativeEvent, data, event, childSession
     sequenceDomain: str(ordering.domain),
     sequenceScopeId: str(ordering.scopeId),
     textLength: str(payload.text).length,
-    childSessionId,
+    childSessionId:
+      event === StreamEventEnum.TURN_LIFECYCLE ? normalizeTrimmedString(eventData.sessionId) : "",
+    eventSessionId: str(eventData.sessionId),
+    eventDialogProcessId: str(eventData.dialogProcessId),
+    eventTurnScopeId: str(eventData.turnScopeId),
     parentSessionId: str(eventData.parentSessionId),
     lifecycleEventType: str(eventData.eventType),
     lifecycleRevision: num(eventData.revision),
@@ -62,8 +57,22 @@ function buildStreamEventLogData({ authoritativeEvent, data, event, childSession
   };
 }
 
+function resolveStreamEventLogIdentity({ authoritativeEvent, botMsg, sessionId, turnScopeId }) {
+  if (authoritativeEvent) {
+    return {
+      sessionId: str(authoritativeEvent.identity.sessionId),
+      dialogProcessId: str(authoritativeEvent.payload?.dialogProcessId),
+      turnScopeId: str(authoritativeEvent.identity.turnScopeId),
+    };
+  }
+  return {
+    sessionId: str(sessionId),
+    dialogProcessId: normalizeTrimmedString(botMsg?.dialogProcessId),
+    turnScopeId: str(turnScopeId),
+  };
+}
+
 export function buildStreamEventLogEntry({
-  activeSession,
   authoritativeEvent,
   botMsg,
   data,
@@ -71,26 +80,10 @@ export function buildStreamEventLogEntry({
   sessionId,
   turnScopeId,
 }) {
-  const identity = authoritativeEvent?.identity || {};
-  const payload = authoritativeEvent?.payload || {};
-  const { childSessionId, rootSessionId } = resolveLifecycleSessionIds({
-    activeSession,
-    data,
-    event,
-    sessionId,
-  });
   return {
     category: event === StreamEventEnum.INTERACTION_REQUEST ? "interaction" : "transport",
     event: `stream.${event || "event"}`,
-    sessionId:
-      childSessionId && childSessionId !== rootSessionId
-        ? rootSessionId
-        : identity.sessionId || data?.sessionId || sessionId,
-    dialogProcessId:
-      payload.dialogProcessId ||
-      data?.dialogProcessId ||
-      normalizeTrimmedString(botMsg?.dialogProcessId),
-    turnScopeId: identity.turnScopeId || data?.turnScopeId || turnScopeId,
-    data: buildStreamEventLogData({ authoritativeEvent, data, event, childSessionId }),
+    ...resolveStreamEventLogIdentity({ authoritativeEvent, botMsg, sessionId, turnScopeId }),
+    data: buildStreamEventLogData({ authoritativeEvent, data, event }),
   };
 }

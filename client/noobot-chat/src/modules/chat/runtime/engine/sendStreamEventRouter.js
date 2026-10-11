@@ -111,27 +111,18 @@ function routePostProjectionEvent(event, data, context) {
   return true;
 }
 
-export function logRuntimeRouteCompleted({
-  routed,
-  data,
-  authoritativeEvent,
-  authoritativeIdentity,
-  authoritativePayload,
-  logSessionEvent,
-  sessionId,
-  turnScopeId,
-}) {
+export function logRuntimeRouteCompleted({ routed, authoritativeEvent, logSessionEvent }) {
   if (!routed) return;
   const entry = {
     category: "transport",
     level: "info",
     event: "frontend.runtimeStream.routeCompleted",
-    sessionId: authoritativeIdentity.sessionId || data?.sessionId || sessionId,
-    dialogProcessId: authoritativePayload.dialogProcessId || data?.dialogProcessId || "",
-    turnScopeId: authoritativeIdentity.turnScopeId || data?.turnScopeId || turnScopeId,
+    sessionId: String(authoritativeEvent.identity.sessionId),
+    dialogProcessId: String(authoritativeEvent.payload?.dialogProcessId || ""),
+    turnScopeId: String(authoritativeEvent.identity.turnScopeId),
     data: {
-      eventType: String(authoritativeEvent?.identity?.eventType || ""),
-      eventFamily: String(authoritativeEvent?.protocol?.family || ""),
+      eventType: String(authoritativeEvent.identity.eventType),
+      eventFamily: String(authoritativeEvent.protocol.family),
       routed,
     },
   };
@@ -144,11 +135,7 @@ export function logRuntimeRouteCompleted({
 
 function routeAuthoritativeRuntimeEvent({
   event,
-  data,
   protocolEnvelope,
-  authoritativeEvent,
-  authoritativeIdentity,
-  authoritativePayload,
   applyWorkflowRuntimeEvent,
   logSessionEvent,
   sessionId,
@@ -167,13 +154,8 @@ function routeAuthoritativeRuntimeEvent({
   });
   logRuntimeRouteCompleted({
     routed,
-    data,
-    authoritativeEvent,
-    authoritativeIdentity,
-    authoritativePayload,
+    authoritativeEvent: protocolEnvelope,
     logSessionEvent,
-    sessionId,
-    turnScopeId,
   });
   return routed;
 }
@@ -233,11 +215,8 @@ export function createSendStreamEventHandler(context) {
       source: "realtime",
     });
     const authoritativeEvent = protocolEnvelope;
-    const authoritativeIdentity = authoritativeEvent?.identity || {};
-    const authoritativePayload = authoritativeEvent?.payload || {};
     logStreamEvent(
       buildStreamEventLogEntry({
-        activeSession,
         authoritativeEvent,
         botMsg,
         data,
@@ -279,11 +258,7 @@ export function createSendStreamEventHandler(context) {
     if (
       routeAuthoritativeRuntimeEvent({
         event,
-        data,
         protocolEnvelope,
-        authoritativeEvent,
-        authoritativeIdentity,
-        authoritativePayload,
         applyWorkflowRuntimeEvent,
         logSessionEvent,
         sessionId,

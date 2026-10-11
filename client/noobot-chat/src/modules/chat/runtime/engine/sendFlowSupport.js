@@ -3,10 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../model/chatConstants.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
-import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../model/messageIdentity.js";
+import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import {
   resolveSessionTurnRuntime,
   sessionRuntimeId,
@@ -33,51 +32,6 @@ export function isEventForCurrentTurn(data = {}, botMessage = {}) {
   const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
   if (!botTurnScopeId || !eventTurnScopeId) return true;
   return eventTurnScopeId === botTurnScopeId;
-}
-
-export function isCompletedChannelStateEvent(event = "", data = {}) {
-  return (
-    normalizeTrimmedString(event) === StreamEventEnum.CHANNEL_STATE &&
-    normalizeTrimmedString(data?.state) === "completed"
-  );
-}
-
-export function hasCompletableRunIdentity(data = {}, botMessage = {}) {
-  return Boolean(
-    normalizeTrimmedString(data?.turnScopeId) ||
-    normalizeTrimmedString(data?.dialogProcessId) ||
-    normalizeTrimmedString(botMessage?.dialogProcessId),
-  );
-}
-
-export function buildFinalDoneEventData({ data = {}, activeSession, botMessage } = {}) {
-  return {
-    ...(data || {}),
-    sessionId: data?.sessionId || activeSession?.value?.sessionId || "",
-    dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMessage?.dialogProcessId),
-    turnScopeId: data?.turnScopeId || normalizeTrimmedString(botMessage?.turnScopeId),
-  };
-}
-
-export function hasDialogProcessConflictForTurn({
-  activeSession,
-  data = {},
-  botMessage = {},
-} = {}) {
-  const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
-  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
-  const botTurnScopeId = getMessageTurnScopeId(botMessage);
-  if (!eventDialogProcessId || !eventTurnScopeId || !botTurnScopeId) return false;
-  if (eventTurnScopeId !== botTurnScopeId) return false;
-  const messages = Array.isArray(activeSession?.value?.messages)
-    ? activeSession.value.messages
-    : [];
-  return messages.some((messageItem) => {
-    if (messageItem === botMessage) return false;
-    if (getMessageDialogProcessId(messageItem) !== eventDialogProcessId) return false;
-    const messageTurnScopeId = getMessageTurnScopeId(messageItem);
-    return Boolean(messageTurnScopeId && messageTurnScopeId !== botTurnScopeId);
-  });
 }
 
 export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {
