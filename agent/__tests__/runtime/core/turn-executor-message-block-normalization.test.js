@@ -3,18 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { invokeWithToolsTurn } from "../../../src/runtime/turn/turn-executor.js";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 
-const MODEL = {
+const MODEL = normalizeRuntimeModelSpec({
   model: "gpt-4o",
   reasoning_effort: "medium",
   tool_reasoning_effort: "medium",
   reasoning_effort_options: ["low", "medium", "high"],
   reasoning_effort_parameter: "reasoning_effort",
-};
+});
 
 test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () => {
   let captured = [];
@@ -32,7 +33,7 @@ test("invokeWithToolsTurn normalizes dirty blocks before llm invoke", async () =
   const modelState = {
     modelPort: createTestModelPort(llm),
     runtime: { systemRuntime: {} },
-    defaultModelSpec: MODEL,
+    activeModelSpec: MODEL,
   };
   const loopState = {
     messages: [current, { role: "system", content: "misplaced" }, history, system, current],

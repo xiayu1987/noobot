@@ -79,6 +79,8 @@ test("streaming mode retries once in the opposite direction and caches the succe
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -119,6 +121,8 @@ test("non-streaming preference also falls back to streaming and caches it", asyn
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -143,6 +147,8 @@ test("explicit model errors do not trigger an opposite streaming mode", async ()
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.AUTHENTICATION }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -168,6 +174,8 @@ test("streaming mode is not retried after output has started", async () => {
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -202,6 +210,8 @@ test("caller abort rethrows the frozen abort reason unchanged without any retry"
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: true, kind: MODEL_ERROR_KIND.UNKNOWN }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: ({ streaming }) => {
       requestedModes.push(streaming);
       return {
@@ -242,6 +252,8 @@ test("executor is the single attempt and retry authority", async () => {
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: true }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () => {
         attempts += 1;
@@ -274,6 +286,8 @@ test("executor observation protocol cannot be overridden with model credentials"
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({ invoke: async () => ({ content: "ok" }) }),
   };
   const port = createModelRequestExecutor({
@@ -298,10 +312,11 @@ test("tool-call mismatch streaming downgrade is one-way within an invocation", a
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
       const client = {
-        bindTools: () => client,
         invoke: async () => {
           calls += 1;
           return calls === 1
@@ -343,6 +358,8 @@ test("non-streaming invocation never enables streaming during semantic retries",
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
       const client = {
@@ -375,10 +392,9 @@ test("tool calls are not discarded when the provider also returns reasoning", as
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
-      bindTools: function bindTools() {
-        return this;
-      },
       invoke: async () => {
         calls += 1;
         return {
@@ -420,6 +436,8 @@ test("Responses continuation metadata remains valid canonical model output", asy
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () => ({
         content: "analysis complete",
@@ -447,9 +465,10 @@ test("executor is the single model context trace authority at each provider atte
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: true }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => {
       const client = {
-        bindTools: () => client,
         invoke: async () => {
           attempts += 1;
           if (attempts === 1) throw new Error("temporary");
@@ -527,6 +546,8 @@ test("non-chat operations execute only through the resolved provider adapter", a
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
     executeOperation: async ({ operation }) => {
       calls.push(operation);

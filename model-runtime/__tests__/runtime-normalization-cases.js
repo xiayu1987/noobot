@@ -576,6 +576,8 @@ test("reasoning-only exhaustion is a typed terminal protocol error", async () =>
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () => ({ content: "", additional_kwargs: { reasoning_content: "thinking" } }),
     }),
@@ -601,6 +603,8 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () =>
         ++calls === 1
@@ -635,6 +639,8 @@ test("empty signed thinking responses are retried before completion", async () =
   const adapter = {
     id: "anthropic-messages",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () =>
         ++calls === 1
@@ -673,6 +679,8 @@ test("empty signed thinking response exhaustion is a typed protocol error", asyn
   const adapter = {
     id: "anthropic-messages",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () => ({
         content: [{ type: "thinking", thinking: "", signature: "signed" }],
@@ -703,6 +711,8 @@ test("image-only chat output completes without an empty-response retry", async (
   const adapter = {
     id: "openai-compatible",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () => {
         calls += 1;
@@ -736,6 +746,8 @@ function createEmptyThenAnswerAdapter(emptyCount) {
   const adapter = {
     id: "anthropic-messages",
     classifyError: () => ({ retryable: false }),
+    bindTools: ({ client }) => client,
+    prepareMessages: ({ messages }) => messages,
     createClient: () => ({
       invoke: async () =>
         ++state.calls <= emptyCount

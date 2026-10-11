@@ -35,7 +35,7 @@ export function streamingProviderCacheKey({ model = {}, operation = {}, tools = 
   return JSON.stringify([
     String(model.operatorId || "").trim(),
     String(model.adapterId || "").trim(),
-    String(model.base_url || model.baseUrl || "").trim(),
+    String(model.base_url || "").trim(),
     String(model.model || "").trim(),
     String(operation?.kind || "chat").trim(),
     Array.isArray(tools) && tools.length > 0,

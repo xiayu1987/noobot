@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filterForModelContext } from "@noobot/context-protocol/policy/message";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, requireModelSpec } from "@noobot/model-protocol";
 import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   resolveBoundToolModelRequestOverrides,
@@ -36,7 +36,7 @@ export function createBoundLlmToolChoiceInvoker({
       ...baseBindOptions,
       ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
     };
-    const effectiveModelSpec = modelState?.activeModelSpec || modelState?.defaultModelSpec || {};
+    const effectiveModelSpec = requireModelSpec(modelState.activeModelSpec);
     const nonThinkingOverrides = resolveNonThinkingCallOverrides(
       runtime,
       effectiveToolChoice,

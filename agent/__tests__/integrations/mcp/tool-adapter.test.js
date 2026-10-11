@@ -93,7 +93,7 @@ test("MCP tool adapter binds dotted tool names and calls with the original name"
   assert.equal(names[2].length, 64);
   assert.equal(names[3].length, 64);
   assert.ok(names[3].endsWith("_2"));
-  assert.deepEqual(adaptToolsForBinding(tools).droppedToolNames, []);
+  assert.deepEqual(adaptToolsForBinding(tools, { model: "gpt-5.5" }).droppedToolNames, []);
 
   await tools[0].invoke({});
   await tools[1].invoke({});

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -12,13 +13,15 @@ import {
 } from "../../../src/runtime/turn/turn-executor.js";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 
-const TEST_MODEL_SPEC = Object.freeze({
-  model: "gpt-4o",
-  reasoning_effort: "medium",
-  tool_reasoning_effort: "medium",
-  reasoning_effort_options: ["low", "medium", "high"],
-  reasoning_effort_parameter: "reasoning_effort",
-});
+const TEST_MODEL_SPEC = Object.freeze(
+  normalizeRuntimeModelSpec({
+    model: "gpt-4o",
+    reasoning_effort: "medium",
+    tool_reasoning_effort: "medium",
+    reasoning_effort_options: ["low", "medium", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
+  }),
+);
 
 function invokeNoToolsTurn(args = {}) {
   prepareTestTurnExecution(
@@ -73,7 +76,7 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
       },
     },
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "keep-user" }],
@@ -106,7 +109,7 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "go" }],
@@ -144,7 +147,7 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
     userConfig: {},
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "go" }],

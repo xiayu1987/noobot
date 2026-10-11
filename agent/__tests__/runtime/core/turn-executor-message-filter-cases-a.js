@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { appendContextMessage, writeMessageBlocks } from "@noobot/context-protocol";
@@ -15,13 +16,15 @@ import {
 import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 
-const TEST_MODEL_SPEC = Object.freeze({
-  model: "gpt-4o",
-  reasoning_effort: "medium",
-  tool_reasoning_effort: "medium",
-  reasoning_effort_options: ["low", "medium", "high"],
-  reasoning_effort_parameter: "reasoning_effort",
-});
+const TEST_MODEL_SPEC = Object.freeze(
+  normalizeRuntimeModelSpec({
+    model: "gpt-4o",
+    reasoning_effort: "medium",
+    tool_reasoning_effort: "medium",
+    reasoning_effort_options: ["low", "medium", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
+  }),
+);
 
 function invokeNoToolsTurn(args = {}) {
   prepareTestTurnExecution(
@@ -55,7 +58,7 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [
@@ -130,7 +133,7 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [
@@ -216,7 +219,7 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [system, history, incremental],
@@ -283,7 +286,7 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [current],
@@ -363,7 +366,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   loopState = {
     messages: [current, toolCall, toolResult],

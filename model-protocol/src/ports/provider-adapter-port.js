@@ -4,7 +4,7 @@
  */
 export function requireProviderAdapter(adapter) {
   if (!String(adapter?.id || "").trim()) throw new TypeError("provider adapter.id is required");
-  for (const key of ["createClient", "classifyError"])
+  for (const key of ["createClient", "classifyError", "bindTools", "prepareMessages"])
     if (typeof adapter?.[key] !== "function")
       throw new TypeError(`provider adapter.${key} is required`);
   if (adapter.executeOperation !== undefined && typeof adapter.executeOperation !== "function") {

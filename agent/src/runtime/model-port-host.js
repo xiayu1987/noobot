@@ -74,7 +74,7 @@ function buildInvocation(modelState, request = {}) {
   };
 }
 
-export function createModelPort({ modelSpec, modelState = {} } = {}) {
+function createModelPort({ resolveTurnModelSpec, modelState }) {
   const executor = createModelRequestExecutor({
     credentialPort: createCredentialPort(),
     observationPort: createObservationPort({ modelState }),
@@ -89,9 +89,7 @@ export function createModelPort({ modelSpec, modelState = {} } = {}) {
       invocation,
       operation,
     } = {}) {
-      const requestModelSpec = requireModelSpec(
-        model || modelState.activeModelSpec || modelState.defaultModelSpec || modelSpec,
-      );
+      const requestModelSpec = requireModelSpec(model || resolveTurnModelSpec());
       const response = await executor.invoke({
         model: requestModelSpec,
         operation,
@@ -116,11 +114,15 @@ export function createModelPort({ modelSpec, modelState = {} } = {}) {
 }
 
 function createAgentModelPort(modelState) {
-  return createModelPort({ modelState });
+  return createModelPort({
+    modelState,
+    resolveTurnModelSpec: () => modelState.activeModelSpec,
+  });
 }
 
-export function createAgentAuxiliaryModelPort({ modelSpec, modelState } = {}) {
-  return createModelPort({ modelSpec, modelState });
+export function createAgentAuxiliaryModelPort({ modelSpec, modelState }) {
+  const auxiliaryModelSpec = requireModelSpec(modelSpec);
+  return createModelPort({ modelState, resolveTurnModelSpec: () => auxiliaryModelSpec });
 }
 
 export function initializeAgentModelHost({

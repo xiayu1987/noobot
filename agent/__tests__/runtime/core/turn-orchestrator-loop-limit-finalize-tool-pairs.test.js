@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
@@ -77,7 +78,7 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
 }
 
 function createModelState(llm, defaultModelSpec = null) {
-  const resolvedModelSpec =
+  const resolvedModelSpec = normalizeRuntimeModelSpec(
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
       : {
@@ -87,7 +88,8 @@ function createModelState(llm, defaultModelSpec = null) {
           tool_reasoning_effort: "medium",
           reasoning_effort_options: ["low", "medium", "high"],
           reasoning_effort_parameter: "reasoning_effort",
-        };
+        },
+  );
   const modelState = {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),

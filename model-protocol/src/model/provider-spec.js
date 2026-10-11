@@ -466,6 +466,9 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
     use_responses_api: internalField(booleanField, {
       group: MODEL_PROVIDER_FIELD_GROUP.TRANSPORT,
     }),
+    strict_tool_schema: internalField(booleanField, {
+      group: MODEL_PROVIDER_FIELD_GROUP.TRANSPORT,
+    }),
     extra_body: internalField(
       {
         type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
@@ -536,6 +539,26 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
   required: Object.freeze(["model"]),
 });
 
+export const MODEL_TRANSPORT_FLAG_DEFAULTS = Object.freeze({
+  use_responses_api: false,
+  strict_tool_schema: false,
+});
+
+function resolveModelTransportFlag(spec, key) {
+  const value = spec?.[key];
+  if (value === undefined) return MODEL_TRANSPORT_FLAG_DEFAULTS[key];
+  if (typeof value !== "boolean") throw new TypeError(`model spec ${key} must be boolean`);
+  return value;
+}
+
+export function resolveModelUseResponsesApi(spec = {}) {
+  return resolveModelTransportFlag(spec, "use_responses_api");
+}
+
+export function resolveModelStrictToolSchema(spec = {}) {
+  return resolveModelTransportFlag(spec, "strict_tool_schema");
+}
+
 const OPERATOR_ID_BY_HOST = Object.freeze({
   "api.openai.com": MODEL_PROVIDER_ID.OPENAI,
   "api.anthropic.com": MODEL_PROVIDER_ID.ANTHROPIC,
@@ -560,19 +583,18 @@ export function normalizeProviderSpec(input = {}) {
   return Object.freeze({
     operatorId: requireIdentity(input.operatorId, "operatorId"),
     adapterId: resolveModelAdapterId({ modelFamily: input.modelFamily }),
-    baseUrl: String(input.baseUrl || input.base_url || "").trim(),
   });
 }
 
-export function resolveModelOperatorId({ baseUrl = "" } = {}) {
-  const endpoint = String(baseUrl || "").trim();
+export function resolveModelOperatorId({ base_url = "" } = {}) {
+  const endpoint = String(base_url || "").trim();
   if (!endpoint || /^\$\{[^}]+\}$/.test(endpoint)) return MODEL_PROVIDER_ID.GENERIC;
   let host = "";
   try {
     host = new URL(endpoint).hostname.toLowerCase();
   } catch {
     throw new TypeError(
-      "model spec.baseUrl must be an absolute URL or a configuration placeholder",
+      "model spec.base_url must be an absolute URL or a configuration placeholder",
     );
   }
   return OPERATOR_ID_BY_HOST[host] || MODEL_PROVIDER_ID.GENERIC;

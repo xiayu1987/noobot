@@ -10,7 +10,7 @@ const modelSpec = {
   model: "gpt-6-astra",
   base_url: "https://example.test/v1",
   api_key: "private-test-credential",
-  useResponsesApi: true,
+  use_responses_api: true,
   reasoning_effort_parameter: "reasoning_effort",
   reasoning_effort_options: ["none", "low", "high"],
 };
@@ -28,7 +28,7 @@ for (const protocol of ["responses", "chat", "messages"]) {
   test(`${protocol} binds tools via the existing adapter and leaves unbound requests tool-free`, async () => {
     const spec = {
       ...modelSpec,
-      useResponsesApi: protocol === "responses",
+      use_responses_api: protocol === "responses",
       model: protocol === "messages" ? "claude-opus-5" : modelSpec.model,
     };
     for (const choice of ["auto", "required", "none"]) {
@@ -70,7 +70,7 @@ for (const protocol of ["responses", "chat", "messages"]) {
 
 test("bound tool-call output is returned without executing the requested tool", async () => {
   const result = await testModelAccess({
-    modelSpec: { ...modelSpec, useResponsesApi: false },
+    modelSpec: { ...modelSpec, use_responses_api: false },
     tools: [diagnosticTool],
     toolBinding: { tool_choice: "required" },
     fetch: async () =>
@@ -139,7 +139,7 @@ function responseFor(protocol) {
 
 for (const protocol of ["responses", "chat", "messages"]) {
   test(`diagnostic uses the real ${protocol} adapter and sends precisely the edited body`, async () => {
-    const spec = { ...modelSpec, useResponsesApi: protocol === "responses" };
+    const spec = { ...modelSpec, use_responses_api: protocol === "responses" };
     if (protocol === "messages") spec.model = "claude-opus-5";
     const minimalBody = {
       model: spec.model,
@@ -251,7 +251,7 @@ test("streaming chat response retains raw SSE and normalized model output", asyn
     },
   ];
   const result = await testModelAccess({
-    modelSpec: { ...modelSpec, useResponsesApi: false },
+    modelSpec: { ...modelSpec, use_responses_api: false },
     body: { model: modelSpec.model, messages: [{ role: "user", content: "OK?" }], stream: true },
     fetch: async () =>
       new Response(

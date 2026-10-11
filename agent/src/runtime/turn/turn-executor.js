@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filterForModelContext } from "@noobot/context-protocol/policy/message";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, requireModelSpec } from "@noobot/model-protocol";
 import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
@@ -177,7 +177,7 @@ export async function invokeNoToolsTurn({
           ...resolveNonThinkingCallOverrides(
             runtime,
             forceToolChoiceNone ? "none" : "",
-            modelState?.defaultModelSpec || {},
+            requireModelSpec(modelState.activeModelSpec),
           ),
         },
       },

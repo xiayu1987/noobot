@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -21,14 +22,14 @@ import { createCanonicalMessageEventSessionManager } from "../../../helpers/cano
 import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 import { reduceCanonicalActivityTimeline } from "@noobot/event-protocol/activity-timeline";
 
-const modelSpec = Object.freeze({
-  alias: "test",
-  model: "test-model",
-  reasoning_effort_parameter: "reasoning_effort",
-  reasoning_effort_options: ["none", "low", "medium", "high"],
-  providerId: "test",
-  adapterId: "openai-compatible",
-});
+const modelSpec = Object.freeze(
+  normalizeRuntimeModelSpec({
+    alias: "test",
+    model: "test-model",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high"],
+  }),
+);
 
 function createModelPort(outputs = []) {
   let index = 0;
@@ -80,7 +81,7 @@ function createModelPort(outputs = []) {
           },
         ],
         model: modelSpec,
-        provider: { operatorId: modelSpec.providerId, adapterId: modelSpec.adapterId },
+        provider: { operatorId: modelSpec.operatorId, adapterId: modelSpec.adapterId },
       });
     },
   };
@@ -179,7 +180,10 @@ test("mini-runner appends assistant tool calls and tool results before the next 
   const result = await createInvoker({
     enableToolBinding: true,
     toolAllowlist: ["echo"],
-    adaptToolsForBindingFn: () => ({ tools: [tool], bindOptions: { tool_choice: "auto" } }),
+    adaptToolsForBindingFn: () => ({
+      tools: [tool],
+      bindOptions: { tool_choice: "auto", strict: false },
+    }),
     executeToolCallFn: async ({ call }) => {
       executed.push(call);
       return { toolResultText: "echo:hi" };
@@ -197,7 +201,10 @@ test("mini-runner appends assistant tool calls and tool results before the next 
   assert.equal(secondMessages[1].tool_calls[0].id, "c1");
   assert.equal(secondMessages[2].role, "tool");
   assert.equal(secondMessages[2].content, "echo:hi");
-  assert.deepEqual(modelPort.requests[0].options.toolBinding, { tool_choice: "auto" });
+  assert.deepEqual(modelPort.requests[0].options.toolBinding, {
+    tool_choice: "auto",
+    strict: false,
+  });
 });
 
 test("mini-runner returns rejected and missing tool facts to the final model call", async () => {

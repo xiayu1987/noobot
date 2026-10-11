@@ -8,7 +8,7 @@ import { runBestEffort } from "@noobot/shared/best-effort";
 import { emitEvent } from "../../events/index.js";
 
 export function prepareToolBinding({ tools, modelState, runtime, eventListener, turn }) {
-  const adaptedBinding = adaptToolsForBinding(tools, modelState);
+  const adaptedBinding = adaptToolsForBinding(tools, modelState.activeModelSpec);
   const configuredToolChoice = String(adaptedBinding?.bindOptions?.tool_choice || "").trim();
   if (configuredToolChoice === "required") {
     emitEvent(eventListener, "tool_choice_required_forced_non_thinking_model", {

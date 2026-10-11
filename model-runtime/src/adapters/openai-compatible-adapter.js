@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ChatOpenAI } from "@langchain/openai";
-import { MODEL_PROVIDER_ID } from "@noobot/model-protocol";
+import { MODEL_PROVIDER_ID, resolveModelUseResponsesApi } from "@noobot/model-protocol";
 import {
   applyPromptCacheMessages,
   compileProviderModelKwargs,
@@ -12,12 +12,6 @@ import {
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { classifyTransportError } from "../policies/default-retry-policy.js";
 import { executeOpenAiOperation } from "./openai-capability-adapter.js";
-
-export function resolveUseResponsesApi(spec = {}) {
-  if (typeof spec.useResponsesApi === "boolean") return spec.useResponsesApi;
-  if (typeof spec.use_responses_api === "boolean") return spec.use_responses_api;
-  return /codex/.test(String(spec.model || "").toLowerCase());
-}
 
 function applyInvocationOverrides(target, overrides = {}) {
   if (!target || typeof target.invocationParams !== "function") return target;
@@ -79,7 +73,7 @@ export function createOpenAiCompatibleClient({
   maxRetries,
 }) {
   const spec = normalizeRuntimeModelSpec(modelSpec);
-  const useResponsesApi = resolveUseResponsesApi(spec);
+  const useResponsesApi = resolveModelUseResponsesApi(spec);
   const cacheTransport = { useResponsesApi };
   const modelKwargs = compileProviderModelKwargs(spec, flow, cacheTransport);
   const promptCacheKey = modelKwargs.prompt_cache_key;

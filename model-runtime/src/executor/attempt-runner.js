@@ -12,14 +12,8 @@ export async function runModelAttempt({
   invokeOptions = {},
 }) {
   const target = tools.length
-    ? typeof adapter?.bindTools === "function"
-      ? adapter.bindTools({ client, tools, toolOptions, invokeOptions })
-      : client.bindTools(tools, toolOptions)
+    ? adapter.bindTools({ client, tools, toolOptions, invokeOptions })
     : client;
-
-  const payload =
-    typeof adapter?.prepareMessages === "function"
-      ? adapter.prepareMessages({ modelSpec, messages })
-      : messages;
+  const payload = adapter.prepareMessages({ modelSpec, messages });
   return target.invoke(payload, invokeOptions);
 }

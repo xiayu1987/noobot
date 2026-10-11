@@ -3,64 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig } from "../../config/index.js";
+import {
+  MODEL_FAMILY_ID,
+  resolveModelFamilyId,
+  resolveModelStrictToolSchema,
+} from "@noobot/model-protocol";
 
 export const TOOL_BINDING_NAME_MAX_LENGTH = 64;
 const TOOL_BINDING_NAME_PATTERN = new RegExp(`^[a-zA-Z0-9_-]{1,${TOOL_BINDING_NAME_MAX_LENGTH}}$`);
 const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
 
-function isCodexLikeModel(modelName = "", modelAlias = "") {
-  const token = `${String(modelName || "").toLowerCase()} ${String(modelAlias || "").toLowerCase()}`;
-  return token.includes("codex") || token.includes("gpt-5.3-codex");
-}
-
-function resolveStrictToolSchemaPolicy(modelState = {}) {
-  const effectiveConfig = mergeConfig(modelState?.globalConfig || {}, modelState?.userConfig || {});
-  const configuredStrict =
-    effectiveConfig?.tools?.strict_tool_schema ??
-    effectiveConfig?.tools?.strictToolSchema ??
-    effectiveConfig?.tools?.binding?.strict ??
-    effectiveConfig?.tools?.binding?.strictToolSchema;
-  if (typeof configuredStrict === "boolean") return configuredStrict;
-  return isCodexLikeModel(modelState?.activeModelName || "", modelState?.activeModelAlias || "");
-}
-
-function collectModelSourceTokens(modelState = {}) {
-  const specs = [
-    modelState?.activeModelSpec,
-    modelState?.defaultModelSpec,
-    modelState?.modelSpec,
-  ].filter((spec) => spec && typeof spec === "object");
-  const fields = [
-    modelState?.activeModelName,
-    modelState?.activeModelAlias,
-    modelState?.provider,
-    modelState?.providerName,
-  ];
-  for (const spec of specs) {
-    fields.push(
-      spec?.alias,
-      spec?.model,
-      spec?.provider,
-      spec?.provider_name,
-      spec?.providerName,
-      spec?.base_url,
-      spec?.baseURL,
-    );
+function assertModelSpec(modelSpec) {
+  if (!modelSpec || typeof modelSpec !== "object" || !String(modelSpec.model || "").trim()) {
+    throw new TypeError("adaptToolsForBinding requires a resolved model spec");
   }
-  return fields
-    .map((item) =>
-      String(item || "")
-        .trim()
-        .toLowerCase(),
-    )
-    .filter(Boolean)
-    .join(" ");
-}
-
-function isClaudeLikeModel(modelState = {}) {
-  const source = collectModelSourceTokens(modelState);
-  return /\bclaude\b|\banthropic\b/.test(source);
 }
 
 function removeToolSearchDeferral(toolItem = {}) {
@@ -76,12 +32,13 @@ function removeToolSearchDeferral(toolItem = {}) {
   return normalizedTool;
 }
 
-export function adaptToolsForBinding(tools = [], modelState = {}) {
+export function adaptToolsForBinding(tools, modelSpec) {
+  assertModelSpec(modelSpec);
   const sourceTools = Array.isArray(tools) ? tools : [];
   const seenNames = new Set();
   const validTools = [];
   const droppedToolNames = [];
-  const disableClaudeToolSearch = isClaudeLikeModel(modelState);
+  const disableClaudeToolSearch = resolveModelFamilyId(modelSpec) === MODEL_FAMILY_ID.CLAUDE;
 
   for (const toolItem of sourceTools) {
     const toolName = String(toolItem?.name || "").trim();
@@ -107,7 +64,7 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     String(left?.name || "").localeCompare(String(right?.name || ""), "en"),
   );
 
-  const strictByPolicy = resolveStrictToolSchemaPolicy(modelState);
+  const strictByPolicy = resolveModelStrictToolSchema(modelSpec);
   const strictIncompatibleTools = validTools
     .map((t) => String(t?.name || "").trim())
     .filter((n) => STRICT_INCOMPATIBLE_TOOL_NAMES.has(n));
@@ -116,7 +73,7 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
   const bindOptions = validTools.length
     ? {
         tool_choice: toolChoice,
-        ...(strict ? { strict: true } : {}),
+        strict,
       }
     : {};
 

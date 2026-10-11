@@ -77,9 +77,9 @@ test("local server protects credential-bearing requests and preserves omitted pa
   ).json();
   assert.deepEqual(received.body, payload.body);
   assert.equal(received.modelSpec.api_key, "secret-key");
-  assert.equal(received.modelSpec.useResponsesApi, true);
+  assert.equal(received.modelSpec.use_responses_api, true);
   assert.equal(result.output.text, "[REDACTED]");
-  assert.equal(models[0].useResponsesApi, undefined);
+  assert.equal(models[0].use_responses_api, undefined);
   assert.equal((await fetch(`${base}/`)).status, 200);
 });
 

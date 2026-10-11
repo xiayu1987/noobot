@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext, writeMessageBlocks } from "@noobot/context-protocol";
@@ -11,13 +12,15 @@ import { createEmptyHookResult } from "@noobot/hook-protocol";
 import { invokeWithToolsTurn as invokeWithToolsTurnProduction } from "../../../src/runtime/turn/turn-executor.js";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 
-const TEST_MODEL_SPEC = Object.freeze({
-  model: "gpt-4o",
-  reasoning_effort: "medium",
-  tool_reasoning_effort: "medium",
-  reasoning_effort_options: ["low", "medium", "high"],
-  reasoning_effort_parameter: "reasoning_effort",
-});
+const TEST_MODEL_SPEC = Object.freeze(
+  normalizeRuntimeModelSpec({
+    model: "gpt-4o",
+    reasoning_effort: "medium",
+    tool_reasoning_effort: "medium",
+    reasoning_effort_options: ["low", "medium", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
+  }),
+);
 
 function invokeWithToolsTurn(args = {}) {
   prepareTestTurnExecution(
@@ -67,7 +70,7 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [system, history, current],
@@ -184,7 +187,7 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [snapshotSystem, snapshotHistory, staleGuidance, resumedUser, userMeta],
@@ -318,7 +321,7 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
     agentContext: {
       execution: {
         dialogProcessId: "d-current",
@@ -381,7 +384,7 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: TEST_MODEL_SPEC,
+    activeModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "run tool" }],

@@ -8,13 +8,18 @@ import assert from "node:assert/strict";
 
 import { adaptToolsForBinding } from "../../../src/models/tool/binding-adapter.js";
 
+const GPT_SPEC = Object.freeze({ model: "gpt-5.5" });
+
+test("adaptToolsForBinding requires a resolved model spec", () => {
+  assert.throws(() => adaptToolsForBinding([{ name: "read_file" }]), /resolved model spec/);
+  assert.throws(() => adaptToolsForBinding([{ name: "read_file" }], {}), /resolved model spec/);
+});
+
 test("adaptToolsForBinding drops invalid names and deduplicates", () => {
-  const adapted = adaptToolsForBinding([
-    { name: "valid_tool" },
-    { name: "invalid tool" },
-    { name: "valid_tool" },
-    { name: "" },
-  ]);
+  const adapted = adaptToolsForBinding(
+    [{ name: "valid_tool" }, { name: "invalid tool" }, { name: "valid_tool" }, { name: "" }],
+    GPT_SPEC,
+  );
 
   assert.deepEqual(
     adapted.tools.map((toolItem) => toolItem.name),
@@ -24,11 +29,10 @@ test("adaptToolsForBinding drops invalid names and deduplicates", () => {
 });
 
 test("adaptToolsForBinding returns tools in stable name order", () => {
-  const adapted = adaptToolsForBinding([
-    { name: "write_file" },
-    { name: "read_file" },
-    { name: "execute_script" },
-  ]);
+  const adapted = adaptToolsForBinding(
+    [{ name: "write_file" }, { name: "read_file" }, { name: "execute_script" }],
+    GPT_SPEC,
+  );
 
   assert.deepEqual(
     adapted.tools.map((toolItem) => toolItem.name),
@@ -36,23 +40,21 @@ test("adaptToolsForBinding returns tools in stable name order", () => {
   );
 });
 
-test("adaptToolsForBinding enables strict by default for codex-like model", () => {
-  const adapted = adaptToolsForBinding([{ name: "task_summary" }], {
-    activeModelName: "gpt-5.3-codex",
-    activeModelAlias: "codex",
-    globalConfig: {},
-    userConfig: {},
+test("adaptToolsForBinding always sends an explicit boolean strict", () => {
+  assert.deepEqual(adaptToolsForBinding([{ name: "task_summary" }], GPT_SPEC).bindOptions, {
+    tool_choice: "auto",
+    strict: false,
   });
-
-  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
+  assert.deepEqual(
+    adaptToolsForBinding([{ name: "task_summary" }], { model: "gpt-5.3-codex" }).bindOptions,
+    { tool_choice: "auto", strict: false },
+  );
 });
 
-test("adaptToolsForBinding respects explicit strict tool schema config", () => {
+test("adaptToolsForBinding reads strict only from the declared spec field", () => {
   const adapted = adaptToolsForBinding([{ name: "task_summary" }], {
-    activeModelName: "gpt-4o-mini",
-    activeModelAlias: "default",
-    globalConfig: { tools: { strict_tool_schema: true } },
-    userConfig: {},
+    model: "gpt-4o-mini",
+    strict_tool_schema: true,
   });
 
   assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
@@ -60,77 +62,26 @@ test("adaptToolsForBinding respects explicit strict tool schema config", () => {
 
 test("adaptToolsForBinding downgrades strict when call_service is present", () => {
   const adapted = adaptToolsForBinding([{ name: "call_service" }], {
-    activeModelName: "gpt-5.3-codex",
-    activeModelAlias: "codex",
-    globalConfig: {},
-    userConfig: {},
+    model: "gpt-5.5",
+    strict_tool_schema: true,
   });
 
-  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto" });
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: false });
   assert.deepEqual(adapted.strictDowngradedTools, ["call_service"]);
 });
 
-test("adaptToolsForBinding defaults tool_choice to auto when tools exist", () => {
-  const adapted = adaptToolsForBinding([{ name: "read_file" }], {
-    activeModelName: "gpt-4o-mini",
-    activeModelAlias: "default",
-    globalConfig: {},
-    userConfig: {},
-  });
-
-  assert.equal(adapted.bindOptions.tool_choice, "auto");
+test("adaptToolsForBinding omits bind options without tools", () => {
+  assert.deepEqual(adaptToolsForBinding([], GPT_SPEC).bindOptions, {});
 });
 
-test("adaptToolsForBinding keeps tool_choice as auto even when runtime marks required unsupported", () => {
+test("adaptToolsForBinding keeps tools for Bedrock-hosted Claude models", () => {
   const adapted = adaptToolsForBinding([{ name: "read_file" }], {
-    activeModelName: "gpt-4o-mini",
-    activeModelAlias: "default",
-    runtime: {
-      systemRuntime: {
-        toolChoiceRequiredUnsupported: true,
-      },
-    },
-    globalConfig: {},
-    userConfig: {},
+    provider: "aws_bedrock",
+    base_url: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+    model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
   });
 
-  assert.equal(adapted.bindOptions.tool_choice, "auto");
-});
-
-test("adaptToolsForBinding keeps standard tool_choice for AWS Bedrock compatible providers", () => {
-  const adapted = adaptToolsForBinding([{ name: "read_file" }], {
-    activeModelName: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-    activeModelAlias: "bedrock_claude",
-    activeModelSpec: {
-      provider: "aws_bedrock",
-      base_url: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
-      model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-      reasoning_effort_parameter: "reasoning_effort",
-      reasoning_effort_options: ["none", "low", "medium", "high"],
-    },
-    globalConfig: {},
-    userConfig: {},
-  });
-
-  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto" });
-});
-
-test("adaptToolsForBinding keeps standard tool_choice for Claude compatible providers", () => {
-  const adapted = adaptToolsForBinding([{ name: "read_file" }], {
-    activeModelName: "claude-sonnet-via-gateway",
-    activeModelAlias: "third_party_claude",
-    defaultModelSpec: {
-      alias: "third_party_claude",
-      base_url: "https://llm-gateway.example.com/v1",
-      model: "claude-sonnet-via-gateway",
-      reasoning_effort_parameter: "reasoning_effort",
-      reasoning_effort_options: ["none", "low", "medium", "high"],
-    },
-    globalConfig: {},
-    userConfig: {},
-  });
-
-  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto" });
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: false });
   assert.deepEqual(
     adapted.tools.map((toolItem) => toolItem.name),
     ["read_file"],
@@ -146,12 +97,7 @@ test("adaptToolsForBinding drops tool_search definitions for Claude models", () 
       { name: "tool_search_regex", type: "tool_search_tool_regex_20251119" },
       { name: "tool_search_bm25", type: "tool_search_tool_bm25_20251119" },
     ],
-    {
-      activeModelName: "claude-opus-4-8",
-      activeModelAlias: "claude",
-      globalConfig: {},
-      userConfig: {},
-    },
+    { model: "claude-opus-4-8" },
   );
 
   assert.deepEqual(
@@ -176,12 +122,7 @@ test("adaptToolsForBinding keeps tool_search definitions for non-Claude models",
         defer_loading: true,
       },
     ],
-    {
-      activeModelName: "gpt-5.5",
-      activeModelAlias: "openai",
-      globalConfig: {},
-      userConfig: {},
-    },
+    GPT_SPEC,
   );
 
   assert.deepEqual(

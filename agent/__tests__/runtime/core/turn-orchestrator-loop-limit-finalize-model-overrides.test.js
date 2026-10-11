@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
@@ -70,7 +71,7 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
 }
 
 function createModelState(modelPort, defaultModelSpec = null) {
-  const resolvedModelSpec =
+  const resolvedModelSpec = normalizeRuntimeModelSpec(
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
       : {
@@ -78,7 +79,8 @@ function createModelState(modelPort, defaultModelSpec = null) {
           model: "test-model",
           reasoning_effort_parameter: "reasoning_effort",
           reasoning_effort_options: ["none", "low", "medium", "high"],
-        };
+        },
+  );
   const modelState = {
     modelPort,
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
@@ -223,11 +225,11 @@ test("bound tool overrides use active model spec when it differs from default sp
     reasoning_effort_parameter: "enable_thinking",
     reasoning_effort_options: ["none", "medium"],
   });
-  modelState.activeModelSpec = {
+  modelState.activeModelSpec = normalizeRuntimeModelSpec({
     model: "gpt-5.5",
     ...GPT_REASONING,
     reasoning_effort: "high",
-  };
+  });
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding: { bindOptions: { tool_choice: "auto" } },
     boundTools: [{ name: "execute_script" }],

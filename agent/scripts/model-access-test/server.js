@@ -102,8 +102,8 @@ export function createModelAccessServer({ models, execute = testModelAccess }) {
           spec[field] = input[field].trim();
       }
       if (input.api_key) requestSecrets.push(input.api_key);
-      if (input.protocol === "responses") spec.useResponsesApi = true;
-      else if (input.protocol === "chat") spec.useResponsesApi = false;
+      if (input.protocol === "responses") spec.use_responses_api = true;
+      else if (input.protocol === "chat") spec.use_responses_api = false;
       else if (input.protocol !== "default") throw new Error("Invalid protocol / 接口选项无效");
       const endpoint = new URL(spec.base_url);
       if (

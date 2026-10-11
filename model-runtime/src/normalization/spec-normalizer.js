@@ -45,26 +45,8 @@ const MODEL_FAMILY_DEFAULT_FIELDS = Object.freeze({
   generic: Object.freeze({}),
 });
 
-const CONCRETE_MODEL_RULES = Object.freeze([
-  Object.freeze({
-    match: /^gpt[-_]?5\.6[-_.]?sol(?:[-_.]|$)/,
-    defaults: Object.freeze({ temperature: 0.7 }),
-  }),
-  Object.freeze({
-    match: /^qwen3.*thinking(?:[-_.]|$)/,
-    defaults: Object.freeze({ temperature: 0.6, top_p: 0.95, top_k: 20, min_p: 0 }),
-  }),
-]);
-
 function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
-}
-
-function resolveConcreteModelDefaults(model = "") {
-  const normalized = String(model || "")
-    .trim()
-    .toLowerCase();
-  return CONCRETE_MODEL_RULES.find(({ match }) => match.test(normalized))?.defaults || {};
 }
 
 function assertContractValue(key, value) {
@@ -91,9 +73,7 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
 
   delete out.adapterId;
   delete out.adapter_id;
-  out.operatorId = resolveModelOperatorId({
-    baseUrl: out.base_url || out.baseUrl || "",
-  });
+  out.operatorId = resolveModelOperatorId(out);
   out.modelFamily = resolveModelFamilyId(out);
   out.adapterId = resolveModelAdapterId({ modelFamily: out.modelFamily });
   Object.assign(out, normalizeModelReasoningConfiguration(out, reasoningFallback));
@@ -101,7 +81,6 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   const defaults = { ...SAMPLING_NEUTRAL_DEFAULT_FIELDS, ...TRANSPORT_DEFAULT_FIELDS };
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});
   Object.assign(defaults, MODEL_FAMILY_DEFAULT_FIELDS[out.modelFamily] || {});
-  Object.assign(defaults, resolveConcreteModelDefaults(out.model));
 
   const selected = new Set(out.sampling_fields);
   for (const key of MODEL_SAMPLING_FIELDS) {

@@ -98,9 +98,7 @@ export function createAgentCapabilityModelInvoker({
       ? resolveAllowPolicy(toolAllowlistOverride)
       : baseAllowPolicy;
     const tools = resolveToolsFromContext(ctx, allowPolicy);
-    const binding = createCapabilityToolBinding(
-      adaptToolsForBindingFn(tools, { globalConfig: effectiveConfig, userConfig: {} }),
-    );
+    const binding = createCapabilityToolBinding(adaptToolsForBindingFn(tools, modelSpec));
     return runCapabilityToolTurns({
       invokeStep,
       messages: runMessages,
