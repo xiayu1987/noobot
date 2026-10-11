@@ -38,58 +38,22 @@ export class SessionTreeService {
         return false;
       }
 
-      if (!sessionTree.nodes[normalizedSessionId]) {
-        sessionTree.nodes[normalizedSessionId] = {
-          sessionId: normalizedSessionId,
-          parentSessionId: normalizedParentSessionId,
-          children: [],
-          createdAt: now,
-          updatedAt: now,
-        };
-      } else {
-        sessionTree.nodes[normalizedSessionId].parentSessionId = normalizedParentSessionId;
-        sessionTree.nodes[normalizedSessionId].updatedAt = now;
-        if (!Array.isArray(sessionTree.nodes[normalizedSessionId].children)) {
-          sessionTree.nodes[normalizedSessionId].children = [];
-        }
-      }
-
-      for (const [nodeId, node] of Object.entries(sessionTree.nodes || {})) {
-        if (nodeId === normalizedParentSessionId) continue;
-        const children = Array.isArray(node?.children) ? node.children : [];
-        sessionTree.nodes[nodeId].children = children.filter(
-          (childId) => String(childId || "").trim() !== normalizedSessionId,
+      if (normalizedParentSessionId && !sessionTree.nodes[normalizedParentSessionId]) {
+        throw fatalSystemError(
+          `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${normalizedParentSessionId}`,
+          {
+            code: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
+            details: { normalizedParentSessionId },
+          },
         );
       }
-
-      if (normalizedParentSessionId) {
-        if (!sessionTree.nodes[normalizedParentSessionId]) {
-          throw fatalSystemError(
-            `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${normalizedParentSessionId}`,
-            {
-              code: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
-              details: { normalizedParentSessionId },
-            },
-          );
-        }
-        const parentChildren = Array.isArray(sessionTree.nodes[normalizedParentSessionId].children)
-          ? sessionTree.nodes[normalizedParentSessionId].children
-          : [];
-        if (!parentChildren.includes(normalizedSessionId)) {
-          parentChildren.push(normalizedSessionId);
-        }
-        sessionTree.nodes[normalizedParentSessionId].children = parentChildren;
-        sessionTree.nodes[normalizedParentSessionId].updatedAt = now;
-        sessionTree.roots = (sessionTree.roots || []).filter(
-          (rootSessionId) => rootSessionId !== normalizedSessionId,
-        );
-        if (
-          !sessionTree.roots.includes(normalizedParentSessionId) &&
-          !String(sessionTree.nodes[normalizedParentSessionId].parentSessionId || "")
-        ) {
-          sessionTree.roots.push(normalizedParentSessionId);
-        }
-      }
+      const existingNode = sessionTree.nodes[normalizedSessionId];
+      sessionTree.nodes[normalizedSessionId] = {
+        sessionId: normalizedSessionId,
+        parentSessionId: normalizedParentSessionId,
+        createdAt: existingNode?.createdAt || now,
+        updatedAt: now,
+      };
 
       await this.treeRepo.saveTree(userId, sessionTree);
       return true;
@@ -119,8 +83,9 @@ export class SessionTreeService {
       if (!currentId || visited.has(currentId)) continue;
       visited.add(currentId);
       branchSessionIds.push(currentId);
-      const children = sessionTree?.nodes?.[currentId]?.children;
-      if (Array.isArray(children)) queue.push(...children);
+      for (const node of Object.values(sessionTree?.nodes || {})) {
+        if (node.parentSessionId === currentId) queue.push(node.sessionId);
+      }
     }
     return branchSessionIds;
   }
@@ -164,19 +129,9 @@ export class SessionTreeService {
           const deleteSet = new Set(deletedSessionIds);
           const nextNodes = {};
           for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
-            if (deleteSet.has(id)) continue;
-            nextNodes[id] = {
-              ...node,
-              children: Array.isArray(node?.children)
-                ? node.children.filter((childId) => !deleteSet.has(String(childId || "").trim()))
-                : [],
-              updatedAt: this.now(),
-            };
+            if (!deleteSet.has(id)) nextNodes[id] = node;
           }
           await this.treeRepo.saveTree(userId, {
-            roots: (sessionTree?.roots || []).filter(
-              (rootId) => !deleteSet.has(String(rootId || "").trim()),
-            ),
             nodes: nextNodes,
             updatedAt: this.now(),
           });

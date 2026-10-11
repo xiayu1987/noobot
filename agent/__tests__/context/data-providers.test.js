@@ -6,67 +6,38 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveSessionTreeWithRootSessionId } from "../../src/context/providers/session-tree-resolver.js";
+import { resolveRootSessionId } from "../../src/context/providers/session-tree-resolver.js";
 import { resolveAttachments } from "../../src/context/providers/attachment-resolver.js";
 import { resolveLongMemory } from "../../src/context/providers/memory-resolver.js";
 import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
 
-test("resolveSessionTreeWithRootSessionId falls back when runtime/sessionManager missing", async () => {
-  const now = "2026-05-13T00:00:00.000Z";
-  const result = await resolveSessionTreeWithRootSessionId({
+test("resolveRootSessionId uses the anchor when sessionManager is missing", async () => {
+  const rootSessionId = await resolveRootSessionId({
     runtimeBasePath: "",
     sessionManager: null,
     userId: "u1",
     sessionId: "s1",
-    now,
   });
-  assert.deepEqual(result, {
-    sessionTree: { roots: [], nodes: {}, updatedAt: now },
-    rootSessionId: "s1",
-  });
+  assert.equal(rootSessionId, "s1");
 });
 
-test("resolveSessionTreeWithRootSessionId reads sessionTree and root from sessionManager", async () => {
-  const result = await resolveSessionTreeWithRootSessionId({
-    runtimeBasePath: "/workspace/u1",
-    sessionManager: {
-      async getSessionTree({ userId }) {
-        assert.equal(userId, "u1");
-        return { roots: ["root"], nodes: { root: { sessionId: "root" } } };
-      },
-      async getRootSessionId({ userId, sessionId }) {
-        assert.equal(userId, "u1");
-        assert.equal(sessionId, "s2");
-        return "root";
-      },
-    },
-    userId: "u1",
-    sessionId: "s2",
-  });
-  assert.equal(result.rootSessionId, "root");
-  assert.equal(result.sessionTree.roots[0], "root");
-});
-
-test("resolveSessionTreeWithRootSessionId anchors detached sessions at their durable parent", async () => {
+test("resolveRootSessionId anchors detached sessions at their durable parent", async () => {
   const calls = [];
-  const result = await resolveSessionTreeWithRootSessionId({
+  const rootSessionId = await resolveRootSessionId({
     runtimeBasePath: "/workspace/u1",
     sessionManager: {
-      async getSessionTree() {
-        return { roots: ["root"], nodes: { root: { sessionId: "root" } } };
-      },
-      async getRootSessionId({ sessionId }) {
-        calls.push(sessionId);
+      async getRootSessionId({ userId, sessionId }) {
+        calls.push([userId, sessionId]);
         return "root";
       },
     },
     userId: "u1",
     sessionId: "scoped-detached-session",
-    parentSessionId: "root",
+    parentSessionId: "branch",
   });
-  assert.deepEqual(calls, ["root"]);
-  assert.equal(result.rootSessionId, "root");
+  assert.deepEqual(calls, [["u1", "branch"]]);
+  assert.equal(rootSessionId, "root");
 });
 
 test("resolveAttachments should bypass ingest when attachment already ingested", async () => {
@@ -265,7 +236,6 @@ test("resolveLongMemory only reads static long memory payload from memoryService
 test("buildDynamicInfo exposes safeConfirm in config", () => {
   const dynamic = buildDynamicInfo({
     sessionTree: {
-      roots: ["unrelated-session"],
       nodes: { "unrelated-session": { sessionId: "unrelated-session" } },
     },
     runConfig: {

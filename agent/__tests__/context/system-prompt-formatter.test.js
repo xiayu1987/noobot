@@ -82,7 +82,6 @@ test("composeSystemInfoSections projects only model-owned execution context", ()
         toolPolicy: { denyToolNames: ["secret-tool"] },
       },
       sessionTree: {
-        roots: ["unrelated-session-secret"],
         nodes: { "unrelated-session-secret": { sessionId: "unrelated-session-secret" } },
       },
       nested: [{ dialogProcessId: "dialog-nested-secret", value: "kept" }],

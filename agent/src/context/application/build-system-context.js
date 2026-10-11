@@ -22,7 +22,7 @@ import {
 import { resolveAvailableMcpServers } from "../providers/mcp-provider.js";
 import { resolveModelSection } from "../providers/model-provider.js";
 import { resolveServices } from "../providers/service-provider.js";
-import { resolveSessionTreeWithRootSessionId } from "../providers/session-tree-resolver.js";
+import { resolveRootSessionId } from "../providers/session-tree-resolver.js";
 import { resolveSkills } from "../providers/skills-resolver.js";
 import { loadSystemPrompt } from "../providers/system-prompt-loader.js";
 
@@ -107,13 +107,12 @@ export async function buildSystemContext({
   const locale = runConfig?.locale || "zh-CN";
   const scenarioProfile = resolveScenarioProfile({ runConfig });
 
-  const treeInfo = await resolveSessionTreeWithRootSessionId({
+  const rootSessionId = await resolveRootSessionId({
     runtimeBasePath,
     sessionManager,
     userId: identity.userId,
     sessionId: identity.sessionId,
     parentSessionId: identity.parentSessionId,
-    now: now(),
   });
   const attachmentsAvailableToRuntime = contextPolicy.runtimeCapabilities.attachments;
   const [systemPrompt, skills, attachments, workspaceDirectories, connectorStatusSection] =
@@ -169,7 +168,7 @@ export async function buildSystemContext({
         runConfig,
         globalConfig,
         botManager,
-        rootSessionId: treeInfo.rootSessionId,
+        rootSessionId,
         now: now(),
       })
     : {};
@@ -190,8 +189,6 @@ export async function buildSystemContext({
       connectorStatusSection,
     }),
     runtimeBasePath,
-    sessionTree: treeInfo.sessionTree,
-    rootSessionId: treeInfo.rootSessionId,
     attachments,
   };
 }

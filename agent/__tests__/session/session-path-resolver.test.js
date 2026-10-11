@@ -37,7 +37,7 @@ function createResolverWithTree(tree = {}) {
 
 test("resolveParentSessionId should throw when hinted parent is missing", async () => {
   const resolver = createResolverWithTree({
-    nodes: { s1: { sessionId: "s1", parentSessionId: "", children: [] } },
+    nodes: { s1: { sessionId: "s1", parentSessionId: "" } },
   });
 
   await assert.rejects(
@@ -49,8 +49,8 @@ test("resolveParentSessionId should throw when hinted parent is missing", async 
 test("resolveParentSessionId should fallback to tree when hint not provided", async () => {
   const resolver = createResolverWithTree({
     nodes: {
-      s1: { sessionId: "s1", parentSessionId: "", children: ["s2"] },
-      s2: { sessionId: "s2", parentSessionId: "s1", children: [] },
+      s1: { sessionId: "s1", parentSessionId: "" },
+      s2: { sessionId: "s2", parentSessionId: "s1" },
     },
   });
 
@@ -61,9 +61,9 @@ test("resolveParentSessionId should fallback to tree when hint not provided", as
 test("resolveSessionDir should resolve multi-level chain path", async () => {
   const resolver = createResolverWithTree({
     nodes: {
-      rootA: { sessionId: "rootA", parentSessionId: "", children: ["branchB"] },
-      branchB: { sessionId: "branchB", parentSessionId: "rootA", children: ["leafC"] },
-      leafC: { sessionId: "leafC", parentSessionId: "branchB", children: [] },
+      rootA: { sessionId: "rootA", parentSessionId: "" },
+      branchB: { sessionId: "branchB", parentSessionId: "rootA" },
+      leafC: { sessionId: "leafC", parentSessionId: "branchB" },
     },
   });
 

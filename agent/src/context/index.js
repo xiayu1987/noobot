@@ -12,7 +12,7 @@ import {
 } from "./providers/environment-provider.js";
 import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
 import { resolveAllEnabledProviders } from "./providers/model-provider.js";
-import { resolveSessionTreeWithRootSessionId } from "./providers/session-tree-resolver.js";
+import { resolveRootSessionId } from "./providers/session-tree-resolver.js";
 import { resolveLongMemory } from "./providers/memory-resolver.js";
 import { buildAgentExecutionContext } from "./application/build-agent-execution-context.js";
 import { buildSystemContext, buildSystemRuntime } from "./application/build-system-context.js";
@@ -161,8 +161,6 @@ export class ContextBuilder {
     {
       runtimeBasePath = "",
       dialogProcessId = "",
-      sessionTree = null,
-      rootSessionId = "",
       attachments = [],
       incrementalMessages = [],
       sourceRevision = "",
@@ -175,20 +173,13 @@ export class ContextBuilder {
       ...this.additionalSystemMessages,
     ];
     const resolvedRuntimeBasePath = runtimeBasePath || this._resolveRuntimeBasePath();
-    const { rootSessionId: resolvedRootSessionId } =
-      sessionTree && typeof sessionTree === "object" && String(rootSessionId || "").trim()
-        ? {
-            sessionTree,
-            rootSessionId: String(rootSessionId || "").trim(),
-          }
-        : await resolveSessionTreeWithRootSessionId({
-            runtimeBasePath: resolvedRuntimeBasePath,
-            sessionManager: this.sessionManager,
-            userId: this.userId,
-            sessionId: this.sessionId,
-            parentSessionId: this.parentSessionId,
-            now: this._now(),
-          });
+    const resolvedRootSessionId = await resolveRootSessionId({
+      runtimeBasePath: resolvedRuntimeBasePath,
+      sessionManager: this.sessionManager,
+      userId: this.userId,
+      sessionId: this.sessionId,
+      parentSessionId: this.parentSessionId,
+    });
 
     const runtimeStaticInfo = buildIdentityAwareStaticInfo({
       runtimeBasePath: resolvedRuntimeBasePath,
@@ -342,16 +333,16 @@ export class ContextBuilder {
       },
     );
     const longMemory = await this._resolveLongMemoryForInjection();
-    const { systemContext, runtimeBasePath, sessionTree, rootSessionId, attachments } =
-      await this._buildSystemContext({ dialogProcessId, longMemory });
+    const { systemContext, runtimeBasePath, attachments } = await this._buildSystemContext({
+      dialogProcessId,
+      longMemory,
+    });
     return this.buildAgentContext(
       systemContext,
       projectSessionRecordsToContextMessages(sessionRecords),
       {
         runtimeBasePath,
         dialogProcessId,
-        sessionTree,
-        rootSessionId,
         attachments,
         sourceRevision: sessionProjection?.sourceRevision || "",
         contextBuildMode: mode,

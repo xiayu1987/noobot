@@ -26,6 +26,7 @@ import {
   writeSessionArtifactSnapshotCommit,
 } from "../agent/src/session/session-artifact-store.js";
 import { summarizeExecutionLogs } from "../agent/src/observability/execution-log/execution-log-summary.js";
+import { parseMigrationArgs } from "./lib/migration-cli.mjs";
 
 const EVENTS_DIR = "execution-events";
 const REPORTS_DIR = "execution-reports";
@@ -34,14 +35,7 @@ const STAGING_DIR = ".execution-events-v2-staging";
 const RETIRED_DIR = ".execution-events-v1-retired";
 const SNAPSHOT_SESSION_FILE = path.basename(buildSessionArtifactFileMap("/").session);
 
-function argument(name) {
-  return process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
-}
-
-const workspaceRoot = path.resolve(argument("workspace") || "workspace");
-const write = process.argv.includes("--write");
-const backupRoot = argument("backup");
-if (write && !backupRoot) throw new Error("--write requires --backup=<directory>");
+const { workspaceRoot, write, backupRoot } = parseMigrationArgs();
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));

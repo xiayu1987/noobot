@@ -48,10 +48,9 @@ export class FileSystemSessionTreeRepository {
     const basePath = this._basePath(userId);
     const ensured = await this.storageService.ensureRuntimeDirsByBasePath(basePath);
     if (!ensured) {
-      return { roots: [], nodes: {}, updatedAt: this.now() };
+      return { nodes: {}, updatedAt: this.now() };
     }
     const tree = await this.storageService.readJson(this._treeFile(userId), {
-      roots: [],
       nodes: {},
       updatedAt: this.now(),
     });
@@ -69,7 +68,6 @@ export class FileSystemSessionTreeRepository {
     }
     const normalizedTree = normalizeSessionTreeEntity(tree, this.now);
     await this.storageService.writeJsonAtomic(this._treeFile(userId), {
-      roots: normalizedTree.roots,
       nodes: normalizedTree.nodes,
       updatedAt: this.now(),
     });

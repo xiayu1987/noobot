@@ -150,7 +150,7 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
     assert.equal(Boolean(tree.nodes.A), true);
     assert.equal(Boolean(tree.nodes.B), false);
     assert.equal(Boolean(tree.nodes.C), false);
-    assert.deepEqual(tree.nodes.A.children, []);
+    assert.deepEqual(Object.keys(tree.nodes), ["A"]);
 
     const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
     assert.deepEqual(
@@ -301,7 +301,6 @@ test("late execution initialization should not restore a deleted session tree no
     assert.equal(await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId }), false);
     const tree = await runtime.sessionTreeService.getSessionTree({ userId });
     assert.equal(Boolean(tree.nodes[sessionId]), false);
-    assert.equal(tree.roots.includes(sessionId), false);
     assert.deepEqual(
       (await runtime.sessionCrudService.getAllSessionSummaries({ userId })).map(
         (item) => item.sessionId,

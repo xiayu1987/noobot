@@ -199,35 +199,34 @@ export function normalizeSessionEntity(
   return assertSessionAggregateInvariants(normalizedSession);
 }
 
+function assertSessionTreeSchema(tree, nodes) {
+  const legacyNode = Object.values(nodes).some((node) => node && "children" in node);
+  if (tree && ("roots" in tree || legacyNode)) {
+    throw new TypeError(
+      "legacy session tree fields roots/children are not supported; run scripts/migrate-session-tree-parent-only.mjs",
+    );
+  }
+}
+
 export function normalizeSessionTreeEntity(tree = {}, now = () => new Date().toISOString()) {
   const nodes = tree?.nodes && typeof tree.nodes === "object" ? { ...tree.nodes } : {};
+  assertSessionTreeSchema(tree, nodes);
   for (const [nodeId, node] of Object.entries(nodes)) {
     const normalizedNodeId = String(nodeId || "").trim();
     if (!normalizedNodeId) {
       delete nodes[nodeId];
       continue;
     }
-    const normalizedChildren = Array.isArray(node?.children)
-      ? Array.from(
-          new Set(node.children.map((childId) => String(childId || "").trim()).filter(Boolean)),
-        )
-      : [];
     nodes[normalizedNodeId] = {
-      ...node,
       sessionId: normalizedNodeId,
       parentSessionId: String(node?.parentSessionId || "").trim(),
-      children: normalizedChildren,
+      createdAt: node?.createdAt,
+      updatedAt: node?.updatedAt,
     };
     if (normalizedNodeId !== nodeId) delete nodes[nodeId];
   }
 
-  const roots = Object.values(nodes)
-    .filter((node) => !String(node?.parentSessionId || "").trim())
-    .map((node) => String(node?.sessionId || "").trim())
-    .filter(Boolean);
-
   return {
-    roots: Array.from(new Set(roots)),
     nodes,
     updatedAt: tree?.updatedAt || now(),
   };

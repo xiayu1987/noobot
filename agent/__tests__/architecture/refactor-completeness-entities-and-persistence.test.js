@@ -172,34 +172,26 @@ describe("2. 字段对齐测试", () => {
   });
 
   describe("normalizeSessionTreeEntity 字段对齐", () => {
-    it("应包含 roots, nodes, updatedAt 字段", () => {
-      const raw = {
-        roots: ["session-1"],
-        nodes: { "session-1": { sessionId: "session-1", parentSessionId: "", children: [] } },
-      };
-      const normalized = normalizeSessionTreeEntity(raw);
-      assert.ok("roots" in normalized, "应包含 roots");
-      assert.ok("nodes" in normalized, "应包含 nodes");
-      assert.ok("updatedAt" in normalized, "应包含 updatedAt");
-    });
-
-    it("roots 和 nodes 应为数组/对象类型", () => {
-      const normalized = normalizeSessionTreeEntity({});
-      assert.ok(Array.isArray(normalized.roots), "roots 应为数组");
+    it("只包含 nodes 与 updatedAt 字段", () => {
+      const normalized = normalizeSessionTreeEntity({
+        nodes: { "session-1": { sessionId: "session-1", parentSessionId: "" } },
+      });
+      assert.deepEqual(Object.keys(normalized).sort(), ["nodes", "updatedAt"]);
       assert.ok(typeof normalized.nodes === "object", "nodes 应为对象");
     });
 
     it("nodes 中每个节点应规范化 sessionId 和 parentSessionId", () => {
       const raw = {
         nodes: {
-          s1: { parentSessionId: "", children: ["s2"] },
-          s2: { parentSessionId: "s1", children: [] },
+          s1: { parentSessionId: "" },
+          s2: { parentSessionId: "s1" },
         },
       };
       const normalized = normalizeSessionTreeEntity(raw);
       assert.equal(normalized.nodes["s1"].sessionId, "s1");
       assert.equal(normalized.nodes["s1"].parentSessionId, "");
-      assert.ok(Array.isArray(normalized.nodes["s1"].children));
+      assert.equal(normalized.nodes["s2"].parentSessionId, "s1");
+      assert.equal("children" in normalized.nodes["s1"], false);
     });
   });
 
