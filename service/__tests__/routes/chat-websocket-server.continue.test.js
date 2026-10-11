@@ -54,7 +54,6 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
         answer: "done",
         messages: [],
         traces: [],
-        executionLogs: [],
       };
     },
   });
@@ -92,7 +91,6 @@ test("chat-websocket-server: continue action passes stopped snapshot identity th
         answer: "continued",
         messages: [],
         traces: [],
-        executionLogs: [],
       };
     },
   });
@@ -152,7 +150,6 @@ test("chat-websocket-server: a consumed stopped source is rejected before a seco
         answer: "continued",
         messages: [],
         traces: [],
-        executionLogs: [],
       };
     },
   });

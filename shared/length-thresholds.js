@@ -22,7 +22,6 @@ const LENGTH_TIERS = deepFreeze({
   displayChars: {
     extensionName: 20,
     modelContextContent: 120,
-    executionLogBrief: 160,
     hookProgressText: 240,
     planningRawPreview: 300,
     shortTrace: 1000,
@@ -173,8 +172,6 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   },
 
   display: {
-    executionLogBriefChars: LENGTH_TIERS.displayChars.executionLogBrief,
-
     modelContextContentChars: LENGTH_TIERS.displayChars.modelContextContent,
 
     hookProgressTextChars: LENGTH_TIERS.displayChars.hookProgressText,

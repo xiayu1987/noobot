@@ -54,7 +54,6 @@ test("socket close detaches an accepted turn which still completes and releases 
       answer: "done after disconnect",
       messages: [],
       traces: [],
-      executionLogs: [],
     };
   };
   const server = await startServerWithWs({ bot: authoritative.bot });

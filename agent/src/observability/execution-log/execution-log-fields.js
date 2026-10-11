@@ -4,16 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function resolveData(log = {}) {
-  return log?.data && typeof log.data === "object" ? log.data : {};
+export const TOOL_CALL_START_EVENT = "tool_call_start";
+export const TOOL_CALL_END_EVENT = "tool_call_end";
+
+export function resolveData(log) {
+  return log.data && typeof log.data === "object" ? log.data : {};
 }
 
-export function resolveEvent(log = {}) {
-  const data = resolveData(log);
-  return String(data.rawEvent || data.event || log?.event || "").trim();
+export function resolveToolName(log) {
+  return String(resolveData(log).tool || "").trim();
 }
 
-export function resolveToolName(log = {}) {
-  const data = resolveData(log);
-  return String(data.tool || data.toolName || log.tool || log.toolName || "").trim();
+export function resolveTimestampMs(log) {
+  const ms = Date.parse(String(log.ts || ""));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function isFailedToolResult(log) {
+  return log.event === TOOL_CALL_END_EVENT && resolveData(log).success !== true;
 }

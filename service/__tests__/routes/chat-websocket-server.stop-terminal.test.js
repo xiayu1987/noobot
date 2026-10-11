@@ -206,7 +206,6 @@ test("chat-websocket-server: stop request emits authoritative stop completion wh
           answer: "completed",
           messages: [],
           traces: [],
-          executionLogs: [],
         };
       },
     },

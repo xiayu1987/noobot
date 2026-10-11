@@ -8,8 +8,17 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { recordServiceWebSocketRuntimeError, recordServiceWebSocketSendFailure } from "../../ws/chat-websocket-server.js";
-import { startServerWithWs, closeServer, readJsonl, waitForFile, requestRawUpgrade } from "./chat-websocket-server.test-helpers.js";
+import {
+  recordServiceWebSocketRuntimeError,
+  recordServiceWebSocketSendFailure,
+} from "../../ws/chat-websocket-server.js";
+import {
+  startServerWithWs,
+  closeServer,
+  readJsonl,
+  waitForFile,
+  requestRawUpgrade,
+} from "./chat-websocket-server.test-helpers.js";
 
 async function persistSession(workspaceRoot, userId, sessionId) {
   const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
@@ -48,7 +57,10 @@ test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime
     assert.equal(record.event, "service.websocket.upgradeUrlParse.failed");
     assert.equal(Object.prototype.hasOwnProperty.call(record, "sessionId"), false);
     assert.equal(record.data.urlPathPreview, "http://[");
-    assert.equal(record.data.urlLength, "http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value".length);
+    assert.equal(
+      record.data.urlLength,
+      "http://[?apikey=SECRET&authorization=Bearer-token&cookie=session&secret=value".length,
+    );
     assert.equal(record.error.name, "TypeError");
     const serialized = JSON.stringify(record);
     assert.equal(serialized.includes("SECRET"), false);
@@ -73,15 +85,9 @@ test("chat-websocket-server: service websocket send failures write direct system
     error: new Error("send failed"),
   });
 
-  const records = await readJsonl(path.join(
-    workspaceRoot,
-    "u1",
-    "runtime",
-    "session",
-    "s1",
-    "events",
-    "system.jsonl",
-  ));
+  const records = await readJsonl(
+    path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "system.jsonl"),
+  );
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "service");
   assert.equal(records[0].channel, "direct");
@@ -96,7 +102,9 @@ test("chat-websocket-server: service websocket send failures write direct system
 });
 
 test("chat-websocket-server: service websocket runtime errors write direct system runtime event", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-events-error-"));
+  const workspaceRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-service-runtime-events-error-"),
+  );
   await persistSession(workspaceRoot, "u1", "p1");
   await recordServiceWebSocketRuntimeError({
     sessionLogConfig: { workspaceRoot },
@@ -110,15 +118,9 @@ test("chat-websocket-server: service websocket runtime errors write direct syste
     data: { phase: "run" },
   });
 
-  const records = await readJsonl(path.join(
-    workspaceRoot,
-    "u1",
-    "runtime",
-    "session",
-    "p1",
-    "events",
-    "system.jsonl",
-  ));
+  const records = await readJsonl(
+    path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events", "system.jsonl"),
+  );
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "service");
   assert.equal(records[0].channel, "direct");

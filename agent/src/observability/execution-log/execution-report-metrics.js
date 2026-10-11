@@ -5,14 +5,9 @@
  */
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { projectToolOperationSubject } from "@noobot/event-protocol/tool-presentation";
-import { resolveData, resolveEvent, resolveToolName } from "./execution-log-fields.js";
+import { resolveData, resolveTimestampMs, resolveToolName } from "./execution-log-fields.js";
 
 const SLOWEST_TOOL_CALL_LIMIT = QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls;
-
-function resolveTimestampMs(log = {}) {
-  const ms = Date.parse(String(log?.ts || resolveData(log).ts || ""));
-  return Number.isFinite(ms) ? ms : null;
-}
 
 function resolveSpanMs(startMs, endMs) {
   if (startMs == null || endMs == null) return null;
@@ -53,7 +48,7 @@ function trackToolCall(acc, log, data, phase) {
   }
   if (phase === "end") {
     entry.endMs = ts;
-    entry.success = data.success !== false && data.ok !== false;
+    entry.success = data.success === true;
     entry.riskLevel = String(data.riskLevel || "").trim();
   }
   acc.toolCalls.set(toolCallId, entry);
@@ -135,7 +130,7 @@ function summarizeToolCalls(toolCalls) {
 export function summarizeExecutionMetrics(scopedLogs = []) {
   const acc = createAccumulator();
   for (const log of Array.isArray(scopedLogs) ? scopedLogs : []) {
-    EVENT_HANDLERS[resolveEvent(log)]?.(acc, log, resolveData(log));
+    EVENT_HANDLERS[log.event]?.(acc, log, resolveData(log));
   }
   return {
     model: {

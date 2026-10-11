@@ -350,8 +350,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(result.answer, "已切换模型并生成附件");
   assert.equal(Array.isArray(result.messages), true);
   assert.equal(result.messages.length, 3);
-  assert.equal(Array.isArray(result.executionLogs), true);
-  assert.equal(result.executionLogs.length > 0, true, "应返回执行日志闭环");
+  assert.equal("executionLogs" in result, false);
+  assert.equal("executionSummary" in result, false);
   const fullTurnLog = appendedExecutionLogs.find(
     (logItem) => String(logItem?.event || "") === "session_turn_full",
   );

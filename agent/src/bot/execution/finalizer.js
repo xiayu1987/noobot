@@ -249,8 +249,6 @@ export class SessionExecutionFinalizer {
       traces: agentResult.traces,
       messages: turnMessages,
       turnTasks: agentResult?.turnTasks || [],
-      executionLogs,
-      executionSummary,
       dialogProcessId,
       turnScopeId: String(turnScopeId || "").trim(),
     };

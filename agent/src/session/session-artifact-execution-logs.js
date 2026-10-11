@@ -22,6 +22,15 @@ function indexCorrupted(message) {
   return failure;
 }
 
+function assertIndexSchema(index, indexPath) {
+  if (index.schemaVersion === EXECUTION_EVENT_INDEX_SCHEMA_VERSION) return;
+  const failure = new Error(
+    `execution event index schemaVersion ${index.schemaVersion} is unsupported (expected ${EXECUTION_EVENT_INDEX_SCHEMA_VERSION}): ${indexPath}; run scripts/migrate-execution-events-v2.mjs`,
+  );
+  failure.code = "EXECUTION_EVENT_INDEX_SCHEMA_UNSUPPORTED";
+  throw failure;
+}
+
 export function resolveExecutionEventsDir(sessionDir = "") {
   return path.join(String(sessionDir || ""), SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
 }
@@ -42,27 +51,36 @@ function assertSafeEntryName(name = "", label = "entry") {
   return value;
 }
 
-async function readIndexFile(filePath, { required = false } = {}) {
+async function readIndexFile(filePath) {
   let raw;
   try {
     raw = await readFile(filePath, "utf8");
   } catch (error) {
-    if (!required && (error?.code === "ENOENT" || error?.code === "ENOTDIR")) return null;
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
     throw error;
   }
+  let index;
   try {
-    return JSON.parse(raw);
+    index = JSON.parse(raw);
   } catch {
     throw indexCorrupted("execution event index is corrupted");
   }
+  if (!index || typeof index !== "object")
+    throw indexCorrupted("execution event index is corrupted");
+  assertIndexSchema(index, filePath);
+  return index;
+}
+
+async function readSessionEventIndex(eventsDir) {
+  const index = await readIndexFile(path.join(eventsDir, EXECUTION_EVENT_INDEX_FILE));
+  if (!index) return null;
+  if (!Array.isArray(index.turns)) throw indexCorrupted("execution event index has no turns");
+  return index;
 }
 
 export async function listExecutionEventTurns(sessionDir = "") {
-  const index = await readIndexFile(
-    path.join(resolveExecutionEventsDir(sessionDir), EXECUTION_EVENT_INDEX_FILE),
-  );
+  const index = await readSessionEventIndex(resolveExecutionEventsDir(sessionDir));
   if (!index) return [];
-  if (!Array.isArray(index.turns)) throw indexCorrupted("execution event index has no turns");
   return index.turns.map((turn) => {
     try {
       return { dialogProcessId: requireDialogProcessKey(turn?.dialogProcessId) };
@@ -183,14 +201,13 @@ function serializeJsonl(log) {
 }
 
 async function registerExecutionTurn(eventsDir, dialogProcessId) {
-  const indexPath = path.join(eventsDir, EXECUTION_EVENT_INDEX_FILE);
-  const index = (await readIndexFile(indexPath)) || {
+  const index = (await readSessionEventIndex(eventsDir)) || {
     schemaVersion: EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
     turns: [],
   };
-  if (!Array.isArray(index.turns)) throw indexCorrupted("execution event index has no turns");
   if (index.turns.some((turn) => turn?.dialogProcessId === dialogProcessId)) return;
   index.turns.push({ dialogProcessId });
+  await mkdir(eventsDir, { recursive: true });
   await writeArtifactIndex(eventsDir, index);
 }
 
@@ -247,8 +264,8 @@ async function appendTurnExecutionLogUnlocked({ sessionDir, log, maxSegmentBytes
   );
   let index = await readExecutionTurnIndex(turnDir);
   if (!index) {
-    await mkdir(turnDir, { recursive: true });
     await registerExecutionTurn(eventsDir, dialogProcessId);
+    await mkdir(turnDir, { recursive: true });
     index = {
       schemaVersion: EXECUTION_EVENT_INDEX_SCHEMA_VERSION,
       dialogProcessId,

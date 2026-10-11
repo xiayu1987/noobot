@@ -66,7 +66,10 @@ function readLegacyEventIndex(sessionDir) {
   const indexFile = path.join(sessionDir, EVENTS_DIR, "index.json");
   if (!fs.existsSync(indexFile)) return null;
   const index = readJson(indexFile);
-  return !Array.isArray(index.turns) && Array.isArray(index.segments) ? index : null;
+  if (index.schemaVersion !== 1) return null;
+  if (!Array.isArray(index.segments))
+    throw new Error(`legacy execution event index has no segments: ${indexFile}`);
+  return index;
 }
 
 function listLegacyReports(sessionDir) {

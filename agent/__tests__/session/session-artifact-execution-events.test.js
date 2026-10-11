@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -180,21 +180,21 @@ test("execution event readers report corrupted indexes, missing segments, and in
 
     await writeFile(
       path.join(files.executionEventsDir, "index.json"),
-      JSON.stringify({ turns: [{ dialogProcessId: "../escape" }] }),
+      JSON.stringify({ schemaVersion: 2, turns: [{ dialogProcessId: "../escape" }] }),
       "utf8",
     );
     await assert.rejects(readExecutionLogs(root), { code: "EXECUTION_EVENT_INDEX_CORRUPTED" });
 
     await writeFile(
       path.join(files.executionEventsDir, "index.json"),
-      JSON.stringify({ turns: [{ dialogProcessId: "" }] }),
+      JSON.stringify({ schemaVersion: 2, turns: [{ dialogProcessId: "" }] }),
       "utf8",
     );
     await assert.rejects(readExecutionLogs(root), { code: "EXECUTION_EVENT_INDEX_CORRUPTED" });
 
     await writeFile(
       path.join(files.executionEventsDir, "index.json"),
-      JSON.stringify({ turns: [{ dialogProcessId: TEST_TURN }] }),
+      JSON.stringify({ schemaVersion: 2, turns: [{ dialogProcessId: TEST_TURN }] }),
       "utf8",
     );
     await mkdir(turnDirOf(root, TEST_TURN), { recursive: true });
@@ -203,7 +203,7 @@ test("execution event readers report corrupted indexes, missing segments, and in
 
     await writeFile(
       path.join(turnDirOf(root, TEST_TURN), "index.json"),
-      JSON.stringify({ segments: [{ file: "segment-000001.jsonl" }] }),
+      JSON.stringify({ schemaVersion: 2, segments: [{ file: "segment-000001.jsonl" }] }),
       "utf8",
     );
     await assert.rejects(readExecutionLogs(root), { code: "EXECUTION_EVENT_SEGMENT_MISSING" });
@@ -214,6 +214,27 @@ test("execution event readers report corrupted indexes, missing segments, and in
       "utf8",
     );
     await assert.rejects(readExecutionLogs(root), { code: "EXECUTION_EVENT_JSONL_CORRUPTED" });
+  }));
+
+test("execution events reject a v1 index without creating turn directories", async () =>
+  withTemp(async (root) => {
+    const files = buildSessionArtifactFileMap(root);
+    await mkdir(files.executionEventsDir, { recursive: true });
+    await writeFile(
+      path.join(files.executionEventsDir, "index.json"),
+      JSON.stringify({ schemaVersion: 1, segments: [] }),
+      "utf8",
+    );
+    const unsupported = { code: "EXECUTION_EVENT_INDEX_SCHEMA_UNSUPPORTED" };
+    await assert.rejects(readExecutionLogs(root), unsupported);
+    await assert.rejects(
+      appendRollingJsonlArtifactLog({
+        sessionDir: root,
+        log: { id: 1, dialogProcessId: TEST_TURN },
+      }),
+      unsupported,
+    );
+    assert.deepEqual(await readdir(files.executionEventsDir), ["index.json"]);
   }));
 
 test("execution append rejects an empty sessionDir", async () => {
