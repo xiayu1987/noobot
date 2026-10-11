@@ -39,6 +39,7 @@ import {
 } from "../helpers/thinking-tool-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
+import { runOpsWorkdirPath, runOpsWorkdir } from "../helpers/run-ops-workdir.js";
 
 function executeScriptEvents(records = [], turnScopeId = "") {
   return toolEventsForTurn(records, turnScopeId).filter(
@@ -161,14 +162,17 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     "execute_script",
   ]);
 
-  const stateRelativePath = `runtime/ops_workdir/pbe044-resume-${Date.now()}-${testInfo.workerIndex}.json`;
+  const stateRelativePath = runOpsWorkdirPath(
+    `pbe044-resume-${Date.now()}-${testInfo.workerIndex}.json`,
+  );
   const chainCommand = [
     'node -e "',
     "const fs=require('fs');",
     `const p='${stateRelativePath}';`,
     "const s=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{step:0};",
     "if(s.step>=8)throw new Error('chain already complete');",
-    "s.step+=1;fs.mkdirSync('runtime/ops_workdir',{recursive:true});",
+    "s.step+=1;",
+    `fs.mkdirSync('${runOpsWorkdir()}',{recursive:true});`,
     "fs.writeFileSync(p,JSON.stringify(s));",
     "console.log(JSON.stringify({step:s.step}));",
     "setTimeout(()=>{},1200);",

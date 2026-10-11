@@ -12,6 +12,8 @@ HOST_PORT="${NOOBOT_E2E_DOCKER_HOST_PORT:-20060}"
 READY_TIMEOUT_S="${NOOBOT_E2E_DOCKER_READY_TIMEOUT_S:-300}"
 CONNECT_CODE_FILE="${NOOBOT_E2E_CONNECT_CODE_FILE:-$SCRIPT_DIR/connect-code.local}"
 MYSQL_PASSWORD_FILE="${NOOBOT_E2E_MYSQL_PASSWORD_FILE:-$SCRIPT_DIR/mysql-password.local}"
+SOURCE_WORKSPACE="$ROOT_DIR/workspace"
+E2E_WORKSPACE="$ROOT_DIR/.e2e-workspace"
 
 eval "$(env -i PATH="$PATH" node "$ROOT_DIR/scripts/lib/runtime-topology-cli.mjs" --shell)"
 CLIENT_PORT="${NOOBOT_TOPOLOGY_CLIENT_ADDR##*:}"
@@ -80,9 +82,11 @@ cmd_up() {
     return 0
   fi
   docker image inspect "$IMAGE" >/dev/null 2>&1 || cmd_build
+  node "$SCRIPT_DIR/prepare-workspace.mjs" "$SOURCE_WORKSPACE" "$E2E_WORKSPACE" "$ROOT_DIR/service/config/global.config.json"
   docker run -d --rm --name "$CONTAINER" \
     -e NOOBOT_ROOT="$ROOT_DIR" \
     -v "$ROOT_DIR:$ROOT_DIR" \
+    -v "$E2E_WORKSPACE:$SOURCE_WORKSPACE" \
     --mount "type=volume,dst=$ROOT_DIR/client/noobot-chat/dist" \
     --mount "type=volume,dst=$ROOT_DIR/client/noobot-chat/node_modules/.vite" \
     --mount "type=volume,dst=$ROOT_DIR/model-proxy/logs" \
@@ -101,12 +105,8 @@ cmd_down() {
 }
 
 cmd_restart() {
-  if ! container_running; then
-    cmd_up
-    return
-  fi
-  docker restart "$CONTAINER" >/dev/null
-  wait_ready
+  cmd_down
+  cmd_up
 }
 
 cmd_status() {
@@ -133,8 +133,8 @@ cmd_test() {
   esac
   load_connect_code
   load_mysql_password
-  container_running || cmd_up
-  local workspace_root="$ROOT_DIR/workspace"
+  cmd_restart
+  local workspace_root="$E2E_WORKSPACE"
   NOOBOT_E2E_BASE_URL="http://127.0.0.1:${HOST_PORT}" \
     NOOBOT_E2E_USER_ID="${NOOBOT_E2E_USER_ID:-admin}" \
     NOOBOT_E2E_MODEL_ALIAS="${NOOBOT_E2E_MODEL_ALIAS:-gpt_6_1_sol}" \

@@ -20,6 +20,7 @@ import {
   waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
+import { runOpsWorkdir } from "../helpers/run-ops-workdir.js";
 import {
   assertContinuation,
   assertTurnLifecycle,
@@ -115,6 +116,7 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
         "build exactly three sequential workflow child tasks named calc1, calc2, calc3.",
         "Each child must call execute_script exactly once for a concrete arithmetic calculation.",
         "Use these calculations in order: calc1=11+7, calc2=6*8, calc3=144/12.",
+        `Any file a child writes must be placed under ${runOpsWorkdir()}.`,
         "Do not merge tasks, do not answer directly, and start executing the workflow immediately.",
       ].join(" "),
     ),

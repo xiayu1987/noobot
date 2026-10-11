@@ -9,6 +9,8 @@ import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-pr
 import { request as playwrightRequest } from "@playwright/test";
 import { readE2eCredentials } from "./fixtures/auth.fixture.js";
 import { admissionRetryDelayMs } from "./helpers/http-admission.js";
+import { workspaceRoot } from "./helpers/persistence-audit.js";
+import { runOpsWorkdir } from "./helpers/run-ops-workdir.js";
 
 const registryPath = String(process.env.NOOBOT_E2E_SESSION_REGISTRY || "").trim();
 const runId = String(process.env.NOOBOT_E2E_RUN_ID || "").trim();
@@ -100,14 +102,13 @@ export default class SuiteSessionCleanupReporter {
         String(record?.userId || "").trim() &&
         String(record?.sessionId || "").trim(),
     );
-    if (
-      process.env.NOOBOT_E2E_FULL_SUITE !== "1" ||
-      result.status !== "passed" ||
-      records.length === 0
-    ) {
-      return;
-    }
+    if (process.env.NOOBOT_E2E_FULL_SUITE !== "1" || result.status !== "passed") return;
     const credentials = readE2eCredentials();
+    await fs.rm(path.join(workspaceRoot(), credentials.userId, runOpsWorkdir()), {
+      recursive: true,
+      force: true,
+    });
+    if (records.length === 0) return;
     if (records.some((record) => record.userId !== credentials.userId)) {
       throw new Error("Suite Session cleanup requires credentials for every registered owner");
     }

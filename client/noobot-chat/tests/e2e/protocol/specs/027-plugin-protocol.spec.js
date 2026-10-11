@@ -35,6 +35,7 @@ import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
+import { runOpsWorkdirPath } from "../helpers/run-ops-workdir.js";
 
 function assertActivationIdentity(record, command, sessionId) {
   expect(record.data.protocolVersion).toBe(PLUGIN_PROTOCOL_VERSION);
@@ -106,7 +107,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   test.setTimeout(PROTOCOL_TIMEOUTS.harness + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const file = fixedAttachment("pbe-028.txt");
-  const childFilePath = `runtime/ops_workdir/pbe-028-child-${Date.now()}.txt`;
+  const childFilePath = runOpsWorkdirPath(`pbe-028-child-${Date.now()}.txt`);
   await addAttachment(noobot.page, file);
   await sendMessage(
     noobot.page,
@@ -300,7 +301,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     .toEqual(generatedNames);
   assertNoForbiddenErrors(protocolCapture.console);
 
-  const failurePathPrefix = `runtime/ops_workdir/pbe-028-missing-${Date.now()}`;
+  const failurePathPrefix = runOpsWorkdirPath(`pbe-028-missing-${Date.now()}`);
   const beforeFailureSend = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(
     noobot.page,

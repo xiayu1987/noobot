@@ -40,6 +40,7 @@ import {
   waitForToolSet,
 } from "../helpers/thinking-tool-assertions.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
+import { runOpsWorkdir, runOpsWorkdirPath } from "../helpers/run-ops-workdir.js";
 
 const EXPECTED_TOOLS = Object.freeze([
   "write_file",
@@ -61,13 +62,7 @@ const EXTERNAL_AND_NATIVE_TOOLS = Object.freeze([
   "call_mcp_task",
 ]);
 
-async function assertGeneratedFilesConverged({
-  page,
-  userId,
-  sessionId,
-  turnScopeId,
-  filePath = "runtime/ops_workdir/case036.txt",
-}) {
+async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScopeId, filePath }) {
   let executionResults = [];
   let persistedFiles = [];
   await expect
@@ -178,7 +173,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await setHarnessCapability(noobot.page, "Planning Acceptance", false);
   await setHarnessGuidanceAnalysisIntensity(noobot.page, 9);
   const generatedFileName = `case036-${randomUUID().slice(0, 8)}.txt`;
-  const generatedFilePath = `runtime/ops_workdir/${generatedFileName}`;
+  const generatedFilePath = runOpsWorkdirPath(generatedFileName);
   await sendMessage(
     noobot.page,
     uniquePrompt(
@@ -188,7 +183,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
         `1) write_file 写 ${generatedFilePath}，内容 CASE036-TOOL-CONTENT，overwrite=true，riskLevel=low；`,
         `2) read_file 读取 ${generatedFilePath} 且不显示行号，riskLevel=low；`,
         "3) search 使用 source=text 在文本 CASE036-SEARCH-TARGET 中查 SEARCH-TARGET，riskLevel=low；",
-        `4) patch_file 对 ${generatedFileName} 应用这个精确 unified diff，dryRun=false、root=runtime/ops_workdir、strip=1、riskLevel=low：--- a/${generatedFileName} +++ b/${generatedFileName} @@ -1 +1 @@ -CASE036-TOOL-CONTENT +CASE036-PATCH-CONTENT；`,
+        `4) patch_file 对 ${generatedFileName} 应用这个精确 unified diff，dryRun=false、root=${runOpsWorkdir()}、strip=1、riskLevel=low：--- a/${generatedFileName} +++ b/${generatedFileName} @@ -1 +1 @@ -CASE036-TOOL-CONTENT +CASE036-PATCH-CONTENT；`,
         "5) execute_script 执行 printf CASE036-SCRIPT，foreground、riskLevel=low；",
         "6) list_skills 使用空参数；",
         "7) user_interaction 显示 CASE036-INTERACTION，要求必填 verificationCode，显示名 Verification Code。",

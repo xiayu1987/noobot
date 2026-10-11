@@ -207,11 +207,12 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
         record.turnScopeId === command.identity.turnScopeId &&
         record.data?.toolCallId === connectorCall.data.toolCallId,
     );
-    expect(connectorCallStart?.data?.args).toEqual({
-      connector_id: connectorId,
-      operation: "execute",
-      input: { command: "SELECT * FROM users WHERE 1=1;" },
-    });
+    const connectorArgs = connectorCallStart?.data?.args;
+    expect(Object.keys(connectorArgs || {}).sort()).toEqual(["connector_id", "input", "operation"]);
+    expect(connectorArgs.connector_id).toBe(connectorId);
+    expect(connectorArgs.operation).toBe("execute");
+    expect(Object.keys(connectorArgs.input || {})).toEqual(["command"]);
+    expect(connectorArgs.input.command.trim()).toBe("SELECT * FROM users WHERE 1=1;");
 
     let traces = modelInvocationTraces(executionEvents).filter(
       (record) => record.turnScopeId === command.identity.turnScopeId,

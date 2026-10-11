@@ -21,6 +21,7 @@ it("authenticates cleanup after a restart without persisting session credentials
   directory = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-cleanup-"));
   const registry = path.join(directory, "sessions.json");
   vi.stubEnv("NOOBOT_E2E_SESSION_REGISTRY", registry);
+  vi.stubEnv("NOOBOT_E2E_WORKSPACE_ROOT", directory);
   vi.stubEnv("NOOBOT_E2E_RUN_ID", "current-run");
   vi.stubEnv("NOOBOT_E2E_USER_ID", "owner");
   vi.stubEnv("NOOBOT_E2E_CONNECT_CODE", "test-code");

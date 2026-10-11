@@ -29,6 +29,7 @@ import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
+import { runOpsWorkdirPath, runOpsWorkdir } from "../helpers/run-ops-workdir.js";
 
 const HARNESS_COMPLETION_TIMEOUT_MS = PROTOCOL_TIMEOUTS.harness;
 const HARNESS_AUDIT_TIMEOUT_MS = PROTOCOL_TIMEOUTS.audit;
@@ -220,7 +221,9 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     phaseAcceptanceTurns: 3,
   });
 
-  const chainStatePath = `runtime/ops_workdir/pbe033-chain-${Date.now()}-${testInfo.workerIndex}.json`;
+  const chainStatePath = runOpsWorkdirPath(
+    `pbe033-chain-${Date.now()}-${testInfo.workerIndex}.json`,
+  );
   const chainCommand = [
     'node -e "',
     "const fs=require('fs');",
@@ -235,7 +238,8 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     "if(s.step===4)v=String(Number(s.values[3])+4);",
     "if(s.step===5)v=String(Number(s.values[4])+5);",
     "if(s.step===6)v=String(Number(s.values[5])+6);",
-    "s.values.push(v);s.step+=1;fs.mkdirSync('runtime/ops_workdir',{recursive:true});",
+    "s.values.push(v);s.step+=1;",
+    `fs.mkdirSync('${runOpsWorkdir()}',{recursive:true});`,
     "fs.writeFileSync(p,JSON.stringify(s));",
     "console.log(JSON.stringify({step:s.step,value:v}));",
     '"',

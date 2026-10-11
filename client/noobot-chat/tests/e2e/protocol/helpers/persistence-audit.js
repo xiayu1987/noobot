@@ -6,20 +6,14 @@
 import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { createHash } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { readSessionArtifact } from "noobot-agent/session";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
-const repositoryRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../../../..",
-);
-
 export function workspaceRoot() {
-  return path.resolve(
-    process.env.NOOBOT_E2E_WORKSPACE_ROOT || path.join(repositoryRoot, "workspace"),
-  );
+  const root = String(process.env.NOOBOT_E2E_WORKSPACE_ROOT || "").trim();
+  if (!path.isAbsolute(root)) throw new Error("NOOBOT_E2E_WORKSPACE_ROOT must be an absolute path");
+  return root;
 }
 
 export function sessionRoot(userId, sessionId) {

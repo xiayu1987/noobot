@@ -28,6 +28,7 @@ client/noobot-chat/deploy/bin/*
 
 workspaces/
 workspace/
+.e2e-workspace/
 service/config/global.config.json
 agent-proxy/agent-proxy.config.json
 model-proxy/model-proxy.config.json

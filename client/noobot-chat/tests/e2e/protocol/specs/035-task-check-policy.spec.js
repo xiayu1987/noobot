@@ -29,6 +29,7 @@ import {
   waitForLifecycle,
 } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { runOpsWorkdirPath, runOpsWorkdir } from "../helpers/run-ops-workdir.js";
 
 const toolCallName = (call = {}) => String(call.name || call.function?.name || "").trim();
 const toolCallId = (call = {}) => String(call.id || call.tool_call_id || "").trim();
@@ -303,14 +304,15 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     phaseSummaryLoopTurns: 12,
     taskCheckLoopTurns: 12,
   });
-  const resumedChainStatePath = `runtime/ops_workdir/pbe035-${randomUUID().slice(0, 6)}.json`;
+  const resumedChainStatePath = runOpsWorkdirPath(`pbe035-${randomUUID().slice(0, 6)}.json`);
   const resumedChainCommand = [
     'node -e "',
     "const fs=require('fs');",
     `const p='${resumedChainStatePath}';`,
     "const s=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{step:0};",
     "if(s.step>=5)throw new Error('chain already complete');",
-    "s.step+=1;fs.mkdirSync('runtime/ops_workdir',{recursive:true});",
+    "s.step+=1;",
+    `fs.mkdirSync('${runOpsWorkdir()}',{recursive:true});`,
     "fs.writeFileSync(p,JSON.stringify(s));console.log(JSON.stringify({step:s.step}));",
     '"',
   ].join("");
