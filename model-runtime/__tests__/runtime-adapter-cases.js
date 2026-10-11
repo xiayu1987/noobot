@@ -724,3 +724,71 @@ test("Anthropic adapter rejects operation kinds it cannot serve", async () => {
     /does not support operation: image_generation/,
   );
 });
+
+test("prompt_cache_ttl reaches the wire through the selected cache field", () => {
+  const claude = {
+    operatorId: "anthropic",
+    model: "claude-sonnet-5",
+    modelFamily: "claude",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["low", "medium", "high"],
+    prompt_cache_fields: ["cache_control"],
+  };
+  assert.deepEqual(
+    compileProviderModelKwargs({ ...claude, prompt_cache_ttl: "1h" }).cache_control,
+    { type: "ephemeral", ttl: "1h" },
+  );
+  assert.throws(
+    () => compileProviderModelKwargs({ ...claude, prompt_cache_ttl: "24h" }),
+    /prompt_cache_ttl value 24h is not supported/,
+  );
+  assert.deepEqual(
+    compileProviderModelKwargs({
+      operatorId: "kimi",
+      model: "kimi-k3",
+      modelFamily: "kimi",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["low", "medium", "high"],
+      prompt_cache_fields: ["prompt_cache_options"],
+      prompt_cache_ttl: "1h",
+    }).prompt_cache_options,
+    { mode: "implicit", ttl: "1h" },
+  );
+});
+
+test("Anthropic Messages adapter sends the configured 1h cache_control ttl", async () => {
+  const previousFetch = globalThis.fetch;
+  let body;
+  globalThis.fetch = async (url, init) => {
+    body = JSON.parse(init.body);
+    return new Response(
+      JSON.stringify({
+        id: "msg_ttl",
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  try {
+    const client = anthropicMessagesAdapter.createClient({
+      credential: "sk-test",
+      modelSpec: {
+        model: "claude-fable-5-1",
+        base_url: "https://api.anthropic.com",
+        reasoning_effort: "none",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
+        reasoning_effort_parameter: "reasoning_effort",
+        prompt_cache_fields: ["cache_control"],
+        prompt_cache_ttl: "1h",
+      },
+    });
+    await client.invoke([{ role: "user", content: "hello" }]);
+    assert.deepEqual(body.cache_control, { type: "ephemeral", ttl: "1h" });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});

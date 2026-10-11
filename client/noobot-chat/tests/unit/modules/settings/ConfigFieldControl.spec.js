@@ -158,6 +158,46 @@ describe("ConfigFieldControl cache field options", () => {
   });
 });
 
+describe("ConfigFieldControl cache lifetime options", () => {
+  const ttlNode = {
+    key: "prompt_cache_ttl",
+    kind: CONFIG_FORM_NODE_KIND.ENUM,
+    options: ["5m", "30m", "1h", "in_memory", "24h"],
+  };
+
+  it("drops a lifetime that the current model and cache fields no longer offer", async () => {
+    const container = reactive({
+      model: "claude-opus-5",
+      prompt_cache_fields: ["cache_control"],
+      prompt_cache_ttl: "1h",
+    });
+    const wrapper = mountControl({ container, node: ttlNode });
+    expect(container.prompt_cache_ttl).toBe("1h");
+    expect(wrapper.findAll("option").map((option) => option.attributes("value"))).toEqual([
+      "5m",
+      "1h",
+    ]);
+
+    container.model = "qwen3.7-max";
+    await wrapper.vm.$nextTick();
+    expect(container.prompt_cache_ttl).toBeUndefined();
+    expect(wrapper.find(".select-stub").attributes("disabled")).toBeUndefined();
+
+    container.prompt_cache_fields = ["prompt_cache_key"];
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".select-stub").attributes("disabled")).toBeDefined();
+  });
+
+  it("keeps a valid value of an ordinary enum field", () => {
+    const container = reactive({ mode: "b" });
+    mountControl({
+      container,
+      node: { key: "mode", kind: CONFIG_FORM_NODE_KIND.ENUM, options: ["a", "b"] },
+    });
+    expect(container.mode).toBe("b");
+  });
+});
+
 describe("ConfigFieldControl sampling transmit toggle", () => {
   const numberNode = (key) => ({ key, kind: CONFIG_FORM_NODE_KIND.NUMBER });
 

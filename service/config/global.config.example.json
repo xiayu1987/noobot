@@ -135,6 +135,7 @@
       "base_url": "${ANTHROPIC_API_ADDRESS}",
       "model": "claude-opus-5",
       "prompt_cache_fields": ["cache_control"],
+      "prompt_cache_ttl": "1h",
       "description": "擅长编码",
       "capabilities": {
         "web_search": true

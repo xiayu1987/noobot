@@ -5,8 +5,8 @@
 import libraryPayload from "../../model-library.json" with { type: "json" };
 import {
   normalizeModelPromptCacheFields,
+  normalizeModelPromptCacheSelection,
   normalizeModelReasoningConfiguration,
-  resolveModelFamilyPromptCacheFields,
 } from "./provider-spec.js";
 
 function isPlainObject(value) {
@@ -35,15 +35,7 @@ function validatePromptCacheConfiguration(provider, label) {
   if (!Object.hasOwn(provider, "prompt_cache_fields")) {
     throw new TypeError(`${label}.prompt_cache_fields is required`);
   }
-  const configured = normalizeModelPromptCacheFields(provider.prompt_cache_fields);
-  const familyFields = new Set(resolveModelFamilyPromptCacheFields(provider));
-  for (const field of configured) {
-    if (!familyFields.has(field)) {
-      throw new TypeError(
-        `${label}.prompt_cache_fields value ${field} is outside its model family`,
-      );
-    }
-  }
+  normalizeModelPromptCacheSelection(provider, label);
 }
 
 function validateLibrary(payload) {

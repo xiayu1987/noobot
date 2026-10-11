@@ -87,11 +87,37 @@ export function normalizeModelSamplingFields(input) {
   return Object.freeze(MODEL_SAMPLING_FIELDS.filter((field) => selected.has(field)));
 }
 
-const MODEL_PROMPT_CACHE_VALUE = Object.freeze({
-  OPTIONS: Object.freeze({ ttl: "30m" }),
-  KIMI_OPTIONS: Object.freeze({ mode: "implicit", ttl: "5m" }),
-  RETENTION: "24h",
-  CACHE_CONTROL: Object.freeze({ type: "ephemeral" }),
+export const MODEL_PROMPT_CACHE_TTL_KEY = "prompt_cache_ttl";
+
+export const MODEL_PROMPT_CACHE_TTL = Object.freeze({
+  FIVE_MINUTES: "5m",
+  THIRTY_MINUTES: "30m",
+  ONE_HOUR: "1h",
+  IN_MEMORY: "in_memory",
+  TWENTY_FOUR_HOURS: "24h",
+});
+
+export const MODEL_PROMPT_CACHE_TTLS = Object.freeze(Object.values(MODEL_PROMPT_CACHE_TTL));
+
+function ttlRule(options, defaultValue) {
+  return Object.freeze({ options: Object.freeze([...options]), default: defaultValue });
+}
+
+const TTL = MODEL_PROMPT_CACHE_TTL;
+const EPHEMERAL_TTL_RULE = ttlRule([TTL.FIVE_MINUTES, TTL.ONE_HOUR], TTL.FIVE_MINUTES);
+
+const MODEL_PROMPT_CACHE_TTL_RULES = Object.freeze({
+  [MODEL_PROMPT_CACHE_FIELD.OPTIONS]: Object.freeze({
+    default: ttlRule([TTL.THIRTY_MINUTES], TTL.THIRTY_MINUTES),
+    [MODEL_FAMILY_ID.KIMI]: EPHEMERAL_TTL_RULE,
+  }),
+  [MODEL_PROMPT_CACHE_FIELD.RETENTION]: Object.freeze({
+    default: ttlRule([TTL.IN_MEMORY, TTL.TWENTY_FOUR_HOURS], TTL.TWENTY_FOUR_HOURS),
+  }),
+  [MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL]: Object.freeze({
+    default: EPHEMERAL_TTL_RULE,
+    [MODEL_FAMILY_ID.QWEN]: ttlRule([TTL.FIVE_MINUTES], TTL.FIVE_MINUTES),
+  }),
 });
 
 const MODEL_PROMPT_CACHE_FIELD_SET = new Set(MODEL_PROMPT_CACHE_FIELDS);
@@ -122,37 +148,89 @@ export function resolveModelFamilyPromptCacheFields(input = {}) {
 }
 
 export function resolveModelPromptCacheValue(input = {}, field = "") {
-  const family = input.modelFamily || resolveModelFamilyId(input);
+  const family = promptCacheFamily(input);
+  if (!Object.hasOwn(MODEL_PROMPT_CACHE_TTL_RULES, field)) return null;
+  const ttl = normalizeTtl(input) || resolveModelPromptCacheTtlRule(input, field).default;
   if (field === MODEL_PROMPT_CACHE_FIELD.OPTIONS) {
-    const value =
-      family === MODEL_FAMILY_ID.KIMI
-        ? MODEL_PROMPT_CACHE_VALUE.KIMI_OPTIONS
-        : MODEL_PROMPT_CACHE_VALUE.OPTIONS;
-    return Object.freeze({ ...value });
+    return Object.freeze(family === MODEL_FAMILY_ID.KIMI ? { mode: "implicit", ttl } : { ttl });
   }
-  if (field === MODEL_PROMPT_CACHE_FIELD.RETENTION) return MODEL_PROMPT_CACHE_VALUE.RETENTION;
-  if (field === MODEL_PROMPT_CACHE_FIELD.CACHE_CONTROL) {
-    return Object.freeze({ ...MODEL_PROMPT_CACHE_VALUE.CACHE_CONTROL });
-  }
-  return null;
+  if (field === MODEL_PROMPT_CACHE_FIELD.RETENTION) return ttl;
+  return Object.freeze(
+    ttl === MODEL_PROMPT_CACHE_TTL.FIVE_MINUTES
+      ? { type: "ephemeral" }
+      : { type: "ephemeral", ttl },
+  );
 }
 
-export function normalizeModelPromptCacheFields(input) {
+function promptCacheFamily(input = {}) {
+  return input.modelFamily || resolveModelFamilyId(input);
+}
+
+function resolveModelPromptCacheTtlRule(input = {}, field = "") {
+  const rules = MODEL_PROMPT_CACHE_TTL_RULES[field];
+  return rules[promptCacheFamily(input)] || rules.default;
+}
+
+export function resolveModelPromptCacheTtlOptions(input = {}) {
+  const familyFields = new Set(resolveModelFamilyPromptCacheFields(input));
+  const declared = Array.isArray(input.prompt_cache_fields) ? input.prompt_cache_fields : [];
+  const fields = MODEL_PROMPT_CACHE_FIELDS.filter(
+    (field) =>
+      declared.includes(field) &&
+      familyFields.has(field) &&
+      Object.hasOwn(MODEL_PROMPT_CACHE_TTL_RULES, field),
+  );
+  if (!fields.length) return Object.freeze([]);
+  const allowed = fields
+    .map((field) => new Set(resolveModelPromptCacheTtlRule(input, field).options))
+    .reduce((left, right) => new Set([...left].filter((value) => right.has(value))));
+  return Object.freeze(MODEL_PROMPT_CACHE_TTLS.filter((value) => allowed.has(value)));
+}
+
+function normalizeTtl(input = {}, label = "model spec") {
+  const value = input[MODEL_PROMPT_CACHE_TTL_KEY];
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") {
+    throw new TypeError(`${label}.${MODEL_PROMPT_CACHE_TTL_KEY} must be a string`);
+  }
+  const options = resolveModelPromptCacheTtlOptions(input);
+  if (!options.includes(value)) {
+    throw new TypeError(
+      `${label}.${MODEL_PROMPT_CACHE_TTL_KEY} value ${value} is not supported by the selected prompt_cache_fields of ${input.model || "model"}; allowed: ${options.join(", ") || "none"}`,
+    );
+  }
+  return value;
+}
+
+export function normalizeModelPromptCacheFields(input, label = "model spec") {
   if (input === undefined) return Object.freeze([]);
   if (!Array.isArray(input)) {
-    throw new TypeError("model spec.prompt_cache_fields must be an array");
+    throw new TypeError(`${label}.prompt_cache_fields must be an array`);
   }
   const selected = new Set();
   for (const field of input) {
     if (!MODEL_PROMPT_CACHE_FIELD_SET.has(field)) {
-      throw new TypeError(`unsupported model spec.prompt_cache_fields value: ${String(field)}`);
+      throw new TypeError(`unsupported ${label}.prompt_cache_fields value: ${String(field)}`);
     }
     if (selected.has(field)) {
-      throw new TypeError(`duplicate model spec.prompt_cache_fields value: ${field}`);
+      throw new TypeError(`duplicate ${label}.prompt_cache_fields value: ${field}`);
     }
     selected.add(field);
   }
   return Object.freeze(MODEL_PROMPT_CACHE_FIELDS.filter((field) => selected.has(field)));
+}
+
+export function normalizeModelPromptCacheSelection(input = {}, label = "model spec") {
+  const fields = normalizeModelPromptCacheFields(input.prompt_cache_fields, label);
+  const familyFields = new Set(resolveModelFamilyPromptCacheFields(input));
+  for (const field of fields) {
+    if (!familyFields.has(field)) {
+      throw new TypeError(
+        `${label}.prompt_cache_fields value ${field} is outside the model-family cache protocol for ${input.model || "model"}`,
+      );
+    }
+  }
+  return Object.freeze({ fields, ttl: normalizeTtl(input, label) });
 }
 
 const stringField = Object.freeze({ type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING });
@@ -401,6 +479,10 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
         type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
         values: MODEL_PROMPT_CACHE_FIELDS,
       }),
+    }),
+    [MODEL_PROMPT_CACHE_TTL_KEY]: configurableCacheField({
+      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
+      values: MODEL_PROMPT_CACHE_TTLS,
     }),
     cached_content: cacheField(stringField, [MODEL_FAMILY_ID.GEMINI]),
     capabilities: internalField(

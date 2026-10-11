@@ -10,9 +10,8 @@ import {
   MODEL_SAMPLING_FIELD,
   MODEL_SAMPLING_FIELDS,
   buildModelReasoningEffortTransport,
-  normalizeModelPromptCacheFields,
+  normalizeModelPromptCacheSelection,
   requireModelFamilyId,
-  resolveModelFamilyPromptCacheFields,
   resolveModelPromptCacheValue,
 } from "@noobot/model-protocol";
 
@@ -32,16 +31,7 @@ function modelFamily(spec = {}) {
 }
 
 function selectedCacheFields(spec = {}) {
-  const selected = normalizeModelPromptCacheFields(spec.prompt_cache_fields);
-  const supported = new Set(resolveModelFamilyPromptCacheFields(spec));
-  for (const field of selected) {
-    if (!supported.has(field)) {
-      throw new TypeError(
-        `model spec.prompt_cache_fields value ${field} is outside the model-family cache protocol for ${spec.model}`,
-      );
-    }
-  }
-  return selected;
+  return normalizeModelPromptCacheSelection(spec).fields;
 }
 
 function segment(value) {

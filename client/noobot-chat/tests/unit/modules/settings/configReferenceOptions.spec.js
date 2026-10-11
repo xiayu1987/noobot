@@ -157,18 +157,42 @@ describe("resolveConfigReferenceOptions", () => {
       "prompt_cache_retention",
     ]);
   });
+
+  it("offers the lifetimes shared by the selected cache fields as an enum", () => {
+    const node = findNode(userTree, "providers.*.prompt_cache_ttl");
+    expect(node.kind).toBe("enum");
+    const options = (provider) => resolveConfigFieldOptions(node, provider, document);
+    expect(options({ model: "claude-opus-5", prompt_cache_fields: ["cache_control"] })).toEqual([
+      "5m",
+      "1h",
+    ]);
+    expect(options({ model: "kimi-k3", prompt_cache_fields: ["prompt_cache_options"] })).toEqual([
+      "5m",
+      "1h",
+    ]);
+    expect(
+      options({ model: "gpt-5.6-sol", prompt_cache_fields: ["prompt_cache_options"] }),
+    ).toEqual(["30m"]);
+    expect(options({ model: "gpt-5.5", prompt_cache_fields: ["prompt_cache_retention"] })).toEqual([
+      "in_memory",
+      "24h",
+    ]);
+    expect(options({ model: "qwen3.7-max", prompt_cache_fields: ["cache_control"] })).toEqual([
+      "5m",
+    ]);
+    expect(options({ model: "gpt-5.5", prompt_cache_fields: ["prompt_cache_key"] })).toEqual([]);
+    expect(options({ model: "gpt-5.5", prompt_cache_fields: "broken" })).toEqual([]);
+  });
 });
 
 describe("hidden builtin sections on save", () => {
   it("removes existing builtin values from the user document", () => {
     const document = {
-      session: { executionBundleTimeoutMs: 120000 },
       context: { promptSections: ["*"] },
       default_provider: "p1",
       providers: { p1: { model: "m1" } },
     };
     const saved = buildConfigDocumentForSave(document, cloneConfigDocument(document));
-    expect(saved.session).toBeUndefined();
     expect(saved.context).toBeUndefined();
     expect(saved.default_provider).toBe("p1");
   });

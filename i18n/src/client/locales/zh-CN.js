@@ -205,6 +205,7 @@ export const zhCNMessages = {
     reasoning_effort: "推理强度",
     tool_reasoning_effort: "工具推理强度",
     prompt_cache_fields: "提示词缓存字段",
+    prompt_cache_ttl: "提示词缓存时长",
     image_generation: "图片生成",
     reasoning: "推理",
     streaming: "流式输出",
@@ -286,6 +287,8 @@ export const zhCNMessages = {
     reasoning_effort: "常规请求的推理强度档位，取值来自下方推理档位列表。",
     tool_reasoning_effort: "工具调用请求单独使用的推理强度档位。",
     prompt_cache_fields: "选择目标接口支持的缓存字段；字段值由系统生成，未选择的字段不会发送。",
+    prompt_cache_ttl:
+      "缓存保留时长，可选值为已选缓存字段支持时长的交集；留空使用各字段默认时长。同时选择 prompt_cache_options 与 prompt_cache_retention 时无可选时长；Kimi 的 TTL 在首次写入缓存后锁定。",
   },
   infra: {
     inputUserAndCodeFirst: "请先输入用户名和连接码，点击连接",
@@ -443,6 +446,7 @@ export const zhCNMessages = {
     executionReportToolCalls: "工具调用",
     executionReportErrors: "失败",
     executionReportError: "错误",
+    executionReportSummaryError: "执行统计不可用",
     executionReportOverview: "概览",
     executionReportModelSection: "模型调用",
     executionReportPhaseSection: "阶段耗时",

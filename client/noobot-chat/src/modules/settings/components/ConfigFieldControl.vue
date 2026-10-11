@@ -94,6 +94,12 @@ watch(
 watch(
   selectOptions,
   (options) => {
+    if (isKind(KIND.ENUM)) {
+      if (typeof value.value === "string" && value.value && !options.includes(value.value)) {
+        delete props.container[props.node.key];
+      }
+      return;
+    }
     if (!isKind(KIND.ENUM_LIST) || !Array.isArray(value.value)) return;
     const allowed = new Set(options);
     const next = value.value.filter((item) => allowed.has(item));
@@ -164,6 +170,7 @@ function syncRawDraft(text) {
         :model-value="value ?? ''"
         clearable
         filterable
+        :disabled="selectOptions.length === 0"
         popper-class="noobot-select-popper"
         class="field-input"
         :placeholder="translate('settings.configSelectPlaceholder')"
