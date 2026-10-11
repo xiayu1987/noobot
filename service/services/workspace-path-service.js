@@ -5,25 +5,28 @@
  */
 import path from "node:path";
 
+function requireConfiguredPath(value, key) {
+  const configured = String(value || "").trim();
+  if (!configured) throw new TypeError(`global config ${key} is required`);
+  return configured;
+}
+
 export function createWorkspacePathService({
   getGlobalConfig,
   getGlobalConfigRaw,
   getProcessCwd = () => process.cwd(),
 } = {}) {
   function workspaceRootPath() {
-    const globalConfig = typeof getGlobalConfig === "function" ? getGlobalConfig() : {};
     return path.resolve(
       getProcessCwd(),
-      String(globalConfig?.workspaceRoot || "../workspaces"),
+      requireConfiguredPath(getGlobalConfig()?.workspaceRoot, "workspace_root"),
     );
   }
 
   function templateRootPath() {
-    const globalConfigRaw =
-      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
     return path.resolve(
       getProcessCwd(),
-      String(globalConfigRaw?.workspaceTemplatePath || "../user-template/default-user"),
+      requireConfiguredPath(getGlobalConfigRaw()?.workspaceTemplatePath, "workspace_template_path"),
     );
   }
 

@@ -168,13 +168,7 @@ export function createDesktopServiceManager({
     syncPackagedProxyConfig("model-proxy");
   }
 
-  function writeStartupContext({
-    isPackaged,
-    userDataPath,
-    cwd,
-    configState,
-    globalConfigPath,
-  } = {}) {
+  function writeStartupContext({ isPackaged, userDataPath, cwd, configState } = {}) {
     const runtimeDir = path.join(userDataPath, "runtime");
     fs.mkdirSync(runtimeDir, { recursive: true });
     const backendRoot = isPackaged ? packagedBackendRoot : repoRoot;
@@ -208,12 +202,6 @@ export function createDesktopServiceManager({
         frontendRoot,
         pluginRootDir: path.join(backendRoot, "plugin"),
         userDataDir: userDataPath,
-        configDir: configState.configDir,
-        dataDir: path.join(userDataPath, "data"),
-        logDir: path.join(userDataPath, "logs"),
-        workspaceRoot: configState?.workspaceRootPath || "",
-        workspaceTemplatePath: configState?.workspaceTemplatePath || "",
-        globalConfigPath,
       },
       service: {
         port: Number(servicePort),
@@ -284,7 +272,6 @@ export function createDesktopServiceManager({
       userDataPath,
       cwd,
       configState,
-      globalConfigPath,
     });
     const args = isPackaged
       ? [

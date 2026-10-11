@@ -10,21 +10,9 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import { WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
 
-export function createWorkspaceUsersService({
-  workspaceRootPath,
-  defaultWorkspaceUsersConfig = { users: [] },
-  runtimeEventsConfig,
-} = {}) {
-  function normalizeAllowIDE(userItem = {}) {
-    return (
-      userItem?.allowIDE === true ||
-      userItem?.allowIde === true ||
-      userItem?.allow_ide === true ||
-      userItem?.ideEnabled === true
-    );
-  }
-
+export function createWorkspaceUsersService({ workspaceRootPath, runtimeEventsConfig } = {}) {
   function normalizeWorkspaceUsersConfig(input) {
     const sourceItems = Array.isArray(input)
       ? input
@@ -34,44 +22,52 @@ export function createWorkspaceUsersService({
     const users = sourceItems
       .map((userItem) => ({
         userId: String(userItem?.userId || "").trim(),
-        connectCode: String(userItem?.connectCode || userItem?.code || "").trim(),
-        allowIDE: normalizeAllowIDE(userItem),
+        connectCode: String(userItem?.connectCode || "").trim(),
+        allowIDE: userItem?.allowIDE === true,
       }))
       .filter((userItem) => userItem.userId && userItem.connectCode);
     return { users };
   }
 
   function workspaceUsersFilePath() {
-    return path.join(workspaceRootPath(), "user.json");
+    return path.join(workspaceRootPath(), WORKSPACE_ROOT_LAYOUT.USERS_FILE);
   }
 
-  async function readWorkspaceUsersConfig({ createIfMissing = false } = {}) {
+  async function readWorkspaceUsersConfig() {
     const filePath = workspaceUsersFilePath();
-    let parsedPayload = null;
+    let fileText;
     try {
-      parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
+      fileText = await readFile(filePath, "utf8");
     } catch (error) {
-      void writeRoutedRuntimeEvent({
+      if (error?.code === "ENOENT") return normalizeWorkspaceUsersConfig([]);
+      throw reportReadFailure(filePath, error);
+    }
+    try {
+      return normalizeWorkspaceUsersConfig(JSON.parse(fileText));
+    } catch (error) {
+      throw reportReadFailure(filePath, error);
+    }
+  }
+
+  function reportReadFailure(filePath, error) {
+    void writeRoutedRuntimeEvent(
+      {
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         category: RUNTIME_EVENT_CATEGORIES.CONFIG,
-        level: "warn",
+        level: "error",
         event: "service.workspaceUsers.config.read.failed",
         data: {
           fileName: path.basename(filePath),
           filePathLength: String(filePath || "").length,
-          createIfMissing: createIfMissing === true,
         },
         error,
-      }, runtimeEventsConfig);
-      if (createIfMissing) {
-        const payload = normalizeWorkspaceUsersConfig(defaultWorkspaceUsersConfig);
-        await writeWorkspaceUsersConfig(payload);
-        return payload;
-      }
-      return normalizeWorkspaceUsersConfig([]);
-    }
-    return normalizeWorkspaceUsersConfig(parsedPayload);
+      },
+      runtimeEventsConfig,
+    );
+    return new Error(`workspace users config is unreadable: ${path.basename(filePath)}`, {
+      cause: error,
+    });
   }
 
   async function writeWorkspaceUsersConfig(configPayload = {}) {
@@ -83,15 +79,7 @@ export function createWorkspaceUsersService({
   }
 
   async function readWorkspaceUsers() {
-    const usersConfig = await readWorkspaceUsersConfig();
-    const sourceItems = Array.isArray(usersConfig?.users) ? usersConfig.users : [];
-    return sourceItems
-      .map((userItem) => ({
-        userId: String(userItem?.userId || "").trim(),
-        connectCode: String(userItem?.connectCode || userItem?.code || "").trim(),
-        allowIDE: normalizeAllowIDE(userItem),
-      }))
-      .filter((userItem) => userItem.userId && userItem.connectCode);
+    return normalizeWorkspaceUsersConfig(await readWorkspaceUsersConfig()).users;
   }
 
   return {

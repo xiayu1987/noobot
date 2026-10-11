@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { BotManager } from "#agent/bot";
-import { createGlobalConfigBuilder } from "#agent/config";
+import { resolveConfiguredSuperUserId } from "../deps/agent-utils.js";
 import {
   normalizeLocale,
   resolveLocaleFromAcceptLanguage,
@@ -22,25 +22,16 @@ import { createWorkspacePathService } from "../services/workspace-path-service.j
 import { createWorkspaceUsersService } from "../services/workspace-users-service.js";
 import { createOpenVSCodeService } from "../services/openvscode-service.js";
 
-const DEFAULT_WORKSPACE_USERS_CONFIG = {
-  users: [
-    {
-      userId: "xiayu",
-      connectCode: "change-your-connect-code",
-    },
-  ],
-};
-
 export async function createAppDependencies({
   startupContext = {},
   globalConfigBuilder,
   buildWorkspaceTree,
   connectorAccessPort,
 } = {}) {
-  const configBuilder =
-    globalConfigBuilder && typeof globalConfigBuilder?.build === "function"
-      ? globalConfigBuilder
-      : createGlobalConfigBuilder();
+  if (typeof globalConfigBuilder?.build !== "function") {
+    throw new TypeError("createAppDependencies requires globalConfigBuilder");
+  }
+  const configBuilder = globalConfigBuilder;
   const initialRawConfig = (await configBuilder?.loadRawConfig?.({ reload: false })) || {};
   let globalConfigRaw = initialRawConfig;
   let globalConfig = globalConfigRaw;
@@ -79,7 +70,6 @@ export async function createAppDependencies({
 
   const workspaceUsersService = createWorkspaceUsersService({
     workspaceRootPath,
-    defaultWorkspaceUsersConfig: DEFAULT_WORKSPACE_USERS_CONFIG,
     runtimeEventsConfig: { workspaceRoot: workspaceRootPath() },
   });
   const {
@@ -164,9 +154,7 @@ export async function createAppDependencies({
 
   async function readSessionUserIds() {
     const workspaceUsers = await readWorkspaceUsers();
-    const superAdminUserId = String(
-      globalConfigRaw?.super_admin?.user_id || globalConfigRaw?.superAdmin?.userId || "",
-    ).trim();
+    const superAdminUserId = resolveConfiguredSuperUserId(globalConfig);
     return [
       ...new Set(
         [

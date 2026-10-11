@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { loadGlobalConfig } from "./global-config-loader.js";
 import { normalizeConfiguredModelProviders } from "./model-config-normalizer.js";
 import {
   applyConfigMigrations,
@@ -19,49 +18,34 @@ import { resolveConfiguredPathPolicy } from "./path-policy-adapter.js";
 
 function cloneConfig(value) {
   if (value === null || value === undefined) return value;
-  try {
-    return structuredClone(value);
-  } catch {
-    return JSON.parse(JSON.stringify(value));
+  return structuredClone(value);
+}
+
+function assertGlobalConfigSource(source) {
+  const name = typeof source?.name === "string" ? source.name.trim() : "";
+  if (typeof source?.loadRawConfig !== "function" || !name) {
+    throw new TypeError("global config source requires loadRawConfig() and name");
   }
+  return name;
 }
 
 export function createGlobalConfigBuilder({
-  source = null,
-  sourceName = "",
+  source,
   migrations = [],
   validators = [],
-  loadGlobalConfigFn = loadGlobalConfig,
   normalizeRawConfigFn = normalizeKnownConfigKeys,
   resolveConfigTemplatesFn = resolveConfigTemplates,
-  globalConfigPath = "",
-  loadOptions = {},
 } = {}) {
+  const sourceName = assertGlobalConfigSource(source);
   let lastRawConfig = {};
   const normalizedMigrations = normalizeConfigMigrations(migrations);
   const normalizedValidators = normalizeConfigValidators(validators);
-
-  async function loadRawConfigBySource() {
-    if (typeof source === "function") {
-      return source({
-        globalConfigPath,
-        loadOptions,
-      });
-    }
-    if (source && typeof source.loadRawConfig === "function") {
-      return source.loadRawConfig({
-        globalConfigPath,
-        loadOptions,
-      });
-    }
-    return loadGlobalConfigFn(globalConfigPath, loadOptions);
-  }
 
   async function loadRawConfig({ reload = true } = {}) {
     if (!reload && lastRawConfig && Object.keys(lastRawConfig).length > 0) {
       return cloneConfig(lastRawConfig);
     }
-    const sourceRawConfig = await loadRawConfigBySource();
+    const sourceRawConfig = await source.loadRawConfig();
     const normalizedRawConfig =
       typeof normalizeRawConfigFn === "function"
         ? normalizeRawConfigFn(sourceRawConfig || {})
@@ -81,8 +65,6 @@ export function createGlobalConfigBuilder({
       env,
       configParams,
       extraContext: extraContext && typeof extraContext === "object" ? extraContext : {},
-      globalConfigPath,
-      loadOptions,
     };
     const migrationResult = await applyConfigMigrations({
       config: rawConfig,
@@ -107,11 +89,7 @@ export function createGlobalConfigBuilder({
       persistedConfig,
       resolvedConfig,
       metadata: {
-        source:
-          String(sourceName || "").trim() ||
-          (source && typeof source.name === "string" ? source.name : "") ||
-          (typeof source === "function" ? source.name : "") ||
-          "file",
+        source: sourceName,
         migrations: migrationResult.appliedMigrations,
         warnings,
       },

@@ -109,7 +109,6 @@ async function runLauncher(serviceRoot, { env = {}, args = [] } = {}) {
     cwd: serviceRoot,
     env: {
       ...process.env,
-      AGENT_GLOBAL_CONFIG_PATH: "",
       NOOBOT_GLOBAL_CONFIG_PATH: "",
       NOOBOT_SETUP_LANG: "en",
       ...env,

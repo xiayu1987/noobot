@@ -32,25 +32,27 @@ function normalizeDependencySourceSummary(value = {}) {
   const dependencies = Array.isArray(source.dependencies) ? source.dependencies : [];
   return {
     platform: String(source.platform || ""),
-    dependencies: dependencies.map((item) => {
-      const dependency = item && typeof item === "object" ? item : {};
-      const customSourceEnvKeys = Array.isArray(dependency.customSourceEnvKeys)
-        ? dependency.customSourceEnvKeys.map((key) => String(key || "").trim()).filter(Boolean)
-        : [];
-      const configKeys = Array.isArray(dependency.configKeys)
-        ? dependency.configKeys.map((key) => String(key || "").trim()).filter(Boolean)
-        : [];
-      return {
-        key: String(dependency.key || ""),
-        name: String(dependency.name || ""),
-        available: Boolean(dependency.available),
-        installMode: String(dependency.installMode || ""),
-        sourceType: String(dependency.sourceType || ""),
-        hasCustomSource: Boolean(dependency.hasCustomSource),
-        customSourceEnvKeys,
-        configKeys,
-      };
-    }).filter((item) => item.key || item.name),
+    dependencies: dependencies
+      .map((item) => {
+        const dependency = item && typeof item === "object" ? item : {};
+        const customSourceEnvKeys = Array.isArray(dependency.customSourceEnvKeys)
+          ? dependency.customSourceEnvKeys.map((key) => String(key || "").trim()).filter(Boolean)
+          : [];
+        const configKeys = Array.isArray(dependency.configKeys)
+          ? dependency.configKeys.map((key) => String(key || "").trim()).filter(Boolean)
+          : [];
+        return {
+          key: String(dependency.key || ""),
+          name: String(dependency.name || ""),
+          available: Boolean(dependency.available),
+          installMode: String(dependency.installMode || ""),
+          sourceType: String(dependency.sourceType || ""),
+          hasCustomSource: Boolean(dependency.hasCustomSource),
+          customSourceEnvKeys,
+          configKeys,
+        };
+      })
+      .filter((item) => item.key || item.name),
   };
 }
 
@@ -79,9 +81,8 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
   const paths = raw.paths && typeof raw.paths === "object" ? raw.paths : {};
   const service = raw.service && typeof raw.service === "object" ? raw.service : {};
   const runtime = raw.runtime && typeof raw.runtime === "object" ? raw.runtime : {};
-  const dependencies = runtime.dependencies && typeof runtime.dependencies === "object"
-    ? runtime.dependencies
-    : {};
+  const dependencies =
+    runtime.dependencies && typeof runtime.dependencies === "object" ? runtime.dependencies : {};
   const app = raw.app && typeof raw.app === "object" ? raw.app : {};
   const backendRoot = normalizePath(paths.backendRoot || resolveDefaultBackendRoot(cwd));
   return {
@@ -97,12 +98,6 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
       frontendRoot: normalizePath(paths.frontendRoot),
       pluginRootDir: normalizePath(paths.pluginRootDir || path.join(backendRoot, "plugin")),
       userDataDir: normalizePath(paths.userDataDir),
-      configDir: normalizePath(paths.configDir || process.env.NOOBOT_CONFIG_DIR),
-      dataDir: normalizePath(paths.dataDir || process.env.NOOBOT_DATA_DIR),
-      logDir: normalizePath(paths.logDir || process.env.NOOBOT_LOG_DIR),
-      workspaceRoot: normalizePath(paths.workspaceRoot || process.env.NOOBOT_WORKSPACE_ROOT),
-      workspaceTemplatePath: normalizePath(paths.workspaceTemplatePath || process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH),
-      globalConfigPath: normalizePath(paths.globalConfigPath || process.env.NOOBOT_GLOBAL_CONFIG_PATH),
     },
     service: {
       port: Number(service.port || process.env.PORT || 3000),
@@ -131,10 +126,17 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
 }
 
 export function createDefaultStartupContext({ cwd = process.cwd() } = {}) {
-  return normalizeStartupContext({
-    app: { platform: process.env.NOOBOT_DESKTOP === "1" ? "desktop" : "web", channel: process.platform, packaged: false },
-    paths: { backendRoot: resolveDefaultBackendRoot(cwd) },
-  }, { cwd });
+  return normalizeStartupContext(
+    {
+      app: {
+        platform: process.env.NOOBOT_DESKTOP === "1" ? "desktop" : "web",
+        channel: process.platform,
+        packaged: false,
+      },
+      paths: { backendRoot: resolveDefaultBackendRoot(cwd) },
+    },
+    { cwd },
+  );
 }
 
 export async function loadStartupContext({ argv = process.argv, cwd = process.cwd() } = {}) {

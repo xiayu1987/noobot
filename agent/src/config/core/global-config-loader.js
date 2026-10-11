@@ -3,19 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "@noobot/path-resolver";
 import { readFile } from "node:fs/promises";
 import { normalizeKnownConfigKeys } from "@noobot/agent-config-protocol";
 
-function resolveDefaultGlobalConfigPath({ cwd = process.cwd(), env = process.env } = {}) {
-  const rawEnvPath =
-    String(env?.AGENT_GLOBAL_CONFIG_PATH || "").trim() ||
-    String(env?.NOOBOT_GLOBAL_CONFIG_PATH || "").trim();
-  if (rawEnvPath) return path.resolve(cwd, rawEnvPath);
-  return path.resolve(cwd, "config/global.config.json");
-}
-
-export async function loadGlobalConfig(filePath = "", options = {}) {
-  const targetPath = String(filePath || "").trim() || resolveDefaultGlobalConfigPath(options);
+export async function loadGlobalConfig(filePath) {
+  const targetPath = typeof filePath === "string" ? filePath.trim() : "";
+  if (!targetPath) throw new TypeError("loadGlobalConfig requires an explicit filePath");
   return normalizeKnownConfigKeys(JSON.parse(await readFile(targetPath, "utf8")));
 }

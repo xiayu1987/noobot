@@ -20,10 +20,7 @@ test("super-user: configured super user id alone does not grant super user", () 
     resolveConfiguredSuperUserId({ superAdmin: { userId: configuredUserId } }),
     configuredUserId,
   );
-  assert.equal(
-    resolveConfiguredSuperUserId({ super_admin: { user_id: configuredUserId } }),
-    configuredUserId,
-  );
+  assert.equal(resolveConfiguredSuperUserId({ super_admin: { user_id: configuredUserId } }), "");
   assert.equal(
     isSuperUserRuntime({
       userId: configuredUserId,

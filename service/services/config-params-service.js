@@ -15,8 +15,7 @@ import {
   collectConfigTemplateKeys as scanConfigTemplateKeys,
   normalizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
-
-const CONFIG_PARAMS_FILE_NAME = "config-params.json";
+import { WORKSPACE_LAYOUT, WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
 
 export function createConfigParamsService({
   workspaceRootPath,
@@ -25,12 +24,12 @@ export function createConfigParamsService({
   runtimeEventsConfig,
 } = {}) {
   function workspaceConfigParamsFilePath() {
-    return path.join(workspaceRootPath(), CONFIG_PARAMS_FILE_NAME);
+    return path.join(workspaceRootPath(), WORKSPACE_ROOT_LAYOUT.CONFIG_PARAMS_FILE);
   }
 
   function userConfigParamsFilePath(userId = "") {
     const normalizedUserId = String(userId || "").trim();
-    return path.join(workspaceRootPath(), normalizedUserId, CONFIG_PARAMS_FILE_NAME);
+    return path.join(workspaceRootPath(), normalizedUserId, WORKSPACE_LAYOUT.CONFIG_PARAMS_FILE);
   }
 
   function normalizeConfigParams(input = {}) {
@@ -130,13 +129,9 @@ export function createConfigParamsService({
   }
 
   async function collectConfigTemplateKeys() {
-    const globalConfigJson = typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
-    const templateBasePath =
-      typeof templateRootPath === "function"
-        ? templateRootPath()
-        : path.resolve(process.cwd(), "../user-template/default-user");
+    const globalConfigJson = getGlobalConfigRaw();
     const templateConfigJson = await readConfigJsonIfExists(
-      path.join(templateBasePath, "config.json"),
+      path.join(templateRootPath(), WORKSPACE_LAYOUT.CONFIG_FILE),
     );
     return scanConfigTemplateKeys(globalConfigJson, templateConfigJson);
   }
@@ -144,8 +139,12 @@ export function createConfigParamsService({
   async function collectUserConfigTemplateKeys(userId = "") {
     const normalizedUserId = String(userId || "").trim();
     if (!normalizedUserId) return [];
-    const userConfigFilePath = path.join(workspaceRootPath(), normalizedUserId, "config.json");
-    const globalConfigJson = typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
+    const userConfigFilePath = path.join(
+      workspaceRootPath(),
+      normalizedUserId,
+      WORKSPACE_LAYOUT.CONFIG_FILE,
+    );
+    const globalConfigJson = getGlobalConfigRaw();
     const userConfigJson = await readConfigJsonIfExists(userConfigFilePath);
     return scanConfigTemplateKeys(globalConfigJson, userConfigJson);
   }

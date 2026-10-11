@@ -27,13 +27,11 @@ const {
   releaseConnectors,
 } = await createHeadlessRuntime({ argv: process.argv, cwd: process.cwd() });
 
-const desktopFrontendRoot = String(
-  startupContext?.paths?.frontendRoot ||
-    process.env.NOOBOT_DESKTOP_FRONTEND_ROOT ||
-    path.resolve(process.cwd(), "../frontend"),
-).trim();
+const desktopFrontendRoot = startupContext.paths.frontendRoot;
 const shouldServeDesktopFrontend =
-  process.env.NOOBOT_DESKTOP === "1" && fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
+  process.env.NOOBOT_DESKTOP === "1" &&
+  Boolean(desktopFrontendRoot) &&
+  fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
 
 const {
   resolveRequestLocale,

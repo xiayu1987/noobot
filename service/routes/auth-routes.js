@@ -202,7 +202,7 @@ export function registerAuthRoutes(
     requireSuperAdmin,
     withJsonError(
       async (req, res) => {
-        const payload = await readWorkspaceUsersConfig({ createIfMissing: true });
+        const payload = await readWorkspaceUsersConfig();
         res.json({ ok: true, ...payload });
       },
       { fallbackErrorKey: "common.readUsersFailed", translateText },
@@ -232,7 +232,7 @@ export function registerAuthRoutes(
             }),
           );
         }
-        const current = await readWorkspaceUsersConfig({ createIfMissing: true });
+        const current = await readWorkspaceUsersConfig();
         const currentByUserId = new Map(current.users.map((item) => [item.userId, item]));
         const rotations = normalized.users.filter((item) => {
           const previous = currentByUserId.get(item.userId);

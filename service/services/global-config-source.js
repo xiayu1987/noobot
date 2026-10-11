@@ -12,9 +12,7 @@ export function resolveServiceGlobalConfigPath({
   env = process.env,
 } = {}) {
   const explicitPath = String(filePath || "").trim();
-  const envPath =
-    String(env?.AGENT_GLOBAL_CONFIG_PATH || "").trim() ||
-    String(env?.NOOBOT_GLOBAL_CONFIG_PATH || "").trim();
+  const envPath = String(env?.NOOBOT_GLOBAL_CONFIG_PATH || "").trim();
   const targetPath = explicitPath || envPath || "config/global.config.json";
   return path.resolve(cwd, targetPath);
 }

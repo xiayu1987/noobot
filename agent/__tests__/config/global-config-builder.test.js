@@ -8,11 +8,14 @@ import assert from "node:assert/strict";
 
 import { createGlobalConfigBuilder } from "../../src/config/core/global-config-builder.js";
 
+function memorySource(loadRawConfig) {
+  return { name: "memory-source", loadRawConfig };
+}
+
 test("createGlobalConfigBuilder: 支持 source + migrations + validators", async () => {
   let sourceCalled = 0;
   const builder = createGlobalConfigBuilder({
-    sourceName: "memory-source",
-    source: async () => {
+    source: memorySource(async () => {
       sourceCalled += 1;
       return {
         workspaceRoot: "/tmp/workspace",
@@ -20,7 +23,7 @@ test("createGlobalConfigBuilder: 支持 source + migrations + validators", async
           apiKey: "${API_KEY}",
         },
       };
-    },
+    }),
     migrations: [
       {
         name: "set-default-provider",
@@ -54,12 +57,12 @@ test("createGlobalConfigBuilder: 支持 source + migrations + validators", async
 
 test("createGlobalConfigBuilder: configParams 应优先于环境变量，环境变量仅作回退", async () => {
   const builder = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       provider: {
         apiKey: "${API_KEY}",
         baseUrl: "${BASE_URL}",
       },
-    }),
+    })),
   });
 
   const built = await builder.build({
@@ -77,10 +80,10 @@ test("createGlobalConfigBuilder: configParams 应优先于环境变量，环境�
 test("createGlobalConfigBuilder: loadRawConfig(reload=false) 使用缓存副本", async () => {
   let sourceCalled = 0;
   const builder = createGlobalConfigBuilder({
-    source: async () => {
+    source: memorySource(async () => {
       sourceCalled += 1;
       return { workspaceRoot: "/tmp/workspace" };
-    },
+    }),
   });
 
   const first = await builder.loadRawConfig({ reload: true });
@@ -93,7 +96,7 @@ test("createGlobalConfigBuilder: loadRawConfig(reload=false) 使用缓存副本"
 
 test("createGlobalConfigBuilder: validator 返回 warning 与失败场景", async () => {
   const builderWithWarning = createGlobalConfigBuilder({
-    source: async () => ({ workspaceRoot: "/tmp/workspace" }),
+    source: memorySource(async () => ({ workspaceRoot: "/tmp/workspace" })),
     validators: [
       {
         name: "warning-only",
@@ -105,7 +108,7 @@ test("createGlobalConfigBuilder: validator 返回 warning 与失败场景", asyn
   assert.deepEqual(warningBuilt.metadata.warnings, ["config uses fallback defaults"]);
 
   const builderWithFailure = createGlobalConfigBuilder({
-    source: async () => ({ workspaceRoot: "" }),
+    source: memorySource(async () => ({ workspaceRoot: "" })),
     validators: [
       {
         name: "must-have-workspace-root",
@@ -128,10 +131,10 @@ test("createGlobalConfigBuilder: validator 返回 warning 与失败场景", asyn
 
 test("createGlobalConfigBuilder: source 原始 snake_case 配置应由 builder 统一规范化", async () => {
   const builder = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       workspace_root: "/tmp/workspace",
       default_provider: "openai",
-    }),
+    })),
     validators: [
       ({ resolvedConfig }) => ({
         ok: resolvedConfig.workspaceRoot === "/tmp/workspace",
@@ -146,12 +149,12 @@ test("createGlobalConfigBuilder: source 原始 snake_case 配置应由 builder �
 
 test("createGlobalConfigBuilder: 可信目录只由配置协议规范化并由路径协议校验", async () => {
   const valid = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       security: {
         trusted_directories: ["/srv/project"],
         path_policy: { roles: { super_admin: { host: { denied_roots: ["/private"] } } } },
       },
-    }),
+    })),
   });
   const built = await valid.build();
   assert.deepEqual(built.resolvedConfig.security.trustedDirectories, ["/srv/project"]);
@@ -160,33 +163,35 @@ test("createGlobalConfigBuilder: 可信目录只由配置协议规范化并由�
   ]);
 
   const relative = createGlobalConfigBuilder({
-    source: async () => ({ security: { trusted_directories: ["relative/path"] } }),
+    source: memorySource(async () => ({ security: { trusted_directories: ["relative/path"] } })),
   });
   await assert.rejects(() => relative.build(), /must be absolute/);
 
   const ambiguous = createGlobalConfigBuilder({
-    source: async () => ({ security: { trusted_directories: ["*", "/srv/project"] } }),
+    source: memorySource(async () => ({
+      security: { trusted_directories: ["*", "/srv/project"] },
+    })),
   });
   await assert.rejects(() => ambiguous.build(), /cannot be combined/);
 });
 
 test("createGlobalConfigBuilder: 错误安全配置��得被静默替换", async () => {
   const invalidSecurity = createGlobalConfigBuilder({
-    source: async () => ({ security: "disabled" }),
+    source: memorySource(async () => ({ security: "disabled" })),
   });
   await assert.rejects(() => invalidSecurity.build(), /security config must be an object/);
 
   const invalidPathPolicy = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       security: { path_policy: { capabilities: { "file.read": { host_requires_role: "any" } } } },
-    }),
+    })),
   });
   await assert.rejects(() => invalidPathPolicy.build(), /hostRequiresRole must be one of/);
 });
 
 test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化入口", async () => {
   const builder = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       providers: {
         main: {
           model: "gpt-5.5",
@@ -203,7 +208,7 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
           temperature: 0.3,
         },
       },
-    }),
+    })),
   });
 
   const built = await builder.build();
@@ -217,7 +222,7 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
 test("createGlobalConfigBuilder: provider 无需 format 也通过唯一 ModelSpec 入口规范化", async () => {
   const legacyAlias = ["GLM", "5", "1"].join("_");
   const builder = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       defaultProvider: "current",
       providers: {
         current: {
@@ -235,7 +240,7 @@ test("createGlobalConfigBuilder: provider 无需 format 也通过唯一 ModelSpe
           reasoning_effort_options: ["none", "low", "medium", "high"],
         },
       },
-    }),
+    })),
   });
 
   const built = await builder.build({
@@ -253,7 +258,7 @@ test("createGlobalConfigBuilder: provider 无需 format 也通过唯一 ModelSpe
 
 test("createGlobalConfigBuilder: custom provider facts do not resolve from the library by model", async () => {
   const builder = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       providers: {
         custom_gpt: {
           model: "gpt-5.5",
@@ -266,7 +271,7 @@ test("createGlobalConfigBuilder: custom provider facts do not resolve from the l
           reasoning_effort_parameter: "reasoning_effort",
         },
       },
-    }),
+    })),
   });
 
   const built = await builder.build();
@@ -280,7 +285,7 @@ test("createGlobalConfigBuilder: custom provider facts do not resolve from the l
 
 test("createGlobalConfigBuilder: derives protocol identities and removes providerId overrides", async () => {
   const builder = createGlobalConfigBuilder({
-    source: async () => ({
+    source: memorySource(async () => ({
       providers: {
         configured: {
           model: "gpt-4",
@@ -290,7 +295,7 @@ test("createGlobalConfigBuilder: derives protocol identities and removes provide
           adapterId: "untrusted-override",
         },
       },
-    }),
+    })),
   });
 
   const built = await builder.build();

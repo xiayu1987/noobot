@@ -7,7 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 import { mergeConfig } from "../../config/index.js";
-import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
+import { resolveModelSpecByName } from "../../models/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
@@ -34,21 +34,12 @@ function tWebSearch(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.web_search.${String(key || "").trim()}`, params);
 }
 
-function resolveSearchModelSpec({
-  modelName = "",
-  runtimeModel = "",
-  globalConfig = {},
-  userConfig = {},
-}) {
-  const preferredModelName = String(modelName || "").trim();
-  const currentRuntimeModel = String(runtimeModel || "").trim();
-  const resolvedModelName = preferredModelName || currentRuntimeModel;
-  const resolvedModelSpec = resolveModelSpecOrConfiguredDefault({
-    modelName: resolvedModelName,
-    globalConfig,
-    userConfig,
-  });
-  return { resolvedModelName, resolvedModelSpec };
+function resolveSearchModelSpec({ modelName, globalConfig, userConfig }) {
+  const alias = typeof modelName === "string" ? modelName.trim() : "";
+  if (!alias) throw new TypeError("tools.web_search.model_web_search.model is required");
+  const modelSpec = resolveModelSpecByName({ modelName: alias, globalConfig, userConfig });
+  if (!modelSpec) throw new TypeError(`web search model not found: ${alias}`);
+  return modelSpec;
 }
 
 const WEB_SEARCH_MODES = Object.freeze(Object.values(WEB_SEARCH_MODE));
@@ -57,7 +48,7 @@ function normalizeWebSearchMode(mode = "") {
   const normalizedMode = String(mode || "")
     .trim()
     .toLowerCase();
-  if (!normalizedMode) return WEB_SEARCH_MODE.MODEL_WEB_SEARCH;
+  if (!normalizedMode) throw new TypeError("tools.web_search.mode is required");
   if (!WEB_SEARCH_MODES.includes(normalizedMode)) {
     throw new TypeError(
       `unsupported web search mode: ${normalizedMode}; expected one of ${WEB_SEARCH_MODES.join(", ")}`,
@@ -72,9 +63,11 @@ function resolveWebSearchToolConfig(runtime = {}) {
 }
 
 function resolveModelWebSearchConfig(toolCfg = {}) {
-  return toolCfg?.model_web_search && typeof toolCfg.model_web_search === "object"
-    ? toolCfg.model_web_search
-    : {};
+  const config = toolCfg?.model_web_search;
+  if (!config || typeof config !== "object") {
+    throw new TypeError("tools.web_search.model_web_search is required");
+  }
+  return config;
 }
 
 function resolveSearchEngineConfig(toolCfg = {}) {
@@ -225,13 +218,11 @@ export function createWebSearchTool({ agentContext }) {
             );
           }
           const modelWebSearchCfg = resolveModelWebSearchConfig(toolCfg);
-          const { resolvedModelSpec: selectedModelSpec } = resolveSearchModelSpec({
-            modelName: modelWebSearchCfg?.model,
-            runtimeModel: runtime?.runtimeModel,
+          resolvedModelSpec = resolveSearchModelSpec({
+            modelName: modelWebSearchCfg.model,
             globalConfig,
             userConfig,
           });
-          resolvedModelSpec = selectedModelSpec;
           const modelPort = runtime?.modelPort;
           if (!modelPort || typeof modelPort.invoke !== "function") {
             throw new TypeError("web search requires runtime.modelPort");

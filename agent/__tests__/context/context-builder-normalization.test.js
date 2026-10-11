@@ -514,7 +514,7 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
 
 test("buildSystemRuntime derives isSuperUser from configured super user id", () => {
   const runtime = buildSystemRuntime({
-    globalConfig: { super_admin: { user_id: "super-root-user" } },
+    globalConfig: { superAdmin: { userId: "super-root-user" } },
     userId: "super-root-user",
     dialogProcessId: "dp-super",
   });
@@ -561,7 +561,7 @@ test("buildSystemRuntime defaults isSuperUser to false when config is missing", 
 
 test("buildSystemRuntime does not allow systemRuntimePatch to grant super user", () => {
   const runtime = buildSystemRuntime({
-    globalConfig: { super_admin: { user_id: "super-root-user" } },
+    globalConfig: { superAdmin: { userId: "super-root-user" } },
     userId: "regular-user",
     dialogProcessId: "dp-guard",
     runConfig: {

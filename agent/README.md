@@ -53,7 +53,7 @@ Provider configuration and request execution are not Agent adapters. `@noobot/mo
 
 ## Environment
 
-- `AGENT_GLOBAL_CONFIG_PATH` or `NOOBOT_GLOBAL_CONFIG_PATH`
+- `NOOBOT_GLOBAL_CONFIG_PATH`
 - `AGENT_SYSTEM_PROMPT_PATH`
 
 The workspace root is not an environment variable. It is resolved from the `workspace_root` global config field through `@noobot/path-resolver`.

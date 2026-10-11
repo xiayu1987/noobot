@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { createModelRequestExecutor } from "@noobot/model-runtime";
@@ -47,11 +45,8 @@ function parseArgs(argv = []) {
       "--model",
       "--prompt",
       "--tool",
-      "--config",
-      "--global-config",
-      "--globalConfigPath",
+      "--global-config-path",
       "--workspace-root",
-      "--workspaceRoot",
     ].includes(arg);
     if (!hasValueFlag) continue;
     const value = String(argv[argIndex + 1] || "").trim();
@@ -66,9 +61,9 @@ function parseArgs(argv = []) {
           .map((item) => item.trim())
           .filter(Boolean),
       );
-    } else if (arg === "--config" || arg === "--global-config" || arg === "--globalConfigPath") {
+    } else if (arg === "--global-config-path") {
       out.globalConfigPath = value;
-    } else if (arg === "--workspace-root" || arg === "--workspaceRoot") {
+    } else if (arg === "--workspace-root") {
       out.workspaceRoot = value;
     }
     argIndex += 1;
@@ -107,39 +102,23 @@ async function assertToolCallMatchesSchema(tool, call) {
 }
 
 function resolveScriptPaths({ globalConfigPath = "", workspaceRoot = "" } = {}) {
-  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-  const agentRoot = path.resolve(scriptDir, "..");
-  const repoRoot = path.resolve(agentRoot, "..");
-
-  const defaultWorkspaceRoot = path.resolve(repoRoot, "workspace");
-  const resolvedWorkspaceRoot = String(workspaceRoot || "").trim()
-    ? path.resolve(process.cwd(), String(workspaceRoot || "").trim())
-    : defaultWorkspaceRoot;
-
-  const candidates = [];
-  if (String(globalConfigPath || "").trim()) {
-    candidates.push(path.resolve(process.cwd(), String(globalConfigPath || "").trim()));
-  } else {
-    candidates.push(path.resolve(process.cwd(), "config/global.config.json"));
-    candidates.push(path.resolve(agentRoot, "config/global.config.json"));
-    candidates.push(path.resolve(repoRoot, "service/config/global.config.json"));
-  }
-  const resolvedGlobalConfigPath =
-    candidates.find((filePath) => existsSync(filePath)) || candidates[0];
-
+  if (!globalConfigPath) throw new TypeError("--global-config-path is required");
+  if (!workspaceRoot) throw new TypeError("--workspace-root is required");
   return {
-    resolvedWorkspaceRoot,
-    resolvedGlobalConfigPath,
+    resolvedWorkspaceRoot: path.resolve(process.cwd(), workspaceRoot),
+    resolvedGlobalConfigPath: path.resolve(process.cwd(), globalConfigPath),
   };
 }
 
-async function readJsonSafe(filePath = "", fallback = {}) {
+async function readOptionalJson(filePath) {
+  let raw;
   try {
-    const raw = await readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
+    raw = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return {};
+    throw error;
   }
+  return JSON.parse(raw);
 }
 
 function dedupeToolsByName(tools = []) {
@@ -272,17 +251,14 @@ async function main() {
     workspaceRoot: args.workspaceRoot,
   });
   const rawGlobalConfig = await loadGlobalConfig(resolvedGlobalConfigPath);
-  const rawUserConfig = await readJsonSafe(
+  const rawUserConfig = await readOptionalJson(
     path.join(resolvedWorkspaceRoot, args.userId, "config.json"),
-    {},
   );
-  const workspaceConfigParamsRaw = await readJsonSafe(
+  const workspaceConfigParamsRaw = await readOptionalJson(
     path.join(resolvedWorkspaceRoot, "config-params.json"),
-    {},
   );
-  const userConfigParamsRaw = await readJsonSafe(
+  const userConfigParamsRaw = await readOptionalJson(
     path.join(resolvedWorkspaceRoot, args.userId, "config-params.json"),
-    {},
   );
   const workspaceConfigParams = normalizeConfigParamsDocument(workspaceConfigParamsRaw).values;
   const userConfigParams = normalizeConfigParamsDocument(userConfigParamsRaw).values;

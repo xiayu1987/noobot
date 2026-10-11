@@ -17,8 +17,10 @@ test("web_search: model_web_search 模式只通过 canonical ModelPort 发起操
   const abortController = new AbortController();
   const runtime = {
     abortSignal: abortController.signal,
-    runtimeModel: "search-model",
     globalConfig: {
+      tools: {
+        web_search: { mode: "model_web_search", model_web_search: { model: "search-model" } },
+      },
       providers: {
         "search-model": {
           enabled: true,
@@ -63,8 +65,10 @@ test("web_search: model_web_search 模式只通过 canonical ModelPort 发起操
 
 test("web_search: Claude 家族透传 Anthropic Messages 执行协议身份", async () => {
   const runtime = {
-    runtimeModel: "claude_opus_5",
     globalConfig: {
+      tools: {
+        web_search: { mode: "model_web_search", model_web_search: { model: "claude_opus_5" } },
+      },
       providers: {
         claude_opus_5: {
           enabled: true,
@@ -191,4 +195,31 @@ test("web_search: search_engine 模式缺少 endpoints.search.url 时报错", as
       }),
     /endpoints\.search\.url|搜索引擎模式需要配置/,
   );
+});
+
+test("web_search: model_web_search 未显式声明模型时失败，不回退到运行时模型", async () => {
+  let invoked = false;
+  const runtime = {
+    runtimeModel: "search-model",
+    globalConfig: {
+      tools: { web_search: { mode: "model_web_search", model_web_search: {} } },
+      providers: {
+        "search-model": { enabled: true, api_key: "k", model: "gpt-5.5", providerId: "openai" },
+      },
+    },
+    userConfig: {},
+    modelPort: {
+      async invoke() {
+        invoked = true;
+        return {};
+      },
+    },
+  };
+  const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
+  const output = await tool.invoke({ query: "q" }).then(
+    (value) => String(value),
+    (error) => String(error?.message || error),
+  );
+  assert.equal(invoked, false);
+  assert.match(output, /model_web_search\.model is required/);
 });

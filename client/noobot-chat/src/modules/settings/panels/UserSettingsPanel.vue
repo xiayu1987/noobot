@@ -82,7 +82,7 @@ function normalizeUsers(list = []) {
     .map((item) => ({
       userId: String(item?.userId || "").trim(),
       connectCode: String(item?.connectCode || "").trim(),
-      allowIDE: item?.allowIDE === true || item?.allowIde === true || item?.allow_ide === true,
+      allowIDE: item?.allowIDE === true,
     }))
     .filter((item) => item.userId || item.connectCode);
 }

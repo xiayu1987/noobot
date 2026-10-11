@@ -17,7 +17,7 @@ function resolveRuntimeFromAgentContext(agentContext = {}) {
 
 export function resolveConfiguredSuperUserId(globalConfig = {}) {
   const config = asObject(globalConfig) || {};
-  return String(config?.superAdmin?.userId || config?.super_admin?.user_id || "").trim();
+  return String(config?.superAdmin?.userId || "").trim();
 }
 
 export function isConfiguredSuperUser({ globalConfig = {}, userId = "" } = {}) {

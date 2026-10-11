@@ -55,14 +55,12 @@ export async function createHeadlessRuntime({
     category: RUNTIME_EVENT_CATEGORIES.CONFIG,
     level: "info",
     event: "service.startup.context.loaded",
-    workspaceRoot: startupContext?.workspaceRoot,
     data: safeStartupContextForLog(startupContext),
   });
 
   const globalConfigSource = createServiceGlobalConfigSource({ cwd });
   const globalConfigBuilder = createGlobalConfigBuilder({
     source: globalConfigSource,
-    sourceName: globalConfigSource.name,
   });
   let connectorRuntime = null;
   const connectorSecretVault = new ConnectorSecretVault();
