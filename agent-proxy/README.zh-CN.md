@@ -17,7 +17,8 @@ Noobot Agent Proxy 是客户端与 Noobot Service 之间的 HTTP/WebSocket 网�
 - Agent 命令使用 `@noobot/agent-transport-protocol`；发送、重发、继续、停止、结束、交互响应和快照/查询命令按命令类型路由。
 - 后端协议事件经过校验和排序后广播，不改变业务身份。
 - Turn 生命周期事件使用回执和有限次数重投。
-- 重连请求携带 `currentSessionId`、`requestId` 和 `knownLifecycleSequenceMap`。
+- 重连请求携带 `currentSessionId`、`currentParentSessionId`、`currentParentDialogProcessId`、`requestId` 和 `knownLifecycleSequenceMap`。子会话必须显式声明两个 parent 字段，proxy 不做推导。
+- 请求方用户只来自鉴权后的 socket。携带 `userId` 的重连请求以 `unsupported_reconnect_user_identity` 拒绝；未鉴权 socket 不会建立 channel。客户端与 proxy 需同步发布。
 - 重连按 Session 返回一个权威 `replayBatch`，其中可包含 Turn 快照、快照后的连续生命周期事件以及完整的未完成 `pendingInteractions` 事件。
 - 消息游标和载荷片段不是重连事实源；重连只接受上述生命周期序列映射。
 
@@ -29,24 +30,25 @@ Noobot Agent Proxy 是客户端与 Noobot Service 之间的 HTTP/WebSocket 网�
 
 核心配置：
 
-| 环境变量                                           | 默认值                         | 用途                                 |
-| -------------------------------------------------- | ------------------------------ | ------------------------------------ |
-| `AGENT_PROXY_PORT`                                 | `10062`                        | 监听端口                             |
-| `AGENT_PROXY_HOST`                                 | `0.0.0.0`                      | 监听地址                             |
-| `AGENT_PROXY_UPSTREAM_WS_URL`                      | `ws://127.0.0.1:10061/chat/ws` | Service WebSocket 地址               |
-| `AGENT_PROXY_UPSTREAM_HTTP_BASE`                   | `http://127.0.0.1:10061`       | Service HTTP 基础地址                |
-| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS`             | `60000`                        | 上游 HTTP 超时                       |
-| `AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS`        | 共享时间阈值                   | 重连快照超时                         |
-| `AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS`    | 共享时间阈值                   | 生命周期回执超时                     |
-| `AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS` | 共享轮次阈值                   | 生命周期事件最大投递次数             |
-| `AGENT_PROXY_WS_MAX_PAYLOAD_BYTES`                 | 共享长度阈值                   | WebSocket 最大输入载荷               |
-| `AGENT_PROXY_WS_MAX_BUFFERED_BYTES`                | 共享长度阈值                   | WebSocket 最大缓冲输出               |
-| `AGENT_PROXY_TRUSTED_ORIGINS`                      | 空                             | 逗号分隔的可信 Origin；空表示不限制  |
-| `AGENT_PROXY_TRUSTED_IPS`                          | 空                             | 逗号分隔的可信 IP 模式；空表示不限制 |
-| `AGENT_PROXY_CONNECT_TOKEN`                        | 空                             | 配置后用于保护连接拦截接口           |
-| `AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED`              | `true`                         | 开启 HTTP 限流                       |
-| `AGENT_PROXY_WS_RATE_LIMIT_ENABLED`                | `true`                         | 开启 WebSocket 升级限流              |
-| `AGENT_PROXY_FRONTEND_ROOT`                        | 空                             | 可选的前端构建目录                   |
+| 环境变量                                           | 默认值                         | 用途                                                                                                                                                                                            |
+| -------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_PROXY_PORT`                                 | `10062`                        | 监听端口                                                                                                                                                                                        |
+| `AGENT_PROXY_HOST`                                 | `0.0.0.0`                      | 监听地址                                                                                                                                                                                        |
+| `AGENT_PROXY_UPSTREAM_WS_URL`                      | `ws://127.0.0.1:10061/chat/ws` | Service WebSocket 地址                                                                                                                                                                          |
+| `AGENT_PROXY_UPSTREAM_HTTP_BASE`                   | `http://127.0.0.1:10061`       | Service HTTP 基础地址                                                                                                                                                                           |
+| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS`             | `60000`                        | 上游 HTTP 超时                                                                                                                                                                                  |
+| `AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS`        | 共享时间阈值                   | 重连快照超时                                                                                                                                                                                    |
+| `AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS`    | 共享时间阈值                   | 生命周期回执超时                                                                                                                                                                                |
+| `AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS` | 共享轮次阈值                   | 生命周期事件最大投递次数                                                                                                                                                                        |
+| `AGENT_PROXY_WS_MAX_PAYLOAD_BYTES`                 | 共享长度阈值                   | WebSocket 最大输入载荷                                                                                                                                                                          |
+| `AGENT_PROXY_WS_MAX_BUFFERED_BYTES`                | 共享长度阈值                   | WebSocket 最大缓冲输出                                                                                                                                                                          |
+| `AGENT_PROXY_TRUSTED_ORIGINS`                      | 空                             | 逗号分隔的可信 Origin；空表示不限制                                                                                                                                                             |
+| `AGENT_PROXY_TRUSTED_IPS`                          | 空                             | 逗号分隔的可信 IP 模式；空表示不限制                                                                                                                                                            |
+| `AGENT_PROXY_TRUSTED_PROXIES`                      | 空                             | 逗号分隔的可信代理 IP 模式，只采信这些直连方的 `X-Forwarded-For`；空表示忽略该头。客户端 IP 取从右侧起第一个非可信代理的地址。`ecosystem.noobot.config.cjs` 为本机 Caddy 配置了 `127.0.0.1,::1` |
+| `AGENT_PROXY_CONNECT_TOKEN`                        | 空                             | 配置后用于保护连接拦截接口                                                                                                                                                                      |
+| `AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED`              | `true`                         | 开启 HTTP 限流                                                                                                                                                                                  |
+| `AGENT_PROXY_WS_RATE_LIMIT_ENABLED`                | `true`                         | 开启 WebSocket 升级限流                                                                                                                                                                         |
+| `AGENT_PROXY_FRONTEND_ROOT`                        | 空                             | 可选的前端构建目录                                                                                                                                                                              |
 
 部署文档不要复制完整配置 schema。新增或修改配置时，以 `src/shared/config.js` 为准。
 

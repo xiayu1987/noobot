@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   TURN_EVENT,
   TURN_PHASE,
+  TURN_RECOVERY_ACTION,
   TURN_STATE,
   createTurnLifecycleEnvelope,
   createTurnLifecycleSnapshot,
@@ -114,6 +115,46 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
       },
     }).errors,
     ["replaced_turn_still_materialized"],
+  );
+});
+
+test("snapshot recovery is an explicit read-side assessment bound to the active turn", () => {
+  const base = {
+    commandId: "snapshot-recovery",
+    sessionId: "session-recovery",
+    sequence: 1,
+  };
+  const idle = createTurnLifecycleSnapshot(base);
+  assert.equal(idle.recovery, TURN_RECOVERY_ACTION.NONE);
+  assert.deepEqual(validateTurnLifecycleSnapshot(idle), { valid: true, errors: [] });
+
+  const activeTurn = {
+    turnScopeId: "turn-recovery",
+    messageId: "message-recovery",
+    presentationMessageId: "presentation-recovery",
+    state: TURN_STATE.PROCESSING,
+    revision: 1,
+    sequence: 1,
+    startedAt: "2026-07-18T00:00:00.000Z",
+  };
+  const orphan = createTurnLifecycleSnapshot({
+    ...base,
+    activeTurnScopeId: activeTurn.turnScopeId,
+    activeTurn,
+    recovery: TURN_RECOVERY_ACTION.ORPHAN,
+  });
+  assert.equal(orphan.recovery, TURN_RECOVERY_ACTION.ORPHAN);
+  assert.deepEqual(validateTurnLifecycleSnapshot(orphan), { valid: true, errors: [] });
+
+  assert.deepEqual(validateTurnLifecycleSnapshot({ ...idle, recovery: undefined }).errors, [
+    "invalid_snapshot_recovery",
+  ]);
+  assert.deepEqual(validateTurnLifecycleSnapshot({ ...idle, recovery: "repair" }).errors, [
+    "invalid_snapshot_recovery",
+  ]);
+  assert.deepEqual(
+    validateTurnLifecycleSnapshot({ ...idle, recovery: TURN_RECOVERY_ACTION.FINALIZE }).errors,
+    ["recovery_without_active_turn"],
   );
 });
 

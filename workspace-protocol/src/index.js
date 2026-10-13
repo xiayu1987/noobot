@@ -7,3 +7,4 @@ export * from "./layout.js";
 export * from "./sections.js";
 export * from "./asset-sync.js";
 export * from "./layout-migration.js";
+export * from "./session-tree.js";

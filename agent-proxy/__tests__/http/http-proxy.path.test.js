@@ -70,7 +70,10 @@ async function withUpstreamServer(handler, run) {
 }
 
 test("normalizeProxyPathname strips /api prefix before forwarding to service", () => {
-  assert.equal(normalizeProxyPathname("/api/internal/session/u/s/messages/replace-turn"), "/internal/session/u/s/messages/replace-turn");
+  assert.equal(
+    normalizeProxyPathname("/api/internal/session/u/s/messages/replace-turn"),
+    "/internal/session/u/s/messages/replace-turn",
+  );
   assert.equal(normalizeProxyPathname("/api/internal/connect"), "/internal/connect");
   assert.equal(normalizeProxyPathname("/api"), "/");
   assert.equal(normalizeProxyPathname("/internal/session/u/s"), "/internal/session/u/s");
@@ -78,29 +81,32 @@ test("normalizeProxyPathname strips /api prefix before forwarding to service", (
 
 test("proxyHttpRequest forwards /api/internal replace-turn to upstream /internal route", async () => {
   const seen = {};
-  await withUpstreamServer((request, response) => {
-    seen.method = request.method;
-    seen.url = request.url;
-    const chunks = [];
-    request.on("data", (chunk) => chunks.push(chunk));
-    request.on("end", () => {
-      seen.body = Buffer.concat(chunks).toString("utf8");
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true }));
-    });
-  }, async () => {
-    const request = createMockRequest({
-      method: "POST",
-      url: "/api/internal/session/admin/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn?trace=1",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ anchor: { turnId: "turn-1" }, newContent: "hello" }),
-    });
-    const response = createMockResponse();
+  await withUpstreamServer(
+    (request, response) => {
+      seen.method = request.method;
+      seen.url = request.url;
+      const chunks = [];
+      request.on("data", (chunk) => chunks.push(chunk));
+      request.on("end", () => {
+        seen.body = Buffer.concat(chunks).toString("utf8");
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+      });
+    },
+    async () => {
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/internal/session/admin/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn?trace=1",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ anchor: { turnId: "turn-1" }, newContent: "hello" }),
+      });
+      const response = createMockResponse();
 
-    proxyHttpRequest(request, response);
+      proxyHttpRequest(request, response);
 
-    await new Promise((resolve) => response.on("finish", resolve));
-  });
+      await new Promise((resolve) => response.on("finish", resolve));
+    },
+  );
 
   assert.equal(seen.method, "POST");
   assert.equal(
@@ -116,9 +122,8 @@ test("proxyHttpRequest forwards /api/internal replace-turn to upstream /internal
 test("proxyHttpRequest writes sanitized system event for invalid request URL", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "agent-proxy-http-system-events-"));
   const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
-  const previousDefaultWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-  delete process.env.NOOBOT_WORKSPACE_ROOT;
-  process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = workspaceRoot;
+  const previousDefaultWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
+  process.env.NOOBOT_WORKSPACE_ROOT = workspaceRoot;
 
   try {
     const request = createMockRequest({
@@ -148,7 +153,11 @@ test("proxyHttpRequest writes sanitized system event for invalid request URL", a
     );
     await waitForFile(eventFile);
     const raw = await readFile(eventFile, "utf8");
-    const records = raw.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const records = raw
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
     const record = records.find((item) => item.event === "agentProxy.http.invalidRequestUrl");
 
     assert.ok(record);
@@ -171,8 +180,8 @@ test("proxyHttpRequest writes sanitized system event for invalid request URL", a
   } finally {
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
-    if (previousDefaultWorkspaceRoot === undefined) delete process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-    else process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
+    if (previousDefaultWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
+    else process.env.NOOBOT_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
@@ -180,15 +189,16 @@ test("proxyHttpRequest writes sanitized system event for invalid request URL", a
 test("proxyHttpRequest writes sanitized system event for upstream request failure", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "agent-proxy-http-upstream-events-"));
   const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
-  const previousDefaultWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
+  const previousDefaultWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
   const previousBase = config.upstreamHttpBase;
-  delete process.env.NOOBOT_WORKSPACE_ROOT;
-  process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = workspaceRoot;
+  process.env.NOOBOT_WORKSPACE_ROOT = workspaceRoot;
 
   const server = http.createServer((_request, response) => response.end("unused"));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
   config.upstreamHttpBase = `http://127.0.0.1:${port}`;
 
   try {
@@ -220,7 +230,11 @@ test("proxyHttpRequest writes sanitized system event for upstream request failur
     );
     await waitForFile(eventFile);
     const raw = await readFile(eventFile, "utf8");
-    const records = raw.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const records = raw
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
     const record = records.find((item) => item.event === "agentProxy.http.upstreamRequest.failed");
 
     assert.ok(record);
@@ -246,8 +260,8 @@ test("proxyHttpRequest writes sanitized system event for upstream request failur
     config.upstreamHttpBase = previousBase;
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
-    if (previousDefaultWorkspaceRoot === undefined) delete process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-    else process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
+    if (previousDefaultWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
+    else process.env.NOOBOT_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });

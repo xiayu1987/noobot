@@ -29,7 +29,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   let capturedAgentContext = null;
 
   const session = {
-    async upsertSessionTree() {},
     async getSessionBundle() {
       return { exists: false, session: { messages: [] } };
     },
@@ -383,7 +382,6 @@ test("continue mode closed-loop: should build continue context and persist paren
   let capturedRunConfig = null;
 
   const session = {
-    async upsertSessionTree() {},
     async getSessionBundle() {
       return {
         exists: true,

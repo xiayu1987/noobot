@@ -9,6 +9,17 @@ import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
 
+function requireBasePath(basePath) {
+  const normalizedBasePath = String(basePath ?? "").trim();
+  if (!normalizedBasePath) {
+    throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
+      code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,
+      details: { basePath: normalizedBasePath },
+    });
+  }
+  return normalizedBasePath;
+}
+
 export class PathResolver {
   constructor(globalConfig = {}) {
     this.globalConfig = globalConfig || {};
@@ -26,19 +37,27 @@ export class PathResolver {
     return path.resolve(workspaceRoot, normalizedUserId);
   }
 
-  sessionRoot(basePath = "") {
-    return path.join(String(basePath || ""), WORKSPACE_LAYOUT.SESSION_DIR);
+  sessionRoot(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_DIR);
   }
 
-  sessionTreeFile(basePath = "") {
-    return path.join(String(basePath || ""), WORKSPACE_LAYOUT.SESSION_TREE_FILE);
+  sessionTreeFile(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_TREE_FILE);
   }
 
-  sessionsSummaryFile(basePath = "") {
-    return path.join(this.sessionRoot(basePath), "sessions.json");
+  sessionsSummaryFile(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_SUMMARY_FILE);
   }
 
-  deletedSessionMarkerFile(basePath = "") {
-    return path.join(this.sessionRoot(basePath), ".deleted-sessions.json");
+  sessionTombstoneFile(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE);
+  }
+
+  sessionLifecycleRecordsDir(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR);
+  }
+
+  sessionLifecycleLocksDir(basePath) {
+    return path.join(requireBasePath(basePath), WORKSPACE_LAYOUT.SESSION_LIFECYCLE_LOCKS_DIR);
   }
 }

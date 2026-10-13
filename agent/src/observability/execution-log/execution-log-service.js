@@ -8,10 +8,9 @@ import { shouldRecordRuntimeExecutionLog } from "@noobot/shared/runtime-events-c
 import { readRepositoryParentSessionId } from "../../session/services/session-scope-resolution.js";
 
 export class ExecutionLogService {
-  constructor({ executionRepo, sessionRepo, runtimeEventsConfig = {} } = {}) {
+  constructor({ executionRepo, sessionRepo } = {}) {
     this.executionRepo = executionRepo;
     this.sessionRepo = sessionRepo;
-    this.runtimeEventsConfig = runtimeEventsConfig;
   }
 
   async _resolveParentSessionId(
@@ -70,9 +69,7 @@ export class ExecutionLogService {
     parentSessionId = "",
     persistenceContext = null,
   }) {
-    if (
-      !shouldRecordRuntimeExecutionLog({ event, category, type, data }, this.runtimeEventsConfig)
-    ) {
+    if (!shouldRecordRuntimeExecutionLog({ event, category, type, data })) {
       return { appended: false, skipped: true, reason: "runtime_event_policy" };
     }
     const resolvedParentSessionId = await this._resolveParentSessionId(

@@ -5,8 +5,9 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { reportRuntimeEventFailure } from "../failure-report.js";
 
-const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 1000;
 const DEFAULT_BATCH_FLUSH_MS = 50;
 const DEFAULT_BATCH_MAX_RECORDS = 100;
 const MAX_CACHED_FILES = 512;
@@ -101,12 +102,6 @@ async function ensureDirectory(directory) {
   }
 }
 
-function resolveCleanupIntervalMs(options = {}) {
-  const value = Number(options.cleanupIntervalMs);
-  if (!Number.isFinite(value)) return DEFAULT_CLEANUP_INTERVAL_MS;
-  return Math.max(0, Math.floor(value));
-}
-
 function shouldCleanup(file, rotatedFile, options = {}) {
   if (
     !resolveNonNegativeInteger(options.retentionDays) &&
@@ -114,9 +109,8 @@ function shouldCleanup(file, rotatedFile, options = {}) {
   )
     return false;
   if (rotatedFile) return true;
-  const interval = resolveCleanupIntervalMs(options);
   const last = cleanupTimes.get(file) || 0;
-  return interval === 0 || Date.now() - last >= interval;
+  return Date.now() - last >= CLEANUP_INTERVAL_MS;
 }
 
 function enqueueAppend(file, operation) {
@@ -133,8 +127,7 @@ function sameBatchOptions(left = {}, right = {}) {
     resolveMaxFileBytes(left) === resolveMaxFileBytes(right) &&
     resolveNonNegativeInteger(left.retentionDays) ===
       resolveNonNegativeInteger(right.retentionDays) &&
-    resolveNonNegativeInteger(left.maxArchives) === resolveNonNegativeInteger(right.maxArchives) &&
-    resolveCleanupIntervalMs(left) === resolveCleanupIntervalMs(right)
+    resolveNonNegativeInteger(left.maxArchives) === resolveNonNegativeInteger(right.maxArchives)
   );
 }
 
@@ -157,12 +150,15 @@ async function appendLineBatch(file, entries = []) {
     throw error;
   }
   let cleanup = { deletedFiles: [] };
+  let cleanupError = false;
   if (shouldCleanup(file, rotatedFile, options)) {
     try {
       cleanup = await cleanupArchives(file, options);
       cacheSet(cleanupTimes, file, Date.now());
-    } catch {
-      cleanup = { deletedFiles: [], error: true };
+    } catch (error) {
+      cleanup = { deletedFiles: [] };
+      cleanupError = true;
+      reportRuntimeEventFailure("archive cleanup failed", { file }, error);
     }
   }
   const result = {
@@ -170,7 +166,7 @@ async function appendLineBatch(file, entries = []) {
     file,
     rotatedFile,
     deletedFiles: cleanup.deletedFiles,
-    cleanupError: Boolean(cleanup.error),
+    cleanupError,
   };
   for (const entry of entries) entry.resolve(result);
 }

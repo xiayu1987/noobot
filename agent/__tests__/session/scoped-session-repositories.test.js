@@ -15,6 +15,7 @@ import {
 } from "@noobot/session-protocol/execution-report";
 
 import { FileSystemSessionRepository } from "../../src/session/repositories/file-system-session-repository.js";
+import { FileSystemSessionTreeRepository } from "../../src/session/repositories/file-system-session-tree-repository.js";
 import { resolveSessionArtifactMutationLock } from "../../src/session/session-artifact-files.js";
 import { FileSystemTaskRepository } from "../../src/session/repositories/file-system-task-repository.js";
 import { FileSystemExecutionRepository } from "../../src/session/repositories/file-system-execution-repository.js";
@@ -37,16 +38,16 @@ import {
   readExecutionLogs,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
+import { PathResolver } from "../../src/session/path-resolver.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 function buildHarness() {
   let root;
-  const pathResolver = {
-    resolveBasePath: (userId) => path.join(root, userId),
-    sessionRoot: (basePath) => path.join(basePath, "runtime/session"),
-    sessionsSummaryFile: (basePath) => path.join(basePath, "runtime/session/sessions.json"),
-    deletedSessionMarkerFile: (basePath) =>
-      path.join(basePath, "runtime/session/.deleted-sessions.json"),
-  };
+  const pathResolver = new PathResolver({
+    get workspaceRoot() {
+      return root;
+    },
+  });
   const sessionPathResolver = {
     async resolveSessionScope(userId, sessionId, parentSessionId = "") {
       const sessionDir = path.join(
@@ -66,13 +67,15 @@ function buildHarness() {
   return {
     async setup() {
       root = await mkdtemp(path.join(os.tmpdir(), "noobot-scoped-session-"));
-      await import("node:fs/promises").then(({ mkdir }) =>
-        mkdir(path.join(root, "alice"), { recursive: true }),
-      );
+      await initializeUserWorkspace(root, "alice");
       const storageService = new StorageService({ pathResolver });
       const sessionRepo = new FileSystemSessionRepository({
         pathResolver,
         sessionPathResolver,
+        sessionTreeRepository: new FileSystemSessionTreeRepository({
+          pathResolver,
+          storageService,
+        }),
         storageService,
         normalizeMessages: normalizeMessagesEntity,
         normalizeSelectedConnectorIds,

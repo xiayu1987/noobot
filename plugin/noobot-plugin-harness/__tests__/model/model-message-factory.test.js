@@ -77,7 +77,10 @@ test("buildCapabilityModelMessages preserves a matched tool result", () => {
 
   assert.equal(output.length, 2);
   assert.equal(output[1].role, "assistant");
-  assert.equal(output[1].content, '{"ok":true}');
+  assert.equal(
+    output[1].content,
+    'Tool result [call_1] (matching tool result of the executed call above):\n{"ok":true}',
+  );
 });
 
 test("buildCapabilityModelMessages keeps regular messages unchanged", () => {
@@ -144,9 +147,12 @@ test("buildCapabilityModelMessages keeps one authoritative tool execution pair",
     ],
   });
   assert.equal(output[0].role, "user");
-  assert.match(output[0].content, /execute_script/);
+  assert.equal(output[0].content, 'Tool call [call_1]: execute_script({"command":"pwd"})');
   assert.equal(output[1].role, "assistant");
-  assert.equal(output[1].content, '{"ok":true}');
+  assert.equal(
+    output[1].content,
+    'Tool result [call_1] (matching tool result of the executed call above):\n{"ok":true}',
+  );
 });
 
 test("buildCapabilityModelMessages preserves provided agent messages without plugin-side filtering", () => {

@@ -16,6 +16,7 @@ export class FileSystemSessionRepository {
   constructor({
     pathResolver,
     sessionPathResolver,
+    sessionTreeRepository,
     storageService,
     normalizeMessages,
     now = () => new Date().toISOString(),
@@ -23,8 +24,12 @@ export class FileSystemSessionRepository {
     mutationLockStaleMs = 60000,
     mutationLockPollMs = 10,
   } = {}) {
+    if (!sessionTreeRepository) {
+      throw new TypeError("FileSystemSessionRepository requires sessionTreeRepository");
+    }
     this.pathResolver = pathResolver;
     this.sessionPathResolver = sessionPathResolver;
+    this.sessionTreeRepository = sessionTreeRepository;
     this.storageService = storageService;
     this.normalizeMessages = normalizeMessages;
     this.normalizeSelectedConnectorIds = normalizeSelectedConnectorIds;
@@ -37,7 +42,6 @@ export class FileSystemSessionRepository {
       staleMs: this.mutationLockStaleMs,
       pollMs: this.mutationLockPollMs,
     });
-    this._deletedSessionCache = new Map();
   }
 }
 

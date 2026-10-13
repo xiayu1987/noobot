@@ -185,9 +185,8 @@ function logSuccessfulTransport({
   }
 }
 
-function recordSendFailure({ sessionLogConfig, state, eventName, enrichedData, error }) {
+function recordSendFailure({ state, eventName, enrichedData, error }) {
   void recordServiceWebSocketSendFailure({
-    sessionLogConfig,
     eventName: text(eventName),
     userId: state.currentRunMeta?.userId || "",
     dialogProcessId: enrichedData.dialogProcessId,
@@ -244,9 +243,9 @@ function sendPacket(context, packet, eventContext) {
   });
 }
 
-export function createOutboundEventSender({ webSocket, state, logConnection, sessionLogConfig }) {
+export function createOutboundEventSender({ webSocket, state, logConnection }) {
   let sequence = 0;
-  const deliveryTimingEnabled = isSessionLogDebugTypeEnabled("delivery-timing", sessionLogConfig);
+  const deliveryTimingEnabled = isSessionLogDebugTypeEnabled("delivery-timing");
   return function sendEvent(eventName, data = {}, transportContext = {}) {
     const protocolEnvelope = getProtocolEnvelope(data);
     if (!validateOutboundProtocolEnvelope(protocolEnvelope, eventName, logConnection)) return false;
@@ -287,12 +286,12 @@ export function createOutboundEventSender({ webSocket, state, logConnection, ses
     };
     try {
       return sendPacket(
-        { webSocket, state, logConnection, sessionLogConfig, deliveryTimingEnabled },
+        { webSocket, state, logConnection, deliveryTimingEnabled },
         JSON.stringify({ event: eventName, data: enrichedData }),
         eventContext,
       );
     } catch (error) {
-      recordSendFailure({ sessionLogConfig, state, ...eventContext, error });
+      recordSendFailure({ state, ...eventContext, error });
       return false;
     }
   };

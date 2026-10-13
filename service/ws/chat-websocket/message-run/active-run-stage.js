@@ -14,13 +14,13 @@ import {
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 const text = (value) => String(value || "").trim();
 
 async function recordPluginDebug(context, command, run) {
-  await writeRoutedRuntimeEvent({
+  await writeRuntimeEvent({
     scope: "session",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -45,7 +45,6 @@ function scheduleTimeout(context, run, timeoutMs) {
   context.state.currentRunTimeoutTimer = setTimeout(() => {
     context.state.currentRunTimedOut = true;
     void recordServiceWebSocketLifecycle({
-      sessionLogConfig: context.sessionLogConfig,
       event: "service.websocket.run.timeout",
       userId: context.state.currentRunMeta?.userId || run.userId,
       sessionId: context.state.currentRunMeta?.sessionId || run.sessionId,

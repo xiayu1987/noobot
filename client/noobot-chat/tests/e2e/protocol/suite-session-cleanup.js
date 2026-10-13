@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { request as playwrightRequest } from "@playwright/test";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { readE2eCredentials } from "./fixtures/auth.fixture.js";
 import { admissionRetryDelayMs } from "./helpers/http-admission.js";
 import { workspaceRoot } from "./helpers/persistence-audit.js";
@@ -92,8 +93,85 @@ export async function registerSuiteSession(record) {
   await fs.writeFile(registryPath, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
 }
 
+function hasPatterns(value) {
+  return (Array.isArray(value) ? value : [value]).some(Boolean);
+}
+
+function isMatchAll(grep) {
+  const patterns = Array.isArray(grep) ? grep : [grep];
+  return patterns.length === 1 && patterns[0] instanceof RegExp && patterns[0].source === ".*";
+}
+
+async function listSpecFiles(dir, pattern) {
+  const files = [];
+  for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+    const target = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...(await listSpecFiles(target, pattern)));
+    else if (pattern.test(target)) files.push(target);
+  }
+  return files;
+}
+
+async function assertUnfilteredFullSuite(config, suite) {
+  const filtered =
+    !isMatchAll(config.grep) ||
+    hasPatterns(config.grepInvert) ||
+    Boolean(config.shard) ||
+    config.projects.some((project) => !isMatchAll(project.grep) || hasPatterns(project.grepInvert));
+  const selectedFiles = new Set(suite.allTests().map((test) => test.location.file));
+  for (const project of config.projects) {
+    if (!(project.testMatch instanceof RegExp)) {
+      throw new Error("NOOBOT_E2E_FULL_SUITE requires a RegExp testMatch");
+    }
+    const specFiles = await listSpecFiles(project.testDir, project.testMatch);
+    if (specFiles.length === 0 || specFiles.some((file) => !selectedFiles.has(file))) {
+      throw new Error("NOOBOT_E2E_FULL_SUITE runs must include every spec file");
+    }
+  }
+  if (filtered) {
+    throw new Error("NOOBOT_E2E_FULL_SUITE runs must not filter tests (grep/grepInvert/shard)");
+  }
+}
+
 export default class SuiteSessionCleanupReporter {
+  constructor({ failureEvidenceRoot } = {}) {
+    this.failureEvidenceRoot = String(failureEvidenceRoot || "").trim();
+    if (!path.isAbsolute(this.failureEvidenceRoot)) {
+      throw new Error("Suite Session cleanup requires an absolute failureEvidenceRoot");
+    }
+    this.outputDirs = [];
+  }
+
+  onBegin(config, suite) {
+    this.outputDirs = [...new Set(config.projects.map((project) => project.outputDir))];
+    this.fullSuiteCheck =
+      process.env.NOOBOT_E2E_FULL_SUITE === "1"
+        ? assertUnfilteredFullSuite(config, suite)
+        : Promise.resolve();
+    this.fullSuiteCheck.catch(() => {});
+  }
+
+  async preserveFailureEvidence(userId) {
+    const evidenceDir = path.join(this.failureEvidenceRoot, runId);
+    await fs.mkdir(evidenceDir, { recursive: true });
+    const runtimeDir = WORKSPACE_LAYOUT.RUNTIME_DIR;
+    await fs.cp(
+      path.join(workspaceRoot(), userId, runtimeDir),
+      path.join(evidenceDir, runtimeDir),
+      {
+        recursive: true,
+      },
+    );
+    for (const outputDir of this.outputDirs) {
+      await fs.cp(outputDir, path.join(evidenceDir, path.basename(outputDir)), {
+        recursive: true,
+      });
+    }
+    await fs.cp(registryPath, path.join(evidenceDir, path.basename(registryPath)));
+  }
+
   async onEnd(result) {
+    await this.fullSuiteCheck;
     const allRecords = await readRegistry();
     const records = allRecords.filter(
       (record) =>
@@ -102,8 +180,13 @@ export default class SuiteSessionCleanupReporter {
         String(record?.userId || "").trim() &&
         String(record?.sessionId || "").trim(),
     );
-    if (process.env.NOOBOT_E2E_FULL_SUITE !== "1" || result.status !== "passed") return;
+    if (process.env.NOOBOT_E2E_FULL_SUITE !== "1") return;
     const credentials = readE2eCredentials();
+    if (result.status !== "passed") {
+      if (records.length > 0) await this.preserveFailureEvidence(credentials.userId);
+      return;
+    }
+    await fs.rm(this.failureEvidenceRoot, { recursive: true, force: true });
     await fs.rm(path.join(workspaceRoot(), credentials.userId, runOpsWorkdir()), {
       recursive: true,
       force: true,

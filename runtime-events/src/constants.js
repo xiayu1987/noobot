@@ -39,5 +39,4 @@ export const RUNTIME_EVENT_CHANNELS = Object.freeze({
   WEB_SOCKET: "ws",
   AGENT_PROXY_WEB_SOCKET: "agent-proxy-ws",
 });
-export const DEFAULT_WORKSPACE_ROOT = "/workspace";
 export const RUNTIME_EVENTS_DIR = "events";

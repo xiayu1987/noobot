@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { RUNTIME_INSTANCE_PATH_ENV_KEYS } from "@noobot/runtime-topology-protocol/instance-paths";
+import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
 import {
   ISOLATED_TMP_ENV,
   acquireIsolatedTmpDir,
@@ -73,18 +74,23 @@ test("buildIsolatedTmpEnv points all tmp variables and marker at dir", () => {
   assert.deepEqual(env, {
     KEEP: "1",
     [ISOLATED_TMP_ENV]: "/x",
+    [WORKSPACE_ROOT_ENV]: path.join("/x", "workspace"),
     TMPDIR: "/x",
     TMP: "/x",
     TEMP: "/x",
   });
 });
 
-test("buildIsolatedTmpEnv drops inherited runtime instance paths", () => {
+test("buildIsolatedTmpEnv drops inherited runtime instance paths and isolates workspace root", () => {
   const inherited = Object.fromEntries(
     RUNTIME_INSTANCE_PATH_ENV_KEYS.map((key) => [key, `/real/${key}`]),
   );
   const env = buildIsolatedTmpEnv("/x", { KEEP: "1", ...inherited });
-  for (const key of RUNTIME_INSTANCE_PATH_ENV_KEYS) assert.equal(Object.hasOwn(env, key), false);
+  for (const key of RUNTIME_INSTANCE_PATH_ENV_KEYS) {
+    if (key === WORKSPACE_ROOT_ENV) continue;
+    assert.equal(Object.hasOwn(env, key), false);
+  }
+  assert.equal(env[WORKSPACE_ROOT_ENV], path.join("/x", "workspace"));
   assert.equal(env.KEEP, "1");
   assert.equal(env.TMPDIR, "/x");
 });

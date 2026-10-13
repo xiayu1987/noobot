@@ -6,8 +6,6 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import path from "node:path";
-import { mkdir } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
@@ -16,6 +14,7 @@ import {
   canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 test("session display summary materializes the active Turn presentation in the zero-event window", () => {
   const summary = buildSessionDisplaySummary({
@@ -128,7 +127,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "active-full-detail";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");

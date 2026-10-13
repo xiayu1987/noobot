@@ -6,6 +6,10 @@
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
+import {
+  collectSessionTreeBranch,
+  resolveSessionTreeDepth,
+} from "@noobot/workspace-protocol/session-tree";
 
 export class SessionTreeService {
   constructor({ sessionRepo, treeRepo } = {}) {
@@ -13,46 +17,8 @@ export class SessionTreeService {
     this.treeRepo = treeRepo;
   }
 
-  async ensureRuntimeDirs(userId) {
-    await this.sessionRepo.storageService.ensureRuntimeDirsByBasePath(
-      this.sessionRepo.pathResolver.resolveBasePath(userId),
-    );
-  }
-
   async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return false;
-    return this.treeRepo.withLock(userId, async () => {
-      if (await this.sessionRepo.isSessionDeleted(userId, normalizedSessionId)) {
-        return false;
-      }
-      const sessionTree = await this.treeRepo.getTree(userId);
-      const normalizedParentSessionId = String(parentSessionId || "").trim();
-
-      if (
-        normalizedParentSessionId &&
-        (await this.sessionRepo.isSessionDeleted(userId, normalizedParentSessionId))
-      ) {
-        return false;
-      }
-
-      if (normalizedParentSessionId && !sessionTree.nodes[normalizedParentSessionId]) {
-        throw fatalSystemError(
-          `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${normalizedParentSessionId}`,
-          {
-            code: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
-            details: { normalizedParentSessionId },
-          },
-        );
-      }
-      sessionTree.nodes[normalizedSessionId] = {
-        sessionId: normalizedSessionId,
-        parentSessionId: normalizedParentSessionId,
-      };
-
-      await this.treeRepo.saveTree(userId, sessionTree);
-      return true;
-    });
+    return this.sessionRepo.registerSessionTreeNode(userId, sessionId, parentSessionId);
   }
 
   async getSessionTree({ userId }) {
@@ -60,32 +26,18 @@ export class SessionTreeService {
   }
 
   async getRootSessionId({ userId, sessionId }) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return "";
     const tree = await this.treeRepo.getTree(userId);
-    return this.treeRepo.resolveRootSessionIdFromTree(normalizedSessionId, tree);
+    return this.treeRepo.resolveRootSessionIdFromTree(sessionId, tree);
   }
 
   collectBranchSessionIds(sessionId = "", sessionTree = null) {
-    const branchSessionIds = [];
-    const queue = [String(sessionId || "").trim()];
-    const visited = new Set();
-    while (queue.length) {
-      const currentId = String(queue.shift() || "").trim();
-      if (!currentId || visited.has(currentId)) continue;
-      visited.add(currentId);
-      branchSessionIds.push(currentId);
-      for (const node of Object.values(sessionTree?.nodes || {})) {
-        if (node.parentSessionId === currentId) queue.push(node.sessionId);
-      }
-    }
-    return branchSessionIds;
+    return collectSessionTreeBranch(sessionTree, sessionId);
   }
 
   resolveDepthInTree(sessionId = "", sessionTree = null) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId || !sessionTree?.nodes?.[normalizedSessionId]) return 0;
-    return this.treeRepo.loopSession(normalizedSessionId, sessionTree, []).length;
+    return resolveSessionTreeDepth(sessionTree, normalizedSessionId);
   }
 
   async deleteSessionBranch({ userId, sessionId }) {
@@ -96,47 +48,34 @@ export class SessionTreeService {
       });
     }
 
-    return this.treeRepo.withLock(userId, async () => {
-      const sessionTree = await this.treeRepo.getTree(userId);
-      const nodeExists = Boolean(sessionTree?.nodes?.[normalizedSessionId]);
+    const plannedTree = await this.treeRepo.getTree(userId);
+    const toDelete = this.collectBranchSessionIds(normalizedSessionId, plannedTree);
 
-      const toDelete = this.collectBranchSessionIds(normalizedSessionId, sessionTree);
-      const persistedBranchIds = await this.sessionRepo.listPersistedSessionBranchIds(
-        userId,
-        normalizedSessionId,
-      );
-      for (const persistedSessionId of persistedBranchIds) {
-        if (!toDelete.includes(persistedSessionId)) toDelete.push(persistedSessionId);
+    const deletedSessionIds = [];
+    await this.sessionRepo.withSessionLifecycleMutations(userId, toDelete, async () => {
+      await this.sessionRepo.markSessionsDeleted(userId, toDelete);
+      for (const id of toDelete) {
+        await this.sessionRepo.delete(userId, id);
+        deletedSessionIds.push(id);
       }
-
-      const deletedSessionIds = [];
-      const deleteWithLifecycleLocks = async () => {
-        await this.sessionRepo.markSessionsDeleted(userId, toDelete);
-        for (const id of toDelete) {
-          await this.sessionRepo.delete(userId, id);
-          deletedSessionIds.push(id);
+      await this.treeRepo.withLock(userId, async () => {
+        const sessionTree = await this.treeRepo.getTree(userId);
+        const deleteSet = new Set([
+          ...deletedSessionIds,
+          ...this.collectBranchSessionIds(normalizedSessionId, sessionTree),
+        ]);
+        const nextNodes = {};
+        for (const [id, node] of Object.entries(sessionTree.nodes)) {
+          if (!deleteSet.has(id)) nextNodes[id] = node;
         }
-
-        if (nodeExists) {
-          const deleteSet = new Set(deletedSessionIds);
-          const nextNodes = {};
-          for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
-            if (!deleteSet.has(id)) nextNodes[id] = node;
-          }
-          await this.treeRepo.saveTree(userId, { nodes: nextNodes });
-        }
-      };
-      await this.sessionRepo.withSessionLifecycleMutations(
-        userId,
-        toDelete,
-        deleteWithLifecycleLocks,
-      );
-
-      return {
-        ok: true,
-        sessionId: normalizedSessionId,
-        deletedSessionIds,
-      };
+        await this.treeRepo.saveTree(userId, { nodes: nextNodes });
+      });
     });
+
+    return {
+      ok: true,
+      sessionId: normalizedSessionId,
+      deletedSessionIds,
+    };
   }
 }

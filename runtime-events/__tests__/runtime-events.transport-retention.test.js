@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
 import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
-import { writeRoutedRuntimeEvent, writeRuntimeEvent } from "../src/index.js";
+import { writeRuntimeEvent } from "../src/index.js";
 
 import {
   pathExists,
@@ -16,6 +17,7 @@ import {
   readJsonl,
   tempRoot,
   writeArchive,
+  useRuntimeEventsEnv,
 } from "./runtime-events-test-fixtures.js";
 
 test("runtime event jsonl transport rotates active file when max file bytes is exceeded", async () => {
@@ -28,24 +30,19 @@ test("runtime event jsonl transport rotates active file when max file bytes is e
     level: "info",
     userId: "admin",
     sessionId: "rotation-2",
-    workspaceRoot,
   };
-  const first = await writeRuntimeEvent(
-    {
-      ...baseEvent,
-      event: "agent.runtime.rotation.archiveSource",
-      data: { message: "x".repeat(160) },
-    },
-    { maxFileBytes: 1 },
-  );
-  const second = await writeRuntimeEvent(
-    {
-      ...baseEvent,
-      event: "agent.runtime.rotation.activeAfterArchive",
-      data: { message: "y".repeat(160) },
-    },
-    { maxFileBytes: 1 },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 1 } });
+  const first = await writeRuntimeEvent({
+    ...baseEvent,
+    event: "agent.runtime.rotation.archiveSource",
+    data: { message: "x".repeat(160) },
+  });
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 1 } });
+  const second = await writeRuntimeEvent({
+    ...baseEvent,
+    event: "agent.runtime.rotation.activeAfterArchive",
+    data: { message: "y".repeat(160) },
+  });
 
   assert.equal(first.ok, true);
   assert.equal(first.rotatedFile, null);
@@ -69,24 +66,19 @@ test("runtime event max file bytes can be disabled with zero", async () => {
     level: "info",
     userId: "admin",
     sessionId: "rotation-disabled",
-    workspaceRoot,
   };
-  const first = await writeRuntimeEvent(
-    {
-      ...baseEvent,
-      event: "agent.runtime.rotation.disabledFirst",
-      data: { message: "x".repeat(160) },
-    },
-    { maxFileBytes: 0 },
-  );
-  const second = await writeRuntimeEvent(
-    {
-      ...baseEvent,
-      event: "agent.runtime.rotation.disabledSecond",
-      data: { message: "y".repeat(160) },
-    },
-    { maxFileBytes: 0 },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0 } });
+  const first = await writeRuntimeEvent({
+    ...baseEvent,
+    event: "agent.runtime.rotation.disabledFirst",
+    data: { message: "x".repeat(160) },
+  });
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0 } });
+  const second = await writeRuntimeEvent({
+    ...baseEvent,
+    event: "agent.runtime.rotation.disabledSecond",
+    data: { message: "y".repeat(160) },
+  });
 
   assert.equal(first.ok, true);
   assert.equal(second.ok, true);
@@ -107,7 +99,6 @@ test("runtime event jsonl transport serializes concurrent writes to the same fil
         event: "agent.runtime.concurrentWrite",
         userId: "admin",
         sessionId: "concurrent-writes",
-        workspaceRoot,
         data: { id },
       }),
     ),
@@ -124,13 +115,14 @@ test("runtime event jsonl transport serializes concurrent writes to the same fil
 test("runtime event max file bytes falls back when environment value is invalid", async () => {
   const maxFileBytesEnv = RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxFileBytes;
   const previousMaxFileBytes = process.env[maxFileBytesEnv];
-  const previousDefaultWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
+  const previousDefaultWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
   const defaultWorkspaceRoot = await tempRoot();
   try {
     await persistSession(defaultWorkspaceRoot, "admin", "rotation-invalid-env");
     process.env[maxFileBytesEnv] = "invalid";
-    process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = defaultWorkspaceRoot;
-    const first = await writeRoutedRuntimeEvent({
+    process.env.NOOBOT_WORKSPACE_ROOT = defaultWorkspaceRoot;
+    const first = await writeRuntimeEvent({
+      scope: "session",
       source: "agent",
       category: "system",
       level: "info",
@@ -139,7 +131,8 @@ test("runtime event max file bytes falls back when environment value is invalid"
       sessionId: "rotation-invalid-env",
       data: { message: "x".repeat(160) },
     });
-    const second = await writeRoutedRuntimeEvent({
+    const second = await writeRuntimeEvent({
+      scope: "session",
       source: "agent",
       category: "system",
       level: "info",
@@ -156,9 +149,8 @@ test("runtime event max file bytes falls back when environment value is invalid"
   } finally {
     if (previousMaxFileBytes === undefined) delete process.env[maxFileBytesEnv];
     else process.env[maxFileBytesEnv] = previousMaxFileBytes;
-    if (previousDefaultWorkspaceRoot === undefined)
-      delete process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-    else process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
+    if (previousDefaultWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
+    else process.env.NOOBOT_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
   }
 });
 
@@ -172,30 +164,16 @@ test("runtime event archive cleanup deletes archives older than retention days",
     level: "info",
     userId: "admin",
     sessionId: "cleanup-ttl",
-    workspaceRoot,
   };
-  const seed = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.seed" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 0,
-      maxArchives: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 0, maxArchives: 0 } });
+  const seed = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanup.seed" });
   const oldArchive = path.join(path.dirname(seed.file), "system.20000101T000000Z.jsonl");
   const freshArchive = path.join(path.dirname(seed.file), "system.29990101T000000Z.jsonl");
   await writeArchive(oldArchive, 2 * 24 * 60 * 60 * 1000);
   await writeArchive(freshArchive, 0);
 
-  const result = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.ttl" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 1,
-      maxArchives: 0,
-      cleanupIntervalMs: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 1, maxArchives: 0 } });
+  const result = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanup.ttl" });
 
   assert.equal(result.ok, true);
   assert.equal(await pathExists(oldArchive), false);
@@ -214,30 +192,16 @@ test("runtime event archive cleanup keeps only newest max archives", async () =>
     level: "info",
     userId: "admin",
     sessionId: "cleanup-max",
-    workspaceRoot,
   };
-  const seed = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.maxSeed" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 0,
-      maxArchives: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 0, maxArchives: 0 } });
+  const seed = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanup.maxSeed" });
   const dir = path.dirname(seed.file);
   const first = await writeArchive(path.join(dir, "system.20000101T000000Z.jsonl"), 3000);
   const second = await writeArchive(path.join(dir, "system.20000101T000001Z.jsonl"), 2000);
   const third = await writeArchive(path.join(dir, "system.20000101T000002Z.jsonl"), 1000);
 
-  const result = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.max" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 0,
-      maxArchives: 2,
-      cleanupIntervalMs: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 0, maxArchives: 2 } });
+  const result = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanup.max" });
 
   assert.equal(result.ok, true);
   assert.equal(await pathExists(first), false);
@@ -257,29 +221,19 @@ test("runtime event archive cleanup can be disabled", async () => {
     level: "info",
     userId: "admin",
     sessionId: "cleanup-disabled",
-    workspaceRoot,
   };
-  const seed = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.disabledSeed" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 0,
-      maxArchives: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 0, maxArchives: 0 } });
+  const seed = await writeRuntimeEvent({
+    ...baseEvent,
+    event: "agent.runtime.cleanup.disabledSeed",
+  });
   const archive = await writeArchive(
     path.join(path.dirname(seed.file), "system.20000101T000000Z.jsonl"),
     30 * 24 * 60 * 60 * 1000,
   );
 
-  const result = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.disabled" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 0,
-      maxArchives: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 0, maxArchives: 0 } });
+  const result = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanup.disabled" });
 
   assert.equal(result.ok, true);
   assert.equal(await pathExists(archive), true);
@@ -296,33 +250,76 @@ test("runtime event archive cleanup ignores active and unrelated jsonl files", a
     level: "info",
     userId: "admin",
     sessionId: "cleanup-active",
-    workspaceRoot,
   };
-  const seed = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.activeSeed" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 0,
-      maxArchives: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 0, maxArchives: 0 } });
+  const seed = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanup.activeSeed" });
   const unrelated = await writeArchive(
     path.join(path.dirname(seed.file), "interaction.20000101T000000Z.jsonl"),
     30 * 24 * 60 * 60 * 1000,
   );
 
-  const result = await writeRuntimeEvent(
-    { ...baseEvent, event: "agent.runtime.cleanup.active" },
-    {
-      maxFileBytes: 0,
-      retentionDays: 1,
-      maxArchives: 0,
-      cleanupIntervalMs: 0,
-    },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 1, maxArchives: 0 } });
+  const result = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanup.active" });
 
   assert.equal(result.ok, true);
   assert.equal(await pathExists(result.file), true);
   assert.equal(await pathExists(unrelated), true);
   assert.equal((await readJsonl(result.file)).length, 2);
+});
+
+test("runtime event archive cleanup failure is reported once per batch and keeps the write", async (t) => {
+  const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, "admin", "cleanup-fail");
+  const baseEvent = {
+    source: "agent",
+    scope: "session",
+    category: "system",
+    level: "info",
+    userId: "admin",
+    sessionId: "cleanup-fail",
+  };
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 0, maxArchives: 0 } });
+  const seed = await writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanupFail.seed" });
+  const oldArchive = path.join(path.dirname(seed.file), "system.20000101T000000Z.jsonl");
+  await writeArchive(oldArchive, 2 * 24 * 60 * 60 * 1000);
+
+  const warn = t.mock.method(console, "warn", () => {});
+  t.mock.method(fs, "unlink", async () => {
+    throw Object.assign(new Error("simulated unlink failure"), { code: "EPERM" });
+  });
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 0, retentionDays: 1, maxArchives: 0 } });
+  const results = await Promise.all([
+    writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanupFail.a" }),
+    writeRuntimeEvent({ ...baseEvent, event: "agent.runtime.cleanupFail.b" }),
+  ]);
+
+  for (const result of results) {
+    assert.equal(result.ok, true);
+    assert.equal(result.cleanupError, true);
+  }
+  const reports = warn.mock.calls.filter((call) =>
+    String(call.arguments[0]).includes("archive cleanup failed"),
+  );
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].arguments[2].code, "EPERM");
+  assert.equal(await pathExists(oldArchive), true);
+  assert.equal((await readJsonl(results[0].file)).length, 3);
+});
+
+test("runtime event write failure is reported once and returned as ok:false", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const result = await writeRuntimeEvent({
+    source: "agent",
+    category: "system",
+    level: "info",
+    event: "agent.runtime.writeFail.missingScope",
+  });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.error instanceof Error);
+  const reports = warn.mock.calls.filter((call) =>
+    String(call.arguments[0]).includes("write failed"),
+  );
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].arguments[2], result.error);
 });

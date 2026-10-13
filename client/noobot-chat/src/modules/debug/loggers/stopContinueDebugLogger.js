@@ -60,30 +60,3 @@ export function logContinueResumeIdentitySelection({
     hasOptionResumeIdentity: Boolean(options?.resumeDialogProcessId || options?.resumeTurnScopeId),
   }));
 }
-
-export function logStopButtonEvaluation({
-  previousState = {},
-  nextState = {},
-  event = {},
-  evaluation = {},
-  changed = false,
-} = {}) {
-  if (!isDebugTypeEnabled(sessionLogSink, "stop-continue")) return false;
-  logStopContinueDebug("frontend.stopContinue.stopButtonEvaluated", () => ({
-    sessionId: nextState?.sessionId || previousState?.sessionId || event?.sessionId || "",
-    dialogProcessId: nextState?.dialogProcessId || event?.dialogProcessId || "",
-    turnScopeId: nextState?.turnScopeId || event?.turnScopeId || "",
-    previousState: summarizeStopContinueRunState(previousState),
-    nextState: summarizeStopContinueRunState(nextState),
-    eventType: event?.type || "",
-    eventState: event?.state || "",
-    canStop: Boolean(evaluation?.canStop),
-    backendCanStop: Boolean(evaluation?.backendCanStop),
-    sending: Boolean(evaluation?.sending),
-    stopInFlight: Boolean(evaluation?.stopInFlight),
-    stopButtonHiddenReason: evaluation?.canStop
-      ? ""
-      : "backend_not_stoppable_and_no_pending_request",
-    changed: Boolean(changed),
-  }));
-}

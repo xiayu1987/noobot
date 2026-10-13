@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -15,6 +15,7 @@ import {
   canonicalMessages,
   withTempWorkspace,
 } from "./session-repository-boundary.summaries.fixtures.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 function canonicalTransferEnvelope(sessionId) {
   return {
@@ -56,7 +57,7 @@ test("session detail derives transfer envelopes from the canonical Session", asy
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "canonical-display-source";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
@@ -118,7 +119,7 @@ test("failed Session repair projects an unavailable list item", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "unavailable-display-source";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     const repository = runtime.repositories.sessionRepository;
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });

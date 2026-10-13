@@ -13,6 +13,7 @@ import { writeAgentProxyDataPlaneMetricsEvent } from "../../src/runtime-events/w
 
 test("data-plane success metrics write directly to system runtime events", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "agent-proxy-data-plane-metrics-"));
+  process.env.NOOBOT_WORKSPACE_ROOT = workspaceRoot;
   const eventFile = path.join(
     workspaceRoot,
     "system",
@@ -25,7 +26,6 @@ test("data-plane success metrics write directly to system runtime events", async
 
   try {
     const result = await writeAgentProxyDataPlaneMetricsEvent({
-      workspaceRoot,
       metrics: {
         windowStartedAtMs: 100,
         windowEndedAtMs: 200,

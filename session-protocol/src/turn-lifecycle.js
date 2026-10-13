@@ -28,6 +28,11 @@ import {
 import { TURN_EVENT_STATE, TURN_FAILED_PHASE_STATE } from "./lifecycle/turn-transition-policy.js";
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./lifecycle/turn-state.js";
 import { snapshotReplacedTurn, snapshotTurn } from "./lifecycle/turn-projection.js";
+import {
+  isActionableTurnRecovery,
+  isTurnRecoveryAction,
+  TURN_RECOVERY_ACTION,
+} from "./lifecycle/turn-recovery.js";
 import { text as clean } from "./normalize.js";
 
 export {
@@ -38,6 +43,7 @@ export {
   TURN_COMMAND,
   TURN_EVENT,
   TURN_PHASE,
+  TURN_RECOVERY_ACTION,
   TURN_STATE,
   TURN_TERMINAL_EVENTS,
 };
@@ -123,6 +129,7 @@ export function createTurnLifecycleSnapshot({
   recentTerminalTurns = [],
   replacedTurns = [],
   unchanged = false,
+  recovery = TURN_RECOVERY_ACTION.NONE,
   generatedAt = new Date().toISOString(),
 } = {}) {
   return {
@@ -139,36 +146,12 @@ export function createTurnLifecycleSnapshot({
     ),
     replacedTurns: (Array.isArray(replacedTurns) ? replacedTurns : []).map(snapshotReplacedTurn),
     unchanged: unchanged === true,
+    recovery: clean(recovery),
     generatedAt: clean(generatedAt),
   };
 }
 
-export function validateTurnLifecycleSnapshot(snapshot = {}) {
-  if (!snapshot || typeof snapshot !== "object") {
-    return { valid: false, errors: ["snapshot_not_object"] };
-  }
-  const errors = [];
-  if (Number(snapshot.protocolVersion) !== TURN_LIFECYCLE_PROTOCOL_VERSION)
-    errors.push("unsupported_protocol_version");
-  if (clean(snapshot.eventType) !== TURN_EVENT.SNAPSHOT) errors.push("invalid_snapshot_event_type");
-  if (!clean(snapshot.commandId)) errors.push("missing_command_id");
-  if (!clean(snapshot.sessionId)) errors.push("missing_session_id");
-  if (!Number.isInteger(Number(snapshot.sequence)) || Number(snapshot.sequence) < 0)
-    errors.push("invalid_sequence");
-  const turns = [
-    snapshot.activeTurn,
-    ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : []),
-  ].filter(Boolean);
-  for (const turn of turns) {
-    errors.push(...collectTurnMaterializationErrors(turn));
-    if (
-      Number.isInteger(Number(turn.sequence)) &&
-      Number(turn.sequence) >= 1 &&
-      Number(turn.sequence) > Number(snapshot.sequence)
-    )
-      errors.push("turn_sequence_exceeds_snapshot");
-  }
-  if (!Array.isArray(snapshot.replacedTurns)) errors.push("missing_replaced_turns");
+function collectReplacementErrors(snapshot, errors) {
   const replacementScopes = new Set();
   for (const replacement of Array.isArray(snapshot.replacedTurns) ? snapshot.replacedTurns : []) {
     const turnScopeId = canonicalizeTurnScopeId(replacement?.turnScopeId);
@@ -207,6 +190,39 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
       errors.push("invalid_replacement_sequence");
     if (!clean(replacement?.committedAt)) errors.push("missing_replacement_committed_at");
   }
+  return replacementScopes;
+}
+
+export function validateTurnLifecycleSnapshot(snapshot = {}) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return { valid: false, errors: ["snapshot_not_object"] };
+  }
+  const errors = [];
+  if (Number(snapshot.protocolVersion) !== TURN_LIFECYCLE_PROTOCOL_VERSION)
+    errors.push("unsupported_protocol_version");
+  if (clean(snapshot.eventType) !== TURN_EVENT.SNAPSHOT) errors.push("invalid_snapshot_event_type");
+  if (!clean(snapshot.commandId)) errors.push("missing_command_id");
+  if (!clean(snapshot.sessionId)) errors.push("missing_session_id");
+  if (!Number.isInteger(Number(snapshot.sequence)) || Number(snapshot.sequence) < 0)
+    errors.push("invalid_sequence");
+  if (!isTurnRecoveryAction(snapshot.recovery)) errors.push("invalid_snapshot_recovery");
+  else if (isActionableTurnRecovery(snapshot.recovery) && !snapshot.activeTurn)
+    errors.push("recovery_without_active_turn");
+  const turns = [
+    snapshot.activeTurn,
+    ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : []),
+  ].filter(Boolean);
+  for (const turn of turns) {
+    errors.push(...collectTurnMaterializationErrors(turn));
+    if (
+      Number.isInteger(Number(turn.sequence)) &&
+      Number(turn.sequence) >= 1 &&
+      Number(turn.sequence) > Number(snapshot.sequence)
+    )
+      errors.push("turn_sequence_exceeds_snapshot");
+  }
+  if (!Array.isArray(snapshot.replacedTurns)) errors.push("missing_replaced_turns");
+  const replacementScopes = collectReplacementErrors(snapshot, errors);
   const materializedTurnScopes = new Set(
     turns.map((turn) => canonicalizeTurnScopeId(turn?.turnScopeId)).filter(Boolean),
   );

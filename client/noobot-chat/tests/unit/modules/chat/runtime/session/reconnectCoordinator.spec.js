@@ -15,7 +15,6 @@ describe("createReconnectCoordinator", () => {
       activeSession: ref({ id: "local-1", sessionId: "", isLocal: true, messages: [] }),
       activeSessionId: ref("local-1"),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
-      userId: ref("user-1"),
       chatWebSocketClient,
       reconnectReplay: {},
       chatList: {},
@@ -25,6 +24,38 @@ describe("createReconnectCoordinator", () => {
 
     await expect(coordinator.handleReconnect()).resolves.toBe(false);
     expect(chatWebSocketClient.reconnect).not.toHaveBeenCalled();
+  });
+
+  it("declares the active child session parent identity on reconnect", async () => {
+    const chatWebSocketClient = { reconnect: vi.fn(async () => {}) };
+    const coordinator = createReconnectCoordinator({
+      activeSession: ref({
+        sessionId: "child-1",
+        parentSessionId: "parent-1",
+        parentDialogProcessId: "parent-dp-1",
+        messages: [],
+      }),
+      activeSessionId: ref("child-1"),
+      turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
+      chatWebSocketClient,
+      reconnectReplay: {},
+      chatList: {},
+      resolveActiveSessionIdentity: () => "child-1",
+      resolveActiveTurnScopeIdentity: () => "",
+      logSessionSystemEvent: vi.fn(),
+      notify: vi.fn(),
+      translate: (key) => key,
+    });
+
+    await coordinator.handleReconnect();
+
+    const request = chatWebSocketClient.reconnect.mock.calls[0][0];
+    expect(request).toMatchObject({
+      currentSessionId: "child-1",
+      currentParentSessionId: "parent-1",
+      currentParentDialogProcessId: "parent-dp-1",
+    });
+    expect("userId" in request).toBe(false);
   });
 
   it("finishes the ordered replay queue after a packet rejection", async () => {
@@ -55,7 +86,6 @@ describe("createReconnectCoordinator", () => {
       activeSession: ref({ sessionId: "s-1", messages: [] }),
       activeSessionId: ref("s-1"),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
-      userId: ref("user-1"),
       chatWebSocketClient,
       reconnectReplay,
       chatList: {},

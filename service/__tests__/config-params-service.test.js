@@ -51,40 +51,35 @@ function serviceConfigEventFile(workspaceRoot) {
   );
 }
 
-test("collectConfigTemplateKeys: 只收集大写模板变量", async () => {
+test("collectConfigTemplateKeys: 只从全局配置收集大写模板变量", async () => {
+  const service = createConfigParamsService({
+    workspaceRootPath: () => "/tmp/unused-workspace",
+    getGlobalConfigRaw: () => ({
+      provider: { api_key: "${API_KEY}", lower: "${api_key}", url: "${BASE_URL}" },
+      globalKey: "${GLOBAL_KEY}",
+    }),
+  });
+  assert.deepEqual(await service.collectConfigTemplateKeys(), [
+    "API_KEY",
+    "BASE_URL",
+    "GLOBAL_KEY",
+  ]);
+});
+
+test("collectUserConfigTemplateKeys: 用户 config.json 缺失或 userId 为空时报错", async () => {
   const tempDir = await createTempDir();
-  const workspaceRoot = path.join(tempDir, "workspace");
-  const templateRoot = path.join(tempDir, "template");
+  const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
+  process.env.NOOBOT_WORKSPACE_ROOT = path.join(tempDir, "runtime-root");
   try {
-    await mkdir(templateRoot, { recursive: true });
-    await writeFile(
-      path.join(templateRoot, "config.json"),
-      JSON.stringify({
-        provider: {
-          api_key: "${API_KEY}",
-          lower: "${api_key}",
-          mixed: "${Api_Key}",
-          url: "${BASE_URL}",
-        },
-      }),
-      "utf8",
-    );
-
     const service = createConfigParamsService({
-      workspaceRootPath: () => workspaceRoot,
-      templateRootPath: () => templateRoot,
-      getGlobalConfigRaw: () => ({
-        globalKey: "${GLOBAL_KEY}",
-        oldKey: "${global_key}",
-      }),
+      workspaceRootPath: () => path.join(tempDir, "workspace"),
+      getGlobalConfigRaw: () => ({}),
     });
-
-    assert.deepEqual(await service.collectConfigTemplateKeys(), [
-      "API_KEY",
-      "BASE_URL",
-      "GLOBAL_KEY",
-    ]);
+    await assert.rejects(service.collectUserConfigTemplateKeys(""), TypeError);
+    await assert.rejects(service.collectUserConfigTemplateKeys("u1"), { code: "ENOENT" });
   } finally {
+    if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
+    else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
     await rm(tempDir, { recursive: true, force: true });
   }
 });
@@ -93,10 +88,10 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
   const tempDir = await createTempDir();
   const workspaceRoot = path.join(tempDir, "workspace");
   const runtimeRoot = path.join(tempDir, "runtime-root");
-  const templateRoot = path.join(tempDir, "template");
+  const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
+  process.env.NOOBOT_WORKSPACE_ROOT = runtimeRoot;
   try {
     await mkdir(path.join(workspaceRoot, "user-secret-token"), { recursive: true });
-    await mkdir(templateRoot, { recursive: true });
     await writeFile(
       path.join(workspaceRoot, "config-params.json"),
       "{ invalid SECRET_VALUE",
@@ -107,13 +102,15 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
       "{ invalid APIKEY",
       "utf8",
     );
-    await writeFile(path.join(templateRoot, "config.json"), "{ invalid TOKEN", "utf8");
+    await writeFile(
+      path.join(workspaceRoot, "user-secret-token", "config.json"),
+      "{ invalid TOKEN",
+      "utf8",
+    );
 
     const service = createConfigParamsService({
       workspaceRootPath: () => workspaceRoot,
-      templateRootPath: () => templateRoot,
       getGlobalConfigRaw: () => ({ provider: "${API_KEY}" }),
-      runtimeEventsConfig: { workspaceRoot: runtimeRoot },
     });
 
     await assert.rejects(service.readWorkspaceConfigParams(), SyntaxError);
@@ -121,7 +118,7 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
       service.readUserConfigParams({ userId: "user-secret-token" }),
       SyntaxError,
     );
-    await assert.rejects(service.collectConfigTemplateKeys(), SyntaxError);
+    await assert.rejects(service.collectUserConfigTemplateKeys("user-secret-token"), SyntaxError);
 
     const eventFile = serviceConfigEventFile(runtimeRoot);
     await waitForFile(eventFile);
@@ -151,6 +148,8 @@ test("config-params-service: rejects invalid documents and writes sanitized syst
     assert.equal(serialized.includes("TOKEN"), false);
     assert.equal(serialized.includes("user-secret-token"), false);
   } finally {
+    if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
+    else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
     await rm(tempDir, { recursive: true, force: true });
   }
 });

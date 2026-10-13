@@ -82,6 +82,9 @@ function assertToolEvidenceAlignment(messages = []) {
   }
 }
 
+// Observer projection keeps the call/result pairing explicit: auxiliary models
+// see tool evidence as text, so each executed call and its matching result
+// carry the same canonical call id.
 function formatToolCallForObserver(toolCalls = []) {
   return toolCalls
     .map((call = {}) => {
@@ -91,14 +94,18 @@ function formatToolCallForObserver(toolCalls = []) {
         typeof fn.arguments === "string"
           ? fn.arguments
           : JSON.stringify(fn.arguments ?? call.args ?? {});
-      return `Tool call: ${name}(${args})`;
+      return `Tool call [${resolveContextToolCallId(call)}]: ${name}(${args})`;
     })
     .join("\n");
 }
 
+function formatToolResultForObserver(message = {}) {
+  return `Tool result [${message.tool_call_id}] (matching tool result of the executed call above):\n${message.content}`;
+}
+
 export function projectAuxiliaryHistoryMessages(
   sourceMessages = [],
-  { decorateMessage = null, projectObserverPerspective = true, formatToolCall = null } = {},
+  { decorateMessage = null, projectObserverPerspective = true } = {},
 ) {
   if (!Array.isArray(sourceMessages)) {
     throw new TypeError("auxiliary history sourceMessages must be an array");
@@ -117,7 +124,7 @@ export function projectAuxiliaryHistoryMessages(
         if (message.role === "tool") {
           return {
             role: "assistant",
-            content: message.content,
+            content: formatToolResultForObserver(message),
             ...(resolveContextMessageOrigin(message) === "natural"
               ? { messageOrigin: "natural" }
               : {}),
@@ -128,11 +135,7 @@ export function projectAuxiliaryHistoryMessages(
           Array.isArray(message.tool_calls) &&
           message.tool_calls.length
         ) {
-          const content =
-            typeof formatToolCall === "function"
-              ? formatToolCall(message.tool_calls)
-              : formatToolCallForObserver(message.tool_calls);
-          return { role: "user", content };
+          return { role: "user", content: formatToolCallForObserver(message.tool_calls) };
         }
         return message;
       })

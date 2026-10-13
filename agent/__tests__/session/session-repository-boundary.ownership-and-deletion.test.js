@@ -7,10 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { readExecutionLogs } from "../../src/session/session-artifact-store.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -34,7 +35,7 @@ test("session/task/execution repositories should keep file ownership boundaries"
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "s1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },
@@ -95,7 +96,7 @@ test("session/task/execution repositories should keep file ownership boundaries"
 test("deleteSessionBranch should remove descendant directories and tree nodes", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },
@@ -160,12 +161,12 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
   });
 });
 
-test("deleteSessionBranch tombstones persisted child Sessions outside the Session Tree", async () => {
+test("ensureSession registers child Sessions in the Session Tree and deleteSessionBranch tombstones them", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const rootSessionId = "workflow-root";
     const childSessionId = "workflow-child";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({
@@ -180,7 +181,10 @@ test("deleteSessionBranch tombstones persisted child Sessions outside the Sessio
     });
 
     const treeBeforeDelete = await runtime.sessionTreeService.getSessionTree({ userId });
-    assert.equal(Boolean(treeBeforeDelete.nodes[childSessionId]), false);
+    assert.deepEqual(treeBeforeDelete.nodes[childSessionId], {
+      sessionId: childSessionId,
+      parentSessionId: rootSessionId,
+    });
     const rootScope = await runtime.repositories.sessionRepository.resolveSessionScope(
       userId,
       rootSessionId,
@@ -213,7 +217,7 @@ test("appendTurns should not recreate session after deletion marker is set", asy
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "race-session";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },
@@ -244,7 +248,7 @@ test("task and execution writes should not recreate a deleted session directory"
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "deleted-write-barrier";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
@@ -291,14 +295,16 @@ test("late execution initialization should not restore a deleted session tree no
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "deleted-tree-node";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
 
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
-    assert.equal(await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId }), false);
+    await assert.rejects(runtime.sessionTreeService.upsertSessionTree({ userId, sessionId }), {
+      code: "SESSION_DELETED",
+    });
     const tree = await runtime.sessionTreeService.getSessionTree({ userId });
     assert.equal(Boolean(tree.nodes[sessionId]), false);
     assert.deepEqual(
@@ -314,7 +320,7 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "deleted-context-session";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
@@ -378,84 +384,43 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
   });
 });
 
-test("lifecycle lock rechecks tombstone inside mutation before creating a session", async () => {
+test("a session deleted before the lifecycle lock is rejected without creating artifacts", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    const sessionId = "lock-recheck-session";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const sessionId = "deleted-before-lock";
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     const repo = runtime.repositories.sessionRepository;
     const scope = await repo.resolveSessionScope(userId, sessionId);
-
-    let checked = 0;
-    const originalIsDeleted = repo.isSessionDeleted.bind(repo);
-    repo.isSessionDeleted = async (...args) => {
-      checked += 1;
-      if (checked === 1) return false;
-      return true;
-    };
+    await runtime.sessionCrudService.ensureSession(userId, sessionId);
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
     await assert.rejects(repo.ensureSession({ userId, sessionId }), { code: "SESSION_DELETED" });
-    repo.isSessionDeleted = originalIsDeleted;
     assert.equal(await exists(scope.sessionDir), false);
+    assert.deepEqual(await repo.listSessionIds(userId), []);
   });
 });
 
-test("stale generation token blocks session, task, and execution writes without side effects", async () => {
+test("a child of a deleted parent is rejected before any artifact or tree node is written", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    const sessionId = "stale-generation-session";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const parentSessionId = "deleted-parent";
+    const childSessionId = "late-child";
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     const repo = runtime.repositories.sessionRepository;
-
-    await runtime.sessionCrudService.ensureSession(userId, sessionId);
-    const lifecycle = await repo.getSessionLifecycle(userId, sessionId);
-    const scope = await repo.resolveSessionScope(userId, sessionId);
-    const staleContext = {
-      sessionGeneration: lifecycle.generation,
-      locationResolver: repo.sessionPathResolver,
-    };
-    await repo._writeSessionLifecycleRecord(userId, sessionId, {
-      ...lifecycle,
-      generation: lifecycle.generation + 1,
-      updatedAt: "2026-05-14T00:00:01.000Z",
-    });
-    const sessionFileBefore = await readFile(scope.sessionFile, "utf8");
+    await runtime.sessionCrudService.ensureSession(userId, parentSessionId);
+    const parentScope = await repo.resolveSessionScope(userId, parentSessionId);
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId: parentSessionId });
 
     await assert.rejects(
-      repo.save(userId, { sessionId, messages: [{ role: "user", content: "late" }] }, "", {
-        persistenceContext: staleContext,
-      }),
-      { code: "SESSION_GENERATION_STALE" },
+      repo.ensureSession({ userId, sessionId: childSessionId, parentSessionId }),
+      { code: "SESSION_DELETED" },
     );
-    await assert.rejects(
-      runtime.repositories.taskRepository.save(
-        userId,
-        sessionId,
-        {
-          taskId: "late-task",
-          taskName: "late",
-          taskStatus: "start",
-        },
-        "",
-        staleContext,
-      ),
-      { code: "SESSION_GENERATION_STALE" },
+    assert.equal(await exists(parentScope.sessionDir), false);
+    assert.equal(
+      (await runtime.sessionTreeService.getSessionTree({ userId })).nodes[childSessionId],
+      undefined,
     );
-    await assert.rejects(
-      runtime.repositories.fileSystemExecutionRepository.appendLog(
-        userId,
-        sessionId,
-        { event: "late", dialogProcessId: "dp-late" },
-        "",
-        staleContext,
-      ),
-      { code: "SESSION_GENERATION_STALE" },
-    );
-
-    assert.equal(await readFile(scope.sessionFile, "utf8"), sessionFileBefore);
-    assert.equal(await exists(scope.taskFile), false);
-    assert.equal(await exists(scope.executionEventsDir), false);
   });
 });

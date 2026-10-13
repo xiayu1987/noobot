@@ -557,9 +557,8 @@ test("ws router reports strict protocol validation errors without a generic rout
 test("ws router writes sanitized system event for invalid JSON payload", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "agent-proxy-ws-system-events-"));
   const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
-  const previousDefaultWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-  delete process.env.NOOBOT_WORKSPACE_ROOT;
-  process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = workspaceRoot;
+  const previousDefaultWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
+  process.env.NOOBOT_WORKSPACE_ROOT = workspaceRoot;
 
   const eventFile = path.join(
     workspaceRoot,
@@ -612,9 +611,8 @@ test("ws router writes sanitized system event for invalid JSON payload", async (
   } finally {
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
-    if (previousDefaultWorkspaceRoot === undefined)
-      delete process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-    else process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
+    if (previousDefaultWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
+    else process.env.NOOBOT_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
     await rm(workspaceRoot, { recursive: true, force: true });
   }
 });

@@ -8,11 +8,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
 
-export function createWorkspaceUsersService({ workspaceRootPath, runtimeEventsConfig } = {}) {
+export function createWorkspaceUsersService({ workspaceRootPath } = {}) {
   function normalizeWorkspaceUsersConfig(input) {
     const sourceItems = Array.isArray(input)
       ? input
@@ -50,21 +50,19 @@ export function createWorkspaceUsersService({ workspaceRootPath, runtimeEventsCo
   }
 
   function reportReadFailure(filePath, error) {
-    void writeRoutedRuntimeEvent(
-      {
-        source: "service",
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        category: RUNTIME_EVENT_CATEGORIES.CONFIG,
-        level: "error",
-        event: "service.workspaceUsers.config.read.failed",
-        data: {
-          fileName: path.basename(filePath),
-          filePathLength: String(filePath || "").length,
-        },
-        error,
+    void writeRuntimeEvent({
+      scope: "system",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+      level: "error",
+      event: "service.workspaceUsers.config.read.failed",
+      data: {
+        fileName: path.basename(filePath),
+        filePathLength: String(filePath || "").length,
       },
-      runtimeEventsConfig,
-    );
+      error,
+    });
     return new Error(`workspace users config is unreadable: ${path.basename(filePath)}`, {
       cause: error,
     });

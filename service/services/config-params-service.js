@@ -8,7 +8,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
   buildConfigParamCatalog as buildProtocolConfigParamCatalog,
@@ -17,12 +17,7 @@ import {
 } from "@noobot/agent-config-protocol";
 import { WORKSPACE_LAYOUT, WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
 
-export function createConfigParamsService({
-  workspaceRootPath,
-  getGlobalConfigRaw,
-  templateRootPath,
-  runtimeEventsConfig,
-} = {}) {
+export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRaw } = {}) {
   function workspaceConfigParamsFilePath() {
     return path.join(workspaceRootPath(), WORKSPACE_ROOT_LAYOUT.CONFIG_PARAMS_FILE);
   }
@@ -37,22 +32,20 @@ export function createConfigParamsService({
   }
 
   function writeConfigReadFailedEvent({ event, filePath, error, data = {} } = {}) {
-    void writeRoutedRuntimeEvent(
-      {
-        source: "service",
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        category: RUNTIME_EVENT_CATEGORIES.CONFIG,
-        level: "warn",
-        event,
-        data: {
-          fileName: path.basename(String(filePath || "")),
-          filePathLength: String(filePath || "").length,
-          ...data,
-        },
-        error,
+    void writeRuntimeEvent({
+      scope: "system",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+      level: "warn",
+      event,
+      data: {
+        fileName: path.basename(String(filePath || "")),
+        filePathLength: String(filePath || "").length,
+        ...data,
       },
-      runtimeEventsConfig,
-    );
+      error,
+    });
   }
 
   async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
@@ -61,13 +54,14 @@ export function createConfigParamsService({
       const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
       return normalizeConfigParams(parsedPayload);
     } catch (error) {
-      writeConfigReadFailedEvent({
-        event: "service.configParams.workspace.read.failed",
-        filePath,
-        error,
-        data: { createIfMissing: createIfMissing === true },
-      });
-      if (error?.code !== "ENOENT") throw error;
+      if (error?.code !== "ENOENT") {
+        writeConfigReadFailedEvent({
+          event: "service.configParams.workspace.read.failed",
+          filePath,
+          error,
+        });
+        throw error;
+      }
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeWorkspaceConfigParams(payload);
@@ -89,16 +83,15 @@ export function createConfigParamsService({
       const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
       return normalizeConfigParams(parsedPayload);
     } catch (error) {
-      writeConfigReadFailedEvent({
-        event: "service.configParams.user.read.failed",
-        filePath,
-        error,
-        data: {
-          createIfMissing: createIfMissing === true,
-          userIdLength: String(userId || "").trim().length,
-        },
-      });
-      if (error?.code !== "ENOENT") throw error;
+      if (error?.code !== "ENOENT") {
+        writeConfigReadFailedEvent({
+          event: "service.configParams.user.read.failed",
+          filePath,
+          error,
+          data: { userIdLength: String(userId || "").trim().length },
+        });
+        throw error;
+      }
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeUserConfigParams({ userId, input: payload });
@@ -114,7 +107,7 @@ export function createConfigParamsService({
     return payload;
   }
 
-  async function readConfigJsonIfExists(filePath = "") {
+  async function readUserConfigJson(filePath = "") {
     try {
       return JSON.parse(await readFile(filePath, "utf8"));
     } catch (error) {
@@ -123,29 +116,24 @@ export function createConfigParamsService({
         filePath,
         error,
       });
-      if (error?.code === "ENOENT") return {};
       throw error;
     }
   }
 
   async function collectConfigTemplateKeys() {
-    const globalConfigJson = getGlobalConfigRaw();
-    const templateConfigJson = await readConfigJsonIfExists(
-      path.join(templateRootPath(), WORKSPACE_LAYOUT.CONFIG_FILE),
-    );
-    return scanConfigTemplateKeys(globalConfigJson, templateConfigJson);
+    return scanConfigTemplateKeys(getGlobalConfigRaw());
   }
 
   async function collectUserConfigTemplateKeys(userId = "") {
     const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) return [];
+    if (!normalizedUserId) throw new TypeError("collectUserConfigTemplateKeys requires userId");
     const userConfigFilePath = path.join(
       workspaceRootPath(),
       normalizedUserId,
       WORKSPACE_LAYOUT.CONFIG_FILE,
     );
     const globalConfigJson = getGlobalConfigRaw();
-    const userConfigJson = await readConfigJsonIfExists(userConfigFilePath);
+    const userConfigJson = await readUserConfigJson(userConfigFilePath);
     return scanConfigTemplateKeys(globalConfigJson, userConfigJson);
   }
 

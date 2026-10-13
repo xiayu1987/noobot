@@ -237,3 +237,10 @@ export function findActiveRun(identity = {}) {
   }
   return null;
 }
+
+export function createExecutionLivenessInspector({ userId, sessionId, now = () => Date.now() }) {
+  return ({ turnScopeId, dialogProcessId }) => ({
+    alive: Boolean(findActiveRun({ userId, sessionId, turnScopeId, dialogProcessId })),
+    observedAtMs: now(),
+  });
+}

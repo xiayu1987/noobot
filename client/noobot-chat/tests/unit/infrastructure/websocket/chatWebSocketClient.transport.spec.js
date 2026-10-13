@@ -112,11 +112,13 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       .filter((record) => record.event === "frontend.websocket.transportEventReceived");
     expect(debug).toHaveBeenCalledWith("transport-diagnostics", expect.any(Function));
     expect(received[0]).toEqual({
+      scope: "session",
       category: "debug",
       level: "debug",
       debugType: "transport-diagnostics",
       event: "frontend.websocket.transportEventReceived",
       sessionId: "session-transport-log",
+      parentSessionId: "parent-transport-log",
       dialogProcessId: "dialog-transport-log",
       turnScopeId: "turn-transport-log",
       data: expect.objectContaining({
@@ -392,27 +394,31 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     await streamPromise;
   });
 
-  it("sends userId in reconnect payload", async () => {
+  it("sends the active session parent identity and no user identity in reconnect payload", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
     });
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-1",
-      userId: "u-1",
+      currentParentSessionId: "p-1",
+      currentParentDialogProcessId: "pdp-1",
       onReconnectData: vi.fn(),
     });
     const socket = MockWebSocket.instances[0];
 
     socket.onopen?.();
 
-    expect(JSON.parse(socket.sent[0])).toEqual(
+    const sent = JSON.parse(socket.sent[0]);
+    expect(sent).toEqual(
       expect.objectContaining({
         action: "reconnect",
         currentSessionId: "s-1",
-        userId: "u-1",
+        currentParentSessionId: "p-1",
+        currentParentDialogProcessId: "pdp-1",
         requestId: expect.stringMatching(/^reconnect:/),
       }),
     );
+    expect("userId" in sent).toBe(false);
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0 });
     await reconnectPromise;

@@ -23,9 +23,11 @@ import {
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 import { repairWorkspaceMemoryDocuments } from "../memory/storage/repair.js";
 import { upgradeSessionStorage } from "./session-storage-upgrade.js";
+import { upgradeSessionLifecycle } from "./session-lifecycle-upgrade.js";
 
 const LAYOUT_UPGRADE_HANDLERS = Object.freeze({
   [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE]: upgradeSessionStorage,
+  [WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE]: upgradeSessionLifecycle,
 });
 
 async function pathExists(filePath) {

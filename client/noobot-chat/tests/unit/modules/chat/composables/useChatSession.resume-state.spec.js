@@ -49,6 +49,7 @@ describe("useChatSession summary and reconnect state", () => {
         turnLifecycleSnapshot: {
           protocolVersion: 1,
           eventType: "turn.snapshot",
+          recovery: "none",
           commandId: "summary:s-snapshot:2",
           userId: "",
           sessionId: "s-snapshot",
@@ -117,6 +118,7 @@ describe("useChatSession summary and reconnect state", () => {
         turnLifecycleSnapshot: {
           protocolVersion: 1,
           eventType: "turn.snapshot",
+          recovery: "none",
           commandId: `summary:${sessionId}:2`,
           sessionId,
           sequence: 2,
@@ -175,6 +177,7 @@ describe("useChatSession summary and reconnect state", () => {
         turnLifecycleSnapshot: {
           protocolVersion: 1,
           eventType: "turn.snapshot",
+          recovery: "none",
           commandId: "summary:s-late-identity:2",
           userId: "",
           sessionId: "s-late-identity",
@@ -240,6 +243,7 @@ describe("useChatSession summary and reconnect state", () => {
         turnLifecycleSnapshot: {
           protocolVersion: 1,
           eventType: "turn.snapshot",
+          recovery: "none",
           commandId: "summary:s-active-refresh:4",
           sessionId,
           sequence: 4,
@@ -318,6 +322,7 @@ describe("useChatSession summary and reconnect state", () => {
       turnLifecycleSnapshot: {
         protocolVersion: 1,
         eventType: "turn.snapshot",
+        recovery: "none",
         commandId: "summary:s-async-refresh:4",
         sessionId: "s-async-refresh",
         sequence: 4,

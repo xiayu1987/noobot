@@ -15,7 +15,7 @@ import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   flushJsonLineBatches,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 const app = express();
@@ -40,7 +40,6 @@ const {
   resolveAuthByApiKey,
   normalizeLocale,
   defaultLocale,
-  workspaceRootPath,
   getBot,
   readSessionUserIds,
   buildHttpModuleDependencies,
@@ -110,11 +109,10 @@ try {
       defaultLocale,
       translateText,
       openVSCodeService,
-      workspaceRootPath,
       host: startupContext.service.host || undefined,
       port: startupContext.service.port,
     });
-    await writeRoutedRuntimeEvent({
+    await writeRuntimeEvent({
       scope: "startup",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.STARTUP,
@@ -123,7 +121,6 @@ try {
       event: failures.length
         ? "service.startup.sessionDisplaySummaryMaintenance.failed"
         : "service.startup.sessionDisplaySummaryMaintenance.completed",
-      workspaceRoot: workspaceRootPath(),
       data: {
         userCount: results.length,
         migratedSessionCount: results.reduce(
@@ -139,14 +136,13 @@ try {
     });
   }
 } catch (error) {
-  const eventWrite = writeRoutedRuntimeEvent({
+  const eventWrite = writeRuntimeEvent({
     scope: "startup",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.STARTUP,
     category: RUNTIME_EVENT_CATEGORIES.STATE,
     level: "error",
     event: "service.startup.sessionDisplaySummaryMaintenance.failed",
-    workspaceRoot: workspaceRootPath(),
     data: {
       code: String(error?.code || ""),
       message: String(error?.message || error || ""),

@@ -12,7 +12,7 @@ import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 export class SseMcpClient extends BaseMcpClient {
@@ -64,7 +64,8 @@ export class SseMcpClient extends BaseMcpClient {
     try {
       payload = JSON.parse(data);
     } catch (error) {
-      void writeRoutedRuntimeEvent({
+      void writeRuntimeEvent({
+        scope: "system",
         source: "agent",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,

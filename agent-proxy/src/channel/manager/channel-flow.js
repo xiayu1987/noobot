@@ -59,7 +59,7 @@ function buildInteractionConversationPatch({
 }) {
   const current = currentState ?? {};
   return {
-    sessionId: resolved.sessionId || String(current.sessionId || "").trim(),
+    sessionId: resolved.sessionId,
     dialogProcessId: resolved.dialogProcessId,
     turnScopeId: resolved.turnScopeId || String(current.turnScopeId || "").trim(),
     state: hasRemainingInteraction
@@ -95,7 +95,7 @@ class ChannelFlowMethods {
     const sessionId = String(identity.sessionId || payload?.sessionId || "").trim();
     const explicitChannelKey = String(payload?.channelKey || "").trim();
     if (explicitChannelKey && this.hasChannel(explicitChannelKey)) {
-      if (sessionId && this._extractSessionIdFromChannelKey?.(explicitChannelKey) !== sessionId) {
+      if (sessionId && this.getChannel(explicitChannelKey).identity.sessionId !== sessionId) {
         void writeAgentProxyRouteDebugEvent({
           event: "agentProxy.route.resolve.rejected",
           payload,
@@ -142,7 +142,7 @@ class ChannelFlowMethods {
     }
     const activeChannelKey = String(socket?.__agentProxyActiveChannelKey || "").trim();
     if (activeChannelKey && this.hasChannel(activeChannelKey)) {
-      if (sessionId && this._extractSessionIdFromChannelKey?.(activeChannelKey) !== sessionId) {
+      if (sessionId && this.getChannel(activeChannelKey).identity.sessionId !== sessionId) {
         void writeAgentProxyRouteDebugEvent({
           event: "agentProxy.route.resolve.rejected",
           payload,
@@ -189,7 +189,7 @@ class ChannelFlowMethods {
       channel,
       data: { reason: "upstream_not_open" },
     });
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       level: "warn",
       event: "agentProxy.upstream.forward.skipped",
@@ -214,7 +214,7 @@ class ChannelFlowMethods {
       channel,
       data: { reason: "forwarded" },
     });
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       event: "agentProxy.upstream.forward",
       data: {
@@ -245,7 +245,7 @@ class ChannelFlowMethods {
         errorMessage: describeForwardError(error).slice(0, 300),
       },
     });
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       level: "warn",
       event: "agentProxy.upstream.forward.error",
@@ -359,6 +359,7 @@ class ChannelFlowMethods {
     this.logSessionEvent(channel, {
       category: "interaction",
       event: shouldStartNewRun ? "agentProxy.channel.start" : "agentProxy.channel.join",
+      sessionId,
       data: {
         channelKey: channel.key,
         socketId: socket?.__agentProxySocketId,
@@ -382,6 +383,7 @@ class ChannelFlowMethods {
     channel.eventJournal.reset();
     channel.conversationStateByDialogProcessId = new Map();
     this.updateConversationState(channel, {
+      sessionId: channel.identity.sessionId,
       dialogProcessId: "",
       state: CONVERSATION_STATE.NO_CONVERSATION,
       sourceEvent: CONVERSATION_SOURCE_EVENT.RESTART,

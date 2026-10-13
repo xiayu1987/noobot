@@ -10,6 +10,7 @@ import {
   SESSIONS_SUMMARY_SCHEMA_VERSION,
 } from "../../session-summary-builders.js";
 import { readJsonArtifactFile } from "../../session-artifact-store.js";
+import { PERSISTED_JSON_READ_ERROR_CODE } from "../../../shared/storage/json-file-reader.js";
 
 class SessionSummaryMethods {
   _basePath(userId = "") {
@@ -20,18 +21,12 @@ class SessionSummaryMethods {
     return this.pathResolver.sessionRoot(this._basePath(userId));
   }
 
-  _deletedSessionMarkerFile(userId = "") {
-    if (typeof this.pathResolver?.deletedSessionMarkerFile === "function") {
-      return this.pathResolver.deletedSessionMarkerFile(this._basePath(userId));
-    }
-    return `${this._sessionRoot(userId)}/.deleted-sessions.json`;
+  _sessionTombstoneFile(userId = "") {
+    return this.pathResolver.sessionTombstoneFile(this._basePath(userId));
   }
 
   _sessionsSummaryFile(userId = "") {
-    if (typeof this.pathResolver?.sessionsSummaryFile === "function") {
-      return this.pathResolver.sessionsSummaryFile(this._basePath(userId));
-    }
-    return `${this._sessionRoot(userId)}/sessions.json`;
+    return this.pathResolver.sessionsSummaryFile(this._basePath(userId));
   }
 
   _sortSummaries(sessions = []) {
@@ -51,7 +46,6 @@ class SessionSummaryMethods {
 
   async readSessionsSummary(userId = "") {
     const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) return { sessions: [], updatedAt: this.now() };
     const payload = await this.storageService.readJson(
       this._sessionsSummaryFile(normalizedUserId),
       { sessions: [], updatedAt: this.now() },
@@ -64,8 +58,6 @@ class SessionSummaryMethods {
 
   async writeSessionsSummary(userId = "", sessions = []) {
     const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) return { sessions: [], updatedAt: this.now() };
-    await this.storageService.ensureRuntimeDirsByBasePath(this._basePath(normalizedUserId));
     const payload = normalizeSessionsSummaryPayload(
       { sessions: this._sortSummaries(sessions), updatedAt: this.now() },
       this.now,
@@ -195,7 +187,8 @@ class SessionSummaryMethods {
         createdAt: String(manifest?.createdAt || "").trim(),
         updatedAt: String(manifest?.updatedAt || "").trim(),
       };
-    } catch {
+    } catch (error) {
+      if (error?.code !== PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED) throw error;
       return { title: "", caller: "user", createdAt: "", updatedAt: "" };
     }
   }

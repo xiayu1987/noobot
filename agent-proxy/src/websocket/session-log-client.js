@@ -29,9 +29,6 @@ export function createSessionLogClient({ WebSocketImpl } = {}) {
     WebSocketImpl,
     resolveWebSocketUrl: buildLogWebSocketUrl,
     source: "agent-proxy",
-    defaultCategory: "agent-proxy",
-    defaultEvent: "agentProxy.log",
-    defaultSessionId: "agent-proxy",
     channel: SESSION_CHANNELS.AGENT_PROXY_WEB_SOCKET,
   });
 }

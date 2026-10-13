@@ -155,7 +155,7 @@ test("project launcher initializes a known provider from the model library", asy
       NOOBOT_MODEL_NAME: "gpt-6-sol",
       NOOBOT_MODEL_API_KEY: "test-key",
       NOOBOT_MODEL_BASE_URL: "https://example.invalid/v1",
-      NOOBOT_WORKSPACE_ROOT: "./workspace",
+      NOOBOT_SETUP_WORKSPACE_ROOT: "./workspace",
     },
   });
 
@@ -181,7 +181,7 @@ test("project launcher falls back to model library config when key and url are e
       NOOBOT_MODEL_API_KEY: "",
       NOOBOT_MODEL_BASE_URL: "",
       NOOBOT_EXECUTION_ISOLATION_MODE: "host",
-      NOOBOT_WORKSPACE_ROOT: "./workspace",
+      NOOBOT_SETUP_WORKSPACE_ROOT: "./workspace",
     },
   });
 

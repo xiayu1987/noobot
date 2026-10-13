@@ -69,7 +69,6 @@ test("plugin artifact outbox commit is sent through the active WebSocket before 
     webSocket,
     state: {},
     logConnection: (event, data) => logs.push({ event, data }),
-    sessionLogConfig: {},
   });
   const runHandle = registerActiveRun({
     userId: "u1",

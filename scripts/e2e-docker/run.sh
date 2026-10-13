@@ -6,7 +6,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE="${NOOBOT_E2E_DOCKER_IMAGE:-noobot-e2e:node26.9.0}"
+PLAYWRIGHT_VERSION="$(node -p "require('$ROOT_DIR/node_modules/@playwright/test/package.json').version")"
+IMAGE="${NOOBOT_E2E_DOCKER_IMAGE:-noobot-e2e:node26.9.0-pw${PLAYWRIGHT_VERSION}}"
 CONTAINER="${NOOBOT_E2E_DOCKER_CONTAINER:-noobot-e2e}"
 HOST_PORT="${NOOBOT_E2E_DOCKER_HOST_PORT:-20060}"
 READY_TIMEOUT_S="${NOOBOT_E2E_DOCKER_READY_TIMEOUT_S:-300}"
@@ -54,7 +55,7 @@ container_running() {
 }
 
 cmd_build() {
-  docker build -t "$IMAGE" "$SCRIPT_DIR"
+  docker build --build-arg "PLAYWRIGHT_VERSION=$PLAYWRIGHT_VERSION" -t "$IMAGE" "$SCRIPT_DIR"
 }
 
 wait_ready() {
@@ -134,14 +135,21 @@ cmd_test() {
   load_connect_code
   load_mysql_password
   cmd_restart
-  local workspace_root="$E2E_WORKSPACE"
-  NOOBOT_E2E_BASE_URL="http://127.0.0.1:${HOST_PORT}" \
-    NOOBOT_E2E_USER_ID="${NOOBOT_E2E_USER_ID:-admin}" \
-    NOOBOT_E2E_MODEL_ALIAS="${NOOBOT_E2E_MODEL_ALIAS:-gpt_6_1_sol}" \
-    NOOBOT_E2E_MYSQL_HOST="${NOOBOT_E2E_MYSQL_HOST:-host.docker.internal}" \
-    NOOBOT_WORKSPACE_ROOT="$workspace_root" \
-    NOOBOT_E2E_WORKSPACE_ROOT="$workspace_root" \
-    NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$workspace_root" \
+  # Tests run inside the container against the freshly built services; the
+  # workspace root is the container view of the mounted e2e workspace.
+  export NOOBOT_E2E_BASE_URL="http://127.0.0.1:${CLIENT_PORT}"
+  export NOOBOT_E2E_USER_ID="${NOOBOT_E2E_USER_ID:-admin}"
+  export NOOBOT_E2E_MODEL_ALIAS="${NOOBOT_E2E_MODEL_ALIAS:-gpt_6_1_sol}"
+  export NOOBOT_E2E_MYSQL_HOST="${NOOBOT_E2E_MYSQL_HOST:-host.docker.internal}"
+  export NOOBOT_WORKSPACE_ROOT="$SOURCE_WORKSPACE"
+  local env_args=(
+    -e NOOBOT_E2E_BASE_URL -e NOOBOT_E2E_USER_ID -e NOOBOT_E2E_MODEL_ALIAS
+    -e NOOBOT_E2E_MYSQL_HOST -e NOOBOT_WORKSPACE_ROOT -e NOOBOT_E2E_CONNECT_CODE
+  )
+  if [[ -n "${NOOBOT_E2E_MYSQL_PASSWORD:-}" ]]; then
+    env_args+=(-e NOOBOT_E2E_MYSQL_PASSWORD)
+  fi
+  docker exec "${env_args[@]}" -w "$ROOT_DIR" "$CONTAINER" \
     npm --prefix "$ROOT_DIR/client/noobot-chat" run "test:e2e:protocol:${suite}" -- "$@"
 }
 

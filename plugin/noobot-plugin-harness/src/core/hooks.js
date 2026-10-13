@@ -67,7 +67,7 @@ export function createRegisterHarnessHooks(deps = {}) {
 
   return function registerHarnessHooks({ hookManager, options, capabilityRuntime, plugin }) {
     const disposers = [];
-    const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled({ options });
+    const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled();
 
     for (const point of tracePoints) {
       disposers.push(

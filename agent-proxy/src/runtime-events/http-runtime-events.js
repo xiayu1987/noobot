@@ -6,7 +6,7 @@
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 function resolveRequestUrlInfo({ requestUrl = "", method = "" } = {}) {
@@ -24,15 +24,14 @@ export function writeAgentProxyInvalidRequestUrlEvent({
   requestUrl = "",
   method = "",
   error = null,
-  workspaceRoot,
 } = {}) {
-  return writeRoutedRuntimeEvent({
+  return writeRuntimeEvent({
+    scope: "system",
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
     level: "warn",
     event: "agentProxy.http.invalidRequestUrl",
-    workspaceRoot,
     data: resolveRequestUrlInfo({ requestUrl, method }),
     error,
   });
@@ -45,9 +44,9 @@ export function writeAgentProxyUpstreamRequestFailedEvent({
   timeoutMs = 0,
   timedOut = false,
   error = null,
-  workspaceRoot,
 } = {}) {
-  return writeRoutedRuntimeEvent({
+  return writeRuntimeEvent({
+    scope: "system",
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
@@ -55,7 +54,6 @@ export function writeAgentProxyUpstreamRequestFailedEvent({
     event: timedOut
       ? "agentProxy.http.upstreamRequest.timeout"
       : "agentProxy.http.upstreamRequest.failed",
-    workspaceRoot,
     data: {
       method:
         String(method || "")
@@ -79,16 +77,15 @@ export function writeAgentProxyHttpTraceEvent({
   contentType = "",
   contentDisposition = false,
   error = "",
-  workspaceRoot,
 } = {}) {
-  return writeRoutedRuntimeEvent({
+  return writeRuntimeEvent({
+    scope: "system",
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,
     level: "debug",
     debugType: "agent-proxy-http-trace",
     event: "agentProxy.http.trace",
-    workspaceRoot,
     data: {
       traceEvent: String(event || ""),
       traceIdLength: String(traceId || "").length,
@@ -112,15 +109,14 @@ export function writeAgentProxyHttpLifecycleEvent({
   traceId = "",
   status = 0,
   durationMs = 0,
-  workspaceRoot,
 } = {}) {
-  return writeRoutedRuntimeEvent({
+  return writeRuntimeEvent({
+    scope: "system",
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: "agent-proxy-http",
     level: "info",
     event,
-    workspaceRoot,
     data: {
       method: String(method || "").toUpperCase() || "GET",
       pathname: String(pathname || "").slice(0, 200),

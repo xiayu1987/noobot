@@ -75,6 +75,7 @@ export function createChatWebSocketClient({
       return sessionLogSink.debug?.(AGENT_TRANSPORT_DEBUG_TYPE, () => {
         const summary = summarizeAgentTransportCommand(command, extra);
         return {
+          scope: "session",
           category: "debug",
           level: "debug",
           debugType: AGENT_TRANSPORT_DEBUG_TYPE,
@@ -599,7 +600,8 @@ export function createChatWebSocketClient({
 
   async function reconnect({
     currentSessionId = "",
-    userId = "",
+    currentParentSessionId = "",
+    currentParentDialogProcessId = "",
     knownLifecycleSequenceMap = {},
     onReconnectData = () => {},
   } = {}) {
@@ -666,7 +668,8 @@ export function createChatWebSocketClient({
               action: "reconnect",
               requestId,
               currentSessionId: String(currentSessionId || "").trim(),
-              userId: String(userId || "").trim(),
+              currentParentSessionId: String(currentParentSessionId || "").trim(),
+              currentParentDialogProcessId: String(currentParentDialogProcessId || "").trim(),
               knownLifecycleSequenceMap:
                 knownLifecycleSequenceMap && typeof knownLifecycleSequenceMap === "object"
                   ? knownLifecycleSequenceMap

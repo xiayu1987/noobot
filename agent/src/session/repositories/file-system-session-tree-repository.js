@@ -7,6 +7,10 @@ import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeSessionTreeEntity } from "../entities/session-entity.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
+import {
+  SESSION_TREE_ERROR,
+  resolveSessionTreeChain,
+} from "@noobot/workspace-protocol/session-tree";
 
 export class FileSystemSessionTreeRepository {
   constructor({ pathResolver, storageService } = {}) {
@@ -23,45 +27,49 @@ export class FileSystemSessionTreeRepository {
     return this.pathResolver.sessionTreeFile(this._basePath(userId));
   }
 
-  loopSession(sessionId, tree, chain = []) {
+  resolveRootSessionIdFromTree(sessionId, tree) {
     const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return chain;
-    const parentSessionId = String(
-      tree?.nodes?.[normalizedSessionId]?.parentSessionId || "",
-    ).trim();
-    const nextChain = chain.concat(normalizedSessionId);
-    if (!parentSessionId) return nextChain;
-    return this.loopSession(parentSessionId, tree, nextChain);
+    if (!normalizedSessionId) {
+      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
+      });
+    }
+    try {
+      return resolveSessionTreeChain(tree, normalizedSessionId)[0];
+    } catch (error) {
+      if (error?.code !== SESSION_TREE_ERROR.NODE_MISSING) throw error;
+      const { missingSessionId } = error.details;
+      throw fatalSystemError(`${tSystem("session.treeNodeMissing")}: ${missingSessionId}`, {
+        code: ERROR_CODE.FATAL_SESSION_TREE_NODE_MISSING,
+        details: { sessionId: normalizedSessionId, missingSessionId },
+      });
+    }
   }
 
-  resolveRootSessionIdFromTree(sessionId = "", tree = {}) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return "";
-    const nodes = tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
-    if (!nodes?.[normalizedSessionId]) return normalizedSessionId;
-    const chain = this.loopSession(normalizedSessionId, tree, []);
-    return String(chain?.[chain.length - 1] || normalizedSessionId).trim();
+  async assertWorkspaceInitialized(userId) {
+    const basePath = this._basePath(userId);
+    const requiredDirectories = [
+      this.pathResolver.sessionRoot(basePath),
+      this.pathResolver.sessionLifecycleRecordsDir(basePath),
+      this.pathResolver.sessionLifecycleLocksDir(basePath),
+    ];
+    for (const directory of requiredDirectories) {
+      if (await this.storageService.isDirectory(directory)) continue;
+      throw fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
+        code: ERROR_CODE.FATAL_WORKSPACE_NOT_INITIALIZED,
+        details: { basePath, missingDirectory: directory },
+      });
+    }
   }
 
   async getTree(userId) {
-    const basePath = this._basePath(userId);
-    const ensured = await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    if (!ensured) {
-      return { nodes: {} };
-    }
+    await this.assertWorkspaceInitialized(userId);
     const tree = await this.storageService.readJson(this._treeFile(userId), { nodes: {} });
     return normalizeSessionTreeEntity(tree);
   }
 
   async saveTree(userId, tree = {}) {
-    const basePath = this._basePath(userId);
-    const ensured = await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    if (!ensured) {
-      throw fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
-        code: ERROR_CODE.FATAL_WORKSPACE_NOT_INITIALIZED,
-        details: { basePath },
-      });
-    }
+    await this.assertWorkspaceInitialized(userId);
     await this.storageService.writeJsonAtomic(
       this._treeFile(userId),
       normalizeSessionTreeEntity(tree),

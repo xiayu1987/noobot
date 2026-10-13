@@ -11,10 +11,12 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 async function withTempWorkspace(operation) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-initial-provision-"));
   try {
+    await initializeUserWorkspace(workspaceRoot, "u1");
     return await operation(workspaceRoot);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

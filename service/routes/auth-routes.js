@@ -11,7 +11,7 @@ import { createClientModelCatalog, normalizePluginMode } from "@noobot/agent-con
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 function isPlainObject(value) {
@@ -101,7 +101,8 @@ export function registerAuthRoutes(
               ? (await loadUserConfigForUser(targetUserId)) || {}
               : {};
           } catch (error) {
-            void writeRoutedRuntimeEvent({
+            void writeRuntimeEvent({
+              scope: "system",
               source: "service",
               channel: RUNTIME_EVENT_CHANNELS.DIRECT,
               category: RUNTIME_EVENT_CATEGORIES.CONFIG,

@@ -17,7 +17,6 @@ import { createExecutionQueryCommand } from "@noobot/agent-transport-protocol";
 export function createReconnectCoordinator({
   activeSession,
   turnRuntimeRegistry,
-  userId,
   chatWebSocketClient,
   reconnectReplay,
   chatList,
@@ -50,7 +49,10 @@ export function createReconnectCoordinator({
     return chatWebSocketClient
       .reconnect({
         currentSessionId: reconnectSessionId,
-        userId: String(userId?.value || userId || ""),
+        currentParentSessionId: String(activeSession.value?.parentSessionId || "").trim(),
+        currentParentDialogProcessId: String(
+          activeSession.value?.parentDialogProcessId || "",
+        ).trim(),
         knownLifecycleSequenceMap,
         onReconnectData: (reconnectPayload) => {
           logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", () => ({

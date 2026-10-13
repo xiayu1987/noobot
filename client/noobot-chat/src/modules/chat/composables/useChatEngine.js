@@ -202,6 +202,19 @@ export function useChatEngine({
     const terminalResolution = terminalResolutionCoordinator.observe(event);
     return terminalResolution ? terminalResolution.then(() => lifecycleResult) : lifecycleResult;
   };
+  const logSessionStateEvent = (event, name, data) => {
+    const sessionId = String(event?.sessionId || "").trim();
+    if (!sessionId) return false;
+    return sessionLogWebSocketClient?.log?.({
+      scope: "session",
+      category: "state",
+      event: name,
+      sessionId,
+      dialogProcessId: String(event?.dialogProcessId || "").trim(),
+      turnScopeId: String(event?.turnScopeId || "").trim(),
+      data,
+    });
+  };
   const applyRunStateEvent = (event) => {
     const eventSummary = summarizeStateMachineEvent(event);
     const before = selectSessionTurnRuntime(
@@ -247,17 +260,10 @@ export function useChatEngine({
       before: summarizeStateMachineTurn(beforeTurn, before),
       after: summarizeStateMachineTurn(turnResult?.turn, runtime),
     }));
-    sessionLogWebSocketClient?.log?.({
-      category: "state",
-      event: "stateMachine.event",
-      sessionId: event?.sessionId || activeSessionId?.value || "",
-      dialogProcessId: event?.dialogProcessId || "",
-      turnScopeId: event?.turnScopeId || "",
-      data: {
-        eventType: event?.type || "",
-        source: event?.source || "",
-        toState: runtime.displayState,
-      },
+    logSessionStateEvent(event, "stateMachine.event", {
+      eventType: event?.type || "",
+      source: event?.source || "",
+      toState: runtime.displayState,
     });
     logStateMachineDebug("stateMachine.transition", () => ({
       eventType: event?.type || "",
@@ -268,21 +274,14 @@ export function useChatEngine({
         ? activeSession.value.messages.length
         : 0,
     }));
-    sessionLogWebSocketClient?.log?.({
-      category: "state",
-      event: "stateMachine.transition",
-      sessionId: event?.sessionId || activeSessionId?.value || "",
-      dialogProcessId: event?.dialogProcessId || "",
-      turnScopeId: event?.turnScopeId || "",
-      data: {
-        eventType: event?.type || "",
-        toState: runtime.displayState,
-        sending: runtime.sending,
-        canStop: runtime.canStop,
-        messageCount: Array.isArray(activeSession?.value?.messages)
-          ? activeSession.value.messages.length
-          : 0,
-      },
+    logSessionStateEvent(event, "stateMachine.transition", {
+      eventType: event?.type || "",
+      toState: runtime.displayState,
+      sending: runtime.sending,
+      canStop: runtime.canStop,
+      messageCount: Array.isArray(activeSession?.value?.messages)
+        ? activeSession.value.messages.length
+        : 0,
     });
     return turnResult;
   };

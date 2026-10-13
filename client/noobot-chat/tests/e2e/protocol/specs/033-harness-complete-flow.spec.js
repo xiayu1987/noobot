@@ -110,13 +110,16 @@ function assertAuxiliaryObserverProjection(mainMessages = [], auxiliaryTraces = 
   expect(
     auxiliaryPreview.some(
       (message) =>
-        message.role === "user" && /tool call:/i.test(String(message.contentPreview || "")),
+        message.role === "user" &&
+        /^Tool call \[[^\]]+\]: /.test(String(message.contentPreview || "")),
     ),
     "auxiliary lane must project a canonical main-lane tool call as observer user context",
   ).toBe(true);
   expect(
     auxiliaryPreview.some(
-      (message) => message.role === "assistant" && Number(message.contentLength || 0) > 0,
+      (message) =>
+        message.role === "assistant" &&
+        /^Tool result \[[^\]]+\] /.test(String(message.contentPreview || "")),
     ),
     "auxiliary lane must project a canonical main-lane tool result as observer assistant context",
   ).toBe(true);

@@ -26,7 +26,7 @@ export class ConnectorRuntime {
   constructor({
     repository,
     secretStore,
-    workspaceRoot = "",
+    workspaceRoot,
     resolveUserWorkspacePath = null,
     now = () => new Date().toISOString(),
   } = {}) {
@@ -34,18 +34,16 @@ export class ConnectorRuntime {
     if (!secretStore) throw new TypeError("connector secret store is required");
     this.repository = repository;
     this.secretStore = secretStore;
-    this.workspaceRoot = path.resolve(String(workspaceRoot || "."));
+    if (!path.isAbsolute(String(workspaceRoot || ""))) {
+      throw new TypeError("connector runtime workspaceRoot must be an absolute path");
+    }
+    this.workspaceRoot = workspaceRoot;
     this.resolveUserWorkspacePath = resolveUserWorkspacePath;
     this.now = now;
     this.registry = new ConnectorInstanceRegistry();
     this.handles = new Map();
     this.statuses = new Map();
     this.connectorLocks = new Map();
-  }
-
-  setWorkspaceRoot(workspaceRoot = "") {
-    this.workspaceRoot = path.resolve(String(workspaceRoot || "."));
-    this.repository.setWorkspaceRoot?.(this.workspaceRoot);
   }
 
   register(implementation = {}) {

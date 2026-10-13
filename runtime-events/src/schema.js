@@ -17,8 +17,7 @@ const scopes = new Set(Object.values(RUNTIME_EVENT_SCOPES));
 const levels = new Set(Object.values(RUNTIME_EVENT_LEVELS));
 const categories = new Set(Object.values(RUNTIME_EVENT_CATEGORIES));
 
-function buildProcessInfo(includeProcess = true) {
-  if (!includeProcess) return undefined;
+function buildProcessInfo() {
   return {
     pid: process.pid,
     platform: process.platform,
@@ -51,26 +50,23 @@ function resolveRecordDebugType({ category, level, debugType }) {
   return debugType;
 }
 
-export function normalizeRuntimeEventEnvelope(event = {}, defaults = {}) {
-  const scope = event.scope || defaults.scope || RUNTIME_EVENT_SCOPES.SYSTEM;
+export function normalizeRuntimeEventEnvelope(event = {}) {
+  const scope = event.scope;
   if (!scopes.has(scope)) throw new Error(`Invalid runtime event scope: ${scope}`);
-  const level = event.level || defaults.level || RUNTIME_EVENT_LEVELS.INFO;
+  const level = event.level || RUNTIME_EVENT_LEVELS.INFO;
   if (!levels.has(level)) throw new Error(`Invalid runtime event level: ${level}`);
-  const category = event.category || defaults.category || RUNTIME_EVENT_CATEGORIES.SYSTEM;
+  const category = event.category;
   if (!categories.has(category)) throw new Error(`Invalid runtime event category: ${category}`);
-  const source = event.source || defaults.source;
-  const name = event.event || defaults.event;
+  const source = event.source;
+  const name = event.event;
   if (!source) throw new Error("Runtime event source is required");
   if (!name) throw new Error("Runtime event name is required");
   const debugType = resolveRecordDebugType({
     category,
     level,
-    debugType: event.debugType ?? defaults.debugType,
+    debugType: event.debugType,
   });
-  if (
-    scope === RUNTIME_EVENT_SCOPES.SESSION &&
-    ((!event.userId && !defaults.userId) || (!event.sessionId && !defaults.sessionId))
-  ) {
+  if (scope === RUNTIME_EVENT_SCOPES.SESSION && (!event.userId || !event.sessionId)) {
     throw new Error("Session runtime event requires userId and sessionId");
   }
   const record = {
@@ -80,7 +76,6 @@ export function normalizeRuntimeEventEnvelope(event = {}, defaults = {}) {
     scope,
     channel: safeSegment(
       event.channel ||
-        defaults.channel ||
         (scope === RUNTIME_EVENT_SCOPES.STARTUP
           ? RUNTIME_EVENT_CHANNELS.STARTUP
           : RUNTIME_EVENT_CHANNELS.DIRECT),
@@ -91,36 +86,26 @@ export function normalizeRuntimeEventEnvelope(event = {}, defaults = {}) {
   };
   if (debugType) record.debugType = debugType;
   for (const key of ["userId", "sessionId", "dialogProcessId", "turnScopeId"]) {
-    const value = event[key] ?? defaults[key];
+    const value = event[key];
     if (value) record[key] = normalizeIdentity(value);
   }
-  for (const key of ["parentSessionId", "rootSessionId", "storageSessionId"]) {
-    const value = normalizeOptionalSessionId(event[key] ?? defaults[key]);
-    if (value) record[key] = safeSegment(value);
-  }
-  const error = event.error || defaults.error;
+  const parentSessionId = normalizeOptionalSessionId(event.parentSessionId);
+  if (parentSessionId) record.parentSessionId = parentSessionId;
+  const error = event.error;
   if (error) record.error = serializeError(error);
   return record;
 }
 
-export function attachRuntimeEventPayload(record, event = {}, defaults = {}) {
-  const processInfo =
-    event.process ?? defaults.process ?? buildProcessInfo(defaults.includeProcess ?? true);
-  if (processInfo) record.process = sanitizeValue(processInfo);
-  if (event.data || defaults.data) {
-    record.data = sanitizeValue({ ...(defaults.data || {}), ...(event.data || {}) });
-    for (const key of ["parentSessionId", "rootSessionId", "storageSessionId"]) {
-      if (!(key in record.data)) continue;
-      const value = normalizeOptionalSessionId(record.data[key]);
-      if (value) record.data[key] = safeSegment(value);
-      else delete record.data[key];
-    }
+export function attachRuntimeEventPayload(record, event = {}) {
+  record.process = sanitizeValue(event.process ?? buildProcessInfo());
+  if (event.data) {
+    record.data = sanitizeValue({ ...event.data });
   }
-  const tags = event.tags || defaults.tags;
+  const tags = event.tags;
   if (Array.isArray(tags) && tags.length) record.tags = tags.map((tag) => safeSegment(tag));
   return record;
 }
 
-export function normalizeRuntimeEvent(event = {}, defaults = {}) {
-  return attachRuntimeEventPayload(normalizeRuntimeEventEnvelope(event, defaults), event, defaults);
+export function normalizeRuntimeEvent(event = {}) {
+  return attachRuntimeEventPayload(normalizeRuntimeEventEnvelope(event), event);
 }

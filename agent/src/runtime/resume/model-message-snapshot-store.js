@@ -5,8 +5,7 @@
  */
 import fs from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { isWorkspaceSessionDeleted } from "@noobot/runtime-events";
-import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { resolveWorkspaceSessionLocation } from "@noobot/runtime-events";
 import { projectSystemRuntimeTurnProgress } from "@noobot/agent-config-protocol";
 import {
   createModelContextSnapshot,
@@ -14,39 +13,30 @@ import {
   normalizeSnapshotIdentity,
 } from "@noobot/context-protocol/policy/snapshot";
 
-function cleanId(value = "") {
-  return String(value || "")
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]/g, "_");
+const SNAPSHOT_DIR_NAME = "model-message-snapshots";
+
+function snapshotFileSegment(value = "") {
+  return String(value).replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function snapshotDir({
-  globalConfig = {},
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-} = {}) {
-  const root = String(globalConfig?.workspaceRoot || process.cwd()).trim();
-  const storageSessionId = cleanId(parentSessionId) || cleanId(sessionId);
-  return path.resolve(
-    root,
-    cleanId(userId),
-    WORKSPACE_LAYOUT.SESSION_DIR,
-    storageSessionId,
-    "model-message-snapshots",
-  );
+async function resolveSnapshotLocation(identity = {}, globalConfig = {}) {
+  const workspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
+  if (!workspaceRoot) {
+    throw new TypeError("model message snapshot requires globalConfig.workspaceRoot");
+  }
+  const location = await resolveWorkspaceSessionLocation({
+    workspaceRoot,
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    parentSessionId: identity.parentSessionId,
+  });
+  if (!location.sessionDir) return location;
+  const fileName = `${snapshotFileSegment(identity.dialogProcessId)}__${snapshotFileSegment(identity.turnScopeId)}.json`;
+  return { file: path.join(location.sessionDir, SNAPSHOT_DIR_NAME, fileName) };
 }
 
-function snapshotPath(identity = {}, globalConfig = {}) {
-  const childPrefix =
-    cleanId(identity.parentSessionId) &&
-    cleanId(identity.parentSessionId) !== cleanId(identity.sessionId)
-      ? `${cleanId(identity.sessionId)}__`
-      : "";
-  return path.join(
-    snapshotDir({ globalConfig, ...identity }),
-    `${childPrefix}${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`,
-  );
+function snapshotSkipReason(location = {}) {
+  return location.deleted ? "session_deleted" : "session_missing";
 }
 
 function countSnapshotMessages(candidate = {}) {
@@ -157,32 +147,22 @@ export async function saveStoppedModelMessageSnapshot({
     !normalizedIdentity.sessionId ||
     !normalizedIdentity.dialogProcessId ||
     !normalizedIdentity.turnScopeId
-  )
-    return null;
-  const workspaceRoot = String(globalConfig?.workspaceRoot || process.cwd()).trim();
-  const guardedSessionIds = [
-    ...new Set([normalizedIdentity.sessionId, normalizedIdentity.parentSessionId].filter(Boolean)),
-  ];
-  for (const sessionId of guardedSessionIds) {
-    if (
-      await isWorkspaceSessionDeleted({
-        workspaceRoot,
-        userId: normalizedIdentity.userId,
-        sessionId,
-      })
-    )
-      return null;
+  ) {
+    throw new TypeError(
+      "model message snapshot requires userId, sessionId, dialogProcessId and turnScopeId",
+    );
   }
+  const location = await resolveSnapshotLocation(normalizedIdentity, globalConfig);
+  if (!location.file) return { saved: false, reason: snapshotSkipReason(location) };
   const snapshot = createModelContextSnapshot({
     identity: normalizedIdentity,
     messageBlocks,
     userMetaBackwrites,
     turnProgress,
   });
-  const filePath = snapshotPath(normalizedIdentity, globalConfig);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), "utf8");
-  return snapshot;
+  await fs.mkdir(path.dirname(location.file), { recursive: true });
+  await fs.writeFile(location.file, JSON.stringify(snapshot, null, 2), "utf8");
+  return { saved: true, snapshot };
 }
 
 export async function saveStoppedModelMessageSnapshotCandidate({
@@ -229,18 +209,18 @@ export async function saveStoppedModelMessageSnapshotCandidate({
     return result;
   }
   try {
-    const snapshot = await saveStoppedModelMessageSnapshot({
+    const saveResult = await saveStoppedModelMessageSnapshot({
       globalConfig,
       identity,
       messageBlocks: candidate.messageBlocks,
       userMetaBackwrites: candidate.userMetaBackwrites,
       turnProgress: projectSystemRuntimeTurnProgress(candidate.systemRuntime),
     });
-    if (!snapshot) {
+    if (!saveResult.saved) {
       const result = buildSnapshotPersistenceResult({
         status: "skipped",
         source,
-        reason: "session_deleted",
+        reason: saveResult.reason,
         identity,
         candidate,
       });
@@ -283,16 +263,17 @@ export async function loadStoppedModelMessageSnapshot({
   allowMissing = false,
 } = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
+  const location = await resolveSnapshotLocation(normalizedIdentity, globalConfig);
+  if (!location.file) {
+    if (allowMissing === true) return null;
+    throw new Error(`stopped model message snapshot unavailable: ${snapshotSkipReason(location)}`);
+  }
   let raw;
   try {
-    raw = await fs.readFile(snapshotPath(normalizedIdentity, globalConfig), "utf8");
+    raw = await fs.readFile(location.file, "utf8");
   } catch (error) {
     if (allowMissing === true && error?.code === "ENOENT") return null;
     throw error;
   }
   return hydrateModelContextSnapshot(JSON.parse(raw), normalizedIdentity);
-}
-
-export async function clearStoppedModelMessageSnapshot({ globalConfig = {}, identity = {} } = {}) {
-  await fs.rm(snapshotPath(identity, globalConfig), { force: true });
 }

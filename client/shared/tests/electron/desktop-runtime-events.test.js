@@ -11,7 +11,6 @@ import test from "node:test";
 import {
   createDesktopRuntimeEventWriter,
   getDesktopRuntimeEventsRoot,
-  initializeDesktopRuntimeEvents,
   sanitizeDesktopRuntimeEventData,
 } from "../../electron/runtime/runtime-events.js";
 
@@ -34,12 +33,17 @@ test("desktop runtime-events root is under Electron userData", async () => {
   }
 });
 
-test("desktop runtime-events initialization keeps explicit env root", async () => {
-  const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-runtime-events-env-"));
+test("desktop runtime event writer rejects session-scoped events", async () => {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-runtime-events-session-"));
   try {
-    const env = { NOOBOT_RUNTIME_EVENTS_ROOT: path.join(rootDir, "custom-events") };
-    const app = createApp(rootDir);
-    assert.equal(initializeDesktopRuntimeEvents(app, { env }), env.NOOBOT_RUNTIME_EVENTS_ROOT);
+    const writer = createDesktopRuntimeEventWriter({ app: createApp(rootDir) });
+    const result = await writer.write(
+      { scope: "session", event: "desktop.test.session" },
+      {},
+      { scope: "session" },
+    );
+    assert.equal(result.ok, false);
+    assert.match(String(result.error?.message), /owned by the workspace/);
   } finally {
     await rm(rootDir, { recursive: true, force: true });
   }
@@ -49,7 +53,7 @@ test("desktop runtime event writer writes sanitized startup event", async () => 
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-runtime-events-write-"));
   try {
     const app = createApp(rootDir);
-    const writer = createDesktopRuntimeEventWriter({ app, env: {} });
+    const writer = createDesktopRuntimeEventWriter({ app });
     const result = await writer.write(
       { scope: "startup", category: "system", event: "desktop.test.startup" },
       {
@@ -62,13 +66,20 @@ test("desktop runtime event writer writes sanitized startup event", async () => 
 
     assert.equal(result.ok, true);
     assert.equal(writer.runtimeEventsRoot, path.join(rootDir, "runtime", "events"));
-    const content = await readFile(path.join(writer.runtimeEventsRoot, "startup", "desktop", "system.jsonl"), "utf8");
+    const content = await readFile(
+      path.join(writer.runtimeEventsRoot, "startup", "desktop", "system.jsonl"),
+      "utf8",
+    );
     const record = JSON.parse(content.trim());
     assert.equal(record.source, "desktop");
     assert.equal(record.scope, "startup");
     assert.equal(record.event, "desktop.test.startup");
     assert.equal(record.data.token, "[Redacted]");
-    assert.deepEqual(record.data.url, { protocol: "https:", host: "example.test", pathname: "/private/path" });
+    assert.deepEqual(record.data.url, {
+      protocol: "https:",
+      host: "example.test",
+      pathname: "/private/path",
+    });
     assert.equal(record.data.message, "ready");
     assert.doesNotMatch(content, /secret-token-value/);
     assert.doesNotMatch(content, /private\.txt/);
@@ -83,7 +94,9 @@ test("desktop runtime event sanitizer collapses sensitive objects", () => {
     body: { token: "secret" },
     safe: "ok",
   });
-  assert.deepEqual(data.headers, { valueLength: String({ authorization: "Bearer secret", cookie: "a=b" }).length });
+  assert.deepEqual(data.headers, {
+    valueLength: String({ authorization: "Bearer secret", cookie: "a=b" }).length,
+  });
   assert.deepEqual(data.body, { valueLength: String({ token: "secret" }).length });
   assert.equal(data.safe, "ok");
 });

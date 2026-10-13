@@ -8,24 +8,16 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+import { requireWorkspaceRootEnv } from "@noobot/runtime-topology-protocol/workspace-root";
 import { validateModelObservationPolicyCoverage } from "./helpers/model-observation-policy.js";
 import { PROTOCOL_TIMEOUTS } from "./helpers/protocol-timeouts.js";
 
 const protocolRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(protocolRoot, "../../../../..");
 const suiteSessionRegistry = path.join(repositoryRoot, "test-results/protocol/suite-sessions.json");
+const failureEvidenceRoot = path.join(repositoryRoot, "test-results/e2e-evidence");
 process.env.NOOBOT_E2E_SESSION_REGISTRY = suiteSessionRegistry;
 process.env.NOOBOT_E2E_RUN_ID = String(process.env.NOOBOT_E2E_RUN_ID || "").trim() || randomUUID();
-const e2eWorkspaceRoot = String(process.env.NOOBOT_E2E_WORKSPACE_ROOT || "").trim();
-const runtimeEventsWorkspaceRoot = String(
-  process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT || "",
-).trim();
-const workspaceRoot = String(process.env.NOOBOT_WORKSPACE_ROOT || "").trim();
-const configuredWorkspaceRoots = [
-  workspaceRoot,
-  e2eWorkspaceRoot,
-  runtimeEventsWorkspaceRoot,
-].filter(Boolean);
 
 function resolveBaseUrl(value) {
   const raw = String(value || "").trim();
@@ -45,18 +37,11 @@ function resolveBaseUrl(value) {
 
 validateModelObservationPolicyCoverage(path.join(protocolRoot, "specs"));
 
-if (configuredWorkspaceRoots.some((value) => !path.isAbsolute(value))) {
-  throw new Error("configured Noobot workspace roots must be absolute paths");
-}
-if (new Set(configuredWorkspaceRoots).size > 1) {
-  throw new Error(
-    "NOOBOT_WORKSPACE_ROOT, NOOBOT_E2E_WORKSPACE_ROOT and " +
-      "NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT must identify the same workspace",
-  );
-}
+requireWorkspaceRootEnv();
 
 export default defineConfig({
   testDir: path.join(protocolRoot, "specs"),
+  testMatch: /\.spec\.js$/,
   outputDir: path.join(repositoryRoot, "test-results/protocol/raw"),
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
@@ -66,7 +51,7 @@ export default defineConfig({
   expect: { timeout: 15000 },
   reporter: [
     ["line"],
-    [path.join(protocolRoot, "suite-session-cleanup.js")],
+    [path.join(protocolRoot, "suite-session-cleanup.js"), { failureEvidenceRoot }],
     [
       "html",
       {

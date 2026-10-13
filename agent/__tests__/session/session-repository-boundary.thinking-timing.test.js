@@ -7,10 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -24,7 +25,7 @@ async function withTempWorkspace(fn) {
 test("session save persists thinking timing fields to full session and display summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-thinking";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },
@@ -84,7 +85,7 @@ test("session save persists thinking timing fields to full session and display s
 test("session save keeps the model loop round on persisted turn timings", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-loop-round";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },

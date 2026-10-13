@@ -255,7 +255,7 @@ export async function runAgentRuntimeHook({
     runtime,
   });
   const hookedContext = withHookClientEmitter(context, emitHookClientEvent);
-  const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled({ runtime });
+  const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled();
   const invocationSignal =
     descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
       ? null

@@ -11,6 +11,7 @@ import fs from "node:fs/promises";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
+import { persistSession } from "../helpers/runtime-events-env.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
@@ -107,6 +108,7 @@ test("stopped snapshot resume preserves history and incremental block boundaries
 
 test("stopped snapshot resume restores system as the same task-state fact", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-resume-system-boundary-"));
+  await persistSession(workspaceRoot, "u1", "s1");
   const stoppedIdentity = {
     userId: "u1",
     sessionId: "s1",
@@ -287,6 +289,7 @@ test("_resolveStoppedResumeAttachments ingests raw attachments into the current 
 
 test("stopped snapshot resume restores turn progress onto the live system runtime", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-resume-turn-progress-"));
+  await persistSession(workspaceRoot, "u1", "s1");
   const stoppedIdentity = {
     userId: "u1",
     sessionId: "s1",

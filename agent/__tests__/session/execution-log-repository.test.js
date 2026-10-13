@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ExecutionLogRepository } from "../../src/observability/execution-log/execution-log-repository.js";
+import { persistChildSessionFixture, useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 
 async function makeTempDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-execution-log-repository-"));
@@ -113,12 +114,13 @@ test("appendLog forwards logs without deriving a dialogProcessId", async () => {
   assert.equal(appended[1].dialogProcessId, "");
 });
 
-test("appendLog mirrors session execution logs to runtime-events session events", async () => {
+test("appendLog mirrors session execution logs to runtime-events session events", async (t) => {
   const workspaceRoot = await makeTempDir();
+  useRuntimeEventsEnv(t, { workspaceRoot });
+  const eventsDir = await persistChildSessionFixture(workspaceRoot);
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
     now: () => "2026-05-13T00:00:00.000Z",
-    workspaceRoot,
   });
 
   await repo.appendLog(
@@ -135,15 +137,7 @@ test("appendLog mirrors session execution logs to runtime-events session events"
     "p1",
   );
 
-  const runtimeEventFile = path.join(
-    workspaceRoot,
-    "u1",
-    "runtime",
-    "session",
-    "p1",
-    "events",
-    "interaction.jsonl",
-  );
+  const runtimeEventFile = path.join(eventsDir, "interaction.jsonl");
   const records = await readJsonLines(runtimeEventFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "agent");
@@ -158,12 +152,12 @@ test("appendLog mirrors session execution logs to runtime-events session events"
   assert.equal(records[0].data.tool, "read_file");
 });
 
-test("appendLog mirrors context identity diagnostics to their dedicated runtime-events file", async () => {
+test("appendLog mirrors context identity diagnostics to their dedicated runtime-events file", async (t) => {
   const workspaceRoot = await makeTempDir();
+  useRuntimeEventsEnv(t, { workspaceRoot, debug: { contextIdentity: true } });
+  const eventsDir = await persistChildSessionFixture(workspaceRoot);
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
-    workspaceRoot,
-    runtimeEventsConfig: { env: {}, sessionLogControls: { debug: { contextIdentity: true } } },
   });
 
   await repo.appendLog(
@@ -184,15 +178,7 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
     "p1",
   );
 
-  const runtimeEventFile = path.join(
-    workspaceRoot,
-    "u1",
-    "runtime",
-    "session",
-    "p1",
-    "events",
-    "debug-context-identity.jsonl",
-  );
+  const runtimeEventFile = path.join(eventsDir, "debug-context-identity.jsonl");
   const records = await readJsonLines(runtimeEventFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].dialogProcessId, "d1");
@@ -201,12 +187,12 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
   assert.equal(records[0].data.userMetaProjectionId, "sm_1::user_meta");
 });
 
-test("appendLog routes model context traces to the registry-derived debug file, not system", async () => {
+test("appendLog routes model context traces to the registry-derived debug file, not system", async (t) => {
   const workspaceRoot = await makeTempDir();
+  useRuntimeEventsEnv(t, { workspaceRoot, debug: { modelContextTrace: true } });
+  const eventsDir = await persistChildSessionFixture(workspaceRoot);
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
-    workspaceRoot,
-    runtimeEventsConfig: { env: {}, sessionLogControls: { debug: { modelContextTrace: true } } },
   });
 
   await repo.appendLog(
@@ -222,7 +208,6 @@ test("appendLog routes model context traces to the registry-derived debug file, 
     "p1",
   );
 
-  const eventsDir = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events");
   const records = await readJsonLines(path.join(eventsDir, "debug-model-context-trace.jsonl"));
   assert.equal(records.length, 1);
   assert.equal(records[0].debugType, "model-context-trace");
@@ -232,11 +217,12 @@ test("appendLog routes model context traces to the registry-derived debug file, 
   assert.equal(systemRecords.length, 0);
 });
 
-test("appendLog routes durable activity events to the message channel, not system", async () => {
+test("appendLog routes durable activity events to the message channel, not system", async (t) => {
   const workspaceRoot = await makeTempDir();
+  useRuntimeEventsEnv(t, { workspaceRoot });
+  const eventsDir = await persistChildSessionFixture(workspaceRoot);
   const repo = new ExecutionLogRepository({
     executionRepository: createInMemoryExecutionRepository(),
-    workspaceRoot,
   });
 
   await repo.appendLog(
@@ -252,7 +238,6 @@ test("appendLog routes durable activity events to the message channel, not syste
     "p1",
   );
 
-  const eventsDir = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events");
   const records = await readJsonLines(path.join(eventsDir, "message.jsonl"));
   assert.equal(records.length, 1);
   assert.equal(records[0].data.eventType, "thinking");

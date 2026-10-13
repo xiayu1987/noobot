@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 
 import { TURN_EVENT } from "@noobot/session-protocol";
-import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
+import { finalizeTurnSnapshot } from "../../ws/chat-websocket/turn-recovery.js";
 
 import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
 import { createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
@@ -62,11 +62,16 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
         : input,
     );
   const request = { bot, commitTurnLifecycle, userId: "u1", sessionId: "s1", commandId: "recover" };
-  const first = await recoverTurnFinalize(request);
-  const second = await recoverTurnFinalize(request);
+  const first = await finalizeTurnSnapshot(request);
+  const second = await finalizeTurnSnapshot(request);
   assert.equal(first.recovered, true);
+  assert.equal(first.action, "finalize");
+  assert.equal(first.snapshot.activeTurn, null);
+  assert.equal(first.snapshot.recovery, "none");
   assert.equal(second.recovered, false);
-  assert.equal(second.reason, "no_recoverable_finalize");
+  assert.equal(second.action, "none");
+  assert.equal(second.reason, "no_active_turn");
+  assert.equal(second.snapshot.recovery, "none");
   assert.equal(lifecycle.turns["turn-recover"].summaryVersion, 4);
   assert.equal(lifecycle.turns["turn-recover"].state, "completed");
   assert.equal(lifecycle.turns["turn-recover"].revision, 4);

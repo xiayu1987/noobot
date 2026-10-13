@@ -12,7 +12,7 @@ import {
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 const MCP_ERROR_LOG_FILE_NAME = "mcp-error.log";
@@ -55,7 +55,7 @@ export async function appendMcpErrorLog({
     details: details && typeof details === "object" ? details : {},
   };
   if (sessionId) {
-    await writeRoutedRuntimeEvent({
+    await writeRuntimeEvent({
       scope: "session",
       userId,
       sessionId,
@@ -73,8 +73,6 @@ export async function appendMcpErrorLog({
         modelName: record.modelName,
         details: record.details,
       },
-    }, {
-      workspaceRoot,
     });
   } else {
     const targetFiles = resolveTargetLogFiles({

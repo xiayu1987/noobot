@@ -76,7 +76,7 @@ export function collectAnswersFromEnv(cliOptions = {}) {
   const setupLocale = resolveDefaultSetupLocale(cliOptions);
   const raw = {
     setupLocale,
-    workspaceRoot: process.env.NOOBOT_WORKSPACE_ROOT || DEFAULT_WORKSPACE_ROOT,
+    workspaceRoot: process.env.NOOBOT_SETUP_WORKSPACE_ROOT || DEFAULT_WORKSPACE_ROOT,
     workspaceTemplatePath: process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH || DEFAULT_TEMPLATE_PATH,
     modelName: process.env.NOOBOT_MODEL_NAME || "",
     apiKey: process.env.NOOBOT_MODEL_API_KEY || "",

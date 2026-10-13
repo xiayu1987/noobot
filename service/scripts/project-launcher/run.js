@@ -7,11 +7,8 @@ import path from "node:path";
 import process from "node:process";
 import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
 import { resolveInitializationAnswers } from "./answers.js";
-import {
-  parseCliOptions,
-  resolveConfiguredWorkspaceRoot,
-  resolveLauncherGlobalConfigPath,
-} from "./cli.js";
+import { resolveWorkspaceRootPath } from "@noobot/runtime-topology-protocol/workspace-root";
+import { parseCliOptions, resolveLauncherGlobalConfigPath } from "./cli.js";
 import {
   ensureAgentProxyConfig,
   ensureModelProxyConfig,
@@ -99,7 +96,10 @@ async function initializeGlobalConfigWhenMissing({
 
   await writeJson(globalConfigPath, globalConfig);
 
-  const workspaceRootAbsolutePath = path.resolve(serviceRoot, answers.workspaceRoot);
+  const workspaceRootAbsolutePath = resolveWorkspaceRootPath({
+    configuredRoot: globalConfig.workspace_root,
+    serviceDir: serviceRoot,
+  });
 
   await syncUserConfigs({
     workspaceRootAbsolutePath,
@@ -155,9 +155,10 @@ async function syncWhenGlobalConfigExists({
     });
   }
 
-  const workspaceRootRelative = resolveConfiguredWorkspaceRoot(mergedGlobalLocalized);
-
-  const workspaceRootAbsolutePath = path.resolve(serviceRoot, workspaceRootRelative);
+  const workspaceRootAbsolutePath = resolveWorkspaceRootPath({
+    configuredRoot: mergedGlobalLocalized.workspace_root,
+    serviceDir: serviceRoot,
+  });
 
   await syncUserConfigs({
     workspaceRootAbsolutePath,

@@ -18,6 +18,7 @@ import {
 } from "@noobot/session-protocol";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
 import { normalizeRuntimeEventEnvelope } from "@noobot/runtime-events";
+import { createChannelKey, parseChannelKey } from "../../src/shared/utils.js";
 
 function canonicalTurnLifecycle(domainEnvelope) {
   return createEventEnvelope({
@@ -155,24 +156,35 @@ test("command removal session log events satisfy the runtime event schema", () =
   const manager = new ChannelManager(class {}, {
     sessionLogClient: { log: (apiKey, event) => logged.push({ apiKey, event }) },
   });
-  manager.channelStore.set("admin::session-1", {
-    key: "admin::session-1",
-    apiKey: "key-1",
-    startPayload: { sessionId: "session-1" },
-  });
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "admin", sessionId: "session-1" }),
+  );
+  channel.apiKey = "key-1";
+  logged.length = 0;
   const register = (id) =>
-    manager.commandRegistry.register(id, { channelKey: "admin::session-1", requester: {} });
+    manager.commandRegistry.register(id, { channelKey: channel.key, requester: {} });
   register("q-delivered");
   register("q-orphaned");
   manager.commandRegistry.delete("q-delivered", "delivered");
   manager.commandRegistry.delete("q-orphaned", "forward_failed");
 
   assert.equal(logged.length, 1);
-  const record = normalizeRuntimeEventEnvelope({ source: "agent-proxy", ...logged[0].event });
+  const record = normalizeRuntimeEventEnvelope({
+    source: "agent-proxy",
+    ...logged[0].event,
+    userId: "admin",
+  });
+  assert.equal(record.scope, "session");
+  assert.equal(record.sessionId, "session-1");
   assert.equal(record.event, "agentProxy.commandRegistry.removed");
   assert.equal(record.category, "transport");
   assert.equal(logged[0].event.data.reason, "forward_failed");
 });
+
+function channelStub(sessionId) {
+  const key = createChannelKey({ userId: "user-1", sessionId });
+  return { key, identity: parseChannelKey(key) };
+}
 
 test("subscriber delivery closes a slow consumer at the backpressure boundary", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
@@ -191,7 +203,7 @@ test("subscriber delivery closes a slow consumer at the backpressure boundary", 
 
 test("authoritative lifecycle delivery remains pending until the browser receipt", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
-  const channel = { key: "user-1:session-1" };
+  const channel = channelStub("session-1");
   const socket = {
     readyState: 1,
     bufferedAmount: 0,
@@ -242,7 +254,7 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
 
 test("newer lifecycle state supersedes the in-flight state and is delivered immediately", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
-  const channel = { key: "user-1:session-ordered" };
+  const channel = channelStub("session-ordered");
   const logged = [];
   manager.logSessionEvent = (_channel, entry) => logged.push(entry);
   const socket = {
@@ -327,7 +339,7 @@ test("newer lifecycle state supersedes the in-flight state and is delivered imme
 
 test("older lifecycle state is superseded by the in-flight newer state and not sent", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
-  const channel = { key: "user-1:session-stale" };
+  const channel = channelStub("session-stale");
   const socket = {
     readyState: 1,
     bufferedAmount: 0,
@@ -409,7 +421,7 @@ test("detaching a subscriber clears lifecycle receipt timers", () => {
 
 test("unacknowledged lifecycle exhausts retries and retires the unreliable socket", () => {
   const manager = new ChannelManager({ OPEN: 1 });
-  const channel = { key: "user-1:session-timeout" };
+  const channel = channelStub("session-timeout");
   const closeCalls = [];
   const socket = {
     readyState: 1,
@@ -451,7 +463,7 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
 
 test("terminal lifecycle supersedes an unacknowledged state instead of waiting behind it", () => {
   const manager = new ChannelManager({ OPEN: 1 });
-  const channel = { key: "user-1:session-drop" };
+  const channel = channelStub("session-drop");
   const logged = [];
   manager.logSessionEvent = (_channel, entry) => logged.push(entry);
   const closeCalls = [];

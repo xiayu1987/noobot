@@ -4,12 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 const path = require("node:path");
-const { toProcessEnv } = require("@noobot/runtime-topology-protocol");
+const {
+  WORKSPACE_ROOT_ENV,
+  resolveConfiguredWorkspaceRoot,
+  resolveGlobalConfigPath,
+  toProcessEnv,
+} = require("@noobot/runtime-topology-protocol");
 
 const root = __dirname;
+const serviceDir = path.join(root, "service");
 const runtimeEnv = toProcessEnv(process.env);
+const workspaceRoot = resolveConfiguredWorkspaceRoot({
+  globalConfigPath: resolveGlobalConfigPath({ serviceDir, env: process.env }),
+  serviceDir,
+});
 const serviceEnv = {
   PORT: runtimeEnv.PORT,
+  [WORKSPACE_ROOT_ENV]: workspaceRoot,
   ...(process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS
     ? { NOOBOT_USER_INTERACTION_TIMEOUT_MS: process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS }
     : {}),
@@ -19,7 +30,7 @@ module.exports = {
   apps: [
     {
       name: "noobot-service",
-      cwd: path.join(root, "service"),
+      cwd: serviceDir,
       script: "app.js",
       interpreter: process.execPath,
       exec_mode: "fork",
@@ -46,6 +57,9 @@ module.exports = {
         AGENT_PROXY_HOST: runtimeEnv.AGENT_PROXY_HOST,
         AGENT_PROXY_UPSTREAM_WS_URL: runtimeEnv.AGENT_PROXY_UPSTREAM_WS_URL,
         AGENT_PROXY_UPSTREAM_HTTP_BASE: runtimeEnv.AGENT_PROXY_UPSTREAM_HTTP_BASE,
+        // noobot-client (Caddy) below runs on this host and reverse-proxies over loopback.
+        AGENT_PROXY_TRUSTED_PROXIES: "127.0.0.1,::1",
+        [WORKSPACE_ROOT_ENV]: workspaceRoot,
       },
     },
     {

@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { appendSystemErrorLog } from "../../src/observability/error-log/system-error-log.js";
+import { persistChildSessionFixture, useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 
 async function makeTempDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-system-error-log-"));
@@ -23,8 +24,10 @@ async function readJsonLines(filePath) {
     .map((line) => JSON.parse(line));
 }
 
-test("appendSystemErrorLog writes session errors to runtime-events session events", async () => {
+test("appendSystemErrorLog writes session errors to runtime-events session events", async (t) => {
   const workspaceRoot = await makeTempDir();
+  useRuntimeEventsEnv(t, { workspaceRoot });
+  const eventsDir = await persistChildSessionFixture(workspaceRoot);
   const basePath = path.join(workspaceRoot, "u1");
   await fs.mkdir(basePath, { recursive: true });
 
@@ -42,15 +45,7 @@ test("appendSystemErrorLog writes session errors to runtime-events session event
   });
 
   assert.equal(record.sessionId, "s1");
-  const runtimeEventFile = path.join(
-    workspaceRoot,
-    "u1",
-    "runtime",
-    "session",
-    "p1",
-    "events",
-    "system.jsonl",
-  );
+  const runtimeEventFile = path.join(eventsDir, "system.jsonl");
   const records = await readJsonLines(runtimeEventFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].category, "system");

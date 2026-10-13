@@ -12,7 +12,7 @@ import {
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
 } from "../../shared/constants.js";
-import { normalizeApiKey, nowMs } from "../../shared/utils.js";
+import { normalizeApiKey, nowMs, parseChannelKey } from "../../shared/utils.js";
 import {
   isFailedTurnState,
   isTerminalTurnEvent,
@@ -47,6 +47,14 @@ function readAuthoritativeLifecycle(channel, eventData) {
   if (validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) return null;
   const lifecycle = eventData.payload;
   return isAuthoritativeTurnLifecycleEnvelope(lifecycle) ? lifecycle : null;
+}
+
+function rejectedFrameIdentity(data) {
+  return {
+    sessionId: String(data?.identity?.sessionId || "").trim(),
+    dialogProcessId: String(data?.payload?.dialogProcessId || "").trim(),
+    turnScopeId: String(data?.identity?.turnScopeId || "").trim(),
+  };
 }
 
 function readLifecycleScope(eventData, lifecycle) {
@@ -115,8 +123,7 @@ function clearScopedPendingInteractions(store, channel, scope) {
 }
 
 function cleanupTerminalChannel(store, channel, scope, nextState) {
-  const channelSessionId = store._extractSessionIdFromChannelKey(channel.key);
-  if (scope.sessionId && scope.sessionId !== channelSessionId) return;
+  if (scope.sessionId && scope.sessionId !== channel.identity.sessionId) return;
   const clearedPendingInteractionCount = clearScopedPendingInteractions(store, channel, scope);
   store.logSessionEvent(channel, {
     category: "interaction",
@@ -182,10 +189,12 @@ class ChannelStoreMethods {
     if (!normalizedChannelKey) return null;
     const existingChannel = this.channelStore.get(normalizedChannelKey);
     if (existingChannel) return existingChannel;
+    const identity = parseChannelKey(normalizedChannelKey);
     const upstreamTransport = this.createUpstreamTransport();
     const eventJournal = this.createEventJournal();
     const nextChannel = {
       key: normalizedChannelKey,
+      identity,
       createdAtMs: nowMs(),
       updatedAtMs: nowMs(),
       subscribers: new Set(),
@@ -285,6 +294,7 @@ class ChannelStoreMethods {
     }
     this.channelStore.set(normalizedChannelKey, nextChannel);
     this.updateConversationState(nextChannel, {
+      sessionId: nextChannel.identity.sessionId,
       dialogProcessId: "",
       state: CONVERSATION_STATE.NO_CONVERSATION,
       sourceEvent: CONVERSATION_SOURCE_EVENT.INIT,
@@ -328,15 +338,14 @@ class ChannelStoreMethods {
     if (!normalizedEventName) return null;
     const dataPlaneValidation = validateDataPlaneEvent(normalizedEventName, data);
     if (!dataPlaneValidation.valid) {
-      this.logSessionEvent(channel, {
+      this.logChannelEvent(channel, {
         category: "protocol",
         level: "warn",
         event: "agentProxy.channelEvent.rejected",
-        sessionId: data?.identity?.sessionId,
-        turnScopeId: data?.identity?.turnScopeId,
         data: {
           wireEvent: normalizedEventName,
           errors: dataPlaneValidation.errors,
+          frameIdentity: rejectedFrameIdentity(data),
         },
       });
       return null;
@@ -355,13 +364,10 @@ class ChannelStoreMethods {
           (channel.pendingInteractionRequests.has(requestId) ||
             this.requestChannelMap.has(requestId)))
       ) {
-        this.logSessionEvent(channel, {
+        this.logChannelEvent(channel, {
           category: "interaction",
           level: "warn",
           event: "agentProxy.interaction.rejected",
-          sessionId: data?.identity?.sessionId,
-          dialogProcessId: data?.payload?.dialogProcessId,
-          turnScopeId: data?.identity?.turnScopeId,
           data: {
             requestId,
             reason: validation.valid
@@ -370,6 +376,7 @@ class ChannelStoreMethods {
                 : "duplicate_request_id"
               : "invalid_protocol_event",
             errors: validation.errors,
+            frameIdentity: rejectedFrameIdentity(data),
           },
         });
         return null;
@@ -378,16 +385,14 @@ class ChannelStoreMethods {
     if (normalizedEventName === TURN_LIFECYCLE_WIRE_EVENT) {
       const validation = validateProtocolEvent(data);
       if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) {
-        this.logSessionEvent(channel, {
+        this.logChannelEvent(channel, {
           category: "protocol",
           level: "warn",
           event: "agentProxy.turnLifecycle.rejected",
-          sessionId: data?.identity?.sessionId,
-          dialogProcessId: data?.payload?.dialogProcessId,
-          turnScopeId: data?.identity?.turnScopeId,
           data: {
             eventId: String(data?.identity?.eventId || "").trim(),
             errors: validation.errors,
+            frameIdentity: rejectedFrameIdentity(data),
           },
         });
         return null;
@@ -563,8 +568,10 @@ class ChannelStoreMethods {
     if (!normalizedState) return null;
     const normalizedDialogProcessId = String(dialogProcessId || "").trim();
     const stateKey = normalizedDialogProcessId || CONVERSATION_SCOPE_KEY;
-    const normalizedSessionId =
-      String(sessionId || "").trim() || this._extractSessionIdFromChannelKey(channel.key);
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) {
+      throw new TypeError(`updateConversationState requires sessionId: ${normalizedState}`);
+    }
     const normalizedTurnScopeId = String(turnScopeId || "").trim();
     const previousStateItem = channel.conversationStateByDialogProcessId.get(stateKey) || null;
     if (

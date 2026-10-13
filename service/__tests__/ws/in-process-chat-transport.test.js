@@ -5,8 +5,6 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import os from "node:os";
-import path from "node:path";
 import {
   createInProcessChatTransport,
   resolveInProcessExitCode,
@@ -32,7 +30,6 @@ function createTransport() {
       mapAgentRunCommand: (command) => command,
     },
     connectorAccessPort: {},
-    sessionLogConfig: { workspaceRoot: path.join(os.tmpdir(), "noobot-in-process-transport") },
   });
 }
 
@@ -115,7 +112,6 @@ test("in-process close aborts the running turn and releases the session", async 
       mapAgentRunCommand,
     },
     connectorAccessPort: {},
-    sessionLogConfig: { workspaceRoot: path.join(os.tmpdir(), "noobot-in-process-transport") },
   });
   const scopedPayload = {
     ...payload,

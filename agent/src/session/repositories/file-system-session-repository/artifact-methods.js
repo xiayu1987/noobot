@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { migrateLegacyAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
+import { PERSISTED_JSON_READ_ERROR_CODE } from "../../../shared/storage/json-file-reader.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import { isSessionDisplaySummaryCurrent } from "../../session-summary-builders.js";
 import { normalizeSessionDocumentForCurrentProtocol } from "../../session-document-normalization.js";
@@ -93,12 +94,12 @@ class SessionArtifactMethods {
     );
     try {
       const [manifest, summary] = await Promise.all([
-        this.storageService.readJson(scope.sessionFile, null).catch(() => null),
+        this.storageService.readJson(scope.sessionFile, null),
         readDisplaySummaryArtifact({
           storageService: this.storageService,
           sessionDir: scope.sessionDir,
           sessionId: normalizedSessionId,
-        }).catch(() => null),
+        }),
       ]);
       if (isSessionDisplaySummaryCurrent(summary, manifest)) {
         return { summary, migrated: false, rebuilt: false };
@@ -284,7 +285,13 @@ class SessionArtifactMethods {
         });
       }
       return { migrated: false, migrations: [], repaired: [] };
-    } catch {
+    } catch (error) {
+      if (
+        error?.code !== "SESSION_PROTOCOL_VERSION_REPAIR_REQUIRED" &&
+        error?.code !== PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED
+      ) {
+        throw error;
+      }
       return this._repairSessionToCurrentProtocol(
         userId,
         normalizedSessionId,
@@ -362,8 +369,7 @@ class SessionArtifactMethods {
                 sessionDir: stagingDir,
                 sessionId,
                 mutationCoordinator: null,
-                assertSessionWritable: () =>
-                  this.assertSessionWritable(userId, sessionId, persistenceContext),
+                assertSessionWritable: () => this.assertSessionWritable(userId, sessionId),
               });
               return {
                 migrated:
@@ -383,25 +389,9 @@ class SessionArtifactMethods {
             },
           });
         } catch (error) {
-          await this._writeSessionLifecycleRecord(userId, sessionId, {
-            ...(lifecycle || {
-              schemaVersion: 1,
-              sessionId,
-              state: "active",
-              generation: 1,
-              createdAt: this.now(),
-            }),
-            repair: {
-              status: "failed",
-              errorCode: String(error?.code || "SESSION_REPAIR_FAILED"),
-              message: String(error?.message || "Session repair failed"),
-              failedAt: this.now(),
-              trigger: {
-                code: String(repairTrigger?.code || ""),
-                message: String(repairTrigger?.message || ""),
-              },
-            },
-            updatedAt: this.now(),
+          await this._recordSessionRepairFailure(userId, sessionId, {
+            error,
+            trigger: repairTrigger,
           });
           throw error;
         }

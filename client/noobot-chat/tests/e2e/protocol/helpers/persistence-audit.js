@@ -6,18 +6,35 @@
 import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { createHash } from "node:crypto";
+import { requireWorkspaceRootEnv } from "@noobot/runtime-topology-protocol/workspace-root";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
+import {
+  SESSION_TREE_ERROR,
+  normalizeSessionTree,
+  resolveSessionDirSegments,
+} from "@noobot/workspace-protocol/session-tree";
 import { readSessionArtifact } from "noobot-agent/session";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
 export function workspaceRoot() {
-  const root = String(process.env.NOOBOT_E2E_WORKSPACE_ROOT || "").trim();
-  if (!path.isAbsolute(root)) throw new Error("NOOBOT_E2E_WORKSPACE_ROOT must be an absolute path");
-  return root;
+  return requireWorkspaceRootEnv();
 }
 
-export function sessionRoot(userId, sessionId) {
-  return path.join(workspaceRoot(), userId, WORKSPACE_LAYOUT.SESSION_DIR, sessionId);
+export async function sessionRoot(userId, sessionId) {
+  const userRoot = path.join(workspaceRoot(), userId);
+  const tree = normalizeSessionTree(
+    await readJson(path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE)),
+  );
+  return path.join(userRoot, ...resolveSessionDirSegments(tree, sessionId));
+}
+
+async function persistedSessionRoot(userId, sessionId) {
+  try {
+    return await sessionRoot(userId, sessionId);
+  } catch (error) {
+    if (error?.code === SESSION_TREE_ERROR.NODE_MISSING) return "";
+    throw error;
+  }
 }
 
 async function readParentSessionId(sessionDir) {
@@ -62,10 +79,10 @@ async function detachedDescendantRoots(userId, rootSessionId) {
 
 async function sessionTreeRoots(userId, rootSessionId) {
   return [
-    sessionRoot(userId, rootSessionId),
+    await persistedSessionRoot(userId, rootSessionId),
     path.join(workspaceRoot(), userId, "runtime/plugin-data/workflow/session", rootSessionId),
     ...(await detachedDescendantRoots(userId, rootSessionId)),
-  ];
+  ].filter(Boolean);
 }
 
 export async function readJson(filePath) {
@@ -73,7 +90,7 @@ export async function readJson(filePath) {
 }
 
 export async function readSessionFact(userId, sessionId) {
-  return readJson(path.join(sessionRoot(userId, sessionId), "session.json"));
+  return readJson(path.join(await sessionRoot(userId, sessionId), "session.json"));
 }
 
 async function findFilesNamed(directory, filename) {
@@ -105,9 +122,13 @@ export async function auditSessionSummaryArtifacts(
   sessionId,
   { expectation = "required", requiredTitlePrefix = "" } = {},
 ) {
-  const root = sessionRoot(userId, sessionId);
-  const summaryFiles = (await findFilesNamed(root, "session-summary.json")).sort();
-  const sessionsIndexFile = path.join(workspaceRoot(), userId, "runtime/session/sessions.json");
+  const root = await persistedSessionRoot(userId, sessionId);
+  const summaryFiles = root ? (await findFilesNamed(root, "session-summary.json")).sort() : [];
+  const sessionsIndexFile = path.join(
+    workspaceRoot(),
+    userId,
+    WORKSPACE_LAYOUT.SESSION_SUMMARY_FILE,
+  );
   let sessionsIndex = null;
   try {
     sessionsIndex = await readJson(sessionsIndexFile);
@@ -265,12 +286,12 @@ export async function auditSessionSummaryArtifacts(
 }
 
 export async function readSessionTurnMessages(userId, sessionId) {
-  const session = await readSessionArtifact({ sessionDir: sessionRoot(userId, sessionId) });
+  const session = await readSessionArtifact({ sessionDir: await sessionRoot(userId, sessionId) });
   return Array.isArray(session?.messages) ? session.messages : [];
 }
 
 export async function readSnapshots(userId, sessionId) {
-  const directory = path.join(sessionRoot(userId, sessionId), "model-message-snapshots");
+  const directory = path.join(await sessionRoot(userId, sessionId), "model-message-snapshots");
   const names = (await fs.readdir(directory)).filter((name) => name.endsWith(".json")).sort();
   return Promise.all(names.map((name) => readJson(path.join(directory, name))));
 }
@@ -297,7 +318,7 @@ async function readJsonLinesIfPresent(filePath, options = {}) {
 }
 
 export async function readSessionRuntimeEvents(userId, sessionId) {
-  const eventsDir = path.join(sessionRoot(userId, sessionId), "events");
+  const eventsDir = path.join(await sessionRoot(userId, sessionId), "events");
   let names = [];
   try {
     names = (await fs.readdir(eventsDir)).filter((name) => name.endsWith(".jsonl")).sort();
@@ -342,7 +363,7 @@ async function readExecutionEventSegmentFiles(files) {
 }
 
 export async function readSessionExecutionEvents(userId, sessionId) {
-  const executionDir = path.join(sessionRoot(userId, sessionId), "execution-events");
+  const executionDir = path.join(await sessionRoot(userId, sessionId), "execution-events");
   return readExecutionEventSegmentFiles(await listExecutionEventSegmentFiles(executionDir));
 }
 

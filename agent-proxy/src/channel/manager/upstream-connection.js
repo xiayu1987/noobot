@@ -34,7 +34,7 @@ const EXECUTION_QUERY_WIRE_EVENTS = new Set(
 class UpstreamConnectionMethods {
   closeUpstreamChannel(channel, closeCode = 1000, reasonText = UPSTREAM_CLOSE_REASON.CLOSED) {
     if (!channel?.upstreamSocket) return;
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       event: "agentProxy.upstream.close.requested",
       data: { channelKey: channel.key, closeCode, reason: reasonText },
@@ -45,7 +45,7 @@ class UpstreamConnectionMethods {
   markChannelTerminal(channel, terminalStatus = CHANNEL_STATUS.DONE) {
     if (!channel) return false;
     if (channel.pendingInteractionRequests.size) {
-      this.logSessionEvent(channel, {
+      this.logChannelEvent(channel, {
         category: "state",
         level: "warn",
         event: "agentProxy.channel.terminal.rejected",
@@ -63,7 +63,7 @@ class UpstreamConnectionMethods {
     channel.retention.terminalStatus = String(terminalStatus || CHANNEL_STATUS.DONE).trim();
     channel.updatedAtMs = nowMs();
     channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "state",
       event: "agentProxy.channel.terminal",
       data: {
@@ -85,7 +85,7 @@ class UpstreamConnectionMethods {
     channel._errorHandled = false;
     const upstreamUrl = buildUpstreamUrl(config.upstreamWsUrl, apiKey);
     if (!upstreamUrl) {
-      this.logSessionEvent(channel, {
+      this.logChannelEvent(channel, {
         category: "transport",
         level: "error",
         event: "agentProxy.upstream.connect.skipped",
@@ -106,7 +106,7 @@ class UpstreamConnectionMethods {
     channel.apiKey = String(apiKey || "").trim();
     channel.locale = String(locale || "").trim();
     channel.updatedAtMs = nowMs();
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       event: "agentProxy.upstream.connecting",
       data: { channelKey: channel.key, locale: channel.locale },
@@ -128,7 +128,7 @@ class UpstreamConnectionMethods {
             return;
           }
           channel.updatedAtMs = nowMs();
-          this.logSessionEvent(channel, {
+          this.logChannelEvent(channel, {
             category: "transport",
             event: "agentProxy.upstream.open",
             data: { channelKey: channel.key, status: channel.transport.phase },
@@ -178,7 +178,7 @@ class UpstreamConnectionMethods {
                 initialCommand: true,
               },
             });
-            this.logSessionEvent(channel, {
+            this.logChannelEvent(channel, {
               category: "transport",
               level: "error",
               event: "agentProxy.upstream.initialPayload.error",
@@ -224,7 +224,7 @@ class UpstreamConnectionMethods {
             channel,
             data: { closeCode: normalizedCloseCode, reasonLength: closeReason.length },
           });
-          this.logSessionEvent(channel, {
+          this.logChannelEvent(channel, {
             category: "transport",
             event: "agentProxy.upstream.closed",
             data: { channelKey: channel.key, closeCode: normalizedCloseCode, closeReason },
@@ -239,7 +239,7 @@ class UpstreamConnectionMethods {
             channel,
             data: { errorType: error?.name || "Error" },
           });
-          this.logSessionEvent(channel, {
+          this.logChannelEvent(channel, {
             category: "transport",
             level: "error",
             event: "agentProxy.upstream.error",
@@ -261,7 +261,7 @@ class UpstreamConnectionMethods {
           this.broadcastChannelEvent(channel, errorEnvelope);
         },
         handlerError: ({ error, handlerName }) => {
-          this.logSessionEvent(channel, {
+          this.logChannelEvent(channel, {
             category: "transport",
             level: "error",
             event: "agentProxy.upstream.handler.error",
@@ -307,7 +307,7 @@ class UpstreamConnectionMethods {
     recent.push(currentMs);
     channel.invalidUpstreamFrameAtMs = recent;
     if (recent.length > config.invalidUpstreamFrameLimit) return false;
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       level: "warn",
       event: "agentProxy.upstream.message.dropped",
@@ -334,14 +334,11 @@ class UpstreamConnectionMethods {
       lifecycleEventId: String(eventData?.identity?.eventId || "").trim(),
       lifecycleRevision: Number(eventData?.ordering?.revision || 0),
     });
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "debug",
       level: "debug",
       debugType: AGENT_TRANSPORT_DEBUG_TYPE,
       event: "agentProxy.agentTransport.commandAccepted",
-      sessionId: summary.sessionId,
-      dialogProcessId: summary.dialogProcessId,
-      turnScopeId: summary.turnScopeId,
       data: {
         event: "agentProxy.agentTransport.commandAccepted",
         ...summary,
@@ -378,7 +375,7 @@ class UpstreamConnectionMethods {
     }
     if (!EXECUTION_QUERY_WIRE_EVENTS.has(eventName)) return false;
     const removal = this.commandRegistry?.lastRemoval?.(commandId) || null;
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       level: "warn",
       event: "agentProxy.upstream.executionQuery.orphanDropped",
@@ -426,7 +423,7 @@ class UpstreamConnectionMethods {
 
   reportUpstreamMessageError(channel, error) {
     if (this.recordDroppableUpstreamFrame(channel, error)) return;
-    this.logSessionEvent(channel, {
+    this.logChannelEvent(channel, {
       category: "transport",
       level: "error",
       event: "agentProxy.upstream.message.error",

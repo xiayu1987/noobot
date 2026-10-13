@@ -49,13 +49,9 @@ function normalizePayload(payload = {}) {
 }
 
 export class FileSystemConnectorInstanceRepository {
-  constructor({ workspaceRoot = "" } = {}) {
-    this.workspaceRoot = path.resolve(String(workspaceRoot || "."));
+  constructor({ workspaceRoot } = {}) {
+    this.workspaceRoot = path.resolve(requiredText(workspaceRoot, "connector workspaceRoot"));
     this.userLocks = new Map();
-  }
-
-  setWorkspaceRoot(workspaceRoot = "") {
-    this.workspaceRoot = path.resolve(String(workspaceRoot || "."));
   }
 
   _registryPath(userId = "") {

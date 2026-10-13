@@ -27,15 +27,12 @@ export NOOBOT_E2E_CONNECT_CODE='...'
 export NOOBOT_E2E_BASE_URL='http://127.0.0.1:10060'
 export NOOBOT_E2E_MODEL_ALIAS='GLM_5_3'
 export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
-export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
-export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENT_PLUGIN_RUN_CONFIG_DEBUG='true'
 export NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG='true'
 ```
 
-`NOOBOT_WORKSPACE_ROOT` is the single workspace-root fact. The E2E and runtime-event variables
-declare reader responsibilities only and must derive from that root. Explicit roots must be
-absolute. `NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG` must be enabled on the service under
+`NOOBOT_WORKSPACE_ROOT` is the single workspace-root fact shared by the services under test and
+the E2E audit (sessions, snapshots, runtime-events). It must be an absolute path. `NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG` must be enabled on the service under
 test: `model_context_trace` is off by default and the model invocation audit requires it. Using different roots for the proxy and the audit process makes the configuration
 invalid because the evidence chain cannot close.
 
@@ -108,16 +105,13 @@ export NOOBOT_E2E_CONNECT_CODE='...'
 export NOOBOT_E2E_BASE_URL='http://127.0.0.1:10060'
 export NOOBOT_E2E_MODEL_ALIAS='GLM_5_3'
 export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
-export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
-export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_RUNTIME_EVENT_PLUGIN_RUN_CONFIG_DEBUG='true'
 export NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG='true'
 ```
 
-`NOOBOT_E2E_WORKSPACE_ROOT` 是审计进程读取 Session、快照和 runtime-events 的根目录。
-所有被测服务和 E2E 审计必须使用同一个 `NOOBOT_WORKSPACE_ROOT`。两个专用变量只声明各进程的
-读取职责，其值必须派生自该唯一根目录。禁止让代理和 E2E 审计使用不同的 workspace 根目录，
-否则 runtime-events 数据链不闭合，测试配置应视为无效。三个变量只要显式设置就必须使用绝对路径。
+`NOOBOT_WORKSPACE_ROOT` 是唯一的工作区根目录，被测服务和 E2E 审计（Session、快照、runtime-events）
+共用它，必须是绝对路径。禁止让代理和 E2E 审计使用不同的 workspace 根目录，
+否则 runtime-events 数据链不闭合，测试配置应视为无效。
 被测服务必须打开 `NOOBOT_RUNTIME_EVENT_MODEL_CONTEXT_TRACE_DEBUG`：`model_context_trace` 默认不落盘，而模型调用审计依赖它。
 
 服务应由测试外部启动。测试不使用模拟后端，也不通过文件系统或内部接口创建业务事实。

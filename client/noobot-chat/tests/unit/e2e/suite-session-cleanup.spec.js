@@ -17,11 +17,18 @@ afterEach(async () => {
   if (directory) await fs.rm(directory, { recursive: true, force: true });
 });
 
-it("authenticates cleanup after a restart without persisting session credentials", async () => {
+async function setupSuite() {
   directory = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-cleanup-"));
   const registry = path.join(directory, "sessions.json");
+  const evidenceRoot = path.join(directory, "evidence");
+  const outputDir = path.join(directory, "raw");
+  const testDir = path.join(directory, "specs");
+  const specFile = path.join(testDir, "001-a.spec.js");
+  await fs.mkdir(testDir, { recursive: true });
+  await fs.writeFile(specFile, "");
+  await fs.writeFile(path.join(testDir, "README.md"), "");
   vi.stubEnv("NOOBOT_E2E_SESSION_REGISTRY", registry);
-  vi.stubEnv("NOOBOT_E2E_WORKSPACE_ROOT", directory);
+  vi.stubEnv("NOOBOT_WORKSPACE_ROOT", directory);
   vi.stubEnv("NOOBOT_E2E_RUN_ID", "current-run");
   vi.stubEnv("NOOBOT_E2E_USER_ID", "owner");
   vi.stubEnv("NOOBOT_E2E_CONNECT_CODE", "test-code");
@@ -35,12 +42,65 @@ it("authenticates cleanup after a restart without persisting session credentials
   newContext.mockResolvedValue(context);
   const { default: Reporter, registerSuiteSession } =
     await import("../../e2e/protocol/suite-session-cleanup.js");
+  const project = { outputDir, testDir, testMatch: /\.spec\.js$/, grep: /.*/, grepInvert: null };
+  const createReporter = (overrides = {}) => {
+    const reporter = new Reporter({ failureEvidenceRoot: evidenceRoot });
+    const config = { grep: /.*/, grepInvert: null, shard: null, projects: [project], ...overrides };
+    const suite = { allTests: () => (overrides.selectedFiles ?? [specFile]).map(fileTest) };
+    reporter.onBegin(config, suite);
+    return reporter;
+  };
+  await fs.mkdir(path.join(directory, "owner", "runtime", "session", "session-1"), {
+    recursive: true,
+  });
+  await fs.writeFile(
+    path.join(directory, "owner", "runtime", "session", "session-1", "s.json"),
+    "{}",
+  );
+  await fs.mkdir(outputDir, { recursive: true });
+  await fs.writeFile(path.join(outputDir, "trace.zip"), "trace");
+  return { registry, evidenceRoot, context, createReporter, registerSuiteSession };
+}
+
+const fileTest = (file) => ({ location: { file } });
+
+it("requires an absolute failure evidence root", async () => {
+  const { default: Reporter } = await import("../../e2e/protocol/suite-session-cleanup.js");
+  expect(() => new Reporter()).toThrow(/failureEvidenceRoot/);
+});
+
+it("rejects filtered full suite runs before touching evidence or sessions", async () => {
+  const { evidenceRoot, context, createReporter, registerSuiteSession } = await setupSuite();
+  await registerSuiteSession({ userId: "owner", sessionId: "session-1" });
+  await expect(createReporter({ grep: /@smoke/ }).onEnd({ status: "failed" })).rejects.toThrow(
+    /must not filter/,
+  );
+  await expect(createReporter({ selectedFiles: [] }).onEnd({ status: "passed" })).rejects.toThrow(
+    /every spec file/,
+  );
+  await expect(fs.access(evidenceRoot)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(context.post).not.toHaveBeenCalled();
+});
+
+it("preserves failure evidence and deletes it once the full suite passes", async () => {
+  const { registry, evidenceRoot, context, createReporter, registerSuiteSession } =
+    await setupSuite();
   await registerSuiteSession({ userId: "owner", sessionId: "session-1", apiKey: "expired-key" });
   const records = JSON.parse(await fs.readFile(registry, "utf8"));
   expect(records[0]).not.toHaveProperty("apiKey");
-  await new Reporter().onEnd({ status: "failed" });
+  await createReporter().onEnd({ status: "failed" });
   expect(context.post).not.toHaveBeenCalled();
-  await new Reporter().onEnd({ status: "passed" });
+  const evidenceDir = path.join(evidenceRoot, "current-run");
+  await expect(
+    fs.readFile(path.join(evidenceDir, "runtime", "session", "session-1", "s.json"), "utf8"),
+  ).resolves.toBe("{}");
+  await expect(fs.readFile(path.join(evidenceDir, "raw", "trace.zip"), "utf8")).resolves.toBe(
+    "trace",
+  );
+  await expect(fs.readFile(path.join(evidenceDir, "sessions.json"), "utf8")).resolves.toContain(
+    "session-1",
+  );
+  await createReporter().onEnd({ status: "passed" });
   expect(context.post).toHaveBeenCalledWith("/api/internal/connect", {
     data: { userId: "owner", connectCode: "test-code" },
   });
@@ -49,4 +109,5 @@ it("authenticates cleanup after a restart without persisting session credentials
   });
   expect(context.dispose).toHaveBeenCalledOnce();
   await expect(fs.access(registry)).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(fs.access(evidenceRoot)).rejects.toMatchObject({ code: "ENOENT" });
 });

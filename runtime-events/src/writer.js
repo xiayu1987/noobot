@@ -5,64 +5,44 @@
  */
 import { RUNTIME_EVENT_SCOPES } from "./constants.js";
 import { attachRuntimeEventPayload, normalizeRuntimeEventEnvelope } from "./schema.js";
-import {
-  resolveRuntimeEventFile,
-  resolveRuntimeEventsConfig,
-  resolveRuntimeEventStorageSessionId,
-} from "./paths.js";
+import { resolveRuntimeEventFile, resolveRuntimeEventsConfig } from "./paths.js";
 import { appendJsonLine } from "./transports/jsonl.js";
 import { isSessionLogDebugEvent, shouldRecordSessionLog } from "./session-log-protocol.js";
-import {
-  isWorkspaceSessionDeleted,
-  isWorkspaceSessionPersisted,
-} from "./session-deletion-guard.js";
+import { resolveWorkspaceSessionLocation } from "./session-location.js";
+import { reportRuntimeEventFailure } from "./failure-report.js";
 
-export async function writeRuntimeEvent(event = {}, options = {}) {
+export async function writeRuntimeEvent(event = {}, { desktopRoot = "" } = {}) {
   try {
-    const defaults = options.defaults || options;
-    const config = resolveRuntimeEventsConfig({
-      ...defaults,
-      ...options,
-      workspaceRoot: event.workspaceRoot ?? defaults.workspaceRoot ?? options.workspaceRoot,
-    });
-    const record = normalizeRuntimeEventEnvelope(event, defaults);
+    const config = resolveRuntimeEventsConfig({ desktopRoot });
+    if (config.desktopRoot && event.scope === RUNTIME_EVENT_SCOPES.SESSION) {
+      throw new Error(
+        "Session runtime events are owned by the workspace and cannot use desktopRoot",
+      );
+    }
+    const record = normalizeRuntimeEventEnvelope(event);
     const controlledLog =
       record.scope === RUNTIME_EVENT_SCOPES.SESSION || isSessionLogDebugEvent(record);
-    if (controlledLog && !shouldRecordSessionLog(record, { ...defaults, ...options, ...config })) {
+    if (controlledLog && !shouldRecordSessionLog(record)) {
       return { ok: true, skipped: true, record };
     }
-    attachRuntimeEventPayload(record, event, defaults);
-    if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !config.root) {
-      const storageSessionId = resolveRuntimeEventStorageSessionId(record);
-      const sessionIds = [...new Set([record.sessionId, storageSessionId].filter(Boolean))];
-      for (const sessionId of sessionIds) {
-        if (
-          await isWorkspaceSessionDeleted({
-            workspaceRoot: config.workspaceRoot,
-            userId: record.userId,
-            sessionId,
-          })
-        ) {
-          return { ok: true, skipped: true, deleted: true, record };
-        }
-      }
-      if (
-        storageSessionId === record.sessionId &&
-        !(await isWorkspaceSessionPersisted({
-          workspaceRoot: config.workspaceRoot,
-          userId: record.userId,
-          sessionId: storageSessionId,
-        }))
-      ) {
-        return { ok: true, skipped: true, missingSession: true, record };
-      }
+    attachRuntimeEventPayload(record, event);
+    let sessionDir = "";
+    if (record.scope === RUNTIME_EVENT_SCOPES.SESSION) {
+      const location = await resolveWorkspaceSessionLocation({
+        workspaceRoot: config.workspaceRoot,
+        userId: record.userId,
+        sessionId: record.sessionId,
+        parentSessionId: record.parentSessionId,
+      });
+      if (location.deleted) return { ok: true, skipped: true, deleted: true, record };
+      if (location.missingSession) return { ok: true, skipped: true, missingSession: true, record };
+      sessionDir = location.sessionDir;
     }
-    const file = resolveRuntimeEventFile(record, config);
+    const file = resolveRuntimeEventFile(record, config, { sessionDir });
     const writeResult = await appendJsonLine(file, record, {
       maxFileBytes: config.maxFileBytes,
       retentionDays: config.retentionDays,
       maxArchives: config.maxArchives,
-      cleanupIntervalMs: options.cleanupIntervalMs,
     });
     return {
       ok: true,
@@ -73,70 +53,11 @@ export async function writeRuntimeEvent(event = {}, options = {}) {
       cleanupError: writeResult.cleanupError,
     };
   } catch (error) {
-    if (options.throwOnError) throw error;
+    reportRuntimeEventFailure(
+      "write failed",
+      { scope: event?.scope, source: event?.source, event: event?.event },
+      error,
+    );
     return { ok: false, error };
   }
-}
-
-export function createRuntimeEventWriter(defaults = {}) {
-  return {
-    write: (event = {}, options = {}) =>
-      writeRuntimeEvent(event, {
-        ...options,
-        defaults: { ...defaults, ...(options.defaults || {}) },
-      }),
-    routed: (event = {}, options = {}) =>
-      writeRoutedRuntimeEvent(event, {
-        ...options,
-        defaults: { ...defaults, ...(options.defaults || {}) },
-      }),
-    startup: (event = {}, options = {}) =>
-      writeRuntimeEvent(
-        { ...event, scope: RUNTIME_EVENT_SCOPES.STARTUP },
-        { ...options, defaults },
-      ),
-    session: (event = {}, options = {}) =>
-      writeRuntimeEvent(
-        { ...event, scope: RUNTIME_EVENT_SCOPES.SESSION },
-        { ...options, defaults },
-      ),
-    system: (event = {}, options = {}) =>
-      writeRuntimeEvent({ ...event, scope: RUNTIME_EVENT_SCOPES.SYSTEM }, { ...options, defaults }),
-  };
-}
-
-function hasRuntimeSessionContext(event = {}, defaults = {}) {
-  return Boolean((event.sessionId ?? defaults.sessionId) && (event.userId ?? defaults.userId));
-}
-
-function withoutSessionContext(event = {}) {
-  const { sessionId, parentSessionId, dialogProcessId, turnScopeId, ...systemEvent } = event;
-  return systemEvent;
-}
-
-export function writeRoutedRuntimeEvent(event = {}, options = {}) {
-  const defaults = options.defaults || options;
-  const explicitScope = event.scope ?? defaults.scope;
-  if (explicitScope === RUNTIME_EVENT_SCOPES.STARTUP) {
-    return writeRuntimeEvent({ ...event, scope: RUNTIME_EVENT_SCOPES.STARTUP }, options);
-  }
-  if (explicitScope === RUNTIME_EVENT_SCOPES.SYSTEM) {
-    return writeRuntimeEvent(
-      { ...withoutSessionContext(event), scope: RUNTIME_EVENT_SCOPES.SYSTEM },
-      {
-        ...options,
-        defaults: withoutSessionContext(defaults),
-      },
-    );
-  }
-  if (hasRuntimeSessionContext(event, defaults)) {
-    return writeRuntimeEvent({ ...event, scope: RUNTIME_EVENT_SCOPES.SESSION }, options);
-  }
-  return writeRuntimeEvent(
-    { ...withoutSessionContext(event), scope: RUNTIME_EVENT_SCOPES.SYSTEM },
-    {
-      ...options,
-      defaults: withoutSessionContext(defaults),
-    },
-  );
 }

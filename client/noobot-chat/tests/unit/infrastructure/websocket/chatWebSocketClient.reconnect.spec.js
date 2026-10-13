@@ -56,7 +56,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-1",
-      userId: "u-1",
       knownLifecycleSequenceMap: { "s-1": 12 },
       onReconnectData: vi.fn(),
     });
@@ -66,7 +65,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     expect(JSON.parse(bootstrapSocket.sent[0])).toMatchObject({
       action: "reconnect",
       currentSessionId: "s-1",
-      userId: "u-1",
       knownLifecycleSequenceMap: { "s-1": 12 },
     });
     bootstrapSocket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0 });
@@ -78,7 +76,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-live-replay",
-      userId: "u-1",
       onReconnectData,
     });
     const socket = MockWebSocket.instances[0];
@@ -120,7 +117,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-failed-reconnect",
-      userId: "u-1",
     });
     const socket = MockWebSocket.instances[0];
 
@@ -145,7 +141,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const reconnectPromise = client.reconnect({
       currentSessionId: "root-session",
-      userId: "u-1",
       onReconnectData,
     });
     const socket = MockWebSocket.instances[0];
@@ -224,7 +219,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const streamRequestId = JSON.parse(socket.sent[0]).commandId;
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-live-owner",
-      userId: "u-1",
       onReconnectData,
     });
 
@@ -263,7 +257,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const socket = MockWebSocket.instances[0];
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-overlap",
-      userId: "u-1",
       onReconnectData,
     });
     const reconnectRequestId = JSON.parse(socket.sent[1]).requestId;
@@ -315,7 +308,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const socket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(socket.sent[0]).commandId;
 
-    const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
+    const reconnectPromise = client.reconnect({ currentSessionId: "s-1" });
     expect(MockWebSocket.instances).toHaveLength(1);
     expect(JSON.parse(socket.sent[1])).toMatchObject({
       action: "reconnect",
@@ -346,7 +339,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-1",
-      userId: "u-1",
       onReconnectData: vi.fn(),
     });
     const reconnectSocket = MockWebSocket.instances[1];
@@ -383,7 +375,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const firstSocket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(firstSocket.sent[0]).commandId;
     firstSocket.readyState = MockWebSocket.CLOSING;
-    const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
+    const reconnectPromise = client.reconnect({ currentSessionId: "s-1" });
     const replacementSocket = MockWebSocket.instances[1];
 
     replacementSocket.onopen?.();
@@ -405,7 +397,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const firstSocket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(firstSocket.sent[0]).commandId;
     firstSocket.readyState = MockWebSocket.CLOSING;
-    const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
+    const reconnectPromise = client.reconnect({ currentSessionId: "s-1" });
     const replacementSocket = MockWebSocket.instances[1];
 
     replacementSocket.onopen?.();
@@ -435,7 +427,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     });
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-1",
-      userId: "u-1",
       onReconnectData,
     });
     const socket = MockWebSocket.instances[0];

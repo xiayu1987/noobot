@@ -56,11 +56,8 @@ function normalizeContextServicePayload(payload = {}) {
 
 function createSessionLifecycleAccess(sessionRepository) {
   return {
-    async getSessionLifecycle({ userId = "", sessionId = "", initialize = true } = {}) {
-      return sessionRepository.getSessionLifecycle(userId, sessionId, { initialize });
-    },
-    async assertSessionWritable({ userId = "", sessionId = "", persistenceContext = null } = {}) {
-      return sessionRepository.assertSessionWritable(userId, sessionId, persistenceContext);
+    async assertSessionWritable({ userId = "", sessionId = "" } = {}) {
+      return sessionRepository.assertSessionWritable(userId, sessionId);
     },
     async withSessionLifecycleMutation({ userId = "", sessionId = "" } = {}, operation) {
       return sessionRepository.withSessionLifecycleMutation(userId, sessionId, operation);
@@ -77,7 +74,6 @@ function createScopedPersistenceContextFactory(pathResolver) {
     relativeDir = "",
     allowedRoot = "",
     metadataContributor = null,
-    sessionGeneration = null,
   } = {}) {
     if (!String(sessionId || "").trim() || !String(scopeId || "").trim()) {
       throw new TypeError("scoped persistence context requires sessionId and scopeId");
@@ -93,7 +89,6 @@ function createScopedPersistenceContextFactory(pathResolver) {
         allowedRoot,
       }),
       metadataContributor,
-      sessionGeneration,
     });
   };
 }
@@ -107,15 +102,12 @@ export function createSessionServices(
   const pathResolver = new PathResolver(globalConfig || {});
   const storageService = new StorageService({ pathResolver });
   const connectorInstanceRepository = new FileSystemConnectorInstanceRepository({
-    workspaceRoot: globalConfig?.workspaceRoot || ".",
+    workspaceRoot: globalConfig.workspaceRoot,
   });
 
   const sessionTreeRepository = new FileSystemSessionTreeRepository({
     pathResolver,
     storageService,
-    async getSessionLifecycle({ userId = "", sessionId = "", initialize = true } = {}) {
-      return sessionRepository.getSessionLifecycle(userId, sessionId, { initialize });
-    },
   });
 
   const sessionPathResolver = new SessionPathResolver({
@@ -126,6 +118,7 @@ export function createSessionServices(
   const sessionRepository = new FileSystemSessionRepository({
     pathResolver,
     sessionPathResolver,
+    sessionTreeRepository,
     storageService,
     normalizeMessages: (messages, options = {}) =>
       normalizeMessagesEntity(messages, nowFn, options),
@@ -147,12 +140,9 @@ export function createSessionServices(
     sessionRepository,
   });
 
-  const executionLogRuntimeEventsConfig = {};
   const executionRepository = new ExecutionLogRepository({
     executionRepository: fileSystemExecutionRepository,
     now: nowFn,
-    workspaceRoot: globalConfig?.workspaceRoot || "",
-    runtimeEventsConfig: executionLogRuntimeEventsConfig,
   });
 
   const sessionTreeService = new SessionTreeService({
@@ -194,7 +184,6 @@ export function createSessionServices(
   const executionLogService = new ExecutionLogService({
     executionRepo: executionRepository,
     sessionRepo: sessionRepository,
-    runtimeEventsConfig: executionLogRuntimeEventsConfig,
   });
 
   return {
@@ -292,24 +281,12 @@ export function createSessionFacade(runtime = {}) {
       return assertPersistenceContextIdentity(context, identity);
     },
 
-    async getSessionLifecycle(payload = {}) {
-      return runtime.getSessionLifecycle(payload);
-    },
-
     async assertSessionWritable(payload = {}) {
       return runtime.assertSessionWritable(payload);
     },
 
     async withSessionLifecycleMutation(payload = {}, operation) {
       return runtime.withSessionLifecycleMutation(payload, operation);
-    },
-
-    async ensureRuntimeDirs(userId) {
-      return sessionTreeService.ensureRuntimeDirs(userId);
-    },
-
-    async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
-      return sessionTreeService.upsertSessionTree({ userId, sessionId, parentSessionId });
     },
 
     async getSessionTree({ userId }) {

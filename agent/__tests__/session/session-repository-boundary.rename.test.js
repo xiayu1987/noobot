@@ -8,10 +8,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
@@ -25,7 +26,7 @@ async function withTempWorkspace(fn) {
 test("renameSession should persist custom title to full, display summary and sessions summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },
@@ -79,7 +80,7 @@ test("renameSession should persist custom title to full, display summary and ses
 test("renameSession should validate title and return null for missing session", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
 
     await assert.rejects(

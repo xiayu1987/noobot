@@ -4,63 +4,73 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { randomUUID } from "node:crypto";
-import { fsMkdir } from "../../../shared/storage/fs-adapter.js";
+import { fatalSystemError } from "../../../shared/errors/index.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
+import { ERROR_CODE } from "../../../shared/errors/constants.js";
+import { fsRm } from "../../../shared/storage/fs-adapter.js";
+import { createSessionDeletedError, normalizeParentSessionId } from "@noobot/session-protocol";
+
+function requireLifecycleSessionKey(sessionId = "") {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId) {
+    throw fatalSystemError(tSystem("common.sessionIdRequired"), {
+      code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
+    });
+  }
+  return encodeURIComponent(normalizedSessionId);
+}
 
 class SessionLifecycleMethods {
-  _sessionLifecycleLockDir(userId = "", sessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const safeSessionId = encodeURIComponent(normalizedSessionId || "__empty__");
-    return path.join(this._sessionRoot(userId), ".lifecycle", "locks", `${safeSessionId}.lock`);
-  }
-
-  _sessionLifecycleRecordFile(userId = "", sessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const safeSessionId = encodeURIComponent(normalizedSessionId || "__empty__");
-    return path.join(this._sessionRoot(userId), ".lifecycle", "records", `${safeSessionId}.json`);
-  }
-
-  async _readSessionLifecycleRecord(userId = "", sessionId = "") {
-    const record = await this.storageService.readJson(
-      this._sessionLifecycleRecordFile(userId, sessionId),
-      null,
+  _sessionLifecycleLockDir(userId, sessionId) {
+    const sessionKey = requireLifecycleSessionKey(sessionId);
+    return path.join(
+      this.pathResolver.sessionLifecycleLocksDir(this._basePath(userId)),
+      `${sessionKey}.lock`,
     );
-    return record && typeof record === "object" && !Array.isArray(record) ? record : null;
   }
 
-  async _writeSessionLifecycleRecord(userId = "", sessionId = "", record = {}) {
-    await fsMkdir(path.dirname(this._sessionLifecycleRecordFile(userId, sessionId)), {
-      recursive: true,
-    });
+  _sessionLifecycleRecordFile(userId, sessionId) {
+    const sessionKey = requireLifecycleSessionKey(sessionId);
+    return path.join(
+      this.pathResolver.sessionLifecycleRecordsDir(this._basePath(userId)),
+      `${sessionKey}.json`,
+    );
+  }
+
+  async _readSessionLifecycleRecord(userId, sessionId) {
+    const recordFile = this._sessionLifecycleRecordFile(userId, sessionId);
+    const record = await this.storageService.readJson(recordFile, null);
+    if (record === null) return null;
+    if (typeof record !== "object" || Array.isArray(record) || record.repair?.status !== "failed") {
+      const error = new Error(`invalid session lifecycle record: ${recordFile}`);
+      error.code = "SESSION_LIFECYCLE_RECORD_INVALID";
+      error.persistencePath = recordFile;
+      throw error;
+    }
+    return record;
+  }
+
+  async _recordSessionRepairFailure(userId, sessionId, { error, trigger }) {
+    const record = {
+      schemaVersion: 1,
+      sessionId: String(sessionId).trim(),
+      repair: {
+        status: "failed",
+        errorCode: String(error?.code || "SESSION_REPAIR_FAILED"),
+        message: String(error?.message || "Session repair failed"),
+        failedAt: this.now(),
+        trigger: {
+          code: String(trigger?.code || ""),
+          message: String(trigger?.message || ""),
+        },
+      },
+      updatedAt: this.now(),
+    };
     await this.storageService.writeJsonAtomic(
       this._sessionLifecycleRecordFile(userId, sessionId),
       record,
     );
     return record;
-  }
-
-  async getSessionLifecycle(userId = "", sessionId = "", { initialize = true } = {}) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return null;
-    const current = await this._readSessionLifecycleRecord(userId, normalizedSessionId);
-    if (current) return current;
-    if (!initialize) return null;
-    return this.withSessionLifecycleMutation(userId, normalizedSessionId, async () => {
-      const existing = await this._readSessionLifecycleRecord(userId, normalizedSessionId);
-      if (existing) return existing;
-      const deleted = await this.isSessionDeleted(userId, normalizedSessionId);
-      const now = this.now();
-      return this._writeSessionLifecycleRecord(userId, normalizedSessionId, {
-        schemaVersion: 1,
-        sessionId: normalizedSessionId,
-        state: deleted ? "deleted" : "active",
-        generation: 1,
-        createdAt: now,
-        updatedAt: now,
-        operationId: randomUUID(),
-        ...(deleted ? { deletedAt: now } : {}),
-      });
-    });
   }
 
   _createPreviousRepairFailureError(lifecycle = null, currentError = null) {
@@ -76,18 +86,16 @@ class SessionLifecycleMethods {
   async _clearSessionRepairFailure(userId = "", sessionId = "") {
     return this.withSessionLifecycleMutation(userId, sessionId, async () => {
       const current = await this._readSessionLifecycleRecord(userId, sessionId);
-      if (current?.repair?.status !== "failed") return false;
-      const { repair: _clearedRepair, ...rest } = current;
-      await this._writeSessionLifecycleRecord(userId, sessionId, {
-        ...rest,
-        updatedAt: this.now(),
-      });
+      if (!current) return false;
+      await fsRm(this._sessionLifecycleRecordFile(userId, sessionId), { force: true });
       return true;
     });
   }
 
   async withSessionLifecycleMutation(userId, sessionId, operation) {
-    return this._withMutationLock(this._sessionLifecycleLockDir(userId, sessionId), operation);
+    const lockPath = this._sessionLifecycleLockDir(userId, sessionId);
+    await this.sessionTreeRepository.assertWorkspaceInitialized(userId);
+    return this._withMutationLock(lockPath, operation);
   }
 
   async withSessionLifecycleMutations(userId, sessionIds = [], operation) {
@@ -113,7 +121,14 @@ class SessionLifecycleMethods {
     persistenceContext = null,
   ) {
     return this.withSessionLifecycleMutation(userId, sessionId, async () => {
-      await this.assertSessionWritable(userId, sessionId, persistenceContext);
+      await this.assertSessionWritable(userId, sessionId);
+      const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
+      if (
+        normalizedParentSessionId &&
+        (await this.isSessionDeleted(userId, normalizedParentSessionId))
+      ) {
+        throw createSessionDeletedError({ userId, sessionId: normalizedParentSessionId });
+      }
       const scope = await this.resolveSessionScope(
         userId,
         sessionId,

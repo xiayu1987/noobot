@@ -89,6 +89,7 @@ export function useReconnectReplay({
     const identity = record?.identity || {};
     const data = record?.payload || {};
     sessionLogWebSocketClient?.log?.({
+      scope: "session",
       category: "debug",
       level: "debug",
       debugType: "workflow-diagnostics",
@@ -171,6 +172,7 @@ export function useReconnectReplay({
       if (result?.applied === true) appliedCount += 1;
     }
     sessionLogWebSocketClient?.log?.({
+      scope: "session",
       category: "debug",
       level: "debug",
       debugType: "workflow-diagnostics",
@@ -294,9 +296,10 @@ export function useReconnectReplay({
 
   function logReconnectReplaySystemEvent(event, payload = {}) {
     sessionLogWebSocketClient?.log?.({
+      scope: "session",
       category: "system",
       event,
-      sessionId: String(payload.sessionId),
+      sessionId: payload.sessionId,
       dialogProcessId: "",
       turnScopeId: "",
       data: {

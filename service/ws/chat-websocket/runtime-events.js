@@ -6,13 +6,12 @@
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 export { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 export { recordServiceAgentTransportDebug } from "../../runtime-events/agent-transport-debug.js";
 
 export function recordServiceWebSocketSendFailure({
-  sessionLogConfig,
   eventName = "",
   sessionId = "",
   userId = "",
@@ -22,24 +21,21 @@ export function recordServiceWebSocketSendFailure({
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
-  return writeRoutedRuntimeEvent(
-    {
-      scope: "session",
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-      event: "service.websocket.sendEvent.failed",
-      sessionId: normalizedSessionId,
-      userId: String(userId || "").trim(),
-      dialogProcessId: String(dialogProcessId || "").trim(),
-      turnScopeId: String(turnScopeId || "").trim(),
-      data: {
-        eventName: String(eventName || ""),
-        error: error?.message || String(error || ""),
-      },
+  return writeRuntimeEvent({
+    scope: "session",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+    event: "service.websocket.sendEvent.failed",
+    sessionId: normalizedSessionId,
+    userId: String(userId || "").trim(),
+    dialogProcessId: String(dialogProcessId || "").trim(),
+    turnScopeId: String(turnScopeId || "").trim(),
+    data: {
+      eventName: String(eventName || ""),
+      error: error?.message || String(error || ""),
     },
-    sessionLogConfig,
-  );
+  });
 }
 
 const trimRuntimeText = (value) => String(value || "").trim();
@@ -49,7 +45,6 @@ function describeRuntimeError(error) {
 }
 
 export function recordServiceWebSocketRuntimeError({
-  sessionLogConfig,
   event = "service.websocket.runtime.failed",
   userId = "",
   sessionId = "",
@@ -61,29 +56,25 @@ export function recordServiceWebSocketRuntimeError({
 } = {}) {
   const normalizedSessionId = trimRuntimeText(sessionId);
   if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
-  return writeRoutedRuntimeEvent(
-    {
-      scope: "session",
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-      event,
-      userId: trimRuntimeText(userId),
-      sessionId: normalizedSessionId,
-      parentSessionId: trimRuntimeText(parentSessionId),
-      dialogProcessId: trimRuntimeText(dialogProcessId),
-      turnScopeId: trimRuntimeText(turnScopeId),
-      data: {
-        ...(data && typeof data === "object" ? data : {}),
-        error: describeRuntimeError(error),
-      },
+  return writeRuntimeEvent({
+    scope: "session",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+    event,
+    userId: trimRuntimeText(userId),
+    sessionId: normalizedSessionId,
+    parentSessionId: trimRuntimeText(parentSessionId),
+    dialogProcessId: trimRuntimeText(dialogProcessId),
+    turnScopeId: trimRuntimeText(turnScopeId),
+    data: {
+      ...(data && typeof data === "object" ? data : {}),
+      error: describeRuntimeError(error),
     },
-    sessionLogConfig,
-  );
+  });
 }
 
 export function recordServiceWebSocketLifecycle({
-  sessionLogConfig,
   event,
   userId = "",
   sessionId = "",
@@ -95,21 +86,18 @@ export function recordServiceWebSocketLifecycle({
   data = {},
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
-  return writeRoutedRuntimeEvent(
-    {
-      scope: normalizedSessionId ? "session" : "system",
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category,
-      level,
-      debugType,
-      event,
-      userId,
-      sessionId: normalizedSessionId,
-      dialogProcessId,
-      turnScopeId,
-      data: { ...data, hasSessionContext: Boolean(normalizedSessionId) },
-    },
-    sessionLogConfig,
-  );
+  return writeRuntimeEvent({
+    scope: normalizedSessionId ? "session" : "system",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category,
+    level,
+    debugType,
+    event,
+    userId,
+    sessionId: normalizedSessionId,
+    dialogProcessId,
+    turnScopeId,
+    data: { ...data, hasSessionContext: Boolean(normalizedSessionId) },
+  });
 }

@@ -28,8 +28,6 @@ export class FileSystemTaskRepository {
   }
 
   async _resolveTaskScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const basePath = this._basePath(userId);
-    await this.storageService.ensureRuntimeDirsByBasePath(basePath);
     const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
     const { sessionDir, taskFile } = await resolver.resolveSessionScope(
       userId,

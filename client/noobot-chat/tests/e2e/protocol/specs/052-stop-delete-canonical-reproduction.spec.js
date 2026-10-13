@@ -5,6 +5,7 @@
  */
 import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
   deleteLatestUserMessage,
@@ -46,7 +47,7 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
   const turnDirectory = path.join(
     workspaceRoot(),
     noobot.userId,
-    "runtime/session",
+    WORKSPACE_LAYOUT.SESSION_DIR,
     noobot.sessionId,
     "turns",
   );
@@ -109,20 +110,20 @@ test("@core PBE-052 回答显示后发送、锁失败、停止并删除的 canon
   const lockPath = path.join(
     workspaceRoot(),
     noobot.userId,
-    "runtime/session/.lifecycle/locks",
+    WORKSPACE_LAYOUT.SESSION_LIFECYCLE_LOCKS_DIR,
     `${noobot.sessionId}.lock`,
   );
   const toolStartedMarker = path.join(
     workspaceRoot(),
     noobot.userId,
-    "runtime/session",
+    WORKSPACE_LAYOUT.SESSION_DIR,
     noobot.sessionId,
     "pbe052-tool-started",
   );
   const toolFinishedMarker = path.join(
     workspaceRoot(),
     noobot.userId,
-    "runtime/session",
+    WORKSPACE_LAYOUT.SESSION_DIR,
     noobot.sessionId,
     "pbe052-tool-finished",
   );

@@ -8,7 +8,7 @@ import { resolveUserInteractionTimeoutMs } from "@noobot/shared/time-thresholds"
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
   validateInteractionAuthority,
@@ -160,7 +160,6 @@ export function createUserInteractionBridge({
   commitInteractionRequest,
   translateText,
   getCurrentLocale = () => "",
-  sessionLogConfig,
   interactionTimeoutMs = USER_INTERACTION_TIMEOUT_MS,
 } = {}) {
   const interactionOwnerUserId = String(ownerUserId || "").trim();
@@ -170,20 +169,18 @@ export function createUserInteractionBridge({
   }
   const interactionRequestsByIdentity = new Map();
   const writeInteractionLifecycle = (event, data, authority) => {
-    void writeRoutedRuntimeEvent(
-      {
-        source: "service",
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
-        event,
-        userId: authority.session.userId,
-        sessionId: authority.session.sessionId,
-        dialogProcessId: authority.turn.dialogProcessId,
-        turnScopeId: authority.turn.turnScopeId,
-        data,
-      },
-      sessionLogConfig,
-    );
+    void writeRuntimeEvent({
+      scope: "session",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
+      event,
+      userId: authority.session.userId,
+      sessionId: authority.session.sessionId,
+      dialogProcessId: authority.turn.dialogProcessId,
+      turnScopeId: authority.turn.turnScopeId,
+      data,
+    });
   };
   const rejectTurnInteractions = ({ sessionId = "", turnScopeId = "" } = {}, error) =>
     rejectPendingInteractionsForTurn(

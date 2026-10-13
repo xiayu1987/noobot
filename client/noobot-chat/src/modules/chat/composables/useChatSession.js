@@ -231,6 +231,7 @@ export function useChatSession({
       },
     ].slice(-80);
     sessionLogWebSocketClient.log({
+      scope: "session",
       category: "state",
       event: "conversation.state",
       sessionId,
@@ -379,6 +380,7 @@ export function useChatSession({
         primaryAction: state.primaryAction || "",
       }));
       sessionLogWebSocketClient.log({
+        scope: "session",
         category: "debug",
         level: "debug",
         debugType: "workflow-diagnostics",
@@ -403,6 +405,7 @@ export function useChatSession({
 
   function logSessionSystemEvent(event, payload = {}) {
     sessionLogWebSocketClient.log({
+      scope: "session",
       category: "system",
       event,
       sessionId:
@@ -601,7 +604,6 @@ export function useChatSession({
     activeSession,
     activeSessionId,
     turnRuntimeRegistry,
-    userId,
     chatWebSocketClient,
     reconnectReplay,
     chatList,

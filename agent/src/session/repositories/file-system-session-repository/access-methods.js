@@ -3,130 +3,83 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomUUID } from "node:crypto";
 import { createSessionDeletedError } from "@noobot/session-protocol";
+import { fatalSystemError } from "../../../shared/errors/index.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
+import { ERROR_CODE } from "../../../shared/errors/constants.js";
+
+function requireIdentity(value, message, code) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) throw fatalSystemError(tSystem(message), { code });
+  return normalized;
+}
+
+function requireUserId(userId) {
+  return requireIdentity(userId, "common.userIdRequired", ERROR_CODE.FATAL_USER_ID_REQUIRED);
+}
+
+function requireSessionId(sessionId) {
+  return requireIdentity(
+    sessionId,
+    "common.sessionIdRequired",
+    ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
+  );
+}
+
+function createTombstoneInvalidError(tombstoneFile) {
+  const error = new Error(`invalid session tombstone: ${tombstoneFile}`);
+  error.code = "SESSION_TOMBSTONE_INVALID";
+  error.persistencePath = tombstoneFile;
+  return error;
+}
 
 class SessionAccessMethods {
-  async _readDeletedSessions(userId = "") {
-    const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) return { sessions: {}, updatedAt: this.now() };
-    const markerFile = this._deletedSessionMarkerFile(normalizedUserId);
-    const raw = await this.storageService.readJson(markerFile, null);
-    const currentSessions =
-      raw?.sessions && typeof raw.sessions === "object" && !Array.isArray(raw.sessions)
-        ? raw.sessions
-        : {};
-    let pruned = false;
-    const nextSessions = {};
-    for (const [sessionId, deletedAt] of Object.entries(currentSessions)) {
-      const normalizedSessionId = String(sessionId || "").trim();
-      const deletedAtMs = Number(deletedAt);
-      if (!normalizedSessionId || !Number.isFinite(deletedAtMs)) {
-        pruned = true;
-        continue;
+  async _readDeletedSessions(userId) {
+    const tombstoneFile = this._sessionTombstoneFile(requireUserId(userId));
+    const tombstone = await this.storageService.readJson(tombstoneFile, null);
+    if (tombstone === null) return { sessions: {} };
+    const sessions = tombstone?.sessions;
+    if (!sessions || typeof sessions !== "object" || Array.isArray(sessions)) {
+      throw createTombstoneInvalidError(tombstoneFile);
+    }
+    for (const [sessionId, deletedAt] of Object.entries(sessions)) {
+      if (!String(sessionId).trim() || !Number.isFinite(deletedAt)) {
+        throw createTombstoneInvalidError(tombstoneFile);
       }
-      nextSessions[normalizedSessionId] = deletedAtMs;
     }
-    const payload = {
-      sessions: nextSessions,
-      updatedAt: String(raw?.updatedAt || this.now()),
-    };
-    if (pruned) {
-      await this.storageService.writeJsonAtomic(markerFile, {
-        sessions: nextSessions,
-        updatedAt: this.now(),
-      });
-      payload.updatedAt = this.now();
-    }
-    this._deletedSessionCache.set(normalizedUserId, payload);
-    return payload;
+    return { sessions };
   }
 
-  async _writeDeletedSessions(userId = "", sessions = {}) {
-    const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) return false;
-    const markerFile = this._deletedSessionMarkerFile(normalizedUserId);
-    const payload = {
-      sessions:
-        sessions && typeof sessions === "object" && !Array.isArray(sessions) ? sessions : {},
-      updatedAt: this.now(),
-    };
-    await this.storageService.writeJsonAtomic(markerFile, payload);
-    this._deletedSessionCache.set(normalizedUserId, payload);
-    return true;
-  }
-
-  async markSessionsDeleted(userId = "", sessionIds = []) {
-    const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) return 0;
-    const ids = (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
-      .map((item) => String(item || "").trim())
-      .filter(Boolean);
+  async markSessionsDeleted(userId, sessionIds) {
+    const normalizedUserId = requireUserId(userId);
+    if (!Array.isArray(sessionIds)) throw new TypeError("markSessionsDeleted requires sessionIds");
+    const ids = [...new Set(sessionIds.map((sessionId) => requireSessionId(sessionId)))];
     if (!ids.length) return 0;
-    await this.storageService.ensureRuntimeDirsByBasePath(this._basePath(normalizedUserId));
     const current = await this._readDeletedSessions(normalizedUserId);
-    const nextSessions = {
-      ...(current?.sessions && typeof current.sessions === "object" ? current.sessions : {}),
-    };
     const deletedAt = Date.now();
-    let marked = 0;
+    const sessions = { ...current.sessions };
     for (const sessionId of ids) {
-      nextSessions[sessionId] = deletedAt;
-      const currentLifecycle = await this._readSessionLifecycleRecord(normalizedUserId, sessionId);
-      const now = this.now();
-      await this._writeSessionLifecycleRecord(normalizedUserId, sessionId, {
-        schemaVersion: 1,
-        sessionId,
-        state: "deleted",
-        generation: Math.max(1, Number(currentLifecycle?.generation) || 1) + 1,
-        createdAt: String(currentLifecycle?.createdAt || now),
-        updatedAt: now,
-        operationId: randomUUID(),
-        deletedAt: now,
-      });
-      marked += 1;
+      sessions[sessionId] = deletedAt;
     }
-    await this._writeDeletedSessions(normalizedUserId, nextSessions);
+    await this.storageService.writeJsonAtomic(this._sessionTombstoneFile(normalizedUserId), {
+      sessions,
+      updatedAt: this.now(),
+    });
     await this.removeSessionSummaries(normalizedUserId, ids);
     await this.removeSessionDisplaySummaries(normalizedUserId, ids);
-    return marked;
+    return ids.length;
   }
 
-  async isSessionDeleted(userId = "", sessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return false;
-    const payload = await this._readDeletedSessions(userId);
-    return Boolean(payload?.sessions?.[normalizedSessionId]);
+  async isSessionDeleted(userId, sessionId) {
+    const normalizedSessionId = requireSessionId(sessionId);
+    const { sessions } = await this._readDeletedSessions(userId);
+    return Object.hasOwn(sessions, normalizedSessionId);
   }
 
-  createSessionGenerationStaleError(
-    userId = "",
-    sessionId = "",
-    expectedGeneration = 0,
-    currentGeneration = 0,
-  ) {
-    const error = new Error(`stale session generation: ${String(sessionId || "").trim()}`);
-    error.statusCode = 409;
-    error.code = "SESSION_GENERATION_STALE";
-    error.userId = String(userId || "").trim();
-    error.sessionId = String(sessionId || "").trim();
-    error.expectedGeneration = expectedGeneration;
-    error.currentGeneration = currentGeneration;
-    return error;
-  }
-
-  async assertSessionWritable(userId = "", sessionId = "", persistenceContext = null) {
+  async assertSessionWritable(userId = "", sessionId = "") {
     if (await this.isSessionDeleted(userId, sessionId)) {
       throw createSessionDeletedError({ userId, sessionId });
     }
-    const lifecycle = await this.getSessionLifecycle(userId, sessionId);
-    if (lifecycle?.state === "deleted") throw createSessionDeletedError({ userId, sessionId });
-    const token = Number(persistenceContext?.sessionGeneration);
-    const current = Number(lifecycle?.generation);
-    if (Number.isInteger(token) && token > 0 && token !== current) {
-      throw this.createSessionGenerationStaleError(userId, sessionId, token, current);
-    }
-    return lifecycle;
   }
 
   async resolveSessionDir(userId, sessionId, parentSessionId = "") {

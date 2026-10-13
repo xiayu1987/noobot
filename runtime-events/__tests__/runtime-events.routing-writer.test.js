@@ -4,16 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
-import {
-  createRuntimeEventWriter,
-  RUNTIME_EVENT_SCOPES,
-  writeRoutedRuntimeEvent,
-  writeRuntimeEvent,
-} from "../src/index.js";
+import { RUNTIME_EVENT_SCOPES, writeRuntimeEvent } from "../src/index.js";
 
-import { persistSession, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
+import {
+  persistSession,
+  readJsonl,
+  tempRoot,
+  useRuntimeEventsEnv,
+} from "./runtime-events-test-fixtures.js";
 
 test("session runtime event requires userId and sessionId", async () => {
   const result = await writeRuntimeEvent({
@@ -29,23 +32,21 @@ test("session runtime event requires userId and sessionId", async () => {
 });
 
 test("startup and system events write JSONL without session context", async () => {
-  const workspaceRoot = await tempRoot();
-  const startup = await writeRoutedRuntimeEvent({
+  await tempRoot();
+  const startup = await writeRuntimeEvent({
     scope: RUNTIME_EVENT_SCOPES.STARTUP,
     source: "service",
     category: "state",
     level: "info",
     event: "service.startup.listen.started",
-    workspaceRoot,
     data: { port: 3000 },
   });
-  const system = await writeRoutedRuntimeEvent({
+  const system = await writeRuntimeEvent({
     scope: RUNTIME_EVENT_SCOPES.SYSTEM,
     source: "agent",
     category: "transport",
     level: "warn",
     event: "agent.runtime.queue.timeout",
-    workspaceRoot,
   });
 
   assert.equal(startup.ok, true);
@@ -66,16 +67,15 @@ test("session runtime events write to runtime session events path", async () => 
     level: "error",
     event: "agent.multimodal_parse.failed",
     userId: "admin",
-    sessionId: "s:1",
+    sessionId: "s_1",
     dialogProcessId: "dialog:1",
     turnScopeId: "client-turn:1",
-    workspaceRoot,
   });
 
   assert.equal(result.ok, true);
   assert.match(result.file, /admin\/runtime\/session\/s_1\/events\/system\.jsonl$/);
   const [record] = await readJsonl(result.file);
-  assert.equal(record.sessionId, "s:1");
+  assert.equal(record.sessionId, "s_1");
   assert.equal(record.userId, "admin");
   assert.equal(record.dialogProcessId, "dialog:1");
   assert.equal(record.turnScopeId, "client-turn:1");
@@ -83,195 +83,147 @@ test("session runtime events write to runtime session events path", async () => 
   assert.equal(record.workspaceRoot, undefined);
 });
 
-test("routed runtime events write session when full session context exists", async () => {
+test("explicit session scope writes to the session events path", async () => {
   const workspaceRoot = await tempRoot();
   await persistSession(workspaceRoot, "admin", "session_1");
-  const result = await writeRoutedRuntimeEvent({
+  const result = await writeRuntimeEvent({
+    scope: "session",
     source: "agent",
     category: "system",
     level: "warn",
-    event: "agent.routed.session",
+    event: "agent.explicit.session",
     userId: "admin",
-    sessionId: "session:1",
-    workspaceRoot,
+    sessionId: "session_1",
     data: { token: "secret", count: 1 },
   });
 
   assert.equal(result.ok, true);
   assert.equal(result.record.scope, "session");
-  assert.equal(result.record.sessionId, "session:1");
+  assert.equal(result.record.sessionId, "session_1");
   assert.equal(result.record.data.token, "[Redacted]");
   assert.match(result.file, /admin\/runtime\/session\/session_1\/events\/system\.jsonl$/);
 });
 
-test("routed runtime events write system without session context", async () => {
-  const workspaceRoot = await tempRoot();
-  const result = await writeRoutedRuntimeEvent({
+test("runtime events without a declared scope are rejected", async () => {
+  await tempRoot();
+  const result = await writeRuntimeEvent({
     source: "service",
     category: "config",
     level: "warn",
-    event: "service.routed.system",
-    workspaceRoot,
-    data: { authorization: "Bearer secret", reason: "parse-failed" },
+    event: "service.undeclared.scope",
+    userId: "admin",
+    sessionId: "session-1",
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.record.scope, "system");
-  assert.equal(result.record.sessionId, undefined);
-  assert.equal(result.record.workspaceRoot, undefined);
-  assert.equal(result.record.data.authorization, "[Redacted]");
-  assert.match(result.file, /runtime\/events\/system\/service\/config\.jsonl$/);
+  assert.equal(result.ok, false);
+  assert.match(result.error.message, /Invalid runtime event scope: undefined/);
 });
 
-test("routed runtime events use default configured workspace when no root is provided", async () => {
+test("routed runtime events write under NOOBOT_WORKSPACE_ROOT and fail when it is missing", async () => {
   const previousWorkspaceRoot = process.env.NOOBOT_WORKSPACE_ROOT;
-  const previousDefaultWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-  const defaultWorkspaceRoot = await tempRoot();
+  const workspaceRoot = await tempRoot();
+  const event = {
+    source: "agent-proxy",
+    scope: "startup",
+    category: "state",
+    level: "info",
+    event: "agentProxy.default.startup",
+  };
   try {
-    delete process.env.NOOBOT_WORKSPACE_ROOT;
-    process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = defaultWorkspaceRoot;
-    const result = await writeRoutedRuntimeEvent({
-      source: "agent-proxy",
-      scope: "startup",
-      category: "state",
-      level: "info",
-      event: "agentProxy.default.startup",
-    });
-
+    const result = await writeRuntimeEvent(event);
     assert.equal(result.ok, true);
     assert.equal(result.record.workspaceRoot, undefined);
-    assert.match(
-      result.file,
-      new RegExp(
-        `${defaultWorkspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*runtime/events/startup/agent-proxy/state\\.jsonl$`,
-      ),
-    );
+    assert.equal(result.file.startsWith(`${workspaceRoot}${path.sep}`), true);
+    assert.match(result.file, /runtime\/events\/startup\/agent-proxy\/state\.jsonl$/);
+
+    delete process.env.NOOBOT_WORKSPACE_ROOT;
+    const missing = await writeRuntimeEvent(event);
+    assert.equal(missing.ok, false);
   } finally {
     if (previousWorkspaceRoot === undefined) delete process.env.NOOBOT_WORKSPACE_ROOT;
     else process.env.NOOBOT_WORKSPACE_ROOT = previousWorkspaceRoot;
-    if (previousDefaultWorkspaceRoot === undefined)
-      delete process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-    else process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
   }
 });
 
-test("runtimeEventsRoot option writes under explicit root before default workspace", async () => {
-  const previousDefaultWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-  const defaultWorkspaceRoot = await tempRoot();
-  const explicitRoot = await tempRoot();
-  try {
-    process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = defaultWorkspaceRoot;
-    const result = await writeRoutedRuntimeEvent(
-      {
-        source: "service",
-        category: "transport",
-        level: "warn",
-        event: "service.explicit.runtimeEventsRoot",
-      },
-      { runtimeEventsRoot: explicitRoot },
-    );
-
-    assert.equal(result.ok, true);
-    assert.equal(result.record.scope, "system");
-    assert.match(
-      result.file,
-      new RegExp(
-        `${explicitRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/system/service/transport\\.jsonl$`,
-      ),
-    );
-  } finally {
-    if (previousDefaultWorkspaceRoot === undefined)
-      delete process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
-    else process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = previousDefaultWorkspaceRoot;
-  }
-});
-
-test("routed runtime events do not infer session from partial session context", async () => {
-  const workspaceRoot = await tempRoot();
-  const result = await writeRoutedRuntimeEvent({
-    source: "service",
-    category: "transport",
-    level: "warn",
-    event: "service.routed.partialSession",
-    sessionId: "session-only",
-    dialogProcessId: "dialog-1",
-    workspaceRoot,
-  });
+test("desktopRoot writes system events under the explicit desktop root", async () => {
+  await tempRoot();
+  const desktopRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-runtime-events-desktop-"));
+  const result = await writeRuntimeEvent(
+    {
+      scope: "system",
+      source: "service",
+      category: "transport",
+      level: "warn",
+      event: "service.explicit.desktopRoot",
+    },
+    { desktopRoot },
+  );
 
   assert.equal(result.ok, true);
   assert.equal(result.record.scope, "system");
-  assert.equal(result.record.sessionId, undefined);
-  assert.equal(result.record.dialogProcessId, undefined);
-  assert.match(result.file, /runtime\/events\/system\/service\/transport\.jsonl$/);
+  assert.equal(result.file, path.join(desktopRoot, "system", "service", "transport.jsonl"));
 });
 
-test("createRuntimeEventWriter merges default context", async () => {
-  const workspaceRoot = await tempRoot();
-  const writer = createRuntimeEventWriter({ source: "service", workspaceRoot, userId: "admin" });
-  const result = await writer.system({
-    category: "config",
-    level: "info",
-    event: "service.config.loaded",
-  });
+test("desktopRoot rejects session-scoped events", async () => {
+  await tempRoot();
+  const desktopRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-runtime-events-desktop-"));
+  const result = await writeRuntimeEvent(
+    {
+      source: "service",
+      scope: "session",
+      userId: "admin",
+      sessionId: "session-1",
+      category: "system",
+      event: "service.desktop.session",
+    },
+    { desktopRoot },
+  );
 
-  assert.equal(result.ok, true);
-  assert.equal(result.record.source, "service");
-  assert.equal(result.record.userId, "admin");
-  assert.match(result.file, /admin\/runtime\/events\/system\/service\/config\.jsonl$/);
+  assert.equal(result.ok, false);
+  assert.match(String(result.error?.message), /owned by the workspace/);
 });
 
-test("createRuntimeEventWriter exposes routed writer with merged defaults", async () => {
-  const workspaceRoot = await tempRoot();
-  await persistSession(workspaceRoot, "admin", "session-2");
-  const writer = createRuntimeEventWriter({
-    source: "agent",
-    workspaceRoot,
-    userId: "admin",
-    sessionId: "session-2",
-  });
-  const result = await writer.routed({
-    category: "system",
-    level: "info",
-    event: "agent.routed.defaultSession",
+test("explicit session scope with partial session context is rejected", async () => {
+  await tempRoot();
+  const result = await writeRuntimeEvent({
+    scope: "session",
+    source: "service",
+    category: "transport",
+    level: "warn",
+    event: "service.explicit.partialSession",
+    sessionId: "session-only",
+    dialogProcessId: "dialog-1",
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.record.scope, "session");
-  assert.equal(result.record.sessionId, "session-2");
-  assert.match(result.file, /admin\/runtime\/session\/session-2\/events\/system\.jsonl$/);
+  assert.equal(result.ok, false);
+  assert.match(result.error.message, /requires userId and sessionId/);
 });
 
 test("runtime event jsonl transport appends without rotating below max file bytes", async () => {
   const workspaceRoot = await tempRoot();
   await persistSession(workspaceRoot, "admin", "rotation-1");
-  const first = await writeRuntimeEvent(
-    {
-      source: "agent",
-      scope: "session",
-      category: "system",
-      level: "info",
-      event: "agent.runtime.rotation.first",
-      userId: "admin",
-      sessionId: "rotation-1",
-      workspaceRoot,
-      data: { message: "small" },
-    },
-    { maxFileBytes: 1024 * 1024 },
-  );
-  const second = await writeRuntimeEvent(
-    {
-      source: "agent",
-      scope: "session",
-      category: "system",
-      level: "info",
-      event: "agent.runtime.rotation.second",
-      userId: "admin",
-      sessionId: "rotation-1",
-      workspaceRoot,
-      data: { message: "small" },
-    },
-    { maxFileBytes: 1024 * 1024 },
-  );
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 1024 * 1024 } });
+  const first = await writeRuntimeEvent({
+    source: "agent",
+    scope: "session",
+    category: "system",
+    level: "info",
+    event: "agent.runtime.rotation.first",
+    userId: "admin",
+    sessionId: "rotation-1",
+    data: { message: "small" },
+  });
+  useRuntimeEventsEnv({ storage: { maxFileBytes: 1024 * 1024 } });
+  const second = await writeRuntimeEvent({
+    source: "agent",
+    scope: "session",
+    category: "system",
+    level: "info",
+    event: "agent.runtime.rotation.second",
+    userId: "admin",
+    sessionId: "rotation-1",
+    data: { message: "small" },
+  });
 
   assert.equal(first.ok, true);
   assert.equal(second.ok, true);

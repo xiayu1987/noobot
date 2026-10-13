@@ -7,7 +7,7 @@ import { WORKFLOW_DATA_SCOPE } from "../core/constants.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
   createWorkflowRuntimeEnvelope,
@@ -77,7 +77,7 @@ function logDetail({
   level = "debug",
   data = {},
 } = {}) {
-  return writeRoutedRuntimeEvent({
+  return writeRuntimeEvent({
     scope: "session",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,

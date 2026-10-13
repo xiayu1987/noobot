@@ -62,6 +62,20 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
     ["turn-0"],
   );
   assert.equal(snapshot.unchanged, true);
+  assert.equal(snapshot.recovery, "none");
+});
+
+test("authority snapshot carries the read-side recovery annotation verbatim", () => {
+  const snapshot = createAuthoritativeTurnSnapshot({
+    lifecycle: { activeTurnScopeId: "turn-1", sequence: 2, turns: { active: turn() } },
+    commandId: "snapshot-recovery",
+    userId: "u1",
+    sessionId: "s1",
+    recovery: "finalize",
+    generatedAt: now,
+  });
+  assert.equal(snapshot.recovery, "finalize");
+  assert.equal(snapshot.activeTurn.state, "processing");
 });
 
 test("authority snapshots only terminal Turns represented by canonical messages", () => {

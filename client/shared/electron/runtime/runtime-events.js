@@ -3,25 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { writeRoutedRuntimeEvent } from "@noobot/runtime-events";
+import { writeRuntimeEvent } from "@noobot/runtime-events";
 import { joinClientPath } from "../../path-resolver.js";
 
-const DESKTOP_RUNTIME_EVENTS_ROOT_ENV = "NOOBOT_RUNTIME_EVENTS_ROOT";
-const SENSITIVE_KEY_PATTERN = /(token|cookie|authorization|secret|apikey|apiKey|headers|body|url|href|password|path|file)/i;
+const SENSITIVE_KEY_PATTERN =
+  /(token|cookie|authorization|secret|apikey|apiKey|headers|body|url|href|password|path|file)/i;
 
 export function getDesktopRuntimeEventsRoot(app) {
   if (!app || typeof app.getPath !== "function") {
     throw new Error("getDesktopRuntimeEventsRoot requires an Electron app");
   }
   return joinClientPath(app.getPath("userData"), "runtime", "events");
-}
-
-export function initializeDesktopRuntimeEvents(app, { env = process.env, runtimeEventsRoot } = {}) {
-  const root = runtimeEventsRoot || getDesktopRuntimeEventsRoot(app);
-  if (!env[DESKTOP_RUNTIME_EVENTS_ROOT_ENV]) {
-    env[DESKTOP_RUNTIME_EVENTS_ROOT_ENV] = root;
-  }
-  return env[DESKTOP_RUNTIME_EVENTS_ROOT_ENV];
 }
 
 function sanitizeDesktopValue(key, value) {
@@ -60,19 +52,20 @@ export function sanitizeDesktopRuntimeEventData(fields = {}) {
   return data;
 }
 
-export function createDesktopRuntimeEventWriter({ app, runtimeEventsRoot, env = process.env } = {}) {
-  const root = initializeDesktopRuntimeEvents(app, { env, runtimeEventsRoot });
-  function write(event = {}, fields = {}, options = {}) {
-    const record = {
-      source: "desktop",
-      scope: event.scope || options.scope || "system",
-      category: event.category || options.category || "system",
-      level: event.level || options.level || "info",
-      event: event.event || event.name,
-      data: sanitizeDesktopRuntimeEventData({ ...(event.data || {}), ...(fields || {}) }),
-    };
-    if (!record.event) return Promise.resolve({ ok: false, error: new Error("Desktop runtime event name is required") });
-    return writeRoutedRuntimeEvent(record, { runtimeEventsRoot: root, throwOnError: false });
+export function createDesktopRuntimeEventWriter({ app } = {}) {
+  const root = getDesktopRuntimeEventsRoot(app);
+  function write(event = {}, fields = {}) {
+    return writeRuntimeEvent(
+      {
+        source: "desktop",
+        scope: event.scope,
+        category: event.category,
+        level: event.level,
+        event: event.event,
+        data: sanitizeDesktopRuntimeEventData({ ...(event.data || {}), ...(fields || {}) }),
+      },
+      { desktopRoot: root },
+    );
   }
   return { runtimeEventsRoot: root, write };
 }

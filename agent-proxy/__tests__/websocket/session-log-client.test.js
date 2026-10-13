@@ -35,7 +35,15 @@ test("session log client keeps sent logs in flight until ack", () => {
   MockWebSocket.instances = [];
   const client = createSessionLogClient({ WebSocketImpl: MockWebSocket });
 
-  assert.equal(client.log("api-key-1", { category: "state", event: "state.pending", sessionId: "s-1" }), true);
+  assert.equal(
+    client.log("api-key-1", {
+      scope: "session",
+      category: "state",
+      event: "state.pending",
+      sessionId: "s-1",
+    }),
+    true,
+  );
   const socket = MockWebSocket.instances[0];
   socket.readyState = MockWebSocket.OPEN;
   socket.onopen?.();
@@ -62,6 +70,7 @@ test("session log client preserves child storage ownership fields on the wire", 
   const client = createSessionLogClient({ WebSocketImpl: MockWebSocket });
 
   client.log("api-key-1", {
+    scope: "session",
     category: "transport",
     event: "child.pending",
     sessionId: "child-session",
@@ -80,7 +89,12 @@ test("session log client restores unacked logs on close", () => {
   MockWebSocket.instances = [];
   const client = createSessionLogClient({ WebSocketImpl: MockWebSocket });
 
-  client.log("api-key-1", { category: "message", event: "message.pending", sessionId: "s-1" });
+  client.log("api-key-1", {
+    scope: "session",
+    category: "message",
+    event: "message.pending",
+    sessionId: "s-1",
+  });
   const socket = MockWebSocket.instances[0];
   socket.readyState = MockWebSocket.OPEN;
   socket.onopen?.();

@@ -108,7 +108,7 @@ NOOBOT_EXECUTION_ISOLATION_MODE=sandbox \
 
 `NOOBOT_MODEL_NAME` 可填模型库 key 或 model 名；`NOOBOT_MODEL_API_KEY`、`NOOBOT_MODEL_BASE_URL` 可选；`NOOBOT_EXECUTION_ISOLATION_MODE` 为 `sandbox`（默认）或 `host`。
 
-可选：`NOOBOT_SETUP_LANG=zh|en`（初始化引导语言，并同步 `preferences.language` 与配置内置文案的中英文文本）。
+可选：`NOOBOT_SETUP_WORKSPACE_ROOT`（初始 `workspace_root`，相对 `service/`，默认 `../workspace`）。可选：`NOOBOT_SETUP_LANG=zh|en`（初始化引导语言，并同步 `preferences.language` 与配置内置文案的中英文文本）。
 
 默认地址：
 

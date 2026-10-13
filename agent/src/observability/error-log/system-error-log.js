@@ -12,7 +12,7 @@ import {
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 const SYSTEM_ERROR_LOG_FILE_NAME = "system-error.log";
@@ -49,27 +49,22 @@ export async function appendSystemErrorLog({
     extra: extra && typeof extra === "object" ? extra : {},
   };
   if (sessionId) {
-    await writeRoutedRuntimeEvent(
-      {
-        scope: "session",
-        userId,
-        sessionId,
-        parentSessionId,
-        source,
-        category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        event,
+    await writeRuntimeEvent({
+      scope: "session",
+      userId,
+      sessionId,
+      parentSessionId,
+      source,
+      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      event,
+      message,
+      data: {
         message,
-        data: {
-          message,
-          stack,
-          extra: record.extra,
-        },
+        stack,
+        extra: record.extra,
       },
-      {
-        workspaceRoot,
-      },
-    );
+    });
   } else {
     const targetFiles = resolveTargetLogFiles({
       basePath,

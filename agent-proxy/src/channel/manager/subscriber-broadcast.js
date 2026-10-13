@@ -120,7 +120,7 @@ function logTerminalDelivery(manager, channel, delivery, context) {
 
 function logBroadcastDrop(manager, channel, delivery, context) {
   const { envelope, eventData } = context;
-  manager.logSessionEvent(channel, {
+  manager.logChannelEvent(channel, {
     category: "transport",
     level: "warn",
     event: "agentProxy.channel.broadcast.delivery",
@@ -317,11 +317,10 @@ class SubscriberBroadcastMethods {
 
   projectChannelEventForDelivery(channel, envelope) {
     if (!channel || !envelope) return envelope;
-    const channelSessionId = String(this._extractSessionIdFromChannelKey(channel.key) || "").trim();
     return createAgentTransportEvent({
       event: envelope.event,
       data: envelope.data,
-      channelSessionId,
+      channelSessionId: channel.identity.sessionId,
     });
   }
 

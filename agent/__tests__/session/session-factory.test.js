@@ -7,9 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-factory-"));
@@ -22,7 +23,7 @@ async function withTempWorkspace(fn) {
 
 test("createSessionServices wires repositories/services with expected dependency chain", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    await mkdir(path.join(workspaceRoot, "u1"), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, "u1");
 
     const runtime = createSessionServices(
       { workspaceRoot },

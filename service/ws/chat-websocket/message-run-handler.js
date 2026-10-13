@@ -3,14 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
 import {
   consumeUserInterjections,
-  findActiveRun,
+  createExecutionLivenessInspector,
   sealUserInterjectionQueueIfEmpty,
 } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
+import { recoverPersistedTurn } from "./turn-recovery.js";
 import {
   acceptRunCommand,
   bindExistingRun,
@@ -24,21 +24,19 @@ import { finalizeRunResult } from "./message-run/terminal-stage.js";
 
 const text = (value) => String(value || "").trim();
 
-function createOrphanedTurnRecovery(context) {
+function createConflictTurnRecovery(context) {
   return async ({ accepted = null, userId = "", sessionId = "", parentSessionId = "" } = {}) => {
-    const result = await recoverOrphanedTurn({
-      conflict: accepted,
-      identity: { userId, sessionId, parentSessionId },
-      inspectExecution: ({ turnScopeId, dialogProcessId }) => ({
-        alive: Boolean(
-          findActiveRun({
-            userId: context.canonicalRunOwnerId,
-            sessionId,
-            turnScopeId,
-            dialogProcessId,
-          }),
-        ),
-        observedAtMs: Date.now(),
+    if (accepted?.reason !== "session_action_conflict") return false;
+    const lifecycle = accepted.lifecycle || {};
+    const turn = lifecycle.turns?.[text(lifecycle.activeTurnScopeId)] || null;
+    const result = await recoverPersistedTurn({
+      turn,
+      userId,
+      sessionId,
+      parentSessionId,
+      inspectExecution: createExecutionLivenessInspector({
+        userId: context.canonicalRunOwnerId,
+        sessionId,
       }),
       commitTurnLifecycle: context.commitTurnLifecycle,
     });
@@ -114,7 +112,6 @@ function createRunTransportDiagnostic(context) {
   return (identity = {}) =>
     (data = {}) => {
       void recordServiceWebSocketLifecycle({
-        sessionLogConfig: context.sessionLogConfig,
         category: "debug",
         level: "debug",
         debugType: "workflow-diagnostics",
@@ -171,7 +168,7 @@ export function createMessageRunHandler(dependencies) {
     canonicalRunOwnerId: text(dependencies.authInfo?.userId),
     lifecycle: { pending: null, latestTurn: null },
   };
-  context.recoverOrphanedTurnConflict = createOrphanedTurnRecovery(context);
+  context.recoverConflictingTurn = createConflictTurnRecovery(context);
   context.recordRunTransportDiagnostic = createRunTransportDiagnostic(context);
   return {
     handleRun: createRunHandler(context),

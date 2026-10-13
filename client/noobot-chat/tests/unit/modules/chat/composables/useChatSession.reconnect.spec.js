@@ -512,12 +512,14 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.pending).toBe(true);
   });
 
-  it("passes current userId to reconnect websocket request", async () => {
+  it("passes the active session parent identity and no user identity to reconnect", async () => {
     const store = useChatStore();
     store.sessions = [
       {
         id: "s-reconnect-user",
         sessionId: "s-reconnect-user",
+        parentSessionId: "p-reconnect",
+        parentDialogProcessId: "pdp-reconnect",
         title: "session",
         isLocal: false,
         loaded: true,
@@ -554,12 +556,13 @@ describe("useChatSession reconnect replay", () => {
 
     await session.handleReconnect();
 
-    expect(wsClientMock.reconnect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        currentSessionId: "s-reconnect-user",
-        userId: "u-reconnect",
-      }),
-    );
+    const request = wsClientMock.reconnect.mock.calls.at(-1)[0];
+    expect(request).toMatchObject({
+      currentSessionId: "s-reconnect-user",
+      currentParentSessionId: "p-reconnect",
+      currentParentDialogProcessId: "pdp-reconnect",
+    });
+    expect("userId" in request).toBe(false);
   });
 
   it("restores a workflow Execution tree before its selected snapshot without double-consuming responses", async () => {

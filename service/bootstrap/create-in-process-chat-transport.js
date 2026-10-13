@@ -66,11 +66,7 @@ class InProcessSocket extends EventEmitter {
   }
 }
 
-export function createInProcessChatTransport({
-  appDependencies,
-  connectorAccessPort,
-  sessionLogConfig,
-} = {}) {
+export function createInProcessChatTransport({ appDependencies, connectorAccessPort } = {}) {
   const handleConnection = createChatConnectionHandler({
     consumerId: AUTHORITY_EVENT_CONSUMER.CLI,
     closePolicy: CONNECTION_CLOSE_POLICY.ABORT_RUN,
@@ -80,7 +76,6 @@ export function createInProcessChatTransport({
     translateText: appDependencies.translateText,
     mapAgentRunCommand: appDependencies.mapAgentRunCommand,
     connectorAccessPort,
-    sessionLogConfig,
   });
 
   function openConnection({ authInfo, locale = "", onEvent = () => {} } = {}) {

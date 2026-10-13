@@ -20,7 +20,6 @@ function createContextSessionManager({ getContextProjection = null } = {}) {
       if (getContextProjection) return getContextProjection(payload);
       return { messages: [], sourceRevision: "" };
     },
-    async upsertSessionTree() {},
   };
 }
 
@@ -473,7 +472,6 @@ test("buildNewSessionContext resolves session history and passes edited turnScop
             sourceRevision: "ctxsrc:test",
           };
         },
-        async upsertSessionTree() {},
       },
       memoryService: null,
       attachmentService: {

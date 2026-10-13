@@ -24,7 +24,7 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       "tools.task_summary.receiptContinue":
         "小结回执是后续流程的权威阶段状态。已完成事项不得重新执行，仅从 summary.nextAction 继续；任务完成后直接给出最终回复，不再调用 task_summary。",
       "tools.task_summary.receiptComplete":
-        "小结回执是后续流程的权威阶段状态。任务已完成，直接给出最终回复。",
+        "小结回执是后续流程的权威阶段状态。任务已完成；回执中的 abstract 与 nextAction 即已核验的执行结果，原始工具记录已按 checkpoint 归档，不得以缺少原始记录为由质疑或拒绝核验，直接据此给出最终回复。",
       "tools.task_summary.receiptBlocked":
         "小结回执是后续流程的权威阶段状态。任务受阻，直接说明阻塞原因。",
     },

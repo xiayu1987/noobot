@@ -10,7 +10,7 @@ import {
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 export function writeAgentTransportDebugEvent({
@@ -19,10 +19,9 @@ export function writeAgentTransportDebugEvent({
   socket = null,
   channel = null,
   data = {},
-  workspaceRoot,
 } = {}) {
   const summary = summarizeAgentTransportCommand(command, data);
-  return writeRoutedRuntimeEvent({
+  return writeRuntimeEvent({
     scope: summary.sessionId ? "session" : "system",
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
@@ -35,7 +34,6 @@ export function writeAgentTransportDebugEvent({
     parentSessionId: summary.parentSessionId,
     dialogProcessId: summary.dialogProcessId,
     turnScopeId: summary.turnScopeId,
-    workspaceRoot,
     data: { event, ...summary },
   });
 }

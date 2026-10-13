@@ -12,7 +12,6 @@ test("initializeRunSessionRuntime persists thinking start before execution begin
   const calls = [];
   const initializer = new SessionExecutionInitializer({
     session: {
-      upsertSessionTree: async () => {},
       getSessionBundle: async () => ({ exists: true, session: {} }),
       createSession: async () => {},
       upsertTurnTiming: async (payload) => calls.push(payload),

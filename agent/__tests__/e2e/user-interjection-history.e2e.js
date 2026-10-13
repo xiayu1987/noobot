@@ -39,7 +39,6 @@ test("session execution preserves every user interjection into the next model hi
   });
 
   const session = {
-    async upsertSessionTree() {},
     async getSessionBundle() {
       return { exists: false, session: { messages: [] } };
     },

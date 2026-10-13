@@ -15,7 +15,7 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { projectUserVisibleConfigDeclarations } from "@noobot/agent-config-protocol";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
@@ -42,7 +42,8 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
       await access(path.join(root, userId, "config.json"));
       userDirs.push(userId);
     } catch (error) {
-      void writeRoutedRuntimeEvent({
+      void writeRuntimeEvent({
+        scope: "system",
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         category: RUNTIME_EVENT_CATEGORIES.CONFIG,
@@ -286,7 +287,8 @@ export function registerWorkspaceRoutes(
             await workspaceService.syncUserWorkspace(userId);
             syncedUsers.push(userId);
           } catch (error) {
-            void writeRoutedRuntimeEvent({
+            void writeRuntimeEvent({
+              scope: "system",
               source: "service",
               channel: RUNTIME_EVENT_CHANNELS.DIRECT,
               category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
@@ -323,7 +325,8 @@ export function registerWorkspaceRoutes(
             await workspaceService.resetUserWorkspace(userId, { sections });
             resetUsers.push(userId);
           } catch (error) {
-            void writeRoutedRuntimeEvent({
+            void writeRuntimeEvent({
+              scope: "system",
               source: "service",
               channel: RUNTIME_EVENT_CHANNELS.DIRECT,
               category: RUNTIME_EVENT_CATEGORIES.SYSTEM,

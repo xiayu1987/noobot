@@ -101,11 +101,7 @@ export class ScopedSessionLocationResolver {
   }
 }
 
-export function createPersistenceContext({
-  locationResolver,
-  metadataContributor = null,
-  sessionGeneration = null,
-} = {}) {
+export function createPersistenceContext({ locationResolver, metadataContributor = null } = {}) {
   if (!locationResolver || typeof locationResolver.resolveSessionScope !== "function") {
     throw new TypeError("persistence context requires a locationResolver");
   }
@@ -128,10 +124,6 @@ export function createPersistenceContext({
     parentSessionId: String(locationResolver?.parentSessionId || "").trim(),
     locationResolver,
     metadataContributor,
-    sessionGeneration:
-      Number.isInteger(Number(sessionGeneration)) && Number(sessionGeneration) > 0
-        ? Number(sessionGeneration)
-        : null,
   });
 }
 

@@ -26,6 +26,7 @@ function summaryWithTerminalSnapshot(overrides = {}) {
     turnLifecycleSnapshot: {
       protocolVersion: 1,
       eventType: "turn.snapshot",
+      recovery: "none",
       sessionId: "s-refresh",
       sequence: 2,
       activeTurnScopeId: "",

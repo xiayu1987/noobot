@@ -41,5 +41,32 @@ canonical definition instead of duplicating it.
 
 `scripts/check-session-protocol-boundary.mjs` enforces these definition sites.
 
+## Turn recovery
+
+Reads never settle a Turn; settling is a write.
+
+- `turn.snapshot.get` is a pure read. It loads the persisted lifecycle once and
+  annotates the snapshot with the required `recovery` field
+  (`TURN_RECOVERY_ACTION`), using the pure assessment `assessTurnRecovery` in
+  `@noobot/authoritative-state`.
+  - `none`: no active Turn, or nothing to settle yet (execution live, within
+    the grace period, or liveness unknown).
+  - `finalize`: the active Turn holds a retryable finalize intent; this wins
+    over liveness.
+  - `orphan`: the active Turn's execution is observed dead past the grace
+    period.
+- `recovery` is never a projected terminal state; the snapshot still reports
+  the persisted active Turn, so `revision` and `sequence` stay authoritative.
+  `finalize` and `orphan` require an `activeTurn`.
+- Settling happens only through write entries, at most one commit each,
+  idempotent by `commandId` plus `expectedRevision`:
+  - `turn.finalize` settles the flagged Turn and returns the resulting
+    snapshot; with nothing to settle it returns the current snapshot.
+  - A new Turn command that hits `session_action_conflict` settles the blocking
+    Turn and retries.
+- Reconnect: the agent proxy sends `turn.finalize` once for a snapshot whose
+  `recovery` is actionable and replaces the snapshot with the settled one. On
+  failure it keeps the original snapshot and reconnect still completes.
+
 Runtime readers reject the previous schema. Existing artifacts must be changed
 offline before deploying all components together.

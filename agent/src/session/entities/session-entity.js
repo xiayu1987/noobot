@@ -10,6 +10,7 @@ import { validateProtocolEvent } from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { firstTextField, normalizeTextField, objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
 
@@ -199,31 +200,6 @@ export function normalizeSessionEntity(
   return assertSessionAggregateInvariants(normalizedSession);
 }
 
-function assertSessionTreeSchema(tree, nodes) {
-  const legacyNode = Object.values(nodes).some(
-    (node) => node && ("children" in node || "createdAt" in node || "updatedAt" in node),
-  );
-  if (tree && ("roots" in tree || "updatedAt" in tree || legacyNode)) {
-    throw new TypeError(
-      "legacy session tree fields roots/children/createdAt/updatedAt are not supported; the workspace layout upgrade maps them to parentSessionId",
-    );
-  }
-}
-
 export function normalizeSessionTreeEntity(tree = {}) {
-  const nodes = tree?.nodes && typeof tree.nodes === "object" ? { ...tree.nodes } : {};
-  assertSessionTreeSchema(tree, nodes);
-  for (const [nodeId, node] of Object.entries(nodes)) {
-    const normalizedNodeId = String(nodeId || "").trim();
-    if (!normalizedNodeId) {
-      delete nodes[nodeId];
-      continue;
-    }
-    nodes[normalizedNodeId] = {
-      sessionId: normalizedNodeId,
-      parentSessionId: String(node?.parentSessionId || "").trim(),
-    };
-    if (normalizedNodeId !== nodeId) delete nodes[nodeId];
-  }
-  return { nodes };
+  return normalizeSessionTree(tree);
 }

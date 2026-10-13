@@ -7,6 +7,7 @@ import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { withoutRuntimeInstancePaths } from "@noobot/runtime-topology-protocol/instance-paths";
+import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
 
 export const ISOLATED_TMP_ENV = "NOOBOT_TEST_TMP_DIR";
 export const DEFAULT_TMP_MIN_AGE_MS = 60 * 60 * 1000;
@@ -44,6 +45,7 @@ export function buildIsolatedTmpEnv(dir, env = process.env) {
   return {
     ...withoutRuntimeInstancePaths(env),
     [ISOLATED_TMP_ENV]: dir,
+    [WORKSPACE_ROOT_ENV]: path.join(dir, "workspace"),
     TMPDIR: dir,
     TMP: dir,
     TEMP: dir,

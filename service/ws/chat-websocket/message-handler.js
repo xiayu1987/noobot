@@ -41,7 +41,6 @@ export function createMessageHandler({
   mapAgentRunCommand,
   connectorAccessPort,
   resolveBot,
-  sessionLogConfig,
   rejectTurnInteractions,
   userInteractionBridge,
   buildRunStateSnapshot,
@@ -53,8 +52,7 @@ export function createMessageHandler({
   commitTurnLifecycle,
   commitUserInterjection,
   dispatchAuthorityEvents,
-  recoverTurnFinalize,
-  recoverSnapshotOrphan,
+  turnRecovery,
 }) {
   const canonicalRunOwnerId = String(authInfo?.userId || "").trim();
 
@@ -66,8 +64,7 @@ export function createMessageHandler({
       translateText,
       resolveBot,
       canonicalRunOwnerId,
-      recoverTurnFinalize,
-      recoverSnapshotOrphan,
+      turnRecovery,
     });
   const handleStop = createMessageStopHandler({
     state,
@@ -75,7 +72,6 @@ export function createMessageHandler({
     sendEvent,
     translateText,
     resolveBot,
-    sessionLogConfig,
     rejectTurnInteractions,
     commitTurnLifecycle,
   });
@@ -88,7 +84,6 @@ export function createMessageHandler({
     mapAgentRunCommand,
     connectorAccessPort,
     resolveBot,
-    sessionLogConfig,
     userInteractionBridge,
     buildRunStateSnapshot,
     finalizeTimeout,
@@ -103,7 +98,6 @@ export function createMessageHandler({
     webSocket,
     sendEvent,
     translateText,
-    sessionLogConfig,
     canonicalRunOwnerId,
     buildRunStateSnapshot,
     finalizeTimeout,
@@ -130,7 +124,6 @@ export function createMessageHandler({
       const command = parseAgentCommand(rawMessage);
       parsedCommand = command;
       void recordServiceAgentTransportDebug({
-        sessionLogConfig,
         event: "service.agentTransport.commandReceived",
         command,
         userId: canonicalRunOwnerId,
@@ -263,7 +256,6 @@ async function handleInterject(context, command) {
   const dispatch = await dispatchInterjectionAuthority(context, activeRun);
   if (dispatch?.dispatched !== true) {
     void recordServiceWebSocketLifecycle({
-      sessionLogConfig: context.sessionLogConfig,
       event: "service.userInterjection.authorityDispatchDeferred",
       userId: activeRun.userId,
       sessionId: activeRun.sessionId,
@@ -294,9 +286,8 @@ function buildRejectionReceiptError({ state, translateText }, error) {
 }
 
 function rejectCommand(context, error, parsedCommand, rawMessage) {
-  const { sendEvent, sessionLogConfig } = context;
+  const { sendEvent } = context;
   void recordServiceAgentTransportDebug({
-    sessionLogConfig,
     event: parsedCommand
       ? "service.agentTransport.commandDispatchFailed"
       : "service.agentTransport.commandRejected",
@@ -305,7 +296,6 @@ function rejectCommand(context, error, parsedCommand, rawMessage) {
     data: buildRejectionDebugData(error, parsedCommand),
   });
   void recordServiceWebSocketLifecycle({
-    sessionLogConfig,
     event: "service.websocket.request.rejected",
     data: {
       errorType: error?.name || "Error",
@@ -342,7 +332,6 @@ async function settleAbortedRun(context, error) {
     await context.commitCurrentFailure(error, state.currentLifecyclePhase || TURN_PHASE.ACTION);
   } else {
     void recordServiceWebSocketLifecycle({
-      sessionLogConfig: context.sessionLogConfig,
       event: "service.websocket.run.aborted",
       ...state.currentRunMeta,
       data: { errorType: error?.name || "Error" },
@@ -359,7 +348,6 @@ async function settleFailedRun(context, error) {
     return;
   }
   void recordServiceWebSocketLifecycle({
-    sessionLogConfig: context.sessionLogConfig,
     event: "service.websocket.run.failed",
     ...state.currentRunMeta,
     data: { errorType: error?.name || "Error" },
@@ -368,7 +356,7 @@ async function settleFailedRun(context, error) {
   await context.finalizeGenericError(context.buildRunStateSnapshot(), { error, committed });
 }
 
-function releaseRun({ state, sessionLogConfig }, boundRunHandle) {
+function releaseRun({ state }, boundRunHandle) {
   if (boundRunHandle) {
     unregisterActiveRun(boundRunHandle);
   }
@@ -376,7 +364,6 @@ function releaseRun({ state, sessionLogConfig }, boundRunHandle) {
     resetRunState(state);
   }
   void recordServiceWebSocketLifecycle({
-    sessionLogConfig,
     event: "service.websocket.run.stateReset",
     data: { completed: true },
   });

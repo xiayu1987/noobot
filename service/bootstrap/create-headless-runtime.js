@@ -9,7 +9,7 @@ import { registerBuiltinConnectorInstances } from "@noobot/connector-instances";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { createAppDependencies } from "./create-app-dependencies.js";
 import { createServiceGlobalConfigSource } from "../services/global-config-source.js";
@@ -48,7 +48,7 @@ export async function createHeadlessRuntime({
 } = {}) {
   const startupContext = await loadStartupContext({ argv, cwd });
   applyStartupRuntimeEnv(startupContext);
-  void writeRoutedRuntimeEvent({
+  void writeRuntimeEvent({
     scope: "startup",
     source: startupSource,
     channel: RUNTIME_EVENT_CHANNELS.STARTUP,
@@ -69,6 +69,7 @@ export async function createHeadlessRuntime({
     listUserConnectors: (userId) => connectorRuntime.listUserConnectors(userId),
   });
   const appDependencies = await createAppDependencies({
+    serviceDir: cwd,
     startupContext,
     globalConfigBuilder,
     buildWorkspaceTree,

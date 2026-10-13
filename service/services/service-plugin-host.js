@@ -32,11 +32,11 @@ import {
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 function reportPluginEvent(record = {}) {
-  void writeRoutedRuntimeEvent({
+  void writeRuntimeEvent({
     scope: "startup",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,

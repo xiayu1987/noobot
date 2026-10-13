@@ -15,6 +15,13 @@ import { config } from "../shared/config.js";
 import { ChannelEventJournal } from "./channel-event-journal.js";
 import { resolveOptionalSessionId } from "@noobot/runtime-events/session-id";
 
+const CHANNEL_LOG_RESERVED_KEYS = [
+  "sessionId",
+  "parentSessionId",
+  "dialogProcessId",
+  "turnScopeId",
+];
+
 const DATA_PLANE_METRIC_KEYS = new Set([
   "upstreamMessages",
   "channelEvents",
@@ -75,54 +82,52 @@ export class ChannelManager {
 
   logCommandRemoval(removal) {
     if (removal?.reason === "delivered") return false;
-    try {
-      const channel = this.channelStore.get(removal?.channelKey);
-      return this.logSessionEvent(channel, {
-        category: "transport",
-        level: "info",
-        event: "agentProxy.commandRegistry.removed",
-        data: { ...removal },
-      });
-    } catch {
-      return false;
+    const channel = this.channelStore.get(removal?.channelKey);
+    return this.logChannelEvent(channel, {
+      category: "transport",
+      level: "info",
+      event: "agentProxy.commandRegistry.removed",
+      data: { ...removal },
+    });
+  }
+
+  logChannelEvent(channel, event = {}) {
+    if (!this.sessionLogClient || !channel) return false;
+    for (const key of CHANNEL_LOG_RESERVED_KEYS) {
+      if (Object.hasOwn(event, key)) {
+        throw new TypeError(`logChannelEvent does not accept ${key}; use logSessionEvent`);
+      }
     }
+    const { sessionId, parentSessionId } = channel.identity;
+    return this.writeSessionLog(channel, {
+      ...event,
+      sessionId,
+      parentSessionId,
+      dialogProcessId: "",
+      turnScopeId: "",
+    });
   }
 
   logSessionEvent(channel, event = {}) {
     if (!this.sessionLogClient || !channel) return false;
-    const channelSessionId = resolveOptionalSessionId(
-      this._extractSessionIdFromChannelKey?.(channel.key),
-    );
-    const sessionId = resolveOptionalSessionId(
-      event.sessionId,
-      event.data?.sessionId,
-      channel.startPayload?.sessionId,
-      channelSessionId,
-      "agent-proxy",
-    );
-    const parentSessionId = resolveOptionalSessionId(
-      event.parentSessionId,
-      event.data?.parentSessionId,
-      channelSessionId && channelSessionId !== sessionId ? channelSessionId : "",
-      channel.startPayload?.parentSessionId,
-    );
-    const logEvent = {
+    const sessionId = resolveOptionalSessionId(event.sessionId);
+    if (!sessionId) {
+      throw new TypeError(`logSessionEvent requires sessionId: ${event.event || ""}`);
+    }
+    return this.writeSessionLog(channel, {
       ...event,
       sessionId,
-      ...(parentSessionId ? { parentSessionId } : {}),
-      dialogProcessId:
-        event.dialogProcessId ||
-        event.data?.dialogProcessId ||
-        channel.startPayload?.dialogProcessId ||
-        "",
-      turnScopeId: event.turnScopeId || event.data?.turnScopeId || "",
-    };
-    if (!parentSessionId) delete logEvent.parentSessionId;
-    if (logEvent.data && !resolveOptionalSessionId(logEvent.data.parentSessionId)) {
-      logEvent.data = { ...logEvent.data };
-      delete logEvent.data.parentSessionId;
-    }
-    return this.sessionLogClient.log(channel.apiKey || channel.ownerApiKey || "", logEvent);
+      parentSessionId: resolveOptionalSessionId(event.parentSessionId),
+      dialogProcessId: event.dialogProcessId || "",
+      turnScopeId: event.turnScopeId || "",
+    });
+  }
+
+  writeSessionLog(channel, event) {
+    const data = event.data && typeof event.data === "object" ? { ...event.data } : undefined;
+    const logEvent = { ...event, scope: "session", ...(data ? { data } : {}) };
+    if (!logEvent.parentSessionId) delete logEvent.parentSessionId;
+    return this.sessionLogClient.log(channel.apiKey, logEvent);
   }
 }
 

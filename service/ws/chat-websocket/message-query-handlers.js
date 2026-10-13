@@ -61,8 +61,7 @@ export function createMessageQueryHandlers({
   translateText,
   resolveBot,
   canonicalRunOwnerId,
-  recoverTurnFinalize,
-  recoverSnapshotOrphan,
+  turnRecovery,
 }) {
   const handleInteractionResponse = (command) => {
     const requestId = String(command.interaction?.requestId || "").trim();
@@ -86,31 +85,7 @@ export function createMessageQueryHandlers({
       sendFailedCommandReceipt(sendEvent, command, { code: "invalid_snapshot_request" });
       return;
     }
-    const recovered = await recoverTurnFinalize?.({
-      ...identity,
-      commandId: `${commandId}:recovery`,
-      terminalLimit,
-    });
-    if (
-      !recovered?.recovered &&
-      recovered?.reason &&
-      recovered.reason !== "no_recoverable_finalize"
-    ) {
-      sendFailedCommandReceipt(sendEvent, command, { code: recovered.reason });
-      return;
-    }
-    await recoverSnapshotOrphan?.({
-      ...identity,
-      commandId: `${commandId}:orphan-recovery`,
-      terminalLimit,
-    });
-    const bot = resolveBot();
-    const reader = bot?.getTurnLifecycleSnapshot;
-    if (typeof reader !== "function") {
-      sendFailedCommandReceipt(sendEvent, command, { code: "lifecycle_snapshot_unavailable" });
-      return;
-    }
-    const result = await reader.call(bot, {
+    const result = await turnRecovery.readSnapshot({
       ...identity,
       commandId,
       knownSequence: command.options?.knownSequence,
@@ -172,14 +147,14 @@ export function createMessageQueryHandlers({
       sendFailedCommandReceipt(sendEvent, command, { code: "invalid_finalize_request" });
       return;
     }
-    const result = await recoverTurnFinalize?.({ ...identity, commandId, terminalLimit });
-    if (!result?.recovered && result?.reason !== "no_recoverable_finalize") {
+    const result = await turnRecovery.finalize({ ...identity, commandId, terminalLimit });
+    if (!result?.snapshot) {
       sendFailedCommandReceipt(sendEvent, command, {
         code: result?.reason || "finalize_recovery_failed",
       });
       return;
     }
-    sendAuthoritativeTurnSnapshot(sendEvent, command, result?.result?.snapshot);
+    sendAuthoritativeTurnSnapshot(sendEvent, command, result.snapshot);
   };
 
   return { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize };

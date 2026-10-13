@@ -218,7 +218,10 @@ test("invokeCapabilityModel advances one checkpoint append-only auxiliary sequen
     ["system", "user", "user", "user", "assistant", "user"],
   );
   assert.match(captured[1][3].content, /read_file/);
-  assert.equal(captured[1][4].content, "file-content");
+  assert.equal(
+    captured[1][4].content,
+    "Tool result [call-1] (matching tool result of the executed call above):\nfile-content",
+  );
   assert.equal(
     captured[1].some((item) => item.content === "analysis-request-1"),
     true,

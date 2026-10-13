@@ -98,7 +98,6 @@ test("detached sub-session delegates execution and persistence to the main runne
     relativeDir: "runtime/plugin-data/workflow/session/root/node-a",
     allowedRoot: "runtime/plugin-data/workflow/session",
     metadataContributor: calls.persistencePayloads[0].metadataContributor,
-    sessionGeneration: 1,
   });
   const metadata = calls.persistencePayloads[0].metadataContributor();
   assert.equal(metadata.scope, "workflow_node");
@@ -376,9 +375,6 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
   const { deps } = createDeps({
     session: {
-      async getSessionLifecycle({ sessionId = "" } = {}) {
-        return { sessionId, state: "active", generation: 1 };
-      },
       async appendExecutionLog() {},
       applyTurnLifecycleEvent: (payload) => messageService.applyTurnLifecycleEvent(payload),
       createScopedPersistenceContext(payload = {}) {

@@ -29,6 +29,7 @@ export function createAuthoritativeTurnSnapshot({
   knownSequence,
   terminalLimit = 10,
   terminalTurnScopeIds = [],
+  recovery,
   generatedAt = new Date().toISOString(),
 } = {}) {
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
@@ -63,6 +64,7 @@ export function createAuthoritativeTurnSnapshot({
     recentTerminalTurns,
     replacedTurns: Object.values(lifecycle.replacedTurns),
     unchanged: knownSequence !== undefined && Number(knownSequence) === lifecycle.sequence,
+    recovery,
     generatedAt,
   });
 }

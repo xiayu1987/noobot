@@ -5,8 +5,6 @@
  */
 import process from "node:process";
 import { resolveServiceGlobalConfigPath } from "../../services/global-config-source.js";
-import { DEFAULT_WORKSPACE_ROOT } from "./constants.js";
-import { firstNonEmptyString } from "./utils.js";
 
 export function parseCliOptions(argv = []) {
   const items = Array.isArray(argv) ? argv : [];
@@ -37,10 +35,6 @@ export function parseCliOptions(argv = []) {
   }
 
   return options;
-}
-
-export function resolveConfiguredWorkspaceRoot(config = {}) {
-  return firstNonEmptyString(config?.workspace_root, DEFAULT_WORKSPACE_ROOT);
 }
 
 export function resolveLauncherGlobalConfigPath({

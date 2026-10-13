@@ -64,18 +64,36 @@ export function normalizeApiKey(input = "") {
   return String(input || "").trim();
 }
 
-export function createChannelKey({
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  parentDialogProcessId = "",
-} = {}) {
-  return [
-    String(userId || "").trim(),
-    String(sessionId || "").trim(),
-    String(parentSessionId || "").trim(),
-    String(parentDialogProcessId || "").trim(),
-  ].join("::");
+const CHANNEL_KEY_SEPARATOR = "::";
+const CHANNEL_KEY_FIELDS = ["userId", "sessionId", "parentSessionId", "parentDialogProcessId"];
+const CHANNEL_KEY_REQUIRED_FIELDS = ["userId", "sessionId"];
+
+function assertChannelKeyIdentity(identity, source) {
+  for (const field of CHANNEL_KEY_REQUIRED_FIELDS) {
+    if (!identity[field]) {
+      throw new TypeError(`Agent-proxy channel key requires ${field}: ${source}`);
+    }
+  }
+  return identity;
+}
+
+export function createChannelKey(identity = {}) {
+  const normalized = Object.fromEntries(
+    CHANNEL_KEY_FIELDS.map((field) => [field, String(identity?.[field] || "").trim()]),
+  );
+  assertChannelKeyIdentity(normalized, "createChannelKey");
+  return CHANNEL_KEY_FIELDS.map((field) => normalized[field]).join(CHANNEL_KEY_SEPARATOR);
+}
+
+export function parseChannelKey(channelKey = "") {
+  const parts = String(channelKey || "").split(CHANNEL_KEY_SEPARATOR);
+  if (parts.length !== CHANNEL_KEY_FIELDS.length) {
+    throw new TypeError(`Invalid agent-proxy channel key: ${channelKey}`);
+  }
+  const identity = Object.fromEntries(
+    CHANNEL_KEY_FIELDS.map((field, index) => [field, parts[index].trim()]),
+  );
+  return Object.freeze(assertChannelKeyIdentity(identity, channelKey));
 }
 
 export function parseRequestQuery(request = null) {

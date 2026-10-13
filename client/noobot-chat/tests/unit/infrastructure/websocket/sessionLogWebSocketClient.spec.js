@@ -75,6 +75,7 @@ describe("sessionLogWebSocketClient", () => {
       client.log({
         category: "state",
         event: "stateMachine.event",
+        scope: "session",
         sessionId: "s-1",
         data: { state: "sending" },
       }),
@@ -103,12 +104,37 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0, inFlightLength: 0 }));
   });
 
+  it("rejects protocol-invalid records without scope and counts them", async () => {
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(client.log({ category: "message", event: "message.no-scope", sessionId: "s-1" })).toBe(
+      false,
+    );
+    expect(client.log({ scope: "session", category: "message", event: "message.no-session" })).toBe(
+      false,
+    );
+
+    expect(client.status()).toEqual(
+      expect.objectContaining({ rejectedInvalidCount: 2, queueLength: 0 }),
+    );
+    expect(MockWebSocket.instances).toHaveLength(0);
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
   it("rejects reliable events beyond the bounded queue without generating recursive logs", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
     for (let index = 0; index < 505; index += 1) {
-      client.log({ category: "message", event: `message.${index}`, sessionId: "s-queue" });
+      client.log({
+        category: "message",
+        event: `message.${index}`,
+        scope: "session",
+        sessionId: "s-queue",
+      });
     }
 
     const socket = MockWebSocket.instances[0];
@@ -139,7 +165,12 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
     for (let index = 0; index < 150; index += 1)
-      client.log({ event: `ordered.${index}`, sessionId: "s-order" });
+      client.log({
+        event: `ordered.${index}`,
+        category: "state",
+        scope: "session",
+        sessionId: "s-order",
+      });
     const socket = MockWebSocket.instances[0];
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
@@ -158,7 +189,12 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    client.log({ category: "message", event: "message.pending", sessionId: "s-retry" });
+    client.log({
+      category: "message",
+      event: "message.pending",
+      scope: "session",
+      sessionId: "s-retry",
+    });
     const socket = MockWebSocket.instances[0];
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
@@ -180,7 +216,12 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    client.log({ category: "message", event: "message.error", sessionId: "s-error" });
+    client.log({
+      category: "message",
+      event: "message.error",
+      scope: "session",
+      sessionId: "s-error",
+    });
     const socket = MockWebSocket.instances[0];
     socket.onerror?.();
 
@@ -193,7 +234,12 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    client.log({ category: "message", event: "message.send-failure", sessionId: "s-retry" });
+    client.log({
+      category: "message",
+      event: "message.send-failure",
+      scope: "session",
+      sessionId: "s-retry",
+    });
     const socket = MockWebSocket.instances[0];
     socket.send = () => {
       throw new DOMException("socket closing", "InvalidStateError");
@@ -214,7 +260,12 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    client.log({ category: "message", event: "message.first", sessionId: "s-stale" });
+    client.log({
+      category: "message",
+      event: "message.first",
+      scope: "session",
+      sessionId: "s-stale",
+    });
     const firstSocket = MockWebSocket.instances[0];
     firstSocket.readyState = MockWebSocket.OPEN;
     firstSocket.onopen?.();
@@ -240,7 +291,12 @@ describe("sessionLogWebSocketClient", () => {
       refreshAuthentication,
     });
 
-    client.log({ category: "message", event: "message.pending", sessionId: "s-auth" });
+    client.log({
+      category: "message",
+      event: "message.pending",
+      scope: "session",
+      sessionId: "s-auth",
+    });
     const socket = MockWebSocket.instances[0];
     socket.onerror?.();
     await vi.waitFor(() => expect(client.status().hasReconnectTimer).toBe(true));
@@ -271,7 +327,12 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    const factory = () => ({ event: "debug.trace", sessionId: "s-debug", data: { step: 1 } });
+    const factory = () => ({
+      event: "debug.trace",
+      scope: "session",
+      sessionId: "s-debug",
+      data: { step: 1 },
+    });
     expect(client.debug("state-machine", factory)).toBe(false);
     client.updatePolicy({ debug: { "state-machine": true } });
     expect(client.debug("state-machine", factory)).toBe(true);
@@ -294,7 +355,7 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    const factory = vi.fn(() => ({ event: "debug.trace", sessionId: "s-debug" }));
+    const factory = vi.fn(() => ({ event: "debug.trace", scope: "session", sessionId: "s-debug" }));
     expect(client.debug("state-machine", factory)).toBe(false);
     expect(factory).not.toHaveBeenCalled();
     expect(MockWebSocket.instances).toHaveLength(0);
@@ -305,11 +366,19 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
     client.updatePolicy({ debug: { "state-machine": true } });
-    client.debug("state-machine", () => ({ event: "debug.first", sessionId: "s-debug" }));
+    client.debug("state-machine", () => ({
+      event: "debug.first",
+      scope: "session",
+      sessionId: "s-debug",
+    }));
     const socket = MockWebSocket.instances[0];
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
-    client.debug("state-machine", () => ({ event: "debug.queued", sessionId: "s-debug" }));
+    client.debug("state-machine", () => ({
+      event: "debug.queued",
+      scope: "session",
+      sessionId: "s-debug",
+    }));
 
     socket.readyState = MockWebSocket.CLOSED;
     socket.onclose?.({ code: 1006, reason: "network" });
@@ -327,7 +396,11 @@ describe("sessionLogWebSocketClient", () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
     client.updatePolicy({ debug: { "state-machine": true }, limits: { debugTtlMs: 5 } });
-    client.debug("state-machine", () => ({ event: "debug.expired", sessionId: "s-debug" }));
+    client.debug("state-machine", () => ({
+      event: "debug.expired",
+      scope: "session",
+      sessionId: "s-debug",
+    }));
     const socket = MockWebSocket.instances[0];
     await vi.advanceTimersByTimeAsync(6);
     socket.readyState = MockWebSocket.OPEN;
@@ -345,10 +418,18 @@ describe("sessionLogWebSocketClient", () => {
       limits: { maxDebugQueue: 1, maxDebugBytes: 10000 },
     });
     expect(
-      client.debug("state-machine", () => ({ event: "debug.one", sessionId: "s-debug" })),
+      client.debug("state-machine", () => ({
+        event: "debug.one",
+        scope: "session",
+        sessionId: "s-debug",
+      })),
     ).toBe(true);
     expect(
-      client.debug("state-machine", () => ({ event: "debug.two", sessionId: "s-debug" })),
+      client.debug("state-machine", () => ({
+        event: "debug.two",
+        scope: "session",
+        sessionId: "s-debug",
+      })),
     ).toBe(false);
     expect(client.status()).toMatchObject({ debugQueueLength: 1, droppedDebugCount: 1 });
 
@@ -357,7 +438,11 @@ describe("sessionLogWebSocketClient", () => {
       limits: { maxDebugQueue: 10, maxDebugBytes: 1 },
     });
     expect(
-      client.debug("state-machine", () => ({ event: "debug.bytes", sessionId: "s-debug" })),
+      client.debug("state-machine", () => ({
+        event: "debug.bytes",
+        scope: "session",
+        sessionId: "s-debug",
+      })),
     ).toBe(false);
     expect(client.status().droppedDebugCount).toBe(2);
   });

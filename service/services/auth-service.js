@@ -11,7 +11,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 const DEFAULT_API_KEY_TTL_MS = TIME_THRESHOLDS.service.apiKeyTtlMs;
@@ -19,7 +19,6 @@ const DEFAULT_API_KEY_TTL_MS = TIME_THRESHOLDS.service.apiKeyTtlMs;
 export function createAuthService({
   initialApiKeyTtlMs = DEFAULT_API_KEY_TTL_MS,
   translateText,
-  runtimeEventsConfig,
 } = {}) {
   const apiKeyStore = new Map();
   let apiKeyTtlMs = normalizeTimeMs(initialApiKeyTtlMs, {
@@ -55,23 +54,21 @@ export function createAuthService({
           new URL(req.url, "http://localhost").searchParams.get("apikey") || "",
         ).trim();
       } catch (error) {
-        void writeRoutedRuntimeEvent(
-          {
-            source: "service",
-            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-            category: RUNTIME_EVENT_CATEGORIES.SECURITY,
-            level: "warn",
-            event: "service.auth.extractApiKey.urlParse.failed",
-            data: {
-              urlPathPreview: String(req?.url || "")
-                .split("?")[0]
-                .slice(0, 200),
-              urlLength: String(req?.url || "").length,
-            },
-            error,
+        void writeRuntimeEvent({
+          scope: "system",
+          source: "service",
+          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+          category: RUNTIME_EVENT_CATEGORIES.SECURITY,
+          level: "warn",
+          event: "service.auth.extractApiKey.urlParse.failed",
+          data: {
+            urlPathPreview: String(req?.url || "")
+              .split("?")[0]
+              .slice(0, 200),
+            urlLength: String(req?.url || "").length,
           },
-          runtimeEventsConfig,
-        );
+          error,
+        });
         queryApiKey = "";
       }
     }

@@ -55,6 +55,7 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
     snapshot: {
       protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
       eventType: "turn.snapshot",
+      recovery: "none",
       commandId,
       sessionId,
       sequence: 3,
@@ -174,6 +175,7 @@ test("reconnect buffers live events until after the authoritative baseline", asy
     snapshot: {
       protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
       eventType: "turn.snapshot",
+      recovery: "none",
       commandId,
       sessionId,
       sequence: 3,
@@ -334,6 +336,7 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     snapshot: {
       protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
       eventType: "turn.snapshot",
+      recovery: "none",
       commandId: currentCommandId,
       sessionId,
       sequence: 3,
@@ -364,5 +367,191 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
       .filter((item) => item.event === "reconnect_complete")
       .map((item) => item.data.requestId),
     ["reconnect-current"],
+  );
+});
+
+function setupRecoveryReconnect(sessionId) {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const forwarded = [];
+  channel.upstreamSocket = {
+    readyState: 1,
+    send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
+  };
+  manager.recordTurnLifecycleEnvelope(channel, {
+    eventId: `${sessionId}-gap-3`,
+    sessionId,
+    turnScopeId: "turn-orphan",
+    revision: 3,
+    sequence: 3,
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  const reconnectPromise = manager.handleReconnect(client, {
+    currentSessionId: sessionId,
+    knownLifecycleSequenceMap: { [sessionId]: 1 },
+  });
+  return { manager, channel, forwarded, client, reconnectPromise };
+}
+
+function snapshotEnvelope({ commandId, sessionId, sequence, recovery, activeTurn }) {
+  return {
+    protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+    eventType: "turn.snapshot",
+    causality: { commandId },
+    ordering: { sequence },
+    payload: {
+      sessionId,
+      recovery,
+      activeTurnScopeId: activeTurn ? activeTurn.turnScopeId : "",
+      activeTurn,
+      recentTerminalTurns: [],
+      replacedTurns: [],
+    },
+  };
+}
+
+const processingOrphan = {
+  turnScopeId: "turn-orphan",
+  messageId: "message-orphan",
+  presentationMessageId: "message-orphan",
+  revision: 3,
+  sequence: 3,
+  state: "processing",
+};
+
+async function flushMicrotasks() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve();
+}
+
+test("an orphan-flagged snapshot is settled once via turn.finalize and the settled snapshot replaces it", async () => {
+  const sessionId = "session-recovery-orphan";
+  const { manager, channel, forwarded, client, reconnectPromise } =
+    setupRecoveryReconnect(sessionId);
+  const snapshotCommandId = forwarded[0].commandId;
+  manager.routeUpstreamSnapshot(
+    channel,
+    "turn.snapshot",
+    snapshotEnvelope({
+      commandId: snapshotCommandId,
+      sessionId,
+      sequence: 3,
+      recovery: "orphan",
+      activeTurn: processingOrphan,
+    }),
+  );
+  await flushMicrotasks();
+
+  assert.equal(forwarded.length, 2);
+  assert.equal(forwarded[1].commandType, "turn.finalize");
+  assert.equal(forwarded[1].identity.sessionId, sessionId);
+  const finalizeCommandId = forwarded[1].commandId;
+  assert.notEqual(finalizeCommandId, snapshotCommandId);
+  assert.equal(getEvent(client, "reconnect_data"), null);
+
+  manager.routeUpstreamSnapshot(
+    channel,
+    "turn.snapshot",
+    snapshotEnvelope({
+      commandId: finalizeCommandId,
+      sessionId,
+      sequence: 4,
+      recovery: "none",
+      activeTurn: null,
+    }),
+  );
+  await reconnectPromise;
+
+  const entry = getEvent(client, "reconnect_data").data.sessions.find(
+    (item) => item.sessionId === sessionId,
+  );
+  assert.equal(entry.replayBatch.snapshot.causality.commandId, finalizeCommandId);
+  assert.equal(entry.replayBatch.snapshot.payload.recovery, "none");
+  assert.equal(entry.replayBatch.snapshotSequence, 4);
+  assert.equal(forwarded.length, 2);
+  assert.equal(channel.pendingSnapshotRequests.size, 0);
+});
+
+test("a failed recovery finalize keeps the original authoritative snapshot and completes reconnect", async () => {
+  const sessionId = "session-recovery-failed";
+  const { manager, channel, forwarded, client, reconnectPromise } =
+    setupRecoveryReconnect(sessionId);
+  const snapshotCommandId = forwarded[0].commandId;
+  manager.routeUpstreamSnapshot(
+    channel,
+    "turn.snapshot",
+    snapshotEnvelope({
+      commandId: snapshotCommandId,
+      sessionId,
+      sequence: 3,
+      recovery: "orphan",
+      activeTurn: processingOrphan,
+    }),
+  );
+  await flushMicrotasks();
+  const finalizeCommandId = forwarded[1].commandId;
+  manager.resolvePendingSnapshotFailure(channel, finalizeCommandId, "turn_finalize_failed");
+  await reconnectPromise;
+
+  const entry = getEvent(client, "reconnect_data").data.sessions.find(
+    (item) => item.sessionId === sessionId,
+  );
+  assert.equal(entry.replayBatch.snapshot.causality.commandId, snapshotCommandId);
+  assert.equal(entry.replayBatch.snapshot.payload.recovery, "orphan");
+  assert.equal(getEvent(client, "reconnect_complete")?.data?.totalSessions, 1);
+  assert.equal(channel.pendingSnapshotRequests.size, 0);
+});
+
+test("cancelling reconnect during recovery finalize clears both pending command ids", async () => {
+  const sessionId = "session-recovery-cancel";
+  const { manager, channel, forwarded, client, reconnectPromise } =
+    setupRecoveryReconnect(sessionId);
+  const snapshotCommandId = forwarded[0].commandId;
+  manager.routeUpstreamSnapshot(
+    channel,
+    "turn.snapshot",
+    snapshotEnvelope({
+      commandId: snapshotCommandId,
+      sessionId,
+      sequence: 3,
+      recovery: "orphan",
+      activeTurn: processingOrphan,
+    }),
+  );
+  await flushMicrotasks();
+  const finalizeCommandId = forwarded[1].commandId;
+  assert.equal(channel.pendingSnapshotRequests.has(finalizeCommandId), true);
+
+  const superseding = manager.handleReconnect(client, {
+    currentSessionId: sessionId,
+    requestId: "reconnect-superseding",
+    knownLifecycleSequenceMap: { [sessionId]: 3 },
+  });
+  assert.equal(channel.pendingSnapshotRequests.has(snapshotCommandId), false);
+  assert.equal(channel.pendingSnapshotRequests.has(finalizeCommandId), false);
+  await reconnectPromise.catch(() => {});
+
+  const currentCommandId = forwarded.at(-1).commandId;
+  manager.routeUpstreamSnapshot(
+    channel,
+    "turn.snapshot",
+    snapshotEnvelope({
+      commandId: currentCommandId,
+      sessionId,
+      sequence: 3,
+      recovery: "none",
+      activeTurn: null,
+    }),
+  );
+  await superseding;
+  assert.deepEqual(
+    client.sentEvents
+      .filter((item) => item.event === "reconnect_data")
+      .map((item) => item.data.requestId),
+    ["reconnect-superseding"],
   );
 });

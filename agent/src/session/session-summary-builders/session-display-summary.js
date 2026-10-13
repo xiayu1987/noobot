@@ -16,7 +16,7 @@ import {
   SESSION_SOURCE_SCHEMA_VERSION,
 } from "../session-display-source-revision.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 26;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 27;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 function isValidTransferEnvelopeList(value) {

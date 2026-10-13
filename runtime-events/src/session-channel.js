@@ -3,15 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
-import path from "node:path";
-import {
-  buildSessionLogRecord,
-  SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
-  SESSION_LOG_DEBUG_CATEGORY,
-  SESSION_LOG_DEFAULT_CATEGORY,
-} from "./session-log-protocol.js";
-import { DEFAULT_WORKSPACE_ROOT } from "./constants.js";
+import { buildSessionLogRecord, SESSION_LOG_DEBUG_CATEGORY } from "./session-log-protocol.js";
 import { safeSegment } from "./sanitize.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
@@ -27,75 +19,22 @@ export const MAX_SESSION_CHANNEL_MESSAGE_BYTES = LENGTH_THRESHOLDS.sessionLog.ma
 export const MAX_SESSION_CHANNEL_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
 
 const MAX_SESSION_CHANNEL_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
-const DEFAULT_RETENTION_MS = TIME_THRESHOLDS.service.sessionLogRetentionMs;
 const RECONNECT_DELAY_MS = TIME_THRESHOLDS.service.sessionLogMinIntervalMs;
 
-function envMs(name, fallback, min = TIME_THRESHOLDS.service.sessionLogMinIntervalMs) {
-  const parsed = Number(process.env[name]);
-  return Number.isFinite(parsed) ? Math.max(min, parsed) : fallback;
-}
-
-export function resolveSessionChannelConfig(options = {}) {
-  const explicitRoot = options.root || process.env.NOOBOT_SESSION_LOG_ROOT || "";
-  return {
-    root: explicitRoot ? path.resolve(String(explicitRoot)) : "",
-    workspaceRoot: path.resolve(
-      String(options.workspaceRoot || process.env.NOOBOT_WORKSPACE_ROOT || DEFAULT_WORKSPACE_ROOT),
-    ),
-    dirName: safeSegment(options.dirName || process.env.NOOBOT_SESSION_LOG_DIR_NAME || "logs"),
-    retentionMs: envMs(
-      "NOOBOT_SESSION_LOG_RETENTION_MS",
-      Number(options.retentionMs || DEFAULT_RETENTION_MS),
-    ),
-    cleanupIntervalMs: envMs(
-      "NOOBOT_SESSION_LOG_CLEANUP_INTERVAL_MS",
-      Number(options.cleanupIntervalMs || TIME_THRESHOLDS.service.sessionLogCleanupIntervalMs),
-    ),
-    sessionLogControls: options.sessionLogControls,
-  };
-}
-
-function buildSessionChannelRecord(event = {}, options = {}) {
-  const record = buildSessionLogRecord(event, {
-    defaultCategory: options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY,
-    defaultEvent: options.defaultEvent,
-    defaultSessionId: options.defaultSessionId || "unknown-session",
-    source: options.source,
-  });
-  if (options.channel || event.channel)
-    record.channel = safeSegment(event.channel || options.channel);
+function buildSessionChannelRecord(event = {}, { source, channel }) {
+  const record = buildSessionLogRecord({ ...event, source });
+  record.channel = safeSegment(channel);
   return record;
-}
-
-export async function cleanupSessionChannelRecords(
-  config = resolveSessionChannelConfig(),
-  now = Date.now(),
-) {
-  if (!config.root) return { ok: true, removed: 0, skipped: true };
-  await fs.mkdir(config.root, { recursive: true });
-  const entries = await fs.readdir(config.root, { withFileTypes: true }).catch(() => []);
-  let removed = 0;
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const fullPath = path.join(config.root, entry.name);
-    const stat = await fs.stat(fullPath).catch(() => null);
-    if (stat && now - stat.mtimeMs > config.retentionMs) {
-      await fs.rm(fullPath, { recursive: true, force: true });
-      removed += 1;
-    }
-  }
-  return { ok: true, removed };
 }
 
 export function createSessionChannelWebSocketClient({
   WebSocketImpl,
   resolveWebSocketUrl,
-  source = "agent-proxy",
-  defaultCategory = SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
-  defaultEvent = "agentProxy.log",
-  defaultSessionId = "agent-proxy",
-  channel = SESSION_CHANNELS.AGENT_PROXY_WEB_SOCKET,
+  source,
+  channel,
 } = {}) {
+  if (!source || !channel)
+    throw new TypeError("Session channel client requires source and channel");
   const sockets = new Map();
   const queues = new Map();
   const inFlights = new Map();
@@ -175,13 +114,7 @@ export function createSessionChannelWebSocketClient({
   }
 
   function log(key = "", event = {}) {
-    const record = buildSessionChannelRecord(event, {
-      source,
-      defaultCategory,
-      defaultEvent,
-      defaultSessionId,
-      channel,
-    });
+    const record = buildSessionChannelRecord(event, { source, channel });
     const queue = getQueue(key);
     queue.push(record);
     if (queue.length > MAX_SESSION_CHANNEL_QUEUE_SIZE)

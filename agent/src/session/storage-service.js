@@ -3,14 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  fsAccess,
-  fsMkdir,
-  fsReadFile,
-  fsRm,
-  fsRename,
-  fsWriteFile,
-} from "../shared/storage/fs-adapter.js";
+import { fsReadFile, fsRm, fsRename, fsStat, fsWriteFile } from "../shared/storage/fs-adapter.js";
 import {
   ATOMIC_RENAME_RETRY_DELAYS_MS,
   writeFileAtomic,
@@ -30,26 +23,23 @@ export class StorageService {
     this.platform = platform;
   }
 
-  async exists(filePath = "") {
+  async exists(filePath) {
     try {
-      await fsAccess(filePath);
+      await fsStat(filePath);
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+      throw error;
     }
   }
 
-  async ensureRuntimeDirsByBasePath(basePath = "") {
-    if (!(await this.exists(basePath))) {
-      return false;
+  async isDirectory(directoryPath) {
+    try {
+      return (await fsStat(directoryPath)).isDirectory();
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+      throw error;
     }
-    const sessionRootPath = this.pathResolver?.sessionRoot
-      ? this.pathResolver.sessionRoot(basePath)
-      : "";
-    if (sessionRootPath) {
-      await fsMkdir(sessionRootPath, { recursive: true });
-    }
-    return true;
   }
 
   async readJson(filePath, fallback = {}) {

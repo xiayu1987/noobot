@@ -5,13 +5,46 @@
  */
 import { timingSafeEqual } from "node:crypto";
 
-export function getClientIp(request = null) {
-  const xff = String(request?.headers?.["x-forwarded-for"] || "").trim();
-  if (xff) {
-    const firstForwardedIp = xff.split(",")[0];
-    return String(firstForwardedIp || "").trim();
+// IPv4-mapped IPv6 (::ffff:a.b.c.d) and plain IPv4 must match the same proxy rule.
+function normalizeProxyAddress(input = "") {
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
+  const mappedPrefix = "::ffff:";
+  if (value.startsWith(mappedPrefix) && value.includes(".")) {
+    return value.slice(mappedPrefix.length);
   }
-  return String(request?.socket?.remoteAddress || "").trim();
+  return value;
+}
+
+function isTrustedProxy(address = "", trustedProxies = []) {
+  if (!Array.isArray(trustedProxies) || !trustedProxies.length) return false;
+  const normalizedAddress = normalizeProxyAddress(address);
+  return trustedProxies.some((rule) =>
+    matchTrustedRule(normalizedAddress, normalizeProxyAddress(rule)),
+  );
+}
+
+function parseForwardedFor(headerValue = "") {
+  return String(headerValue || "")
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Resolve the client address. X-Forwarded-For is honoured only when the direct
+ * peer is a trusted proxy; hops are stripped from the right while they are trusted
+ * proxies, so a client-supplied left-most value can never be selected by forgery.
+ */
+export function getClientIp(request = null, trustedProxies = []) {
+  const remoteAddress = String(request?.socket?.remoteAddress || "").trim();
+  if (!isTrustedProxy(remoteAddress, trustedProxies)) return remoteAddress;
+  const hops = parseForwardedFor(request?.headers?.["x-forwarded-for"]);
+  for (let index = hops.length - 1; index >= 0; index -= 1) {
+    if (!isTrustedProxy(hops[index], trustedProxies)) return hops[index];
+  }
+  return hops[0] || remoteAddress;
 }
 
 export function matchTrustedRule(value = "", rule = "") {
@@ -38,7 +71,9 @@ export function isOriginTrusted(origin = "", trustedOrigins = []) {
 }
 
 export function isLoopbackAddress(input = "") {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(value);
 }
 
@@ -68,10 +103,7 @@ export function createFixedWindowRateLimiter({ windowMs = 60000, maxRequests = 1
       if (bucket.count <= maxRequests) {
         return { ok: true, retryAfterSec: 0 };
       }
-      const retryAfterSec = Math.max(
-        1,
-        Math.ceil((windowMs - (now - bucket.windowStart)) / 1000),
-      );
+      const retryAfterSec = Math.max(1, Math.ceil((windowMs - (now - bucket.windowStart)) / 1000));
       return { ok: false, retryAfterSec };
     },
     cleanup(maxIdleMs = windowMs * 2) {
@@ -93,7 +125,9 @@ function normalizeHeaderValue(value = "") {
 }
 
 export function resolveHeaderValue(request = null, headerName = "") {
-  const normalizedHeaderName = String(headerName || "").trim().toLowerCase();
+  const normalizedHeaderName = String(headerName || "")
+    .trim()
+    .toLowerCase();
   if (!normalizedHeaderName) return "";
   return normalizeHeaderValue(request?.headers?.[normalizedHeaderName]);
 }

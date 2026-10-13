@@ -28,8 +28,11 @@ test("auxiliary history projects tool evidence into the observer perspective", (
     messages.map((message) => message.role),
     ["user", "user", "assistant"],
   );
-  assert.match(messages[1].content, /read_file/);
-  assert.equal(messages[2].content, '{"ok":true}');
+  assert.equal(messages[1].content, 'Tool call [call-1]: read_file({"filePath":"a.txt"})');
+  assert.equal(
+    messages[2].content,
+    'Tool result [call-1] (matching tool result of the executed call above):\n{"ok":true}',
+  );
 });
 
 test("auxiliary history rejects tool results without their authoritative call", () => {
@@ -53,5 +56,5 @@ test("auxiliary history keeps a pending tool call without inventing a result", (
     },
   ]);
   assert.equal(messages.length, 1);
-  assert.match(messages[0].content, /search/);
+  assert.equal(messages[0].content, "Tool call [pending]: search({})");
 });

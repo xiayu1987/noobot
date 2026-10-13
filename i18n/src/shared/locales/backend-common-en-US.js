@@ -19,7 +19,7 @@ export const BACKEND_COMMON_EN_US = {
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
     `Tool calls have failed consecutively ${Number(params.failureCount || 0)} times. If the tool usage or parameter semantics are unclear, call ${String(params.helpToolName || "help")} to read the detailed manual for that tool.`,
   "agent.helpToolLoopPrompt": (params = {}) =>
-    `Tool loop has run ${Number(params.loopCount || 0)} turns. Consider calling ${String(params.helpToolName || "help")} to read the detailed manual for the tools involved.`,
+    `Tool loop has run ${Number(params.loopCount || 0)} turns. If you run into a problem, call ${String(params.helpToolName || "help")}; otherwise, continue.`,
   "agent.taskSummarySingleToolPrompt":
     "task_summary must be called alone and cannot appear in the same tool-call turn as other tools.",
   "agent.taskCheckSingleToolPrompt":
@@ -115,6 +115,7 @@ export const BACKEND_COMMON_EN_US = {
   "services.handlerRequired": "service handler required",
   "session.parentSessionNotFoundPossiblyDeleted": "parent session not found (possibly deleted)",
   "session.workspaceNotInitialized": "workspace not initialized",
+  "session.treeNodeMissing": "session is not registered in the session tree",
   "status.disconnectedFromHistory": "disconnected from history",
   "web2img.readabilityNotInstalledWarn":
     "@mozilla/readability/jsdom not installed; fallback to DOM extraction. Run: npm i @mozilla/readability jsdom",

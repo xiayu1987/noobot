@@ -44,8 +44,6 @@ export function createTurnRuntimeStoreCallbacks({
       buildCommitProjectionDiagnostics({
         turn,
         result,
-        sessionId,
-        parentSessionId,
         existingSubSession,
         projectionEligible,
       }),
@@ -69,8 +67,6 @@ export function createTurnRuntimeStoreCallbacks({
     logTurnRuntimeDiagnostics("frontend.turnRuntime.messageProjectionCommitted", () =>
       buildMessageProjectionDiagnostics({
         turn,
-        sessionId,
-        parentSessionId,
         mainSessionProjection,
         subSessionProjection,
       }),

@@ -157,6 +157,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
         protocolVersion: 1,
         eventType: "turn.snapshot",
+        recovery: "none",
         commandId: "snapshot-refresh",
         userId: "u-1",
         sessionId,

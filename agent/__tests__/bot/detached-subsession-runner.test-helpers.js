@@ -44,9 +44,6 @@ export function createDeps(overrides = {}) {
       },
     },
     session: {
-      async getSessionLifecycle({ sessionId = "" } = {}) {
-        return { sessionId, state: "active", generation: 1 };
-      },
       async appendExecutionLog(payload = {}) {
         calls.executionLogs.push(payload);
         return { appended: true };

@@ -95,9 +95,11 @@ export class SystemErrorLogger {
         ...normalizedExtra,
       };
       const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
+      if (!workspaceRoot)
+        throw new TypeError("system error logger requires globalConfig.workspaceRoot");
       const basePath = normalizedUserId
         ? await this.workspaceService.ensureUserWorkspace(normalizedUserId)
-        : path.resolve(workspaceRoot || ".");
+        : path.resolve(workspaceRoot);
       await appendSystemErrorLog({
         basePath,
         workspaceRoot,

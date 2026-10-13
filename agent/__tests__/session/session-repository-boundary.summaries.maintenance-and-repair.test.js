@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
   SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
@@ -20,11 +21,12 @@ import {
   canonicalMessages,
   withTempWorkspace,
 } from "./session-repository-boundary.summaries.fixtures.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 test("session summaries should be maintained and rebuilt for list API", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },
@@ -81,26 +83,68 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
-test("session list excludes orphan session-tree nodes without Session artifacts", async () => {
+test("session list projects session-tree nodes without Session artifacts as unavailable", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-tree-orphans";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionCrudService.ensureSession(userId, "materialized", "");
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "orphan" });
 
     const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    assert.deepEqual(summaries.map((item) => item.sessionId).sort(), ["materialized", "orphan"]);
+    const orphan = summaries.find((item) => item.sessionId === "orphan");
+    assert.equal(orphan.availability, "unavailable");
+    assert.equal(orphan.unavailableReason.code, "SESSION_ARTIFACT_MISSING");
+  });
+});
+
+test("session detail projects a tree child without artifact as unavailable", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-detail-orphan-child";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, "root", "");
+    await runtime.sessionTreeService.upsertSessionTree({
+      userId,
+      sessionId: "child",
+      parentSessionId: "root",
+    });
+
+    const detail = await runtime.sessionCrudService.getSessionData({ userId, sessionId: "root" });
     assert.deepEqual(
-      summaries.map((item) => item.sessionId),
-      ["materialized"],
+      detail.sessions.map((item) => item.sessionId),
+      ["root", "child"],
     );
+    const child = detail.sessions.find((item) => item.sessionId === "child");
+    assert.equal(child.availability, "unavailable");
+    assert.equal(child.unavailableReason.code, "SESSION_ARTIFACT_MISSING");
+    assert.equal(child.parentSessionId, "root");
+  });
+});
+
+test("ensureSession rejects an artifact absent from the session tree without registering it", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-artifact-without-tree-node";
+    await initializeUserWorkspace(workspaceRoot, userId);
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, "S", "");
+    const treeFile = path.join(workspaceRoot, userId, WORKSPACE_LAYOUT.SESSION_TREE_FILE);
+    await writeFile(treeFile, JSON.stringify({ nodes: {} }));
+
+    await assert.rejects(
+      runtime.sessionCrudService.ensureSession(userId, "S", ""),
+      (error) => error?.code === "FATAL_SESSION_TREE_NODE_MISSING",
+    );
+    const tree = JSON.parse(await readFile(treeFile, "utf8"));
+    assert.deepEqual(tree.nodes, {});
   });
 });
 
 test("session discovery traverses only canonical Session directories", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-session-discovery";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
 
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "root" });
@@ -127,7 +171,7 @@ test("session discovery traverses only canonical Session directories", async () 
 test("session summary rebuild isolates an unreadable session as an unavailable projection", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-unavailable";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices(
       { workspaceRoot },
       { now: () => "2026-08-08T00:00:00.000Z" },
@@ -172,7 +216,7 @@ test("failed Session repair is marked and skipped on subsequent reads", async ()
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-repair-failed";
     const sessionId = "broken";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
@@ -187,10 +231,7 @@ test("failed Session repair is marked and skipped on subsequent reads", async ()
     const lifecycleFile = path.join(
       workspaceRoot,
       userId,
-      "runtime",
-      "session",
-      ".lifecycle",
-      "records",
+      WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR,
       `${encodeURIComponent(sessionId)}.json`,
     );
     const lifecycle = JSON.parse(await readFile(lifecycleFile, "utf8"));
@@ -212,7 +253,7 @@ test("stale Session repair failure marker is cleared once the artifact validates
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-repair-heal";
     const sessionId = "healed";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
     const sessionFile = path.join(
@@ -230,10 +271,7 @@ test("stale Session repair failure marker is cleared once the artifact validates
     const lifecycleFile = path.join(
       workspaceRoot,
       userId,
-      "runtime",
-      "session",
-      ".lifecycle",
-      "records",
+      WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR,
       `${encodeURIComponent(sessionId)}.json`,
     );
     assert.equal(JSON.parse(await readFile(lifecycleFile, "utf8")).repair.status, "failed");
@@ -241,9 +279,7 @@ test("stale Session repair failure marker is cleared once the artifact validates
     await writeFile(sessionFile, original, "utf8");
     const session = await repository.findById(userId, sessionId, "");
     assert.equal(session.sessionId, sessionId);
-    const healed = JSON.parse(await readFile(lifecycleFile, "utf8"));
-    assert.equal(healed.repair, undefined);
-    assert.equal(healed.state, "active");
+    await assert.rejects(readFile(lifecycleFile, "utf8"), { code: "ENOENT" });
 
     await writeFile(sessionFile, "{invalid-json", "utf8");
     await assert.rejects(
@@ -257,7 +293,7 @@ test("display maintenance migrates repairable artifacts through the Session repa
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "legacy";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
@@ -303,7 +339,7 @@ test("display summary repair migrates the previous canonical artifact before rev
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-previous-artifact";
     const sessionId = "previous-artifact";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
@@ -381,7 +417,7 @@ test("display summary repair migrates the previous canonical artifact before rev
 test("deleting one session does not invalidate another session display summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     for (const sessionId of ["kept", "deleted"]) {
       await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });

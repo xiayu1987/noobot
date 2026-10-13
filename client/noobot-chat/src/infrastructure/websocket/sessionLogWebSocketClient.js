@@ -7,7 +7,6 @@
 import {
   buildSessionLogRecord,
   isSessionLogDebugEvent,
-  SESSION_LOG_DEFAULT_CATEGORY,
 } from "@noobot/runtime-events/session-log-protocol";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -37,6 +36,7 @@ export function createSessionLogWebSocketClient({
   let debugQueueBytes = 0;
   let droppedDebugCount = 0;
   let rejectedReliableCount = 0;
+  let rejectedInvalidCount = 0;
   let policy = {
     debug: {},
     limits: {
@@ -243,12 +243,15 @@ export function createSessionLogWebSocketClient({
 
   function log(event = {}) {
     if (disposed) return false;
-    const resolvedEvent = event;
-    if (!resolvedEvent || typeof resolvedEvent !== "object") return false;
-    const record = buildSessionLogRecord(resolvedEvent, {
-      source,
-      defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
-    });
+    if (!event || typeof event !== "object") return false;
+    let record;
+    try {
+      record = buildSessionLogRecord({ ...event, source });
+    } catch (error) {
+      rejectedInvalidCount += 1;
+      console.warn("[noobot:session-log] rejected invalid record", error?.message || error);
+      return false;
+    }
     if (isSessionLogDebugEvent(record)) {
       if (
         !isEnabled(record.debugType) ||
@@ -301,6 +304,7 @@ export function createSessionLogWebSocketClient({
       inFlightLength: inFlight.length,
       droppedDebugCount,
       rejectedReliableCount,
+      rejectedInvalidCount,
       ...transport.status(),
       suspended: isSuspended(),
     };

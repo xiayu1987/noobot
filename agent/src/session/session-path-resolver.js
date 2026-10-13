@@ -8,6 +8,25 @@ import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
 import { buildSessionLocationScope } from "./session-location-resolver.js";
+import {
+  SESSION_TREE_ERROR,
+  resolveSessionTreePlacement,
+} from "@noobot/workspace-protocol/session-tree";
+
+const SESSION_TREE_FATAL_CODE = Object.freeze({
+  [SESSION_TREE_ERROR.NODE_MISSING]: ERROR_CODE.FATAL_SESSION_TREE_NODE_MISSING,
+  [SESSION_TREE_ERROR.PARENT_MISMATCH]: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
+  [SESSION_TREE_ERROR.CYCLE]: ERROR_CODE.FATAL_SESSION_TREE_NODE_MISSING,
+});
+
+function toSessionTreeFatalError(error, sessionId) {
+  const code = SESSION_TREE_FATAL_CODE[error?.code];
+  if (!code) throw error;
+  return fatalSystemError(`${tSystem("session.treeNodeMissing")}: ${error.message}`, {
+    code,
+    details: { sessionId, protocolCode: error.code, ...error.details },
+  });
+}
 
 export class SessionPathResolver {
   constructor({ pathResolver, treeRepository } = {}) {
@@ -49,16 +68,14 @@ export class SessionPathResolver {
   async resolveSessionDir(userId, sessionId, parentSessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return this._sessionRoot(userId);
-
-    const normalizedParentSessionId = String(parentSessionId || "").trim();
-    if (normalizedParentSessionId && normalizedParentSessionId !== normalizedSessionId) {
-      const parentDir = await this.resolveSessionDir(userId, normalizedParentSessionId);
-      return path.join(parentDir, normalizedSessionId);
-    }
-
     const tree = await this.treeRepository.getTree(userId);
-    const chain = this.treeRepository.loopSession(normalizedSessionId, tree, []);
-    return path.join(this._sessionRoot(userId), ...chain.reverse());
+    let chain;
+    try {
+      chain = resolveSessionTreePlacement(tree, normalizedSessionId, parentSessionId);
+    } catch (error) {
+      throw toSessionTreeFatalError(error, normalizedSessionId);
+    }
+    return path.join(this._sessionRoot(userId), ...chain);
   }
 
   async resolveSessionScope(userId, sessionId, parentSessionId = "") {

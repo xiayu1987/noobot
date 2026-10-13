@@ -15,7 +15,7 @@ import {
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
@@ -90,7 +90,8 @@ export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runCo
         ? (await bot.loadUserConfig(workspacePath)) || {}
         : {};
   } catch (error) {
-    void writeRoutedRuntimeEvent({
+    void writeRuntimeEvent({
+      scope: "system",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.CONFIG,

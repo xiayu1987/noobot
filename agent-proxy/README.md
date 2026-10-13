@@ -17,7 +17,8 @@ One channel is identified by `userId + sessionId + parentSessionId + parentDialo
 - Agent commands use `@noobot/agent-transport-protocol`; send, resend, continue, stop, finalize, interaction response, and snapshot/query commands are routed by command type.
 - Backend protocol events are validated, sequenced, and broadcast without changing their business identity.
 - Turn lifecycle delivery uses receipts and bounded redelivery.
-- A reconnect request carries `currentSessionId`, `requestId`, and `knownLifecycleSequenceMap`.
+- A reconnect request carries `currentSessionId`, `currentParentSessionId`, `currentParentDialogProcessId`, `requestId`, and `knownLifecycleSequenceMap`. Child sessions must declare both parent fields explicitly; the proxy never infers them.
+- The requesting user comes only from the authenticated socket. A reconnect request that carries `userId` is rejected with `unsupported_reconnect_user_identity`, and an unauthenticated socket never provisions a channel. Clients and proxy must be released together.
 - Reconnect returns one authoritative `replayBatch` per session. A batch can contain a Turn snapshot, the contiguous lifecycle tail after that snapshot, and complete unresolved `pendingInteractions` events.
 - Message cursors and payload fragments are not reconnect authority; reconnect accepts only the lifecycle sequence map defined above.
 
@@ -29,24 +30,25 @@ Configuration is read from `agent-proxy.config.json`, with environment variables
 
 Core settings:
 
-| Environment variable                               | Default                        | Purpose                                                   |
-| -------------------------------------------------- | ------------------------------ | --------------------------------------------------------- |
-| `AGENT_PROXY_PORT`                                 | `10062`                        | Listen port                                               |
-| `AGENT_PROXY_HOST`                                 | `0.0.0.0`                      | Listen host                                               |
-| `AGENT_PROXY_UPSTREAM_WS_URL`                      | `ws://127.0.0.1:10061/chat/ws` | Service WebSocket endpoint                                |
-| `AGENT_PROXY_UPSTREAM_HTTP_BASE`                   | `http://127.0.0.1:10061`       | Service HTTP base URL                                     |
-| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS`             | `60000`                        | Upstream HTTP timeout                                     |
-| `AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS`        | shared time threshold          | Reconnect snapshot timeout                                |
-| `AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS`    | shared time threshold          | Lifecycle receipt timeout                                 |
-| `AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS` | shared turn threshold          | Lifecycle delivery attempt limit                          |
-| `AGENT_PROXY_WS_MAX_PAYLOAD_BYTES`                 | shared length threshold        | Maximum incoming WebSocket payload                        |
-| `AGENT_PROXY_WS_MAX_BUFFERED_BYTES`                | shared length threshold        | Maximum buffered WebSocket output                         |
-| `AGENT_PROXY_TRUSTED_ORIGINS`                      | empty                          | Comma-separated allowed origins; empty allows any origin  |
-| `AGENT_PROXY_TRUSTED_IPS`                          | empty                          | Comma-separated allowed IP patterns; empty allows any IP  |
-| `AGENT_PROXY_CONNECT_TOKEN`                        | empty                          | Token required by the connect interceptor when configured |
-| `AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED`              | `true`                         | Enable HTTP rate limiting                                 |
-| `AGENT_PROXY_WS_RATE_LIMIT_ENABLED`                | `true`                         | Enable WebSocket upgrade rate limiting                    |
-| `AGENT_PROXY_FRONTEND_ROOT`                        | empty                          | Optional built frontend directory                         |
+| Environment variable                               | Default                        | Purpose                                                                                                                                                                                                                                  |
+| -------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_PROXY_PORT`                                 | `10062`                        | Listen port                                                                                                                                                                                                                              |
+| `AGENT_PROXY_HOST`                                 | `0.0.0.0`                      | Listen host                                                                                                                                                                                                                              |
+| `AGENT_PROXY_UPSTREAM_WS_URL`                      | `ws://127.0.0.1:10061/chat/ws` | Service WebSocket endpoint                                                                                                                                                                                                               |
+| `AGENT_PROXY_UPSTREAM_HTTP_BASE`                   | `http://127.0.0.1:10061`       | Service HTTP base URL                                                                                                                                                                                                                    |
+| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS`             | `60000`                        | Upstream HTTP timeout                                                                                                                                                                                                                    |
+| `AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS`        | shared time threshold          | Reconnect snapshot timeout                                                                                                                                                                                                               |
+| `AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS`    | shared time threshold          | Lifecycle receipt timeout                                                                                                                                                                                                                |
+| `AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS` | shared turn threshold          | Lifecycle delivery attempt limit                                                                                                                                                                                                         |
+| `AGENT_PROXY_WS_MAX_PAYLOAD_BYTES`                 | shared length threshold        | Maximum incoming WebSocket payload                                                                                                                                                                                                       |
+| `AGENT_PROXY_WS_MAX_BUFFERED_BYTES`                | shared length threshold        | Maximum buffered WebSocket output                                                                                                                                                                                                        |
+| `AGENT_PROXY_TRUSTED_ORIGINS`                      | empty                          | Comma-separated allowed origins; empty allows any origin                                                                                                                                                                                 |
+| `AGENT_PROXY_TRUSTED_IPS`                          | empty                          | Comma-separated allowed IP patterns; empty allows any IP                                                                                                                                                                                 |
+| `AGENT_PROXY_TRUSTED_PROXIES`                      | empty                          | Comma-separated proxy IP patterns whose `X-Forwarded-For` is honoured; empty ignores the header. The client IP is the right-most hop that is not a trusted proxy. `ecosystem.noobot.config.cjs` sets `127.0.0.1,::1` for the local Caddy |
+| `AGENT_PROXY_CONNECT_TOKEN`                        | empty                          | Token required by the connect interceptor when configured                                                                                                                                                                                |
+| `AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED`              | `true`                         | Enable HTTP rate limiting                                                                                                                                                                                                                |
+| `AGENT_PROXY_WS_RATE_LIMIT_ENABLED`                | `true`                         | Enable WebSocket upgrade rate limiting                                                                                                                                                                                                   |
+| `AGENT_PROXY_FRONTEND_ROOT`                        | empty                          | Optional built frontend directory                                                                                                                                                                                                        |
 
 Do not duplicate the full configuration schema in deployment documentation. Use `src/shared/config.js` when adding or changing a setting.
 

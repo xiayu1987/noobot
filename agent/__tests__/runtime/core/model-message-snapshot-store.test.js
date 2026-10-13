@@ -13,12 +13,8 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/
 import {
   saveStoppedModelMessageSnapshot,
   loadStoppedModelMessageSnapshot,
-  clearStoppedModelMessageSnapshot,
 } from "../../../src/runtime/resume/model-message-snapshot-store.js";
-
-async function createWorkspace() {
-  return fs.mkdtemp(path.join(os.tmpdir(), "noobot-stopped-snapshot-"));
-}
+import { persistSession } from "../../helpers/runtime-events-env.js";
 
 const identity = {
   userId: "admin",
@@ -27,6 +23,31 @@ const identity = {
   dialogProcessId: "dialog-a",
   turnScopeId: "turn-a",
 };
+
+async function createWorkspace() {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-stopped-snapshot-"));
+  await persistSession(workspaceRoot, identity.userId, identity.parentSessionId);
+  await persistSession(
+    workspaceRoot,
+    identity.userId,
+    identity.sessionId,
+    identity.parentSessionId,
+  );
+  return workspaceRoot;
+}
+
+function snapshotFileOf(workspaceRoot) {
+  return path.join(
+    workspaceRoot,
+    identity.userId,
+    "runtime",
+    "session",
+    identity.parentSessionId,
+    identity.sessionId,
+    "model-message-snapshots",
+    `${identity.dialogProcessId}__${identity.turnScopeId}.json`,
+  );
+}
 
 test("stopped model message snapshot keeps message tool calls and tool results", async () => {
   const workspaceRoot = await createWorkspace();
@@ -55,20 +76,18 @@ test("stopped model message snapshot keeps message tool calls and tool results",
     ],
   });
 
-  const parentSnapshotFile = path.join(
-    workspaceRoot,
-    identity.userId,
-    "runtime",
-    "session",
-    identity.parentSessionId,
-    "model-message-snapshots",
-    `${identity.sessionId}__${identity.dialogProcessId}__${identity.turnScopeId}.json`,
-  );
-  assert.equal(await fs.stat(parentSnapshotFile).then((stat) => stat.isFile()), true);
+  assert.equal(await fs.stat(snapshotFileOf(workspaceRoot)).then((stat) => stat.isFile()), true);
   await assert.rejects(
     () =>
       fs.access(
-        path.join(workspaceRoot, identity.userId, "runtime", "session", identity.sessionId),
+        path.join(
+          workspaceRoot,
+          identity.userId,
+          "runtime",
+          "session",
+          identity.parentSessionId,
+          "model-message-snapshots",
+        ),
       ),
     /ENOENT/,
   );
@@ -111,12 +130,6 @@ test("stopped model message snapshot keeps message tool calls and tool results",
   const loadedToolResult = loaded.messages.find((item) => item.type === "tool");
   assert.equal(loadedToolResult.content, "tool output");
   assert.equal(loadedToolResult.tool_call_id, "call-1");
-
-  await clearStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
-  await assert.rejects(
-    () => loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity }),
-    /ENOENT/,
-  );
 });
 
 test("stopped snapshot round trip preserves Anthropic thinking blocks and OpenAI Responses reasoning output", async () => {
@@ -350,15 +363,7 @@ test("stopped model message snapshot validates identity on load", async () => {
     messages: [new SystemMessage("system")],
   });
 
-  const snapshotFile = path.join(
-    workspaceRoot,
-    identity.userId,
-    "runtime",
-    "session",
-    identity.parentSessionId,
-    "model-message-snapshots",
-    `${identity.sessionId}__${identity.dialogProcessId}__${identity.turnScopeId}.json`,
-  );
+  const snapshotFile = snapshotFileOf(workspaceRoot);
   const raw = JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   raw.sessionId = "different-session";
   await fs.writeFile(snapshotFile, JSON.stringify(raw, null, 2), "utf8");
@@ -369,10 +374,9 @@ test("stopped model message snapshot validates identity on load", async () => {
   );
 });
 
-test("stopped model message snapshot does not recreate a deleted parent session", async () => {
+test("stopped model message snapshot does not recreate a deleted parent session chain", async () => {
   const workspaceRoot = await createWorkspace();
   const sessionRoot = path.join(workspaceRoot, identity.userId, "runtime", "session");
-  await fs.mkdir(sessionRoot, { recursive: true });
   await fs.writeFile(
     path.join(sessionRoot, ".deleted-sessions.json"),
     JSON.stringify({
@@ -387,8 +391,35 @@ test("stopped model message snapshot does not recreate a deleted parent session"
     messageBlocks: { system: [new SystemMessage("late")], history: [], incremental: [] },
   });
 
-  assert.equal(saved, null);
-  await assert.rejects(() => fs.access(path.join(sessionRoot, identity.parentSessionId)), /ENOENT/);
+  assert.deepEqual(saved, { saved: false, reason: "session_deleted" });
+  await assert.rejects(() => fs.access(path.dirname(snapshotFileOf(workspaceRoot))), /ENOENT/);
+  assert.equal(
+    await loadStoppedModelMessageSnapshot({
+      globalConfig: { workspaceRoot },
+      identity,
+      allowMissing: true,
+    }),
+    null,
+  );
+});
+
+test("stopped model message snapshot skips a session that is not registered in the tree", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-stopped-snapshot-"));
+  const saved = await saveStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity,
+    messageBlocks: { system: [new SystemMessage("draft")], history: [], incremental: [] },
+  });
+
+  assert.deepEqual(saved, { saved: false, reason: "session_missing" });
+  await assert.rejects(
+    () => fs.access(path.join(workspaceRoot, identity.userId, "runtime", "session")),
+    /ENOENT/,
+  );
+  await assert.rejects(
+    () => loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity }),
+    /snapshot unavailable: session_missing/,
+  );
 });
 
 test("stopped model message snapshot preserves existing harness policy messages", async () => {
@@ -491,15 +522,7 @@ test("stopped model message snapshot preserves protocol content on load", async 
     },
     messages: [new SystemMessage("system"), new HumanMessage("ID: keep\nPATCH: keep")],
   });
-  const snapshotFile = path.join(
-    workspaceRoot,
-    identity.userId,
-    "runtime",
-    "session",
-    identity.parentSessionId,
-    "model-message-snapshots",
-    `${identity.sessionId}__${identity.dialogProcessId}__${identity.turnScopeId}.json`,
-  );
+  const snapshotFile = snapshotFileOf(workspaceRoot);
   const raw = JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   raw.messageBlocks.system.push({
     type: "system",

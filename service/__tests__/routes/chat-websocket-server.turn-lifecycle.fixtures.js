@@ -289,7 +289,12 @@ export function installLifecycleSnapshotReader(authoritative) {
   });
 }
 
-export async function requestTurnSnapshot({ port, sessionId, commandId }) {
+export async function requestTurnSnapshot({
+  port,
+  sessionId,
+  commandId,
+  commandType = TURN_COMMAND.SNAPSHOT_GET,
+}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
       headers: { authorization: "Bearer test-key" },
@@ -307,7 +312,7 @@ export async function requestTurnSnapshot({ port, sessionId, commandId }) {
       ws.send(
         JSON.stringify(
           createProtocolTestCommand({
-            commandType: TURN_COMMAND.SNAPSHOT_GET,
+            commandType,
             userId: "u1",
             sessionId,
             commandId,

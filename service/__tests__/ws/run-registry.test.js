@@ -10,6 +10,7 @@ import {
   buildRunRegistryKeys,
   closeUserInterjectionQueue,
   consumeUserInterjections,
+  createExecutionLivenessInspector,
   detachRunTransport,
   enqueueUserInterjection,
   findActiveRun,
@@ -19,6 +20,35 @@ import {
   sealUserInterjectionQueueIfEmpty,
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
+
+test("execution liveness inspector reports registered runs alive and others dead", () => {
+  const identity = {
+    userId: "owner-liveness",
+    sessionId: "session-liveness",
+    turnScopeId: "turn-liveness",
+    dialogProcessId: "dialog-liveness",
+  };
+  const inspect = createExecutionLivenessInspector({
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    now: () => 42,
+  });
+  const probe = { turnScopeId: identity.turnScopeId, dialogProcessId: identity.dialogProcessId };
+  assert.deepEqual(inspect(probe), { alive: false, observedAtMs: 42 });
+  const handle = registerActiveRun(identity);
+  try {
+    assert.deepEqual(inspect(probe), { alive: true, observedAtMs: 42 });
+    const otherUser = createExecutionLivenessInspector({
+      userId: "other-owner",
+      sessionId: identity.sessionId,
+      now: () => 42,
+    });
+    assert.equal(otherUser(probe).alive, false);
+  } finally {
+    unregisterActiveRun(handle);
+  }
+  assert.equal(inspect(probe).alive, false);
+});
 
 test("user interjection queue consumes FIFO and retains the batch when persistence fails", async () => {
   const handle = registerActiveRun({

@@ -112,7 +112,7 @@ NOOBOT_EXECUTION_ISOLATION_MODE=sandbox \
 
 `NOOBOT_MODEL_NAME` accepts a model library key or model name. `NOOBOT_MODEL_API_KEY` and `NOOBOT_MODEL_BASE_URL` are optional. `NOOBOT_EXECUTION_ISOLATION_MODE` is `sandbox` (default) or `host`.
 
-Optional: `NOOBOT_SETUP_LANG=zh|en` (controls setup wizard language and synchronizes `preferences.language` plus built-in config copy text localization).
+Optional: `NOOBOT_SETUP_WORKSPACE_ROOT` (initial `workspace_root`, relative to `service/`, default `../workspace`). Optional: `NOOBOT_SETUP_LANG=zh|en` (controls setup wizard language and synchronizes `preferences.language` plus built-in config copy text localization).
 
 Default endpoints:
 

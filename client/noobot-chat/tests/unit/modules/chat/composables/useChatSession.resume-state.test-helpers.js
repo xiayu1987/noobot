@@ -48,6 +48,7 @@ export function terminalLifecycleSnapshot({
   return {
     protocolVersion: 1,
     eventType: "turn.snapshot",
+    recovery: "none",
     commandId: `summary:${sessionId}:${sequence}`,
     sessionId,
     sequence,

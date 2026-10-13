@@ -180,6 +180,7 @@ export function snapshot(overrides = {}) {
   return {
     protocolVersion: 1,
     eventType: "turn.snapshot",
+    recovery: "none",
     commandId: "snapshot-1",
     userId: "u1",
     sessionId: "s1",

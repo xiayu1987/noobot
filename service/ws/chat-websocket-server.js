@@ -29,7 +29,6 @@ export function registerChatWebSocketServer(
     normalizeLocale,
     defaultLocale,
     translateText,
-    sessionLogConfig,
   } = {},
 ) {
   const resolveBot = () => {
@@ -44,7 +43,6 @@ export function registerChatWebSocketServer(
     defaultLocale,
     translateText,
     resolveAuthByApiKey,
-    sessionLogConfig,
   });
 
   webSocketServer.on(
@@ -58,7 +56,6 @@ export function registerChatWebSocketServer(
       translateText,
       mapAgentRunCommand,
       connectorAccessPort,
-      sessionLogConfig,
     }),
   );
 

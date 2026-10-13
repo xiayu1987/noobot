@@ -49,7 +49,6 @@ export function createMessageStopHandler({
   sendEvent,
   translateText,
   resolveBot,
-  sessionLogConfig,
   rejectTurnInteractions,
   commitTurnLifecycle,
 }) {
@@ -98,7 +97,6 @@ export function createMessageStopHandler({
 
   const recordStopLifecycle = (event, userId, stopPayload, data) => {
     void recordServiceWebSocketLifecycle({
-      sessionLogConfig,
       event,
       userId,
       sessionId: stopPayload.sessionId,

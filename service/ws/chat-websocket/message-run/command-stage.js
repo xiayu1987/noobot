@@ -7,7 +7,7 @@ import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
   SESSION_ERROR_CODE,
@@ -45,25 +45,22 @@ export async function mapRunCommand(context, command) {
 }
 
 export function recordReceivedCommand(context, command, run) {
-  void writeRoutedRuntimeEvent(
-    {
-      scope: "session",
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-      event: "debug.resend.websocket.received",
-      userId: text(run.userId),
-      sessionId: text(run.sessionId),
-      parentSessionId: text(run.parentSessionId),
-      turnScopeId: text(context.state.currentTurnScopeId || run.turnScopeId),
-      data: {
-        commandType: command.commandType,
-        reuseExistingUserTurn: run.normalizedRunConfig.reuseExistingUserTurn === true,
-        attachments: summarizeDebugAttachments(run.attachments),
-      },
+  void writeRuntimeEvent({
+    scope: "session",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+    event: "debug.resend.websocket.received",
+    userId: text(run.userId),
+    sessionId: text(run.sessionId),
+    parentSessionId: text(run.parentSessionId),
+    turnScopeId: text(context.state.currentTurnScopeId || run.turnScopeId),
+    data: {
+      commandType: command.commandType,
+      reuseExistingUserTurn: run.normalizedRunConfig.reuseExistingUserTurn === true,
+      attachments: summarizeDebugAttachments(run.attachments),
     },
-    context.sessionLogConfig,
-  );
+  });
 }
 
 export function validateRunIdentity(context, run) {
@@ -93,7 +90,6 @@ export async function bindExistingRun(context, run, onRunBound) {
     parentSessionId: run.parentSessionId,
   });
   void recordServiceWebSocketLifecycle({
-    sessionLogConfig: context.sessionLogConfig,
     event: "service.websocket.run.transportRebound",
     userId: run.userId,
     sessionId: run.sessionId,
@@ -179,7 +175,7 @@ async function commitAction(context, actionEvent, run) {
   if (
     !accepted?.applied &&
     !accepted?.deduplicated &&
-    (await context.recoverOrphanedTurnConflict({
+    (await context.recoverConflictingTurn({
       accepted,
       userId: run.userId,
       sessionId: run.sessionId,
@@ -241,7 +237,6 @@ export async function acceptRunCommand(context, command, run) {
   context.lifecycle.pending = null;
   context.lifecycle.latestTurn = accepted.turn || null;
   void recordServiceAgentTransportDebug({
-    sessionLogConfig: context.sessionLogConfig,
     event: "service.agentTransport.commandConsumed",
     command,
     userId: run.userId,

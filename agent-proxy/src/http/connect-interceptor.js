@@ -7,16 +7,12 @@ import { config } from "../shared/config.js";
 import { AGENT_PROXY_ERROR } from "../shared/constants.js";
 import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 import { buildClientPermissions } from "../shared/utils.js";
-import {
-  collectRequestBody,
-  writeProxyError,
-  decorateProxyResponseHeaders,
-} from "./http-proxy.js";
+import { collectRequestBody, writeProxyError, decorateProxyResponseHeaders } from "./http-proxy.js";
 import { isLoopbackAddress, resolveHeaderValue, secureEquals } from "./security.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 function isConnectTokenAuthorized(request = null) {
@@ -32,7 +28,10 @@ function isConnectTokenAuthorized(request = null) {
 
 export async function interceptConnectRequest(request, response, channelManager) {
   const locale = resolveLocaleFromRequest(request);
-  const method = String(request?.method || "POST").trim().toUpperCase() || "POST";
+  const method =
+    String(request?.method || "POST")
+      .trim()
+      .toUpperCase() || "POST";
   if (!isConnectTokenAuthorized(request)) {
     response.writeHead(
       401,
@@ -62,7 +61,8 @@ export async function interceptConnectRequest(request, response, channelManager)
   try {
     upstreamConnectUrl = new URL("/internal/connect", config.upstreamHttpBase).toString();
   } catch (error) {
-    await writeRoutedRuntimeEvent({
+    await writeRuntimeEvent({
+      scope: "system",
       source: "agent-proxy",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.CONFIG,
@@ -73,12 +73,7 @@ export async function interceptConnectRequest(request, response, channelManager)
       },
       error,
     });
-    writeProxyError(
-      response,
-      500,
-      AGENT_PROXY_ERROR.INVALID_UPSTREAM_BASE_URL,
-      locale,
-    );
+    writeProxyError(response, 500, AGENT_PROXY_ERROR.INVALID_UPSTREAM_BASE_URL, locale);
     return;
   }
   let upstreamResponse = null;
@@ -114,8 +109,7 @@ export async function interceptConnectRequest(request, response, channelManager)
           ? {
               ...parsedJson,
               permissions:
-                parsedJson?.permissions &&
-                typeof parsedJson.permissions === "object"
+                parsedJson?.permissions && typeof parsedJson.permissions === "object"
                   ? parsedJson.permissions
                   : buildClientPermissions(parsedJson?.role || "user"),
               agentProxy: {

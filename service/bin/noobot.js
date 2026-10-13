@@ -12,6 +12,12 @@ const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 process.chdir(serviceRoot);
 const { config: loadDotenv } = await import("dotenv");
 loadDotenv({ quiet: true });
+const { WORKSPACE_ROOT_ENV, resolveConfiguredWorkspaceRoot, resolveGlobalConfigPath } =
+  await import("@noobot/runtime-topology-protocol/workspace-root");
+process.env[WORKSPACE_ROOT_ENV] = resolveConfiguredWorkspaceRoot({
+  globalConfigPath: resolveGlobalConfigPath({ serviceDir: serviceRoot, env: process.env }),
+  serviceDir: serviceRoot,
+});
 const { runCli } = await import("../cli/noobot.js");
 
 const exitCode = await runCli({ argv: process.argv.slice(2), cwd: invocationCwd, serviceRoot });

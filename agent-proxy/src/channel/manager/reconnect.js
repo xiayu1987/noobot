@@ -30,8 +30,13 @@ function normalizeReconnectRequest(payload = {}) {
   if ("lastReceivedSeqMap" in payload || "lastReceivedTurnScopeIdMap" in payload) {
     throw new Error("unsupported_reconnect_message_cursor");
   }
+  if ("userId" in payload) {
+    throw new Error("unsupported_reconnect_user_identity");
+  }
   return {
     currentSessionId: text(payload.currentSessionId),
+    currentParentSessionId: text(payload.currentParentSessionId),
+    currentParentDialogProcessId: text(payload.currentParentDialogProcessId),
     requestId: text(payload.requestId),
     knownLifecycleSequenceMap: payload.knownLifecycleSequenceMap || {},
   };
@@ -47,16 +52,22 @@ function cancelSupersededReconnect(manager, socket) {
 function hasSessionChannel(manager, sessionId) {
   return Boolean(
     sessionId &&
-    Array.from(manager.channelStore.keys()).some(
-      (channelKey) => manager._extractSessionIdFromChannelKey(channelKey) === sessionId,
+    Array.from(manager.channelStore.values()).some(
+      (channel) => channel.identity.sessionId === sessionId,
     ),
   );
 }
 
-async function provisionReconnectChannel(manager, socket, payload, sessionId) {
-  const userId = text(socket?.__agentProxyUserId || payload?.userId);
-  const channelKey = createChannelKey({ userId, sessionId });
-  const channel = manager.ensureChannel(channelKey, { sessionId, userId });
+async function provisionReconnectChannel(manager, socket, session) {
+  const userId = text(socket?.__agentProxyUserId);
+  if (!userId) return [];
+  const channelKey = createChannelKey({
+    userId,
+    sessionId: session.sessionId,
+    parentSessionId: session.parentSessionId,
+    parentDialogProcessId: session.parentDialogProcessId,
+  });
+  const channel = manager.ensureChannel(channelKey, { sessionId: session.sessionId, userId });
   const apiKey = text(socket?.__agentProxyApiKey);
   if (!channel || !manager.hasChannelPermission(channel, apiKey, userId)) return [];
   manager.connectUpstreamChannel(channel, apiKey, text(socket?.__agentProxyLocale), {
@@ -82,7 +93,7 @@ function attachReconnectBaselines(manager, socket, channelKeys, transaction) {
 function isReconnectChannelCandidate(manager, channelKey, channel, currentSessionId) {
   if (!channel) return false;
   if (!currentSessionId) return true;
-  if (manager._extractSessionIdFromChannelKey(channelKey) === currentSessionId) return true;
+  if (channel.identity.sessionId === currentSessionId) return true;
   return (
     channel.activity.phase === CHANNEL_STATUS.RUNNING ||
     channel.transport.phase === CHANNEL_STATUS.CONNECTING ||
@@ -92,21 +103,25 @@ function isReconnectChannelCandidate(manager, channelKey, channel, currentSessio
 
 class ReconnectMethods {
   async handleReconnect(socket, payload = {}) {
-    const { currentSessionId, requestId, knownLifecycleSequenceMap } =
-      normalizeReconnectRequest(payload);
+    const {
+      currentSessionId,
+      currentParentSessionId,
+      currentParentDialogProcessId,
+      requestId,
+      knownLifecycleSequenceMap,
+    } = normalizeReconnectRequest(payload);
     cancelSupersededReconnect(this, socket);
-    let reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
+    let reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId);
     if (
       !reconnectChannelKeys.length &&
       currentSessionId &&
       !hasSessionChannel(this, currentSessionId)
     ) {
-      reconnectChannelKeys = await provisionReconnectChannel(
-        this,
-        socket,
-        payload,
-        currentSessionId,
-      );
+      reconnectChannelKeys = await provisionReconnectChannel(this, socket, {
+        sessionId: currentSessionId,
+        parentSessionId: currentParentSessionId,
+        parentDialogProcessId: currentParentDialogProcessId,
+      });
     }
     void writeAgentProxyRouteLifecycleEvent({
       event: "agentProxy.route.reconnect.started",
@@ -163,7 +178,7 @@ class ReconnectMethods {
     });
   }
 
-  _resolveReconnectChannelKeys(socket, currentSessionId = "", payload = {}) {
+  _resolveReconnectChannelKeys(socket, currentSessionId = "") {
     const currentSocketChannelKeys = Array.from(
       socket?.__agentProxyChannelKeys instanceof Set ? socket.__agentProxyChannelKeys : [],
     ).filter(Boolean);
@@ -172,7 +187,7 @@ class ReconnectMethods {
     }
     const normalizedCurrentSessionId = String(currentSessionId || "").trim();
     const requesterApiKey = String(socket?.__agentProxyApiKey || "").trim();
-    const requesterUserId = String(socket?.__agentProxyUserId || payload?.userId || "").trim();
+    const requesterUserId = text(socket?.__agentProxyUserId);
     const resolvedChannelKeys = [];
     for (const [channelKey, channel] of this.channelStore.entries()) {
       if (!isReconnectChannelCandidate(this, channelKey, channel, normalizedCurrentSessionId))
@@ -181,11 +196,6 @@ class ReconnectMethods {
       resolvedChannelKeys.push(channelKey);
     }
     return resolvedChannelKeys;
-  }
-
-  _extractSessionIdFromChannelKey(channelKey = "") {
-    const parts = String(channelKey || "").split("::");
-    return parts.length >= 2 ? parts[1] : "";
   }
 }
 

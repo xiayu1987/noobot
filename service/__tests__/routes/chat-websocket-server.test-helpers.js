@@ -164,7 +164,6 @@ export async function startServerWithWs({
   runSession = async () => ({}),
   bot = null,
   initialTurnLifecycle = {},
-  sessionLogConfig = undefined,
   resolveAuthByApiKey = () => ({ userId: "primary-user" }),
   isForbiddenUserScope = () => false,
 } = {}) {
@@ -324,7 +323,6 @@ export async function startServerWithWs({
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),
     defaultLocale: "zh-CN",
     translateText: (key = "") => String(key || ""),
-    sessionLogConfig,
   });
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

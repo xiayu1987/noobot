@@ -7,8 +7,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ExecutionLogService } from "../../src/observability/execution-log/execution-log-service.js";
+import { useRuntimeEventsEnv } from "../helpers/runtime-events-env.js";
 
-function createService(runtimeEventsConfig = { env: {} }) {
+function createService() {
   const appendedLogs = [];
   let resolvedScopeCount = 0;
   const service = new ExecutionLogService({
@@ -23,7 +24,6 @@ function createService(runtimeEventsConfig = { env: {} }) {
         return { resolvedParentSessionId: "parent-1" };
       },
     },
-    runtimeEventsConfig,
   });
   return {
     service,
@@ -87,8 +87,9 @@ test("ExecutionLogService preserves ordinary and failure execution logs", async 
   assert.equal(harness.appendedLogs[0][2].event, "message_persistence_failed");
 });
 
-test("ExecutionLogService can enable full turn diagnostics through centralized config", async () => {
-  const harness = createService({ executionLogControls: { sessionTurnFullDebug: true }, env: {} });
+test("ExecutionLogService can enable full turn diagnostics through the environment", async (t) => {
+  useRuntimeEventsEnv(t, { executionLog: { sessionTurnFullDebug: true } });
+  const harness = createService();
   const result = await harness.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",
@@ -100,11 +101,9 @@ test("ExecutionLogService can enable full turn diagnostics through centralized c
   assert.equal(harness.appendedLogs.length, 1);
 });
 
-test("ExecutionLogService applies the context identity debug switch without a flat fallback", async () => {
-  const disabled = createService({
-    env: {},
-    sessionLogControls: { debug: { contextIdentity: false } },
-  });
+test("ExecutionLogService applies the context identity debug switch from the environment", async (t) => {
+  useRuntimeEventsEnv(t, { debug: { contextIdentity: false } });
+  const disabled = createService();
   const skipped = await disabled.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",
@@ -115,20 +114,8 @@ test("ExecutionLogService applies the context identity debug switch without a fl
   assert.equal(skipped.skipped, true);
   assert.equal(disabled.resolvedScopeCount, 0);
 
-  const flatOverride = createService({ env: {}, contextIdentityDebug: true });
-  const flatSkipped = await flatOverride.service.appendExecutionLog({
-    userId: "u1",
-    sessionId: "s1",
-    event: "agent.contextIdentity.contextBuildInput",
-    category: "context_identity",
-    data: {},
-  });
-  assert.equal(flatSkipped.skipped, true);
-
-  const enabled = createService({
-    env: {},
-    sessionLogControls: { debug: { contextIdentity: true } },
-  });
+  useRuntimeEventsEnv(t, { debug: { contextIdentity: true } });
+  const enabled = createService();
   const appended = await enabled.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",
@@ -139,8 +126,8 @@ test("ExecutionLogService applies the context identity debug switch without a fl
   assert.equal(appended.appended, true);
 });
 
-test("ExecutionLogService applies the default-off agent context debug switch", async () => {
-  const defaults = createService({ env: {} });
+test("ExecutionLogService applies the default-off agent context debug switch", async (t) => {
+  const defaults = createService();
   const defaultSkipped = await defaults.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",
@@ -150,10 +137,8 @@ test("ExecutionLogService applies the default-off agent context debug switch", a
   });
   assert.equal(defaultSkipped.skipped, true);
 
-  const enabled = createService({
-    env: {},
-    sessionLogControls: { debug: { agentContext: true } },
-  });
+  useRuntimeEventsEnv(t, { debug: { agentContext: true } });
+  const enabled = createService();
   const appended = await enabled.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",
@@ -163,10 +148,8 @@ test("ExecutionLogService applies the default-off agent context debug switch", a
   });
   assert.equal(appended.appended, true);
 
-  const disabled = createService({
-    env: {},
-    sessionLogControls: { debug: { agentContext: false } },
-  });
+  useRuntimeEventsEnv(t, { debug: { agentContext: false } });
+  const disabled = createService();
   const skipped = await disabled.service.appendExecutionLog({
     userId: "u1",
     sessionId: "s1",

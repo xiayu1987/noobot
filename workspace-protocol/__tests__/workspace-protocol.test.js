@@ -34,6 +34,9 @@ const h = (char) => char.repeat(64);
 test("layout runtime directories all live under runtime", () => {
   for (const dir of WORKSPACE_RUNTIME_DIRECTORIES) assert.ok(isWorkspaceRuntimeRelativePath(dir));
   assert.ok(WORKSPACE_RUNTIME_DIRECTORIES.includes(WORKSPACE_LAYOUT.PLUGIN_DATA_DIR));
+  assert.ok(WORKSPACE_RUNTIME_DIRECTORIES.includes(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR));
+  assert.ok(WORKSPACE_RUNTIME_DIRECTORIES.includes(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_LOCKS_DIR));
+  assert.ok(isWorkspaceRuntimeRelativePath(WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE));
 });
 
 test("plugin data path rejects traversal and invalid segments", () => {
@@ -171,11 +174,11 @@ test("layout upgrades run every step above the installed version and end at the 
     planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_UNMARKED_VERSION }).map(
       (item) => item.id,
     ),
-    ["session-storage-v2", "session-tree-parent-only-v3"],
+    ["session-storage-v2", "session-tree-parent-only-v3", "session-deletion-tombstone-only-v4"],
   );
   assert.deepEqual(
-    planWorkspaceLayoutUpgrades({ installedVersion: 2 }).map((item) => item.id),
-    ["session-tree-parent-only-v3"],
+    planWorkspaceLayoutUpgrades({ installedVersion: 3 }).map((item) => item.id),
+    ["session-deletion-tombstone-only-v4"],
   );
   assert.deepEqual(planWorkspaceLayoutUpgrades({ installedVersion: WORKSPACE_LAYOUT_VERSION }), []);
   assert.equal(WORKSPACE_LAYOUT_UPGRADES.at(-1).toVersion, WORKSPACE_LAYOUT_VERSION);

@@ -21,7 +21,6 @@ const WORKFLOW_DIAGNOSTIC_EVENT_TYPES = new Set([
 
 function recordEventAudit(context, run, audit, { debugType, event }) {
   void recordServiceWebSocketLifecycle({
-    sessionLogConfig: context.sessionLogConfig,
     category: "debug",
     level: "debug",
     debugType,
@@ -61,7 +60,6 @@ function recordDispatchFailure(
   const identity = committedEnvelope.identity || {};
   const payload = committedEnvelope.payload || {};
   void recordServiceWebSocketLifecycle({
-    sessionLogConfig: context.sessionLogConfig,
     event: "service.authorityOutbox.dispatchFailed",
     userId: run.userId,
     sessionId: run.sessionId,
@@ -172,7 +170,6 @@ function createRootRunningHandler(context, run, accepted, lifecycle) {
     context.lifecycle.pending = lifecycle.processingStarted;
     void lifecycle.processingStarted.catch((error) => {
       void recordServiceWebSocketLifecycle({
-        sessionLogConfig: context.sessionLogConfig,
         event: "service.websocket.processingStart.persistenceFailed",
         userId: run.userId,
         sessionId: run.sessionId,
@@ -189,7 +186,6 @@ const DELIVERY_TIMING_DEBUG_TYPE = "delivery-timing";
 
 function recordDeliveryTiming(context, run, summary) {
   void recordServiceWebSocketLifecycle({
-    sessionLogConfig: context.sessionLogConfig,
     category: "debug",
     level: "debug",
     debugType: DELIVERY_TIMING_DEBUG_TYPE,
@@ -212,10 +208,7 @@ export function createMessageRunEventListener(context, run, accepted, active) {
     getCurrentRunHandle: () => active.runHandle,
     getCurrentTurnScopeId: () => active.runMeta.turnScopeId,
     onEventReceived: (audit) => onEventReceived(context, run, audit),
-    onDeliveryTiming: isSessionLogDebugTypeEnabled(
-      DELIVERY_TIMING_DEBUG_TYPE,
-      context.sessionLogConfig,
-    )
+    onDeliveryTiming: isSessionLogDebugTypeEnabled(DELIVERY_TIMING_DEBUG_TYPE)
       ? (summary) => recordDeliveryTiming(context, run, summary)
       : null,
     onCommittedTurnLifecycle: (envelope, dispatchContext) =>

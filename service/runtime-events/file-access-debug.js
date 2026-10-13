@@ -7,13 +7,14 @@ import { FILE_ACCESS_DEBUG_TYPE, FILE_TRACE_ID_HEADER } from "@noobot/shared/run
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 export function recordFileAccessDebug(req, { event, traceEvent, data = {} } = {}) {
   const traceId = String(req?.headers?.[FILE_TRACE_ID_HEADER] || "").trim();
   if (!traceId) return;
-  void writeRoutedRuntimeEvent({
+  void writeRuntimeEvent({
+    scope: "system",
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,

@@ -13,11 +13,15 @@ import { createAuthorityEventDispatcher } from "./authority-event-dispatcher.js"
 import { createInteractionAuthorityBridge } from "./interaction-authority-bridge.js";
 import { createUserInterjectionAuthorityBridge } from "./user-interjection-authority-bridge.js";
 import { createTurnLifecycleBridge } from "./turn-lifecycle-bridge.js";
-import { recoverSnapshotOrphan, recoverTurnFinalize } from "./finalize-recovery.js";
+import { finalizeTurnSnapshot, readAnnotatedTurnSnapshot } from "./turn-recovery.js";
 import { createTurnFinalizer, snapshotRunState } from "./terminal-outcomes.js";
 import { createUserInteractionBridge } from "./user-interaction-bridge.js";
 import { createMessageHandler } from "./message-handler.js";
-import { detachRunTransport, findActiveRun, isRunTransportAttached } from "./run-registry.js";
+import {
+  createExecutionLivenessInspector,
+  detachRunTransport,
+  isRunTransportAttached,
+} from "./run-registry.js";
 import { EXECUTION_ABORT_TYPE, createExecutionAbortReason } from "@noobot/session-protocol";
 
 export const CONNECTION_CLOSE_POLICY = Object.freeze({
@@ -31,11 +35,10 @@ function text(value) {
   return String(value || "").trim();
 }
 
-function createConnectionLogger(state, sessionLogConfig) {
+function createConnectionLogger(state) {
   return (event, data = {}, routing = {}) => {
     const meta = state.currentRunMeta || {};
     void recordServiceWebSocketLifecycle({
-      sessionLogConfig,
       event,
       ...routing,
       userId: meta.userId,
@@ -62,12 +65,11 @@ function registerConnectionDiagnostics(webSocket, authInfo, logConnection) {
   );
 }
 
-function createTurnStatusRejection({ webSocket, state, sessionLogConfig }) {
+function createTurnStatusRejection({ webSocket, state }) {
   return ({ runMeta = {}, status = "", result = null } = {}) => {
     const errorCode = "turn_status_persistence_failed";
     const errorMessage = `failed to persist terminal turn status: ${text(status || "unknown")}`;
     void recordServiceWebSocketRuntimeError({
-      sessionLogConfig,
       event: "service.websocket.turnStatusPersistenceFailed",
       error: new Error(errorMessage),
       userId: runMeta?.userId,
@@ -85,26 +87,25 @@ function createTurnStatusRejection({ webSocket, state, sessionLogConfig }) {
   };
 }
 
-function createRecoveryHandlers({ resolveBot, commitTurnLifecycle, authInfo }) {
+function createTurnRecovery({ resolveBot, commitTurnLifecycle, authInfo }) {
+  const inspectorFor = (request) =>
+    createExecutionLivenessInspector({
+      userId: text(authInfo?.userId),
+      sessionId: request.sessionId,
+    });
   return {
-    recoverPersistedTurnFinalize: (request = {}) =>
-      recoverTurnFinalize({ ...request, bot: resolveBot(), commitTurnLifecycle }),
-    recoverPersistedSnapshotOrphan: (request = {}) =>
-      recoverSnapshotOrphan({
+    readSnapshot: (request = {}) =>
+      readAnnotatedTurnSnapshot({
+        ...request,
+        bot: resolveBot(),
+        inspectExecution: inspectorFor(request),
+      }),
+    finalize: (request = {}) =>
+      finalizeTurnSnapshot({
         ...request,
         bot: resolveBot(),
         commitTurnLifecycle,
-        inspectExecution: ({ turnScopeId, dialogProcessId }) => ({
-          alive: Boolean(
-            findActiveRun({
-              userId: text(authInfo?.userId),
-              sessionId: request.sessionId,
-              turnScopeId,
-              dialogProcessId,
-            }),
-          ),
-          observedAtMs: Date.now(),
-        }),
+        inspectExecution: inspectorFor(request),
       }),
   };
 }
@@ -120,11 +121,10 @@ function createRunStateSnapshot(state) {
     });
 }
 
-function registerMessageListener({ webSocket, messageHandler, sessionLogConfig, logConnection }) {
+function registerMessageListener({ webSocket, messageHandler, logConnection }) {
   webSocket.on("message", (rawMessage) => {
     void messageHandler(rawMessage).catch((error) => {
       void recordServiceWebSocketLifecycle({
-        sessionLogConfig,
         event: "service.websocket.message.unhandledFailure",
         data: { errorType: error?.name || "Error", errorCode: text(error?.code) },
       });
@@ -206,7 +206,6 @@ function createConnectionMessageRuntime(context) {
     rejectUnpersistedTurnStatus: createTurnStatusRejection(context),
     resolveBot: context.resolveBot,
     translateText: context.translateText,
-    sessionLogConfig: context.sessionLogConfig,
     webSocket: context.webSocket,
     commitTurnLifecycle,
   });
@@ -215,7 +214,6 @@ function createConnectionMessageRuntime(context) {
     commitInteractionRequest,
     translateText: context.translateText,
     getCurrentLocale: () => context.state.currentLocale,
-    sessionLogConfig: context.sessionLogConfig,
   });
   return {
     commitTurnLifecycle,
@@ -223,7 +221,7 @@ function createConnectionMessageRuntime(context) {
     dispatchAuthorityEvents,
     ...finalizers,
     ...interaction,
-    ...createRecoveryHandlers({
+    turnRecovery: createTurnRecovery({
       resolveBot: context.resolveBot,
       commitTurnLifecycle,
       authInfo: context.authInfo,
@@ -242,7 +240,6 @@ function createConnectionMessageHandler(context, runtime) {
     mapAgentRunCommand: context.mapAgentRunCommand,
     connectorAccessPort: context.connectorAccessPort,
     resolveBot: context.resolveBot,
-    sessionLogConfig: context.sessionLogConfig,
     rejectTurnInteractions: runtime.rejectTurnInteractions,
     userInteractionBridge: runtime.userInteractionBridge,
     buildRunStateSnapshot: createRunStateSnapshot(context.state),
@@ -254,8 +251,7 @@ function createConnectionMessageHandler(context, runtime) {
     commitTurnLifecycle: runtime.commitTurnLifecycle,
     commitUserInterjection: runtime.commitUserInterjection,
     dispatchAuthorityEvents: runtime.dispatchAuthorityEvents,
-    recoverTurnFinalize: runtime.recoverPersistedTurnFinalize,
-    recoverSnapshotOrphan: runtime.recoverPersistedSnapshotOrphan,
+    turnRecovery: runtime.turnRecovery,
   });
 }
 
@@ -268,7 +264,7 @@ export function createChatConnectionHandler(options) {
     const state = createConnectionState({
       locale: options.normalizeLocale(request?.locale || options.defaultLocale),
     });
-    const logConnection = createConnectionLogger(state, options.sessionLogConfig);
+    const logConnection = createConnectionLogger(state);
     registerConnectionDiagnostics(webSocket, authInfo, logConnection);
     const context = {
       ...options,
@@ -283,7 +279,6 @@ export function createChatConnectionHandler(options) {
     registerMessageListener({
       webSocket,
       messageHandler,
-      sessionLogConfig: options.sessionLogConfig,
       logConnection,
     });
     registerCloseListener({

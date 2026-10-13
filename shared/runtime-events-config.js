@@ -319,31 +319,29 @@ export function resolveRuntimeEventsStorageConfig(env = process.env) {
   };
 }
 
-export function resolveRuntimeEventsSessionLogControls(env = process.env, overrides = {}) {
+export function resolveRuntimeEventsSessionLogControls(env = process.env) {
   const defaults = RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls;
   const envs = RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls;
   const result = { log: {}, debug: {} };
   for (const domain of ["log", "debug"]) {
     for (const key of Object.keys(defaults[domain])) {
-      result[domain][key] =
-        overrides?.[domain]?.[key] ??
-        resolveBooleanEnv(env, envs[domain][key], defaults[domain][key]);
+      result[domain][key] = resolveBooleanEnv(env, envs[domain][key], defaults[domain][key]);
     }
   }
   return result;
 }
 
-export function resolveRuntimeEventsExecutionLogControls(env = process.env, overrides = {}) {
+export function resolveRuntimeEventsExecutionLogControls(env = process.env) {
   const defaults = RUNTIME_EVENTS_CONFIG_DEFAULTS.executionLogControls;
   const envs = RUNTIME_EVENTS_CONFIG_ENVS.executionLogControls;
   const result = {};
   for (const key of Object.keys(defaults)) {
-    result[key] = overrides[key] ?? resolveBooleanEnv(env, envs[key], defaults[key]);
+    result[key] = resolveBooleanEnv(env, envs[key], defaults[key]);
   }
   return result;
 }
 
-export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
+export function shouldRecordRuntimeExecutionLog(event = {}, { env = process.env } = {}) {
   if (event && typeof event === "object") {
     const level = String(event?.level || "")
       .trim()
@@ -369,10 +367,7 @@ export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
   const descriptor = debugType ? RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES[debugType] : null;
 
   if (descriptor?.gatesExecutionBundle === true) {
-    const controls = resolveRuntimeEventsSessionLogControls(
-      options.env || process.env,
-      options.sessionLogControls || {},
-    );
+    const controls = resolveRuntimeEventsSessionLogControls(env);
     return controls.debug[descriptor.controlKey] === true;
   }
   const eventName = String(typeof event === "string" ? event : event?.event || event?.name || "")
@@ -380,29 +375,19 @@ export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
     .toLowerCase();
   const controlKey = RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS[eventName];
   if (!controlKey) return true;
-  const controls = resolveRuntimeEventsExecutionLogControls(
-    options.env || process.env,
-    options.executionLogControls || options.controls || options,
-  );
+  const controls = resolveRuntimeEventsExecutionLogControls(env);
   return controls[controlKey] === true;
 }
 
-export function resolveHookRuntimeEventsMode({
-  runtime = {},
-  options = {},
-  env = process.env,
-} = {}) {
+export function resolveHookRuntimeEventsMode(env = process.env) {
   return String(
-    runtime?.systemRuntime?.hookRuntimeEventsMode ??
-      runtime?.hookRuntimeEventsMode ??
-      options?.hookRuntimeEventsMode ??
-      env?.[RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode] ??
+    env?.[RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode] ??
       RUNTIME_EVENTS_CONFIG_DEFAULTS.hookRuntimeEvents.mode,
   )
     .trim()
     .toLowerCase();
 }
 
-export function isHookRuntimeEventVerboseEnabled(input = {}) {
-  return HOOK_RUNTIME_EVENT_VERBOSE_VALUES.includes(resolveHookRuntimeEventsMode(input));
+export function isHookRuntimeEventVerboseEnabled(env = process.env) {
+  return HOOK_RUNTIME_EVENT_VERBOSE_VALUES.includes(resolveHookRuntimeEventsMode(env));
 }

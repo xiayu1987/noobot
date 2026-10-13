@@ -38,6 +38,7 @@ const SCANNED_SOURCE_ROOTS = Object.freeze([
   "memory-protocol/src",
   "memory-repair/src",
   "path-resolver/src",
+  "runtime-events/src",
   "plugin/noobot-plugin-workflow/src",
   "plugin/noobot-plugin-character/src",
   "plugin/noobot-plugin-harness/src",

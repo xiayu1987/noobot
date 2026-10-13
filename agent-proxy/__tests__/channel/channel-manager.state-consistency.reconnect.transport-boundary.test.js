@@ -155,7 +155,7 @@ test("reconnect keeps transport status separate from authoritative running state
   assert.equal("currentRun" in sessionEntry, false);
 });
 
-test("reconnect does not infer a running Turn from same-user transport identity", () => {
+test("reconnect rejects a payload-declared user identity", async () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-user-fallback" });
   const channel = manager.ensureChannel(channelKey, {
@@ -168,16 +168,13 @@ test("reconnect does not infer a running Turn from same-user transport identity"
   channel.ownerUserId = "user-1";
 
   const reconnectClient = createMockSocket({ apiKey: "api-key-new", userId: "" });
-  manager.handleReconnect(reconnectClient, {
-    userId: "user-1",
-    currentSessionId: "session-user-fallback",
-  });
-
-  const reconnectData = getEvent(reconnectClient, "reconnect_data");
-  const sessionEntry = (reconnectData?.data?.sessions || []).find(
-    (item) => String(item?.sessionId || "") === "session-user-fallback",
+  await assert.rejects(
+    manager.handleReconnect(reconnectClient, {
+      userId: "user-1",
+      currentSessionId: "session-user-fallback",
+    }),
+    /unsupported_reconnect_user_identity/,
   );
-  assert.equal("hasRunningTask" in sessionEntry, false);
-  assert.equal("currentRun" in sessionEntry, false);
-  assert.equal("conversationStates" in sessionEntry, false);
+  assert.equal(getEvent(reconnectClient, "reconnect_data"), null);
+  assert.equal(channel.subscribers.has(reconnectClient), false);
 });

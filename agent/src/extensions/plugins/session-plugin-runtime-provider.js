@@ -9,7 +9,7 @@ import { createRunConfigPluginPreparer } from "../../bot/session/session-plugin-
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 const reportedRuntimes = new WeakSet();
@@ -18,7 +18,7 @@ function reportRuntimeLifecycle(runtime) {
   if (!runtime || reportedRuntimes.has(runtime)) return;
   reportedRuntimes.add(runtime);
   for (const record of runtime.lifecycleEvents || []) {
-    void writeRoutedRuntimeEvent({
+    void writeRuntimeEvent({
       scope: "startup",
       source: "agent",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -48,7 +48,9 @@ export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = 
     ...(String(pluginRootDir || "").trim() ? { pluginRootDir: String(pluginRootDir).trim() } : {}),
   });
   if (loadedPlugins.errors.length) {
-    throw new Error(`agent plugin runtime failed: ${loadedPlugins.errors.map((item) => `${item.pluginId}: ${item.message}`).join("; ")}`);
+    throw new Error(
+      `agent plugin runtime failed: ${loadedPlugins.errors.map((item) => `${item.pluginId}: ${item.message}`).join("; ")}`,
+    );
   }
   reportRuntimeLifecycle(loadedPlugins);
   return { loadedPlugins, pluginRuntime: runtimeDescriptor(loadedPlugins) };
@@ -70,7 +72,10 @@ export function getDefaultLoadedDynamicPlugins() {
 }
 
 export function createDefaultRunConfigPluginPreparer(options = {}) {
-  return createRunConfigPluginPreparerFromRuntimeBundle({ ...options, loadedPlugins: loadedDynamicPlugins });
+  return createRunConfigPluginPreparerFromRuntimeBundle({
+    ...options,
+    loadedPlugins: loadedDynamicPlugins,
+  });
 }
 
 export function getDefaultPluginDiagnostics() {

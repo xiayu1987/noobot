@@ -256,44 +256,15 @@ test("frontend thinking replay diagnostics are independently configurable and de
   );
 });
 
-test("session log controls do not accept the removed flat override protocol", () => {
-  const controls = resolveRuntimeEventsSessionLogControls(
-    {},
-    {
-      messageLog: false,
-      contextIdentityDebug: true,
-    },
-  );
-  assert.equal(controls.log.message, true);
-  assert.equal(controls.debug.contextIdentity, false);
-});
-
 test("hook runtime-events mode defaults to summary and recognizes verbose values", () => {
-  assert.equal(resolveHookRuntimeEventsMode({ env: {} }), "summary");
-  assert.equal(isHookRuntimeEventVerboseEnabled({ env: {} }), false);
+  assert.equal(resolveHookRuntimeEventsMode({}), "summary");
+  assert.equal(isHookRuntimeEventVerboseEnabled({}), false);
   for (const value of ["verbose", "trace", "debug", "full", "1", "true", "on", "yes"]) {
     assert.equal(
       isHookRuntimeEventVerboseEnabled({
-        env: { [RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode]: value },
+        [RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode]: value,
       }),
       true,
     );
   }
-});
-
-test("hook runtime-events mode prefers runtime/options before environment", () => {
-  assert.equal(
-    isHookRuntimeEventVerboseEnabled({
-      runtime: { systemRuntime: { hookRuntimeEventsMode: "summary" } },
-      env: { [RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode]: "verbose" },
-    }),
-    false,
-  );
-  assert.equal(
-    isHookRuntimeEventVerboseEnabled({
-      options: { hookRuntimeEventsMode: "verbose" },
-      env: { [RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode]: "summary" },
-    }),
-    true,
-  );
 });

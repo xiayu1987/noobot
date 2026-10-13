@@ -21,9 +21,6 @@ export class FileSystemExecutionRepository {
   }
 
   async _resolveSessionDir(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    await this.storageService.ensureRuntimeDirsByBasePath(
-      this.pathResolver.resolveBasePath(userId),
-    );
     const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
     const { sessionDir } = await resolver.resolveSessionScope(userId, sessionId, parentSessionId);
     return sessionDir;

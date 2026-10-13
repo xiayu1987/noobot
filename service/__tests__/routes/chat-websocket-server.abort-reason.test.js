@@ -36,7 +36,6 @@ test("timeout finalization exposes the canonical timeout error code", async () =
     sendEvent: (event, data) => sent.push({ event, data }),
     rejectUnpersistedTurnStatus: () => assert.fail("timeout status must persist"),
     translateText: (key) => key,
-    sessionLogConfig: {},
     webSocket: { close() {} },
     commitTurnLifecycle: async (command) => {
       committed.push(command);

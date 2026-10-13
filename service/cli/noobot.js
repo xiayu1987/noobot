@@ -9,7 +9,6 @@ import { flushJsonLineBatches } from "@noobot/runtime-events";
 import { resolveConfiguredSuperUserId, SUPER_ADMIN_ROLE } from "#agent/utils";
 import { createHeadlessRuntime } from "../bootstrap/create-headless-runtime.js";
 import { createInProcessChatTransport } from "../bootstrap/create-in-process-chat-transport.js";
-import { resolveSessionLogConfig } from "../ws/log-websocket-server.js";
 import { readCliAttachments } from "./attachments.js";
 import { CLI_ACTION, CLI_USAGE, CliUsageError, parseCliArgs } from "./cli-args.js";
 import { promptInteraction } from "./interaction-prompt.js";
@@ -161,9 +160,6 @@ export async function runCli({
     const transport = createInProcessChatTransport({
       appDependencies,
       connectorAccessPort,
-      sessionLogConfig: resolveSessionLogConfig({
-        workspaceRoot: appDependencies.workspaceRootPath(),
-      }),
     });
     return await runTurnWithRetry({
       runtime,

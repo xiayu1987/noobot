@@ -174,8 +174,8 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
     )
     .toBe(true);
   const transportLogPath = path.join(
-    sessionRoot(noobot.userId, noobot.sessionId),
-    "logs/transport.jsonl",
+    await sessionRoot(noobot.userId, noobot.sessionId),
+    "events/transport.jsonl",
   );
   await expect
     .poll(
@@ -440,20 +440,18 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   await expect(chatNavigatorPanel).toHaveClass(/is-collapsed/);
   await expect(connectorPanel).toHaveClass(/is-collapsed/);
   await expect(featurePanel).toHaveClass(/is-collapsed/);
-  const collapsedArtifactBox = await artifactPanelAfterReload.boundingBox();
-
-  const collapsedToolBox = await rightToolPanels.boundingBox();
-  const collapsedToolLeft = collapsedToolBox?.x ?? Number.POSITIVE_INFINITY;
-  expect((collapsedArtifactBox?.x || 0) + (collapsedArtifactBox?.width || 0)).toBeLessThanOrEqual(
-    collapsedToolLeft - 8,
-  );
+  // Panel width animates (--noobot-duration-normal); measure the settled layout, not mid-transition.
+  const rightEdge = (box) => (box?.x || 0) + (box?.width || 0);
+  const toolLeft = async () => (await rightToolPanels.boundingBox())?.x ?? Number.POSITIVE_INFINITY;
+  await expect
+    .poll(async () => (await toolLeft()) - rightEdge(await artifactPanelAfterReload.boundingBox()))
+    .toBeGreaterThanOrEqual(8);
 
   await page.getByTestId("session-artifact-panel-toggle").click();
   await expect(artifactPanelAfterReload).toHaveClass(/is-collapsed/);
-  const collapsedArtifactIconBox = await artifactPanelAfterReload.boundingBox();
-  expect(
-    (collapsedArtifactIconBox?.x || 0) + (collapsedArtifactIconBox?.width || 0),
-  ).toBeLessThanOrEqual(collapsedToolLeft - 8);
+  await expect
+    .poll(async () => (await toolLeft()) - rightEdge(await artifactPanelAfterReload.boundingBox()))
+    .toBeGreaterThanOrEqual(8);
 
   await page.getByTestId("right-feature-panel-toggle").click();
   await expect(featurePanel).not.toHaveClass(/is-collapsed/);

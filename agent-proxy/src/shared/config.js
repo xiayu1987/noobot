@@ -192,6 +192,7 @@ export const config = {
   ),
   trustedOrigins: envList("AGENT_PROXY_TRUSTED_ORIGINS", "trustedOrigins", ""),
   trustedIps: envList("AGENT_PROXY_TRUSTED_IPS", "trustedIps", ""),
+  trustedProxies: envList("AGENT_PROXY_TRUSTED_PROXIES", "trustedProxies", ""),
   httpRateLimitEnabled: envBoolean(
     "AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED",
     "httpRateLimitEnabled",

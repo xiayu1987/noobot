@@ -291,7 +291,8 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   const historyUserIndex = indexOf(/history-user-first/);
   const historyAssistantIndex = indexOf(/history-assistant-latest/);
   const toolCallIndex = messages.findIndex(
-    (item = {}) => item.role === "user" && /Tool call:/.test(String(item.content || "")),
+    (item = {}) =>
+      item.role === "user" && /^Tool call \[call-ctx\]: /.test(String(item.content || "")),
   );
   const toolResultIndex = messages.findIndex((item = {}) =>
     String(item.content || "").includes('"stdout":"/workspace"'),

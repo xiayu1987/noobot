@@ -204,6 +204,9 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     } else {
       expect(result.message).not.toContain("summary.nextAction");
     }
+    if (result.summary.state === TASK_SUMMARY_STATE.COMPLETE) {
+      expect(result.message).toContain("已核验的执行结果");
+    }
     expect(resultMessage.content.includes(fullSummaryContent)).toBe(false);
     expect(result.summary.details).toBeUndefined();
     const attachmentRefs = (resultMessage.transferEnvelopes || [])
@@ -310,9 +313,23 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     expect(invocationsReceivingReceipt.length).toBeGreaterThan(0);
   }
   const toolResultNames = messages.map(toolResultName).filter(Boolean);
-  expect(toolResultNames.filter((name) => name === "execute_script").length).toBeGreaterThanOrEqual(
-    2,
+  // Failed attempts may be retried; the three-step chain must succeed exactly once per step.
+  const succeededScriptResults = messages.filter(
+    (message) =>
+      toolResultName(message) === "execute_script" &&
+      JSON.parse(String(message.content || "{}"))?.ok === true,
   );
+  expect(succeededScriptResults).toHaveLength(3);
+  const succeededCallIds = new Set(
+    succeededScriptResults.map((message) => String(message.tool_call_id || "").trim()),
+  );
+  const succeededCommands = messages
+    .filter((message) => message.role === "assistant" && Array.isArray(message.tool_calls))
+    .flatMap((message) => message.tool_calls)
+    .filter((call) => succeededCallIds.has(toolCallId(call)))
+    .map((call) => String(toolCallArgs(call).command || "").trim());
+  expect(succeededCommands).toHaveLength(3);
+  expect(new Set(succeededCommands).size).toBe(3);
   expect(toolResultNames.filter((name) => name === "task_summary")).toHaveLength(
     summaryExchanges.length,
   );

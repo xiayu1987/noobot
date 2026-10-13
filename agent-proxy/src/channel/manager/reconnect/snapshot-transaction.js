@@ -19,9 +19,12 @@ export function createReconnectTransaction(snapshotRequests) {
       if (transaction.cancelled) return;
       transaction.cancelled = true;
       for (const request of snapshotRequests) {
-        const pendingRequest = request.channel?.pendingSnapshotRequests?.get(request.commandId);
-        request.channel?.pendingSnapshotRequests?.delete(request.commandId);
-        pendingRequest?.resolve?.({ ok: false, reason });
+        request.cancelled = true;
+        for (const commandId of request.commandIds) {
+          const pendingRequest = request.channel?.pendingSnapshotRequests?.get(commandId);
+          request.channel?.pendingSnapshotRequests?.delete(commandId);
+          pendingRequest?.resolve?.({ ok: false, reason });
+        }
         request.channel?.transport?.closeOwnedConnection(request.queryConnection, 1000, reason, {
           purpose: "snapshot_query",
         });
@@ -59,6 +62,7 @@ function logResolvedSnapshot(manager, channel, request, snapshotSequence) {
   manager.logSessionEvent(channel, {
     category: "transport",
     event: "agentProxy.reconnect.snapshot.resolved",
+    sessionId: request.sessionId,
     data: {
       sessionId: request.sessionId,
       commandId: request.commandId,
@@ -98,6 +102,7 @@ export function applySnapshotResults(manager, sessionsMap, snapshotResults) {
       category: "transport",
       level: "warn",
       event: "agentProxy.reconnect.snapshot.failed",
+      sessionId: request.sessionId,
       data: { sessionId: request.sessionId, commandId: request.commandId, reason },
     });
     if (reason === "session_not_found") {

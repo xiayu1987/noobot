@@ -45,7 +45,6 @@ function createSender() {
     webSocket: { readyState: 1, send: (_packet, callback) => callback() },
     state: {},
     logConnection: (event, data, routing) => logs.push({ event, data, routing }),
-    sessionLogConfig: {},
   });
   return { sendEvent, logs };
 }
@@ -92,7 +91,7 @@ test("persistent message event eventSent keeps the default backend-websocket rou
   assert.equal(eventSentRouting(logs, "evt-final"), undefined);
 });
 
-function createSlowSender(sessionLogConfig) {
+function createSlowSender() {
   const logs = [];
   const sendEvent = createOutboundEventSender({
     webSocket: {
@@ -102,7 +101,6 @@ function createSlowSender(sessionLogConfig) {
     },
     state: {},
     logConnection: (event, data, routing) => logs.push({ event, data, routing }),
-    sessionLogConfig,
   });
   return { sendEvent, logs };
 }
@@ -119,10 +117,15 @@ function slowFinalContent() {
   });
 }
 
-test("slow websocket send callback is logged to delivery-timing debug when enabled", async () => {
-  const { sendEvent, logs } = createSlowSender({
-    sessionLogControls: { debug: { backendDeliveryTiming: true } },
+test("slow websocket send callback is logged to delivery-timing debug when enabled", async (t) => {
+  const previous = process.env.NOOBOT_RUNTIME_EVENT_BACKEND_DELIVERY_TIMING_DEBUG;
+  process.env.NOOBOT_RUNTIME_EVENT_BACKEND_DELIVERY_TIMING_DEBUG = "true";
+  t.after(() => {
+    if (previous === undefined)
+      delete process.env.NOOBOT_RUNTIME_EVENT_BACKEND_DELIVERY_TIMING_DEBUG;
+    else process.env.NOOBOT_RUNTIME_EVENT_BACKEND_DELIVERY_TIMING_DEBUG = previous;
   });
+  const { sendEvent, logs } = createSlowSender();
   assert.equal(await sendEvent(MESSAGE_EVENT_WIRE_EVENT, slowFinalContent()), true);
   const slow = logs.filter((item) => item.event === "service.websocket.sendCallback.slow");
   assert.equal(slow.length, 1);
@@ -136,7 +139,7 @@ test("slow websocket send callback is logged to delivery-timing debug when enabl
 });
 
 test("slow websocket send callback is not timed when delivery-timing debug is off", async () => {
-  const { sendEvent, logs } = createSlowSender({});
+  const { sendEvent, logs } = createSlowSender();
   assert.equal(await sendEvent(MESSAGE_EVENT_WIRE_EVENT, slowFinalContent()), true);
   assert.equal(
     logs.some((item) => item.event === "service.websocket.sendCallback.slow"),

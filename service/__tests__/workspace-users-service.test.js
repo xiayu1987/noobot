@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { createWorkspaceUsersService } from "../services/workspace-users-service.js";
+import { withRuntimeEventsRoot } from "./runtime-events-root.test-helpers.js";
 
 async function createTempDir(prefix = "noobot-workspace-users-test-") {
   return mkdtemp(path.join(os.tmpdir(), prefix));
@@ -44,7 +45,6 @@ test("workspace-users-service: missing users file is an empty user table and is 
   try {
     const service = createWorkspaceUsersService({
       workspaceRootPath: () => tempDir,
-      runtimeEventsConfig: { workspaceRoot: path.join(tempDir, "runtime-root") },
     });
     assert.deepEqual(await service.readWorkspaceUsersConfig(), { users: [] });
     await assert.rejects(access(path.join(tempDir, "user.json")), { code: "ENOENT" });
@@ -53,58 +53,57 @@ test("workspace-users-service: missing users file is an empty user table and is 
   }
 });
 
-test("workspace-users-service: corrupt users file fails and writes sanitized system event", async () => {
-  const tempDir = await createTempDir();
-  const workspaceRoot = path.join(tempDir, "workspace-secret-token");
-  const runtimeRoot = path.join(tempDir, "runtime-root");
-  try {
-    await mkdir(workspaceRoot, { recursive: true });
-    await writeFile(
-      path.join(workspaceRoot, "user.json"),
-      "{ invalid SECRET_VALUE apikey=TOKEN",
-      "utf8",
-    );
+test("workspace-users-service: corrupt users file fails and writes sanitized system event", () =>
+  withRuntimeEventsRoot("noobot-workspace-users-events-", async (runtimeRoot) => {
+    const tempDir = await createTempDir();
+    const workspaceRoot = path.join(tempDir, "workspace-secret-token");
+    try {
+      await mkdir(workspaceRoot, { recursive: true });
+      await writeFile(
+        path.join(workspaceRoot, "user.json"),
+        "{ invalid SECRET_VALUE apikey=TOKEN",
+        "utf8",
+      );
 
-    const service = createWorkspaceUsersService({
-      workspaceRootPath: () => workspaceRoot,
-      runtimeEventsConfig: { workspaceRoot: runtimeRoot },
-    });
+      const service = createWorkspaceUsersService({
+        workspaceRootPath: () => workspaceRoot,
+      });
 
-    await assert.rejects(
-      service.readWorkspaceUsersConfig(),
-      /workspace users config is unreadable: user\.json/,
-    );
+      await assert.rejects(
+        service.readWorkspaceUsersConfig(),
+        /workspace users config is unreadable: user\.json/,
+      );
 
-    const eventFile = path.join(
-      runtimeRoot,
-      "system",
-      "runtime",
-      "events",
-      "system",
-      "service",
-      "config.jsonl",
-    );
-    await waitForFile(eventFile);
-    const [record] = await readJsonl(eventFile);
+      const eventFile = path.join(
+        runtimeRoot,
+        "system",
+        "runtime",
+        "events",
+        "system",
+        "service",
+        "config.jsonl",
+      );
+      await waitForFile(eventFile);
+      const [record] = await readJsonl(eventFile);
 
-    assert.equal(record.scope, "system");
-    assert.equal(record.source, "service");
-    assert.equal(record.category, "config");
-    assert.equal(record.level, "error");
-    assert.equal(record.channel, "direct");
-    assert.equal(record.event, "service.workspaceUsers.config.read.failed");
-    assert.equal(Object.prototype.hasOwnProperty.call(record, "sessionId"), false);
-    assert.deepEqual(record.data, {
-      fileName: "user.json",
-      filePathLength: path.join(workspaceRoot, "user.json").length,
-    });
-    assert.ok(record.error);
+      assert.equal(record.scope, "system");
+      assert.equal(record.source, "service");
+      assert.equal(record.category, "config");
+      assert.equal(record.level, "error");
+      assert.equal(record.channel, "direct");
+      assert.equal(record.event, "service.workspaceUsers.config.read.failed");
+      assert.equal(Object.prototype.hasOwnProperty.call(record, "sessionId"), false);
+      assert.deepEqual(record.data, {
+        fileName: "user.json",
+        filePathLength: path.join(workspaceRoot, "user.json").length,
+      });
+      assert.ok(record.error);
 
-    const serialized = JSON.stringify(record);
-    assert.equal(serialized.includes("SECRET_VALUE"), false);
-    assert.equal(serialized.includes("apikey=TOKEN"), false);
-    assert.equal(serialized.includes("workspace-secret-token"), false);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
-  }
-});
+      const serialized = JSON.stringify(record);
+      assert.equal(serialized.includes("SECRET_VALUE"), false);
+      assert.equal(serialized.includes("apikey=TOKEN"), false);
+      assert.equal(serialized.includes("workspace-secret-token"), false);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  }));

@@ -4,74 +4,69 @@
  * SPDX-License-Identifier: MIT
  */
 import { fatalSystemError } from "../../../shared/errors/index.js";
-import { filePath as path } from "@noobot/path-resolver";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
-import { fsMkdir, fsReaddir, fsRm } from "../../../shared/storage/fs-adapter.js";
+import { fsMkdir, fsRm } from "../../../shared/storage/fs-adapter.js";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 import { writeSessionArtifact } from "../../session-artifact-store.js";
-import { SESSION_ERROR_CODE, normalizeParentSessionId } from "@noobot/session-protocol";
+import {
+  SESSION_ERROR_CODE,
+  createSessionDeletedError,
+  normalizeParentSessionId,
+} from "@noobot/session-protocol";
 
 class SessionCrudMethods {
-  async listPersistedSessionBranchIds(userId, sessionId) {
+  async registerSessionTreeNode(userId, sessionId, parentSessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return [];
-    const { sessionDir } = await this.resolveSessionScope(userId, normalizedSessionId);
-    const sessionIds = [];
-    const visit = async (directory) => {
-      if (!(await this.storageService.exists(path.join(directory, "session.json")))) return;
-      const session = await this.storageService.readJson(
-        path.join(directory, "session.json"),
-        null,
-      );
-      const persistedSessionId = String(session?.sessionId || "").trim();
-      if (persistedSessionId) sessionIds.push(persistedSessionId);
-      const entries = await fsReaddir(directory, { withFileTypes: true }).catch(() => []);
-      for (const entry of entries) {
-        if (!entry.isDirectory() || String(entry.name || "").startsWith(".")) continue;
-        await visit(path.join(directory, entry.name));
+    if (!normalizedSessionId) {
+      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
+      });
+    }
+    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
+    return this.sessionTreeRepository.withLock(userId, async () => {
+      if (await this.isSessionDeleted(userId, normalizedSessionId)) {
+        throw createSessionDeletedError({ userId, sessionId: normalizedSessionId });
       }
-    };
-    await visit(sessionDir);
-    return [...new Set(sessionIds)];
+      if (
+        normalizedParentSessionId &&
+        (await this.isSessionDeleted(userId, normalizedParentSessionId))
+      ) {
+        throw createSessionDeletedError({ userId, sessionId: normalizedParentSessionId });
+      }
+      const sessionTree = await this.sessionTreeRepository.getTree(userId);
+      if (normalizedParentSessionId && !sessionTree.nodes[normalizedParentSessionId]) {
+        throw fatalSystemError(
+          `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${normalizedParentSessionId}`,
+          {
+            code: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
+            details: { normalizedParentSessionId },
+          },
+        );
+      }
+      const currentNode = sessionTree.nodes[normalizedSessionId];
+      if (currentNode) {
+        if (currentNode.parentSessionId === normalizedParentSessionId) return true;
+        const error = new Error("session tree parent conflicts with requested parent");
+        error.statusCode = 409;
+        error.code = SESSION_ERROR_CODE.PARENT_SESSION_SCOPE_CONFLICT;
+        throw error;
+      }
+      sessionTree.nodes[normalizedSessionId] = {
+        sessionId: normalizedSessionId,
+        parentSessionId: normalizedParentSessionId,
+      };
+      await this.sessionTreeRepository.saveTree(userId, sessionTree);
+      return true;
+    });
   }
 
   async listSessionIds(userId) {
-    const basePath = this._basePath(userId);
-    await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    let entries = [];
-    try {
-      entries = await fsReaddir(this._sessionRoot(userId), { withFileTypes: true });
-    } catch {
-      return [];
-    }
+    const sessionTree = await this.sessionTreeRepository.getTree(userId);
     const deletedSessions = await this._readDeletedSessions(userId);
-    const deletedSet = new Set(Object.keys(deletedSessions?.sessions || {}));
-    const sessionIds = [];
-    const visit = async (directory) => {
-      const directoryEntries =
-        directory === this._sessionRoot(userId)
-          ? entries
-          : await fsReaddir(directory, { withFileTypes: true });
-      for (const entry of directoryEntries) {
-        if (!entry.isDirectory() || String(entry.name || "").startsWith(".")) continue;
-        if (
-          String(entry.name || "").includes(".repair-") ||
-          String(entry.name || "").endsWith(".mutation-lock")
-        )
-          continue;
-        const childDir = path.join(directory, entry.name);
-        const sessionFileExists = await this.storageService.exists(
-          path.join(childDir, "session.json"),
-        );
-        if (!sessionFileExists) continue;
-        const sessionId = String(entry.name || "").trim();
-        if (sessionId && !deletedSet.has(sessionId)) sessionIds.push(sessionId);
-        await visit(childDir);
-      }
-    };
-    await visit(this._sessionRoot(userId));
-    return [...new Set(sessionIds)];
+    return Object.keys(sessionTree.nodes).filter(
+      (sessionId) => !Object.hasOwn(deletedSessions.sessions, sessionId),
+    );
   }
 
   async ensureSession({
@@ -86,8 +81,6 @@ class SessionCrudMethods {
       sessionId,
       parentSessionId,
       async () => {
-        const basePath = this._basePath(userId);
-        await this.storageService.ensureRuntimeDirsByBasePath(basePath);
         const { resolvedParentSessionId, sessionDir, sessionFile } = await this.resolveSessionScope(
           userId,
           sessionId,
@@ -95,31 +88,38 @@ class SessionCrudMethods {
           persistenceContext,
         );
 
-        await fsMkdir(sessionDir, { recursive: true });
-
-        if (!(await this.storageService.exists(sessionFile))) {
-          const payload = normalizeSessionEntity(
-            {
-              sessionId,
-              parentSessionId: resolvedParentSessionId || "",
-              caller: meta?.caller || "user",
-              modelAlias: meta?.modelAlias || "",
-              currentTaskId: "",
-              shortMemoryCheckpoint: 0,
-              messages: [],
-              selectedConnectorIds: [],
-            },
-            { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
-          );
-          await writeSessionArtifact({
-            storageService: this.storageService,
-            sessionDir,
-            sessionPayload: payload,
-            atomic: true,
-          });
+        if (await this.storageService.exists(sessionFile)) {
           if (!persistenceContext) {
-            await this.upsertSessionSummary(userId, payload);
+            this.sessionTreeRepository.resolveRootSessionIdFromTree(
+              sessionId,
+              await this.sessionTreeRepository.getTree(userId),
+            );
           }
+          return true;
+        }
+        await fsMkdir(sessionDir, { recursive: true });
+        const payload = normalizeSessionEntity(
+          {
+            sessionId,
+            parentSessionId: resolvedParentSessionId || "",
+            caller: meta?.caller || "user",
+            modelAlias: meta?.modelAlias || "",
+            currentTaskId: "",
+            shortMemoryCheckpoint: 0,
+            messages: [],
+            selectedConnectorIds: [],
+          },
+          { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
+        );
+        await writeSessionArtifact({
+          storageService: this.storageService,
+          sessionDir,
+          sessionPayload: payload,
+          atomic: true,
+        });
+        if (!persistenceContext) {
+          await this.registerSessionTreeNode(userId, sessionId, resolvedParentSessionId);
+          await this.upsertSessionSummary(userId, payload);
         }
         return true;
       },
@@ -275,6 +275,9 @@ class SessionCrudMethods {
           sessionPayload: payload,
           atomic: true,
         });
+        if (createOnly && !persistenceContext) {
+          await this.registerSessionTreeNode(userId, sessionId, resolvedParentSessionId);
+        }
         try {
           await this.upsertSessionSummary(userId, payload);
         } catch (summaryError) {

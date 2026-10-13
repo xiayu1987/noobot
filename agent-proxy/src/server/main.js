@@ -37,7 +37,7 @@ import { DownstreamConnectionRegistry } from "../websocket/downstream-connection
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
@@ -164,7 +164,8 @@ function isLogProxyPath(pathname = "") {
 }
 
 function agentProxyLogDiagnostic(message, data = {}) {
-  void writeRoutedRuntimeEvent({
+  void writeRuntimeEvent({
+    scope: "system",
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,
@@ -182,7 +183,7 @@ function agentProxyLogDiagnostic(message, data = {}) {
 }
 
 function logAgentProxyEvent(apiKey = "", event = {}) {
-  sessionLogClient.log(apiKey, event);
+  sessionLogClient.log(apiKey, { ...event, scope: "system" });
 }
 
 function proxyUpgradeToHttpUpstream(request, socket, head) {
@@ -299,7 +300,7 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
 const httpServer = http.createServer((request, response) => {
   const locale = resolveLocaleFromRequest(request);
   const pathname = parseRequestPathname(request);
-  const clientIp = getClientIp(request);
+  const clientIp = getClientIp(request, config.trustedProxies);
   const requestOrigin = String(request?.headers?.origin || "").trim();
 
   if (!isIpTrusted(clientIp, config.trustedIps)) {
@@ -369,7 +370,7 @@ const websocketServer = new WebSocketServer({
 
 httpServer.on("upgrade", (request, socket, head) => {
   const { pathname } = parseRequestQuery(request);
-  const clientIp = getClientIp(request);
+  const clientIp = getClientIp(request, config.trustedProxies);
   const requestOrigin = String(request?.headers?.origin || "").trim();
   if (!isIpTrusted(clientIp, config.trustedIps)) {
     socket.destroy();
@@ -400,7 +401,6 @@ httpServer.on("upgrade", (request, socket, head) => {
     logAgentProxyEvent(parseRequestQuery(request).apiKey, {
       category: "agent-proxy",
       event: "agentProxy.logs.upgrade",
-      sessionId: "agent-proxy",
       data: { pathname, clientIp },
     });
     proxyUpgradeToHttpUpstream(request, socket, head);
@@ -448,7 +448,6 @@ websocketServer.on("connection", (socket, request) => {
   logAgentProxyEvent(connectionApiKey, {
     category: "agent-proxy",
     event: "agentProxy.chat.connected",
-    sessionId: "agent-proxy",
     data: { pathname: requestInfo.pathname, socketId: socket.__agentProxySocketId },
   });
 
@@ -475,7 +474,6 @@ websocketServer.on("connection", (socket, request) => {
     logAgentProxyEvent(connectionApiKey, {
       category: "agent-proxy",
       event: "agentProxy.chat.closed",
-      sessionId: "agent-proxy",
       data: {
         socketId: socket.__agentProxySocketId,
         channels: [...(socket.__agentProxyChannelKeys || [])],
@@ -489,7 +487,6 @@ websocketServer.on("connection", (socket, request) => {
       category: "agent-proxy",
       level: "warn",
       event: "agentProxy.chat.error",
-      sessionId: "agent-proxy",
       data: {
         socketId: socket.__agentProxySocketId,
         channels: [...(socket.__agentProxyChannelKeys || [])],

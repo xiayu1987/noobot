@@ -7,26 +7,30 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
-import { RUNTIME_EVENT_SCOPES, writeRoutedRuntimeEvent, writeRuntimeEvent } from "../src/index.js";
+import { RUNTIME_EVENT_SCOPES, writeRuntimeEvent } from "../src/index.js";
 
-import { pathExists, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
+import {
+  persistSession,
+  readJsonl,
+  tempRoot,
+  useRuntimeEventsEnv,
+} from "./runtime-events-test-fixtures.js";
 
 test("runtime-events writer drops debug session logs when their control is disabled", async () => {
   const root = await tempRoot();
-  const result = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "state.transition",
-      userId: "admin",
-      sessionId: "session-debug-default",
-      debugType: "state-machine",
-      data: {},
-    },
-    { root, includeProcess: false, sessionLogControls: { debug: { stateMachine: false } } },
-  );
+  await persistSession(root, "admin", "session-debug-default");
+  useRuntimeEventsEnv({ debug: { stateMachine: false } });
+  const result = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "state.transition",
+    userId: "admin",
+    sessionId: "session-debug-default",
+    debugType: "state-machine",
+    data: {},
+  });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, true);
@@ -34,30 +38,27 @@ test("runtime-events writer drops debug session logs when their control is disab
 
 test("runtime-events writer filters session logs by business log control", async () => {
   const root = await tempRoot();
-  const skipped = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "message",
-      level: "info",
-      event: "chat.message",
-      userId: "admin",
-      sessionId: "session-category-filter",
-    },
-    { root, includeProcess: false, sessionLogControls: { log: { message: false } } },
-  );
-  const recorded = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "state",
-      level: "info",
-      event: "state.update",
-      userId: "admin",
-      sessionId: "session-category-filter",
-    },
-    { root, includeProcess: false, sessionLogControls: { log: { state: true, message: false } } },
-  );
+  await persistSession(root, "admin", "session-category-filter");
+  useRuntimeEventsEnv({ log: { message: false } });
+  const skipped = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "message",
+    level: "info",
+    event: "chat.message",
+    userId: "admin",
+    sessionId: "session-category-filter",
+  });
+  useRuntimeEventsEnv({ log: { state: true, message: false } });
+  const recorded = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "state",
+    level: "info",
+    event: "state.update",
+    userId: "admin",
+    sessionId: "session-category-filter",
+  });
 
   assert.equal(skipped.ok, true);
   assert.equal(skipped.skipped, true);
@@ -67,47 +68,36 @@ test("runtime-events writer filters session logs by business log control", async
 
 test("runtime-events writer separates debug session logs by debug type", async () => {
   const root = await tempRoot();
-  const stateMachine = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "state.transition",
-      userId: "admin",
-      sessionId: "session-debug-files",
-      debugType: "state-machine",
-      data: {},
-    },
-    {
-      root,
-      includeProcess: false,
-      sessionLogControls: { debug: { stateMachine: true, resend: true } },
-    },
-  );
-  const resend = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "resend.tick",
-      userId: "admin",
-      sessionId: "session-debug-files",
-      debugType: "resend",
-      data: {},
-    },
-    {
-      root,
-      includeProcess: false,
-      sessionLogControls: { debug: { stateMachine: true, resend: true } },
-    },
-  );
+  await persistSession(root, "admin", "session-debug-files");
+  useRuntimeEventsEnv({ debug: { stateMachine: true, resend: true } });
+  const stateMachine = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "state.transition",
+    userId: "admin",
+    sessionId: "session-debug-files",
+    debugType: "state-machine",
+    data: {},
+  });
+  useRuntimeEventsEnv({ debug: { stateMachine: true, resend: true } });
+  const resend = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "resend.tick",
+    userId: "admin",
+    sessionId: "session-debug-files",
+    debugType: "resend",
+    data: {},
+  });
 
   assert.equal(stateMachine.ok, true);
   assert.equal(resend.ok, true);
-  assert.match(stateMachine.file, /session-debug-files\/debug-state-machine\.jsonl$/);
-  assert.match(resend.file, /session-debug-files\/debug-resend\.jsonl$/);
+  assert.match(stateMachine.file, /session-debug-files\/events\/debug-state-machine\.jsonl$/);
+  assert.match(resend.file, /session-debug-files\/events\/debug-resend\.jsonl$/);
   assert.notEqual(stateMachine.file, resend.file);
   assert.equal((await readJsonl(stateMachine.file))[0].category, "debug");
   assert.equal((await readJsonl(resend.file))[0].category, "debug");
@@ -115,6 +105,7 @@ test("runtime-events writer separates debug session logs by debug type", async (
 
 test("agent context debug logs default off and use their own file when enabled", async () => {
   const root = await tempRoot();
+  await persistSession(root, "admin", "session-agent-context");
   const event = {
     source: "agent",
     scope: "session",
@@ -126,96 +117,83 @@ test("agent context debug logs default off and use their own file when enabled",
     debugType: "agent-context",
     data: { envelope: { protocolVersion: 1 } },
   };
-  const skipped = await writeRuntimeEvent(event, { root, includeProcess: false });
+  const skipped = await writeRuntimeEvent(event);
   assert.equal(skipped.skipped, true);
 
-  const recorded = await writeRuntimeEvent(event, {
-    root,
-    includeProcess: false,
-    sessionLogControls: { debug: { agentContext: true } },
-  });
+  useRuntimeEventsEnv({ debug: { agentContext: true } });
+  const recorded = await writeRuntimeEvent(event);
   assert.equal(recorded.ok, true);
   assert.equal(recorded.skipped, undefined);
-  assert.match(recorded.file, /session-agent-context\/debug-agent-context\.jsonl$/);
+  assert.match(recorded.file, /session-agent-context\/events\/debug-agent-context\.jsonl$/);
 });
 
 test("agent context debug logs honor an explicit disabled control", async () => {
   const root = await tempRoot();
-  const disabled = await writeRuntimeEvent(
-    {
-      source: "agent",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "agent.context.executionScopeCreated",
-      userId: "admin",
-      sessionId: "session-agent-context-disabled",
-      debugType: "agent-context",
-      data: {},
-    },
-    {
-      root,
-      includeProcess: false,
-      sessionLogControls: { debug: { agentContext: false } },
-    },
-  );
+  await persistSession(root, "admin", "session-agent-context-disabled");
+  useRuntimeEventsEnv({ debug: { agentContext: false } });
+  const disabled = await writeRuntimeEvent({
+    source: "agent",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "agent.context.executionScopeCreated",
+    userId: "admin",
+    sessionId: "session-agent-context-disabled",
+    debugType: "agent-context",
+    data: {},
+  });
   assert.equal(disabled.skipped, true);
 });
 
 test("runtime-events writer filters debug session logs by business debug control", async () => {
   const root = await tempRoot();
-  const skipped = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "resend.tick",
-      userId: "admin",
-      sessionId: "session-debug-type",
-      debugType: "resend",
-      data: {},
-    },
-    { root, includeProcess: false, sessionLogControls: { debug: { resend: false } } },
-  );
-  const recorded = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "state.transition",
-      userId: "admin",
-      sessionId: "session-debug-type",
-      debugType: "state-machine",
-      data: {},
-    },
-    { root, includeProcess: false, sessionLogControls: { debug: { stateMachine: true } } },
-  );
+  await persistSession(root, "admin", "session-debug-type");
+  useRuntimeEventsEnv({ debug: { resend: false } });
+  const skipped = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "resend.tick",
+    userId: "admin",
+    sessionId: "session-debug-type",
+    debugType: "resend",
+    data: {},
+  });
+  useRuntimeEventsEnv({ debug: { stateMachine: true } });
+  const recorded = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "state.transition",
+    userId: "admin",
+    sessionId: "session-debug-type",
+    debugType: "state-machine",
+    data: {},
+  });
 
   assert.equal(skipped.ok, true);
   assert.equal(skipped.skipped, true);
   assert.equal(recorded.ok, true);
-  assert.match(recorded.file, /session-debug-type\/debug-state-machine\.jsonl$/);
+  assert.match(recorded.file, /session-debug-type\/events\/debug-state-machine\.jsonl$/);
   assert.equal((await readJsonl(recorded.file)).length, 1);
 });
 
 test("runtime-events writer rejects unregistered debug types", async () => {
   const root = await tempRoot();
-  const result = await writeRuntimeEvent(
-    {
-      source: "frontend",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "unknown.trace",
-      userId: "admin",
-      sessionId: "session-debug-unknown",
-      debugType: "unknown-debug",
-      data: {},
-    },
-    { root, includeProcess: false },
-  );
+  await persistSession(root, "admin", "session-debug-unknown");
+  const result = await writeRuntimeEvent({
+    source: "frontend",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "unknown.trace",
+    userId: "admin",
+    sessionId: "session-debug-unknown",
+    debugType: "unknown-debug",
+    data: {},
+  });
 
   assert.equal(result.ok, false);
   assert.match(result.error.message, /Invalid runtime event debugType: unknown-debug/);
@@ -223,32 +201,28 @@ test("runtime-events writer rejects unregistered debug types", async () => {
 
 test("runtime-events writer never suppresses an error with a disabled debug control", async () => {
   const root = await tempRoot();
-  const result = await writeRuntimeEvent(
-    {
-      source: "agent",
-      scope: "session",
-      category: "debug",
-      level: "error",
-      event: "agent.contextIdentity.failed",
-      userId: "admin",
-      sessionId: "session-debug-error",
-      debugType: "context-identity",
-      data: { reason: "invalid identity" },
-    },
-    {
-      root,
-      includeProcess: false,
-      sessionLogControls: { debug: { contextIdentity: false } },
-    },
-  );
+  await persistSession(root, "admin", "session-debug-error");
+  useRuntimeEventsEnv({ debug: { contextIdentity: false } });
+  const result = await writeRuntimeEvent({
+    source: "agent",
+    scope: "session",
+    category: "debug",
+    level: "error",
+    event: "agent.contextIdentity.failed",
+    userId: "admin",
+    sessionId: "session-debug-error",
+    debugType: "context-identity",
+    data: { reason: "invalid identity" },
+  });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
-  assert.match(result.file, /session-debug-error\/debug-context-identity\.jsonl$/);
+  assert.match(result.file, /session-debug-error\/events\/debug-context-identity\.jsonl$/);
 });
 
 test("disabled debug logs are skipped before payload sanitization", async () => {
   const root = await tempRoot();
+  await persistSession(root, "admin", "session-skip-before-sanitize");
   let payloadReads = 0;
   const data = {};
   Object.defineProperty(data, "chunk", {
@@ -259,29 +233,28 @@ test("disabled debug logs are skipped before payload sanitization", async () => 
     },
   });
 
-  const result = await writeRuntimeEvent(
-    {
-      source: "service",
-      scope: "session",
-      category: "debug",
-      level: "debug",
-      event: "service.authorityOutbox.eventSent",
-      userId: "admin",
-      sessionId: "session-skip-before-sanitize",
-      debugType: "stream-delta",
-      data,
-    },
-    { root, includeProcess: false, sessionLogControls: { debug: { frontendStreamDelta: false } } },
-  );
+  useRuntimeEventsEnv({ debug: { frontendStreamDelta: false } });
+  const result = await writeRuntimeEvent({
+    source: "service",
+    scope: "session",
+    category: "debug",
+    level: "debug",
+    event: "service.authorityOutbox.eventSent",
+    userId: "admin",
+    sessionId: "session-skip-before-sanitize",
+    debugType: "stream-delta",
+    data,
+  });
 
   assert.equal(result.skipped, true);
   assert.equal(payloadReads, 0);
   assert.equal("data" in result.record, false);
 });
 
-test("routed debug logs without session context still honor their debug control", async () => {
+test("system debug logs still honor their debug control", async () => {
   const root = await tempRoot();
   const event = {
+    scope: RUNTIME_EVENT_SCOPES.SYSTEM,
     source: "frontend",
     category: "debug",
     level: "debug",
@@ -291,22 +264,17 @@ test("routed debug logs without session context still honor their debug control"
     data: { candidateCount: 100 },
   };
 
-  const skipped = await writeRoutedRuntimeEvent(event, {
-    root,
-    includeProcess: false,
-    sessionLogControls: { debug: { frontendToolLogWindow: false } },
-  });
+  useRuntimeEventsEnv({ debug: { frontendToolLogWindow: false } });
+  const skipped = await writeRuntimeEvent(event);
 
   assert.equal(skipped.ok, true);
   assert.equal(skipped.skipped, true);
   assert.equal(skipped.record.scope, "system");
-  assert.equal(await pathExists(path.join(root, "system", "frontend", "debug.jsonl")), false);
 
-  const recorded = await writeRoutedRuntimeEvent(event, {
-    root,
-    includeProcess: false,
-    sessionLogControls: { debug: { frontendToolLogWindow: true } },
-  });
+  useRuntimeEventsEnv({ debug: { frontendToolLogWindow: true } });
+  const recorded = await writeRuntimeEvent(event);
+  assert.equal(recorded.file.startsWith(`${root}${path.sep}`), true);
+  assert.equal((await readJsonl(recorded.file)).length, 1);
 
   assert.equal(recorded.ok, true);
   assert.equal(recorded.skipped, undefined);
@@ -316,17 +284,15 @@ test("routed debug logs without session context still honor their debug control"
 });
 
 test("non-debug system runtime events are not governed by session log controls", async () => {
-  const root = await tempRoot();
-  const result = await writeRoutedRuntimeEvent(
-    {
-      scope: RUNTIME_EVENT_SCOPES.SYSTEM,
-      source: "service",
-      category: "system",
-      level: "info",
-      event: "service.runtime.ready",
-    },
-    { root, includeProcess: false, sessionLogControls: { log: { system: false } } },
-  );
+  await tempRoot();
+  useRuntimeEventsEnv({ log: { system: false } });
+  const result = await writeRuntimeEvent({
+    scope: RUNTIME_EVENT_SCOPES.SYSTEM,
+    source: "service",
+    category: "system",
+    level: "info",
+    event: "service.runtime.ready",
+  });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);

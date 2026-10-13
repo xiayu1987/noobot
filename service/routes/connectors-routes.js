@@ -27,7 +27,7 @@ async function removeConnectorFromSessionSelections({ bot, userId, connectorId }
   let updatedSessionCount = 0;
   for (const sessionId of sessionIds) {
     const rootSessionId = await bot.session.getRootSessionId({ userId, sessionId });
-    if (!rootSessionId || visitedRoots.has(rootSessionId)) continue;
+    if (visitedRoots.has(rootSessionId)) continue;
     visitedRoots.add(rootSessionId);
     const selectedConnectorIds = await bot.session.getRootSessionSelectedConnectorIds({
       userId,

@@ -7,7 +7,7 @@ import { HTTP_STATUS } from "#agent/constants";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
 export function sendUpgradeError(
@@ -25,13 +25,7 @@ export function sendUpgradeError(
 export function registerWebSocketUpgrade(
   server,
   webSocketServer,
-  {
-    resolveRequestLocale,
-    defaultLocale,
-    translateText,
-    resolveAuthByApiKey,
-    sessionLogConfig,
-  } = {},
+  { resolveRequestLocale, defaultLocale, translateText, resolveAuthByApiKey } = {},
 ) {
   server.on("upgrade", (request, socket, head) => {
     const requestLocale = resolveRequestLocale(request, defaultLocale);
@@ -41,7 +35,8 @@ export function registerWebSocketUpgrade(
     } catch (error) {
       const rawUrl = String(request?.url || "");
       const urlPathPreview = rawUrl.split("?")[0].slice(0, 200);
-      void writeRoutedRuntimeEvent({
+      void writeRuntimeEvent({
+        scope: "system",
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
@@ -52,7 +47,7 @@ export function registerWebSocketUpgrade(
           urlLength: rawUrl.length,
         },
         error,
-      }, sessionLogConfig);
+      });
       sendUpgradeError(
         socket,
         HTTP_STATUS.BAD_REQUEST,
@@ -69,14 +64,15 @@ export function registerWebSocketUpgrade(
 
     const authInfo = resolveAuthByApiKey(request);
     if (!authInfo) {
-      void writeRoutedRuntimeEvent({
+      void writeRuntimeEvent({
+        scope: "system",
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         category: RUNTIME_EVENT_CATEGORIES.BACKEND_WEBSOCKET,
         level: "warn",
         event: "service.websocket.upgrade.authentication.failed",
         data: { pathname: requestPathname },
-      }, sessionLogConfig);
+      });
       sendUpgradeError(
         socket,
         HTTP_STATUS.UNAUTHORIZED,
@@ -84,13 +80,14 @@ export function registerWebSocketUpgrade(
       );
       return;
     }
-    void writeRoutedRuntimeEvent({
+    void writeRuntimeEvent({
+      scope: "system",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.BACKEND_WEBSOCKET,
       event: "service.websocket.upgrade.authentication.succeeded",
       data: { pathname: requestPathname },
-    }, sessionLogConfig);
+    });
     request.auth = authInfo;
     request.locale = requestLocale;
 

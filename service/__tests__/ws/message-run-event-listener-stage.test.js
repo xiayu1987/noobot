@@ -14,7 +14,6 @@ import { createTestLifecycleEnvelope } from "../routes/chat-websocket-server.tur
 function createListener(dispatchResult, runHandle = {}) {
   const calls = [];
   const context = {
-    sessionLogConfig: {},
     state: { currentRunMeta: { dialogProcessId: "dialog-1" }, currentTurnScopeId: "scope-1" },
     lifecycle: {},
     dispatchAuthorityEvents: async (request) => {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
-import { admissionRetryDelayMs } from "../helpers/http-admission.js";
+import { ADMISSION_RETRY_BUDGET_MS } from "../helpers/http-admission.js";
 
 export function readE2eCredentials(env = process.env) {
   const userId = String(env.NOOBOT_E2E_USER_ID || "").trim();
@@ -15,24 +15,25 @@ export function readE2eCredentials(env = process.env) {
   return Object.freeze({ userId, connectCode });
 }
 
+// The client owns 429 retries (Retry-After backoff); the fixture clicks once and
+// waits for the client's final admitted connect response.
 export async function connectThroughUi(page, credentials) {
   await page.locator(".custom-input input").first().fill(credentials.userId);
   await page.locator(".connect-input input").fill(credentials.connectCode);
-  for (;;) {
-    const responsePromise = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/internal/connect") && response.request().method() === "POST",
-    );
-    await page.locator(".connect-btn").click();
-    const response = await responsePromise;
-    const payload = await response.json();
-    await expect(page.locator(".connect-btn")).not.toHaveClass(/is-loading/);
-    if (response.status() === 429) {
-      await page.waitForTimeout(admissionRetryDelayMs(response, payload));
-      continue;
-    }
-    expect(response.ok(), String(payload?.error || "connection failed")).toBe(true);
-    await expect(page.locator(".status-btn.connected")).toBeVisible();
-    return payload;
-  }
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/internal/connect") &&
+      response.request().method() === "POST" &&
+      response.status() !== 429,
+    { timeout: ADMISSION_RETRY_BUDGET_MS },
+  );
+  await page.locator(".connect-btn").click();
+  const response = await responsePromise;
+  const payload = await response.json();
+  expect(response.ok(), String(payload?.error || "connection failed")).toBe(true);
+  await expect(page.locator(".connect-btn")).not.toHaveClass(/is-loading/, {
+    timeout: ADMISSION_RETRY_BUDGET_MS,
+  });
+  await expect(page.locator(".status-btn.connected")).toBeVisible();
+  return payload;
 }

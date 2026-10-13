@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { RUNTIME_EVENTS_CONFIG_ENVS } from "@noobot/shared/runtime-events-config";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
@@ -130,13 +131,17 @@ test("harness plugin emits hook summary via client emitter by default", async ()
   assert.equal(summary.data?.fsmRejected, false);
 });
 
-test("harness plugin keeps hook start/end via client emitter in verbose mode", async () => {
+test("harness plugin keeps hook start/end via client emitter in verbose mode", async (t) => {
+  const modeEnv = RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode;
+  const previousMode = process.env[modeEnv];
+  process.env[modeEnv] = "verbose";
+  t.after(() => {
+    if (previousMode === undefined) delete process.env[modeEnv];
+    else process.env[modeEnv] = previousMode;
+  });
   const hookManager = createAgentHookManager();
   const channelEvents = [];
-  registerHarnessCore(
-    { hookManager },
-    { trace: false, promptPolicy: false, hookRuntimeEventsMode: "verbose" },
-  );
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   await hookManager.emit("agent.before_turn", {
     userId: "u-channel",

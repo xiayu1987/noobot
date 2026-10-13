@@ -62,7 +62,6 @@ export function createChatRunService({
   normalizeLocale,
   defaultLocale,
   translateText,
-  sessionLogConfig,
   connectorAccessPort,
 } = {}) {
   function normalizeStringArray(input = []) {
@@ -138,7 +137,6 @@ export function createChatRunService({
       if (!RUN_COMMAND_TYPES.includes(command.commandType)) throw new Error("run_command_required");
       acceptedCommand = command;
       void recordServiceAgentTransportDebug({
-        sessionLogConfig,
         event: "service.agentTransport.httpCommandReceived",
         command,
         userId: req.auth?.userId,
@@ -164,7 +162,6 @@ export function createChatRunService({
       res.json({ ok: true, ...result });
     } catch (error) {
       void recordServiceAgentTransportDebug({
-        sessionLogConfig,
         event: acceptedCommand
           ? "service.agentTransport.httpCommandProcessingFailed"
           : "service.agentTransport.httpCommandRejected",

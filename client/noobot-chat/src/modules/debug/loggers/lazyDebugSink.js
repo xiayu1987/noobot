@@ -12,25 +12,37 @@ export function isDebugTypeEnabled(sink, debugType) {
   return sink?.isEnabled?.(debugType) === true;
 }
 
+function text(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function buildLazyDebugRecord(debugType, event, payload = {}) {
+  const data = payload && typeof payload === "object" ? payload : {};
+  const sessionId = text(data.sessionId);
+  const base = {
+    category: "debug",
+    level: "debug",
+    debugType,
+    event,
+    data: { event, ...data },
+  };
+  if (!sessionId) return { ...base, scope: "system" };
+  const parentSessionId = text(data.parentSessionId);
+  return {
+    ...base,
+    scope: "session",
+    sessionId,
+    ...(parentSessionId ? { parentSessionId } : {}),
+    dialogProcessId: text(data.dialogProcessId),
+    turnScopeId: text(data.turnScopeId),
+  };
+}
+
 export function emitLazyDebug(sink, debugType, event, payload = {}) {
   if (!isDebugTypeEnabled(sink, debugType)) return false;
-  return sink.debug(debugType, () => {
-    const resolvedPayload = typeof payload === "function" ? payload() : payload;
-    return {
-      category: "debug",
-      level: "debug",
-      debugType,
-      event,
-      sessionId: resolvedPayload?.sessionId || resolvedPayload?.runState?.sessionId || "",
-      dialogProcessId:
-        resolvedPayload?.dialogProcessId || resolvedPayload?.runState?.dialogProcessId || "",
-      turnScopeId: resolvedPayload?.turnScopeId || resolvedPayload?.runState?.turnScopeId || "",
-      data: {
-        event,
-        ...(resolvedPayload && typeof resolvedPayload === "object" ? resolvedPayload : {}),
-      },
-    };
-  });
+  return sink.debug(debugType, () =>
+    buildLazyDebugRecord(debugType, event, typeof payload === "function" ? payload() : payload),
+  );
 }
 
 export function emitLazyDebugSafely(sink, debugType, event, payload = {}) {

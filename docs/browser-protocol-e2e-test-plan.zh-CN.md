@@ -187,8 +187,10 @@ turn.processing_started
 
 每条用例结束后审计：
 
+会话目录沿 `runtime/session/session-tree.json` 的树链嵌套（根会话在最外层，子会话位于父会话目录下），下文 `<sessionDir>` 指该嵌套目录：
+
 ```text
-workspace/<userId>/runtime/session/<sessionId>/
+workspace/<userId>/runtime/session/<rootSessionId>/.../<sessionId>/
 ├── session.json
 ├── session-summary.json
 ├── execution.json
@@ -213,8 +215,7 @@ workspace/<userId>/runtime/session/<sessionId>/
 快照路径：
 
 ```text
-workspace/<userId>/runtime/session/<sessionId>/model-message-snapshots/
-<dialogProcessId>__<turnScopeId>.json
+<sessionDir>/model-message-snapshots/<dialogProcessId>__<turnScopeId>.json
 ```
 
 断言：

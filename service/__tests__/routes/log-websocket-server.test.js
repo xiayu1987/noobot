@@ -7,34 +7,51 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
 import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
 import { flushJsonLineBatches } from "@noobot/runtime-events";
+import { registerLogWebSocketServer, writeSessionLogEvent } from "../../ws/log-websocket-server.js";
 import {
-  cleanupSessionLogs,
-  registerLogWebSocketServer,
-  resolveSessionLogConfig,
-  writeSessionLogEvent,
-} from "../../ws/log-websocket-server.js";
+  persistSession,
+  sessionDirPath,
+  withRuntimeEventsEnv,
+  withRuntimeEventsRoot,
+} from "../runtime-events-root.test-helpers.js";
 
-async function withTempLogDir() {
-  return fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-logs-"));
+async function sessionEventFile(workspaceRoot, sessionId, fileName) {
+  return path.join(await sessionDirPath(workspaceRoot, "u1", sessionId), "events", fileName);
 }
 
-async function startLogServer({ logConfig, resolveAuthByApiKey = () => ({ userId: "u1" }) } = {}) {
+async function waitForJsonLines(file, predicate = (records) => records.length > 0) {
+  const deadline = Date.now() + 2000;
+  for (;;) {
+    await flushJsonLineBatches();
+    try {
+      const records = (await fs.readFile(file, "utf8"))
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
+      if (predicate(records)) return records;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${file}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+async function startLogServer({ resolveAuthByApiKey = () => ({ userId: "u1" }) } = {}) {
   const server = createServer((_req, res) => {
     res.statusCode = 404;
     res.end("not-found");
   });
-  const registered = registerLogWebSocketServer(server, { resolveAuthByApiKey, logConfig });
+  const registered = registerLogWebSocketServer(server, { resolveAuthByApiKey });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   return { server, registered };
 }
 
 async function closeLogServer(server, registered) {
-  clearInterval(registered?.cleanupTimer);
   registered?.webSocketServer?.close?.();
   await new Promise((resolve) => server.close(resolve));
 }
@@ -64,134 +81,130 @@ function sendLogWs({
   });
 }
 
-test("log-websocket-server: writes session logs by category", async () => {
-  const logRoot = await withTempLogDir();
-  const logConfig = { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
-  const { server, registered } = await startLogServer({ logConfig });
-  try {
-    const { port } = server.address();
-    const messages = await sendLogWs({
-      port,
-      payload: {
-        source: "client",
-        category: "state",
-        event: "state.changed",
-        sessionId: "s1",
-        data: { state: "sending" },
-      },
-    });
-    assert.equal(messages[0]?.event, "session_log_policy");
-    assert.equal(messages.at(-1)?.event, "ack");
-    const content = await fs.readFile(path.join(logRoot, "s1", "state.jsonl"), "utf8");
-    const record = JSON.parse(content.trim());
-    assert.equal(record.sessionId, "s1");
-    assert.equal(record.category, "state");
-    assert.equal(record.event, "state.changed");
-  } finally {
-    await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
-  }
-});
+test("log-websocket-server: writes session logs by category", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "s1");
+    const { server, registered } = await startLogServer();
+    try {
+      const { port } = server.address();
+      const messages = await sendLogWs({
+        port,
+        payload: {
+          source: "client",
+          category: "state",
+          event: "state.changed",
+          scope: "session",
+          sessionId: "s1",
+          data: { state: "sending" },
+        },
+      });
+      assert.equal(messages[0]?.event, "session_log_policy");
+      assert.equal(messages.at(-1)?.event, "ack");
+      const content = await fs.readFile(
+        await sessionEventFile(workspaceRoot, "s1", "state.jsonl"),
+        "utf8",
+      );
+      const record = JSON.parse(content.trim());
+      assert.equal(record.sessionId, "s1");
+      assert.equal(record.category, "state");
+      assert.equal(record.event, "state.changed");
+    } finally {
+      await closeLogServer(server, registered);
+    }
+  }));
 
-test("log-websocket-server: announces the effective client policy before ACK", async () => {
-  const logRoot = await withTempLogDir();
-  const { server, registered } = await startLogServer({
-    logConfig: {
-      root: logRoot,
-      retentionMs: 60000,
-      cleanupIntervalMs: 60000,
-      sessionLogControls: { debug: { workflowDiagnostics: true } },
-    },
-  });
-  try {
-    const { port } = server.address();
-    const messages = await sendLogWs({
-      port,
-      payload: {
-        source: "client",
-        category: "state",
-        event: "state.policy",
-        sessionId: "s-policy",
-      },
-    });
-    assert.deepEqual(
-      messages.map(({ event }) => event),
-      ["session_log_policy", "ack"],
-    );
-    assert.equal(messages[0].policy.debug["workflow-diagnostics"], true);
-    assert.equal(messages[0].policy.limits.maxDebugQueue > 0, true);
-    assert.equal(messages[0].policy.limits.maxDebugBytes > 0, true);
-    assert.equal(messages[0].policy.limits.debugTtlMs > 0, true);
-  } finally {
-    await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
-  }
-});
-
-test("log-websocket-server: mixed batches ACK after reliable writes without waiting for debug", async () => {
-  const logRoot = await withTempLogDir();
-  let releaseDebug;
-  const pendingDebug = new Promise((resolve) => {
-    releaseDebug = resolve;
-  });
-  const writes = [];
-  const server = createServer((_req, res) => res.end("not-found"));
-  const registered = registerLogWebSocketServer(server, {
-    resolveAuthByApiKey: () => ({ userId: "u1" }),
-    logConfig: {
-      root: logRoot,
-      retentionMs: 60000,
-      cleanupIntervalMs: 60000,
-      sessionLogControls: { debug: { frontendToolLogWindow: true } },
-    },
-    writeLogEvent: async (event) => {
-      writes.push(event);
-      if (event.category === "debug") return pendingDebug;
-      return { ok: true };
-    },
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  try {
-    const messages = await sendLogWs({
-      port: server.address().port,
-      payload: {
-        events: [
-          {
-            category: "debug",
-            debugType: "tool-log-window",
-            event: "debug.pending",
-            sessionId: "s-mixed",
+test("log-websocket-server: announces the effective client policy before ACK", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", (workspaceRoot) =>
+    withRuntimeEventsEnv({ debug: { workflowDiagnostics: true } }, async () => {
+      await persistSession(workspaceRoot, "u1", "s-policy");
+      const { server, registered } = await startLogServer();
+      try {
+        const { port } = server.address();
+        const messages = await sendLogWs({
+          port,
+          payload: {
+            source: "client",
+            category: "state",
+            event: "state.policy",
+            scope: "session",
+            sessionId: "s-policy",
           },
-          { category: "state", event: "state.reliable", sessionId: "s-mixed" },
-        ],
+        });
+        assert.deepEqual(
+          messages.map(({ event }) => event),
+          ["session_log_policy", "ack"],
+        );
+        assert.equal(messages[0].policy.debug["workflow-diagnostics"], true);
+        assert.equal(messages[0].policy.limits.maxDebugQueue > 0, true);
+        assert.equal(messages[0].policy.limits.maxDebugBytes > 0, true);
+        assert.equal(messages[0].policy.limits.debugTtlMs > 0, true);
+      } finally {
+        await closeLogServer(server, registered);
+      }
+    }),
+  ));
+
+test("log-websocket-server: mixed batches ACK after reliable writes without waiting for debug", () =>
+  withRuntimeEventsEnv({ debug: { frontendToolLogWindow: true } }, async () => {
+    let releaseDebug;
+    const pendingDebug = new Promise((resolve) => {
+      releaseDebug = resolve;
+    });
+    const writes = [];
+    const server = createServer((_req, res) => res.end("not-found"));
+    const registered = registerLogWebSocketServer(server, {
+      resolveAuthByApiKey: () => ({ userId: "u1" }),
+      writeLogEvent: async (event) => {
+        writes.push(event);
+        if (event.category === "debug") return pendingDebug;
+        return { ok: true };
       },
     });
-    assert.equal(messages.at(-1)?.event, "ack");
-    assert.equal(messages.at(-1)?.count, 2);
-    assert.deepEqual(
-      writes.map(({ event }) => event),
-      ["debug.pending", "state.reliable"],
-    );
-  } finally {
-    releaseDebug({ ok: true });
-    await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
-  }
-});
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const messages = await sendLogWs({
+        port: server.address().port,
+        payload: {
+          events: [
+            {
+              category: "debug",
+              debugType: "tool-log-window",
+              event: "debug.pending",
+              scope: "session",
+              sessionId: "s-mixed",
+            },
+            { scope: "session", category: "state", event: "state.reliable", sessionId: "s-mixed" },
+          ],
+        },
+      });
+      assert.equal(messages.at(-1)?.event, "ack");
+      assert.equal(messages.at(-1)?.count, 2);
+      assert.deepEqual(
+        writes.map(({ event }) => event),
+        ["debug.pending", "state.reliable"],
+      );
+    } finally {
+      releaseDebug({ ok: true });
+      await closeLogServer(server, registered);
+    }
+  }));
 
 test("log-websocket-server: reliable write failures return error and never ACK", async () => {
-  const logRoot = await withTempLogDir();
   const server = createServer((_req, res) => res.end("not-found"));
   const registered = registerLogWebSocketServer(server, {
     resolveAuthByApiKey: () => ({ userId: "u1" }),
-    logConfig: { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
     writeLogEvent: async () => ({ ok: false, error: new Error("simulated reliable failure") }),
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
     const messages = await sendLogWs({
       port: server.address().port,
-      payload: { category: "state", event: "state.failed", sessionId: "s-failed" },
+      payload: {
+        scope: "session",
+        category: "state",
+        event: "state.failed",
+        sessionId: "s-failed",
+      },
     });
     assert.deepEqual(
       messages.map(({ event }) => event),
@@ -204,191 +217,276 @@ test("log-websocket-server: reliable write failures return error and never ACK",
     assert.equal(messages.at(-1).error, "simulated reliable failure");
   } finally {
     await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
   }
 });
 
-test("log-websocket-server: writes tool log window debug to its dedicated file", async () => {
-  const logRoot = await withTempLogDir();
-  const logConfig = {
-    root: logRoot,
-    retentionMs: 60000,
-    cleanupIntervalMs: 60000,
-    sessionLogControls: { debug: { frontendToolLogWindow: true } },
-  };
-  const { server, registered } = await startLogServer({ logConfig });
-  try {
-    const { port } = server.address();
-    const messages = await sendLogWs({
-      port,
-      payload: {
-        source: "frontend",
-        category: "debug",
-        level: "debug",
-        debugType: "tool-log-window",
-        event: "frontend.toolLogWindow.rendererReceived",
-        sessionId: "s-tool-window",
-        data: { debugType: "tool-log-window", selectedCount: 10 },
-      },
+test("log-websocket-server: batches containing a record without category return error and never ACK", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "s-batch");
+    const { server, registered } = await startLogServer();
+    try {
+      const base = { source: "client", scope: "session", sessionId: "s-batch" };
+      const messages = await sendLogWs({
+        port: server.address().port,
+        payload: {
+          events: [
+            { ...base, category: "state", event: "state.valid" },
+            { ...base, event: "state.nocategory" },
+          ],
+        },
+      });
+      assert.deepEqual(
+        messages.map(({ event }) => event),
+        ["session_log_policy", "error"],
+      );
+      assert.match(messages.at(-1).error, /Invalid runtime event category: undefined/);
+    } finally {
+      await closeLogServer(server, registered);
+    }
+  }));
+
+test("log-websocket-server: writes tool log window debug to its dedicated file", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", (workspaceRoot) =>
+    withRuntimeEventsEnv({ debug: { frontendToolLogWindow: true } }, async () => {
+      await persistSession(workspaceRoot, "u1", "s-tool-window");
+      const { server, registered } = await startLogServer();
+      try {
+        const { port } = server.address();
+        const messages = await sendLogWs({
+          port,
+          payload: {
+            source: "frontend",
+            category: "debug",
+            level: "debug",
+            debugType: "tool-log-window",
+            event: "frontend.toolLogWindow.rendererReceived",
+            scope: "session",
+            sessionId: "s-tool-window",
+            data: { debugType: "tool-log-window", selectedCount: 10 },
+          },
+        });
+        assert.equal(messages[0]?.event, "session_log_policy");
+        assert.equal(messages.at(-1)?.event, "ack");
+        const file = await sessionEventFile(
+          workspaceRoot,
+          "s-tool-window",
+          "debug-tool-log-window.jsonl",
+        );
+        const [record] = await waitForJsonLines(file);
+        assert.equal(record.event, "frontend.toolLogWindow.rendererReceived");
+        assert.equal(record.data.selectedCount, 10);
+      } finally {
+        await closeLogServer(server, registered);
+      }
+    }),
+  ));
+
+test("log-websocket-server: writes to the user runtime session events directory", () =>
+  withRuntimeEventsRoot("noobot-workspace-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "s-runtime");
+    const result = await writeSessionLogEvent({
+      userId: "u1",
+      source: "client",
+      category: "message",
+      event: "message.created",
+      scope: "session",
+      sessionId: "s-runtime",
     });
-    assert.equal(messages[0]?.event, "session_log_policy");
-    assert.equal(messages.at(-1)?.event, "ack");
-    await flushJsonLineBatches();
-    const file = path.join(logRoot, "s-tool-window", "debug-tool-log-window.jsonl");
-    const record = JSON.parse((await fs.readFile(file, "utf8")).trim());
-    assert.equal(record.event, "frontend.toolLogWindow.rendererReceived");
-    assert.equal(record.data.selectedCount, 10);
-  } finally {
-    await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
-  }
-});
-
-test("log-websocket-server: writes to user runtime session directory by default", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-"));
-  const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-runtime");
-  await fs.mkdir(sessionDir, { recursive: true });
-  await fs.writeFile(
-    path.join(sessionDir, "session.json"),
-    JSON.stringify({ sessionId: "s-runtime" }),
-    "utf8",
-  );
-  const config = resolveSessionLogConfig({
-    workspaceRoot,
-    retentionMs: 60000,
-    cleanupIntervalMs: 60000,
-  });
-  try {
-    const result = await writeSessionLogEvent(
-      {
-        userId: "u1",
-        source: "client",
-        category: "message",
-        event: "message.created",
-        sessionId: "s-runtime",
-      },
-      config,
-    );
-    const expectedFile = path.join(
-      workspaceRoot,
-      "u1",
-      "runtime",
-      "session",
-      "s-runtime",
-      "logs",
-      "message.jsonl",
-    );
+    const expectedFile = await sessionEventFile(workspaceRoot, "s-runtime", "message.jsonl");
     assert.equal(result.file, expectedFile);
+    await flushJsonLineBatches();
     const record = JSON.parse((await fs.readFile(expectedFile, "utf8")).trim());
     assert.equal(record.sessionId, "s-runtime");
     assert.equal(record.category, "message");
-  } finally {
-    await fs.rm(workspaceRoot, { recursive: true, force: true });
-  }
-});
+  }));
 
-test("log-websocket-server: resolves configurable workspace roots without hardcoded linux root", async () => {
-  const macWorkspaceRoot = path.resolve("/tmp/noobot-workspace-root");
-  const macConfig = resolveSessionLogConfig({ workspaceRoot: macWorkspaceRoot });
-  assert.equal(macConfig.workspaceRoot, macWorkspaceRoot);
-
-  const relativeWorkspaceRoot = path.join("relative", "workspace-root");
-  const relativeConfig = resolveSessionLogConfig({ workspaceRoot: relativeWorkspaceRoot });
-  assert.equal(relativeConfig.workspaceRoot, path.resolve(relativeWorkspaceRoot));
-
-  const explicitLogRoot = path.join(os.tmpdir(), "noobot-explicit-log-root");
-  const explicitConfig = resolveSessionLogConfig({
-    workspaceRoot: macWorkspaceRoot,
-    root: explicitLogRoot,
-  });
-  assert.equal(explicitConfig.root, path.resolve(explicitLogRoot));
-  assert.equal(explicitConfig.workspaceRoot, macWorkspaceRoot);
-});
-
-test("log-websocket-server: works when chat websocket server is registered first", async () => {
-  const logRoot = await withTempLogDir();
-  const logConfig = { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
-  const server = createServer((_req, res) => {
-    res.statusCode = 404;
-    res.end("not-found");
-  });
-  registerChatWebSocketServer(server, {
-    getBot: () => ({ runSession: async () => ({}) }),
-    resolveRequestLocale: () => "zh-CN",
-    resolveAuthByApiKey: () => ({ userId: "u1" }),
-    isForbiddenUserScope: () => false,
-    normalizeRunConfig: (config = {}) => config || {},
-    normalizeLocale: (locale = "") => String(locale || "zh-CN"),
-    defaultLocale: "zh-CN",
-    translateText: (key = "") => String(key || ""),
-  });
-  const registered = registerLogWebSocketServer(server, {
-    resolveAuthByApiKey: () => ({ userId: "u1" }),
-    logConfig,
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  try {
-    const { port } = server.address();
-    const messages = await sendLogWs({
-      port,
-      payload: {
-        source: "client",
-        category: "system",
-        event: "system.log",
-        sessionId: "combined-s1",
-      },
+test("log-websocket-server: works when chat websocket server is registered first", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "combined-s1");
+    const server = createServer((_req, res) => {
+      res.statusCode = 404;
+      res.end("not-found");
     });
-    assert.equal(messages[0]?.event, "session_log_policy");
-    assert.equal(messages.at(-1)?.event, "ack");
-    const content = await fs.readFile(path.join(logRoot, "combined-s1", "system.jsonl"), "utf8");
-    assert.equal(JSON.parse(content.trim()).event, "system.log");
-  } finally {
-    await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
-  }
-});
+    registerChatWebSocketServer(server, {
+      getBot: () => ({ runSession: async () => ({}) }),
+      resolveRequestLocale: () => "zh-CN",
+      resolveAuthByApiKey: () => ({ userId: "u1" }),
+      isForbiddenUserScope: () => false,
+      normalizeRunConfig: (config = {}) => config || {},
+      normalizeLocale: (locale = "") => String(locale || "zh-CN"),
+      defaultLocale: "zh-CN",
+      translateText: (key = "") => String(key || ""),
+    });
+    const registered = registerLogWebSocketServer(server, {
+      resolveAuthByApiKey: () => ({ userId: "u1" }),
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address();
+      const messages = await sendLogWs({
+        port,
+        payload: {
+          source: "client",
+          category: "system",
+          event: "system.log",
+          scope: "session",
+          sessionId: "combined-s1",
+        },
+      });
+      assert.equal(messages[0]?.event, "session_log_policy");
+      assert.equal(messages.at(-1)?.event, "ack");
+      await flushJsonLineBatches();
+      const content = await fs.readFile(
+        await sessionEventFile(workspaceRoot, "combined-s1", "system.jsonl"),
+        "utf8",
+      );
+      assert.equal(JSON.parse(content.trim()).event, "system.log");
+    } finally {
+      await closeLogServer(server, registered);
+    }
+  }));
 
-test("log-websocket-server: skips registered debug types by default", async () => {
-  const logRoot = await withTempLogDir();
-  const result = await writeSessionLogEvent(
-    {
+test("log-websocket-server: skips registered debug types by default", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "s-debug");
+    const result = await writeSessionLogEvent({
       source: "client",
       userId: "u1",
       category: "debug",
       debugType: "state-machine",
+      scope: "session",
       sessionId: "s-debug",
       event: "debug.off",
-    },
-    { root: logRoot },
-  );
-  assert.equal(result.ok, true);
-  assert.equal(result.skipped, true);
-  await assert.rejects(() => fs.stat(path.join(logRoot, "s-debug")));
-  await fs.rm(logRoot, { recursive: true, force: true });
-});
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.skipped, true);
+    const debugDir = await sessionDirPath(workspaceRoot, "u1", "s-debug");
+    await assert.rejects(() => fs.stat(path.join(debugDir, "events")));
+  }));
 
-test("log-websocket-server: rejects debug logs without a registered debug type", async () => {
-  const logRoot = await withTempLogDir();
-  const result = await writeSessionLogEvent(
-    {
+test("log-websocket-server: rejects debug logs without a registered debug type", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "s-debug");
+    const result = await writeSessionLogEvent({
       source: "client",
       userId: "u1",
       category: "debug",
+      scope: "session",
       sessionId: "s-debug",
       event: "debug.untyped",
-    },
-    { root: logRoot },
-  );
-  assert.equal(result.ok, false);
-  assert.match(result.error.message, /Invalid runtime event debugType: undefined/);
-  await assert.rejects(() => fs.stat(path.join(logRoot, "s-debug")));
-  await fs.rm(logRoot, { recursive: true, force: true });
-});
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error.message, /Invalid runtime event debugType: undefined/);
+    const debugDir = await sessionDirPath(workspaceRoot, "u1", "s-debug");
+    await assert.rejects(() => fs.stat(path.join(debugDir, "events")));
+  }));
+
+test("log-websocket-server: rejects records without an explicit scope", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "s-noscope");
+    const result = await writeSessionLogEvent({
+      source: "client",
+      userId: "u1",
+      category: "state",
+      sessionId: "s-noscope",
+      event: "state.noscope",
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error.message, /Invalid runtime event scope: undefined/);
+  }));
+
+test("log-websocket-server: rejects records without an explicit category", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await persistSession(workspaceRoot, "u1", "s-nocategory");
+    const result = await writeSessionLogEvent({
+      source: "client",
+      userId: "u1",
+      scope: "session",
+      sessionId: "s-nocategory",
+      event: "state.nocategory",
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error.message, /Invalid runtime event category: undefined/);
+    const sessionDir = await sessionDirPath(workspaceRoot, "u1", "s-nocategory");
+    await assert.rejects(() => fs.stat(path.join(sessionDir, "events")));
+  }));
+
+test("log-websocket-server: debug records follow only their debugType switch", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", async (workspaceRoot) => {
+    await withRuntimeEventsEnv(
+      { log: { system: false }, debug: { stateMachine: true } },
+      async () => {
+        await persistSession(workspaceRoot, "u1", "s-debug-on");
+        const debug = await writeSessionLogEvent({
+          source: "client",
+          userId: "u1",
+          category: "debug",
+          debugType: "state-machine",
+          scope: "session",
+          sessionId: "s-debug-on",
+          event: "debug.on",
+        });
+        assert.equal(debug.ok, true);
+        assert.notEqual(debug.skipped, true);
+        const system = await writeSessionLogEvent({
+          source: "client",
+          userId: "u1",
+          category: "system",
+          scope: "session",
+          sessionId: "s-debug-on",
+          event: "system.off",
+        });
+        assert.equal(system.ok, true);
+        assert.equal(system.skipped, true);
+      },
+    );
+  }));
+
+test("log-websocket-server: failed writes are not reported as written", () =>
+  withRuntimeEventsRoot("noobot-session-logs-", (workspaceRoot) =>
+    withRuntimeEventsEnv({ debug: { sessionLogWs: true } }, async () => {
+      await persistSession(workspaceRoot, "u1", "s-ok");
+      const failed = await writeSessionLogEvent({
+        source: "client",
+        userId: "u1",
+        category: "state",
+        sessionId: "s-failed",
+        event: "state.failed",
+      });
+      assert.equal(failed.ok, false);
+      const written = await writeSessionLogEvent({
+        source: "client",
+        userId: "u1",
+        category: "state",
+        scope: "session",
+        sessionId: "s-ok",
+        event: "state.ok",
+      });
+      assert.equal(written.ok, true);
+      const diagnosticFile = path.join(
+        workspaceRoot,
+        "system",
+        "runtime",
+        "events",
+        "system",
+        "service",
+        "debug.jsonl",
+      );
+      const isWritten = (record) => record.data?.message === "written";
+      const diagnostics = (
+        await waitForJsonLines(diagnosticFile, (records) =>
+          records.some((record) => isWritten(record) && record.data.sessionId === "s-ok"),
+        )
+      ).filter(isWritten);
+      assert.deepEqual(
+        diagnostics.map((record) => record.data.sessionId),
+        ["s-ok"],
+      );
+    }),
+  ));
 
 test("log-websocket-server: rejects unauthorized upgrade", async () => {
-  const logRoot = await withTempLogDir();
   const { server, registered } = await startLogServer({
-    logConfig: { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
     resolveAuthByApiKey: () => null,
   });
   try {
@@ -396,15 +494,11 @@ test("log-websocket-server: rejects unauthorized upgrade", async () => {
     await assert.rejects(() => sendLogWs({ port, payload: { sessionId: "s1" } }));
   } finally {
     await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
   }
 });
 
 test("log-websocket-server: rejects too large payload and batch", async () => {
-  const logRoot = await withTempLogDir();
-  const { server, registered } = await startLogServer({
-    logConfig: { root: logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
-  });
+  const { server, registered } = await startLogServer();
   try {
     const { port } = server.address();
     const tooLarge = await sendLogWs({ port, payload: "x".repeat(256 * 1024 + 1) });
@@ -418,34 +512,5 @@ test("log-websocket-server: rejects too large payload and batch", async () => {
     assert.equal(tooMany.at(-1)?.event, "error");
   } finally {
     await closeLogServer(server, registered);
-    await fs.rm(logRoot, { recursive: true, force: true });
   }
-});
-
-test("log-websocket-server: cleanup removes expired session directories", async () => {
-  const logRoot = await withTempLogDir();
-  const oldDir = path.join(logRoot, "old-session");
-  await fs.mkdir(oldDir, { recursive: true });
-  const oldTime = new Date(Date.now() - 10000);
-  await fs.utimes(oldDir, oldTime, oldTime);
-  const result = await cleanupSessionLogs(
-    { root: logRoot, retentionMs: 1, cleanupIntervalMs: 60000 },
-    Date.now(),
-  );
-  assert.equal(result.removed, 1);
-  await assert.rejects(() => fs.stat(oldDir));
-  await fs.rm(logRoot, { recursive: true, force: true });
-});
-
-test("log-websocket-server: cleanup skips user runtime tree when root is not explicit", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-"));
-  const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s1");
-  await fs.mkdir(sessionDir, { recursive: true });
-  const result = await cleanupSessionLogs(
-    resolveSessionLogConfig({ workspaceRoot, retentionMs: 1, cleanupIntervalMs: 60000 }),
-    Date.now(),
-  );
-  assert.equal(result.skipped, true);
-  await fs.stat(sessionDir);
-  await fs.rm(workspaceRoot, { recursive: true, force: true });
 });

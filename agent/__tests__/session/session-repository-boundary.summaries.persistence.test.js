@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import {
@@ -15,11 +15,12 @@ import {
   canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 test("session save refreshes the display projection with live activity timeline", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "live" });
     await runtime.sessionCrudService.ensureSession(userId, "live", "");
@@ -70,7 +71,7 @@ test("session save refreshes the display projection with live activity timeline"
 test("session save writes the display summary once", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({
       userId,
@@ -103,7 +104,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "checkpoint-receipt";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
@@ -183,7 +184,7 @@ test("summary checkpoint receipts survive turn-journal persistence with historic
 test("concurrent saves for different sessions preserve every sessions summary entry", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "B" });

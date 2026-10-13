@@ -19,7 +19,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
     `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若不确定该工具的用法或参数语义，可调用 ${String(params.helpToolName || "help")} 工具查看该工具的详细使用说明。`,
   "agent.helpToolLoopPrompt": (params = {}) =>
-    `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "help")} 工具查看相关工具的详细使用说明。`,
+    `工具循环已执行 ${Number(params.loopCount || 0)} 轮。如果遇到问题可以调用 ${String(params.helpToolName || "help")}，如果没有请继续。`,
   "agent.taskSummarySingleToolPrompt":
     "task_summary 必须单独调用，不能和其它工具出现在同一轮工具调用中。",
   "agent.taskCheckSingleToolPrompt":
@@ -114,6 +114,7 @@ export const BACKEND_COMMON_ZH_CN = {
   "services.handlerRequired": "service handler 必填",
   "session.parentSessionNotFoundPossiblyDeleted": "未找到父会话（可能已删除）",
   "session.workspaceNotInitialized": "工作区未初始化",
+  "session.treeNodeMissing": "会话未登记在会话树中",
   "status.disconnectedFromHistory": "已断开历史连接",
   "web2img.readabilityNotInstalledWarn":
     "@mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom",

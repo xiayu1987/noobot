@@ -275,7 +275,6 @@ async function resolveDetachedSystemMessages(systemMessageFactory, attachments) 
 
 async function createDetachedLifecycle(dependencies, request, identity, prepared) {
   const { session } = dependencies;
-  const generation = await resolveDetachedSessionGeneration(session, identity);
   const runtimePluginState = buildRuntimePluginState({
     effectiveRunConfig: prepared.effectiveRunConfig,
     disabledPlugins: request.strategy?.disabledPlugins,
@@ -293,7 +292,6 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
     scopeId: identity.executionId,
     relativeDir: identity.relativeDir,
     allowedRoot: identity.allowedRoot,
-    ...(generation ? { sessionGeneration: generation } : {}),
     metadataContributor: () => createDetachedMetadata(request, identity, runtimePluginState),
   });
   const lifecycleIdentity = createLifecycleIdentity(
@@ -323,15 +321,6 @@ async function createDetachedLifecycle(dependencies, request, identity, prepared
     ).trim(),
     commit: createLifecycleCommitter(session, lifecycleIdentity, identity.scopedEventListener),
   };
-}
-
-async function resolveDetachedSessionGeneration(session, identity) {
-  const lifecycle = await session.getSessionLifecycle({
-    userId: identity.userId,
-    sessionId: identity.subSessionId,
-  });
-  const generation = Number(lifecycle?.generation);
-  return Number.isInteger(generation) && generation > 0 ? generation : 0;
 }
 
 function createDetachedMetadata(request, identity, runtimePluginState) {

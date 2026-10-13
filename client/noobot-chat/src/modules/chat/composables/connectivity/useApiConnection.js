@@ -9,6 +9,32 @@ import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
 
 const CONNECTION_PROFILE_STORAGE_KEY = "noobot_connection_profile";
+// Admission (429) retries for every backend request: the limiter rejects before the handler runs,
+// so a retry is safe for any method. Bounded so a saturated limiter cannot spin forever.
+const ADMISSION_MAX_RETRIES = 3;
+const ADMISSION_MIN_DELAY_MS = 250;
+const ADMISSION_MAX_DELAY_MS = 60000;
+
+function admissionRetryDelayMs(response) {
+  const seconds = Number(response?.headers?.get?.("retry-after"));
+  const delayMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0;
+  return Math.min(ADMISSION_MAX_DELAY_MS, Math.max(ADMISSION_MIN_DELAY_MS, delayMs));
+}
+
+function waitMs(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+// Returns null when isStale() reports the caller's context changed during a wait.
+async function fetchWithAdmissionRetry(runFetch, { isStale = () => false } = {}) {
+  let res = await runFetch();
+  for (let attempt = 0; res.status === 429 && attempt < ADMISSION_MAX_RETRIES; attempt += 1) {
+    await waitMs(admissionRetryDelayMs(res));
+    if (isStale()) return null;
+    res = await runFetch();
+  }
+  return res;
+}
 
 function readConnectionProfile() {
   try {
@@ -201,12 +227,12 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
             : {}),
         },
       });
-    const res = await runFetch();
+    const res = await fetchWithAdmissionRetry(runFetch);
     if (res.status !== 401) return res;
     const refreshed =
       apiKey.value && apiKey.value !== requestApiKey ? true : await refreshAuthentication();
     if (refreshed && apiKey.value && apiKey.value !== requestApiKey) {
-      const retryResponse = await runFetch();
+      const retryResponse = await fetchWithAdmissionRetry(runFetch);
       if (retryResponse.status === 401) clearApiAuth();
       return retryResponse;
     }
@@ -215,11 +241,17 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
   }
 
   async function authenticate(credentials) {
-    const res = await connectApi({
-      userId: credentials.userId,
-      connectCode: credentials.connectCode,
-      locale: String(locale.value || "").trim(),
-    });
+    const res = await fetchWithAdmissionRetry(
+      () =>
+        connectApi({
+          userId: credentials.userId,
+          connectCode: credentials.connectCode,
+          locale: String(locale.value || "").trim(),
+        }),
+      // Credentials changed while waiting: the caller's result is stale, abandon quietly.
+      { isStale: () => snapshotCredentials().key !== credentials.key },
+    );
+    if (!res) return false;
     const data = await res.json();
     if (!res.ok || !data.ok || !data.apiKey) {
       throw new Error(data.error || translate("infra.connectFailed"));

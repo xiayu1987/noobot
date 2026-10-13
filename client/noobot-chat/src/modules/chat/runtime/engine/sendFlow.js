@@ -66,7 +66,8 @@ export function createChatEngineSender({
   setPendingInteractionRequest,
   uploadFiles,
 }) {
-  const logSessionEvent = (event = {}) => sessionLogWebSocketClient?.log?.(event);
+  const logSessionEvent = (event = {}) =>
+    sessionLogWebSocketClient?.log?.({ scope: "session", ...event });
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     log: logResendDebug,

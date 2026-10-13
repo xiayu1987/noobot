@@ -84,7 +84,7 @@ const TEXT = {
     errSuperAdminUserIdRequired: "super_admin.user_id 不能为空",
     errSuperAdminConnectCodeRequired: "super_admin.connect_code 不能为空",
     errMissingEnvHint:
-      "当前为非交互模式，请设置环境变量：NOOBOT_MODEL_NAME（模型库 key 或 model 名）（可选: NOOBOT_MODEL_API_KEY NOOBOT_MODEL_BASE_URL NOOBOT_EXECUTION_ISOLATION_MODE=sandbox|host NOOBOT_WORKSPACE_ROOT NOOBOT_WORKSPACE_TEMPLATE_PATH NOOBOT_SUPER_ADMIN_USER_ID NOOBOT_SUPER_ADMIN_CONNECT_CODE NOOBOT_SETUP_LANG）",
+      "当前为非交互模式，请设置环境变量：NOOBOT_MODEL_NAME（模型库 key 或 model 名）（可选: NOOBOT_MODEL_API_KEY NOOBOT_MODEL_BASE_URL NOOBOT_EXECUTION_ISOLATION_MODE=sandbox|host NOOBOT_SETUP_WORKSPACE_ROOT NOOBOT_WORKSPACE_TEMPLATE_PATH NOOBOT_SUPER_ADMIN_USER_ID NOOBOT_SUPER_ADMIN_CONNECT_CODE NOOBOT_SETUP_LANG）",
     logLanguageSynced: "[project-launcher] 已按语言同步配置: {language}",
     logInitDone: "[project-launcher] 初始化完成，已生成 global.config.json 并同步用户配置。",
     labelTargetConfig: "目标配置",
@@ -120,7 +120,7 @@ const TEXT = {
     errSuperAdminUserIdRequired: "super_admin.user_id is required",
     errSuperAdminConnectCodeRequired: "super_admin.connect_code is required",
     errMissingEnvHint:
-      "Non-interactive mode detected. Please set env vars: NOOBOT_MODEL_NAME (model library key or model name) (optional: NOOBOT_MODEL_API_KEY NOOBOT_MODEL_BASE_URL NOOBOT_EXECUTION_ISOLATION_MODE=sandbox|host NOOBOT_WORKSPACE_ROOT NOOBOT_WORKSPACE_TEMPLATE_PATH NOOBOT_SUPER_ADMIN_USER_ID NOOBOT_SUPER_ADMIN_CONNECT_CODE NOOBOT_SETUP_LANG)",
+      "Non-interactive mode detected. Please set env vars: NOOBOT_MODEL_NAME (model library key or model name) (optional: NOOBOT_MODEL_API_KEY NOOBOT_MODEL_BASE_URL NOOBOT_EXECUTION_ISOLATION_MODE=sandbox|host NOOBOT_SETUP_WORKSPACE_ROOT NOOBOT_WORKSPACE_TEMPLATE_PATH NOOBOT_SUPER_ADMIN_USER_ID NOOBOT_SUPER_ADMIN_CONNECT_CODE NOOBOT_SETUP_LANG)",
     logLanguageSynced: "[project-launcher] Language synchronized to configs: {language}",
     logInitDone:
       "[project-launcher] Initialization completed: global.config.json created and user configs synchronized.",

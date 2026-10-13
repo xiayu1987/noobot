@@ -4,72 +4,45 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { RUNTIME_EVENT_SCOPES } from "./constants.js";
 import { resolveDefaultRuntimeEventsConfig } from "./config.js";
 import { safeSegment } from "./sanitize.js";
-import { resolveOptionalSessionId } from "./session-id.js";
 
 const DEBUG_CATEGORY = "debug";
 
-export function resolveRuntimeEventsConfig(options = {}) {
-  const defaults = resolveDefaultRuntimeEventsConfig();
+export function resolveRuntimeEventsConfig({ desktopRoot = "" } = {}) {
+  const resolvedDesktopRoot = desktopRoot ? path.resolve(String(desktopRoot)) : "";
   return {
-    root:
-      options.root || options.runtimeEventsRoot
-        ? path.resolve(String(options.root || options.runtimeEventsRoot))
-        : "",
-    workspaceRoot: path.resolve(String(options.workspaceRoot || defaults.workspaceRoot)),
-    dirName: safeSegment(options.dirName || defaults.dirName),
-    maxFileBytes: options.maxFileBytes ?? defaults.maxFileBytes,
-    retentionDays: options.retentionDays ?? defaults.retentionDays,
-    maxArchives: options.maxArchives ?? defaults.maxArchives,
+    desktopRoot: resolvedDesktopRoot,
+    ...resolveDefaultRuntimeEventsConfig(process.env, {
+      requireWorkspaceRoot: !resolvedDesktopRoot,
+    }),
   };
 }
 
-export function resolveRuntimeEventStorageSessionId(record = {}) {
-  return safeSegment(
-    resolveOptionalSessionId(
-      record.storageSessionId,
-      record.rootSessionId,
-      record.parentSessionId,
-      record.data?.storageSessionId,
-      record.data?.rootSessionId,
-      record.data?.parentSessionId,
-      record.sessionId,
-    ),
-  );
-}
-
-function resolveRuntimeEventDir(record, config = resolveRuntimeEventsConfig()) {
-  if (config.root) {
-    if (record.scope === RUNTIME_EVENT_SCOPES.SESSION)
-      return path.join(config.root, safeSegment(record.sessionId));
-    return path.join(config.root, safeSegment(record.scope), safeSegment(record.source));
+function resolveRuntimeEventDir(record, config, sessionDir) {
+  if (config.desktopRoot) {
+    return path.join(config.desktopRoot, safeSegment(record.scope), safeSegment(record.source));
   }
   if (record.scope === RUNTIME_EVENT_SCOPES.SESSION) {
-    return path.join(
-      config.workspaceRoot,
-      safeSegment(record.userId),
-      "runtime",
-      "session",
-      resolveRuntimeEventStorageSessionId(record),
-      config.dirName,
-    );
+    if (!sessionDir) throw new TypeError("session runtime events require a resolved sessionDir");
+    return path.join(sessionDir, config.dirName);
   }
   const userPart = record.userId ? safeSegment(record.userId) : "system";
   return path.join(
     config.workspaceRoot,
     userPart,
-    "runtime",
+    WORKSPACE_LAYOUT.RUNTIME_DIR,
     config.dirName,
     safeSegment(record.scope),
     safeSegment(record.source),
   );
 }
 
-export function resolveRuntimeEventFile(record, config = resolveRuntimeEventsConfig()) {
+export function resolveRuntimeEventFile(record, config, { sessionDir = "" } = {}) {
   return path.join(
-    resolveRuntimeEventDir(record, config),
+    resolveRuntimeEventDir(record, config, sessionDir),
     `${resolveRuntimeEventFileCategory(record)}.jsonl`,
   );
 }

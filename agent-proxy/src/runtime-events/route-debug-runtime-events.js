@@ -6,16 +6,8 @@
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
-
-function parseChannelKeyPart(channelKey = "", index = 0) {
-  return (
-    String(channelKey || "")
-      .split("::")
-      [index]?.trim() || ""
-  );
-}
 
 function firstTrimmed(...candidates) {
   return String(candidates.find(Boolean) || "").trim();
@@ -27,31 +19,6 @@ function firstLowerTrimmed(...candidates) {
 
 function resolvePayloadSessionId(payload) {
   return firstTrimmed(payload?.identity?.sessionId, payload?.sessionId);
-}
-
-function resolveRouteIdentity({ payload, socket, channel, data }) {
-  const identity = payload?.identity;
-  return {
-    userId: firstTrimmed(
-      socket?.__agentProxyUserId,
-      data?.userId,
-      channel?.ownerUserId,
-      parseChannelKeyPart(channel?.key, 0),
-    ),
-    sessionId: firstTrimmed(
-      identity?.sessionId,
-      payload?.sessionId,
-      data?.sessionId,
-      channel?.startPayload?.identity?.sessionId,
-      parseChannelKeyPart(channel?.key, 1),
-    ),
-    dialogProcessId: firstTrimmed(
-      identity?.dialogProcessId,
-      payload?.dialogProcessId,
-      data?.dialogProcessId,
-    ),
-    turnScopeId: firstTrimmed(identity?.turnScopeId, payload?.turnScopeId, data?.turnScopeId),
-  };
 }
 
 function summarizeRouteChannel(channel, data) {
@@ -82,18 +49,16 @@ export function writeAgentProxyRouteDebugEvent({
   socket = null,
   channel = null,
   data = {},
-  workspaceRoot,
 } = {}) {
   const route = { payload, socket, channel, data };
-  return writeRoutedRuntimeEvent({
+  return writeRuntimeEvent({
+    scope: "system",
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
     category: RUNTIME_EVENT_CATEGORIES.DEBUG,
     level: "debug",
     debugType: "agent-proxy-route",
     event,
-    ...resolveRouteIdentity(route),
-    workspaceRoot,
     data: summarizeRouteData(route),
   });
 }

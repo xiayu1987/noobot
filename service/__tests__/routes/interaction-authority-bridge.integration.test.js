@@ -12,10 +12,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createSessionFacade, createSessionServices } from "noobot-agent/session";
 import { AUTHORITY_EVENT_CONSUMER } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createInteractionAuthorityBridge } from "../../ws/chat-websocket/interaction-authority-bridge.js";
+import { initializeUserRuntimeDirectories } from "../runtime-events-root.test-helpers.js";
 
 async function withTempWorkspace(operation) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-interaction-authority-"));
   try {
+    await initializeUserRuntimeDirectories(workspaceRoot, "user-1");
     return await operation(workspaceRoot);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

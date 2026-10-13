@@ -6,7 +6,11 @@
 import { randomUUID } from "node:crypto";
 import { config } from "../../../shared/config.js";
 import { createReplayBatch, isPendingInteractionReplay } from "@noobot/event-protocol";
-import { createTurnSnapshotCommand } from "@noobot/agent-transport-protocol";
+import {
+  createTurnFinalizeCommand,
+  createTurnSnapshotCommand,
+} from "@noobot/agent-transport-protocol";
+import { isActionableTurnRecovery } from "@noobot/session-protocol";
 
 function text(value) {
   return String(value || "").trim();
@@ -16,8 +20,9 @@ export function groupReconnectChannels(manager, channelKeys) {
   const channelsBySessionId = new Map();
   for (const channelKey of channelKeys) {
     const channel = manager.channelStore.get(channelKey);
-    const sessionId = manager._extractSessionIdFromChannelKey(channelKey);
-    if (!channel || !sessionId) continue;
+    if (!channel) continue;
+    const { sessionId } = channel.identity;
+    if (!sessionId) continue;
     const channels = channelsBySessionId.get(sessionId) || [];
     channels.push(channel);
     channelsBySessionId.set(sessionId, channels);
@@ -56,11 +61,42 @@ function createSnapshotPromise(snapshotChannel, commandId, socket) {
   });
 }
 
+async function settleFlaggedRecovery(manager, request, socket, snapshotResult) {
+  const recovery = snapshotResult?.snapshot?.payload?.recovery;
+  if (snapshotResult?.ok !== true || !isActionableTurnRecovery(recovery)) return snapshotResult;
+  if (request.cancelled) return snapshotResult;
+  const { channel, sessionId } = request;
+  const commandId = `proxy-finalize:${sessionId}:${randomUUID()}`;
+  request.commandIds.push(commandId);
+  const promise = createSnapshotPromise(channel, commandId, socket);
+  const forwarded = manager.forwardToUpstream(
+    channel,
+    createTurnFinalizeCommand({ commandId, identity: { sessionId } }),
+  );
+  if (!forwarded) {
+    const pendingRequest = channel.pendingSnapshotRequests.get(commandId);
+    channel.pendingSnapshotRequests.delete(commandId);
+    pendingRequest?.resolve?.({ ok: false, reason: "finalize_forward_failed" });
+  }
+  const finalized = await promise;
+  if (finalized?.ok === true && finalized.snapshot) return finalized;
+  if (request.cancelled) return finalized;
+  manager.logSessionEvent(channel, {
+    category: "transport",
+    level: "warn",
+    event: "agentProxy.reconnect.recovery.finalizeFailed",
+    sessionId,
+    data: { sessionId, commandId, recovery, reason: text(finalized?.reason) },
+  });
+  return snapshotResult;
+}
+
 function startSnapshotRequest(manager, socket, sessionId, channels, knownSequence) {
   const channel = selectSnapshotChannel(channels);
   const commandId = `proxy-snapshot:${sessionId}:${randomUUID()}`;
   channel.pendingSnapshotRequests ||= new Map();
-  const promise = createSnapshotPromise(channel, commandId, socket);
+  const request = { sessionId, channel, commandId, commandIds: [commandId], cancelled: false };
+  const snapshotPromise = createSnapshotPromise(channel, commandId, socket);
   const command = createTurnSnapshotCommand({
     commandId,
     identity: { sessionId },
@@ -80,7 +116,11 @@ function startSnapshotRequest(manager, socket, sessionId, channels, knownSequenc
     channel.pendingSnapshotRequests.delete(commandId);
     pendingRequest?.resolve?.({ ok: false, reason: "snapshot_forward_failed" });
   }
-  return { sessionId, channel, commandId, queryConnection, promise };
+  request.queryConnection = queryConnection;
+  request.promise = snapshotPromise.then((result) =>
+    settleFlaggedRecovery(manager, request, socket, result),
+  );
+  return request;
 }
 
 function createSessionReplay(manager, sessionId, channels, knownSequence) {
@@ -147,6 +187,7 @@ export function logPreparedAuthorityBatches(manager, sessions, channelsBySession
     manager.logSessionEvent(logChannel, {
       category: "transport",
       event: "agentProxy.reconnect.authorityBatch.prepared",
+      sessionId: sessionEntry.sessionId,
       data: {
         sessionId: sessionEntry.sessionId,
         snapshotSequence: Number(sessionEntry.replayBatch?.snapshotSequence || 0),

@@ -23,6 +23,7 @@ import { createWorkspaceUsersService } from "../services/workspace-users-service
 import { createOpenVSCodeService } from "../services/openvscode-service.js";
 
 export async function createAppDependencies({
+  serviceDir,
   startupContext = {},
   globalConfigBuilder,
   buildWorkspaceTree,
@@ -32,7 +33,7 @@ export async function createAppDependencies({
     throw new TypeError("createAppDependencies requires globalConfigBuilder");
   }
   const configBuilder = globalConfigBuilder;
-  const initialRawConfig = (await configBuilder?.loadRawConfig?.({ reload: false })) || {};
+  const initialRawConfig = await configBuilder.loadRawConfig({ reload: false });
   let globalConfigRaw = initialRawConfig;
   let globalConfig = globalConfigRaw;
   let bot = null;
@@ -47,15 +48,15 @@ export async function createAppDependencies({
   const { resolveRequestLocale, translateText } = requestContextService;
 
   const workspacePathService = createWorkspacePathService({
-    getGlobalConfig: () => globalConfig,
+    serviceDir,
     getGlobalConfigRaw: () => globalConfigRaw,
   });
   const { workspaceRootPath, templateRootPath } = workspacePathService;
+  workspacePathService.assertWorkspaceRootMatchesEnv();
 
   const configParamsService = createConfigParamsService({
     workspaceRootPath,
     getGlobalConfigRaw: () => globalConfigRaw,
-    templateRootPath,
   });
   const {
     normalizeConfigParams,
@@ -70,7 +71,6 @@ export async function createAppDependencies({
 
   const workspaceUsersService = createWorkspaceUsersService({
     workspaceRootPath,
-    runtimeEventsConfig: { workspaceRoot: workspaceRootPath() },
   });
   const {
     normalizeWorkspaceUsersConfig,
@@ -82,7 +82,6 @@ export async function createAppDependencies({
   const authService = createAuthService({
     initialApiKeyTtlMs: Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000),
     translateText,
-    runtimeEventsConfig: { workspaceRoot: workspaceRootPath() },
   });
   const {
     setApiKeyTtlMs,
@@ -99,7 +98,6 @@ export async function createAppDependencies({
     normalizeLocale,
     defaultLocale: DEFAULT_LOCALE,
     translateText,
-    sessionLogConfig: { workspaceRoot: workspaceRootPath() },
     connectorAccessPort,
   });
   const { mapAgentRunCommand, handleChat } = chatRunService;
@@ -137,7 +135,7 @@ export async function createAppDependencies({
     BotManager,
     setApiKeyTtlMs,
     setGlobalConfigRaw: (nextGlobalConfigRaw) => {
-      globalConfigRaw = nextGlobalConfigRaw || {};
+      globalConfigRaw = nextGlobalConfigRaw;
     },
     setGlobalConfig: (nextGlobalConfig) => {
       globalConfig = nextGlobalConfig;

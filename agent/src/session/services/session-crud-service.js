@@ -180,7 +180,19 @@ export class SessionCrudService {
         sessionId: currentSessionId,
         parentSessionId: currentParentSessionId,
       });
-      if (!currentBundle?.exists || !currentBundle?.session) continue;
+      if (!currentBundle.exists) {
+        if (await this.sessionRepo.isSessionDeleted(userId, currentSessionId)) continue;
+        sessions.push(
+          buildUnavailableSessionSummary({
+            sessionId: currentSessionId,
+            parentSessionId: currentParentSessionId,
+            depth: this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree),
+            errorCode: "SESSION_ARTIFACT_MISSING",
+            reason: "Canonical session artifact is missing",
+          }),
+        );
+        continue;
+      }
       const rawMessages = currentBundle.session.messages;
       const depth = this.sessionTreeService.resolveDepthInTree(currentSessionId, sessionTree);
       const displayProjection = projectSessionTreeDepth(
@@ -448,8 +460,13 @@ export class SessionCrudService {
       const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
       try {
         await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
-      } catch {
-        continue;
+      } catch (error) {
+        await this.sessionRepo.markSessionSummaryUnavailable(
+          userId,
+          sessionId,
+          parentSessionId,
+          error,
+        );
       }
     }
     let payload = await this.sessionRepo.readSessionsSummary(userId);
@@ -525,13 +542,11 @@ export class SessionCrudService {
 
   async getRootSessionSelectedConnectorIds({ userId, sessionId }) {
     const rootSessionId = await this.sessionTreeService.getRootSessionId({ userId, sessionId });
-    if (!rootSessionId) return normalizeSelectedConnectorIds([]);
     return this.sessionRepo.readSelectedConnectorIds(userId, rootSessionId);
   }
 
   async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
     const rootSessionId = await this.sessionTreeService.getRootSessionId({ userId, sessionId });
-    if (!rootSessionId) return normalizeSelectedConnectorIds([]);
     return this._withSessionMutation(userId, rootSessionId, "", async () => {
       const resolvedParentSessionId = await readRepositoryParentSessionId(
         this.sessionRepo,

@@ -15,7 +15,7 @@ import crypto from "node:crypto";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 import { pipeline } from "node:stream/promises";
@@ -152,7 +152,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
         sessionId,
       });
       const sessionDocs = Array.isArray(result?.sessions) ? result.sessions : [];
-      void writeRoutedRuntimeEvent({
+      void writeRuntimeEvent({
         scope: "session",
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -225,7 +225,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           ),
         },
       });
-      void writeRoutedRuntimeEvent({
+      void writeRuntimeEvent({
         scope: "session",
         source: "service",
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -275,7 +275,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
       turnScopeId,
       commandId,
     });
-    void writeRoutedRuntimeEvent({
+    void writeRuntimeEvent({
       scope: "session",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -368,7 +368,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
         commandId: command.commandId,
       };
       const logDeleteMutation = (event, data = {}, level = "debug") =>
-        writeRoutedRuntimeEvent({
+        writeRuntimeEvent({
           scope: "session",
           source: "service",
           channel: RUNTIME_EVENT_CHANNELS.DIRECT,
@@ -447,7 +447,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
       lifecycle?.replacedTurns && typeof lifecycle.replacedTurns === "object"
         ? lifecycle.replacedTurns
         : {};
-    void writeRoutedRuntimeEvent({
+    void writeRuntimeEvent({
       scope: "session",
       source: "service",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,

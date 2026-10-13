@@ -3,18 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { resolveGlobalConfigPath } from "@noobot/runtime-topology-protocol/workspace-root";
 
 export function resolveServiceGlobalConfigPath({
   filePath = "",
   cwd = process.cwd(),
   env = process.env,
 } = {}) {
-  const explicitPath = String(filePath || "").trim();
-  const envPath = String(env?.NOOBOT_GLOBAL_CONFIG_PATH || "").trim();
-  const targetPath = explicitPath || envPath || "config/global.config.json";
-  return path.resolve(cwd, targetPath);
+  return resolveGlobalConfigPath({ serviceDir: cwd, filePath, env });
 }
 
 export function createServiceGlobalConfigSource({

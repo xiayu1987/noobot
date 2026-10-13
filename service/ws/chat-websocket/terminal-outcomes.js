@@ -26,7 +26,6 @@ export function createTurnFinalizer({
   sendEvent,
   rejectUnpersistedTurnStatus,
   translateText,
-  sessionLogConfig,
   webSocket,
   commitTurnLifecycle,
 } = {}) {
@@ -217,7 +216,6 @@ export function createTurnFinalizer({
       translateText,
     });
     void recordServiceWebSocketRuntimeError({
-      sessionLogConfig,
       event: "service.websocket.run.aborted",
       userId: state.runMeta?.userId || "",
       sessionId: state.runMeta?.sessionId || "",
@@ -245,7 +243,6 @@ export function createTurnFinalizer({
 
   const finalizeGenericError = async (state, { error = null, committed = null } = {}) => {
     void recordServiceWebSocketRuntimeError({
-      sessionLogConfig,
       event: "service.websocket.run.failed",
       userId: state.runMeta?.userId || "",
       sessionId: state.runMeta?.sessionId || "",

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const WORKSPACE_LAYOUT_VERSION = 3;
+export const WORKSPACE_LAYOUT_VERSION = 4;
 
 export const WORKSPACE_ROOT_LAYOUT = Object.freeze({
   USERS_FILE: "user.json",
@@ -21,6 +21,10 @@ export const WORKSPACE_LAYOUT = Object.freeze({
   RUNTIME_DIR: "runtime",
   SESSION_DIR: "runtime/session",
   SESSION_TREE_FILE: "runtime/session/session-tree.json",
+  SESSION_SUMMARY_FILE: "runtime/session/sessions.json",
+  SESSION_TOMBSTONE_FILE: "runtime/session/.deleted-sessions.json",
+  SESSION_LIFECYCLE_RECORDS_DIR: "runtime/session/.lifecycle/records",
+  SESSION_LIFECYCLE_LOCKS_DIR: "runtime/session/.lifecycle/locks",
   ATTACH_DIR: "runtime/attach",
   SCOPED_ATTACH_DIR: "runtime/attach/scoped",
   CONNECTORS_DIR: "runtime/connectors",
@@ -39,6 +43,8 @@ export const WORKSPACE_LAYOUT = Object.freeze({
 
 export const WORKSPACE_RUNTIME_DIRECTORIES = Object.freeze([
   WORKSPACE_LAYOUT.SESSION_DIR,
+  WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR,
+  WORKSPACE_LAYOUT.SESSION_LIFECYCLE_LOCKS_DIR,
   WORKSPACE_LAYOUT.SCOPED_ATTACH_DIR,
   WORKSPACE_LAYOUT.CONNECTORS_DIR,
   WORKSPACE_LAYOUT.OPS_WORKDIR,

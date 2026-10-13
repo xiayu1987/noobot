@@ -50,9 +50,12 @@ test("workflow semantic context projects canonical tool evidence for the observe
     ctx: {},
   });
   assert.equal(messages[0].role, "user");
-  assert.equal(messages[0].content, "Tool call: read_file({})");
+  assert.equal(messages[0].content, "Tool call [call-workflow]: read_file({})");
   assert.equal(messages[1].role, "assistant");
-  assert.equal(messages[1].content, '{"ok":true}');
+  assert.equal(
+    messages[1].content,
+    'Tool result [call-workflow] (matching tool result of the executed call above):\n{"ok":true}',
+  );
 });
 
 test("workflow semantic planning passes conversation context before current user task", async () => {

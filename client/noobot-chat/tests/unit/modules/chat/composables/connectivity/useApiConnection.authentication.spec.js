@@ -322,4 +322,105 @@ describe("useApiConnection authentication recovery", () => {
     expect(connection.apiKey.value).toBe("xiayu-key");
     expect(connection.connected.value).toBe(true);
   });
+
+  function rateLimitedResponse(retryAfterSeconds) {
+    return {
+      ok: false,
+      status: 429,
+      headers: { get: (name) => (name === "retry-after" ? String(retryAfterSeconds) : null) },
+      json: async () => ({ ok: false, error: "Too Many Requests" }),
+    };
+  }
+
+  it("waits for Retry-After and retries connect after admission rejection", async () => {
+    vi.useFakeTimers();
+    try {
+      connectApi.mockResolvedValueOnce(rateLimitedResponse(2)).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, userId: "admin", apiKey: "after-429", role: "user" }),
+      });
+      const connection = useApiConnection({ userId: ref("admin") });
+      connection.connectCode.value = "connect-code";
+      const pending = connection.connectBackend({ silent: true });
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(connectApi).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toBe(true);
+      expect(connectApi).toHaveBeenCalledTimes(2);
+      expect(connection.apiKey.value).toBe("after-429");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up connect after bounded admission retries", async () => {
+    vi.useFakeTimers();
+    try {
+      connectApi.mockResolvedValue(rateLimitedResponse(1));
+      const connection = useApiConnection({ userId: ref("admin") });
+      connection.connectCode.value = "connect-code";
+      const pending = connection.connectBackend({ silent: true });
+      await vi.advanceTimersByTimeAsync(10000);
+      await expect(pending).resolves.toBe(false);
+      expect(connectApi).toHaveBeenCalledTimes(4);
+      expect(connection.connected.value).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("abandons admission retry when credentials change during the wait", async () => {
+    vi.useFakeTimers();
+    try {
+      connectApi.mockResolvedValue(rateLimitedResponse(5));
+      const selectedUserId = ref("admin");
+      const connection = useApiConnection({ userId: selectedUserId });
+      connection.connectCode.value = "connect-code";
+      const pending = connection.connectBackend({ silent: true });
+      await vi.advanceTimersByTimeAsync(0);
+      selectedUserId.value = "xiayu";
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(pending).resolves.toBe(false);
+      expect(connectApi).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries authenticated requests after admission rejection", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(rateLimitedResponse(1))
+        .mockResolvedValueOnce({ ok: true, status: 200 });
+      vi.stubGlobal("fetch", fetchMock);
+      const connection = useApiConnection({ userId: ref("admin") });
+      const pending = connection.authFetch("/api/internal/session/admin/s1", { method: "POST" });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "POST" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns the admission rejection after bounded authenticated retries", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn(async () => rateLimitedResponse(1));
+      vi.stubGlobal("fetch", fetchMock);
+      const connection = useApiConnection({ userId: ref("admin") });
+      const pending = connection.authFetch("/api/internal/connectors/admin");
+      await vi.advanceTimersByTimeAsync(10000);
+      await expect(pending).resolves.toMatchObject({ status: 429 });
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

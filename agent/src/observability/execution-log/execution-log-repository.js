@@ -11,7 +11,7 @@ import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
+  writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { resolveExecutionCategoryDebugType } from "@noobot/shared/runtime-events-config";
 
@@ -27,16 +27,9 @@ function mapExecutionLogToSessionChannel(normalizedLog = {}) {
 }
 
 export class ExecutionLogRepository {
-  constructor({
-    executionRepository = null,
-    now = () => new Date().toISOString(),
-    workspaceRoot = "",
-    runtimeEventsConfig = {},
-  } = {}) {
+  constructor({ executionRepository = null, now = () => new Date().toISOString() } = {}) {
     this.executionRepository = executionRepository;
     this.now = now;
-    this.workspaceRoot = workspaceRoot;
-    this.runtimeEventsConfig = runtimeEventsConfig;
     this.appendQueues = new Map();
   }
 
@@ -44,31 +37,25 @@ export class ExecutionLogRepository {
     const route = mapExecutionLogToSessionChannel(normalizedLog);
     const logData =
       normalizedLog.data && typeof normalizedLog.data === "object" ? normalizedLog.data : {};
-    await writeRoutedRuntimeEvent(
-      {
-        scope: "session",
-        userId,
-        sessionId,
-        parentSessionId,
-        dialogProcessId: normalizedLog.dialogProcessId,
-        turnScopeId: normalizedLog.turnScopeId,
-        source: "agent",
-        category: route.category,
-        ...(route.debugType ? { debugType: route.debugType } : {}),
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        event: normalizedLog.event || "agent.execution",
-        data: {
-          executionCategory: normalizedLog.category || "",
-          type: normalizedLog.type || "",
-          ts: normalizedLog.ts || "",
-          ...logData,
-        },
+    await writeRuntimeEvent({
+      scope: "session",
+      userId,
+      sessionId,
+      parentSessionId,
+      dialogProcessId: normalizedLog.dialogProcessId,
+      turnScopeId: normalizedLog.turnScopeId,
+      source: "agent",
+      category: route.category,
+      ...(route.debugType ? { debugType: route.debugType } : {}),
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      event: normalizedLog.event || "agent.execution",
+      data: {
+        executionCategory: normalizedLog.category || "",
+        type: normalizedLog.type || "",
+        ts: normalizedLog.ts || "",
+        ...logData,
       },
-      {
-        ...this.runtimeEventsConfig,
-        ...(this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : {}),
-      },
-    );
+    });
   }
 
   _appendQueueKey(userId = "", sessionId = "", parentSessionId = "") {

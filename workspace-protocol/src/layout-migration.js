@@ -13,6 +13,7 @@ export const WORKSPACE_LAYOUT_UNMARKED_VERSION = 1;
 
 export const WORKSPACE_LAYOUT_UPGRADE_OWNER = Object.freeze({
   SESSION_STORAGE: "session-storage",
+  SESSION_LIFECYCLE: "session-lifecycle",
 });
 
 export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
@@ -25,6 +26,11 @@ export const WORKSPACE_LAYOUT_UPGRADES = Object.freeze([
     id: "session-tree-parent-only-v3",
     toVersion: 3,
     owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_STORAGE,
+  }),
+  Object.freeze({
+    id: "session-deletion-tombstone-only-v4",
+    toVersion: 4,
+    owner: WORKSPACE_LAYOUT_UPGRADE_OWNER.SESSION_LIFECYCLE,
   }),
 ]);
 

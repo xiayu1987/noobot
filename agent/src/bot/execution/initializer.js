@@ -30,14 +30,6 @@ export class SessionExecutionInitializer {
     const upstreamListener = eventListener;
     const basePath = await this.workspaceService.ensureUserWorkspace(userId);
 
-    if (!persistenceContext?.locationResolver) {
-      await this.session.upsertSessionTree({
-        userId,
-        sessionId: usedSessionId,
-        parentSessionId,
-      });
-    }
-
     const resolvedDialogProcessId = String(dialogProcessId || "").trim() || uuidv4();
     const sessionBundle = await this.session.getSessionBundle({
       userId,

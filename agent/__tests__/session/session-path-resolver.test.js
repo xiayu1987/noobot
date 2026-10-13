@@ -22,14 +22,6 @@ function createResolverWithTree(tree = {}) {
     async getTree() {
       return tree;
     },
-    loopSession(sessionId, inputTree, chain = []) {
-      const normalized = String(sessionId || "").trim();
-      if (!normalized) return chain;
-      const parent = String(inputTree?.nodes?.[normalized]?.parentSessionId || "").trim();
-      const next = chain.concat(normalized);
-      if (!parent) return next;
-      return this.loopSession(parent, inputTree, next);
-    },
   };
 
   return new SessionPathResolver({ pathResolver, treeRepository });
@@ -71,5 +63,33 @@ test("resolveSessionDir should resolve multi-level chain path", async () => {
   assert.equal(
     dir,
     path.join("/tmp", "workspace", "u1", "runtime/session", "rootA", "branchB", "leafC"),
+  );
+});
+
+test("resolveSessionDir places an unregistered child under its parent chain", async () => {
+  const resolver = createResolverWithTree({
+    nodes: {
+      rootA: { sessionId: "rootA", parentSessionId: "" },
+      branchB: { sessionId: "branchB", parentSessionId: "rootA" },
+    },
+  });
+  const dir = await resolver.resolveSessionDir("u1", "newC", "branchB");
+  assert.equal(
+    dir,
+    path.join("/tmp", "workspace", "u1", "runtime/session", "rootA", "branchB", "newC"),
+  );
+});
+
+test("resolveSessionDir rejects a parent hint that contradicts the tree", async () => {
+  const resolver = createResolverWithTree({
+    nodes: {
+      rootA: { sessionId: "rootA", parentSessionId: "" },
+      branchB: { sessionId: "branchB", parentSessionId: "rootA" },
+      otherD: { sessionId: "otherD", parentSessionId: "" },
+    },
+  });
+  await assert.rejects(
+    () => resolver.resolveSessionDir("u1", "branchB", "otherD"),
+    (error) => error?.code === "FATAL_PARENT_SESSION_MISSING",
   );
 });

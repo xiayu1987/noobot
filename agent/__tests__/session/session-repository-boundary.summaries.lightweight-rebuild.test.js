@@ -8,7 +8,7 @@ import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
@@ -18,11 +18,12 @@ import {
   canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
+import { initializeUserWorkspace } from "../helpers/user-workspace.js";
 
 test("session display summary should keep chat view lightweight and rebuild stale files", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
-    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    await initializeUserWorkspace(workspaceRoot, userId);
 
     const runtime = createSessionServices(
       { workspaceRoot },

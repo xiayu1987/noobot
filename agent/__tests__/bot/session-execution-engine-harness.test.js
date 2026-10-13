@@ -312,7 +312,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   const sessionId = randomUUID();
 
   const session = {
-    async upsertSessionTree() {},
     async getRootSessionId({ sessionId }) {
       return sessionId;
     },
