@@ -305,7 +305,6 @@ test("config repair recursively adds template nodes through one protocol", () =>
       tools: {
         execute_script: { enabled: true, sandbox_mode: true },
         read_file: { enabled: true },
-        task_summary: { enabled: true, phaseSummaryLoopTurns: 10 },
       },
     },
     target: {
@@ -342,8 +341,25 @@ test("config repair recursively adds template nodes through one protocol", () =>
   assert.deepEqual(synchronized.tools, {
     execute_script: { enabled: true },
     read_file: { enabled: true },
-    task_summary: { enabled: true, phaseSummaryLoopTurns: 10 },
   });
+});
+
+test("config repair drops control tool entries from every scope", () => {
+  const target = {
+    tools: {
+      task_summary: { enabled: false, phaseSummaryLoopTurns: 7 },
+      task_check: { enabled: false },
+    },
+  };
+  for (const scope of [CONFIG_DOCUMENT_SCOPE.GLOBAL, CONFIG_DOCUMENT_SCOPE.USER]) {
+    const repaired = repairConfigDocument({
+      scope,
+      baseValues: {},
+      target: structuredClone(target),
+    }).document;
+    assert.equal("task_summary" in (repaired.tools || {}), false, scope);
+    assert.equal("task_check" in (repaired.tools || {}), false, scope);
+  }
 });
 
 test("config repair separates structural fields from default values", () => {

@@ -84,9 +84,6 @@
     "multimodal_generate": {
       "enabled": true
     },
-    "task_summary": {
-      "enabled": true
-    },
     "help": {
       "enabled": true
     }

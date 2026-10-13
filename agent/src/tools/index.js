@@ -19,7 +19,7 @@ import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createHelpTool } from "./collaboration/help-tool.js";
 import { mergeConfig } from "../config/index.js";
-import { TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
+import { CONTROL_TOOL_NAMES } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 import { assertToolPathContract } from "@noobot/path-resolver";
 import {
@@ -46,36 +46,12 @@ function normalizeToolName(toolDefinition = {}) {
   return String(toolDefinition?.name || "").trim();
 }
 
-const TOOL_CONFIG_ALIASES = {
-  [TOOL_NAME.READ_FILE]: [TOOL_NAME.READ_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
-  [TOOL_NAME.WRITE_FILE]: [TOOL_NAME.WRITE_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
-  [TOOL_NAME.SEARCH]: [TOOL_NAME.SEARCH, TOOL_CONFIG_ALIAS_KEY.FILE],
-  [TOOL_NAME.PATCH_FILE]: [TOOL_NAME.PATCH_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
-  [TOOL_NAME.EXECUTE_SCRIPT]: [TOOL_NAME.EXECUTE_SCRIPT],
-  [TOOL_NAME.EXECUTE_NATIVE_SCRIPT]: [TOOL_NAME.EXECUTE_NATIVE_SCRIPT],
-  [TOOL_NAME.LIST_SKILLS]: [TOOL_NAME.LIST_SKILLS, TOOL_CONFIG_ALIAS_KEY.SKILL],
-  [TOOL_NAME.CALL_SERVICE]: [TOOL_NAME.CALL_SERVICE, TOOL_CONFIG_ALIAS_KEY.SERVICE],
-  [TOOL_NAME.CALL_MCP_TASK]: [TOOL_NAME.CALL_MCP_TASK, TOOL_CONFIG_ALIAS_KEY.MCP],
-  [TOOL_NAME.SWITCH_MODEL]: [TOOL_NAME.SWITCH_MODEL, TOOL_CONFIG_ALIAS_KEY.MODEL],
-  [TOOL_NAME.USER_INTERACTION]: [TOOL_NAME.USER_INTERACTION],
-  [TOOL_NAME.ACCESS_CONNECTOR]: [TOOL_NAME.ACCESS_CONNECTOR],
-  [TOOL_NAME.WEB_SEARCH]: [TOOL_NAME.WEB_SEARCH],
-  [TOOL_NAME.MULTIMODAL_GENERATE]: [TOOL_NAME.MULTIMODAL_GENERATE],
-  [TOOL_NAME.MULTIMODAL_PARSE]: [TOOL_NAME.MULTIMODAL_PARSE],
-  [TOOL_NAME.TASK_SUMMARY]: [TOOL_NAME.TASK_SUMMARY],
-  [TOOL_NAME.TASK_CHECK]: [TOOL_NAME.TASK_CHECK],
-  [TOOL_NAME.HELP]: [TOOL_NAME.HELP],
-};
-
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
   const source = Array.isArray(tools) ? tools : [];
   return source.filter((toolDefinition) => {
     const name = normalizeToolName(toolDefinition);
-    const candidates =
-      Array.isArray(TOOL_CONFIG_ALIASES[name]) && TOOL_CONFIG_ALIASES[name].length
-        ? TOOL_CONFIG_ALIASES[name]
-        : [name];
-    return candidates.every((key) => isNamedToolEnabled(effectiveConfig, key, true));
+    if (CONTROL_TOOL_NAMES.includes(name)) return true;
+    return isNamedToolEnabled(effectiveConfig, name, true);
   });
 }
 

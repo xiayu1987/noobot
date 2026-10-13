@@ -166,8 +166,6 @@ Execution isolation is defined by the `@noobot/execution-isolation-protocol` wor
 | `tools.access_connector.enabled` | boolean | Enable connector access tool |
 | `tools.max_output_chars` | number | Unified tool output cleaning/truncation length limit |
 | `tools.multimodal_generate.enabled` | boolean | Enable multimodal generation tool |
-| `tools.task_summary.enabled` | boolean | Enable task summary tool |
-| `tools.task_summary.phase_summary_loop_turns` | number | Number of turns threshold to trigger phase summary |
 | `tools.help.enabled` | boolean | Enable help tool |
 | `tools.help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
 | `tools.help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |

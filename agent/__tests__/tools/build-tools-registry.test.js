@@ -169,8 +169,8 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     createContext({
       globalConfig: {
         tools: {
-          service: { enabled: false },
-          model: { enabled: false },
+          call_service: { enabled: false },
+          switch_model: { enabled: false },
           access_connector: { enabled: false },
           help: { enabled: false },
           do_search_web: { enabled: false },
@@ -199,12 +199,23 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
   assert.equal(names.has("call_mcp_task"), true);
 });
 
+test("buildTools: control tools ignore enabled=false in config", async () => {
+  const tools = await buildTools(
+    createContext({
+      globalConfig: { tools: { task_summary: { enabled: false }, task_check: { enabled: false } } },
+      userConfig: { tools: { task_summary: { enabled: false }, task_check: { enabled: false } } },
+    }),
+  );
+  const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
+  assert.equal(names.has("task_summary"), true);
+  assert.equal(names.has("task_check"), true);
+});
+
 test("buildTools: coding 场景不能绕过 enabled=false 的工具配置", async () => {
   const tools = await buildTools(
     createContext({
       globalConfig: {
         tools: {
-          file: { enabled: false },
           read_file: { enabled: false },
           write_file: { enabled: false },
           search: { enabled: false },

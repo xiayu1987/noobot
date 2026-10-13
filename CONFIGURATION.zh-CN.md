@@ -166,8 +166,6 @@ Session 日志 WebSocket：
 | `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
 | `tools.max_output_chars` | number | 工具输出清洗与截断的统一长度上限 |
 | `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |
-| `tools.task_summary.enabled` | boolean | 启用阶段小结工具 |
-| `tools.task_summary.phase_summary_loop_turns` | number | 触发阶段小结的对话轮数阈值 |
 | `tools.help.enabled` | boolean | 启用帮助工具 |
 | `tools.help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
 | `tools.help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |

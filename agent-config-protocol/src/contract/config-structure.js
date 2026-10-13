@@ -186,11 +186,6 @@ const TOOLS_STRUCTURE = object({
     }),
   }),
   multimodal_generate: toolToggle(),
-  task_summary: toolToggle({
-    phaseSummaryLoopTurns: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-    phaseSummaryMessageCharsThreshold: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-    maxToolLoopTurns: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-  }),
   help: toolToggle({
     helpPromptLoopTurns: integer({ minimum: 1, policy: GLOBAL_ONLY }),
     toolFailureHelpCount: integer({ minimum: 1, policy: GLOBAL_ONLY }),

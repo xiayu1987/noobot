@@ -31,13 +31,9 @@ export const TOOL_NAME = Object.freeze({
   HELP: "help",
 });
 
-export const TOOL_CONFIG_ALIAS_KEY = Object.freeze({
-  FILE: "file",
-  SKILL: "skill",
-  SERVICE: "service",
-  MCP: "mcp",
-  MODEL: "model",
-});
+// Loop-control tools are always registered and never toggled by user/global config;
+// only runtime toolPolicy (e.g. harness denyToolNames) may remove them.
+export const CONTROL_TOOL_NAMES = Object.freeze([TOOL_NAME.TASK_SUMMARY, TOOL_NAME.TASK_CHECK]);
 
 export const TOOL_RESULT_STATE = Object.freeze({
   OK: "OK",

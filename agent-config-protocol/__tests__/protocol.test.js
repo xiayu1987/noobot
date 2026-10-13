@@ -489,10 +489,6 @@ test("current config migration preserves active tool and runtime configuration",
       allowedExtensions: [".pdf"],
     },
     tools: {
-      task_summary: {
-        enabled: true,
-        phaseSummaryLoopTurns: 10,
-      },
       help: {
         enabled: true,
         helpPromptLoopTurns: 10,
