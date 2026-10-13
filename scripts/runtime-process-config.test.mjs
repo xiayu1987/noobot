@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { createRequire } from "node:module";
 
@@ -17,6 +20,7 @@ const TOPOLOGY_ENV_KEYS = [
   "AGENT_PROXY_UPSTREAM",
   "AGENT_PROXY_UPSTREAM_WS_URL",
   "AGENT_PROXY_UPSTREAM_HTTP_BASE",
+  "NOOBOT_GLOBAL_CONFIG_PATH",
 ];
 
 function captureTopologyEnv() {
@@ -40,7 +44,12 @@ function restoreTopologyEnv(snapshot) {
 
 test("PM2 ecosystem assigns runtime environment to the owning process", () => {
   const previous = captureTopologyEnv();
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-ecosystem-config-"));
+  const workspaceRoot = path.join(configDir, "workspace");
   try {
+    const globalConfigPath = path.join(configDir, "global.config.json");
+    fs.writeFileSync(globalConfigPath, JSON.stringify({ workspace_root: workspaceRoot }));
+    process.env.NOOBOT_GLOBAL_CONFIG_PATH = globalConfigPath;
     process.env.PORT = "31061";
     process.env.CADDY_ADDR = ":31060";
     process.env.AGENT_PROXY_UPSTREAM = "127.0.0.1:31062";
@@ -48,6 +57,7 @@ test("PM2 ecosystem assigns runtime environment to the owning process", () => {
     delete require.cache[ecosystemPath];
     const apps = new Map(require(ecosystemPath).apps.map((app) => [app.name, app]));
     assert.equal(apps.get("noobot-service")?.env?.PORT, "31061");
+    assert.equal(apps.get("noobot-service")?.env?.NOOBOT_WORKSPACE_ROOT, workspaceRoot);
     assert.equal(
       apps.get("noobot-agent-proxy")?.env?.AGENT_PROXY_UPSTREAM_WS_URL,
       "ws://127.0.0.1:31061/chat/ws",
@@ -61,5 +71,6 @@ test("PM2 ecosystem assigns runtime environment to the owning process", () => {
     assert.equal(apps.get("noobot-model-proxy")?.env, undefined);
   } finally {
     restoreTopologyEnv(previous);
+    fs.rmSync(configDir, { recursive: true, force: true });
   }
 });
