@@ -61,7 +61,7 @@
     "access_connector": {
       "enabled": true
     },
-    "web_search": {
+    "do_search_web": {
       "enabled": true,
       "mode": "model_web_search",
       "model_web_search": {

@@ -26,7 +26,7 @@ export const PROGRAMMING_AUXILIARY_TOOL_NAMES = Object.freeze([
   "task_summary",
   "task_check",
   "help",
-  "web_search",
+  "do_search_web",
 ]);
 export const PROGRAMMING_TOOL_NAMES = Object.freeze([
   ...PROGRAMMING_REQUIRED_TOOL_NAMES,

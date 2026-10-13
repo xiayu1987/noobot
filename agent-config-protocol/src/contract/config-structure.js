@@ -177,7 +177,7 @@ const TOOLS_STRUCTURE = object({
   execute_script: object({ enabled: boolean() }, { policy: GLOBAL_ONLY }),
   execute_native_script: toolToggle(),
   access_connector: toolToggle(),
-  web_search: toolToggle({
+  do_search_web: toolToggle({
     mode: string({ nonEmpty: true, values: Object.freeze(Object.values(WEB_SEARCH_MODE)) }),
     model_web_search: object({ model: string({ modelReference: "model" }) }),
     search_engine: object({

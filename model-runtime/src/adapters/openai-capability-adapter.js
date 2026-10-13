@@ -95,6 +95,25 @@ function resolveResponsesOutputText(result = {}) {
     .trim();
 }
 
+// 只约束“先搜后答”，搜索词保持为用户原始 query。
+const WEB_SEARCH_INSTRUCTION =
+  "Search the web before answering. Answer only from the search results.";
+
+// 来源取自 message 输出里的 url_citation 标注，按 url 去重。
+function extractResponsesUrlCitations(output = []) {
+  const sources = new Map();
+  for (const item of Array.isArray(output) ? output : []) {
+    for (const part of Array.isArray(item?.content) ? item.content : []) {
+      for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
+        const url = String(annotation?.url || "").trim();
+        if (annotation?.type !== "url_citation" || !url || sources.has(url)) continue;
+        sources.set(url, { title: String(annotation.title || "").trim(), url });
+      }
+    }
+  }
+  return [...sources.values()];
+}
+
 function normalizeCount(value = 1, modelName = "") {
   const count = Math.min(10, Math.max(1, Math.floor(Number(value || 1)) || 1));
   return String(modelName || "")
@@ -336,6 +355,7 @@ export async function executeOpenAiOperation({
     const result = await client.responses.create(
       {
         model: modelSpec.model,
+        instructions: WEB_SEARCH_INSTRUCTION,
         input: [
           {
             role: "user",
@@ -343,12 +363,13 @@ export async function executeOpenAiOperation({
           },
         ],
         tools: [{ type: "web_search" }],
+        tool_choice: "required",
       },
       { signal: signal || undefined },
     );
     return {
       rawText: resolveResponsesOutputText(result),
-      output: Array.isArray(result?.output) ? result.output : [],
+      sources: extractResponsesUrlCitations(result?.output),
     };
   }
   if (operation.kind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {

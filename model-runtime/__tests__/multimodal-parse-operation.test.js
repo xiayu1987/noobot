@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { executeOpenAiOperation } from "../src/adapters/openai-capability-adapter.js";
 import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 
-test("Web Search reads text from the canonical Responses output items", async () => {
+test("Web Search forces the search tool and returns text with url_citation sources", async () => {
+  let request;
   const result = await executeOpenAiOperation({
     modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
     credential: "key",
@@ -18,24 +19,38 @@ test("Web Search reads text from the canonical Responses output items", async ()
     },
     openAiClientFactory: () => ({
       responses: {
-        create: async () => ({
-          output: [
-            { type: "web_search_call", status: "completed" },
-            {
-              type: "message",
-              content: [{ type: "output_text", text: "search result" }],
-            },
-          ],
-        }),
+        create: async (body) => {
+          request = body;
+          return {
+            output: [
+              { type: "web_search_call", status: "completed" },
+              {
+                type: "message",
+                content: [
+                  {
+                    type: "output_text",
+                    text: "search result",
+                    annotations: [
+                      { type: "url_citation", title: "A", url: "https://example.test/a" },
+                      { type: "url_citation", title: "A again", url: "https://example.test/a" },
+                    ],
+                  },
+                ],
+              },
+            ],
+          };
+        },
       },
     }),
   });
 
-  assert.equal(result.rawText, "search result");
-  assert.deepEqual(
-    result.output.map((item) => item.type),
-    ["web_search_call", "message"],
-  );
+  assert.equal(request.input[0].content[0].text, "latest");
+  assert.match(request.instructions, /Search the web before answering/);
+  assert.equal(request.tool_choice, "required");
+  assert.deepEqual(result, {
+    rawText: "search result",
+    sources: [{ title: "A", url: "https://example.test/a" }],
+  });
 });
 
 test("Responses image generation sends the prompt through the canonical input field", async () => {

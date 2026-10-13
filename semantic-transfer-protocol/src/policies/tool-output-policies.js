@@ -15,7 +15,7 @@ const TEXT_TOOLS = [
   "switch_model",
   "user_interaction",
   "access_connector",
-  "web_search",
+  "do_search_web",
   "task_summary",
   "task_check",
   "help",

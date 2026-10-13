@@ -94,7 +94,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "task_summary",
     "help",
     "user_interaction",
-    "web_search",
+    "do_search_web",
     "multimodal_parse",
   ];
 
@@ -108,7 +108,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "mcpName",
     "task",
   ]);
-  assert.deepEqual(Object.keys(toolByName.get("web_search")?.schema?.shape || {}).sort(), [
+  assert.deepEqual(Object.keys(toolByName.get("do_search_web")?.schema?.shape || {}).sort(), [
     "query",
   ]);
   assert.deepEqual(Object.keys(toolByName.get("multimodal_parse")?.schema?.shape || {}).sort(), [
@@ -173,7 +173,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
           model: { enabled: false },
           access_connector: { enabled: false },
           help: { enabled: false },
-          web_search: { enabled: false },
+          do_search_web: { enabled: false },
           user_interaction: { enabled: false },
         },
       },
@@ -186,7 +186,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     "switch_model",
     "access_connector",
     "help",
-    "web_search",
+    "do_search_web",
     "user_interaction",
   ];
 

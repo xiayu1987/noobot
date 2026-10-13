@@ -92,7 +92,7 @@ test("resolveScenarioProfile supports builtin text scenario without a hard-coded
     "task_summary",
     "task_check",
     "help",
-    "web_search",
+    "do_search_web",
   ]);
   assert.deepEqual(result.context, [
     "scenario",

@@ -691,7 +691,30 @@ test("Anthropic web search continues the turn when the server tool reports pause
     return new Response(
       JSON.stringify({
         stop_reason: stopReasons[attempt],
-        content: [{ type: "text", text: attempt === 0 ? "partial " : "final" }],
+        content:
+          attempt === 0
+            ? [
+                {
+                  type: "server_tool_use",
+                  id: "srv_1",
+                  name: "web_search",
+                  input: { query: "noobot" },
+                },
+                {
+                  type: "web_search_tool_result",
+                  tool_use_id: "srv_1",
+                  content: [
+                    { type: "web_search_result", title: "Noobot", url: "https://example.test/a" },
+                    {
+                      type: "web_search_result",
+                      title: "Noobot dup",
+                      url: "https://example.test/a",
+                    },
+                  ],
+                },
+                { type: "text", text: "partial " },
+              ]
+            : [{ type: "text", text: "final" }],
       }),
       { status: 200 },
     );
@@ -704,10 +727,16 @@ test("Anthropic web search continues the turn when the server tool reports pause
     });
     assert.equal(bodies.length, 2);
     assert.deepEqual(bodies[0].tools, [{ type: "web_search_20250305", name: "web_search" }]);
+    assert.equal(bodies[0].messages[0].content[0].text, "noobot");
+    assert.match(bodies[0].system, /Search the web before answering/);
+    assert.deepEqual(bodies[0].tool_choice, { type: "any" });
+    assert.equal(bodies[1].tool_choice, undefined);
     assert.equal(bodies[1].messages.length, 2);
     assert.equal(bodies[1].messages[1].role, "assistant");
-    assert.equal(result.rawText, "partial final");
-    assert.equal(result.output.length, 2);
+    assert.deepEqual(result, {
+      rawText: "partial final",
+      sources: [{ title: "Noobot", url: "https://example.test/a" }],
+    });
   } finally {
     globalThis.fetch = previousFetch;
   }

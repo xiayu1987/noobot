@@ -38,7 +38,7 @@ const TOOL_CALL_ICONS = Object.freeze({
   switch_model: Switch,
   user_interaction: ChatDotRound,
   access_connector: Link,
-  web_search: Search,
+  do_search_web: Search,
   multimodal_generate: MagicStick,
   multimodal_parse: Picture,
   task_summary: Document,

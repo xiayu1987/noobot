@@ -171,14 +171,14 @@ Session 日志 WebSocket：
 | `tools.help.enabled` | boolean | 启用帮助工具 |
 | `tools.help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
 | `tools.help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
-| `tools.web_search.enabled` | boolean | 启用网页搜索工具 |
-| `tools.web_search.mode` | enum | 搜索后端：`responses_api` / `search_engine` |
-| `tools.web_search.responses_api.model` | string | Responses API 网页搜索使用的模型别名/名称 |
-| `tools.web_search.search_engine.prompt` | string | 搜索引擎模式注入的提示词 |
-| `tools.web_search.search_engine.endpoints.search.url` | string(url) | 搜索端点 URL（支持 `${VAR_NAME}`） |
-| `tools.web_search.search_engine.endpoints.search.query_string_format` | string | 搜索查询字符串模板 |
-| `tools.web_search.search_engine.endpoints.search.body_format` | string | 搜索请求体模板 |
-| `tools.web_search.search_engine.endpoints.search.custom_param_format` | string | 自定义端点参数说明 |
+| `tools.do_search_web.enabled` | boolean | 启用网页搜索工具 |
+| `tools.do_search_web.mode` | enum | 搜索后端：`model_web_search` / `search_engine` |
+| `tools.do_search_web.model_web_search.model` | string | 模型内置网页搜索使用的模型别名/名称 |
+| `tools.do_search_web.search_engine.prompt` | string | 搜索引擎模式注入的提示词 |
+| `tools.do_search_web.search_engine.endpoints.search.url` | string(url) | 搜索端点 URL（支持 `${VAR_NAME}`） |
+| `tools.do_search_web.search_engine.endpoints.search.query_string_format` | string | 搜索查询字符串模板 |
+| `tools.do_search_web.search_engine.endpoints.search.body_format` | string | 搜索请求体模板 |
+| `tools.do_search_web.search_engine.endpoints.search.custom_param_format` | string | 自定义端点参数说明 |
 
 大上下文长度阈值默认值：
 
@@ -206,7 +206,7 @@ Session 日志 WebSocket：
 情景定义由系统内置，包含三个固定情景：
 
 - `full`（全能，默认）：tools/context/services/mcp_servers 均为 `["*"]`，表示不额外限制。
-- `programming`（编程）：固定使用代码任务策略，包含代码修改必要工具、代码上下文段和 `web_search` 工具；配置文件只允许覆盖 `model`。
+- `programming`（编程）：固定使用代码任务策略，包含代码修改必要工具、代码上下文段和 `do_search_web` 工具；配置文件只允许覆盖 `model`。
 - `text`（文本）：固定使用文本处理策略及对应工具/上下文；配置文件只允许覆盖 `model`。
 
 用户配置或全局配置中的其它字段（如 `name`、`description`、`tools`、`context`、`services`、`mcp_servers`，以及自定义情景定义）会被忽略，避免破坏内置行为。
@@ -322,7 +322,7 @@ Session 日志 WebSocket：
 
 - `weather_service`：通过 `wttr.in` 查询天气
 
-网页搜索由 `web_search` 工具提供，不再通过外部服务提供。
+网页搜索由 `do_search_web` 工具提供，不再通过外部服务提供。
 
 ### 4.2 插件配置（`plugins.<name>`）
 

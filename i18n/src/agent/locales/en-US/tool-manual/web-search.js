@@ -5,14 +5,12 @@
  */
 
 export const WEB_SEARCH_MANUAL = {
-  web_search: {
+  do_search_web: {
     summary:
       "Search the web for facts outside model knowledge or where recency changes the answer.",
-    usage: ["web_search({ query, model_name })"],
+    usage: ["do_search_web({ query })"],
     params: {
       query: "Search content, required.",
-      model_name:
-        "Model that performs the search, optional. Omit to resolve the configured default.",
     },
     notes: [
       "Search before answering when current information would change the answer: recent events, current prices, version-specific behavior.",

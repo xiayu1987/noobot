@@ -41,7 +41,7 @@ const minimalGlobalExample = {
     language: "zh-CN",
   },
   tools: {
-    web_search: {
+    do_search_web: {
       search_engine: {
         endpoints: {
           search: {

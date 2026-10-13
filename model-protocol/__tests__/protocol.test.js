@@ -308,7 +308,7 @@ test("model operation results are validated by operation kind", () => {
     invocation,
     operationKind: MODEL_OPERATION_KIND.WEB_SEARCH,
     output,
-    result: { rawText: "answer", output: [{ type: "message" }] },
+    result: { rawText: "answer", sources: [{ title: "Doc", url: "https://example.test/doc" }] },
     attempts: [
       {
         attempt: 1,
@@ -322,6 +322,27 @@ test("model operation results are validated by operation kind", () => {
     provider: { operatorId: "openai", adapterId: "openai-compatible", format: "openai_compatible" },
   });
   assert.equal(validateModelResponse(response), response);
+  assert.deepEqual(response.result.sources, [{ title: "Doc", url: "https://example.test/doc" }]);
+  assert.throws(
+    () =>
+      createModelResponse({
+        invocation,
+        operationKind: MODEL_OPERATION_KIND.WEB_SEARCH,
+        output,
+        result: { rawText: "answer", output: [] },
+        attempts: [
+          {
+            attempt: 1,
+            status: "completed",
+            kind: MODEL_ATTEMPT_KIND.RESPONSE,
+            streaming: false,
+            output,
+          },
+        ],
+        model,
+      }),
+    /unsupported fields: output/,
+  );
   assert.throws(
     () =>
       createModelResponse({

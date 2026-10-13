@@ -143,6 +143,15 @@ function normalizeImageArtifact(value, index) {
   });
 }
 
+function normalizeWebSearchSource(value = {}, path = "") {
+  const source = requirePlainObject(value, path);
+  rejectUnknownKeys(source, ["title", "url"], path);
+  return Object.freeze({
+    title: String(source.title || "").trim(),
+    url: requireText(source.url, `${path}.url`),
+  });
+}
+
 export function normalizeModelOperationResult(kind, input = {}) {
   const operationKind = String(kind || "")
     .trim()
@@ -156,12 +165,16 @@ export function normalizeModelOperationResult(kind, input = {}) {
     return Object.freeze({});
   }
   if (operationKind === MODEL_OPERATION_KIND.WEB_SEARCH) {
-    rejectUnknownKeys(source, ["rawText", "output"], "model response.result");
-    if (!Array.isArray(source.output))
-      throw new TypeError("model response.result.output must be an array");
+    rejectUnknownKeys(source, ["rawText", "sources"], "model response.result");
+    if (!Array.isArray(source.sources))
+      throw new TypeError("model response.result.sources must be an array");
     return Object.freeze({
       rawText: String(source.rawText || "").trim(),
-      output: Object.freeze([...source.output]),
+      sources: Object.freeze(
+        source.sources.map((item, index) =>
+          normalizeWebSearchSource(item, `model response.result.sources[${index}]`),
+        ),
+      ),
     });
   }
   if (operationKind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {

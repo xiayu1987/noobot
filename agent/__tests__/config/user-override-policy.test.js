@@ -439,7 +439,7 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
     "task_summary",
     "task_check",
     "help",
-    "web_search",
+    "do_search_web",
   ]);
   assert.equal(out.scenarios.definitions.text.name, "文本");
   assert.equal(out.scenarios.definitions.text.model, "");

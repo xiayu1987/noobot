@@ -50,27 +50,23 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.parseError.malformed": "命令格式不正确，需以 --命令 开头",
     },
   },
-  web_search: {
+  do_search_web: {
     description: {
-      key: "tools.web_search.description",
-      text: "搜索网页信息。输入 query，返回网页搜索结果。",
+      key: "tools.do_search_web.description",
+      text: "搜索网页信息。需要时效性或模型知识之外的事实时必须先调用。输入 query，返回搜索结论与来源。",
     },
     params: {
-      model_name: {
-        key: "tools.web_search.fieldModelName",
-        text: "模型名称。",
-      },
       query: {
-        key: "tools.web_search.fieldQuery",
+        key: "tools.do_search_web.fieldQuery",
         text: "搜索内容。",
       },
     },
     texts: {
-      "tools.web_search.modelApiKeyMissing": "模型 API Key 缺失",
-      "tools.web_search.queryRequired": "query 必填",
-      "tools.web_search.searchEngineUrlMissing": "搜索引擎模式需要配置 endpoints.search.url",
-      "tools.web_search.searchFailed": "网页搜索失败",
-      "tools.web_search.userIdMissing": "运行时用户 ID 缺失",
+      "tools.do_search_web.modelApiKeyMissing": "模型 API Key 缺失",
+      "tools.do_search_web.queryRequired": "query 必填",
+      "tools.do_search_web.searchEngineUrlMissing": "搜索引擎模式需要配置 endpoints.search.url",
+      "tools.do_search_web.searchFailed": "网页搜索失败",
+      "tools.do_search_web.userIdMissing": "运行时用户 ID 缺失",
     },
   },
   multimodal_generate: {

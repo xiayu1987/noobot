@@ -551,7 +551,7 @@ test("non-chat operations execute only through the resolved provider adapter", a
     createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
     executeOperation: async ({ operation }) => {
       calls.push(operation);
-      return { rawText: "searched", output: [{ type: "message" }] };
+      return { rawText: "searched", sources: [] };
     },
   };
   const executor = createModelRequestExecutor({

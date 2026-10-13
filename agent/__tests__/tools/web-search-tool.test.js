@@ -12,14 +12,14 @@ import {
   searchWithSearchEngine,
 } from "../../src/tools/ai-models/web-search-tool.js";
 
-test("web_search: model_web_search 模式只通过 canonical ModelPort 发起操作", async () => {
+test("do_search_web: model_web_search 模式只通过 canonical ModelPort 发起操作", async () => {
   let capturedRequest = null;
   const abortController = new AbortController();
   const runtime = {
     abortSignal: abortController.signal,
     globalConfig: {
       tools: {
-        web_search: { mode: "model_web_search", model_web_search: { model: "search-model" } },
+        do_search_web: { mode: "model_web_search", model_web_search: { model: "search-model" } },
       },
       providers: {
         "search-model": {
@@ -41,7 +41,10 @@ test("web_search: model_web_search 模式只通过 canonical ModelPort 发起操
         capturedRequest = request;
         return {
           execution: { provider: { operatorId: "openai", adapterId: "openai-compatible" } },
-          result: { rawText: "search result", output: [{ type: "message" }] },
+          result: {
+            rawText: "search result",
+            sources: [{ title: "Noobot", url: "https://example.test/noobot" }],
+          },
         };
       },
     },
@@ -52,22 +55,21 @@ test("web_search: model_web_search 模式只通过 canonical ModelPort 发起操
   assert.equal(capturedRequest?.operation?.kind, "web_search");
   assert.equal(capturedRequest?.options?.signal, abortController.signal);
   assert.equal(capturedRequest?.model?.model, "gpt-5.5");
-  const inputText = capturedRequest?.operation?.input?.query;
-  assert.match(inputText, /必须使用网页搜索/);
-  assert.match(inputText, /不要只依赖模型已有知识/);
-  assert.match(inputText, /latest noobot news/);
+  // 搜索词只传原始 query，“先搜后答”约束由 provider adapter 负责。
+  assert.equal(capturedRequest?.operation?.input?.query, "latest noobot news");
   assert.equal(result.text, "search result");
-  assert.deepEqual(result.output, [{ type: "message" }]);
+  assert.deepEqual(result.sources, [{ title: "Noobot", url: "https://example.test/noobot" }]);
+  assert.equal(result.output, undefined);
   assert.equal(result.mode, "model_web_search");
   assert.equal(result.provider.adapterId, "openai-compatible");
   assert.equal(result.provider.operatorId, "openai");
 });
 
-test("web_search: Claude 家族透传 Anthropic Messages 执行协议身份", async () => {
+test("do_search_web: Claude 家族透传 Anthropic Messages 执行协议身份", async () => {
   const runtime = {
     globalConfig: {
       tools: {
-        web_search: { mode: "model_web_search", model_web_search: { model: "claude_opus_5" } },
+        do_search_web: { mode: "model_web_search", model_web_search: { model: "claude_opus_5" } },
       },
       providers: {
         claude_opus_5: {
@@ -87,10 +89,7 @@ test("web_search: Claude 家族透传 Anthropic Messages 执行协议身份", as
       async invoke() {
         return {
           execution: { provider: { operatorId: "anthropic", adapterId: "anthropic-messages" } },
-          result: {
-            rawText: "anthropic search result",
-            output: [{ type: "server_tool_use" }, { type: "web_search_tool_result" }],
-          },
+          result: { rawText: "anthropic search result", sources: [] },
         };
       },
     },
@@ -103,10 +102,11 @@ test("web_search: Claude 家族透传 Anthropic Messages 执行协议身份", as
   assert.equal(result.provider.operatorId, "anthropic");
   assert.equal(result.modelAlias, "claude_opus_5");
   assert.equal(result.model, "claude-opus-5");
-  assert.equal(result.summary.output_item_count, 2);
+  assert.equal(result.text, "anthropic search result");
+  assert.equal(result.summary, undefined);
 });
 
-test("web_search: search_engine 模式按配置生成直连搜索引擎请求", () => {
+test("do_search_web: search_engine 模式按配置生成直连搜索引擎请求", () => {
   const toolCfg = {
     enabled: true,
     mode: "search_engine",
@@ -139,7 +139,7 @@ test("web_search: search_engine 模式按配置生成直连搜索引擎请求", 
   assert.equal(request.body, undefined);
 });
 
-test("web_search: search_engine 模式直接请求搜索引擎地址", async () => {
+test("do_search_web: search_engine 模式直接请求搜索引擎地址", async () => {
   const originalFetch = globalThis.fetch;
   let capturedUrl = "";
   let capturedOptions = null;
@@ -181,7 +181,7 @@ test("web_search: search_engine 模式直接请求搜索引擎地址", async () 
   }
 });
 
-test("web_search: search_engine 模式缺少 endpoints.search.url 时报错", async () => {
+test("do_search_web: search_engine 模式缺少 endpoints.search.url 时报错", async () => {
   await assert.rejects(
     () =>
       searchWithSearchEngine({
@@ -197,12 +197,12 @@ test("web_search: search_engine 模式缺少 endpoints.search.url 时报错", as
   );
 });
 
-test("web_search: model_web_search 未显式声明模型时失败，不回退到运行时模型", async () => {
+test("do_search_web: model_web_search 未显式声明模型时失败，不回退到运行时模型", async () => {
   let invoked = false;
   const runtime = {
     runtimeModel: "search-model",
     globalConfig: {
-      tools: { web_search: { mode: "model_web_search", model_web_search: {} } },
+      tools: { do_search_web: { mode: "model_web_search", model_web_search: {} } },
       providers: {
         "search-model": { enabled: true, api_key: "k", model: "gpt-5.5", providerId: "openai" },
       },

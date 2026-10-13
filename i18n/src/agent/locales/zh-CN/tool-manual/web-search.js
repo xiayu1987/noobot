@@ -5,12 +5,11 @@
  */
 
 export const WEB_SEARCH_MANUAL = {
-  web_search: {
+  do_search_web: {
     summary: "检索网页信息，用于获取模型知识之外或时效性强的事实。",
-    usage: ["web_search({ query, model_name })"],
+    usage: ["do_search_web({ query })"],
     params: {
       query: "搜索内容，必填。",
-      model_name: "承担搜索的模型名，可选。省略时按配置默认模型解析。",
     },
     notes: [
       "当前信息会改变答案时应先搜索再回答，例如近期事件、当前价格、版本相关行为。",

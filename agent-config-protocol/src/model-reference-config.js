@@ -40,8 +40,8 @@ export function applyPrimaryModelReferencesToConfigFile(config = {}, modelAlias 
     }
   }
 
-  if (isPlainObject(config?.tools?.web_search?.model_web_search)) {
-    config.tools.web_search.model_web_search.model = alias;
+  if (isPlainObject(config?.tools?.do_search_web?.model_web_search)) {
+    config.tools.do_search_web.model_web_search.model = alias;
   }
 
   setStringValues(config?.plugins?.harness?.stepModels, alias);

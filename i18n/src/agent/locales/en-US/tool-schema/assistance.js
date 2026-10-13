@@ -69,27 +69,24 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.help.parseError.malformed": "Malformed command, it must start with --command",
     },
   },
-  web_search: {
+  do_search_web: {
     description: {
-      key: "tools.web_search.description",
-      text: "Search the web for information. Input query. Returns web search results.",
+      key: "tools.do_search_web.description",
+      text: "Search the web. Must be called first when the answer needs current or external facts. Input query. Returns findings with sources.",
     },
     params: {
-      model_name: {
-        key: "tools.web_search.fieldModelName",
-        text: "Model name.",
-      },
       query: {
-        key: "tools.web_search.fieldQuery",
+        key: "tools.do_search_web.fieldQuery",
         text: "Search query.",
       },
     },
     texts: {
-      "tools.web_search.modelApiKeyMissing": "Model API Key missing",
-      "tools.web_search.queryRequired": "query required",
-      "tools.web_search.searchEngineUrlMissing": "search_engine mode requires endpoints.search.url",
-      "tools.web_search.searchFailed": "web search failed",
-      "tools.web_search.userIdMissing": "runtime user ID missing",
+      "tools.do_search_web.modelApiKeyMissing": "Model API Key missing",
+      "tools.do_search_web.queryRequired": "query required",
+      "tools.do_search_web.searchEngineUrlMissing":
+        "search_engine mode requires endpoints.search.url",
+      "tools.do_search_web.searchFailed": "web search failed",
+      "tools.do_search_web.userIdMissing": "runtime user ID missing",
     },
   },
   multimodal_generate: {

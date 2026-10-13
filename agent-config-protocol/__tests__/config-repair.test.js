@@ -374,32 +374,32 @@ test("config repair restores invalid values and enforces node policies", () => {
   ]);
 });
 
-test("config repair restores web_search mode outside the declared enum", () => {
+test("config repair restores do_search_web mode outside the declared enum", () => {
   const template = {
-    tools: { web_search: { enabled: true, mode: WEB_SEARCH_MODE.MODEL_WEB_SEARCH } },
+    tools: { do_search_web: { enabled: true, mode: WEB_SEARCH_MODE.MODEL_WEB_SEARCH } },
   };
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
     baseValues: template,
-    target: { tools: { web_search: { enabled: true, mode: "responses_api" } } },
+    target: { tools: { do_search_web: { enabled: true, mode: "responses_api" } } },
   });
-  assert.equal(repaired.document.tools.web_search.mode, WEB_SEARCH_MODE.MODEL_WEB_SEARCH);
+  assert.equal(repaired.document.tools.do_search_web.mode, WEB_SEARCH_MODE.MODEL_WEB_SEARCH);
   assert.ok(
-    repaired.report.changes.some((change) => change.path === "tools.web_search.mode"),
-    "expected tools.web_search.mode to be reported as repaired",
+    repaired.report.changes.some((change) => change.path === "tools.do_search_web.mode"),
+    "expected tools.do_search_web.mode to be reported as repaired",
   );
 });
 
-test("config repair keeps every declared web_search mode value", () => {
+test("config repair keeps every declared do_search_web mode value", () => {
   for (const mode of Object.values(WEB_SEARCH_MODE)) {
     const repaired = repairConfigDocument({
       scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
       baseValues: {
-        tools: { web_search: { enabled: true, mode: WEB_SEARCH_MODE.MODEL_WEB_SEARCH } },
+        tools: { do_search_web: { enabled: true, mode: WEB_SEARCH_MODE.MODEL_WEB_SEARCH } },
       },
-      target: { tools: { web_search: { enabled: true, mode } } },
+      target: { tools: { do_search_web: { enabled: true, mode } } },
     });
-    assert.equal(repaired.document.tools.web_search.mode, mode);
+    assert.equal(repaired.document.tools.do_search_web.mode, mode);
   }
 });
 

@@ -135,7 +135,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "task_summary",
     "task_check",
     "help",
-    "web_search",
+    "do_search_web",
   ]);
   assert.deepEqual(resolved.scenarioProfile.context, [
     "scenario",

@@ -363,7 +363,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
     },
     web: {
-      toolNames: ["web_search"],
+      toolNames: ["do_search_web"],
     },
   },
   acceptance: {

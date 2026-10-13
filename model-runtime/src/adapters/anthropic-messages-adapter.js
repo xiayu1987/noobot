@@ -18,6 +18,9 @@ const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
 const ANTHROPIC_PAUSE_TURN_STOP_REASON = "pause_turn";
 const ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS = 3;
 const ANTHROPIC_DOCUMENT_MIME_TYPE = "application/pdf";
+// 只约束“先搜后答”，搜索词保持为用户原始 query。
+const WEB_SEARCH_INSTRUCTION =
+  "Search the web before answering. Answer only from the search results.";
 
 function splitDataUrl(value = "") {
   const raw = String(value || "").trim();
@@ -327,16 +330,34 @@ async function requestAnthropicMessages({
   return parseJson(body, { error: { message: body } });
 }
 
+function textFromAnthropicBlocks(blocks = []) {
+  return blocks
+    .filter((block) => block?.type === "text")
+    .map((block) => String(block.text || ""))
+    .join("")
+    .trim();
+}
+
 function resultFromAnthropicBlocks(parsed = {}) {
   const blocks = Array.isArray(parsed?.content) ? parsed.content : [];
   return {
-    rawText: blocks
-      .filter((block) => block?.type === "text")
-      .map((block) => String(block.text || ""))
-      .join("")
-      .trim(),
+    rawText: textFromAnthropicBlocks(blocks),
     output: blocks.map((block) => ({ ...block })),
   };
+}
+
+// 来源取自 web_search_tool_result 的结果项，按 url 去重。
+function sourcesFromAnthropicBlocks(blocks = []) {
+  const sources = new Map();
+  for (const block of blocks) {
+    if (block?.type !== "web_search_tool_result" || !Array.isArray(block.content)) continue;
+    for (const item of block.content) {
+      const url = String(item?.url || "").trim();
+      if (item?.type !== "web_search_result" || !url || sources.has(url)) continue;
+      sources.set(url, { title: String(item.title || "").trim(), url });
+    }
+  }
+  return [...sources.values()];
 }
 
 export function mapAnthropicMultimodalAttachment(attachment = {}) {
@@ -367,6 +388,7 @@ async function executeAnthropicServerToolTurn({
   headers,
   signal,
   serverTools,
+  system,
   content,
 }) {
   const messages = [{ role: "user", content }];
@@ -380,7 +402,10 @@ async function executeAnthropicServerToolTurn({
       payload: {
         model: spec.model,
         max_tokens: Number(spec.max_tokens || 10000),
+        system,
         tools: serverTools,
+        // 仅首轮强制调用服务端工具；pause_turn 续轮由模型继续完成。
+        ...(attempt === 0 ? { tool_choice: { type: "any" } } : {}),
         messages,
       },
     });
@@ -389,7 +414,7 @@ async function executeAnthropicServerToolTurn({
     if (parsed?.stop_reason !== ANTHROPIC_PAUSE_TURN_STOP_REASON) break;
     messages.push({ role: "assistant", content: turnBlocks.map((block) => ({ ...block })) });
   }
-  return resultFromAnthropicBlocks({ content: collected });
+  return collected;
 }
 
 async function executeAnthropicOperation({
@@ -410,14 +435,19 @@ async function executeAnthropicOperation({
   }
   const spec = normalizeRuntimeModelSpec(modelSpec);
   if (operation.kind === MODEL_OPERATION_KIND.WEB_SEARCH) {
-    return executeAnthropicServerToolTurn({
+    const blocks = await executeAnthropicServerToolTurn({
       spec,
       credential,
       headers,
       signal,
       serverTools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
+      system: WEB_SEARCH_INSTRUCTION,
       content: [{ type: "text", text: String(operation.input.query || "").trim() }],
     });
+    return {
+      rawText: textFromAnthropicBlocks(blocks),
+      sources: sourcesFromAnthropicBlocks(blocks),
+    };
   }
   const parsed = await requestAnthropicMessages({
     spec,

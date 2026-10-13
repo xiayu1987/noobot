@@ -88,7 +88,7 @@ describe("BaseThinkingLogLine", () => {
       props: { eventText: "tool_call", toolName: "read_file", tool: true },
     });
     const searchCall = mount(BaseThinkingLogLine, {
-      props: { eventText: "tool_call", toolName: "web_search", tool: true },
+      props: { eventText: "tool_call", toolName: "do_search_web", tool: true },
     });
     const failedResult = mount(BaseThinkingLogLine, {
       props: {
@@ -103,7 +103,7 @@ describe("BaseThinkingLogLine", () => {
       "read_file",
     );
     expect(searchCall.find(".base-thinking-log-line__event").attributes("data-icon-kind")).toBe(
-      "web_search",
+      "do_search_web",
     );
     expect(
       failedResult.find(".base-thinking-log-line__event").attributes("data-icon-kind"),

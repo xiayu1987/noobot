@@ -15,28 +15,18 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS, WEB_SEARCH_MODE } from "../constants/index.js";
 
-const WEB_SEARCH_FLOW_NAME = "agent.web_search";
-const WEB_SEARCH_PURPOSE_NAME = "web_search";
+const WEB_SEARCH_FLOW_NAME = "agent.do_search_web";
+const WEB_SEARCH_PURPOSE_NAME = "do_search_web";
 const WEB_SEARCH_DOMAIN_NAME = "tool";
 const WEB_SEARCH_SERVICE_ENDPOINT_NAME = "search";
 
-function buildWebSearchInputText(query = "") {
-  const normalizedQuery = String(query || "").trim();
-  return [
-    "请使用网页搜索工具检索最新、可靠的信息，并基于搜索结果回答。",
-    "必须使用网页搜索，不要只依赖模型已有知识。",
-    "搜索问题：",
-    normalizedQuery,
-  ].join("\n");
-}
-
 function tWebSearch(runtime = {}, key = "", params = {}) {
-  return tTool(runtime, `tools.web_search.${String(key || "").trim()}`, params);
+  return tTool(runtime, `tools.do_search_web.${String(key || "").trim()}`, params);
 }
 
 function resolveSearchModelSpec({ modelName, globalConfig, userConfig }) {
   const alias = typeof modelName === "string" ? modelName.trim() : "";
-  if (!alias) throw new TypeError("tools.web_search.model_web_search.model is required");
+  if (!alias) throw new TypeError("tools.do_search_web.model_web_search.model is required");
   const modelSpec = resolveModelSpecByName({ modelName: alias, globalConfig, userConfig });
   if (!modelSpec) throw new TypeError(`web search model not found: ${alias}`);
   return modelSpec;
@@ -48,7 +38,7 @@ function normalizeWebSearchMode(mode = "") {
   const normalizedMode = String(mode || "")
     .trim()
     .toLowerCase();
-  if (!normalizedMode) throw new TypeError("tools.web_search.mode is required");
+  if (!normalizedMode) throw new TypeError("tools.do_search_web.mode is required");
   if (!WEB_SEARCH_MODES.includes(normalizedMode)) {
     throw new TypeError(
       `unsupported web search mode: ${normalizedMode}; expected one of ${WEB_SEARCH_MODES.join(", ")}`,
@@ -65,7 +55,7 @@ function resolveWebSearchToolConfig(runtime = {}) {
 function resolveModelWebSearchConfig(toolCfg = {}) {
   const config = toolCfg?.model_web_search;
   if (!config || typeof config !== "object") {
-    throw new TypeError("tools.web_search.model_web_search is required");
+    throw new TypeError("tools.do_search_web.model_web_search is required");
   }
   return config;
 }
@@ -184,9 +174,9 @@ export function createWebSearchTool({ agentContext }) {
   return [
     new DynamicStructuredTool({
       name: TOOL_NAME.WEB_SEARCH,
-      description: tTool(runtime, "tools.web_search.description"),
+      description: tTool(runtime, "tools.do_search_web.description"),
       schema: z.object({
-        query: z.string().describe(tTool(runtime, "tools.web_search.fieldQuery")),
+        query: z.string().describe(tTool(runtime, "tools.do_search_web.fieldQuery")),
       }),
       func: async ({ query }) => {
         const normalizedQuery = String(query || "").trim();
@@ -232,7 +222,7 @@ export function createWebSearchTool({ agentContext }) {
             messages: [],
             operation: {
               kind: MODEL_OPERATION_KIND.WEB_SEARCH,
-              input: { query: buildWebSearchInputText(normalizedQuery) },
+              input: { query: normalizedQuery },
             },
             options: {
               signal: runtime?.abortSignal || undefined,
@@ -257,10 +247,7 @@ export function createWebSearchTool({ agentContext }) {
               model: String(resolvedModelSpec?.model || "").trim(),
               query: normalizedQuery,
               text: searchResult.rawText,
-              output: searchResult.output,
-              summary: {
-                output_item_count: searchResult.output.length,
-              },
+              sources: searchResult.sources,
             },
             true,
           );

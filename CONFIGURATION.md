@@ -171,14 +171,14 @@ Execution isolation is defined by the `@noobot/execution-isolation-protocol` wor
 | `tools.help.enabled` | boolean | Enable help tool |
 | `tools.help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
 | `tools.help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
-| `tools.web_search.enabled` | boolean | Enable web search tool |
-| `tools.web_search.mode` | enum | Search backend: `model_web_search` / `search_engine` |
-| `tools.web_search.model_web_search.model` | string | Model alias/name used for model-side web search |
-| `tools.web_search.search_engine.prompt` | string | Prompt injected for search-engine mode |
-| `tools.web_search.search_engine.endpoints.search.url` | string(url) | Search endpoint URL (`${VAR_NAME}` supported) |
-| `tools.web_search.search_engine.endpoints.search.query_string_format` | string | Search query-string template |
-| `tools.web_search.search_engine.endpoints.search.body_format` | string | Search request-body template |
-| `tools.web_search.search_engine.endpoints.search.custom_param_format` | string | Description of the custom endpoint parameter |
+| `tools.do_search_web.enabled` | boolean | Enable web search tool |
+| `tools.do_search_web.mode` | enum | Search backend: `model_web_search` / `search_engine` |
+| `tools.do_search_web.model_web_search.model` | string | Model alias/name used for model-side web search |
+| `tools.do_search_web.search_engine.prompt` | string | Prompt injected for search-engine mode |
+| `tools.do_search_web.search_engine.endpoints.search.url` | string(url) | Search endpoint URL (`${VAR_NAME}` supported) |
+| `tools.do_search_web.search_engine.endpoints.search.query_string_format` | string | Search query-string template |
+| `tools.do_search_web.search_engine.endpoints.search.body_format` | string | Search request-body template |
+| `tools.do_search_web.search_engine.endpoints.search.custom_param_format` | string | Description of the custom endpoint parameter |
 
 Large-context length defaults:
 
@@ -206,7 +206,7 @@ Notes:
 Scenario definitions are system built-ins with three fixed scenarios:
 
 - `full` (all-purpose, default): tools/context/services/mcp_servers are `["*"]`, meaning unrestricted by scenario.
-- `programming`: fixed code-task policy with required coding tools, code context sections, and the `web_search` tool; configuration may override only `model`.
+- `programming`: fixed code-task policy with required coding tools, code context sections, and the `do_search_web` tool; configuration may override only `model`.
 - `text`: fixed text-processing policy and tool/context selection; configuration may override only `model`.
 
 Other scenario fields in global/user config (`name`, `description`, `tools`, `context`, `services`, `mcp_servers`) and custom scenario definitions are ignored to protect built-in behavior.
@@ -320,7 +320,7 @@ Current defaults in repo:
 
 - `weather_service`: weather query via `wttr.in`
 
-Web search is provided by the `web_search` tool, not by an external service.
+Web search is provided by the `do_search_web` tool, not by an external service.
 
 ### 4.2 Plugins (`plugins.<name>`)
 

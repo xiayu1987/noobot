@@ -347,7 +347,7 @@ test("primary model alignment updates every config-file model reference", () => 
     },
     scenarios: { definitions: { programming: { model: "old" }, text: { model: "old" } } },
     tools: {
-      web_search: { model_web_search: { model: "old" } },
+      do_search_web: { model_web_search: { model: "old" } },
     },
     plugins: {
       harness: { stepModels: { planning: "old" } },
@@ -365,7 +365,7 @@ test("primary model alignment updates every config-file model reference", () => 
   });
   assert.equal(config.multimodal.generation.default_models.image, "selected");
   assert.equal(config.scenarios.definitions.programming.model, "selected");
-  assert.equal(config.tools.web_search.model_web_search.model, "selected");
+  assert.equal(config.tools.do_search_web.model_web_search.model, "selected");
   assert.equal(config.plugins.harness.stepModels.planning, "selected");
   assert.equal(config.plugins.workflow.semanticModel, "selected");
 });
