@@ -45,11 +45,9 @@ export const TASK_ORCHESTRATION_MANUAL = {
       "All sections must be non-empty; do not add, repeat, or reorder sections.",
     ],
     notes: [
-      "Call it as needed when the system emits a periodic task check prompt; it is not mandatory.",
+      "Call it as needed after a periodic task-check prompt; it is optional.",
       "This tool creates no summary marker or attachment; the result is only a derived receipt.",
     ],
-    pitfalls: [
-      "Its protocol header differs from task_summary, and the two must not be swapped.",
-    ],
+    pitfalls: ["Its protocol header differs from task_summary, and the two must not be swapped."],
   },
 };

@@ -32,7 +32,7 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
   task_check: {
     description: {
       key: "tools.task_check.description",
-      text: "提交当前任务检查切片。仅在系统发出周期任务检查提示时按需调用，不强制调用。checkContent 必须严格遵循 NOOBOT_TASK_CHECK/1 唯一文本协议，按顺序且仅包含 [STATE]、[ABSTRACT]、[DETAILS]、[NEXT_ACTION] 四段；STATE 只能为 CONTINUE、COMPLETE 或 BLOCKED。该工具不创建小结标记或附件，结果只返回派生回执。",
+      text: "提交当前任务检查切片。收到周期任务检查提示后按需调用，不强制。checkContent 必须严格遵循 NOOBOT_TASK_CHECK/1 唯一文本协议，按顺序且仅包含 [STATE]、[ABSTRACT]、[DETAILS]、[NEXT_ACTION] 四段；STATE 只能为 CONTINUE、COMPLETE 或 BLOCKED。该工具不创建小结标记或附件，结果只返回派生回执。",
     },
     params: {
       checkContent: {
