@@ -19,7 +19,8 @@ afterEach(async () => {
 
 async function setupSuite() {
   directory = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-cleanup-"));
-  const registry = path.join(directory, "sessions.json");
+  const runRegistry = (runId) =>
+    path.join(directory, "owner", "runtime", "ops_workdir", `e2e-${runId}`, "suite-sessions.json");
   const evidenceRoot = path.join(directory, "evidence");
   const outputDir = path.join(directory, "raw");
   const testDir = path.join(directory, "specs");
@@ -27,7 +28,6 @@ async function setupSuite() {
   await fs.mkdir(testDir, { recursive: true });
   await fs.writeFile(specFile, "");
   await fs.writeFile(path.join(testDir, "README.md"), "");
-  vi.stubEnv("NOOBOT_E2E_SESSION_REGISTRY", registry);
   vi.stubEnv("NOOBOT_WORKSPACE_ROOT", directory);
   vi.stubEnv("NOOBOT_E2E_RUN_ID", "current-run");
   vi.stubEnv("NOOBOT_E2E_USER_ID", "owner");
@@ -59,7 +59,7 @@ async function setupSuite() {
   );
   await fs.mkdir(outputDir, { recursive: true });
   await fs.writeFile(path.join(outputDir, "trace.zip"), "trace");
-  return { registry, evidenceRoot, context, createReporter, registerSuiteSession };
+  return { runRegistry, evidenceRoot, context, createReporter, registerSuiteSession };
 }
 
 const fileTest = (file) => ({ location: { file } });
@@ -83,11 +83,11 @@ it("rejects filtered full suite runs before touching evidence or sessions", asyn
 });
 
 it("preserves failure evidence and deletes it once the full suite passes", async () => {
-  const { registry, evidenceRoot, context, createReporter, registerSuiteSession } =
+  const { runRegistry, evidenceRoot, context, createReporter, registerSuiteSession } =
     await setupSuite();
   await registerSuiteSession({ userId: "owner", sessionId: "session-1", apiKey: "expired-key" });
-  const records = JSON.parse(await fs.readFile(registry, "utf8"));
-  expect(records[0]).not.toHaveProperty("apiKey");
+  const records = JSON.parse(await fs.readFile(runRegistry("current-run"), "utf8"));
+  expect(records).toEqual([{ userId: "owner", sessionId: "session-1" }]);
   await createReporter().onEnd({ status: "failed" });
   expect(context.post).not.toHaveBeenCalled();
   const evidenceDir = path.join(evidenceRoot, "current-run");
@@ -97,9 +97,12 @@ it("preserves failure evidence and deletes it once the full suite passes", async
   await expect(fs.readFile(path.join(evidenceDir, "raw", "trace.zip"), "utf8")).resolves.toBe(
     "trace",
   );
-  await expect(fs.readFile(path.join(evidenceDir, "sessions.json"), "utf8")).resolves.toContain(
-    "session-1",
-  );
+  await expect(
+    fs.readFile(
+      path.join(evidenceDir, "runtime", "ops_workdir", "e2e-current-run", "suite-sessions.json"),
+      "utf8",
+    ),
+  ).resolves.toContain("session-1");
   await createReporter().onEnd({ status: "passed" });
   expect(context.post).toHaveBeenCalledWith("/api/internal/connect", {
     data: { userId: "owner", connectCode: "test-code" },
@@ -108,6 +111,21 @@ it("preserves failure evidence and deletes it once the full suite passes", async
     headers: { "x-api-key": "fresh-key" },
   });
   expect(context.dispose).toHaveBeenCalledOnce();
-  await expect(fs.access(registry)).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(fs.access(runRegistry("current-run"))).rejects.toMatchObject({ code: "ENOENT" });
   await expect(fs.access(evidenceRoot)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("scopes the registry to its run so a later run never reclaims earlier records", async () => {
+  const { runRegistry, context, createReporter, registerSuiteSession } = await setupSuite();
+  await registerSuiteSession({ userId: "owner", sessionId: "session-1" });
+  await createReporter().onEnd({ status: "failed" });
+  vi.stubEnv("NOOBOT_E2E_RUN_ID", "next-run");
+  await registerSuiteSession({ userId: "owner", sessionId: "session-2" });
+  await createReporter().onEnd({ status: "passed" });
+  expect(context.delete).toHaveBeenCalledOnce();
+  expect(context.delete).toHaveBeenCalledWith("/api/internal/session/owner/session-2", {
+    headers: { "x-api-key": "fresh-key" },
+  });
+  await expect(fs.access(runRegistry("next-run"))).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(fs.readFile(runRegistry("current-run"), "utf8")).resolves.toContain("session-1");
 });

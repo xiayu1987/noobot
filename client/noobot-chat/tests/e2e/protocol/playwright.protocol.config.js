@@ -14,9 +14,7 @@ import { PROTOCOL_TIMEOUTS } from "./helpers/protocol-timeouts.js";
 
 const protocolRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(protocolRoot, "../../../../..");
-const suiteSessionRegistry = path.join(repositoryRoot, "test-results/protocol/suite-sessions.json");
 const failureEvidenceRoot = path.join(repositoryRoot, "test-results/e2e-evidence");
-process.env.NOOBOT_E2E_SESSION_REGISTRY = suiteSessionRegistry;
 process.env.NOOBOT_E2E_RUN_ID = String(process.env.NOOBOT_E2E_RUN_ID || "").trim() || randomUUID();
 
 function resolveBaseUrl(value) {

@@ -6,14 +6,14 @@
 import { joinClientPath } from "@noobot/client-shared/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
 
-function requireRunId() {
+export function e2eRunId() {
   const runId = String(process.env.NOOBOT_E2E_RUN_ID || "").trim();
   if (!runId) throw new Error("NOOBOT_E2E_RUN_ID is required");
   return runId;
 }
 
 export function runOpsWorkdir() {
-  return joinClientPath(WORKSPACE_LAYOUT.OPS_WORKDIR, `e2e-${requireRunId()}`);
+  return joinClientPath(WORKSPACE_LAYOUT.OPS_WORKDIR, `e2e-${e2eRunId()}`);
 }
 
 export function runOpsWorkdirPath(fileName) {
