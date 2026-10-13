@@ -13,6 +13,7 @@ export const CONTEXT_INJECTED_MESSAGE_TYPE = Object.freeze({
   TOOL_LOOP_LIMIT_FINALIZE_PROMPT: "tool_loop_limit_finalize_prompt",
   TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT: "task_summary_single_tool_retry_prompt",
   TASK_CHECK_SINGLE_TOOL_RETRY_PROMPT: "task_check_single_tool_retry_prompt",
+  NO_FINAL_RESPONSE_RETRY_PROMPT: "noobot.no_final_response_retry_prompt",
 });
 
 export const SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES = Object.freeze([

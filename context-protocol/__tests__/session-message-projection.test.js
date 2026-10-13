@@ -83,10 +83,9 @@ test("Session Record projection rejects malformed collections and transfer facts
     /attachments to be an array/,
   );
   assert.throws(() => normalizeContextTransferEnvelopes([{}]), /invalid_transfer_envelope/);
-  assert.deepEqual(
-    normalizeContextTransferEnvelopes([transferEnvelope(), transferEnvelope()]),
-    [transferEnvelope()],
-  );
+  assert.deepEqual(normalizeContextTransferEnvelopes([transferEnvelope(), transferEnvelope()]), [
+    transferEnvelope(),
+  ]);
   assert.throws(
     () =>
       normalizeContextTransferEnvelopes([

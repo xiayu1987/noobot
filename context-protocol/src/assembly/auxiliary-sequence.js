@@ -155,6 +155,7 @@ export function advanceAuxiliaryModelContext({
     }
   }
   const appended = [];
+  let appendsSystem = false;
   for (const message of [...system, ...history]) {
     const identity = resolveAuxiliarySequenceIdentity(message);
     if (identity.kind === AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT) {
@@ -162,11 +163,17 @@ export function advanceAuxiliaryModelContext({
       if (!contextIds.has(id)) {
         contextIds.add(id);
         appended.push(message);
+        if (system.includes(message)) appendsSystem = true;
       }
     } else if (!stableProtocolIds.has(identity.key)) {
       stableProtocolIds.add(identity.key);
       appended.push(message);
+      if (system.includes(message)) appendsSystem = true;
     }
+  }
+  if (appendsSystem) {
+    const snapshot = cloneSnapshot(revision, currentMessages);
+    return { rebuilt: true, snapshot, messages: snapshot.messages.map(cloneMessage) };
   }
   appended.push(...incremental);
   const snapshot = cloneSnapshot(revision, [...previousMessages, ...appended]);

@@ -54,8 +54,19 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.match(capturedPayload.messages[0]?.content, /禁止直接输出可执行脚本或命令/);
   assert.match(capturedPayload.messages[0]?.content, /不能执行工具/);
   assert.match(capturedPayload.messages[0]?.content, /不得把.*未证明的动作或结果写成已执行/);
+  assert.equal(capturedPayload.messages[1]?.role, "system");
+  assert.match(capturedPayload.messages[1]?.content, /^\[HARNESS_SCENARIO_POLICY\]/);
+  const roles = capturedPayload.messages.map((item = {}) => item.role);
+  assert.ok(roles.lastIndexOf("system") < roles.findIndex((role) => role !== "system"));
+  assert.equal(
+    capturedPayload.messages.some(
+      (item = {}) =>
+        item.role !== "system" && String(item.content || "").includes("[HARNESS_SCENARIO_POLICY]"),
+    ),
+    false,
+  );
   assert.deepEqual(
-    capturedPayload.messages.slice(1, 3).map((item = {}) => [item.role, item.content]),
+    capturedPayload.messages.slice(2, 4).map((item = {}) => [item.role, item.content]),
     [
       ["user", "历史上下文"],
       ["assistant", "当前增量"],

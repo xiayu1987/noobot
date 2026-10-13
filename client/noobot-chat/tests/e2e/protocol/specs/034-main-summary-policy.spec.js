@@ -313,7 +313,6 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     expect(invocationsReceivingReceipt.length).toBeGreaterThan(0);
   }
   const toolResultNames = messages.map(toolResultName).filter(Boolean);
-  // Failed attempts may be retried; the three-step chain must succeed exactly once per step.
   const succeededScriptResults = messages.filter(
     (message) =>
       toolResultName(message) === "execute_script" &&

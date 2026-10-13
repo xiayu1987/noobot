@@ -440,7 +440,6 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   await expect(chatNavigatorPanel).toHaveClass(/is-collapsed/);
   await expect(connectorPanel).toHaveClass(/is-collapsed/);
   await expect(featurePanel).toHaveClass(/is-collapsed/);
-  // Panel width animates (--noobot-duration-normal); measure the settled layout, not mid-transition.
   const rightEdge = (box) => (box?.x || 0) + (box?.width || 0);
   const toolLeft = async () => (await rightToolPanels.boundingBox())?.x ?? Number.POSITIVE_INFINITY;
   await expect

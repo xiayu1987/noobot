@@ -2,6 +2,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { MODEL_ERROR_CODE } from "../protocol/constants.js";
+
 export const DEFAULT_RETRY_POLICY = Object.freeze({
   transport: Object.freeze({ maxAttempts: 3, baseDelayMs: 250 }),
   reasoningOnly: Object.freeze({ maxAttempts: 1 }),
@@ -9,6 +11,22 @@ export const DEFAULT_RETRY_POLICY = Object.freeze({
   toolCallMismatch: Object.freeze({ maxAttempts: 1, downgradeStreaming: true }),
   providerFallback: Object.freeze({ enabled: false, candidates: Object.freeze([]) }),
 });
+
+export const NO_FINAL_RESPONSE_ERROR_CODES = Object.freeze([
+  MODEL_ERROR_CODE.EMPTY_RESPONSE_RETRY_EXHAUSTED,
+  MODEL_ERROR_CODE.REASONING_RETRY_EXHAUSTED,
+]);
+
+export function isNoFinalResponseError(error) {
+  return NO_FINAL_RESPONSE_ERROR_CODES.includes(error?.code);
+}
+
+export function buildNoFinalResponseRetryPolicy(attemptPolicy = {}) {
+  return Object.freeze({
+    emptyResponse: attemptPolicy,
+    reasoningOnly: attemptPolicy,
+  });
+}
 
 function normalizeAttemptPolicy(defaults, input) {
   const source = input && typeof input === "object" ? input : {};

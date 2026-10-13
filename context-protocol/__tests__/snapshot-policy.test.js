@@ -240,10 +240,7 @@ test("snapshot carries turn progress through persistence and hydration", () => {
     turnProgress,
   });
   assert.deepEqual(snapshot.turnProgress, turnProgress);
-  const roundTripped = hydrateModelContextSnapshot(
-    JSON.parse(JSON.stringify(snapshot)),
-    identity,
-  );
+  const roundTripped = hydrateModelContextSnapshot(JSON.parse(JSON.stringify(snapshot)), identity);
   assert.deepEqual(roundTripped.turnProgress, turnProgress);
 });
 

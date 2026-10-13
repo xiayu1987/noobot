@@ -15,8 +15,6 @@ export function readE2eCredentials(env = process.env) {
   return Object.freeze({ userId, connectCode });
 }
 
-// The client owns 429 retries (Retry-After backoff); the fixture clicks once and
-// waits for the client's final admitted connect response.
 export async function connectThroughUi(page, credentials) {
   await page.locator(".custom-input input").first().fill(credentials.userId);
   await page.locator(".connect-input input").fill(credentials.connectCode);

@@ -135,8 +135,6 @@ cmd_test() {
   load_connect_code
   load_mysql_password
   cmd_restart
-  # Tests run inside the container against the freshly built services; the
-  # workspace root is the container view of the mounted e2e workspace.
   export NOOBOT_E2E_BASE_URL="http://127.0.0.1:${CLIENT_PORT}"
   export NOOBOT_E2E_USER_ID="${NOOBOT_E2E_USER_ID:-admin}"
   export NOOBOT_E2E_MODEL_ALIAS="${NOOBOT_E2E_MODEL_ALIAS:-gpt_6_1_sol}"

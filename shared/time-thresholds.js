@@ -140,6 +140,8 @@ export const TIME_THRESHOLDS = deepFreeze({
     thinkingDetailRetryDelayMs: TIME_TIERS.shortDelayMs,
     micMaxDurationSeconds: TIME_TIERS.micDurationSeconds,
     terminalTurnRetentionMs: TIME_TIERS.oneDayMs,
+    admissionRetryMinDelayMs: 250,
+    admissionRetryMaxDelayMs: MINUTE_MS,
   },
 
   service: {

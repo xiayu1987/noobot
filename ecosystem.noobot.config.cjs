@@ -57,7 +57,6 @@ module.exports = {
         AGENT_PROXY_HOST: runtimeEnv.AGENT_PROXY_HOST,
         AGENT_PROXY_UPSTREAM_WS_URL: runtimeEnv.AGENT_PROXY_UPSTREAM_WS_URL,
         AGENT_PROXY_UPSTREAM_HTTP_BASE: runtimeEnv.AGENT_PROXY_UPSTREAM_HTTP_BASE,
-        // noobot-client (Caddy) below runs on this host and reverse-proxies over loopback.
         AGENT_PROXY_TRUSTED_PROXIES: "127.0.0.1,::1",
         [WORKSPACE_ROOT_ENV]: workspaceRoot,
       },

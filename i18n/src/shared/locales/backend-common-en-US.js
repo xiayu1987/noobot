@@ -24,6 +24,8 @@ export const BACKEND_COMMON_EN_US = {
     "task_summary must be called alone and cannot appear in the same tool-call turn as other tools.",
   "agent.taskCheckSingleToolPrompt":
     "task_check must be called alone and cannot appear in the same tool-call turn as other tools.",
+  "agent.noFinalResponseRetryPrompt": (params = {}) =>
+    `[No final answer retry #${Number(params.ordinal || 0)}] The previous model response had no final answer (it was empty or contained only reasoning) and no tool call. Give the final answer directly, or call the tools needed to continue.`,
   "agent.userMetaTag": "User Metadata",
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",

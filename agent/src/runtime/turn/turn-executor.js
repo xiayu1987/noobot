@@ -37,6 +37,10 @@ import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { applyRequiredToolChoiceUnsupportedRetryDecision } from "./tool-choice-retry-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
 import {
+  isRecoverableNoFinalResponse,
+  MAIN_FLOW_NO_FINAL_RESPONSE_RETRY,
+} from "./no-final-response-recovery.js";
+import {
   appendContextMessage as appendMessage,
   replaceContextProjection as replaceMessageProjection,
 } from "@noobot/context-protocol/mutation/context";
@@ -187,9 +191,11 @@ export async function invokeNoToolsTurn({
         domain: "primary",
         contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
       },
+      policies: { retry: MAIN_FLOW_NO_FINAL_RESPONSE_RETRY },
     });
     modelResponse = protocolResponse.output;
   } catch (error) {
+    if (isRecoverableNoFinalResponse(error, runtime)) throw error;
     await runAgentRuntimeHook({
       runtime,
       point: HOOK_POINT.AGENT.LLM_CALL_ERROR,
@@ -362,6 +368,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       modelState,
     });
     if (!retryRequiredToolChoice) {
+      if (isRecoverableNoFinalResponse(error, runtime)) throw error;
       await runAgentRuntimeHook({
         runtime,
         point: HOOK_POINT.AGENT.LLM_CALL_ERROR,
@@ -386,6 +393,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     try {
       ai = await invokeBoundLlmWithToolChoice("auto", null, "with_tools_required_retry");
     } catch (retryError) {
+      if (isRecoverableNoFinalResponse(retryError, runtime)) throw retryError;
       await runAgentRuntimeHook({
         runtime,
         point: HOOK_POINT.AGENT.LLM_CALL_ERROR,

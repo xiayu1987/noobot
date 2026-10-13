@@ -5,7 +5,6 @@
  */
 import { timingSafeEqual } from "node:crypto";
 
-// IPv4-mapped IPv6 (::ffff:a.b.c.d) and plain IPv4 must match the same proxy rule.
 function normalizeProxyAddress(input = "") {
   const value = String(input || "")
     .trim()
@@ -32,11 +31,6 @@ function parseForwardedFor(headerValue = "") {
     .filter(Boolean);
 }
 
-/**
- * Resolve the client address. X-Forwarded-For is honoured only when the direct
- * peer is a trusted proxy; hops are stripped from the right while they are trusted
- * proxies, so a client-supplied left-most value can never be selected by forgery.
- */
 export function getClientIp(request = null, trustedProxies = []) {
   const remoteAddress = String(request?.socket?.remoteAddress || "").trim();
   if (!isTrustedProxy(remoteAddress, trustedProxies)) return remoteAddress;

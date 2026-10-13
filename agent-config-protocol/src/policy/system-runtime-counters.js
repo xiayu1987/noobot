@@ -9,6 +9,8 @@ export const SYSTEM_RUNTIME_COUNTER_KEYS = Object.freeze([
   "taskCheckLoopCount",
   "helpPromptLoopCount",
   "toolConsecutiveFailureCount",
+  "noFinalResponseRetryPromptCount",
+  "noFinalResponseRetryConsecutiveCount",
 ]);
 
 export const SYSTEM_RUNTIME_TURN_PROGRESS_FLAG_KEYS = Object.freeze([

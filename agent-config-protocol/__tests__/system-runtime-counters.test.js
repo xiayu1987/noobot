@@ -29,6 +29,8 @@ test("projects turn progress counters and summary flags only", () => {
     taskCheckLoopCount: 0,
     helpPromptLoopCount: 3,
     toolConsecutiveFailureCount: 1,
+    noFinalResponseRetryPromptCount: 0,
+    noFinalResponseRetryConsecutiveCount: 0,
     needsPhaseSummary: true,
     phaseSummaryByCharsPrompted: false,
   });
@@ -40,6 +42,8 @@ test("projects an all-zero turn progress for missing sources", () => {
     taskCheckLoopCount: 0,
     helpPromptLoopCount: 0,
     toolConsecutiveFailureCount: 0,
+    noFinalResponseRetryPromptCount: 0,
+    noFinalResponseRetryConsecutiveCount: 0,
     needsPhaseSummary: false,
     phaseSummaryByCharsPrompted: false,
   });
@@ -116,7 +120,23 @@ test("exposes a frozen counter key list", () => {
     "taskCheckLoopCount",
     "helpPromptLoopCount",
     "toolConsecutiveFailureCount",
+    "noFinalResponseRetryPromptCount",
+    "noFinalResponseRetryConsecutiveCount",
   ]);
+});
+
+test("empty response retry counters survive stop-resume within the same dialog turn", () => {
+  const resumed = {};
+  applySystemRuntimeTurnProgress(
+    resumed,
+    projectSystemRuntimeTurnProgress({
+      noFinalResponseRetryPromptCount: 2,
+      noFinalResponseRetryConsecutiveCount: 1,
+    }),
+  );
+  normalizeSystemRuntimeCounters(resumed, "resume");
+  assert.equal(resumed.noFinalResponseRetryPromptCount, 2);
+  assert.equal(resumed.noFinalResponseRetryConsecutiveCount, 1);
 });
 
 test("defaults the current turn user message to an empty string", () => {

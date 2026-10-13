@@ -314,6 +314,49 @@ test("Harness auxiliary snapshots isolate purposes and require an explicit sessi
   clearAuxiliarySnapshotsForContext(ctx);
 });
 
+test("analysis then guidance keep separate sequences so guidance system stays before conversation", async () => {
+  const captured = [];
+  const ctx = { sessionId: "auxiliary-workflow-split", modelContext: { checkpointRevision: 0 } };
+  const invoker = async ({ messages = [] } = {}) => {
+    captured.push(withoutNoScriptConstraint(messages).map((item) => [item.role, item.content]));
+    return createTestModelResponse("ok");
+  };
+  await invokeCapabilityModel({
+    invoker,
+    ctx,
+    purpose: "guidance",
+    sequenceKey: "guidance:analysis",
+    invokePayload: {
+      purpose: "guidance",
+      messages: buildCapabilityModelMessages({ task: "analysis-task", taskRole: "user" }),
+    },
+  });
+  await invokeCapabilityModel({
+    invoker,
+    ctx,
+    purpose: "guidance",
+    sequenceKey: "guidance:guidance",
+    invokePayload: {
+      purpose: "guidance",
+      messages: buildCapabilityModelMessages({
+        task: "guidance-task",
+        taskRole: "user",
+        postTaskSystemMessages: ["scenario-policy"],
+      }),
+    },
+  });
+  const guidance = captured[1];
+  assert.equal(
+    guidance.some(([, content]) => content === "analysis-task"),
+    false,
+  );
+  const firstConversation = guidance.findIndex(([role]) => role !== "system");
+  const lastSystem = guidance.map(([role]) => role).lastIndexOf("system");
+  assert.ok(guidance.some(([, content]) => content === "scenario-policy"));
+  assert.ok(lastSystem < firstConversation);
+  clearAuxiliarySnapshotsForContext(ctx);
+});
+
 test("Harness turn completion releases every auxiliary purpose snapshot for the session", async () => {
   const captured = [];
   const ctx = {

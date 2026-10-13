@@ -7,13 +7,13 @@ import { computed, ref, watch } from "vue";
 import { connectApi } from "../../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const CONNECTION_PROFILE_STORAGE_KEY = "noobot_connection_profile";
-// Admission (429) retries for every backend request: the limiter rejects before the handler runs,
-// so a retry is safe for any method. Bounded so a saturated limiter cannot spin forever.
-const ADMISSION_MAX_RETRIES = 3;
-const ADMISSION_MIN_DELAY_MS = 250;
-const ADMISSION_MAX_DELAY_MS = 60000;
+const ADMISSION_MAX_RETRIES = TURN_THRESHOLDS.client.admissionMaxRetries;
+const ADMISSION_MIN_DELAY_MS = TIME_THRESHOLDS.client.admissionRetryMinDelayMs;
+const ADMISSION_MAX_DELAY_MS = TIME_THRESHOLDS.client.admissionRetryMaxDelayMs;
 
 function admissionRetryDelayMs(response) {
   const seconds = Number(response?.headers?.get?.("retry-after"));
@@ -25,7 +25,6 @@ function waitMs(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-// Returns null when isStale() reports the caller's context changed during a wait.
 async function fetchWithAdmissionRetry(runFetch, { isStale = () => false } = {}) {
   let res = await runFetch();
   for (let attempt = 0; res.status === 429 && attempt < ADMISSION_MAX_RETRIES; attempt += 1) {
@@ -248,7 +247,6 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
           connectCode: credentials.connectCode,
           locale: String(locale.value || "").trim(),
         }),
-      // Credentials changed while waiting: the caller's result is stale, abandon quietly.
       { isStale: () => snapshotCredentials().key !== credentials.key },
     );
     if (!res) return false;

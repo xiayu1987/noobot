@@ -24,6 +24,8 @@ export const BACKEND_COMMON_ZH_CN = {
     "task_summary 必须单独调用，不能和其它工具出现在同一轮工具调用中。",
   "agent.taskCheckSingleToolPrompt":
     "task_check 必须单独调用，不能和其它工具出现在同一轮工具调用中。",
+  "agent.noFinalResponseRetryPrompt": (params = {}) =>
+    `[无最终回答续写 #${Number(params.ordinal || 0)}] 上一次模型响应没有最终回答（为空或只有思考内容），也没有工具调用。请直接给出最终回答，或调用所需工具继续推进。`,
   "agent.userMetaTag": "用户元信息",
   "attach.countExceedsLimit": "附件数量超出限制",
   "attach.extensionNotAllowed": "附件扩展名不允许",

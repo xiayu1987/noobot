@@ -21,10 +21,7 @@ import {
 } from "@noobot/model-protocol";
 import { normalizeMessages } from "../normalization/message-normalizer.js";
 import { normalizeModelOutput } from "../normalization/response-normalizer.js";
-import {
-  classifyReasoningOnly,
-  appendReasoningContext,
-} from "../policies/reasoning-retry-policy.js";
+import { classifyReasoningOnly } from "../policies/reasoning-retry-policy.js";
 import { classifyEmptyResponse } from "../policies/empty-response-retry-policy.js";
 import { isToolCallStreamingMismatch } from "../policies/tool-call-retry-policy.js";
 import { runModelAttempt } from "./attempt-runner.js";
@@ -60,9 +57,15 @@ function projectObservableModel(model = {}) {
   });
 }
 
-function buildInvocationHeaders({ model = {}, invocation = {}, headers = {} } = {}) {
+function buildInvocationHeaders({
+  model = {},
+  invocation = {},
+  operationKind = "",
+  headers = {},
+} = {}) {
   return {
     "X-Model-Name": String(model.model || "").trim(),
+    "X-Model-Operation": operationKind,
     "X-Plugin-Flow": invocation.flow,
     "X-Plugin-Purpose": invocation.purpose,
     "X-Plugin-Domain": invocation.domain,
@@ -106,7 +109,7 @@ export function createModelRequestExecutor({
         ...input.invocation,
       };
       const retry = normalizeRetryPolicy(input.policies?.retry);
-      let messages = normalizeMessages(input.messages);
+      const messages = normalizeMessages(input.messages);
       let streaming = input.options?.streaming === true;
       let reasoningOnlyAttempts = 0;
       let emptyResponseAttempts = 0;
@@ -170,6 +173,7 @@ export function createModelRequestExecutor({
                 headers: buildInvocationHeaders({
                   model: requestBase.model,
                   invocation,
+                  operationKind: requestBase.operation.kind,
                   headers: requestBase.options.headers,
                 }),
                 signal: requestBase.options.signal,
@@ -230,6 +234,7 @@ export function createModelRequestExecutor({
         const baseHeaders = buildInvocationHeaders({
           model: request.model,
           invocation,
+          operationKind: request.operation.kind,
           headers: request.options.headers,
         });
         const baseClient = adapter.createClient({
@@ -372,7 +377,6 @@ export function createModelRequestExecutor({
               output,
             });
             reasoningOnlyAttempts += 1;
-            messages = appendReasoningContext(messages, output.reasoning);
             observe("model.invocation.semantic_retry", {
               kind: MODEL_ATTEMPT_KIND.REASONING_ONLY,
               attempt: totalAttempts,

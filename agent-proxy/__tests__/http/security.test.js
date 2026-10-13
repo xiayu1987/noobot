@@ -27,7 +27,6 @@ test("getClientIp ignores X-Forwarded-For from an untrusted direct peer", () => 
 });
 
 test("getClientIp takes the right-most untrusted hop behind a trusted proxy", () => {
-  // The client forged the left-most value; the proxy appended the real peer.
   assert.equal(
     getClientIp(request("127.0.0.1", "10.0.0.1, 198.51.100.7"), LOOPBACK_PROXIES),
     "198.51.100.7",

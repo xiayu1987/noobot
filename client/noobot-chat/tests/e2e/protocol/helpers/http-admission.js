@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// Upper bound for the client's admission backoff during connect and session
-// restore (client caps each wait at 60s, 3 retries per request).
 export const ADMISSION_RETRY_BUDGET_MS = 240000;
 
 export function admissionRetryDelayMs(response, payload = {}) {

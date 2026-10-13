@@ -11,6 +11,7 @@ export const ENGINE_I18N_KEY_MAP = {
   helpToolLoopPrompt: "agent.helpToolLoopPrompt",
   taskSummarySingleToolPrompt: "agent.taskSummarySingleToolPrompt",
   taskCheckSingleToolPrompt: "agent.taskCheckSingleToolPrompt",
+  noFinalResponseRetryPrompt: "agent.noFinalResponseRetryPrompt",
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
   fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
   phaseSummaryPrompt: "agent.phaseSummaryPrompt",

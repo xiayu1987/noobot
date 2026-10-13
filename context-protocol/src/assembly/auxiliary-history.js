@@ -82,9 +82,6 @@ function assertToolEvidenceAlignment(messages = []) {
   }
 }
 
-// Observer projection keeps the call/result pairing explicit: auxiliary models
-// see tool evidence as text, so each executed call and its matching result
-// carry the same canonical call id.
 function formatToolCallForObserver(toolCalls = []) {
   return toolCalls
     .map((call = {}) => {

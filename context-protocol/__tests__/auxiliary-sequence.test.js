@@ -96,6 +96,32 @@ test("auxiliary sequence appends canonical Context evidence and the current requ
   assert.equal(second.messages[4].tool_call_id, "call-1");
 });
 
+test("auxiliary sequence rebuilds instead of appending a new system message after conversation", () => {
+  const first = advanceAuxiliaryModelContext({
+    currentContext: current(0, {
+      system: [stable({ role: "system", content: "protocol" }, "protocol")],
+      history: [context({ role: "user", content: "u1" }, "m1")],
+      incremental: [request("request-1")],
+    }),
+  });
+  const second = advanceAuxiliaryModelContext({
+    previousSnapshot: first.snapshot,
+    currentContext: current(0, {
+      system: [
+        stable({ role: "system", content: "protocol" }, "protocol"),
+        stable({ role: "system", content: "policy" }, "policy"),
+      ],
+      history: [context({ role: "user", content: "u1" }, "m1")],
+      incremental: [request("request-2")],
+    }),
+  });
+  assert.equal(second.rebuilt, true);
+  assert.deepEqual(
+    second.messages.map((message) => message.content),
+    ["protocol", "policy", "u1", "request-2"],
+  );
+});
+
 test("auxiliary sequence rebuilds only from the authoritative context after checkpoint change", () => {
   const first = advanceAuxiliaryModelContext({
     currentContext: current(0, {

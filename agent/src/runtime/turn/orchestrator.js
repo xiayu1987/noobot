@@ -36,12 +36,30 @@ import {
 } from "../main-flow-control.js";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
 import { appendTurnContextControlMessage } from "./turn-context-message-appender.js";
+import {
+  recoverMainFlowNoFinalResponse,
+  resetNoFinalResponseRetryStreak,
+} from "./no-final-response-recovery.js";
+
+function withNoFinalResponseRecovery(invokeTurn) {
+  return async function invokeTurnWithNoFinalResponseRecovery(input = {}) {
+    for (;;) {
+      try {
+        const result = await invokeTurn(input);
+        resetNoFinalResponseRetryStreak(input?.modelState?.runtime);
+        return result;
+      } catch (error) {
+        if (!recoverMainFlowNoFinalResponse({ error, ...input })) throw error;
+      }
+    }
+  };
+}
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
   assertNotAbortedFn = assertNotAborted,
-  invokeNoToolsTurnFn = invokeNoToolsTurn,
-  invokeWithToolsTurnFn = invokeWithToolsTurn,
+  invokeNoToolsTurnFn: rawInvokeNoToolsTurnFn = invokeNoToolsTurn,
+  invokeWithToolsTurnFn: rawInvokeWithToolsTurnFn = invokeWithToolsTurn,
   processToolResultsFn = processToolResults,
   buildLoopResultFn = buildLoopResult,
   maybeRequestPhaseSummaryFn = maybeRequestPhaseSummary,
@@ -51,6 +69,9 @@ export function createTurnOrchestrator({
   maybePromptHelpToolByFailureFn = maybePromptHelpToolByFailure,
   handleEngineErrorFn = handleEngineError,
 } = {}) {
+  const invokeNoToolsTurnFn = withNoFinalResponseRecovery(rawInvokeNoToolsTurnFn);
+  const invokeWithToolsTurnFn = withNoFinalResponseRecovery(rawInvokeWithToolsTurnFn);
+
   function resolveTaskSummaryCall(calls = []) {
     return (
       (Array.isArray(calls) ? calls : []).find(

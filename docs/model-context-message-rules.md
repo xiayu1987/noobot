@@ -111,3 +111,11 @@ finalMessages = system + history + incremental
 ## 4. 未启用 harness 时
 
 未启用 harness 时，主流程仍按本文第 1 节生成最终模型消息；不依赖 harness 插件侧压缩逻辑。
+
+## 5. 请求日志审计范围
+
+`scripts/check-model-context-convergence.mjs` 审计 model-proxy 请求日志时，按每条请求的 `X-Model-Operation` 头（由 model-runtime 统一写入）区分：
+
+- `chat`（含缺失该头的旧日志）：主流程与 harness、workflow、memory 等消息组装型辅助调用，必须包含构造的 system/developer 消息，且不能只有 harness 注入；
+- 非 `chat` 的 provider operation（如 `web_search`）：消息由能力自身的调用计划构造，不要求 system；
+- 所有请求：system/developer 必须位于 history/incremental 之前。

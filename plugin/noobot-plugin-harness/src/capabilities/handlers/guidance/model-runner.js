@@ -397,7 +397,7 @@ function buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request }) {
       agentMessages: modelMessages,
       task: prompt,
       taskRole: "user",
-      postTaskSystemMessages: workflowPurpose === "guidance" ? [workflowPolicyPrompt] : [],
+      postTaskSystemMessages: [workflowPolicyPrompt],
       postTaskMessages: [...workflowContextContents, responsibilityPrompt],
       postTaskRole: "user",
     });
@@ -470,6 +470,7 @@ async function invokeGuidanceModel({
         toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
       },
       purpose,
+      sequenceKey: `${purpose}:${workflowPurpose || purpose}`,
       ...flowTags,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       appendModelTrace: async (retryResponse = null) => {

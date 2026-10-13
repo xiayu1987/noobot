@@ -74,6 +74,7 @@ export async function invokeCapabilityModel({
   invoker = null,
   invokePayload = {},
   purpose = "",
+  sequenceKey = "",
   appendModelTrace = null,
   ctx = {},
 } = {}) {
@@ -82,7 +83,7 @@ export async function invokeCapabilityModel({
   const payload = invokePayload && typeof invokePayload === "object" ? { ...invokePayload } : {};
   const runtimeMessages = resolveAuxiliarySnapshotMessages({
     ctx,
-    purpose: purpose || payload.purpose,
+    purpose: sequenceKey || purpose || payload.purpose,
     messages: [
       buildAuxiliaryModelNoScriptMessage(ctx),
       ...(Array.isArray(payload.messages) ? payload.messages : []),

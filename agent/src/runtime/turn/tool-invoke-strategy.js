@@ -11,6 +11,7 @@ import {
   resolveNonThinkingCallOverrides,
 } from "./tool-choice-strategy.js";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
+import { MAIN_FLOW_NO_FINAL_RESPONSE_RETRY } from "./no-final-response-recovery.js";
 
 export function createBoundLlmToolChoiceInvoker({
   adaptedBinding,
@@ -66,7 +67,10 @@ export function createBoundLlmToolChoiceInvoker({
         toolBinding: effectiveBindOptions,
       },
       policies: {
-        retry: { toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true } },
+        retry: {
+          toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true },
+          ...MAIN_FLOW_NO_FINAL_RESPONSE_RETRY,
+        },
       },
       invocation: {
         flow: "agent.main",

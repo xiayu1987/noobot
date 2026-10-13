@@ -14,9 +14,7 @@ function requireCanonicalTurnMessageStore(turnMessageStore = null) {
   return turnMessageStore;
 }
 
-export function finalizeTurnMessagesBeforeReturn({
-  turnMessageStore = null,
-} = {}) {
+export function finalizeTurnMessagesBeforeReturn({ turnMessageStore = null } = {}) {
   const canonicalStore = requireCanonicalTurnMessageStore(turnMessageStore);
   return canonicalStore.toArray();
 }
@@ -36,16 +34,16 @@ export function buildLoopResult({
   });
   const modelLoopRound = Number(loopState?.systemRuntime?.modelLoopRound || 0);
   return {
-      output,
-      assistantMessageId: String(assistantMessageId || "").trim(),
-      traces,
-      turnMessages: finalTurnMessages,
-      modelMessages: Array.isArray(modelMessages) ? modelMessages : [],
-      modelLoopRound: Number.isFinite(modelLoopRound) && modelLoopRound > 0 ? modelLoopRound : 0,
-      turnTasks: turnTaskStore
-        ? turnTaskStore.toArray()
-        : Array.isArray(loopState?.turnTasks)
-          ? loopState.turnTasks
-          : [],
+    output,
+    assistantMessageId: String(assistantMessageId || "").trim(),
+    traces,
+    turnMessages: finalTurnMessages,
+    modelMessages: Array.isArray(modelMessages) ? modelMessages : [],
+    modelLoopRound: Number.isFinite(modelLoopRound) && modelLoopRound > 0 ? modelLoopRound : 0,
+    turnTasks: turnTaskStore
+      ? turnTaskStore.toArray()
+      : Array.isArray(loopState?.turnTasks)
+        ? loopState.turnTasks
+        : [],
   };
 }
