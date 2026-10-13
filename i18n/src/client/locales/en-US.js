@@ -557,7 +557,6 @@ export const enUSMessages = {
     safeConfirm: "Safety Confirmation",
     notSafeConfirm: "No Safety Confirmation",
     safeConfirmLevelLabel: "Confirmation level",
-    phaseSummaryLoopTurns: "Main summary turns",
     safeConfirmLevel: {
       low: "Low",
       medium: "Medium",

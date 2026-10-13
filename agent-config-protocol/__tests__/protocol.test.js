@@ -491,7 +491,6 @@ test("current config migration preserves active tool and runtime configuration",
     tools: {
       help: {
         enabled: true,
-        helpPromptLoopTurns: 10,
       },
     },
     plugins: {

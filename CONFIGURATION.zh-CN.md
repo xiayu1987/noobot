@@ -167,8 +167,6 @@ Session 日志 WebSocket：
 | `tools.max_output_chars` | number | 工具输出清洗与截断的统一长度上限 |
 | `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |
 | `tools.help.enabled` | boolean | 启用帮助工具 |
-| `tools.help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
-| `tools.help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
 | `tools.do_search_web.enabled` | boolean | 启用网页搜索工具 |
 | `tools.do_search_web.mode` | enum | 搜索后端：`model_web_search` / `search_engine` |
 | `tools.do_search_web.model_web_search.model` | string | 模型内置网页搜索使用的模型别名/名称 |

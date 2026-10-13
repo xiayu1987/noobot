@@ -167,8 +167,6 @@ Execution isolation is defined by the `@noobot/execution-isolation-protocol` wor
 | `tools.max_output_chars` | number | Unified tool output cleaning/truncation length limit |
 | `tools.multimodal_generate.enabled` | boolean | Enable multimodal generation tool |
 | `tools.help.enabled` | boolean | Enable help tool |
-| `tools.help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
-| `tools.help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
 | `tools.do_search_web.enabled` | boolean | Enable web search tool |
 | `tools.do_search_web.mode` | enum | Search backend: `model_web_search` / `search_engine` |
 | `tools.do_search_web.model_web_search.model` | string | Model alias/name used for model-side web search |

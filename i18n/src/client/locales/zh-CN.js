@@ -553,7 +553,6 @@ export const zhCNMessages = {
     safeConfirm: "安全确认",
     notSafeConfirm: "非安全确认",
     safeConfirmLevelLabel: "安全等级",
-    phaseSummaryLoopTurns: "主流程小结轮次",
     safeConfirmLevel: {
       low: "低",
       medium: "中",

@@ -186,10 +186,7 @@ const TOOLS_STRUCTURE = object({
     }),
   }),
   multimodal_generate: toolToggle(),
-  help: toolToggle({
-    helpPromptLoopTurns: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-    toolFailureHelpCount: integer({ minimum: 1, policy: GLOBAL_ONLY }),
-  }),
+  help: toolToggle(),
 });
 
 const SCENARIO_ENTRY_STRUCTURE = object({
