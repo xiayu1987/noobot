@@ -55,7 +55,6 @@ test("do_search_web: model_web_search 模式只通过 canonical ModelPort 发起
   assert.equal(capturedRequest?.operation?.kind, "web_search");
   assert.equal(capturedRequest?.options?.signal, abortController.signal);
   assert.equal(capturedRequest?.model?.model, "gpt-5.5");
-  // 搜索词只传原始 query，“先搜后答”约束由 provider adapter 负责。
   assert.equal(capturedRequest?.operation?.input?.query, "latest noobot news");
   assert.equal(result.text, "search result");
   assert.deepEqual(result.sources, [{ title: "Noobot", url: "https://example.test/noobot" }]);

@@ -8,6 +8,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   MODEL_IMAGE_GENERATION_API_TYPE,
   MODEL_OPERATION_KIND,
+  MODEL_WEB_SEARCH_INSTRUCTION,
   resolveModelImageGenerationApiType,
 } from "@noobot/model-protocol";
 
@@ -95,11 +96,6 @@ function resolveResponsesOutputText(result = {}) {
     .trim();
 }
 
-// 只约束“先搜后答”，搜索词保持为用户原始 query。
-const WEB_SEARCH_INSTRUCTION =
-  "Search the web before answering. Answer only from the search results.";
-
-// 来源取自 message 输出里的 url_citation 标注，按 url 去重。
 function extractResponsesUrlCitations(output = []) {
   const sources = new Map();
   for (const item of Array.isArray(output) ? output : []) {
@@ -355,7 +351,7 @@ export async function executeOpenAiOperation({
     const result = await client.responses.create(
       {
         model: modelSpec.model,
-        instructions: WEB_SEARCH_INSTRUCTION,
+        instructions: MODEL_WEB_SEARCH_INSTRUCTION,
         input: [
           {
             role: "user",

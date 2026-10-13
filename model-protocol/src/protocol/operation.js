@@ -15,6 +15,9 @@ export const MODEL_OPERATION_KIND = Object.freeze({
   MULTIMODAL_PARSE: "multimodal_parse",
 });
 
+export const MODEL_WEB_SEARCH_INSTRUCTION =
+  "Search the web before answering. Answer only from the search results.";
+
 const OPERATION_KINDS = new Set(Object.values(MODEL_OPERATION_KIND));
 
 function requirePlainObject(value, path) {

@@ -7,7 +7,7 @@ import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { classifyTransportError } from "../policies/default-retry-policy.js";
 import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
-import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import { MODEL_OPERATION_KIND, MODEL_WEB_SEARCH_INSTRUCTION } from "@noobot/model-protocol";
 import { readAnthropicMessageStream } from "./anthropic-message-stream.js";
 
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -18,9 +18,6 @@ const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
 const ANTHROPIC_PAUSE_TURN_STOP_REASON = "pause_turn";
 const ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS = 3;
 const ANTHROPIC_DOCUMENT_MIME_TYPE = "application/pdf";
-// 只约束“先搜后答”，搜索词保持为用户原始 query。
-const WEB_SEARCH_INSTRUCTION =
-  "Search the web before answering. Answer only from the search results.";
 
 function splitDataUrl(value = "") {
   const raw = String(value || "").trim();
@@ -346,7 +343,6 @@ function resultFromAnthropicBlocks(parsed = {}) {
   };
 }
 
-// 来源取自 web_search_tool_result 的结果项，按 url 去重。
 function sourcesFromAnthropicBlocks(blocks = []) {
   const sources = new Map();
   for (const block of blocks) {
@@ -404,7 +400,6 @@ async function executeAnthropicServerToolTurn({
         max_tokens: Number(spec.max_tokens || 10000),
         system,
         tools: serverTools,
-        // 仅首轮强制调用服务端工具；pause_turn 续轮由模型继续完成。
         ...(attempt === 0 ? { tool_choice: { type: "any" } } : {}),
         messages,
       },
@@ -441,7 +436,7 @@ async function executeAnthropicOperation({
       headers,
       signal,
       serverTools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
-      system: WEB_SEARCH_INSTRUCTION,
+      system: MODEL_WEB_SEARCH_INSTRUCTION,
       content: [{ type: "text", text: String(operation.input.query || "").trim() }],
     });
     return {
