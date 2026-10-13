@@ -13,6 +13,20 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 
+function resolveEventIdentity({ summary, socket, channel }) {
+  const channelIdentity = channel?.identity || null;
+  if (channelIdentity && channelIdentity.sessionId === summary.sessionId) {
+    return {
+      userId: channelIdentity.userId,
+      parentSessionId: summary.parentSessionId || channelIdentity.parentSessionId,
+    };
+  }
+  return {
+    userId: String(socket?.__agentProxyUserId || channelIdentity?.userId || "").trim(),
+    parentSessionId: summary.parentSessionId,
+  };
+}
+
 export function writeAgentTransportDebugEvent({
   event,
   command,
@@ -21,6 +35,7 @@ export function writeAgentTransportDebugEvent({
   data = {},
 } = {}) {
   const summary = summarizeAgentTransportCommand(command, data);
+  const { userId, parentSessionId } = resolveEventIdentity({ summary, socket, channel });
   return writeRuntimeEvent({
     scope: summary.sessionId ? "session" : "system",
     source: "agent-proxy",
@@ -29,9 +44,9 @@ export function writeAgentTransportDebugEvent({
     level: "debug",
     debugType: AGENT_TRANSPORT_DEBUG_TYPE,
     event,
-    userId: String(socket?.__agentProxyUserId || channel?.ownerUserId || "").trim(),
+    userId,
     sessionId: summary.sessionId,
-    parentSessionId: summary.parentSessionId,
+    parentSessionId,
     dialogProcessId: summary.dialogProcessId,
     turnScopeId: summary.turnScopeId,
     data: { event, ...summary },
