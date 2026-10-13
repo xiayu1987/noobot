@@ -49,7 +49,7 @@ function normalizeWebSearchMode(mode = "") {
 
 function resolveWebSearchToolConfig(runtime = {}) {
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
-  return effectiveConfig?.tools?.[TOOL_NAME.WEB_SEARCH] || {};
+  return effectiveConfig?.tools?.[TOOL_NAME.DO_SEARCH_WEB] || {};
 }
 
 function resolveModelWebSearchConfig(toolCfg = {}) {
@@ -173,7 +173,7 @@ export function createWebSearchTool({ agentContext }) {
 
   return [
     new DynamicStructuredTool({
-      name: TOOL_NAME.WEB_SEARCH,
+      name: TOOL_NAME.DO_SEARCH_WEB,
       description: tTool(runtime, "tools.do_search_web.description"),
       schema: z.object({
         query: z.string().describe(tTool(runtime, "tools.do_search_web.fieldQuery")),
@@ -196,7 +196,7 @@ export function createWebSearchTool({ agentContext }) {
               query: normalizedQuery,
             });
             return toToolJsonResult(
-              TOOL_NAME.WEB_SEARCH,
+              TOOL_NAME.DO_SEARCH_WEB,
               {
                 ok: searchEngineResult?.ok !== false,
                 status: TOOL_RESULT_STATUS.COMPLETED,
@@ -237,7 +237,7 @@ export function createWebSearchTool({ agentContext }) {
           });
           const searchResult = response.result;
           return toToolJsonResult(
-            TOOL_NAME.WEB_SEARCH,
+            TOOL_NAME.DO_SEARCH_WEB,
             {
               ok: true,
               status: TOOL_RESULT_STATUS.COMPLETED,

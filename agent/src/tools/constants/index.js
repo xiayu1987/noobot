@@ -23,7 +23,7 @@ export const TOOL_NAME = Object.freeze({
   SWITCH_MODEL: "switch_model",
   USER_INTERACTION: "user_interaction",
   ACCESS_CONNECTOR: "access_connector",
-  WEB_SEARCH: "do_search_web",
+  DO_SEARCH_WEB: "do_search_web",
   MULTIMODAL_GENERATE: "multimodal_generate",
   MULTIMODAL_PARSE: "multimodal_parse",
   TASK_SUMMARY: "task_summary",
