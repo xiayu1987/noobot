@@ -300,6 +300,11 @@ test("packaged desktop startup uses Electron node runtime for service and agent 
         agentProxyCall.options.env.AGENT_PROXY_UPSTREAM_WS_URL,
         "ws://127.0.0.1:10061/chat/ws",
       );
+      assert.ok(serviceCall.options.env.NOOBOT_WORKSPACE_ROOT);
+      assert.equal(
+        agentProxyCall.options.env.NOOBOT_WORKSPACE_ROOT,
+        serviceCall.options.env.NOOBOT_WORKSPACE_ROOT,
+      );
     } finally {
       await fixture.restore();
     }

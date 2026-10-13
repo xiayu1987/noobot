@@ -349,6 +349,10 @@ export function createDesktopServiceManager({
       : ["run", "-w", "agent-proxy", "start"];
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
+    const configState =
+      getDesktopConfigState() ||
+      ensureDesktopGlobalConfig({ isPackaged, userDataPath: app.getPath("userData") });
+    setDesktopConfigState(configState);
     const dependencyEnv = buildDependencyRuntimeEnv({
       app,
       backendRoot: isPackaged ? packagedBackendRoot : repoRoot,
@@ -383,6 +387,7 @@ export function createDesktopServiceManager({
         AGENT_PROXY_FRONTEND_ROOT: frontendRoot,
         AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED: "0",
         AGENT_PROXY_WS_RATE_LIMIT_ENABLED: "0",
+        NOOBOT_WORKSPACE_ROOT: configState.workspaceRootPath,
       },
       stdio: "pipe",
       windowsHide: true,
