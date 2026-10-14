@@ -17,7 +17,7 @@
     "./turn-scope-identity": "./src/turn-scope-identity.js"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.js"
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",

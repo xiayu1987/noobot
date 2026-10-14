@@ -14,7 +14,7 @@
     "./bot-dispatch": "./src/bot-dispatch.js"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.js"
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",

@@ -12,6 +12,6 @@
     "./validation": "./src/validation/index.js"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.js"
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   }
 }

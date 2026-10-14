@@ -11,7 +11,7 @@
     "./diagnostics": "./src/diagnostics/model-access.js"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.js"
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@langchain/openai": "^1.5.13",

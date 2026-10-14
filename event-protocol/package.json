@@ -19,7 +19,7 @@
     "./plugin-artifact-event": "./src/plugin-artifact-event.js"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.js"
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/attachment-protocol": "file:../attachment-protocol",

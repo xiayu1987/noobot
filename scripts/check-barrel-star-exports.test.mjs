@@ -10,8 +10,9 @@ import path from "node:path";
 import test from "node:test";
 import { checkRepository, collectBarrels } from "./check-barrel-star-exports.mjs";
 
-function fixture(files) {
+function fixture(t, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-barrel-star-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
   for (const [relative, source] of Object.entries(files)) {
     const file = path.join(root, relative);
@@ -21,8 +22,8 @@ function fixture(files) {
   return root;
 }
 
-test("reports symbols dropped when two star sources own the same name", async () => {
-  const root = fixture({
+test("reports symbols dropped when two star sources own the same name", async (t) => {
+  const root = fixture(t, {
     "src/index.js": ['export * from "./left.js";', 'export * from "./right.js";'].join("\n"),
     "src/left.js": "export const shared = 1;\nexport const onlyLeft = 2;\n",
     "src/right.js": "export const shared = 3;\nexport const onlyRight = 4;\n",
@@ -36,8 +37,8 @@ test("reports symbols dropped when two star sources own the same name", async ()
   );
 });
 
-test("accepts a collision resolved by an explicit re-export", async () => {
-  const root = fixture({
+test("accepts a collision resolved by an explicit re-export", async (t) => {
+  const root = fixture(t, {
     "src/index.js": [
       'export * from "./left.js";',
       'export * from "./right.js";',
@@ -50,8 +51,8 @@ test("accepts a collision resolved by an explicit re-export", async () => {
   assert.deepEqual(violations, []);
 });
 
-test("accepts disjoint star sources", async () => {
-  const root = fixture({
+test("accepts disjoint star sources", async (t) => {
+  const root = fixture(t, {
     "src/index.js": ['export * from "./left.js";', 'export * from "./right.js";'].join("\n"),
     "src/left.js": "export const onlyLeft = 1;\n",
     "src/right.js": "export const onlyRight = 2;\n",
@@ -60,8 +61,8 @@ test("accepts disjoint star sources", async () => {
   assert.deepEqual(violations, []);
 });
 
-test("analyzes a barrel whose source has named Vue component re-exports", async () => {
-  const root = fixture({
+test("analyzes a barrel whose source has named Vue component re-exports", async (t) => {
+  const root = fixture(t, {
     "src/index.js": ['export * from "./ui.js";', 'export * from "./domain.js";'].join("\n"),
     "src/ui.js": 'export { default as Widget } from "./Widget.vue";\n',
     "src/domain.js": "export const value = 1;\n",
@@ -71,8 +72,8 @@ test("analyzes a barrel whose source has named Vue component re-exports", async 
   assert.deepEqual(violations, []);
 });
 
-test("fails when a star-export source cannot be analyzed", async () => {
-  const root = fixture({
+test("fails when a star-export source cannot be analyzed", async (t) => {
+  const root = fixture(t, {
     "src/index.js": ['export * from "./broken.js";', 'export * from "./valid.js";'].join("\n"),
     "src/broken.js": "export const = ;\n",
     "src/valid.js": "export const value = 1;\n",
@@ -80,8 +81,8 @@ test("fails when a star-export source cannot be analyzed", async () => {
   await assert.rejects(checkRepository({ root }), /unable to analyze/);
 });
 
-test("analyzes exports without executing repository modules", async () => {
-  const root = fixture({
+test("analyzes exports without executing repository modules", async (t) => {
+  const root = fixture(t, {
     "src/index.js": ['export * from "./left.js";', 'export * from "./right.js";'].join("\n"),
     "src/left.js":
       'import fs from "node:fs";\nfs.writeFileSync(new URL("../executed", import.meta.url), "yes");\nexport const left = 1;\n',
@@ -92,8 +93,8 @@ test("analyzes exports without executing repository modules", async () => {
   assert.equal(fs.existsSync(path.join(root, "executed")), false);
 });
 
-test("collects only files with at least two star re-exports and skips ignored directories", () => {
-  const root = fixture({
+test("collects only files with at least two star re-exports and skips ignored directories", (t) => {
+  const root = fixture(t, {
     "src/index.js": ['export * from "./a.js";', 'export * from "./b.js";'].join("\n"),
     "src/single.js": 'export * from "./a.js";\n',
     "src/a.js": "export const a = 1;\n",

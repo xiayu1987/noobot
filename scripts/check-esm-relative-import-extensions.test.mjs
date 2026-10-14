@@ -10,8 +10,9 @@ import path from "node:path";
 import test from "node:test";
 import { checkRepository, inspectSourceFile } from "./check-esm-relative-import-extensions.mjs";
 
-function fixture(files) {
+function fixture(t, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-esm-extensions-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const [relative, source] of Object.entries(files)) {
     const file = path.join(root, relative);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -20,8 +21,8 @@ function fixture(files) {
   return root;
 }
 
-test("finds parser-recognized extensionless imports without matching comments or packages", async () => {
-  const root = fixture({
+test("finds parser-recognized extensionless imports without matching comments or packages", async (t) => {
+  const root = fixture(t, {
     "src/main.js": [
       'import value from "./value";',
       'export * from "./helpers";',
@@ -44,8 +45,8 @@ test("finds parser-recognized extensionless imports without matching comments or
   );
 });
 
-test("fixes only uniquely resolved imports and preserves quote style", async () => {
-  const root = fixture({
+test("fixes only uniquely resolved imports and preserves quote style", async (t) => {
+  const root = fixture(t, {
     "src/main.js": "import './side-effect';\nconst lazy = import(\"./lazy#worker\");\n",
     "src/side-effect.js": "export {};\n",
     "src/lazy.mjs": "export {};\n",
@@ -59,8 +60,8 @@ test("fixes only uniquely resolved imports and preserves quote style", async () 
   );
 });
 
-test("parses Vue script blocks and resolves Vue components by their real extension", async () => {
-  const root = fixture({
+test("parses Vue script blocks and resolves Vue components by their real extension", async (t) => {
+  const root = fixture(t, {
     "src/App.vue": [
       "<template><Widget /></template>",
       "<script setup>",
@@ -74,8 +75,8 @@ test("parses Vue script blocks and resolves Vue components by their real extensi
   assert.match(fs.readFileSync(path.join(root, "src/App.vue"), "utf8"), /from "\.\/Widget\.vue"/);
 });
 
-test("parses both classic and setup Vue script blocks through the SFC compiler", async () => {
-  const root = fixture({
+test("parses both classic and setup Vue script blocks through the SFC compiler", async (t) => {
+  const root = fixture(t, {
     "src/App.vue": [
       '<script>import classic from "./classic";</script>',
       '<script setup>import setup from "./setup";</script>',
@@ -90,8 +91,8 @@ test("parses both classic and setup Vue script blocks through the SFC compiler",
   assert.match(output, /from "\.\/setup\.js"/);
 });
 
-test("reports ambiguous, missing, and computed relative targets without guessing", async () => {
-  const root = fixture({
+test("reports ambiguous, missing, and computed relative targets without guessing", async (t) => {
+  const root = fixture(t, {
     "src/main.js": [
       'import value from "./value";',
       'import missing from "./missing";',
@@ -112,8 +113,8 @@ test("reports ambiguous, missing, and computed relative targets without guessing
   );
 });
 
-test("accepts explicit extensions including dynamic template suffixes", async () => {
-  const root = fixture({
+test("accepts explicit extensions including dynamic template suffixes", async (t) => {
+  const root = fixture(t, {
     "src/main.js": [
       'import value from "./value.js";',
       "const locale = import(`./locales/${name}.js`);",

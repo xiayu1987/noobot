@@ -20,7 +20,7 @@
     "prebuild": "npm run -s generate:frontend-plugin-entries",
     "dev": "vite",
     "build": "vite build",
-    "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
+    "test": "NODE_OPTIONS=--no-experimental-webstorage node ../../scripts/run-with-isolated-tmp.mjs vitest run",
     "test:watch": "vitest",
     "test:e2e:protocol": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js",
     "test:e2e:protocol:smoke": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js --grep @smoke",

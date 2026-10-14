@@ -16,6 +16,6 @@
     "zod": "^4.6.5"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.js"
+    "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   }
 }
