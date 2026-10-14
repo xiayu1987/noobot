@@ -70,10 +70,6 @@ function resolveDesktopLanguage() {
   return desktopConfigState?.superAdmin?.language === "en-US" ? "en-US" : "zh-CN";
 }
 
-function setDesktopConfigState(state) {
-  desktopConfigState = state;
-  refreshTrayMenu();
-}
 const startupStatuses = [];
 
 const {
@@ -96,6 +92,11 @@ const {
   appendDesktopLog,
   sendStatus,
 });
+
+const setDesktopConfigState = (state) => {
+  desktopConfigState = state;
+  refreshTrayMenu();
+};
 
 function sendStatus(status) {
   const language = resolveDesktopLanguage();
@@ -158,30 +159,30 @@ const { requestSuperAdminConfig, requestMissingConfigParams, requestDependencySe
     },
   });
 
-const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager({
-  app,
-  repoRoot,
-  packagedBackendRoot,
-  servicePort,
-  agentProxyPort,
-  serviceOrigin,
-  healthUrl,
-  agentProxyHealthUrl,
-  startupTimeoutMs,
-  pollIntervalMs,
-  sendStatus,
-  onBackendRecovered: () => recoverNoobot(),
-  getLogFilePath,
-  appendServiceLog,
-  appendAgentProxyLog,
-  ensureDesktopGlobalConfig,
-  getDesktopConfigState: () => desktopConfigState,
-  setDesktopConfigState,
-  requestSuperAdminConfig,
-  requestMissingConfigParams,
-  requestDependencySetup,
-  inspectDependencies,
-});
+const { ensureServiceStarted, stopManagedService, setBackendRecoveredHandler } =
+  createDesktopServiceManager({
+    app,
+    repoRoot,
+    packagedBackendRoot,
+    servicePort,
+    agentProxyPort,
+    serviceOrigin,
+    healthUrl,
+    agentProxyHealthUrl,
+    startupTimeoutMs,
+    pollIntervalMs,
+    sendStatus,
+    getLogFilePath,
+    appendServiceLog,
+    appendAgentProxyLog,
+    ensureDesktopGlobalConfig,
+    getDesktopConfigState: () => desktopConfigState,
+    setDesktopConfigState,
+    requestSuperAdminConfig,
+    requestMissingConfigParams,
+    requestDependencySetup,
+    inspectDependencies,
+  });
 
 const { boot, openNoobot, recoverNoobot, hasBootStarted } = createDesktopBootstrap({
   createWindow,
@@ -196,6 +197,7 @@ const { boot, openNoobot, recoverNoobot, hasBootStarted } = createDesktopBootstr
   healthUrl,
   defaultClientUrl,
 });
+setBackendRecoveredHandler(recoverNoobot);
 
 async function startBoot(reason) {
   appendEarlyLog(

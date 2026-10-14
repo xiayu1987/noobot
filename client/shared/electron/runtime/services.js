@@ -29,7 +29,6 @@ export function createDesktopServiceManager({
   startupTimeoutMs,
   pollIntervalMs,
   sendStatus = () => {},
-  onBackendRecovered = async () => {},
   getLogFilePath = () => "",
   appendServiceLog = () => {},
   appendAgentProxyLog = () => {},
@@ -57,6 +56,11 @@ export function createDesktopServiceManager({
   let crashRestartSpawning = false;
   let startupInterruption = "";
   const crashRestartTimes = [];
+  let onBackendRecovered = async () => {};
+
+  function setBackendRecoveredHandler(handler) {
+    onBackendRecovered = handler;
+  }
 
   function scheduleCrashRestart(reason) {
     if (stopping) return;
@@ -516,5 +520,5 @@ export function createDesktopServiceManager({
     stopManagedChildProcess(child);
   }
 
-  return { ensureServiceStarted, stopManagedService };
+  return { ensureServiceStarted, stopManagedService, setBackendRecoveredHandler };
 }

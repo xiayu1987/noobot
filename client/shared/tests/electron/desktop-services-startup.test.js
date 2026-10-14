@@ -393,6 +393,30 @@ test("crash restart stops after the restart budget is exhausted", async () => {
   });
 });
 
+test("crash restart without a registered recovery handler still completes", async () => {
+  await withPlatform("darwin", async () => {
+    const fixture = await createFixture({
+      packaged: false,
+      managerOptions: { crashRestartDelaysMs: [0] },
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+      fixture.calls[0].child.emit("exit", null, "SIGKILL");
+      await waitFor(
+        () => fixture.startupEvents.at(-1) === "status:ready" && fixture.calls.length === 2,
+      );
+      await settle();
+      assert.equal(
+        fixture.statuses.some((status) => String(status.message).includes("restart failed")),
+        false,
+      );
+    } finally {
+      fixture.manager.stopManagedService();
+      await fixture.restore();
+    }
+  });
+});
+
 test("signal-terminated service is reported and restarted, then recovery is notified", async () => {
   await withPlatform("darwin", async () => {
     let recoveries = 0;
@@ -400,10 +424,10 @@ test("signal-terminated service is reported and restarted, then recovery is noti
       packaged: false,
       managerOptions: {
         crashRestartDelaysMs: [0],
-        onBackendRecovered: async () => {
-          recoveries += 1;
-        },
       },
+    });
+    fixture.manager.setBackendRecoveredHandler(async () => {
+      recoveries += 1;
     });
     try {
       await fixture.manager.ensureServiceStarted();
@@ -437,10 +461,10 @@ test("child exit during startup fails startup with the exit reason instead of au
         crashRestartDelaysMs: [0, 0],
         startupTimeoutMs: 5000,
         fetchImpl: async () => ({ ok: true, json: async () => ({ ok: false }) }),
-        onBackendRecovered: async () => {
-          recoveries += 1;
-        },
       },
+    });
+    fixture.manager.setBackendRecoveredHandler(async () => {
+      recoveries += 1;
     });
     try {
       const startup = fixture.manager.ensureServiceStarted();
