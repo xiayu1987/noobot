@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 import { isPendingInteractionReplay } from "./interaction.js";
 import { validateProtocolEvent } from "./event-registry.js";
 
@@ -14,7 +15,6 @@ const eventParentSessionId = (event = {}) => text(event?.payload?.parentSessionI
 const eventId = (event = {}) => text(event?.identity?.eventId);
 
 import { EVENT_PROTOCOL_NAME, EVENT_PROTOCOL_VERSION } from "./envelope.js";
-import { text } from "./normalize.js";
 const REPLAY_BATCH_SCHEMA = "replay.batch";
 
 export function createReplayBatch({

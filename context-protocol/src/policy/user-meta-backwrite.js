@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-const STATUS_PENDING = "pending";
+import { text } from "@noobot/shared/value";
 
-function text(value) {
-  return String(value || "").trim();
-}
+const STATUS_PENDING = "pending";
 
 function cloneJson(value) {
   if (value == null) return value;

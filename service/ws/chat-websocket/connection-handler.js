@@ -23,6 +23,7 @@ import {
   isRunTransportAttached,
 } from "./run-registry.js";
 import { EXECUTION_ABORT_TYPE, createExecutionAbortReason } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 export const CONNECTION_CLOSE_POLICY = Object.freeze({
   DETACH_RUN: "detach_run",
@@ -30,10 +31,6 @@ export const CONNECTION_CLOSE_POLICY = Object.freeze({
 });
 
 const CONNECTION_CLOSE_POLICIES = new Set(Object.values(CONNECTION_CLOSE_POLICY));
-
-function text(value) {
-  return String(value || "").trim();
-}
 
 function createConnectionLogger(state) {
   return (event, data = {}, routing = {}) => {

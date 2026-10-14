@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
-const text = (value) => String(value || "").trim();
-
+import { text } from "@noobot/shared/value";
 export function resolveWorkflowDetailSessionId(detail = {}) {
   return text(
     detail?.sessionId ||

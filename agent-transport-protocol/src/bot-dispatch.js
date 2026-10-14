@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text as clean } from "@noobot/shared/value";
+
 const BOT_DISPATCH_OUTCOME_KIND = "noobot.bot_dispatch_outcome";
 const BOT_DISPATCH_OUTCOME_VERSION = 1;
 export const BOT_DISPATCH_DISPOSITION = Object.freeze({ PASS: "pass", HANDLED: "handled" });
-
-const clean = (value) => String(value || "").trim();
 
 export function createBotDispatchPass({ owner = "" } = {}) {
   return Object.freeze({

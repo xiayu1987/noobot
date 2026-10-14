@@ -8,8 +8,7 @@ import {
   resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,
 } from "./workflowUnifiedSessionDetail.js";
-const text = (value) => String(value || "").trim();
-
+import { text } from "@noobot/shared/value";
 let workflowNodeDetailTraceSequence = 0;
 
 export function createWorkflowNodeDetailTraceId() {

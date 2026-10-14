@@ -15,6 +15,7 @@ import {
   createSessionDisplaySourceRevision,
   SESSION_SOURCE_SCHEMA_VERSION,
 } from "../session-display-source-revision.js";
+import { text } from "@noobot/shared/value";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 27;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
@@ -80,10 +81,6 @@ export function isSessionDisplaySummaryCurrent(payload = null, sessionManifest =
   if (Number(payload?.stats?.messageCount || 0) !== sessionManifest?.messageOrder?.length)
     return false;
   return payload.source.revision === createSessionDisplaySourceRevision(sessionManifest);
-}
-
-function text(value) {
-  return String(value || "").trim();
 }
 
 function createDisplaySummaryContext(session) {

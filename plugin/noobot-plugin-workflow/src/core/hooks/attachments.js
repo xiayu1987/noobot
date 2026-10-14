@@ -13,6 +13,7 @@ import {
   mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
 import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
   return mergeAttachmentsByIdentity(existing, incoming, {
@@ -72,10 +73,6 @@ export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {} } = {}
     selected.push(attachment);
   }
   return mergeAttachments([], selected);
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 export function normalizeWorkflowTransferPayload(payload = {}) {

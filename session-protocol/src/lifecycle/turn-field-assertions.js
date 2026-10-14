@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import {
   canonicalizeTurnScopeId,
   isCanonicalTurnScopeId,
 } from "../identity/turn-scope-identity.js";
-import { text as clean } from "../normalize.js";
 
 export function collectTurnScopeIdErrors(
   turnScopeId,

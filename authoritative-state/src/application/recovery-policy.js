@@ -10,6 +10,7 @@ import {
   TURN_RECOVERY_ACTION,
   TURN_STATE,
 } from "@noobot/session-protocol/turn-lifecycle";
+import { text as clean } from "@noobot/shared/value";
 
 const RECOVERABLE_FINALIZE_STATES = new Set([
   TURN_STATE.COMPLETION_REQUESTING,
@@ -18,7 +19,6 @@ const RECOVERABLE_FINALIZE_STATES = new Set([
   TURN_STATE.STOP_FAILED,
 ]);
 const PHASES = new Set(Object.values(TURN_PHASE));
-const clean = (value) => String(value || "").trim();
 const none = (reason) => ({ action: TURN_RECOVERY_ACTION.NONE, reason });
 
 function hasRecoverableFinalize(turn) {

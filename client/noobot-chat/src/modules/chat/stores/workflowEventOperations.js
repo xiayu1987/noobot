@@ -12,8 +12,7 @@ import {
   evaluateWorkflowNodeStateGate,
   resolvePlanningPayload,
 } from "./workflowNodeStateProjection.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export function createWorkflowNodeStateRegistry() {
   return { workflows: {}, viewerStates: {} };

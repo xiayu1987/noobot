@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function clean(value) {
-  return String(value || "").trim();
-}
+import { text as clean } from "@noobot/shared/value";
 
 export const AGENT_TRANSPORT_EVENT = Object.freeze({
   READY: "transport_ready",

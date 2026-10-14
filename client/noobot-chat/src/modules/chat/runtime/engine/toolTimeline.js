@@ -20,8 +20,8 @@ import { projectToolOperationSummary } from "@noobot/event-protocol/tool-present
 import { isToolResultFailure } from "../../model/toolLogFormatting.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { createWeakArrayIndex } from "@noobot/timeline-runtime";
+import { text } from "@noobot/shared/value";
 
-const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
 
 function parseToolResultObject(value) {

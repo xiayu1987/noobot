@@ -9,8 +9,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export async function commitMessageEvent({
   userId,

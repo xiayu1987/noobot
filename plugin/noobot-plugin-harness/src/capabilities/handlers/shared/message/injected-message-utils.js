@@ -19,6 +19,7 @@ import {
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
 import { createMessageUid } from "@noobot/context-protocol/message/identity";
 import { readMessageField } from "@noobot/context-protocol/policy/message";
+import { isPlainObject } from "@noobot/shared/value";
 
 const HARNESS_PROMPT_INJECTED_TYPE_PREFIX = "harness_prompt:";
 
@@ -29,10 +30,6 @@ export function resolvePromptInjectionId(message = {}) {
   return injectedMessageType.startsWith(HARNESS_PROMPT_INJECTED_TYPE_PREFIX)
     ? injectedMessageType.slice(HARNESS_PROMPT_INJECTED_TYPE_PREFIX.length).trim()
     : "";
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 export function buildHarnessInjectedMessage(

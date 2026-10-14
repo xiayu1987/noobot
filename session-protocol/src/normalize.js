@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function text(value) {
-  return String(value || "").trim();
-}
-
 export function nullishText(value) {
   return String(value ?? "").trim();
 }

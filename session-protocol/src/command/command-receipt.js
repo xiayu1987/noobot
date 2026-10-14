@@ -3,13 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "../normalize.js";
 import { validateTurnReplacementCommit } from "../lifecycle/turn-replacement.js";
 import { SESSION_COMMAND } from "./session-command.js";
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject, text as clean } from "@noobot/shared/value";
 
 function isCanonicalText(value) {
   return typeof value === "string" && Boolean(value) && value === clean(value);

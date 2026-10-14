@@ -25,8 +25,7 @@ import {
   resolveRuntimeNodeSession,
 } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 function isCurrentRequest(nodeViewTransaction, viewTicket, targetSessionId, detail) {
   if (!nodeViewTransaction.accepts(viewTicket)) return false;

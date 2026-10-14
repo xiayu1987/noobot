@@ -37,8 +37,7 @@ import {
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir, resolveOutboxSessionDir } from "./outbox-scope.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 async function readOutboxSessionDir(service, userId, sessionId, parentSessionId, context) {
   const resolvedParentSessionId = await service._resolveParentSessionId(

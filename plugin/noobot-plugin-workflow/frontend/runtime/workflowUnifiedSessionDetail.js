@@ -5,14 +5,11 @@
  */
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { mergeCanonicalSessionDetail } from "noobot-chat/plugin-api/session-domain";
+import { text } from "@noobot/shared/value";
 
 function getListValue(value) {
   const resolved = value && typeof value === "object" && "value" in value ? value.value : value;
   return Array.isArray(resolved) ? resolved : [];
-}
-
-function text(value) {
-  return String(value || "").trim();
 }
 
 function contentOnly(value = {}) {

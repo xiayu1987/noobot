@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
+import { isPlainObject } from "@noobot/shared/value";
 
-export function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 export function normalizeUserId(userId = "") {
   return String(userId || "").trim();
 }

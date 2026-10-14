@@ -19,6 +19,7 @@
     "./turn-thresholds": "./turn-thresholds.js",
     "./tool-name": "./tool-name.js",
     "./event-stream": "./event-stream.js",
+    "./value": "./value.js",
     "./package.json": "./package.json"
   }
 }

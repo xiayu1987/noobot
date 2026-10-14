@@ -4,14 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { validateEventEnvelope } from "./envelope.js";
-import { text } from "./normalize.js";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function validateAuthorityEnvelope(envelope = {}) {
   return validateEventEnvelope(envelope).valid;
-}
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 const AUTHORITY_EVENT_DELIVERY_STATUS = Object.freeze({

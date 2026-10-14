@@ -21,8 +21,7 @@ import {
 import { activateRun } from "./message-run/active-run-stage.js";
 import { createMessageRunEventListener } from "./message-run/event-listener-stage.js";
 import { finalizeRunResult } from "./message-run/terminal-stage.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 function createConflictTurnRecovery(context) {
   return async ({ accepted = null, userId = "", sessionId = "", parentSessionId = "" } = {}) => {

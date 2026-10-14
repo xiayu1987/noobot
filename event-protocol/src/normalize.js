@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const text = (value) => String(value || "").trim();
-
 export const nullishText = (value) => String(value ?? "").trim();
 
 export const collapsedText = (value) =>

@@ -3,9 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function count(value) {
   return Number(value || 0);

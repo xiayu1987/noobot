@@ -18,10 +18,6 @@ import {
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
 function normalizeString(value = "") {
   return String(value || "").trim();
 }
@@ -47,6 +43,7 @@ export function applyTransferPayloadToMessage(message = {}, payload = {}) {
 }
 
 import { isHarnessInjectedMessage as isHarnessInjectedMessageBase } from "./message/utils.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 function isHarnessInjectedMessage(message = {}) {
   return isHarnessInjectedMessageBase(message, { role: "user" });

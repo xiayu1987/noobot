@@ -17,10 +17,7 @@ import {
   extractContextTaskSummary,
   recoverContextTaskSummaryToolResult,
 } from "../task/summary-context.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function messageTurnScopeId(message = {}) {
   return readMessageField(message, "turnScopeId");

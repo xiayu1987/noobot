@@ -3,10 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
 import { applyPrimaryModelReferencesToConfigFile } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions, resolveModelLibraryProvider } from "@noobot/model-protocol";
-import { deepClone, isPlainObject } from "./utils.js";
+import { deepClone } from "./utils.js";
 
 const TEMPLATE_VARIABLE_PATTERN = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
 

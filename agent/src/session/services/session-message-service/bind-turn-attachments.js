@@ -18,8 +18,7 @@ import {
   dedupeAttachments,
 } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 function prepareAttachmentBinding({
   userId,

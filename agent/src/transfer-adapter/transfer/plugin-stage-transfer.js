@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   resolveTransferIntent,
@@ -13,7 +14,6 @@ import {
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { firstNormalizedString, normalizeString } from "../core/compact.js";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 export async function transferAgentPluginStageMessage({

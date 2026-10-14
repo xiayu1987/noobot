@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import {
   SEMANTIC_TRANSFER_REGISTRATION,
   TRANSFER_REASON,
@@ -19,7 +20,6 @@ import {
   composeAgentPluginFinalMessage,
   transferAgentPluginStageMessage,
 } from "./plugin-stage-transfer.js";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
 import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
 
 const SEMANTIC_TRANSFER_SCENARIO = SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS;

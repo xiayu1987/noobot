@@ -9,8 +9,7 @@ import {
   findCurrentWorkflowRuntimeStep,
 } from "../../runtime/workflowNodeSessionRuntime.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 function runtimeIdentity(item = {}) {
   return {

@@ -21,14 +21,13 @@ import { createSessionSnapshotController } from "./workflow-node-session-viewer/
 import { watchRuntimeNodeRebound } from "./workflow-node-session-viewer/runtime-rebound.js";
 import { createLiveProjectionController } from "./workflow-node-session-viewer/live-projection-controller.js";
 import { createNodeSessionOpeningController } from "./workflow-node-session-viewer/node-session-opening.js";
+import { text } from "@noobot/shared/value";
 
 export {
   isSameWorkflowDrawerRoute,
   resolveCanonicalWorkflowNodeItem,
   shouldRejectRootSessionProjection,
 } from "../runtime/workflowNodeSessionIdentity.js";
-
-const text = (value) => String(value || "").trim();
 
 function createViewerRefs(input) {
   return {

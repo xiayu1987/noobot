@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 import { MESSAGE_EVENT_TYPE, isHostActivity } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
-import { text } from "./normalize.js";
 import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,

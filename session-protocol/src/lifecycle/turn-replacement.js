@@ -7,7 +7,7 @@
 const TURN_REPLACEMENT_PROTOCOL_VERSION = 1;
 const TURN_REPLACEMENT_EVENT = "turn.replaced";
 
-import { text } from "../normalize.js";
+import { text } from "@noobot/shared/value";
 
 export function createTurnReplacementCommit({
   commandId,

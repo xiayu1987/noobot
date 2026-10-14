@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 import { MESSAGE_EVENT_TYPE } from "./message-event.js";
 import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
-import { text } from "./normalize.js";
 
 export function countCanonicalToolTimelineEvents(timeline = []) {
   return (Array.isArray(timeline) ? timeline : []).reduce(

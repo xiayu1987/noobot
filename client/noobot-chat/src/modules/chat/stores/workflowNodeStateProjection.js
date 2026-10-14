@@ -8,8 +8,8 @@ import {
   isWorkflowNodeTerminalStatus,
   WORKFLOW_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol/workflow-runtime-event";
+import { text } from "@noobot/shared/value";
 
-const text = (value) => String(value || "").trim();
 const field = (source, key) => text(source?.[key]);
 const textOr = (value, fallback) => text(value) || fallback;
 const numberOr = (value, fallback) => Number(value || fallback);

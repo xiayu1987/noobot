@@ -9,10 +9,7 @@ import {
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function resolveOrderingIdentity(entry = {}) {
   return {

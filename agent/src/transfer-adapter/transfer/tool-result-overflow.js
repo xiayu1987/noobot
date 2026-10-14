@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import {
   DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
@@ -11,7 +12,6 @@ import {
 } from "./tool-result-text.js";
 import { sourceReferenceTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
 import { tTool } from "../../tools/core/tool-i18n.js";
 
 function parseJsonObject(text = "") {

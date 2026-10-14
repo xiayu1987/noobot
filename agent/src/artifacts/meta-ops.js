@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject, safeStr, safeNum } from "../shared/utils/shared-utils.js";
+import { isPlainObject } from "@noobot/shared/value";
+import { safeStr, safeNum } from "../shared/utils/shared-utils.js";
 import {
   attachmentIdentityKey,
   formatAttachmentIdentityRef,

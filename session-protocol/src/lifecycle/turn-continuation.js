@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { TURN_STATE } from "./turn-state.js";
 import { TURN_EXECUTION_STATE, normalizeTurnExecutionState } from "./turn-execution-state.js";
 import { isTurnCommitContinuation } from "./turn-commit-action.js";
-import { text as clean } from "../normalize.js";
 
 export function normalizeTurnContinuationSource(source = null) {
   if (!source || typeof source !== "object" || Array.isArray(source)) return null;

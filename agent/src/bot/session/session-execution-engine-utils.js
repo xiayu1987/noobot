@@ -10,10 +10,7 @@ import {
   readMessageField,
   resolveInjectedMessageType,
 } from "@noobot/context-protocol";
-
-export function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "@noobot/shared/value";
 
 export function resolveTransferEnvelopesFromMessage(message = {}) {
   return resolveTransferEnvelopeListFromMessage(message);

@@ -15,12 +15,9 @@ import {
   writeMessageBlocks,
 } from "../core/message-store.js";
 import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
+import { isPlainObject } from "@noobot/shared/value";
 
 const injectedPromptCache = new WeakMap();
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 function scanInjectedIdsInMessage(message = {}, target = new Set()) {
   const metadataId = resolvePromptInjectionIdFromMetadata(message);

@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { createCommandRequestHash } from "./command-fingerprint.js";
 import { TURN_COMMIT_ACTION, normalizeTurnCommitAction } from "../lifecycle/turn-commit-action.js";
-import { text as clean } from "../normalize.js";
 
 export function createTurnCommitFingerprint({
   action = TURN_COMMIT_ACTION.SEND,

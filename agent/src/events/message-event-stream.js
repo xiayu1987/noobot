@@ -21,12 +21,9 @@ import {
   isTransientMessageEventType,
 } from "@noobot/event-protocol/message-event";
 import { AGENT_RUN_EVENT } from "./run-event.js";
+import { text } from "@noobot/shared/value";
 
 export { assertMessageEventPayload };
-
-function text(value) {
-  return String(value || "").trim();
-}
 
 function runtimeState(runtime = {}) {
   if (!runtime || typeof runtime !== "object") return {};

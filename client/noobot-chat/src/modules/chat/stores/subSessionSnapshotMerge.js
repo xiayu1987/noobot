@@ -5,10 +5,7 @@
  */
 import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function summarizeSubSessionMessage(message = {}) {
   return {

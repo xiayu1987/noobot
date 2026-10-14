@@ -9,8 +9,7 @@ import {
   INTERACTION_SEQUENCE_DOMAIN,
   validateInteractionRequestPayload,
 } from "@noobot/event-protocol";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 export function createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents } = {}) {
   return async function commitInteractionRequest({

@@ -8,10 +8,7 @@ import {
   normalizeStatusStepState,
   resolveTurnTerminalStatusStep,
 } from "../runtime/sessionRunStateMachine.js";
-
-function text(value = "") {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function normalizeStatusStepDisplayState(value = "") {
   return normalizeStatusStepState(value);

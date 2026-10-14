@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
+
 export const TRANSFER_RESULT_STATUS = Object.freeze({
   DIRECT: "direct",
   FILE: "file",
@@ -11,10 +13,6 @@ export const TRANSFER_RESULT_STATUS = Object.freeze({
   SKIPPED: "skipped",
   FAILED: "failed",
 });
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 function normalizeString(value = "") {
   return String(value || "").trim();

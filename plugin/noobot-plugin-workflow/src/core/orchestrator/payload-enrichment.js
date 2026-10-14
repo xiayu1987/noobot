@@ -11,10 +11,7 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function finiteNumber(value) {
   return Number.isFinite(Number(value)) ? Number(value) : undefined;

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 import {
   EXECUTION_CHILDREN_WIRE_EVENT,
   EXECUTION_SNAPSHOT_WIRE_EVENT,
@@ -26,7 +27,6 @@ import {
   validateInteractionEnvelope,
   validateMessageEnvelope,
 } from "./event-registry-validators.js";
-import { text } from "./normalize.js";
 import {
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,

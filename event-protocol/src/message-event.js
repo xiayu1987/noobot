@@ -7,11 +7,11 @@ import {
   normalizeSecurityRiskLevel,
   validateSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
-import { text } from "./normalize.js";
 import {
   THINKING_DETAIL_CONTENT_KIND,
   isThinkingDetailContentFact,
 } from "./thinking-detail-content-fact.js";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
@@ -171,9 +171,6 @@ const USER_INTERJECTION_FACT_REQUIREMENTS = Object.freeze([
   ["messageId", "missing_user_interjection_fact_message_id"],
   ["presentationMessageId", "missing_user_interjection_fact_presentation_message_id"],
 ]);
-
-const isPlainObject = (value) =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 function validatePayloadEnvelope(value) {
   const errors = NONCANONICAL_PAYLOAD_FIELDS.filter((field) => Object.hasOwn(value, field)).map(

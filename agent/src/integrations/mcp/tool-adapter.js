@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { TOOL_BINDING_NAME_MAX_LENGTH } from "../../models/tool/binding-adapter.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 export function buildMcpToolDescription(toolSpec = {}) {
   const description = String(toolSpec?.description || "").trim();
@@ -15,10 +16,6 @@ export function buildMcpToolDescription(toolSpec = {}) {
     return `${tSystem("mcp.toolDescriptionDefault")}\n${tSystem("mcp.inputSchemaTitle")}:\n${schemaText}`;
   }
   return `${description}\n\n${tSystem("mcp.inputSchemaTitle")}:\n${schemaText}`;
-}
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function cloneJsonObject(value = {}) {

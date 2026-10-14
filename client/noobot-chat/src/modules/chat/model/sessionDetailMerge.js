@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function messageRole(item = {}) {
   return text(item?.role || item?.messageRole).toLowerCase();
 }
@@ -30,10 +32,6 @@ function mergeListByIdentity(previous = [], incoming = []) {
     merged.set(key, { ...object(merged.get(key)), ...object(item) });
   });
   return [...merged.values()];
-}
-
-function text(value = "") {
-  return String(value || "").trim();
 }
 
 function object(value) {

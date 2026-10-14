@@ -7,10 +7,7 @@ import { resolveTurnTerminalStateApi } from "../../../infrastructure/api/chat/ch
 import { isTerminalTurnEvent } from "@noobot/session-protocol";
 import { SESSION_RUN_EVENT } from "./run-state-machine/constants.js";
 import { terminalResolutionMetadata } from "./terminalResolutionMetadata.js";
-
-function clean(input) {
-  return String(input || "").trim();
-}
+import { text as clean } from "@noobot/shared/value";
 
 function keyOf(userId, sessionId, turnScopeId) {
   return `${clean(valueOf(userId))}::${clean(sessionId)}::${clean(turnScopeId)}`;

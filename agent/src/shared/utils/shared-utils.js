@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "@noobot/shared/value";
 
 export function deepMerge(base, override) {
   if (!isPlainObject(base)) return isPlainObject(override) ? { ...override } : base;

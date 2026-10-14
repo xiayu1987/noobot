@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 export function commitTurnDeletion({ lifecycle = {}, turnScopeIds = [] } = {}) {
   const normalizedLifecycle = normalizeTurnLifecycleEntity(lifecycle);

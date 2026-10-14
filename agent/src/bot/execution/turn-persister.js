@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   readContextMessageField,
@@ -14,7 +15,6 @@ import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-
 import { emitEvent } from "../../events/index.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
 import { EXECUTION_LOG_EVENT, MESSAGE_ROLE, MESSAGE_TYPE } from "../config/constants.js";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
 import { summarizeSessionTurnPayload } from "./turn-payload-summary.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);

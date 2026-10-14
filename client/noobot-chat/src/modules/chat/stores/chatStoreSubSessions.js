@@ -15,12 +15,9 @@ import {
   createSubSessionEventOperations,
   createSubSessionMessageRegistry,
 } from "./subSessionEventOperations.js";
+import { text } from "@noobot/shared/value";
 
 export { createSubSessionMessageRegistry };
-
-function text(value) {
-  return String(value || "").trim();
-}
 
 function buildSubSessionProjection({ session, turnRuntime, workflowNodeState }) {
   const sequenceByDomain = {

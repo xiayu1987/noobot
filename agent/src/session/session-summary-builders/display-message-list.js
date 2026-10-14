@@ -11,10 +11,7 @@ import {
   compactThinkingTimeline,
 } from "./message-summary-projection.js";
 import { buildLifecycleTurnPresentations } from "./turn-artifact-projection.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function projectPersistedMessages(messages) {
   const thinkingDetailCountForMessage = buildThinkingDetailCountByMessage(messages);

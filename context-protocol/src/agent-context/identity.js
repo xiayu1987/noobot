@@ -5,10 +5,7 @@
  */
 
 import { REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS } from "./schema.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function normalizeAgentContextIdentity(identity = {}) {
   return {

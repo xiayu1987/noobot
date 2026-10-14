@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "./normalize.js";
+import { text } from "@noobot/shared/value";
 
 const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
   new Set([

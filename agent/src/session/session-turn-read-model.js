@@ -5,8 +5,7 @@
  */
 import { createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
 import { isUnsuccessfulTurnTerminalStatus } from "@noobot/session-protocol";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export function selectPresentedSessionLifecycleTurns(lifecycle = null) {
   const turns = lifecycle?.turns && typeof lifecycle.turns === "object" ? lifecycle.turns : {};

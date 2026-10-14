@@ -8,8 +8,7 @@ import {
   selectExecutionChildren,
   sessionRuntimeId,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export function createChatExecutionSelectors({
   turnRuntimeRegistry,

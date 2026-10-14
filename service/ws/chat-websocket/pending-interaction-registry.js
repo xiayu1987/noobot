@@ -3,11 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const pendingInteractionRegistry = new Map();
+import { text } from "@noobot/shared/value";
 
-function text(value = "") {
-  return String(value || "").trim();
-}
+const pendingInteractionRegistry = new Map();
 
 export function registerPendingInteraction(requestItem = {}) {
   const requestId = text(requestItem.requestId);

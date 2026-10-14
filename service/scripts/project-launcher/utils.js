@@ -6,10 +6,6 @@
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export function isPlainObject(input) {
-  return input !== null && typeof input === "object" && !Array.isArray(input);
-}
-
 export function deepClone(input) {
   return JSON.parse(JSON.stringify(input));
 }

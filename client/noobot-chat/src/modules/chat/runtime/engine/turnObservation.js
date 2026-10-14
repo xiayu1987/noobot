@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export function createTurnObservation({
   requestedSessionId = "",

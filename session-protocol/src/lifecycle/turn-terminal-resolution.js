@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { canonicalizeTurnScopeId } from "../identity/turn-scope-identity.js";
 import { snapshotTurn } from "./turn-projection.js";
 import { TURN_FAILED_STATES, TURN_TERMINAL_STATES } from "./turn-state.js";
@@ -10,7 +11,6 @@ import {
   collectPositiveIntegerErrors,
   collectRequiredFieldErrors,
 } from "./turn-field-assertions.js";
-import { text as clean } from "../normalize.js";
 
 export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 2;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";

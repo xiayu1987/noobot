@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
 import { v4 as uuidv4 } from "uuid";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
 

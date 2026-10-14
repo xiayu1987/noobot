@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 export function createTurnLifecycleBridge({ resolveBot, dispatchAuthorityEvents } = {}) {
   return async function commitTurnLifecycle(event = {}) {

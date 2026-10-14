@@ -11,6 +11,9 @@ import {
   isConfigNodeUserEditable,
 } from "@noobot/agent-config-protocol";
 import { MODEL_PROVIDER_CONFIG_VALUE_TYPE } from "@noobot/model-protocol";
+import { isPlainObject } from "@noobot/shared/value";
+
+export { isPlainObject };
 
 export { CONFIG_STRUCTURE_KIND };
 
@@ -35,10 +38,6 @@ const VALUE_TYPE_TO_STRUCTURE_KIND = Object.freeze({
   [MODEL_PROVIDER_CONFIG_VALUE_TYPE.INTEGER]: CONFIG_STRUCTURE_KIND.INTEGER,
   [MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER]: CONFIG_STRUCTURE_KIND.NUMBER,
 });
-
-export function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
 
 function enumValues(node) {
   return Array.isArray(node?.values) ? node.values.map(String).filter(Boolean) : [];

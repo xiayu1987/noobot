@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-function clean(input) {
-  return String(input || "").trim();
-}
+import { text as clean } from "@noobot/shared/value";
 
 function versionNumber(input) {
   if (input === null || input === undefined || input === "") return null;

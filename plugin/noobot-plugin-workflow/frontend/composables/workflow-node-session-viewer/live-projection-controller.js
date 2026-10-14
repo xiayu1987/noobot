@@ -13,8 +13,7 @@ import {
 } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { createWorkflowNodeViewKey } from "../../runtime/workflowNodeSessionRuntime.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 function uniqueExecutions(detail = {}) {
   return [

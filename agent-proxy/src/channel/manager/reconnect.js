@@ -21,10 +21,7 @@ import {
   publishEmptyReconnect,
   publishReconnectTransaction,
 } from "./reconnect/reconnect-publisher.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function normalizeReconnectRequest(payload = {}) {
   if ("lastReceivedSeqMap" in payload || "lastReceivedTurnScopeIdMap" in payload) {

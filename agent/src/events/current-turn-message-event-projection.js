@@ -13,10 +13,7 @@ import {
   reduceCanonicalToolTimeline,
 } from "@noobot/event-protocol/tool-timeline";
 import { resolveMessageEventModelMessageId } from "@noobot/event-protocol/message-event";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function initializeCurrentTurnMessageEventProjection(runtime = {}) {
   if (!runtime || typeof runtime !== "object") {

@@ -13,6 +13,7 @@ import {
 } from "./message.js";
 import { isContextControlMessage } from "./injected-message.js";
 import { resolveContextMessageOrigin } from "../message/codec.js";
+import { text } from "@noobot/shared/value";
 
 const TERMINAL_HISTORY_STATUS = Object.freeze({
   USER_STOPPED: "user_stopped",
@@ -21,10 +22,6 @@ const TERMINAL_HISTORY_STATUS = Object.freeze({
 });
 
 const TERMINAL_HISTORY_STATUSES = new Set(Object.values(TERMINAL_HISTORY_STATUS));
-
-function text(value) {
-  return String(value || "").trim();
-}
 
 function resolveTurnScopeId(value = {}) {
   return readMessageField(value, "turnScopeId");

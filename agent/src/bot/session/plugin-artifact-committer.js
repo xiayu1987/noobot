@@ -6,8 +6,7 @@
 import { createPluginArtifactCommitRequest } from "@noobot/event-protocol/plugin-artifact-event";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export async function commitPluginArtifact({
   pluginId = "",

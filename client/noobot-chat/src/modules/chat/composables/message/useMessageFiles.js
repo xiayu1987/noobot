@@ -17,6 +17,7 @@ import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../../runtime/sessionRunStateM
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { resolveParsedResultAccessMeta } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 function getMessageAttachments(messageItem = {}) {
   return resolveRenderableMessageAttachments(messageItem);
@@ -31,10 +32,6 @@ function getMessageScopeIdentity(messageItem = {}) {
     sessionId: getMessageSessionId(messageItem),
     turnScopeId: getMessageTurnScopeId(messageItem),
   };
-}
-
-function isPlainObject(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function getAttachmentOwnership(attachmentItem = {}) {

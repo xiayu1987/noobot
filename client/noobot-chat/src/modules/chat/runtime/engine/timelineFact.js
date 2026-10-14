@@ -5,8 +5,7 @@
  */
 
 import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export const TIMELINE_AUTHORITY = Object.freeze({
   AUTHORITATIVE: "authoritative",

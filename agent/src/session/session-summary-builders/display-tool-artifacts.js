@@ -5,10 +5,7 @@
  */
 import { compactThinkingTimeline } from "./message-summary-projection.js";
 import { buildToolArtifactTimelineProjection } from "./turn-artifact-projection.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function selectArtifactPresentation(displayMessages, sessionId, routeKey, toolTimeline) {
   const candidates = displayMessages.filter(

@@ -14,8 +14,7 @@ import {
   isTerminalTurnLifecycleState,
   transitionTurnLifecycle,
 } from "../domain/turn-lifecycle-entity.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, eventId = "" } = {}) {
   const payload = createTurnLifecycleEnvelope({

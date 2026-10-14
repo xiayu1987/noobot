@@ -12,10 +12,7 @@ import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
 import { isTerminalTurnEvent, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import { recordServiceWebSocketSendFailure } from "./runtime-events.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 const TRANSIENT_DELTA_LOG_ROUTING = Object.freeze({
   category: RUNTIME_EVENT_CATEGORIES.DEBUG,

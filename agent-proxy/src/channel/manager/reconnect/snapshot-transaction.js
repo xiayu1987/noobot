@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createReplayBatch } from "@noobot/event-protocol";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function createReconnectTransaction(snapshotRequests) {
   const transaction = {

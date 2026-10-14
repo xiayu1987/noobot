@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS =
   LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;

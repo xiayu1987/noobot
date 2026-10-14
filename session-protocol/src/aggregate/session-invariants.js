@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { isSettledTurn } from "../lifecycle/turn-state.js";
 import {
   normalizeCommandReceipt,
   validateCommandReceiptResult,
 } from "../command/command-receipt.js";
 import { validateTurnCommitMetadata } from "./turn-commit-metadata.js";
-import { text as clean } from "../normalize.js";
 import { validateCanonicalAssistantPresentation } from "../turn-presentation.js";
 
 export function validateSessionAggregateInvariants(session = {}) {

@@ -10,10 +10,7 @@ import {
   buildMessageProjectionDiagnostics,
   buildTurnEvaluatedDiagnostics,
 } from "./turnRuntimeStoreDiagnostics.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function createTurnRuntimeStoreCallbacks({
   sessions,

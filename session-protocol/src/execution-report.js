@@ -5,6 +5,7 @@
  */
 import { nullishText as clean } from "./normalize.js";
 import { requireDialogProcessKey } from "./identity.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 export const EXECUTION_REPORT_PROTOCOL = "noobot.execution-report";
 export const EXECUTION_REPORT_VERSION = 4;
@@ -54,10 +55,6 @@ const METRICS_SECTION_FIELDS = Object.freeze({
   tools: ["totalToolDurationMs"],
   hooks: ["count", "errorCount", "totalDurationMs"],
 });
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
 
 function assertMetricsShape(metrics) {
   if (!isPlainObject(metrics)) throw invalidReport("summary.metrics must be an object");

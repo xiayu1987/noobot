@@ -8,10 +8,9 @@ import {
   readProtocolEventReducerInput,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
+import { text } from "@noobot/shared/value";
 
 export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
-
-const text = (value) => String(value || "").trim();
 
 export function normalizeTurnTransportEnvelope({
   event = "",

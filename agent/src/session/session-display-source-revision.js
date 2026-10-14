@@ -5,12 +5,9 @@
  */
 import { createHash } from "node:crypto";
 import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 export const SESSION_SOURCE_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
-
-function text(value) {
-  return String(value || "").trim();
-}
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);

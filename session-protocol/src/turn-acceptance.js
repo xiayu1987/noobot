@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 import { TURN_EVENT } from "./lifecycle/turn-event.js";
-import { text } from "./normalize.js";
 
 export function validateTurnAcceptanceUserMessage(event = {}) {
   if (text(event.eventType) !== TURN_EVENT.ACTION_ACCEPTED) {

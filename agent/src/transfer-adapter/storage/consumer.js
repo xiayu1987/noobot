@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import {
   attachmentIdentityKey,
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 function validated(value) {
   const source =

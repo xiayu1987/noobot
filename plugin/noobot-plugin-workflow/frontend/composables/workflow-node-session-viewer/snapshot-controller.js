@@ -6,8 +6,7 @@
 import { shouldRejectRootSessionProjection } from "../../runtime/workflowNodeSessionIdentity.js";
 import { mergeUnifiedSessionDetail } from "../../runtime/workflowUnifiedSessionDetail.js";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 function comparableSnapshot({ refs, sessionId = "", detail = null }) {
   if (detail) {

@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
   const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};

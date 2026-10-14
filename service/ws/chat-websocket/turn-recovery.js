@@ -5,8 +5,7 @@
  */
 import { inspectTurnRecovery, recoverActiveTurn } from "@noobot/authoritative-state/application";
 import { TURN_RECOVERY_ACTION } from "@noobot/session-protocol/turn-lifecycle";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 function snapshotReader(bot) {
   const reader = bot?.getTurnLifecycleSnapshot;

@@ -15,10 +15,7 @@ import {
   subSessionMessageIdentity,
   summarizeSubSessionMessage,
 } from "./subSessionSnapshotMerge.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function createSubSessionSnapshotReducer({
   subSessionMessageRegistry,

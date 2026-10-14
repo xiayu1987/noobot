@@ -11,8 +11,7 @@ import {
   assertMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
 import { createUserInterjectionContentFact } from "@noobot/event-protocol/thinking-detail-content";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export function createUserInterjectionAuthorityBridge({ resolveBot } = {}) {
   return async function commitUserInterjection({ activeRun = {}, interjection = {} } = {}) {

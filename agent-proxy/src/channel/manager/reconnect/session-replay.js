@@ -11,10 +11,7 @@ import {
   createTurnSnapshotCommand,
 } from "@noobot/agent-transport-protocol";
 import { isActionableTurnRecovery } from "@noobot/session-protocol";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function groupReconnectChannels(manager, channelKeys) {
   const channelsBySessionId = new Map();

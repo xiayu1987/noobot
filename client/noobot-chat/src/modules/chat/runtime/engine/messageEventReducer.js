@@ -35,10 +35,9 @@ import {
   mergeTransferEnvelopes,
 } from "../../model/transferEnvelopes.js";
 import { getMessageAttachments } from "../../model/messageModel.js";
+import { text } from "@noobot/shared/value";
 
 export { initializeMessageEventState } from "../../model/messageEventState.js";
-
-const text = (value) => String(value || "").trim();
 
 export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
   APPLIED: "applied",

@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveRuntimeNodeSession } from "./workflowUnifiedSessionDetail.js";
-const text = (value) => String(value || "").trim();
-
+import { text } from "@noobot/shared/value";
 export function shouldRejectRootSessionProjection({
   currentSessionId = "",
   incomingSessionId = "",

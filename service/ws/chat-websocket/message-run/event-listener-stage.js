@@ -10,8 +10,8 @@ import { publishRunEvent, registerActiveRun } from "../run-registry.js";
 import { createRunEventListener } from "../run-event-listener.js";
 import { isSessionLogDebugTypeEnabled } from "@noobot/runtime-events/session-log-protocol";
 import { recordServiceWebSocketLifecycle } from "../runtime-events.js";
+import { text } from "@noobot/shared/value";
 
-const text = (value) => String(value || "").trim();
 const REPLAYABLE_DISPATCH_FAILURES = new Set(["authority_event_send_failed"]);
 const TIMELINE_EVENT_TYPES = new Set(["tool_call_start", "tool_call_end"]);
 const WORKFLOW_DIAGNOSTIC_EVENT_TYPES = new Set([

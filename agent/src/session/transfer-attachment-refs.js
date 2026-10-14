@@ -9,10 +9,7 @@ import {
   parseAttachmentRelations,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "@noobot/shared/value";
 
 function validatedEnvelopes(value) {
   const source =

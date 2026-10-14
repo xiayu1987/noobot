@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, ref, watch } from "vue";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function resolveWorkflowViewerKey(workflowPayload = {}) {
   return text(

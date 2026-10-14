@@ -6,6 +6,7 @@
 
 import { createSerializedWindowIndex } from "@noobot/timeline-runtime";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { text } from "@noobot/shared/value";
 
 export function initializeMessageEventState(message = {}) {
   if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];
@@ -23,7 +24,6 @@ export function initializeMessageEventState(message = {}) {
   return message;
 }
 
-const text = (value) => String(value || "").trim();
 const CONSUMED_EVENT_LIMIT = QUANTITY_THRESHOLDS.client.consumedEventIdsLimit;
 const consumedMessageEvents = createSerializedWindowIndex({
   field: "consumedEventIds",

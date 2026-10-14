@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { EXECUTION_KIND, normalizeExecutionIdentity } from "./execution-lifecycle.js";
 import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./identity/turn-scope-identity.js";
 import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
@@ -33,7 +34,6 @@ import {
   isTurnRecoveryAction,
   TURN_RECOVERY_ACTION,
 } from "./lifecycle/turn-recovery.js";
-import { text as clean } from "./normalize.js";
 
 export {
   deriveAuthoritativeTurnCapabilities,

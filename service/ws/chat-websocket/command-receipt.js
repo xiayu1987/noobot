@@ -9,8 +9,7 @@ import {
   createAgentCommandReceipt,
   validateAgentCommandReceipt,
 } from "@noobot/agent-transport-protocol";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 export function sendFailedCommandReceipt(sendEvent, command, error = {}) {
   const identity = command?.identity || {};

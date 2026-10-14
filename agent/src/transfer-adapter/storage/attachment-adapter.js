@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import { Buffer } from "node:buffer";
 import {
   createAttachmentReference,
@@ -12,7 +13,7 @@ import {
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
 import { AttachmentService } from "../../artifacts/service/attachment-service.js";
-import { isPlainObject, safeStr } from "../../shared/utils/shared-utils.js";
+import { safeStr } from "../../shared/utils/shared-utils.js";
 
 function requireIdentity(identity = {}) {
   if (!isPlainObject(identity)) {

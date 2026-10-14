@@ -9,6 +9,7 @@ import {
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../../chat/runtime/sessionRunStateMachine.js";
 import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
+import { text as clean } from "@noobot/shared/value";
 
 let sessionLogSink = null;
 
@@ -39,10 +40,6 @@ export function summarizeStateMachineMessage(message = {}) {
     hasRuntimeMark: Boolean(message[SESSION_RUN_MESSAGE_RUNTIME_MARK]),
     contentLength: String(message.content || message.text || message.message || "").length,
   };
-}
-
-function clean(value) {
-  return String(value || "").trim();
 }
 
 export function summarizeStateMachineEvent(event = {}) {

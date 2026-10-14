@@ -11,12 +11,9 @@ import {
   compactTransferEnvelopes,
   dedupeSessionAttachmentRefs,
 } from "../../session/transfer-attachment-refs.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
 function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
   if (!isPlainObject(attachmentItem)) return false;

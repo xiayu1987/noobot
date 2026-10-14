@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as trim } from "../normalize.js";
+import { text as trim } from "@noobot/shared/value";
 
 function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
   const errors = [];

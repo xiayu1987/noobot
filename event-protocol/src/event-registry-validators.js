@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 import { validateExecutionIdentity } from "@noobot/session-protocol";
 import { createAttachmentLifecycleEvent } from "@noobot/attachment-protocol";
 import { INTERACTION_SEQUENCE_DOMAIN } from "./interaction.js";
@@ -12,7 +13,6 @@ import {
   TRANSIENT_MESSAGE_EVENT_SEQUENCE,
   isTransientMessageEventType,
 } from "./message-event.js";
-import { text } from "./normalize.js";
 
 export const domainResult = (result, fallback = "invalid_domain_payload") => {
   if (result?.valid === true) return { valid: true, errors: [] };

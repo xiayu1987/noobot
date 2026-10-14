@@ -5,8 +5,7 @@
  */
 import { assertTurnReplacementCommit } from "@noobot/session-protocol";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 function sameReplacement(left = {}, right = {}) {
   const leftScopes = [

@@ -13,10 +13,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "@noobot/shared/value";
 
 function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
   const globalSource = isPlainObject(globalPlugins) ? globalPlugins : {};

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 function resolveTurnScopeId(value = {}) {
   return clean(value?.turnScopeId || value?.additional_kwargs?.turnScopeId);

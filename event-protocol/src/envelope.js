@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isRecord, selectFields, text } from "./normalize.js";
+import { text } from "@noobot/shared/value";
+import { isRecord, selectFields } from "./normalize.js";
 
 export const EVENT_PROTOCOL_NAME = "@noobot/event-protocol";
 export const EVENT_PROTOCOL_VERSION = 3;

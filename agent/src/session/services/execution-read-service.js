@@ -9,8 +9,7 @@ import {
   queryAuthoritativeExecutionChildren,
   queryAuthoritativeExecutionTree,
 } from "@noobot/authoritative-state/application";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 function withReadDiagnostics(readModel, result) {
   return readModel.unreadableSessions

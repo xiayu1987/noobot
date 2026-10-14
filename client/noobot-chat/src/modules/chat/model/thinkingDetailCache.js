@@ -13,13 +13,10 @@ import {
   getMessageTurnScopeId,
 } from "./messageIdentity.js";
 import { thinkingDetailService } from "../../../infrastructure/api/thinking/thinkingDetailService.js";
+import { text } from "@noobot/shared/value";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();
-
-function text(value) {
-  return String(value || "").trim();
-}
 
 function wait(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(delayMs) || 0)));

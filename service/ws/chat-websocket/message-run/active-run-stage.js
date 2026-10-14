@@ -16,8 +16,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 async function recordPluginDebug(context, command, run) {
   await writeRuntimeEvent({

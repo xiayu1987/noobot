@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { canonicalAttachmentIdentities, createCommandRequestHash } from "./command-fingerprint.js";
-import { text as clean } from "../normalize.js";
 
 export function createTurnAttachmentBindFingerprint({
   turnScopeId = "",

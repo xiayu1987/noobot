@@ -8,8 +8,8 @@ import {
   dedupeAttachmentRefs,
 } from "../transfer-attachment-refs.js";
 import { selectPresentedSessionLifecycleTurns } from "../session-turn-read-model.js";
+import { text } from "@noobot/shared/value";
 
-const text = (value) => String(value || "").trim();
 const items = (value) => (Array.isArray(value) ? value : []);
 
 function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {

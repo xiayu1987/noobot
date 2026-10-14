@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { createSessionIdentity, validateSessionIdentity } from "./identity/session-identity.js";
 import { normalizeTurnIdentity } from "./identity/turn-identity.js";
-import { text as clean } from "./normalize.js";
 
 const SESSION_ID_MAX_LENGTH = 200;
 const DIALOG_PROCESS_KEY_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;

@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 import { EVENT_FAMILY, validateProtocolEvent } from "./event-registry.js";
 import {
   ACTIVITY_EVENT_TYPES,
   MESSAGE_EVENT_TYPE,
   isTransientMessageEvent,
 } from "./message-event.js";
-import { text } from "./normalize.js";
 
 const ACTIVITY_WIRE_EVENT_TYPES = Object.freeze(
   new Set([...ACTIVITY_EVENT_TYPES, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),

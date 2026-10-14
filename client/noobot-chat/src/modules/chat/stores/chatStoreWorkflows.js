@@ -10,10 +10,10 @@ import {
   createWorkflowEventOperations,
   createWorkflowNodeStateRegistry,
 } from "./workflowEventOperations.js";
+import { text } from "@noobot/shared/value";
 
 export { createWorkflowNodeStateRegistry };
 
-const text = (value) => String(value || "").trim();
 function summarizeWorkflowRuntimeCanonical(canonical = {}, source = "unknown") {
   return {
     sessionId: text(canonical?.identity?.sessionId),

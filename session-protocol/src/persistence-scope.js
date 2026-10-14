@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "./normalize.js";
+import { text } from "@noobot/shared/value";
 
 const SESSION_PERSISTENCE_SCOPE_FIELDS = Object.freeze([
   "scopeId",

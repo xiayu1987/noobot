@@ -8,7 +8,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyNormalizedMessageFlags,
-  isPlainObject,
   normalizeTrimmedStringList,
   resolvePreferredAttachments,
   resolveTransferEnvelopeListFromMessage,
@@ -79,8 +78,6 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
     lc_kwargs: { transferEnvelopes: [makeEnvelope("3")] },
   };
 
-  assert.equal(isPlainObject({}), true);
-  assert.equal(isPlainObject([]), false);
   assert.deepEqual(
     resolveTransferEnvelopeListFromMessage(message).map((item) => item.transferId),
     ["transfer-1", "transfer-3"],

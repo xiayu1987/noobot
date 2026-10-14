@@ -20,10 +20,7 @@ import {
   getMessageTransferEnvelopes,
   mergeTransferEnvelopes,
 } from "../../model/transferEnvelopes.js";
-
-function text(value = "") {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function sessionIdFromSession(session = {}) {
   return text(session?.sessionId);

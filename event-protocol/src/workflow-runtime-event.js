@@ -3,10 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 import { canonicalizeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createEventEnvelope } from "./envelope.js";
-import { isRecord, text } from "./normalize.js";
+import { isRecord } from "./normalize.js";
 
 export const WORKFLOW_RUNTIME_FAMILY = "workflow.runtime";
 

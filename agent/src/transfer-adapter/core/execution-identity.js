@@ -3,9 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import { createTransferIdentity } from "@noobot/semantic-transfer-protocol";
 import { currentAssistantMessageId } from "../../events/message-event-stream.js";
-import { isPlainObject, safeStr } from "../../shared/utils/shared-utils.js";
+import { safeStr } from "../../shared/utils/shared-utils.js";
 
 export function resolveRuntimeTransferIdentity({
   runtime = {},

@@ -17,10 +17,7 @@ import {
 } from "../message/codec.js";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "../message/internal-types.js";
 import { recoverContextTaskSummaryToolResult } from "../task/summary-context.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export {
   readContextMessageField as readMessageField,

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -21,7 +22,6 @@ import {
   deepClone,
   fileExists,
   hasOwnProperty,
-  isPlainObject,
   readJsonRelaxed,
   readJsonWithInvalidBackup,
   writeJson,

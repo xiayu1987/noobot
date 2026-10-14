@@ -20,8 +20,8 @@ import {
   projectLifecycleTransition,
   resolveLifecycleTransitionRequest,
 } from "./turn-lifecycle-transition.js";
+import { text as clean } from "@noobot/shared/value";
 
-const clean = (value) => String(value || "").trim();
 const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
 

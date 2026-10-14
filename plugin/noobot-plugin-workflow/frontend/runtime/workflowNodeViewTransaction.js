@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { reactive } from "vue";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 export function createWorkflowNodeViewTransaction({
   clearSnapshot,

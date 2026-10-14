@@ -5,8 +5,8 @@
  */
 
 import { isEventProtocolEnvelope } from "@noobot/event-protocol";
+import { text } from "@noobot/shared/value";
 
-const text = (value) => String(value || "").trim();
 const TURN_KEY_PREFIX = "__turn__";
 
 export function createTurnIdentity({

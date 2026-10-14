@@ -28,8 +28,7 @@ import {
   recordServiceWebSocketLifecycle,
   summarizeDebugAttachments,
 } from "../runtime-events.js";
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export async function mapRunCommand(context, command) {
   const mapped = await resolveAuthoritativeConnectorSelection({

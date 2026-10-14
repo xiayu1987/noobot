@@ -5,8 +5,7 @@
  */
 import { validateProtocolEvent } from "@noobot/event-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-
-const clean = (value) => String(value || "").trim();
+import { text as clean } from "@noobot/shared/value";
 
 export const AUTHORITY_EVENT_CONSUMER = Object.freeze({
   WEBSOCKET: "service.websocket",

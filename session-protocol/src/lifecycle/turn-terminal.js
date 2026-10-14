@@ -3,8 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text as clean } from "@noobot/shared/value";
 import { isSettledTurn, TURN_STATE } from "./turn-state.js";
-import { positiveInteger, text as clean } from "../normalize.js";
+import { positiveInteger } from "../normalize.js";
 
 const TURN_TERMINAL_COMMAND = Object.freeze({
   COMPLETED: "completed",

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPlainObject } from "@noobot/shared/value";
 import path from "node:path";
 import process from "node:process";
 import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
@@ -32,7 +33,6 @@ import {
 import {
   deepClone,
   fileExists,
-  isPlainObject,
   readJsonStrict,
   readJsonWithInvalidBackup,
   writeJson,

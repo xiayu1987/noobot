@@ -8,6 +8,7 @@ import {
   canonicalizeTurnScopeId,
   turnScopeIdentityKey,
 } from "@noobot/session-protocol/turn-scope-identity";
+import { isPlainObject } from "@noobot/shared/value";
 
 function trim(value = "") {
   return String(value || "").trim();
@@ -31,10 +32,6 @@ function stringifyMessageContent(value) {
   }
   if (value === undefined || value === null) return "";
   return JSON.stringify(value);
-}
-
-function isPlainObject(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function hasNaturalUserMarker(messageItem = {}) {

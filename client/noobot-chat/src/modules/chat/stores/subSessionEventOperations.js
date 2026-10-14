@@ -23,10 +23,7 @@ import {
   materializeTurnPresentationMessages,
 } from "./subSessionEventProjection.js";
 import { createSubSessionSnapshotReducer } from "./subSessionSnapshotReducer.js";
-
-function text(value) {
-  return String(value || "").trim();
-}
+import { text } from "@noobot/shared/value";
 
 function eventTime(eventData = {}) {
   return eventData?.occurredAt || "";
