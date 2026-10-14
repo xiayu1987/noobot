@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../model/timeFields.js";
-import {
-  stripMessageTemplatePrefix,
-  translateStoredLocaleMessageKey,
-} from "../../../../shared/i18n/messageCatalog.js";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -89,21 +85,6 @@ function pickExecutionToolResult(logItem = {}) {
   );
 }
 
-const EXECUTION_COMMAND_LABEL_KEYS = Object.freeze([
-  "message.executionCommandStarted",
-  "message.executionCommandCompleted",
-]);
-
-function stripExecutionCommandPrefix(value) {
-  return stripMessageTemplatePrefix(normalizeTrimmedString(value), EXECUTION_COMMAND_LABEL_KEYS);
-}
-
-function buildExecutionCommandLabel(statusKey = "", commandText = "") {
-  return translateStoredLocaleMessageKey(statusKey, {
-    command: stripExecutionCommandPrefix(commandText),
-  });
-}
-
 function toolResultStatusKey(logItem = {}) {
   const status = normalizeTrimmedString(
     logItem?.status || logItem?.state || logItem?.data?.status || logItem?.data?.state,
@@ -123,16 +104,11 @@ function isToolLifecycleResult(logItem = {}, text = "") {
   return eventType === "tool_call_end" || /^[\w.-]+\s+completed(?:\s|$)/i.test(text);
 }
 
-function buildToolResultDisplayText(logItem = {}, commandText = "", text = "") {
-  if (!isToolLifecycleResult(logItem, text)) {
-    return buildExecutionCommandLabel("message.executionCommandCompleted", commandText);
-  }
+function buildToolResultDisplay(logItem = {}, commandText = "", text = "") {
+  if (!isToolLifecycleResult(logItem, text)) return { text: commandText, statusKey: "" };
   const compactToolName = text.match(/^([\w.-]+)\s+completed(?:\s|$)/i)?.[1] || "";
   const command = pickExecutionToolName(logItem) || commandText || compactToolName;
-  return translateStoredLocaleMessageKey("message.executionCommandCompletedWithStatus", {
-    command: stripExecutionCommandPrefix(command),
-    status: translateStoredLocaleMessageKey(toolResultStatusKey(logItem)),
-  });
+  return { text: normalizeTrimmedString(command), statusKey: toolResultStatusKey(logItem) };
 }
 
 function pickExecutionCommandText(logItem = {}) {
@@ -149,61 +125,47 @@ function pickExecutionCommandText(logItem = {}) {
       logItem?.metadata?.cmd ??
       logItem?.metadata?.displayText,
   );
-  if (explicitCommand) return stripExecutionCommandPrefix(explicitCommand);
+  if (explicitCommand) return explicitCommand;
 
   const text = sanitizeExecutionLogText(logItem?.text);
-  if (text && !/^[\w.-]+\s+(started|completed)$/i.test(stripExecutionCommandPrefix(text))) {
-    return stripExecutionCommandPrefix(text);
-  }
+  if (text && !/^[\w.-]+\s+(started|completed)$/i.test(text)) return text;
 
   const toolName = pickExecutionToolName(logItem);
   const toolArgs = pickExecutionToolArgs(logItem);
   const commandFromToolFields = [toolName, toolArgs].filter(Boolean).join(" ").trim();
-  if (commandFromToolFields) return stripExecutionCommandPrefix(commandFromToolFields);
+  if (commandFromToolFields) return commandFromToolFields;
 
-  return stripExecutionCommandPrefix(text);
+  return text;
 }
 
-function buildExecutionLogDisplayText(logItem = {}) {
+function buildExecutionLogDisplay(logItem = {}) {
   const eventName = normalizeTrimmedString(logItem?.event).toLowerCase();
   const typeName = normalizeTrimmedString(logItem?.type).toLowerCase();
   const text = sanitizeExecutionLogText(logItem?.text);
   const isToolCall = eventName === "tool_call" || typeName === "tool_call";
   const isToolResult = eventName === "tool_result" || typeName === "tool_result";
-  if (isToolCall) {
-    const commandText = pickExecutionCommandText(logItem);
-    return commandText
-      ? buildExecutionCommandLabel("message.executionCommandStarted", commandText)
-      : "";
-  }
+  if (isToolCall) return { text: pickExecutionCommandText(logItem), statusKey: "" };
   if (isToolResult) {
-    const commandText =
-      pickExecutionCommandText(logItem) ||
-      stripExecutionCommandPrefix(pickExecutionToolResult(logItem));
-    return commandText ? buildToolResultDisplayText(logItem, commandText, text) : text;
+    const commandText = pickExecutionCommandText(logItem) || pickExecutionToolResult(logItem);
+    return commandText
+      ? buildToolResultDisplay(logItem, commandText, text)
+      : { text, statusKey: "" };
   }
-  return text;
+  return { text, statusKey: "" };
 }
 
-function isDisplayableExecutionLog(logItem = {}) {
-  const text = buildExecutionLogDisplayText(logItem);
-  if (!text) return false;
+function isInternalExecutionLog(logItem = {}) {
   const eventName = normalizeTrimmedString(logItem?.event).toLowerCase();
   const typeName = normalizeTrimmedString(logItem?.type).toLowerCase();
-  if (
-    INTERNAL_EXECUTION_EVENT_NAMES.has(eventName) ||
-    INTERNAL_EXECUTION_EVENT_NAMES.has(typeName)
-  ) {
-    return false;
-  }
-  return true;
+  return (
+    INTERNAL_EXECUTION_EVENT_NAMES.has(eventName) || INTERNAL_EXECUTION_EVENT_NAMES.has(typeName)
+  );
 }
 
 export function sanitizeExecutionLogForDisplay(logItem = {}) {
-  const text = buildExecutionLogDisplayText(logItem);
-  if (!text) return null;
-  const sanitizedLog = { ...logItem, text };
-  return isDisplayableExecutionLog(sanitizedLog) ? sanitizedLog : null;
+  const { text, statusKey } = buildExecutionLogDisplay(logItem);
+  if (!text || isInternalExecutionLog(logItem)) return null;
+  return statusKey ? { ...logItem, text, statusKey } : { ...logItem, text };
 }
 
 export function isBlankCompatibleSameId(left, right) {

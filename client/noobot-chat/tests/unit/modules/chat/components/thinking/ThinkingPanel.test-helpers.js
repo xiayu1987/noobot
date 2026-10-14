@@ -51,6 +51,7 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
         "tone",
         "expandable",
         "expanded",
+        "statusKey",
       ],
       emits: ["toggle"],
       setup(props, { emit }) {
@@ -60,6 +61,7 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
             {
               class: "execution-log-line",
               "data-tool": String(props.tool === true),
+              "data-status-key": props.statusKey || undefined,
               "data-expandable": String(props.expandable === true),
               onClick: () => emit("toggle"),
             },
@@ -193,10 +195,11 @@ export function mountThinkingPanel(messageItem, props = {}, { stubs = {} } = {})
             "tone",
             "expandable",
             "expanded",
+            "statusKey",
           ],
           emits: ["toggle"],
           template:
-            '<div class="execution-log-line" :class="{ \'is-tool-result-failed\': tone === \'error\' }" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && (detailText || detailValue !== undefined)" class="execution-log-detail">{{ detailText || (typeof detailValue === "string" ? detailValue : JSON.stringify(detailValue, null, 2)) }}</pre></div>',
+            '<div class="execution-log-line" :class="{ \'is-tool-result-failed\': tone === \'error\' }" :data-tool="String(tool === true)" :data-status-key="statusKey || undefined" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && (detailText || detailValue !== undefined)" class="execution-log-detail">{{ detailText || (typeof detailValue === "string" ? detailValue : JSON.stringify(detailValue, null, 2)) }}</pre></div>',
         },
         BaseSectionHeader: {
           props: ["title"],

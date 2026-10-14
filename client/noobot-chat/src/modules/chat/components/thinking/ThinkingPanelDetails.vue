@@ -270,6 +270,7 @@ watch(
                 :tone="rendererProjection[virtualRow.index].item.presentation?.tone"
                 :tool-name="rendererProjection[virtualRow.index].item.tool"
                 :risk-level="rendererProjection[virtualRow.index].item.riskLevel"
+                :status-key="rendererProjection[virtualRow.index].item.statusKey"
                 :expandable="
                   Boolean(
                     rendererProjection[virtualRow.index].detailKey &&

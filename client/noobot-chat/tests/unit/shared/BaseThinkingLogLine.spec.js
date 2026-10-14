@@ -27,15 +27,28 @@ describe("BaseThinkingLogLine", () => {
     const wrapper = mount(BaseThinkingLogLine, {
       props: {
         eventText: "tool_call",
-        contentText: "调用：npm test",
+        contentText: "npm test",
         tool: true,
       },
     });
 
     expect(wrapper.text()).toContain("npm test");
-    expect(wrapper.text()).not.toContain("调用：");
     expect(wrapper.find(".base-thinking-log-line__event").attributes("title")).toBe("Call");
     expect(wrapper.find(".base-thinking-log-line__event svg").exists()).toBe(true);
+  });
+
+  it("renders the translated status after the command for tool results", () => {
+    const wrapper = mount(BaseThinkingLogLine, {
+      props: {
+        eventText: "tool_result",
+        contentText: "read_file",
+        statusKey: "message.executionStatusFailed",
+        tool: true,
+      },
+    });
+
+    expect(wrapper.find(".base-thinking-log-line__summary").text()).toBe("read_file");
+    expect(wrapper.find(".base-thinking-log-line__status").text()).toMatch(/^(失败|Failed)$/);
   });
 
   it("does not render internal event names without readable content", () => {

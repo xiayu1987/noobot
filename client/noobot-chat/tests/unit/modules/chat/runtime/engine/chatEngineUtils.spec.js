@@ -54,7 +54,7 @@ describe("chatEngine utils", () => {
       expect.objectContaining({
         event: "tool_call",
         type: "tool_call",
-        text: "调用：npm test",
+        text: "npm test",
       }),
     );
   });
@@ -70,7 +70,7 @@ describe("chatEngine utils", () => {
 
     expect(sanitizeExecutionLogForDisplay(logItem)).toEqual(
       expect.objectContaining({
-        text: "调用：read_file /project/client/noobot-chat/package.json",
+        text: "read_file /project/client/noobot-chat/package.json",
       }),
     );
   });
@@ -86,29 +86,11 @@ describe("chatEngine utils", () => {
     });
 
     expect(sanitizeExecutionLogForDisplay(logItem)?.text).toBe(
-      '调用：read_file {"filePath":"/project/client/noobot-chat/package.json"}',
+      'read_file {"filePath":"/project/client/noobot-chat/package.json"}',
     );
   });
 
-  it("does not duplicate existing start or done command prefixes", () => {
-    expect(
-      sanitizeExecutionLogForDisplay({
-        event: "tool_call",
-        type: "tool_call",
-        text: "调用：调用：npm test",
-      })?.text,
-    ).toBe("调用：npm test");
-
-    expect(
-      sanitizeExecutionLogForDisplay({
-        event: "tool_result",
-        type: "tool_result",
-        text: "返回：返回：npm test",
-      })?.text,
-    ).toBe("返回：npm test");
-  });
-
-  it("keeps authoritative tool result status in the compact display text", () => {
+  it("keeps authoritative tool result status as a structured status key", () => {
     expect(
       sanitizeExecutionLogForDisplay({
         event: "tool_result",
@@ -117,8 +99,10 @@ describe("chatEngine utils", () => {
         tool: "read_file",
         text: "read_file completed",
         success: true,
-      })?.text,
-    ).toMatch(/^返回：read_file · 已完成$|^Return: read_file · Completed$/);
+      }),
+    ).toEqual(
+      expect.objectContaining({ text: "read_file", statusKey: "message.executionStatusCompleted" }),
+    );
 
     expect(
       sanitizeExecutionLogForDisplay({
@@ -128,8 +112,13 @@ describe("chatEngine utils", () => {
         tool: "execute_script",
         text: "execute_script completed",
         success: false,
-      })?.text,
-    ).toMatch(/^返回：execute_script · 失败$|^Return: execute_script · Failed$/);
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        text: "execute_script",
+        statusKey: "message.executionStatusFailed",
+      }),
+    );
   });
 
   it("falls back to status text without blank or undefined when command fields are missing", () => {
@@ -139,7 +128,7 @@ describe("chatEngine utils", () => {
         type: "tool_call",
         text: "read_file started",
       })?.text,
-    ).toBe("调用：read_file started");
+    ).toBe("read_file started");
   });
 
   it("hides internal container events even when they include text", () => {

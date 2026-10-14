@@ -8,7 +8,6 @@ import { computed } from "vue";
 import { ElIcon } from "element-plus";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { useLocale } from "../i18n/useLocale.js";
-import { stripMessageTemplatePrefix } from "../i18n/messageCatalog.js";
 import { resolveToolEventVisual } from "../utils/toolEventIcon.js";
 
 const props = defineProps({
@@ -25,6 +24,7 @@ const props = defineProps({
   detailValue: { type: null, default: undefined },
   toolName: { type: String, default: "" },
   riskLevel: { type: String, default: "" },
+  statusKey: { type: String, default: "" },
 });
 
 const emit = defineEmits(["toggle"]);
@@ -53,33 +53,22 @@ const eventVisual = computed(() =>
     tone: props.tone,
   }),
 );
-const contentWithoutEventPrefix = computed(() => {
-  const content = String(props.contentText || "");
-  if (!props.tool) return content;
-  const eventName = String(props.eventText || "")
-    .trim()
-    .toLowerCase();
-  const prefixKey =
-    eventName === "tool_call"
-      ? "message.executionCommandStarted"
-      : eventName === "tool_result"
-        ? "message.executionCommandCompleted"
-        : "";
-  return prefixKey ? stripMessageTemplatePrefix(content, [prefixKey]) : content;
-});
+const statusLabel = computed(() => (props.statusKey ? translate(props.statusKey) : ""));
 const normalizedRiskLevel = computed(() => normalizeSecurityRiskLevel(props.riskLevel));
 const riskLabel = computed(() =>
   normalizedRiskLevel.value ? translate(`message.toolRiskLevel.${normalizedRiskLevel.value}`) : "",
 );
 const contentWithoutToolName = computed(() => {
-  const content = contentWithoutEventPrefix.value;
+  const content = String(props.contentText || "");
   const toolName = String(props.toolName || "").trim();
   if (!toolName || !content.startsWith(toolName)) return content;
   const boundary = content.charAt(toolName.length);
   if (boundary && !/[\s·:：([]/.test(boundary)) return content;
   return content.slice(toolName.length).trimStart();
 });
-const resolvedTitle = computed(() => props.titleText || contentWithoutEventPrefix.value || "");
+const resolvedTitle = computed(() =>
+  [props.titleText || props.contentText || "", statusLabel.value].filter(Boolean).join(" · "),
+);
 const resolvedDetail = computed(() => {
   if (props.detailText !== "" && props.detailText !== undefined && props.detailText !== null) {
     if (typeof props.detailText === "string") return props.detailText;
@@ -89,8 +78,7 @@ const resolvedDetail = computed(() => {
       return String(props.detailText || "");
     }
   }
-  const source =
-    props.detailValue === undefined ? contentWithoutEventPrefix.value : props.detailValue;
+  const source = props.detailValue === undefined ? props.contentText : props.detailValue;
   try {
     return typeof source === "string" ? source : JSON.stringify(source, null, 2);
   } catch {
@@ -146,6 +134,7 @@ function handleToggle() {
       <span v-if="contentWithoutToolName" class="base-thinking-log-line__summary">{{
         contentWithoutToolName
       }}</span>
+      <span v-if="statusLabel" class="base-thinking-log-line__status">{{ statusLabel }}</span>
     </span>
     <pre v-if="expanded && hasDetail && resolvedDetail" class="base-thinking-log-line__detail">{{
       resolvedDetail
@@ -251,6 +240,10 @@ function handleToggle() {
 }
 .base-thinking-log-line__summary {
   margin-left: var(--noobot-space-xs);
+}
+.base-thinking-log-line__status {
+  margin-left: var(--noobot-space-xs);
+  color: var(--noobot-thinking-muted);
 }
 .base-thinking-log-line__text.is-expandable {
   cursor: pointer;

@@ -225,6 +225,7 @@ watch(
             :tone="logItem.presentation?.tone"
             :tool-name="logItem.tool"
             :risk-level="logItem.riskLevel"
+            :status-key="logItem.statusKey"
             :expandable="isExpandable(logItem)"
             :expanded="isExpanded(messageItem, detailKey(logItem))"
             @toggle="toggleExpanded(messageItem, detailKey(logItem))"

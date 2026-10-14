@@ -254,9 +254,11 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     await flushAsync();
 
     expect(getDetail).toHaveBeenCalledTimes(1);
-    expect(wrapper.findAll(".execution-log-line").map((item) => item.text())).toContain(
-      "返回：details-tool · 已完成",
-    );
+    expect(
+      wrapper
+        .findAll(".execution-log-line")
+        .map((item) => [item.text(), item.attributes("data-status-key")]),
+    ).toContainEqual(["details-tool", "message.executionStatusCompleted"]);
   });
 
   it("refreshes an empty cached detail in details mode", async () => {
@@ -287,9 +289,11 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     await flushAsync();
 
     expect(getDetail).toHaveBeenCalledTimes(1);
-    expect(wrapper.findAll(".execution-log-line").map((item) => item.text())).toContain(
-      "返回：fresh-details-tool · 已完成",
-    );
+    expect(
+      wrapper
+        .findAll(".execution-log-line")
+        .map((item) => [item.text(), item.attributes("data-status-key")]),
+    ).toContainEqual(["fresh-details-tool", "message.executionStatusCompleted"]);
   });
 
   it("does not fetch canonical details while a message is pending or local logs exist", async () => {
@@ -418,8 +422,11 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     await nextTick();
 
     expect(wrapper.vm.currentExecutionLogs).toHaveLength(10);
-    expect(wrapper.vm.currentExecutionLogs.map((item) => item.text)).toEqual(
-      Array.from({ length: 10 }, (_, index) => `返回：success-${index + 1} · 已完成`),
+    expect(wrapper.vm.currentExecutionLogs.map((item) => [item.text, item.statusKey])).toEqual(
+      Array.from({ length: 10 }, (_, index) => [
+        `success-${index + 1}`,
+        "message.executionStatusCompleted",
+      ]),
     );
     expect(wrapper.vm.currentExecutionLogs.some((item) => item.text.includes("missing file"))).toBe(
       false,
