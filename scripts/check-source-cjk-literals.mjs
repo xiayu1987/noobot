@@ -41,16 +41,8 @@ export const ALLOWED_FILES = Object.freeze({
     "self-contained bilingual service template",
 });
 
-export const ALLOWED_DIRS = Object.freeze({
-  "workflow/src/": "standalone workflow engine domain names and debug logs",
-});
-
 export function isExemptPath(filePath) {
   return EXEMPT_PATH_RULES.some(({ pattern }) => pattern.test(filePath));
-}
-
-function allowedDirOf(filePath, allowedDirs) {
-  return Object.keys(allowedDirs).find((dir) => filePath.startsWith(dir)) || "";
 }
 
 export function findCjkLines(text = "") {
@@ -63,29 +55,20 @@ export function findCjkLines(text = "") {
   return hits;
 }
 
-export function evaluateCjkLiterals(
-  files = [],
-  readText,
-  { allowedFiles = ALLOWED_FILES, allowedDirs = ALLOWED_DIRS } = {},
-) {
+export function evaluateCjkLiterals(files = [], readText, { allowedFiles = ALLOWED_FILES } = {}) {
   const violations = [];
   const usedEntries = new Set();
   for (const filePath of files) {
     if (!SOURCE_EXT_RE.test(filePath) || isExemptPath(filePath)) continue;
     const hits = findCjkLines(readText(filePath));
     if (!hits.length) continue;
-    const allowedEntry = Object.hasOwn(allowedFiles, filePath)
-      ? filePath
-      : allowedDirOf(filePath, allowedDirs);
-    if (allowedEntry) {
-      usedEntries.add(allowedEntry);
+    if (Object.hasOwn(allowedFiles, filePath)) {
+      usedEntries.add(filePath);
       continue;
     }
     violations.push({ file: filePath, hits });
   }
-  const staleEntries = [...Object.keys(allowedFiles), ...Object.keys(allowedDirs)].filter(
-    (entry) => !usedEntries.has(entry),
-  );
+  const staleEntries = Object.keys(allowedFiles).filter((entry) => !usedEntries.has(entry));
   return { violations, staleEntries };
 }
 

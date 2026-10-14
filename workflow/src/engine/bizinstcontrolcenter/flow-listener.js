@@ -4,19 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 
-import EModelStateType from '../bizinst/state/modelstate/enums/model-state-type.js';
-import ActionNodeStateProcess from '../bizinst/state/proc/fschange/action-node-state-process.js';
-import CompositeNodeStateProcess from '../bizinst/state/proc/fschange/composite-node-state-process.js';
-import DiscoverModelStateProcess from '../bizinst/state/proc/fschange/discover-model-state-process.js';
-import EActionNodeStateProcessHandleWay from '../bizinst/state/proc/fschange/enums/action-node-state-process-handle-way.js';
-import ECompositeNodeStateProcessHandleWay from '../bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way.js';
-import EStateNodeStateProcessHandleWay from '../bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js';
-import PathStateProcess from '../bizinst/state/proc/fschange/path-state-process.js';
-import StateNodeStateProcess from '../bizinst/state/proc/fschange/state-node-state-process.js';
+import EModelStateType from "../bizinst/state/modelstate/enums/model-state-type.js";
+import ActionNodeStateProcess from "../bizinst/state/proc/fschange/action-node-state-process.js";
+import CompositeNodeStateProcess from "../bizinst/state/proc/fschange/composite-node-state-process.js";
+import DiscoverModelStateProcess from "../bizinst/state/proc/fschange/discover-model-state-process.js";
+import EActionNodeStateProcessHandleWay from "../bizinst/state/proc/fschange/enums/action-node-state-process-handle-way.js";
+import ECompositeNodeStateProcessHandleWay from "../bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way.js";
+import EStateNodeStateProcessHandleWay from "../bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js";
+import PathStateProcess from "../bizinst/state/proc/fschange/path-state-process.js";
+import StateNodeStateProcess from "../bizinst/state/proc/fschange/state-node-state-process.js";
 
 function isWorkflowVerboseLogEnabled() {
-  const raw = String(process?.env?.NOOBOT_WORKFLOW_VERBOSE_LOG || '').trim().toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes';
+  const raw = String(process?.env?.NOOBOT_WORKFLOW_VERBOSE_LOG || "")
+    .trim()
+    .toLowerCase();
+  return raw === "1" || raw === "true" || raw === "on" || raw === "yes";
 }
 
 class FlowListener {
@@ -25,9 +27,9 @@ class FlowListener {
     this.verboseLogEnabled = isWorkflowVerboseLogEnabled();
   }
 
-  logVerbose(message = '') {
+  logVerbose(message = "") {
     if (!this.verboseLogEnabled) return;
-    console.log(String(message || ''));
+    console.log(String(message || ""));
   }
 
   getBizinstTreeBox() {
@@ -45,17 +47,17 @@ class FlowListener {
   discoverModelState(bizinst, modelState) {
     let modelStateType = EModelStateType.ActionNodeState;
 
-    if (modelState && typeof modelState.getFlowto === 'function') {
-      this.logVerbose('发现流向状态：' + modelState.getFlowto().getName());
+    if (modelState && typeof modelState.getFlowto === "function") {
+      this.logVerbose("Discovered flowto state: " + modelState.getFlowto().getName());
       modelStateType = EModelStateType.FlowtoState;
-    } else if (modelState && typeof modelState.getBizinst === 'function') {
-      this.logVerbose('发现复合节点状态：' + modelState.getNode().getName());
+    } else if (modelState && typeof modelState.getBizinst === "function") {
+      this.logVerbose("Discovered composite node state: " + modelState.getNode().getName());
       modelStateType = EModelStateType.CompositeNodeState;
-    } else if (modelState && typeof modelState.getStepStates === 'function') {
-      this.logVerbose('发现动作节点状态：' + modelState.getNode().getName());
+    } else if (modelState && typeof modelState.getStepStates === "function") {
+      this.logVerbose("Discovered action node state: " + modelState.getNode().getName());
       modelStateType = EModelStateType.ActionNodeState;
     } else {
-      this.logVerbose('发现状态节点状态：' + modelState.getNode().getName());
+      this.logVerbose("Discovered state node state: " + modelState.getNode().getName());
       modelStateType = EModelStateType.StateNodeState;
     }
 
@@ -63,19 +65,22 @@ class FlowListener {
     process.setModelState(modelState);
     process.setModelStateType(modelStateType);
 
-    this.getRealTimeProcess(bizinst).getFlowProcess().getDiscoverModelStateProcesses().push(process);
+    this.getRealTimeProcess(bizinst)
+      .getFlowProcess()
+      .getDiscoverModelStateProcesses()
+      .push(process);
     this.bizinstTreeBox.saveState(bizinst, process);
   }
 
   goThrough(bizinst, pathState, direction) {
     this.logVerbose(
-      '经过' +
-        (direction === 1 ? '(正向)' : '(反向)') +
-        '路径：' +
+      "Passed " +
+        (direction === 1 ? "(forward)" : "(backward)") +
+        " path: " +
         pathState.getStartNodeState().getNode().getName() +
-        '----' +
+        "----" +
         pathState.getFlowtoState().getFlowto().getName() +
-        '---->' +
+        "---->" +
         pathState.getEndNodeState().getNode().getName(),
     );
 
@@ -88,9 +93,9 @@ class FlowListener {
 
   arriveStepState(bizinst, stepState) {
     this.logVerbose(
-      '到达步骤：' +
+      "Arrived at step: " +
         stepState.getActionNodeState().getNode().getName() +
-        '下步骤' +
+        " step #" +
         stepState.getActionNodeState().getStepStates().indexOf(stepState),
     );
 
@@ -104,9 +109,9 @@ class FlowListener {
 
   handleStepState(bizinst, stepState) {
     this.logVerbose(
-      '处理步骤：' +
+      "Handled step: " +
         stepState.getActionNodeState().getNode().getName() +
-        '下步骤' +
+        " step #" +
         stepState.getActionNodeState().getStepStates().indexOf(stepState),
     );
 
@@ -119,7 +124,7 @@ class FlowListener {
   }
 
   stop(bizinst, stepState) {
-    this.logVerbose('实例终止');
+    this.logVerbose("Instance stopped");
     const process = new ActionNodeStateProcess();
     process.setNodeState(stepState.getActionNodeState());
     process.setStepState(stepState);
@@ -129,34 +134,55 @@ class FlowListener {
   }
 
   startChildBizinst(bizinst, compositeNodeState) {
-    this.logVerbose('开始子实例：' + compositeNodeState.getNode().getName());
+    this.logVerbose("Started child instance: " + compositeNodeState.getNode().getName());
     const process = new CompositeNodeStateProcess();
     process.setNodeState(compositeNodeState);
     process.setChildBizinst(compositeNodeState.getBizinst());
-    process.setCompositeNodeStateProcessHandleWay(ECompositeNodeStateProcessHandleWay.startChildBizinst);
-    this.getRealTimeProcess(bizinst).getFlowProcess().getCompositeNodeStateProcesses().push(process);
+    process.setCompositeNodeStateProcessHandleWay(
+      ECompositeNodeStateProcessHandleWay.startChildBizinst,
+    );
+    this.getRealTimeProcess(bizinst)
+      .getFlowProcess()
+      .getCompositeNodeStateProcesses()
+      .push(process);
     this.bizinstTreeBox.saveState(bizinst, process);
   }
 
   openChildBizinst(bizinst, compositeNodeState) {
-    this.logVerbose('打开子实例：' + compositeNodeState.getNode().getName());
+    this.logVerbose("Opened child instance: " + compositeNodeState.getNode().getName());
     const process = new CompositeNodeStateProcess();
     process.setNodeState(compositeNodeState);
     process.setChildBizinst(compositeNodeState.getBizinst());
-    process.setCompositeNodeStateProcessHandleWay(ECompositeNodeStateProcessHandleWay.openChildBizinst);
-    this.getRealTimeProcess(bizinst).getFlowProcess().getCompositeNodeStateProcesses().push(process);
+    process.setCompositeNodeStateProcessHandleWay(
+      ECompositeNodeStateProcessHandleWay.openChildBizinst,
+    );
+    this.getRealTimeProcess(bizinst)
+      .getFlowProcess()
+      .getCompositeNodeStateProcesses()
+      .push(process);
     this.bizinstTreeBox.saveState(bizinst, process);
   }
 
-  noticeParentBizinst(parentBizinst, childBizinst, compositeNodeState, routeNoteInfo, sourceNoteInfo) {
-    this.logVerbose('通知父实例');
+  noticeParentBizinst(
+    parentBizinst,
+    childBizinst,
+    compositeNodeState,
+    routeNoteInfo,
+    sourceNoteInfo,
+  ) {
+    this.logVerbose("Notified parent instance");
     const process = new CompositeNodeStateProcess();
     process.setNodeState(compositeNodeState);
     process.setChildBizinst(compositeNodeState.getBizinst());
-    process.setCompositeNodeStateProcessHandleWay(ECompositeNodeStateProcessHandleWay.noticeParentBizinst);
+    process.setCompositeNodeStateProcessHandleWay(
+      ECompositeNodeStateProcessHandleWay.noticeParentBizinst,
+    );
     process.setRouteNoteInfo(routeNoteInfo);
     process.setSourceNoteInfo(sourceNoteInfo);
-    this.getRealTimeProcess(parentBizinst).getFlowProcess().getCompositeNodeStateProcesses().push(process);
+    this.getRealTimeProcess(parentBizinst)
+      .getFlowProcess()
+      .getCompositeNodeStateProcesses()
+      .push(process);
     this.bizinstTreeBox.saveState(parentBizinst, process);
   }
 
@@ -217,4 +243,4 @@ class FlowListener {
   }
 }
 
-export default  FlowListener;
+export default FlowListener;

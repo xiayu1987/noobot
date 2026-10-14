@@ -5,13 +5,13 @@
  */
 
 const STOP_REASON_NAMES = Object.freeze({
-  0: 'actionStop',
-  1: 'childStop',
+  0: "actionStop",
+  1: "childStop",
 });
 
 const STOP_REASON_DESCRIPTIONS = Object.freeze({
-  0: '由动作节点主动终止。',
-  1: '由子流程终止后传递导致。',
+  0: "Stopped by an action node.",
+  1: "Propagated from a stopped child process.",
 });
 
 var EStopReason = {
@@ -25,13 +25,13 @@ var EStopReason = {
   },
 };
 
-Object.defineProperty(EStopReason, 'NAMES', {
+Object.defineProperty(EStopReason, "NAMES", {
   value: STOP_REASON_NAMES,
   enumerable: false,
 });
-Object.defineProperty(EStopReason, 'DESCRIPTIONS', {
+Object.defineProperty(EStopReason, "DESCRIPTIONS", {
   value: STOP_REASON_DESCRIPTIONS,
   enumerable: false,
 });
 
-export default  Object.freeze(EStopReason);
+export default Object.freeze(EStopReason);

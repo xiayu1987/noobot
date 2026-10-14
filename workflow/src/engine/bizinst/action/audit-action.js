@@ -12,7 +12,7 @@ class AuditAction extends ActionBase {
     super("flow");
   }
   getName() {
-    return "审核";
+    return "audit";
   }
   exec(bizinst, stepState, flowListener) {
     BizinstFlowEngine.getInstance().goNext(bizinst, stepState, flowListener);

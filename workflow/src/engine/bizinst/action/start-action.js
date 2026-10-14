@@ -12,7 +12,7 @@ class StartAction extends ActionBase {
     super("flow");
   }
   getName() {
-    return "开始";
+    return "start";
   }
   isStartAction() {
     return true;

@@ -12,7 +12,7 @@ class PreAddStepAction extends ActionBase {
     super("model");
   }
   getName() {
-    return "前加步骤";
+    return "pre_add_step";
   }
   exec(bizinst, currentStepState, modelStateListener) {
     var actionNodeState = currentStepState.getActionNodeState();

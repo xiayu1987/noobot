@@ -4,16 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 
-import Model from '../design/model/model.js';
-import Flowto from '../design/model/flowto/flowto.js';
-import NodeLineRLAT from '../design/model/flowto/node-line-rlat.js';
-import StateNode from '../design/model/node/state-node.js';
-import ActionNode from '../design/model/node/action-node.js';
-import CompositeNode from '../design/model/node/composite-node.js';
-import ENodeType from '../design/model/node/enums/node-type.js';
+import Model from "../design/model/model.js";
+import Flowto from "../design/model/flowto/flowto.js";
+import NodeLineRLAT from "../design/model/flowto/node-line-rlat.js";
+import StateNode from "../design/model/node/state-node.js";
+import ActionNode from "../design/model/node/action-node.js";
+import CompositeNode from "../design/model/node/composite-node.js";
+import ENodeType from "../design/model/node/enums/node-type.js";
 
 function toStateType(value = "") {
-  const key = String(value || "").trim().toLowerCase();
+  const key = String(value || "")
+    .trim()
+    .toLowerCase();
   if (key === "start") return 0;
   if (key === "end") return 1;
   if (key === "branch") return 2;
@@ -28,16 +30,16 @@ function ensureNodeDefinitions(input = {}) {
   const nodes = Array.isArray(input?.nodes) ? input.nodes.slice() : [];
   const byId = new Map(nodes.map((node) => [String(node.id || "").trim(), node]));
   if (!byId.has("start")) {
-    nodes.unshift({ id: "start", name: "开始", type: "state", stateType: 0 });
+    nodes.unshift({ id: "start", name: "start", type: "state", stateType: 0 });
     byId.set("start", nodes[0]);
   }
   if (!byId.has("end")) {
-    nodes.push({ id: "end", name: "结束", type: "state", stateType: 1 });
+    nodes.push({ id: "end", name: "end", type: "state", stateType: 1 });
     byId.set("end", nodes[nodes.length - 1]);
   }
   let flowtos = Array.isArray(input?.flowtos) ? input.flowtos.slice() : [];
   if (!flowtos.length) {
-    flowtos = [{ from: "start", to: "end", name: "开始到结束" }];
+    flowtos = [{ from: "start", to: "end", name: "start_to_end" }];
   }
   return { nodes, flowtos };
 }
@@ -48,11 +50,17 @@ export function compileWorkflowSemantic(semantic = {}) {
   const nodeMap = new Map();
 
   for (const nodeDef of nodeDefs) {
-    const isAction = String(nodeDef?.type || "state").trim().toLowerCase() === "action";
-    const isComposite = String(nodeDef?.type || "state").trim().toLowerCase() === "composite";
+    const isAction =
+      String(nodeDef?.type || "state")
+        .trim()
+        .toLowerCase() === "action";
+    const isComposite =
+      String(nodeDef?.type || "state")
+        .trim()
+        .toLowerCase() === "composite";
     const node = isAction ? new ActionNode() : isComposite ? new CompositeNode() : new StateNode();
     node.workflowNodeId = String(nodeDef?.id || "").trim();
-    node.setName(String(nodeDef?.name || nodeDef?.id || "节点").trim());
+    node.setName(String(nodeDef?.name || nodeDef?.id || "node").trim());
     node.setNodeType(
       isAction ? ENodeType.ActionNode : isComposite ? ENodeType.CompositeNode : ENodeType.StateNode,
     );
@@ -71,7 +79,7 @@ export function compileWorkflowSemantic(semantic = {}) {
     if (!startNode || !endNode) continue;
 
     const flowto = new Flowto();
-    flowto.setName(String(flowDef?.name || `流向${index + 1}`).trim());
+    flowto.setName(String(flowDef?.name || `flowto_${index + 1}`).trim());
     if (typeof flowDef?.condition === "string" && flowDef.condition.trim()) {
       flowto.setCondition(flowDef.condition.trim());
     }

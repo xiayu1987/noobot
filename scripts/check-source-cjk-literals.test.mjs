@@ -41,13 +41,10 @@ test("skips catalogs, tests, scripts and non-source files", () => {
   assert.deepEqual(violations, []);
 });
 
-test("accepts allowlisted files and directories", () => {
+test("accepts allowlisted files", () => {
   const { violations, staleEntries } = run(
-    { "sanitize/src/index.js": '"护照"', "workflow/src/a.js": '"开始"' },
-    {
-      allowedFiles: { "sanitize/src/index.js": "pii" },
-      allowedDirs: { "workflow/src/": "engine" },
-    },
+    { "sanitize/src/index.js": '"护照"' },
+    { allowedFiles: { "sanitize/src/index.js": "pii" } },
   );
   assert.deepEqual(violations, []);
   assert.deepEqual(staleEntries, []);
@@ -56,7 +53,7 @@ test("accepts allowlisted files and directories", () => {
 test("fails stale allowlist entries without CJK content", () => {
   const { staleEntries } = run(
     { "sanitize/src/index.js": "const a = 1;" },
-    { allowedFiles: { "sanitize/src/index.js": "pii", "gone.js": "removed" }, allowedDirs: {} },
+    { allowedFiles: { "sanitize/src/index.js": "pii", "gone.js": "removed" } },
   );
   assert.deepEqual(staleEntries, ["sanitize/src/index.js", "gone.js"]);
 });

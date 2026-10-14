@@ -5,19 +5,19 @@
  */
 
 const MODEL_STATE_TYPE_NAMES = Object.freeze({
-  0: 'StateNodeState',
-  1: 'CompositeNodeState',
-  2: 'ActionNodeState',
-  3: 'StepState',
-  4: 'FlowtoState',
+  0: "StateNodeState",
+  1: "CompositeNodeState",
+  2: "ActionNodeState",
+  3: "StepState",
+  4: "FlowtoState",
 });
 
 const MODEL_STATE_TYPE_DESCRIPTIONS = Object.freeze({
-  0: '状态节点实例状态。',
-  1: '复合节点（子流程）实例状态。',
-  2: '动作节点实例状态。',
-  3: '动作节点下的步骤状态。',
-  4: '流转连线实例状态。',
+  0: "State node instance state.",
+  1: "Composite node (child process) instance state.",
+  2: "Action node instance state.",
+  3: "Step state under an action node.",
+  4: "Flowto instance state.",
 });
 
 var EModelStateType = {
@@ -34,13 +34,13 @@ var EModelStateType = {
   },
 };
 
-Object.defineProperty(EModelStateType, 'NAMES', {
+Object.defineProperty(EModelStateType, "NAMES", {
   value: MODEL_STATE_TYPE_NAMES,
   enumerable: false,
 });
-Object.defineProperty(EModelStateType, 'DESCRIPTIONS', {
+Object.defineProperty(EModelStateType, "DESCRIPTIONS", {
   value: MODEL_STATE_TYPE_DESCRIPTIONS,
   enumerable: false,
 });
 
-export default  Object.freeze(EModelStateType);
+export default Object.freeze(EModelStateType);

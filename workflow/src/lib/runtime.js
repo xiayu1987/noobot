@@ -38,8 +38,8 @@ function summarizeActionRecords(treeRecord = null) {
   return records.map((record) => {
     const action = record?.getAction?.();
     return {
-      actionName: String(action?.getName?.() || action?.constructor?.name || "").trim(),
-      actionType: String(action?.constructor?.name || "").trim(),
+      actionName: String(action?.getName?.() || "").trim(),
+      actionKind: String(action?.getActionKind?.() || "").trim(),
     };
   });
 }

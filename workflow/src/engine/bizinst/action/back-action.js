@@ -12,7 +12,7 @@ class BackAction extends ActionBase {
     super("flow");
   }
   getName() {
-    return "退回";
+    return "back";
   }
   exec(bizinst, stepState, flowListener) {
     BizinstFlowEngine.getInstance().goPre(bizinst, stepState, flowListener);

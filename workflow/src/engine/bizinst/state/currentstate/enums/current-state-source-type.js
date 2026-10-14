@@ -5,13 +5,13 @@
  */
 
 const CURRENT_STATE_SOURCE_TYPE_NAMES = Object.freeze({
-  0: 'currentBizinst',
-  1: 'childBizinst',
+  0: "currentBizinst",
+  1: "childBizinst",
 });
 
 const CURRENT_STATE_SOURCE_TYPE_DESCRIPTIONS = Object.freeze({
-  0: '当前实例自身触发的状态来源。',
-  1: '由子实例回传触发的状态来源。',
+  0: "State source triggered by the current instance.",
+  1: "State source triggered by a child instance callback.",
 });
 
 var ECurrentStateSourceType = {
@@ -25,13 +25,13 @@ var ECurrentStateSourceType = {
   },
 };
 
-Object.defineProperty(ECurrentStateSourceType, 'NAMES', {
+Object.defineProperty(ECurrentStateSourceType, "NAMES", {
   value: CURRENT_STATE_SOURCE_TYPE_NAMES,
   enumerable: false,
 });
-Object.defineProperty(ECurrentStateSourceType, 'DESCRIPTIONS', {
+Object.defineProperty(ECurrentStateSourceType, "DESCRIPTIONS", {
   value: CURRENT_STATE_SOURCE_TYPE_DESCRIPTIONS,
   enumerable: false,
 });
 
-export default  Object.freeze(ECurrentStateSourceType);
+export default Object.freeze(ECurrentStateSourceType);

@@ -12,7 +12,7 @@ class SubmitAction extends ActionBase {
     super("flow");
   }
   getName() {
-    return "提交";
+    return "submit";
   }
   exec(bizinst, stepState, flowListener) {
     BizinstFlowEngine.getInstance().goNext(bizinst, stepState, flowListener);

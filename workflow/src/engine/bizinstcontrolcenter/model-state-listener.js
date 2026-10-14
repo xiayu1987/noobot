@@ -17,7 +17,6 @@ class ModelStateListener {
     this.bizinstTreeBox = bizinstTreeBox;
   }
   addStepState(bizinst, handleStepState, actionNodeState, stepState, index) {
-    console.log("添加步骤状态：" + actionNodeState.getNode().getName() + "下索引" + index);
     var process = new AddStepStateProcess();
     process.setActionNodeState(actionNodeState);
     process.setStepState(stepState);

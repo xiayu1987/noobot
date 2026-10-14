@@ -5,15 +5,15 @@
  */
 
 const ACTION_NODE_STATE_PROCESS_HANDLE_WAY_NAMES = Object.freeze({
-  0: 'Arrive',
-  1: 'Handle',
-  2: 'Stop',
+  0: "Arrive",
+  1: "Handle",
+  2: "Stop",
 });
 
 const ACTION_NODE_STATE_PROCESS_HANDLE_WAY_DESCRIPTIONS = Object.freeze({
-  0: '到达步骤。',
-  1: '处理步骤。',
-  2: '终止步骤。',
+  0: "Arrive at step.",
+  1: "Handle step.",
+  2: "Stop step.",
 });
 
 var EActionNodeStateProcessHandleWay = {
@@ -28,13 +28,13 @@ var EActionNodeStateProcessHandleWay = {
   },
 };
 
-Object.defineProperty(EActionNodeStateProcessHandleWay, 'NAMES', {
+Object.defineProperty(EActionNodeStateProcessHandleWay, "NAMES", {
   value: ACTION_NODE_STATE_PROCESS_HANDLE_WAY_NAMES,
   enumerable: false,
 });
-Object.defineProperty(EActionNodeStateProcessHandleWay, 'DESCRIPTIONS', {
+Object.defineProperty(EActionNodeStateProcessHandleWay, "DESCRIPTIONS", {
   value: ACTION_NODE_STATE_PROCESS_HANDLE_WAY_DESCRIPTIONS,
   enumerable: false,
 });
 
-export default  Object.freeze(EActionNodeStateProcessHandleWay);
+export default Object.freeze(EActionNodeStateProcessHandleWay);

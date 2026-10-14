@@ -12,7 +12,7 @@ class NextSignatureAction extends ActionBase {
     super("model");
   }
   getName() {
-    return "后加签";
+    return "next_signature";
   }
   exec(bizinst, currentStepState, modelStateListener) {
     var actionNodeState = currentStepState.getActionNodeState();

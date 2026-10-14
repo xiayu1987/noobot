@@ -4,31 +4,31 @@
  * SPDX-License-Identifier: MIT
  */
 
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import test from "node:test";
+import assert from "node:assert/strict";
 
-import Business from '../src/engine/bizinst/business.js';
-import BackAction from '../src/engine/bizinst/action/back-action.js';
-import StopAction from '../src/engine/bizinst/action/stop-action.js';
-import SubmitAction from '../src/engine/bizinst/action/submit-action.js';
-import NextAddStepAction from '../src/engine/bizinst/action/next-add-step-action.js';
-import BizinstTreeControlCenter from '../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js';
-import CantFlowException from '../src/engine/exception/cant-flow-exception.js';
-import ECurrentStateSourceType from '../src/engine/bizinst/state/currentstate/enums/current-state-source-type.js';
-import EModelStateType from '../src/engine/bizinst/state/modelstate/enums/model-state-type.js';
-import ENodeType from '../src/design/model/node/enums/node-type.js';
-import EFlowDirection from '../src/engine/bizinst/enums/flow-direction.js';
-import EActionNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/action-node-state-process-handle-way.js';
-import ECompositeNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way.js';
-import EStateNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js';
-import EStopReason from '../src/engine/bizinstcontrolcenter/enums/stop-reason.js';
+import Business from "../src/engine/bizinst/business.js";
+import BackAction from "../src/engine/bizinst/action/back-action.js";
+import StopAction from "../src/engine/bizinst/action/stop-action.js";
+import SubmitAction from "../src/engine/bizinst/action/submit-action.js";
+import NextAddStepAction from "../src/engine/bizinst/action/next-add-step-action.js";
+import BizinstTreeControlCenter from "../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js";
+import CantFlowException from "../src/engine/exception/cant-flow-exception.js";
+import ECurrentStateSourceType from "../src/engine/bizinst/state/currentstate/enums/current-state-source-type.js";
+import EModelStateType from "../src/engine/bizinst/state/modelstate/enums/model-state-type.js";
+import ENodeType from "../src/design/model/node/enums/node-type.js";
+import EFlowDirection from "../src/engine/bizinst/enums/flow-direction.js";
+import EActionNodeStateProcessHandleWay from "../src/engine/bizinst/state/proc/fschange/enums/action-node-state-process-handle-way.js";
+import ECompositeNodeStateProcessHandleWay from "../src/engine/bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way.js";
+import EStateNodeStateProcessHandleWay from "../src/engine/bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js";
+import EStopReason from "../src/engine/bizinstcontrolcenter/enums/stop-reason.js";
 import {
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
   resolveWorkflowUpstreamActionNodes,
   resolveWorkflowUpstreamActionSteps,
   startWorkflowInstanceById,
-} from '../src/lib/runtime.js';
+} from "../src/lib/runtime.js";
 import {
   buildSimpleModel,
   buildActionModel,
@@ -37,9 +37,9 @@ import {
   buildThreeActionModel,
   buildParallelActionModel,
   buildParentChildCompositeModel,
-} from './helpers/model-builders.js';
+} from "./helpers/model-builders.js";
 
-test('startBizinst: simple model can start successfully', () => {
+test("startBizinst: simple model can start successfully", () => {
   const business = new Business();
   const model = buildSimpleModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -52,7 +52,7 @@ test('startBizinst: simple model can start successfully', () => {
   assert.ok(result.getBizinstTreeRecord());
 });
 
-test('action flow: submit moves from action step to end state', () => {
+test("action flow: submit moves from action step to end state", () => {
   const business = new Business();
   const model = buildActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -73,19 +73,22 @@ test('action flow: submit moves from action step to end state', () => {
   assert.equal(treeRecord.getActionRecords().length, 2);
 });
 
-test('startBizinst: model without flow throws CantFlowException', () => {
+test("startBizinst: model without flow throws CantFlowException", () => {
   const business = new Business();
   const model = buildSimpleModel();
   model.setFlowtos([]);
   model.setNodeLineRLATs([]);
   const controlCenter = new BizinstTreeControlCenter();
 
-  assert.throws(() => {
-    controlCenter.startBizinst(business, model);
-  }, (err) => err instanceof CantFlowException);
+  assert.throws(
+    () => {
+      controlCenter.startBizinst(business, model);
+    },
+    (err) => err instanceof CantFlowException,
+  );
 });
 
-test('action flow: back action returns to pre path and clears current step', () => {
+test("action flow: back action returns to pre path and clears current step", () => {
   const business = new Business();
   const model = buildActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -104,7 +107,7 @@ test('action flow: back action returns to pre path and clears current step', () 
   assert.equal(afterSteps.length, 0);
 });
 
-test('action flow: stop action updates current-state source info', () => {
+test("action flow: stop action updates current-state source info", () => {
   const business = new Business();
   const model = buildActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -126,7 +129,7 @@ test('action flow: stop action updates current-state source info', () => {
   assert.equal(sourceInfo.getModelState(), currentStep);
 });
 
-test('model-change action: next-add-step appends a new step and replaces current step', () => {
+test("model-change action: next-add-step appends a new step and replaces current step", () => {
   const business = new Business();
   const model = buildActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -139,7 +142,12 @@ test('model-change action: next-add-step appends a new step and replaces current
   const beforeStepCount = actionNodeState.getStepStates().length;
 
   const nextAddStepAction = new NextAddStepAction();
-  const actionRecord = controlCenter.execAction(nextAddStepAction, bizinst, oldCurrentStep, treeRecord);
+  const actionRecord = controlCenter.execAction(
+    nextAddStepAction,
+    bizinst,
+    oldCurrentStep,
+    treeRecord,
+  );
   assert.ok(actionRecord);
 
   const afterStepCount = actionNodeState.getStepStates().length;
@@ -150,7 +158,7 @@ test('model-change action: next-add-step appends a new step and replaces current
   assert.notEqual(currentSteps[0], oldCurrentStep);
 });
 
-test('branching action model: submit fans out to multiple outgoing action steps', () => {
+test("branching action model: submit fans out to multiple outgoing action steps", () => {
   const business = new Business();
   const model = buildBranchingActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -167,7 +175,7 @@ test('branching action model: submit fans out to multiple outgoing action steps'
   assert.equal(currentSteps.length, 0);
 });
 
-test('complex flow: two-action chain supports submit/back/submit and reaches end', () => {
+test("complex flow: two-action chain supports submit/back/submit and reaches end", () => {
   const business = new Business();
   const model = buildTwoActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -177,19 +185,19 @@ test('complex flow: two-action chain supports submit/back/submit and reaches end
   const treeRecord = startResult.getBizinstTreeRecord();
 
   let currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
-  assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核A');
+  assert.equal(currentStep.getActionNodeState().getNode().getName(), "审核A");
 
   controlCenter.execAction(new SubmitAction(), bizinst, currentStep, treeRecord);
   currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
-  assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核B');
+  assert.equal(currentStep.getActionNodeState().getNode().getName(), "审核B");
 
   controlCenter.execAction(new BackAction(), bizinst, currentStep, treeRecord);
   currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
-  assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核A');
+  assert.equal(currentStep.getActionNodeState().getNode().getName(), "审核A");
 
   controlCenter.execAction(new SubmitAction(), bizinst, currentStep, treeRecord);
   currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
-  assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核B');
+  assert.equal(currentStep.getActionNodeState().getNode().getName(), "审核B");
 
   controlCenter.execAction(new SubmitAction(), bizinst, currentStep, treeRecord);
   const finalSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
@@ -197,7 +205,7 @@ test('complex flow: two-action chain supports submit/back/submit and reaches end
   assert.ok(treeRecord.getActionRecords().length >= 5);
 });
 
-test('complex flow: add-step in first action then submit to second action and stop', () => {
+test("complex flow: add-step in first action then submit to second action and stop", () => {
   const business = new Business();
   const model = buildTwoActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -207,7 +215,7 @@ test('complex flow: add-step in first action then submit to second action and st
   const treeRecord = startResult.getBizinstTreeRecord();
 
   const stepA1 = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
-  assert.equal(stepA1.getActionNodeState().getNode().getName(), '审核A');
+  assert.equal(stepA1.getActionNodeState().getNode().getName(), "审核A");
 
   controlCenter.execAction(new NextAddStepAction(), bizinst, stepA1, treeRecord);
   const currentAfterAdd = bizinst.getState().getCurrentState().getCurrentStepStates();
@@ -217,7 +225,7 @@ test('complex flow: add-step in first action then submit to second action and st
 
   controlCenter.execAction(new SubmitAction(), bizinst, currentAfterAdd[0], treeRecord);
   const stepB = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
-  assert.equal(stepB.getActionNodeState().getNode().getName(), '审核B');
+  assert.equal(stepB.getActionNodeState().getNode().getName(), "审核B");
 
   controlCenter.execAction(new StopAction(), bizinst, stepB, treeRecord);
   const currentState = bizinst.getState().getCurrentState();
@@ -228,7 +236,7 @@ test('complex flow: add-step in first action then submit to second action and st
   assert.ok(treeRecord.getActionRecords().length >= 4);
 });
 
-test('very complex flow: three-action chain with add-step and back cycles reaches end', () => {
+test("very complex flow: three-action chain with add-step and back cycles reaches end", () => {
   const business = new Business();
   const model = buildThreeActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -244,11 +252,11 @@ test('very complex flow: three-action chain with add-step and back cycles reache
   };
 
   const stepA0 = getOnlyStep();
-  assert.equal(stepA0.getActionNodeState().getNode().getName(), '审核A');
+  assert.equal(stepA0.getActionNodeState().getNode().getName(), "审核A");
 
   controlCenter.execAction(new NextAddStepAction(), bizinst, stepA0, treeRecord);
   const stepA1 = getOnlyStep();
-  assert.equal(stepA1.getActionNodeState().getNode().getName(), '审核A');
+  assert.equal(stepA1.getActionNodeState().getNode().getName(), "审核A");
   assert.notEqual(stepA1, stepA0);
 
   controlCenter.execAction(new BackAction(), bizinst, stepA1, treeRecord);
@@ -261,11 +269,11 @@ test('very complex flow: three-action chain with add-step and back cycles reache
 
   controlCenter.execAction(new SubmitAction(), bizinst, stepA1Again, treeRecord);
   const stepB0 = getOnlyStep();
-  assert.equal(stepB0.getActionNodeState().getNode().getName(), '审核B');
+  assert.equal(stepB0.getActionNodeState().getNode().getName(), "审核B");
 
   controlCenter.execAction(new NextAddStepAction(), bizinst, stepB0, treeRecord);
   const stepB1 = getOnlyStep();
-  assert.equal(stepB1.getActionNodeState().getNode().getName(), '审核B');
+  assert.equal(stepB1.getActionNodeState().getNode().getName(), "审核B");
   assert.notEqual(stepB1, stepB0);
 
   controlCenter.execAction(new BackAction(), bizinst, stepB1, treeRecord);
@@ -277,7 +285,7 @@ test('very complex flow: three-action chain with add-step and back cycles reache
 
   controlCenter.execAction(new SubmitAction(), bizinst, stepB1Again, treeRecord);
   const stepC0 = getOnlyStep();
-  assert.equal(stepC0.getActionNodeState().getNode().getName(), '审核C');
+  assert.equal(stepC0.getActionNodeState().getNode().getName(), "审核C");
 
   controlCenter.execAction(new BackAction(), bizinst, stepC0, treeRecord);
   const stepB1FromC = getOnlyStep();
@@ -285,7 +293,7 @@ test('very complex flow: three-action chain with add-step and back cycles reache
 
   controlCenter.execAction(new SubmitAction(), bizinst, stepB1FromC, treeRecord);
   const stepC0Again = getOnlyStep();
-  assert.equal(stepC0Again.getActionNodeState().getNode().getName(), '审核C');
+  assert.equal(stepC0Again.getActionNodeState().getNode().getName(), "审核C");
   controlCenter.execAction(new SubmitAction(), bizinst, stepC0Again, treeRecord);
 
   const finalSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
@@ -293,7 +301,7 @@ test('very complex flow: three-action chain with add-step and back cycles reache
   assert.ok(treeRecord.getActionRecords().length >= 12);
 });
 
-test('parallel flow: split into two current steps and end after both submitted', () => {
+test("parallel flow: split into two current steps and end after both submitted", () => {
   const business = new Business();
   const model = buildParallelActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -304,10 +312,8 @@ test('parallel flow: split into two current steps and end after both submitted',
 
   const startedSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
   assert.equal(startedSteps.length, 2);
-  const startedNames = startedSteps
-    .map((s) => s.getActionNodeState().getNode().getName())
-    .sort();
-  assert.deepEqual(startedNames, ['并发审核A', '并发审核B']);
+  const startedNames = startedSteps.map((s) => s.getActionNodeState().getNode().getName()).sort();
+  assert.deepEqual(startedNames, ["并发审核A", "并发审核B"]);
 
   controlCenter.execAction(new SubmitAction(), bizinst, startedSteps[0], treeRecord);
   const afterFirstSubmit = bizinst.getState().getCurrentState().getCurrentStepStates();
@@ -319,10 +325,10 @@ test('parallel flow: split into two current steps and end after both submitted',
 
   const sourceInfo = bizinst.getState().getCurrentState().getSourceInfo();
   assert.equal(sourceInfo.getModelStateType(), EModelStateType.StateNodeState);
-  assert.equal(sourceInfo.getModelState().getNode().getName(), '并发结束节点');
+  assert.equal(sourceInfo.getModelState().getNode().getName(), "并发结束节点");
 });
 
-test('composite flow: parent starts child bizinst and child sub-flow reaches its end state', () => {
+test("composite flow: parent starts child bizinst and child sub-flow reaches its end state", () => {
   const business = new Business();
   const model = buildParentChildCompositeModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -341,179 +347,202 @@ test('composite flow: parent starts child bizinst and child sub-flow reaches its
   const childSourceInfo = childBizinst.getState().getCurrentState().getSourceInfo();
   assert.ok(childSourceInfo);
   assert.equal(childSourceInfo.getModelStateType(), EModelStateType.StateNodeState);
-  assert.equal(childSourceInfo.getModelState().getNode().getName(), '子流程开始');
+  assert.equal(childSourceInfo.getModelState().getNode().getName(), "子流程开始");
 
   const childStateNames = childBizinst
     .getState()
     .getBizinstModel()
     .getStateNodeStates()
     .map((s) => s.getNode().getName());
-  assert.ok(childStateNames.includes('子流程开始'));
-  assert.ok(childStateNames.includes('子流程结束'));
+  assert.ok(childStateNames.includes("子流程开始"));
+  assert.ok(childStateNames.includes("子流程结束"));
 
   const actionRecords = treeRecord.getActionRecords();
   assert.equal(actionRecords.length, 1);
   assert.equal(actionRecords[0].getProcessRecords().length, 2);
 });
 
-test('runtime relation API resolves nearest upstream action nodes across branch and merge states', () => {
+test("runtime relation API resolves nearest upstream action nodes across branch and merge states", () => {
   const semantic = {
     nodes: [
-      { id: 'start', type: 'state', stateType: 0, name: '开始' },
-      { id: 'a', type: 'action', name: '节点A' },
-      { id: 'branch', type: 'state', stateType: 2, name: '并发分叉' },
-      { id: 'b', type: 'action', name: '节点B' },
-      { id: 'c', type: 'action', name: '节点C' },
-      { id: 'merge', type: 'state', stateType: 3, name: '汇聚' },
-      { id: 'd', type: 'action', name: '节点D' },
-      { id: 'branch2', type: 'state', stateType: 2, name: '汇聚后并发分叉' },
-      { id: 'e', type: 'action', name: '节点E' },
-      { id: 'f', type: 'action', name: '节点F' },
-      { id: 'end', type: 'state', stateType: 1, name: '结束' },
+      { id: "start", type: "state", stateType: 0, name: "开始" },
+      { id: "a", type: "action", name: "节点A" },
+      { id: "branch", type: "state", stateType: 2, name: "并发分叉" },
+      { id: "b", type: "action", name: "节点B" },
+      { id: "c", type: "action", name: "节点C" },
+      { id: "merge", type: "state", stateType: 3, name: "汇聚" },
+      { id: "d", type: "action", name: "节点D" },
+      { id: "branch2", type: "state", stateType: 2, name: "汇聚后并发分叉" },
+      { id: "e", type: "action", name: "节点E" },
+      { id: "f", type: "action", name: "节点F" },
+      { id: "end", type: "state", stateType: 1, name: "结束" },
     ],
     flowtos: [
-      { from: 'start', to: 'a' },
-      { from: 'a', to: 'branch' },
-      { from: 'branch', to: 'b' },
-      { from: 'branch', to: 'c' },
-      { from: 'b', to: 'merge' },
-      { from: 'c', to: 'merge' },
-      { from: 'merge', to: 'd' },
-      { from: 'd', to: 'end' },
-      { from: 'merge', to: 'branch2' },
-      { from: 'branch2', to: 'e' },
-      { from: 'branch2', to: 'f' },
-      { from: 'e', to: 'end' },
-      { from: 'f', to: 'end' },
+      { from: "start", to: "a" },
+      { from: "a", to: "branch" },
+      { from: "branch", to: "b" },
+      { from: "branch", to: "c" },
+      { from: "b", to: "merge" },
+      { from: "c", to: "merge" },
+      { from: "merge", to: "d" },
+      { from: "d", to: "end" },
+      { from: "merge", to: "branch2" },
+      { from: "branch2", to: "e" },
+      { from: "branch2", to: "f" },
+      { from: "e", to: "end" },
+      { from: "f", to: "end" },
     ],
   };
 
   assert.deepEqual(
-    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: 'b' }).map((node) => node.nodeId),
-    ['a'],
+    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: "b" }).map((node) => node.nodeId),
+    ["a"],
   );
   assert.deepEqual(
-    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: 'd' })
+    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: "d" })
       .map((node) => node.nodeId)
       .sort(),
-    ['b', 'c'],
+    ["b", "c"],
   );
   assert.deepEqual(
-    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: 'e' })
+    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: "e" })
       .map((node) => node.nodeId)
       .sort(),
-    ['b', 'c'],
+    ["b", "c"],
   );
 });
 
-test('runtime relation API resolves upstream action steps from actual runtime merge state', () => {
+test("runtime relation API resolves upstream action steps from actual runtime merge state", () => {
   const semantic = {
     nodes: [
-      { id: 'start', type: 'state', stateType: 0, name: '开始' },
-      { id: 'a', type: 'action', name: '节点A' },
-      { id: 'branch', type: 'state', stateType: 2, name: '并发分叉' },
-      { id: 'b', type: 'action', name: '节点B' },
-      { id: 'c', type: 'action', name: '节点C' },
-      { id: 'merge', type: 'state', stateType: 3, name: '汇聚' },
-      { id: 'branch2', type: 'state', stateType: 2, name: '汇聚后并发分叉' },
-      { id: 'd', type: 'action', name: '节点D' },
-      { id: 'e', type: 'action', name: '节点E' },
-      { id: 'end', type: 'state', stateType: 1, name: '结束' },
+      { id: "start", type: "state", stateType: 0, name: "开始" },
+      { id: "a", type: "action", name: "节点A" },
+      { id: "branch", type: "state", stateType: 2, name: "并发分叉" },
+      { id: "b", type: "action", name: "节点B" },
+      { id: "c", type: "action", name: "节点C" },
+      { id: "merge", type: "state", stateType: 3, name: "汇聚" },
+      { id: "branch2", type: "state", stateType: 2, name: "汇聚后并发分叉" },
+      { id: "d", type: "action", name: "节点D" },
+      { id: "e", type: "action", name: "节点E" },
+      { id: "end", type: "state", stateType: 1, name: "结束" },
     ],
     flowtos: [
-      { from: 'start', to: 'a' },
-      { from: 'a', to: 'branch' },
-      { from: 'branch', to: 'b' },
-      { from: 'branch', to: 'c' },
-      { from: 'b', to: 'merge' },
-      { from: 'c', to: 'merge' },
-      { from: 'merge', to: 'branch2' },
-      { from: 'branch2', to: 'd' },
-      { from: 'branch2', to: 'e' },
-      { from: 'd', to: 'end' },
-      { from: 'e', to: 'end' },
+      { from: "start", to: "a" },
+      { from: "a", to: "branch" },
+      { from: "branch", to: "b" },
+      { from: "branch", to: "c" },
+      { from: "b", to: "merge" },
+      { from: "c", to: "merge" },
+      { from: "merge", to: "branch2" },
+      { from: "branch2", to: "d" },
+      { from: "branch2", to: "e" },
+      { from: "d", to: "end" },
+      { from: "e", to: "end" },
     ],
   };
   const instanceId = `test_runtime_steps_${Date.now()}`;
   try {
     let snapshot = startWorkflowInstanceById({ instanceId, semantic });
-    assert.deepEqual(snapshot.pendingSteps.map((step) => step.nodeId), ['a']);
-
-    snapshot = advanceWorkflowInstanceById({
-      instanceId,
-      action: { type: 'submit', stepIndex: 0 },
-    });
     assert.deepEqual(
-      snapshot.pendingSteps.map((step) => step.nodeId).sort(),
-      ['b', 'c'],
+      snapshot.pendingSteps.map((step) => step.nodeId),
+      ["a"],
     );
 
     snapshot = advanceWorkflowInstanceById({
       instanceId,
-      action: { type: 'submit', stepIndex: 1 },
+      action: { type: "submit", stepIndex: 0 },
     });
-    assert.deepEqual(snapshot.pendingSteps.map((step) => step.nodeId), ['b']);
+    assert.deepEqual(snapshot.pendingSteps.map((step) => step.nodeId).sort(), ["b", "c"]);
 
     snapshot = advanceWorkflowInstanceById({
       instanceId,
-      action: { type: 'submit', stepIndex: 0 },
+      action: { type: "submit", stepIndex: 1 },
     });
     assert.deepEqual(
-      snapshot.pendingSteps.map((step) => step.nodeId).sort(),
-      ['d', 'e'],
+      snapshot.pendingSteps.map((step) => step.nodeId),
+      ["b"],
     );
 
-    const dStep = snapshot.pendingSteps.find((step) => step.nodeId === 'd');
+    snapshot = advanceWorkflowInstanceById({
+      instanceId,
+      action: { type: "submit", stepIndex: 0 },
+    });
+    assert.deepEqual(snapshot.pendingSteps.map((step) => step.nodeId).sort(), ["d", "e"]);
+
+    const dStep = snapshot.pendingSteps.find((step) => step.nodeId === "d");
     const upstreamSteps = resolveWorkflowUpstreamActionSteps({
       instanceId,
       pendingStep: dStep,
     });
-    assert.deepEqual(
-      upstreamSteps.map((step) => step.nodeId).sort(),
-      ['b', 'c'],
+    assert.deepEqual(upstreamSteps.map((step) => step.nodeId).sort(), ["b", "c"]);
+    assert.equal(
+      upstreamSteps.every((step) => String(step.stepId || "").trim()),
+      true,
     );
-    assert.equal(upstreamSteps.every((step) => String(step.stepId || '').trim()), true);
   } finally {
     releaseWorkflowInstance({ instanceId });
   }
 });
 
-test('node type: provides readable name and description', () => {
-  assert.equal(ENodeType.getName(ENodeType.StateNode), 'StateNode');
-  assert.equal(ENodeType.getName(ENodeType.CompositeNode), 'CompositeNode');
-  assert.equal(ENodeType.getName(ENodeType.ActionNode), 'ActionNode');
+test("node type: provides readable name and description", () => {
+  assert.equal(ENodeType.getName(ENodeType.StateNode), "StateNode");
+  assert.equal(ENodeType.getName(ENodeType.CompositeNode), "CompositeNode");
+  assert.equal(ENodeType.getName(ENodeType.ActionNode), "ActionNode");
 
-  assert.ok(ENodeType.getDescription(ENodeType.StateNode)?.includes('状态节点'));
-  assert.ok(ENodeType.getDescription(ENodeType.CompositeNode)?.includes('复合节点'));
-  assert.ok(ENodeType.getDescription(ENodeType.ActionNode)?.includes('动作节点'));
+  assert.ok(ENodeType.getDescription(ENodeType.StateNode)?.includes("State node"));
+  assert.ok(ENodeType.getDescription(ENodeType.CompositeNode)?.includes("Composite node"));
+  assert.ok(ENodeType.getDescription(ENodeType.ActionNode)?.includes("Action node"));
 });
 
-test('other enums: provide readable name and description', () => {
-  assert.equal(EFlowDirection.getName(EFlowDirection.Forward), 'Forward');
-  assert.ok(EFlowDirection.getDescription(EFlowDirection.Backward)?.includes('反向'));
-
-  assert.equal(ECurrentStateSourceType.getName(ECurrentStateSourceType.currentBizinst), 'currentBizinst');
-  assert.ok(ECurrentStateSourceType.getDescription(ECurrentStateSourceType.childBizinst)?.includes('子实例'));
-
-  assert.equal(EModelStateType.getName(EModelStateType.StepState), 'StepState');
-  assert.ok(EModelStateType.getDescription(EModelStateType.FlowtoState)?.includes('流转连线'));
-
-  assert.equal(EActionNodeStateProcessHandleWay.getName(EActionNodeStateProcessHandleWay.Arrive), 'Arrive');
-  assert.ok(EActionNodeStateProcessHandleWay.getDescription(EActionNodeStateProcessHandleWay.Stop)?.includes('终止'));
+test("other enums: provide readable name and description", () => {
+  assert.equal(EFlowDirection.getName(EFlowDirection.Forward), "Forward");
+  assert.ok(EFlowDirection.getDescription(EFlowDirection.Backward)?.includes("Backward"));
 
   assert.equal(
-    ECompositeNodeStateProcessHandleWay.getName(ECompositeNodeStateProcessHandleWay.noticeParentBizinst),
-    'noticeParentBizinst',
+    ECurrentStateSourceType.getName(ECurrentStateSourceType.currentBizinst),
+    "currentBizinst",
   );
   assert.ok(
-    ECompositeNodeStateProcessHandleWay
-      .getDescription(ECompositeNodeStateProcessHandleWay.startChildBizinst)
-      ?.includes('启动子实例'),
+    ECurrentStateSourceType.getDescription(ECurrentStateSourceType.childBizinst)?.includes(
+      "child instance",
+    ),
   );
 
-  assert.equal(EStateNodeStateProcessHandleWay.getName(EStateNodeStateProcessHandleWay.forwardStateChange), 'forwardStateChange');
-  assert.ok(EStateNodeStateProcessHandleWay.getDescription(EStateNodeStateProcessHandleWay.backwardStateChange)?.includes('反向'));
+  assert.equal(EModelStateType.getName(EModelStateType.StepState), "StepState");
+  assert.ok(EModelStateType.getDescription(EModelStateType.FlowtoState)?.includes("Flowto"));
 
-  assert.equal(EStopReason.getName(EStopReason.actionStop), 'actionStop');
-  assert.ok(EStopReason.getDescription(EStopReason.childStop)?.includes('子流程'));
+  assert.equal(
+    EActionNodeStateProcessHandleWay.getName(EActionNodeStateProcessHandleWay.Arrive),
+    "Arrive",
+  );
+  assert.ok(
+    EActionNodeStateProcessHandleWay.getDescription(
+      EActionNodeStateProcessHandleWay.Stop,
+    )?.includes("Stop"),
+  );
+
+  assert.equal(
+    ECompositeNodeStateProcessHandleWay.getName(
+      ECompositeNodeStateProcessHandleWay.noticeParentBizinst,
+    ),
+    "noticeParentBizinst",
+  );
+  assert.ok(
+    ECompositeNodeStateProcessHandleWay.getDescription(
+      ECompositeNodeStateProcessHandleWay.startChildBizinst,
+    )?.includes("Start child instance"),
+  );
+
+  assert.equal(
+    EStateNodeStateProcessHandleWay.getName(EStateNodeStateProcessHandleWay.forwardStateChange),
+    "forwardStateChange",
+  );
+  assert.ok(
+    EStateNodeStateProcessHandleWay.getDescription(
+      EStateNodeStateProcessHandleWay.backwardStateChange,
+    )?.includes("Backward"),
+  );
+
+  assert.equal(EStopReason.getName(EStopReason.actionStop), "actionStop");
+  assert.ok(EStopReason.getDescription(EStopReason.childStop)?.includes("child process"));
 });

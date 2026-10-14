@@ -5,15 +5,15 @@
  */
 
 const COMPOSITE_NODE_STATE_PROCESS_HANDLE_WAY_NAMES = Object.freeze({
-  0: 'startChildBizinst',
-  1: 'openChildBizinst',
-  2: 'noticeParentBizinst',
+  0: "startChildBizinst",
+  1: "openChildBizinst",
+  2: "noticeParentBizinst",
 });
 
 const COMPOSITE_NODE_STATE_PROCESS_HANDLE_WAY_DESCRIPTIONS = Object.freeze({
-  0: '启动子实例。',
-  1: '打开子实例。',
-  2: '子实例通知父实例。',
+  0: "Start child instance.",
+  1: "Open child instance.",
+  2: "Child instance notifies parent instance.",
 });
 
 var ECompositeNodeStateProcessHandleWay = {
@@ -28,13 +28,13 @@ var ECompositeNodeStateProcessHandleWay = {
   },
 };
 
-Object.defineProperty(ECompositeNodeStateProcessHandleWay, 'NAMES', {
+Object.defineProperty(ECompositeNodeStateProcessHandleWay, "NAMES", {
   value: COMPOSITE_NODE_STATE_PROCESS_HANDLE_WAY_NAMES,
   enumerable: false,
 });
-Object.defineProperty(ECompositeNodeStateProcessHandleWay, 'DESCRIPTIONS', {
+Object.defineProperty(ECompositeNodeStateProcessHandleWay, "DESCRIPTIONS", {
   value: COMPOSITE_NODE_STATE_PROCESS_HANDLE_WAY_DESCRIPTIONS,
   enumerable: false,
 });
 
-export default  Object.freeze(ECompositeNodeStateProcessHandleWay);
+export default Object.freeze(ECompositeNodeStateProcessHandleWay);

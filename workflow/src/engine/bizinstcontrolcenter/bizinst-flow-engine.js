@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import WorkFlowContext from '../work-flow-context.js';
-import BizinstBox from '../bizinst/box/bizinstbox/bizinst-box.js';
-import ModelBoxFactory from '../bizinst/box/modelbox/model-box-factory.js';
-import ModelStateBoxFactory from '../bizinst/box/modelstatebox/model-state-box-factory.js';
-import ENodeType from '../../design/model/node/enums/node-type.js';
-import CantFlowException from '../exception/cant-flow-exception.js';
-import FlowPolicyException from '../exception/flow-policy-exception.js';
+import WorkFlowContext from "../work-flow-context.js";
+import BizinstBox from "../bizinst/box/bizinstbox/bizinst-box.js";
+import ModelBoxFactory from "../bizinst/box/modelbox/model-box-factory.js";
+import ModelStateBoxFactory from "../bizinst/box/modelstatebox/model-state-box-factory.js";
+import ENodeType from "../../design/model/node/enums/node-type.js";
+import CantFlowException from "../exception/cant-flow-exception.js";
+import FlowPolicyException from "../exception/flow-policy-exception.js";
 
 class BizinstFlowEngine {
   static instance = new BizinstFlowEngine();
@@ -63,7 +63,8 @@ class BizinstFlowEngine {
     if (!bizinst || !currentStepState || !flowListener) return;
     const stepStateBox = this.getModelStateBoxFactory().getStepStateBox(currentStepState);
     const currentActionNodeState = currentStepState.getActionNodeState();
-    const currentActionNodeStateBox = this.getModelStateBoxFactory().getActionNodeStateBox(currentActionNodeState);
+    const currentActionNodeStateBox =
+      this.getModelStateBoxFactory().getActionNodeStateBox(currentActionNodeState);
     const preStepState = stepStateBox.getPreStepState();
 
     if (!preStepState) {
@@ -100,7 +101,7 @@ class BizinstFlowEngine {
       const currentNodeAllowsParallelOutgoing =
         currentStateType === 2 || currentNodeType === ENodeType.ActionNode;
       if (!currentNodeAllowsParallelOutgoing && canFlowtoCount > 1) {
-        throw new FlowPolicyException('存在多个符合条件的流向。');
+        throw new FlowPolicyException("Multiple flowtos match the conditions.");
       }
 
       const flowtoState = flowtoBox.createFlowtoState(bizinst.getState().getBizinstModel());
@@ -110,13 +111,22 @@ class BizinstFlowEngine {
       const endNode = flowtoStateBox.getFlowtoState().getFlowto().getEndNode();
 
       const nodeType = endNode?.getNodeType?.();
-      const isActionNode = nodeType === ENodeType.ActionNode || typeof endNode?.getStepCount === 'function';
-      const isCompositeNode = nodeType === ENodeType.CompositeNode || typeof endNode?.getSubModel === 'function';
+      const isActionNode =
+        nodeType === ENodeType.ActionNode || typeof endNode?.getStepCount === "function";
+      const isCompositeNode =
+        nodeType === ENodeType.CompositeNode || typeof endNode?.getSubModel === "function";
 
       if (isActionNode) {
-        const nextActionNodeState = this.getModelBoxFactory().getActionNodeBox(endNode).createNodeState(bizinst.getState().getBizinstModel());
-        const nextActionNodeStateBox = this.getModelStateBoxFactory().getActionNodeStateBox(nextActionNodeState);
-        const pathState = flowtoStateBox.createPathState(bizinst.getState().getBizinstModel(), currentNodeState, nextActionNodeState);
+        const nextActionNodeState = this.getModelBoxFactory()
+          .getActionNodeBox(endNode)
+          .createNodeState(bizinst.getState().getBizinstModel());
+        const nextActionNodeStateBox =
+          this.getModelStateBoxFactory().getActionNodeStateBox(nextActionNodeState);
+        const pathState = flowtoStateBox.createPathState(
+          bizinst.getState().getBizinstModel(),
+          currentNodeState,
+          nextActionNodeState,
+        );
         flowListener.discoverModelState(bizinst, nextActionNodeState);
         flowListener.goThrough(bizinst, pathState, 1);
         flowListener.arriveStepState(bizinst, nextActionNodeStateBox.getFirstStepState());
@@ -124,8 +134,14 @@ class BizinstFlowEngine {
       }
 
       if (isCompositeNode) {
-        const nextCompositeNodeState = this.getModelBoxFactory().getCompositeNodeBox(endNode).createNodeState(bizinst.getState().getBizinstModel());
-        const pathState = flowtoStateBox.createPathState(bizinst.getState().getBizinstModel(), currentNodeState, nextCompositeNodeState);
+        const nextCompositeNodeState = this.getModelBoxFactory()
+          .getCompositeNodeBox(endNode)
+          .createNodeState(bizinst.getState().getBizinstModel());
+        const pathState = flowtoStateBox.createPathState(
+          bizinst.getState().getBizinstModel(),
+          currentNodeState,
+          nextCompositeNodeState,
+        );
         flowListener.discoverModelState(bizinst, nextCompositeNodeState);
         flowListener.goThrough(bizinst, pathState, 1);
         flowListener.startChildBizinst(bizinst, nextCompositeNodeState);
@@ -133,9 +149,16 @@ class BizinstFlowEngine {
         continue;
       }
 
-      const nextStateNodeState = this.getModelBoxFactory().getStateNodeBox(endNode).createNodeState(bizinst.getState().getBizinstModel());
-      const pathState = flowtoStateBox.createPathState(bizinst.getState().getBizinstModel(), currentNodeState, nextStateNodeState);
-      const nextStateNodeStateBox = this.getModelStateBoxFactory().getStateNodeStateBox(nextStateNodeState);
+      const nextStateNodeState = this.getModelBoxFactory()
+        .getStateNodeBox(endNode)
+        .createNodeState(bizinst.getState().getBizinstModel());
+      const pathState = flowtoStateBox.createPathState(
+        bizinst.getState().getBizinstModel(),
+        currentNodeState,
+        nextStateNodeState,
+      );
+      const nextStateNodeStateBox =
+        this.getModelStateBoxFactory().getStateNodeStateBox(nextStateNodeState);
 
       flowListener.discoverModelState(bizinst, nextStateNodeState);
       flowListener.goThrough(bizinst, pathState, 1);
@@ -157,7 +180,7 @@ class BizinstFlowEngine {
       continue;
     }
     if (canFlowtoCount === 0) {
-      throw new CantFlowException('不存在符合条件的流向。');
+      throw new CantFlowException("No flowto matches the conditions.");
     }
   }
 
@@ -171,12 +194,13 @@ class BizinstFlowEngine {
     const preNodeState = pathState.getStartNodeState();
     flowListener.goThrough(bizinst, pathState, 0);
 
-    if (preNodeState && typeof preNodeState.getStepStates === 'function') {
-      const preActionNodeStateBox = this.getModelStateBoxFactory().getActionNodeStateBox(preNodeState);
+    if (preNodeState && typeof preNodeState.getStepStates === "function") {
+      const preActionNodeStateBox =
+        this.getModelStateBoxFactory().getActionNodeStateBox(preNodeState);
       flowListener.arriveStepState(bizinst, preActionNodeStateBox.getLastStepState());
       return;
     }
-    if (preNodeState && typeof preNodeState.getBizinst === 'function') {
+    if (preNodeState && typeof preNodeState.getBizinst === "function") {
       flowListener.openChildBizinst(bizinst, preNodeState);
       this.openBizinst(preNodeState.getBizinst(), flowListener);
       return;
@@ -194,8 +218,10 @@ class BizinstFlowEngine {
 
   getNodeStateBox(nodeState) {
     const factory = this.getModelStateBoxFactory();
-    if (nodeState && typeof nodeState.getStepStates === 'function') return factory.getActionNodeStateBox(nodeState);
-    if (nodeState && typeof nodeState.getBizinst === 'function') return factory.getCompositeNodeStateBox(nodeState);
+    if (nodeState && typeof nodeState.getStepStates === "function")
+      return factory.getActionNodeStateBox(nodeState);
+    if (nodeState && typeof nodeState.getBizinst === "function")
+      return factory.getCompositeNodeStateBox(nodeState);
     return factory.getStateNodeStateBox(nodeState);
   }
 
@@ -212,12 +238,18 @@ class BizinstFlowEngine {
   }
 
   getModelStateBoxFactory() {
-    return WorkFlowContext.getInstance().getContextBean(WorkFlowContext.MODELSTATEBOXFACTORYNAME) || ModelStateBoxFactory.getInstance();
+    return (
+      WorkFlowContext.getInstance().getContextBean(WorkFlowContext.MODELSTATEBOXFACTORYNAME) ||
+      ModelStateBoxFactory.getInstance()
+    );
   }
 
   getModelBoxFactory() {
-    return WorkFlowContext.getInstance().getContextBean(WorkFlowContext.MODELBOXFACTORYNAME) || ModelBoxFactory.getInstance();
+    return (
+      WorkFlowContext.getInstance().getContextBean(WorkFlowContext.MODELBOXFACTORYNAME) ||
+      ModelBoxFactory.getInstance()
+    );
   }
 }
 
-export default  BizinstFlowEngine;
+export default BizinstFlowEngine;

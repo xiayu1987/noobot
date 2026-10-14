@@ -12,7 +12,7 @@ class NextAddStepAction extends ActionBase {
     super("model");
   }
   getName() {
-    return "后加步骤";
+    return "next_add_step";
   }
   exec(bizinst, currentStepState, modelStateListener) {
     var actionNodeState = currentStepState.getActionNodeState();

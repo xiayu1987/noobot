@@ -12,7 +12,7 @@ class PreSignatureAction extends ActionBase {
     super("model");
   }
   getName() {
-    return "前加签";
+    return "pre_signature";
   }
   exec(bizinst, currentStepState, modelStateListener) {
     var actionNodeState = currentStepState.getActionNodeState();
