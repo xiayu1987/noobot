@@ -77,6 +77,7 @@ test("chat-websocket-server: stop persists and emits authoritative stop completi
       capturedStopPayload?.event?.terminalStatus?.assistantMessage?.turnScopeId,
       "turn-new",
     );
+    assert.equal(capturedStopPayload?.event?.terminalStatus?.description, undefined);
     const stoppedEvent = events.find(
       (item) =>
         item?.event === "turn_lifecycle" &&

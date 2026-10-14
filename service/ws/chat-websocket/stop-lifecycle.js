@@ -35,9 +35,7 @@ export function buildStoppedPartialAssistant({
     normalizeRunIdentityPart(stopPayload?.sessionId) ||
     normalizeRunIdentityPart(runMeta?.sessionId) ||
     normalizeRunIdentityPart(result?.sessionId);
-  const content = String(
-    sourcePartial.content ?? stopPayload?.message ?? fallbackMessage ?? "",
-  ).trim();
+  const content = String(sourcePartial.content ?? fallbackMessage ?? "").trim();
   return {
     ...sourcePartial,
     content,

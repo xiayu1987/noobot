@@ -119,7 +119,8 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
   const resolved = resolver.resolveScenarioRunConfig({ scenario: "programming" }, {});
 
   assert.equal(resolved.runtimeModel, undefined);
-  assert.equal(resolved.scenarioProfile.name, "编程");
+  assert.equal(Object.hasOwn(resolved.scenarioProfile, "name"), false);
+  assert.equal(Object.hasOwn(resolved.scenarioProfile, "description"), false);
   assert.equal(resolved.scenarioProfile.model, "code-model");
   assert.deepEqual(resolved.scenarioProfile.tools, [
     "read_file",

@@ -9,7 +9,7 @@ import ActionBase from "./action-base.js";
 
 class PreSignatureAction extends ActionBase {
   constructor() {
-    super();
+    super("model");
   }
   getName() {
     return "前加签";

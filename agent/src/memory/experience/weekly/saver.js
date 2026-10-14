@@ -30,10 +30,10 @@ export async function saveWeeklyDomainSummary({
     if (!categoryName) continue;
     const filePath = path.join(domainDir, `${categoryName}.md`);
     const block = [
-      `时间：${createdAt || new Date().toISOString()}`,
-      `来源日期：${(Array.isArray(sourceDates) ? sourceDates : []).join(", ")}`,
+      `${schema.timeLabel}：${createdAt || new Date().toISOString()}`,
+      `${schema.sourceLabel}：${(Array.isArray(sourceDates) ? sourceDates : []).join(", ")}`,
       "",
-      formatDomainBlock({ createdAt, item: category, sections: schema.sections }),
+      formatDomainBlock({ createdAt, item: category, schema }),
     ].join("\n");
     await storage.appendMemoryDocument(schema.documentKind, filePath, block);
     writtenCount += 1;

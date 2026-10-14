@@ -22,6 +22,7 @@ import {
 } from "./tool-result-text.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
+import { tTool } from "../../tools/core/tool-i18n.js";
 
 function normalizeRawString(value = "") {
   return String(value || "");
@@ -33,7 +34,7 @@ function toSafePositiveInt(value, fallback = 0, min = 0) {
   return Math.max(min, Math.floor(parsed));
 }
 
-function resolveToolInputOverflowFromCall(call = {}) {
+function resolveToolInputOverflowFromCall(call = {}, runtime = {}) {
   const toolName = normalizeString(call?.name);
   const args = isPlainObject(call?.args) ? call.args : {};
   const policy = getToolInputPolicy(toolName, args);
@@ -52,7 +53,7 @@ function resolveToolInputOverflowFromCall(call = {}) {
     maxChars,
     exceeded,
     forceAttachment,
-    message: policy.message,
+    message: tTool(runtime, policy.messageKey),
     name: typeof policy.name === "function" ? policy.name({ call, args }) : "tool-input.txt",
     mimeType: policy.mimeType || DEFAULT_TRANSFER_MIME_TYPE,
     source: TRANSFER_SOURCE.TOOL,
@@ -187,7 +188,8 @@ export async function transferToolInput({
   identity = null,
 } = {}) {
   const hasExplicitText = text !== "" || content !== "";
-  const callOverflow = !hasExplicitText && call ? resolveToolInputOverflowFromCall(call) : null;
+  const callOverflow =
+    !hasExplicitText && call ? resolveToolInputOverflowFromCall(call, runtime) : null;
   if (!hasExplicitText && call && !callOverflow) {
     return {
       transferEnvelopes: [],

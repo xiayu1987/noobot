@@ -20,6 +20,7 @@ import {
   transferAgentPluginStageMessage,
 } from "./plugin-stage-transfer.js";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
+import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
 
 const SEMANTIC_TRANSFER_SCENARIO = SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS;
 const TOOL_STRATEGY = SEMANTIC_TRANSFER_REGISTRATION.TOOL_STRATEGIES;
@@ -207,7 +208,10 @@ async function transferAgentPluginStrategy({
     });
   }
   if (strategy === HARNESS_STRATEGY.SUMMARY) {
-    const finalMessage = composeAgentPluginFinalMessage(options || {});
+    const finalMessage = composeAgentPluginFinalMessage({
+      ...options,
+      locale: resolveLocaleFromRuntime(runtime),
+    });
     return {
       ...createDirectTextTransfer({
         text: finalMessage,

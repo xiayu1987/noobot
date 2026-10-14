@@ -8,6 +8,7 @@ import { computed } from "vue";
 import { ElIcon } from "element-plus";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { useLocale } from "../i18n/useLocale.js";
+import { stripMessageTemplatePrefix } from "../i18n/messageCatalog.js";
 import { resolveToolEventVisual } from "../utils/toolEventIcon.js";
 
 const props = defineProps({
@@ -58,13 +59,13 @@ const contentWithoutEventPrefix = computed(() => {
   const eventName = String(props.eventText || "")
     .trim()
     .toLowerCase();
-  const prefix =
+  const prefixKey =
     eventName === "tool_call"
-      ? /^(?:调用|call)\s*[:：]?\s*/i
+      ? "message.executionCommandStarted"
       : eventName === "tool_result"
-        ? /^(?:返回|return)\s*[:：]?\s*/i
-        : null;
-  return prefix ? content.replace(prefix, "") : content;
+        ? "message.executionCommandCompleted"
+        : "";
+  return prefixKey ? stripMessageTemplatePrefix(content, [prefixKey]) : content;
 });
 const normalizedRiskLevel = computed(() => normalizeSecurityRiskLevel(props.riskLevel));
 const riskLabel = computed(() =>

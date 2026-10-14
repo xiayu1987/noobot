@@ -421,9 +421,11 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
 
   assert.equal(out.scenarios.default, "programming");
   assert.deepEqual(Object.keys(out.scenarios.definitions).sort(), ["full", "programming", "text"]);
-  assert.equal(out.scenarios.definitions.full.name, "全能");
+  for (const scenarioKey of ["full", "programming", "text"]) {
+    assert.equal(Object.hasOwn(out.scenarios.definitions[scenarioKey], "name"), false);
+    assert.equal(Object.hasOwn(out.scenarios.definitions[scenarioKey], "description"), false);
+  }
   assert.deepEqual(out.scenarios.definitions.full.tools, ["*"]);
-  assert.equal(out.scenarios.definitions.programming.name, "编程");
   assert.equal(out.scenarios.definitions.programming.model, "user-code-model");
   assert.deepEqual(out.scenarios.definitions.programming.tools, [
     "read_file",
@@ -441,6 +443,5 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
     "help",
     "do_search_web",
   ]);
-  assert.equal(out.scenarios.definitions.text.name, "文本");
   assert.equal(out.scenarios.definitions.text.model, "");
 });

@@ -17,6 +17,14 @@ export default {
     "Script content is too long. Please execute in batches or split the script/text and try again.",
   "tools.file.writeContentTooLong": "File content is too long. Please write in batches.",
   "tools.file.readContentTooLong": "File content is too long. Please read in batches.",
+  "tools.input.tooLong": "Tool input is too long and was saved as an attachment.",
+  "tools.search.textTooLong": "Search text is too long. Please search in smaller chunks.",
+  "tools.patch.patchContentTooLong":
+    "Patch content is too long. Please apply in batches or split the patch and try again.",
+  "tools.result.toolResultOverflow": (params = {}) =>
+    `Tool result is too long (${Number(params.measuredLength || 0)} chars) and was saved as an attachment. Read it in batches using the returned transfer info.`,
+  "tools.result.readFileSourceReferenceOverflow":
+    "read_file result is too long. The source file reference was kept; continue reading by source address and line range.",
   "tools.file.readDescriptionWithLineNumbers":
     "Read text file content (line numbers enabled by default).",
   "tools.file.workspaceRelativePathRule":
@@ -75,4 +83,19 @@ export default {
   "scenarios.text.name": "Text",
   "scenarios.text.description":
     "Text scenario: suited for writing, rewriting, summarizing, translating, and content organization.",
+  "capability.finalPlanningPrompt":
+    "Based on the above tool results, provide the final planning answer now.",
+  "context.phaseSummaryTitle": "[Phase summary]",
+  "transfer.pluginDetailAttachments": "Detail attachments:",
+  "transfer.pluginValidationInfo": "Validation info:",
+  "modelRuntime.httpStatus.400": "Invalid request parameters or format",
+  "modelRuntime.httpStatus.401": "Authentication failed; check your API key",
+  "modelRuntime.httpStatus.403": "You do not have permission to access this resource",
+  "modelRuntime.httpStatus.404": "The requested resource was not found",
+  "modelRuntime.httpStatus.429": "Too many requests or account quota exhausted",
+  "modelRuntime.httpStatus.500": "Server error while processing the request; try again later",
+  "modelRuntime.httpStatus.503": "The service is currently overloaded; try again later",
+  "modelRuntime.imagesTaskIdMissing": "Task ID is missing",
+  "modelRuntime.imagesTaskFailed": "Task failed",
+  "modelRuntime.imagesTaskTimeout": ({ id } = {}) => `Task timed out: ${id}`,
 };

@@ -94,16 +94,12 @@ export class RunConfigResolver {
     const scenarioContextKeys = normalizeStringArray(scenarioDefinition?.context);
     const hasAllTools = scenarioToolNames.includes("*");
     const hasAllContext = scenarioContextKeys.includes("*");
-    const scenarioName = (scenarioDefinition?.name ?? "").trim();
-    const scenarioDescription = (scenarioDefinition?.description ?? "").trim();
     const scenarioModelName = (scenarioDefinition?.model ?? "").trim();
     const resolvedRunConfig = {
       ...normalizedRunConfig,
       scenario: resolvedScenarioKey,
       scenarioProfile: {
         key: resolvedScenarioKey,
-        name: scenarioName,
-        description: scenarioDescription,
         model: scenarioModelName,
         tools: scenarioToolNames,
         context: scenarioContextKeys,

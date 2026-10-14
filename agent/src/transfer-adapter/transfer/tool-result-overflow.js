@@ -12,6 +12,7 @@ import {
 import { sourceReferenceTransfer, TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
+import { tTool } from "../../tools/core/tool-i18n.js";
 
 function parseJsonObject(text = "") {
   try {
@@ -42,10 +43,6 @@ function transferIdentityRequired(identity) {
 function overflowArtifactName(call = {}) {
   const toolName = String(call?.name || "tool").trim() || "tool";
   return `${toolName}.result.txt`;
-}
-
-function overflowMessage({ measuredLength }) {
-  return `工具返回内容过长(${measuredLength}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`;
 }
 
 function buildReadFileSourceReference({ parsed = {}, identity }) {
@@ -111,7 +108,7 @@ export async function normalizeToolResultOverflow({
     if (!referenceEnvelope) throw new Error("read_file_source_reference_required");
     const normalized = toToolJsonResult(call?.name, {
       ...(typeof parsed?.ok === "boolean" ? { ok: parsed.ok } : { ok: true }),
-      message: "read_file 结果过长，已保留源文件引用，请按源文件地址和行范围继续读取。",
+      message: tTool(runtime, "tools.result.readFileSourceReferenceOverflow"),
       overflowed: true,
       overflow_reason: `tool result length ${rawText.length} exceeds limit ${maxChars}`,
       transferEnvelopes: [referenceEnvelope],
@@ -153,9 +150,7 @@ export async function normalizeToolResultOverflow({
 
   const message =
     String(parsed?.message || "").trim() ||
-    overflowMessage({
-      measuredLength: rawText.length,
-    });
+    tTool(runtime, "tools.result.toolResultOverflow", { measuredLength: rawText.length });
   const normalized = toToolJsonResult(call?.name, {
     ...(typeof parsed?.ok === "boolean" ? { ok: parsed.ok } : { ok: true }),
     ...(parsed?.status ? { status: parsed.status } : {}),

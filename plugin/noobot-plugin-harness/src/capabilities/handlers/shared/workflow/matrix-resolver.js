@@ -11,26 +11,16 @@ export const HARNESS_SCENARIO = Object.freeze({
   PROGRAMMING: "programming",
 });
 
-function normalizeScenarioText(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+function normalizeScenarioKey(value = "") {
+  return String(value || "").trim();
 }
 
-function isProgrammingScenarioText(value = "") {
-  const text = normalizeScenarioText(value);
-  return (
-    text === "programming" ||
-    text === "coding" ||
-    text.includes("programming") ||
-    text.includes("coding") ||
-    text.includes("\u7f16\u7a0b")
-  );
+function isProgrammingScenarioKey(value = "") {
+  return normalizeScenarioKey(value) === HARNESS_SCENARIO.PROGRAMMING;
 }
 
-export function isTextScenarioText(value = "") {
-  const text = normalizeScenarioText(value);
-  return text === "text" || text.includes("text") || text.includes("\u6587\u672c");
+export function isTextScenarioKey(value = "") {
+  return normalizeScenarioKey(value) === HARNESS_SCENARIO.TEXT;
 }
 
 function resolveRunConfigCandidatesFromContext(ctx = {}) {
@@ -50,21 +40,14 @@ function scenarioCandidatesFromOptions(options = {}) {
     source.scenario,
     source.scenarioKey,
     source.scenarioProfile?.key,
-    source.scenarioProfile?.name,
     data.scenario,
     data.scenarioKey,
     data.scenarioProfile?.key,
-    data.scenarioProfile?.name,
   ];
 }
 
 function scenarioCandidatesFromRunConfig(runConfig = {}) {
-  return [
-    runConfig?.scenario,
-    runConfig?.scenarioKey,
-    runConfig?.scenarioProfile?.key,
-    runConfig?.scenarioProfile?.name,
-  ];
+  return [runConfig?.scenario, runConfig?.scenarioKey, runConfig?.scenarioProfile?.key];
 }
 
 export function resolveHarnessScenarioFromOptions(options = {}) {
@@ -86,8 +69,8 @@ export function resolveHarnessScenarioFromOptions(options = {}) {
     return HARNESS_SCENARIO.TEXT;
   }
   for (const candidate of scenarioCandidatesFromOptions(source)) {
-    if (isProgrammingScenarioText(candidate)) return HARNESS_SCENARIO.PROGRAMMING;
-    if (isTextScenarioText(candidate)) return HARNESS_SCENARIO.TEXT;
+    if (isProgrammingScenarioKey(candidate)) return HARNESS_SCENARIO.PROGRAMMING;
+    if (isTextScenarioKey(candidate)) return HARNESS_SCENARIO.TEXT;
   }
   return HARNESS_SCENARIO.GENERAL;
 }
@@ -97,8 +80,8 @@ export function resolveHarnessScenarioFromContext(ctx = {}, options = {}) {
   if (optionScenario !== HARNESS_SCENARIO.GENERAL) return optionScenario;
   for (const runConfig of resolveRunConfigCandidatesFromContext(ctx)) {
     for (const candidate of scenarioCandidatesFromRunConfig(runConfig)) {
-      if (isProgrammingScenarioText(candidate)) return HARNESS_SCENARIO.PROGRAMMING;
-      if (isTextScenarioText(candidate)) return HARNESS_SCENARIO.TEXT;
+      if (isProgrammingScenarioKey(candidate)) return HARNESS_SCENARIO.PROGRAMMING;
+      if (isTextScenarioKey(candidate)) return HARNESS_SCENARIO.TEXT;
     }
   }
   return HARNESS_SCENARIO.GENERAL;

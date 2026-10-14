@@ -65,6 +65,15 @@ let pendingConfigResolve = null;
 let pendingSuperAdminResolve = null;
 let pendingDependencyResolve = null;
 let desktopConfigState = null;
+
+function resolveDesktopLanguage() {
+  return desktopConfigState?.superAdmin?.language === "en-US" ? "en-US" : "zh-CN";
+}
+
+function setDesktopConfigState(state) {
+  desktopConfigState = state;
+  refreshTrayMenu();
+}
 const startupStatuses = [];
 
 const {
@@ -76,8 +85,10 @@ const {
   getMainWindow,
   allowQuit,
   showMainWindow,
+  refreshTrayMenu,
 } = createDesktopWindowManager({
   app,
+  getLanguage: resolveDesktopLanguage,
   dirname: __dirname,
   agentProxyOrigin,
   defaultClientUrl,
@@ -87,7 +98,7 @@ const {
 });
 
 function sendStatus(status) {
-  const language = desktopConfigState?.superAdmin?.language === "en-US" ? "en-US" : "zh-CN";
+  const language = resolveDesktopLanguage();
   const localizedStatus = { ...status, language };
   writeStartupLog("main", "status", {
     phase: localizedStatus?.phase,
@@ -165,9 +176,7 @@ const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager
   appendAgentProxyLog,
   ensureDesktopGlobalConfig,
   getDesktopConfigState: () => desktopConfigState,
-  setDesktopConfigState: (state) => {
-    desktopConfigState = state;
-  },
+  setDesktopConfigState,
   requestSuperAdminConfig,
   requestMissingConfigParams,
   requestDependencySetup,
@@ -208,9 +217,7 @@ registerStartupIpcHandlers({
   app,
   getStartupStatuses: () => startupStatuses,
   getDesktopConfigState: () => desktopConfigState,
-  setDesktopConfigState: (state) => {
-    desktopConfigState = state;
-  },
+  setDesktopConfigState,
   getPendingConfigResolve: () => pendingConfigResolve,
   setPendingConfigResolve: (resolve) => {
     pendingConfigResolve = resolve;

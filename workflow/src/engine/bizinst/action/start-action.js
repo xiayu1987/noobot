@@ -9,10 +9,13 @@ import ActionBase from "./action-base.js";
 
 class StartAction extends ActionBase {
   constructor() {
-    super();
+    super("flow");
   }
   getName() {
     return "开始";
+  }
+  isStartAction() {
+    return true;
   }
   exec(bizinst, stepState, flowListener) {
     BizinstFlowEngine.getInstance().startBizinst(bizinst, flowListener);

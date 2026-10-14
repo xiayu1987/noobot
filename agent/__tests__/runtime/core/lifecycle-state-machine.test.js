@@ -42,7 +42,7 @@ test("agent lifecycle machine emits normalized state change payload", () => {
     ],
   );
   assert.equal(events[0].data.state, "resume_initializing");
-  assert.equal(events[0].data.phase, "继续初始化");
+  assert.equal(events[0].data.state, "resume_initializing");
   assert.equal(events[0].data.previousState, "");
   assert.equal(events[1].data.previousState, "resume_initializing");
   assert.equal(events[2].data.state, "failed");

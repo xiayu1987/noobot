@@ -14,7 +14,7 @@ export function registerToolInputPolicies(register) {
     field: "content",
     maxChars: MAX_CHARS,
     reason: "write_file_input_too_long",
-    message: "文件内容过长，请分批写入",
+    messageKey: "tools.file.writeContentTooLong",
     name: ({ args = {} }) =>
       `${text(args.filePath).split(/[\\/]/).pop() || "write-file-content"}.tool-input.txt`,
   });
@@ -23,7 +23,7 @@ export function registerToolInputPolicies(register) {
     field: "command",
     maxChars: MAX_CHARS,
     reason: "execute_script_input_too_long",
-    message: "脚本内容过长，请分批执行或拆分脚本/文本后重试",
+    messageKey: "tools.script.commandTooLong",
     name: "execute-script-command.tool-input.sh",
   });
   register({
@@ -31,7 +31,7 @@ export function registerToolInputPolicies(register) {
     field: "text",
     maxChars: MAX_CHARS,
     reason: "semantic_transfer_tool_input",
-    message: "text is too long; search in smaller chunks",
+    messageKey: "tools.search.textTooLong",
     enabled: ({ args = {} }) => text(args.source || "files") === "text",
     name: "search-text.tool-input.txt",
   });
@@ -40,7 +40,7 @@ export function registerToolInputPolicies(register) {
     field: "patch",
     maxChars: MAX_CHARS,
     reason: "patch_file_input_too_long",
-    message: "补丁内容过长，请分批应用或拆分 patch 后重试",
+    messageKey: "tools.patch.patchContentTooLong",
     name: "patch-file-patch.tool-input.diff",
   });
   register({

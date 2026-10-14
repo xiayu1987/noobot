@@ -490,7 +490,7 @@ async function commitDetachedStop(dependencies, lifecycle) {
     phase: TURN_PHASE.STOP,
     executionState: "user_stopped",
     completionCommitId,
-    terminalStatus: { command: "user_stopped", description: "子 Agent 已停止" },
+    terminalStatus: { command: "user_stopped" },
     finishedAt: String(dependencies.now()).trim(),
   });
 }
@@ -538,7 +538,7 @@ async function commitDetachedCompletion(dependencies, lifecycle) {
     phase: TURN_PHASE.COMPLETION,
     executionState: "completed",
     completionCommitId,
-    terminalStatus: { command: "completed", description: "子 Agent 已正常完成" },
+    terminalStatus: { command: "completed" },
     finishedAt: String(dependencies.now()).trim(),
   });
 }

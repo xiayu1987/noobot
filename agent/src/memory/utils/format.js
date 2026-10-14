@@ -5,19 +5,22 @@
  */
 import { dedupeTextList } from "@noobot/memory-protocol/text";
 
-export function renderSectionLines(item = {}, sections = []) {
+export function renderSectionLines(item = {}, { sections = [], emptyValueText } = {}) {
   const lines = [];
   for (const { heading, field } of sections) {
     const values = dedupeTextList(item?.[field]);
-    lines.push(heading, ...(values.length ? values.map((value) => `- ${value}`) : ["- （无）"]));
+    lines.push(
+      heading,
+      ...(values.length ? values.map((value) => `- ${value}`) : [`- ${emptyValueText}`]),
+    );
   }
   return lines;
 }
 
-export function formatDomainBlock({ createdAt = "", item = {}, sections = [] } = {}) {
+export function formatDomainBlock({ createdAt = "", item = {}, schema } = {}) {
   return [
     `[${createdAt || new Date().toISOString()}]`,
-    ...renderSectionLines(item, sections),
+    ...renderSectionLines(item, schema),
     "",
   ].join("\n");
 }

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IStartAction from "../bizinst/action/interfaces/start-action.js";
 import FlowListener from "./flow-listener.js";
 
 class BizinstTreeFlowControler {
@@ -14,12 +13,7 @@ class BizinstTreeFlowControler {
     const flowListener = new FlowListener();
     flowListener.setBizinstTreeBox(bizinstTreeBox);
 
-    const isStartAction =
-      flowAction instanceof IStartAction ||
-      flowAction?.getName?.() === "开始" ||
-      (flowAction && flowAction.constructor && flowAction.constructor.name === "StartAction");
-
-    if (isStartAction) {
+    if (flowAction.isStartAction()) {
       flowAction.exec(bizinstTreeBox.getRootBizinst(), null, flowListener);
     } else {
       flowAction.exec(bizinstTreeBox.getCurrentBizinst(stepState), stepState, flowListener);

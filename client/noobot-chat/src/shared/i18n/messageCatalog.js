@@ -53,3 +53,32 @@ export function translateMessageKey(locale = "", key = "", params = {}) {
 export function translateStoredLocaleMessageKey(key = "", params = {}) {
   return translateMessageKey(readStoredLocale(), key, params);
 }
+
+const templatePrefixCache = new Map();
+
+function resolveTemplatePrefixes(keys = []) {
+  const cacheKey = keys.join("|");
+  if (!templatePrefixCache.has(cacheKey)) {
+    const prefixes = new Set();
+    for (const locale of SUPPORTED_LOCALES) {
+      for (const key of keys) {
+        const template = lookupKey(messages[locale] || {}, key);
+        const prefix = typeof template === "string" ? template.split("{")[0].trim() : "";
+        if (prefix) prefixes.add(prefix);
+      }
+    }
+    templatePrefixCache.set(cacheKey, [...prefixes]);
+  }
+  return templatePrefixCache.get(cacheKey);
+}
+
+export function stripMessageTemplatePrefix(value = "", keys = []) {
+  const prefixes = resolveTemplatePrefixes(keys);
+  let text = String(value || "").trim();
+  let matched = prefixes.find((prefix) => text.startsWith(prefix));
+  while (matched) {
+    text = text.slice(matched.length).trim();
+    matched = prefixes.find((prefix) => text.startsWith(prefix));
+  }
+  return text;
+}

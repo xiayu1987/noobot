@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeToolCalls } from "../../models/index.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 
 export function createCapabilityToolBinding(adapted = {}) {
   const tools = Array.isArray(adapted.tools) ? adapted.tools : [];
@@ -70,10 +71,7 @@ export async function runCapabilityToolTurns({
     }
     messages = [...messages, ...turnMessages];
   }
-  const content =
-    locale === "en-US"
-      ? "Based on the above tool results, provide the final planning answer now."
-      : "请基于以上工具结果，立即给出最终规划答案。";
+  const content = tSystem("capability.finalPlanningPrompt", locale);
   const finalStep = await invokeStep([{ role: "system", content }, ...messages]);
   return finalStep.complete();
 }

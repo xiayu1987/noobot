@@ -138,7 +138,7 @@ test("runSession emits resume-send lifecycle sequence", async () => {
     AGENT_LIFECYCLE_STATE.MEMORY,
     AGENT_LIFECYCLE_STATE.COMPLETED,
   ]);
-  assert.equal(events[0].data.phase, "继续初始化");
+  assert.equal(events[0].data.state, "resume_initializing");
   assert.equal(events[0].data.resumeFromStoppedSnapshot, true);
 });
 

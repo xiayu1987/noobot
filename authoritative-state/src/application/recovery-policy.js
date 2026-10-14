@@ -83,7 +83,6 @@ function finalizeCommand(turn, identity) {
     completionCommitId,
     terminalStatus: {
       command: isStop ? "user_stopped" : "completed",
-      description: isStop ? "停止流程恢复完成" : "完成流程恢复完成",
       ...(isStop && intent.payload?.assistantMessage
         ? { assistantMessage: intent.payload.assistantMessage }
         : {}),

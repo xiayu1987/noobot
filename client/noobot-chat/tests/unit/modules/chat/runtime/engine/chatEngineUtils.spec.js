@@ -47,7 +47,7 @@ describe("chatEngine utils", () => {
       event: "tool_call",
       type: "tool_call",
       category: "tool",
-      text: "执行命令：npm test",
+      text: "npm test",
     });
 
     expect(sanitizeExecutionLogForDisplay(logItem)).toEqual(

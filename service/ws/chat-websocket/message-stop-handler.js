@@ -84,7 +84,6 @@ export function createMessageStopHandler({
     );
     state.currentStopPayload = {
       userId: target.userId,
-      message: translateText("ws.dialogStoppedByUser", state.currentLocale),
       sessionId: target.sessionId,
       dialogProcessId: trimmed(
         command.identity.dialogProcessId || state.currentRunMeta?.dialogProcessId,
@@ -148,7 +147,6 @@ export function createMessageStopHandler({
       completionCommitId: stopLifecycleCommandId(target.stopCommandId, TURN_EVENT.STOP_COMPLETED),
       terminalStatus: {
         command: "user_stopped",
-        description: stopPayload.message,
         assistantMessage: stoppedPartialAssistant,
       },
     });

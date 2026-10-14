@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { clientFilePath as path } from "../../path-resolver.js";
 import { installDesktopNavigation } from "./navigation.js";
+import { messages } from "noobot-i18n/client/messages";
 
 const require = createRequire(import.meta.url);
 const ERR_ABORTED = -3;
@@ -19,6 +20,7 @@ export function createDesktopWindowManager({
   defaultClientUrl,
   electron = require("electron"),
   platform = process.platform,
+  getLanguage = () => "zh-CN",
   appendEarlyLog = () => {},
   appendDesktopLog = () => {},
   sendStatus = () => {},
@@ -31,6 +33,10 @@ export function createDesktopWindowManager({
   let startupFile = "";
   let showingStartupPage = false;
   let noobotUrl = "";
+
+  function translateDesktop(key) {
+    return (messages[getLanguage()] || messages["zh-CN"]).desktop[key];
+  }
 
   function getTrayIconPath() {
     if (process.env.NOOBOT_DESKTOP_TRAY_ICON) return process.env.NOOBOT_DESKTOP_TRAY_ICON;
@@ -56,15 +62,20 @@ export function createDesktopWindowManager({
     if (tray) return tray;
     tray = new Tray(getTrayIconPath());
     tray.setToolTip("Noobot");
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: "显示 Noobot", click: showMainWindow },
-        { type: "separator" },
-        { label: "退出 Noobot", click: quitFromTray },
-      ]),
-    );
+    refreshTrayMenu();
     tray.on("click", showMainWindow);
     return tray;
+  }
+
+  function refreshTrayMenu() {
+    if (!tray) return;
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: translateDesktop("trayShow"), click: showMainWindow },
+        { type: "separator" },
+        { label: translateDesktop("trayQuit"), click: quitFromTray },
+      ]),
+    );
   }
 
   function reloadWebContents(webContents = mainWindow?.webContents) {
@@ -104,7 +115,7 @@ export function createDesktopWindowManager({
     }
     template.push(
       {
-        label: platform === "darwin" ? "Return to Noobot" : "返回 Noobot",
+        label: translateDesktop("contextReturn"),
         enabled: Boolean(noobotUrl),
         click: () =>
           loadNoobotUrl(noobotUrl).catch((error) =>
@@ -112,7 +123,7 @@ export function createDesktopWindowManager({
           ),
       },
       {
-        label: platform === "darwin" ? "Reload" : "重新加载",
+        label: translateDesktop("contextReload"),
         accelerator: "CmdOrCtrl+R",
         click: () => reloadWebContents(webContents),
       },
@@ -262,6 +273,7 @@ export function createDesktopWindowManager({
   return {
     createWindow,
     createTray,
+    refreshTrayMenu,
     allowQuit: () => {
       isQuitting = true;
     },

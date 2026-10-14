@@ -36,11 +36,11 @@ export async function saveSubcategoryDomainSummary({
       await storage.ensureDir(dirPath);
       const filePath = path.join(dirPath, `${safeSubcategoryName}.md`);
       const block = [
-        `时间：${createdAt || new Date().toISOString()}`,
+        `${schema.timeLabel}：${createdAt || new Date().toISOString()}`,
         `${schema.sourceLabel}：${(Array.isArray(sourceKeys) ? sourceKeys : []).join(", ")}`,
         "",
         ...schema.sections.flatMap((section) => [
-          ...renderSectionLines(subcategory, [section]),
+          ...renderSectionLines(subcategory, { ...schema, sections: [section] }),
           "",
         ]),
       ].join("\n");

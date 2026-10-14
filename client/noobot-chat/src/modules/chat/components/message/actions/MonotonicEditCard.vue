@@ -7,7 +7,7 @@
 import { ref } from "vue";
 import {
   attachmentIcon,
-  attachmentTypeLabel,
+  attachmentTypeLabelKey,
   formatAttachmentSize,
 } from "../../../model/message-actions/attachmentFormat.js";
 
@@ -146,8 +146,11 @@ defineExpose({ focusTextarea });
               <div v-else class="monotonic-attachment-icon">{{ attachmentIcon(attachment) }}</div>
 
               <div class="monotonic-attachment-meta">
-                <div class="monotonic-attachment-name" :title="attachment.name">
-                  {{ attachment.name }}
+                <div
+                  class="monotonic-attachment-name"
+                  :title="attachment.name || t('message.attachmentUnnamed')"
+                >
+                  {{ attachment.name || t("message.attachmentUnnamed") }}
                 </div>
                 <div class="monotonic-attachment-desc">
                   <el-tag
@@ -163,9 +166,11 @@ defineExpose({ focusTextarea });
                     }}
                   </el-tag>
                   <span class="dot" aria-hidden="true">·</span>
-                  <span class="desc-text">{{ attachmentTypeLabel(attachment) }}</span>
+                  <span class="desc-text">{{ t(attachmentTypeLabelKey(attachment)) }}</span>
                   <span class="dot" aria-hidden="true">·</span>
-                  <span class="desc-text">{{ formatAttachmentSize(attachment.size) }}</span>
+                  <span class="desc-text">{{
+                    formatAttachmentSize(attachment.size) || t("message.attachmentSizeUnknown")
+                  }}</span>
                 </div>
               </div>
 

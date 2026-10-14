@@ -7,7 +7,7 @@
 defineProps({
   title: { type: String, default: "" },
   scale: { type: Number, default: 1 },
-  resetLabel: { type: String, default: "重置" },
+  resetLabel: { type: String, required: true },
 });
 
 defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);

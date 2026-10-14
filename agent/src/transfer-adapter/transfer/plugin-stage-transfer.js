@@ -14,6 +14,7 @@ import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { firstNormalizedString, normalizeString } from "../core/compact.js";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 
 export async function transferAgentPluginStageMessage({
   runtime = {},
@@ -109,6 +110,7 @@ export function composeAgentPluginFinalMessage({
   detailEnvelopes = [],
   validationInfo = "",
   header = "",
+  locale,
 } = {}) {
   const resultText = String(resultInfo || "").trim();
   const validationText = String(validationInfo || "").trim();
@@ -121,9 +123,9 @@ export function composeAgentPluginFinalMessage({
   return [
     normalizeString(header),
     resultText,
-    detailLines.length ? "明细附件:" : "",
+    detailLines.length ? tSystem("transfer.pluginDetailAttachments", locale) : "",
     ...detailLines,
-    validationText ? "验收信息:" : "",
+    validationText ? tSystem("transfer.pluginValidationInfo", locale) : "",
     validationText,
   ]
     .filter(Boolean)

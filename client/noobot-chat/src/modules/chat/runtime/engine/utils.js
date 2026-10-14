@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../model/timeFields.js";
-import { translateStoredLocaleMessageKey } from "../../../../shared/i18n/messageCatalog.js";
+import {
+  stripMessageTemplatePrefix,
+  translateStoredLocaleMessageKey,
+} from "../../../../shared/i18n/messageCatalog.js";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -86,12 +89,13 @@ function pickExecutionToolResult(logItem = {}) {
   );
 }
 
+const EXECUTION_COMMAND_LABEL_KEYS = Object.freeze([
+  "message.executionCommandStarted",
+  "message.executionCommandCompleted",
+]);
+
 function stripExecutionCommandPrefix(value) {
-  let text = normalizeTrimmedString(value);
-  const prefixRe =
-    /^(?:开始|完成|调用|返回)：\s*(?:执行命令：\s*)?|^执行命令：\s*|^(?:Started|Completed|Call|Return):\s*(?:Command:\s*)?|^Command:\s*/i;
-  while (prefixRe.test(text)) text = text.replace(prefixRe, "").trim();
-  return text;
+  return stripMessageTemplatePrefix(normalizeTrimmedString(value), EXECUTION_COMMAND_LABEL_KEYS);
 }
 
 function buildExecutionCommandLabel(statusKey = "", commandText = "") {

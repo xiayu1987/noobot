@@ -79,8 +79,7 @@ export function createTurnFinalizer({
 
   const finalizeUserStopped = async (state, { result = {} } = {}) => {
     const stopPayload = state.stopPayload || state.abortSignal?.reason?.stopPayload || {};
-    const stoppedMessage =
-      stopPayload?.message || translateText("ws.dialogStoppedByUser", state.locale);
+    const stoppedMessage = translateText("ws.dialogStoppedByUser", state.locale);
     const stoppedPartialAssistant = buildStoppedPartialAssistant({
       stopPayload,
       runMeta: state.runMeta,
@@ -134,7 +133,6 @@ export function createTurnFinalizer({
       completionCommitId,
       terminalStatus: {
         command: "user_stopped",
-        description: stoppedMessage,
         assistantMessage: stoppedPartialAssistant,
       },
     });
@@ -170,10 +168,7 @@ export function createTurnFinalizer({
       eventType: TURN_EVENT.COMPLETED,
       phase: TURN_PHASE.COMPLETION,
       completionCommitId,
-      terminalStatus: {
-        command: "completed",
-        description: "本轮对话已正常完成",
-      },
+      terminalStatus: { command: "completed" },
     });
     if (!completed?.applied && !completed?.deduplicated) {
       await commitTurnLifecycle({

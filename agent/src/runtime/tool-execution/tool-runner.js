@@ -343,7 +343,7 @@ async function completeToolInputOverflow(state, meta) {
   state.toolResultText = compactToolResultTextForModel(
     toToolJsonResult(state.call?.name, {
       ok: false,
-      message: meta.message || "tool input is too long",
+      message: meta.message,
       toolInputOverflow: meta.toolInputOverflow,
       ...state.toolInputTransferPayload,
     }),

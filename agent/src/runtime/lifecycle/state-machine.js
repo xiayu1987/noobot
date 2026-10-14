@@ -22,18 +22,6 @@ export const AGENT_LIFECYCLE_BRANCH_STATE = Object.freeze({
   FAILED: "failed",
 });
 
-const STATE_PHASE_LABEL = Object.freeze({
-  [AGENT_LIFECYCLE_STATE.INITIALIZING]: "初始化",
-  [AGENT_LIFECYCLE_STATE.RESUME_INITIALIZING]: "继续初始化",
-  [AGENT_LIFECYCLE_STATE.RUNNING]: "启动",
-  [AGENT_LIFECYCLE_STATE.PERSISTING]: "持久化",
-  [AGENT_LIFECYCLE_STATE.MEMORY]: "记忆",
-  [AGENT_LIFECYCLE_STATE.COMPLETED]: "完成",
-  [AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED]: "用户停止",
-  [AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED]: "中断",
-  [AGENT_LIFECYCLE_BRANCH_STATE.FAILED]: "异常",
-});
-
 function normalizeText(value = "") {
   return String(value || "").trim();
 }
@@ -131,7 +119,6 @@ export function createAgentLifecycleMachine({
       ...(extra && typeof extra === "object" ? extra : {}),
       state,
       branchState,
-      phase: STATE_PHASE_LABEL[state] || state,
       previousState,
       timestamp: typeof now === "function" ? now() : new Date().toISOString(),
       sessionId: normalizeText(extra?.sessionId ?? basePayload?.sessionId),

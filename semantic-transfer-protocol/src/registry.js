@@ -77,7 +77,7 @@ function registerToolInputPolicy({
   name = "tool-input.txt",
   mimeType = "text/plain",
   reason = "semantic_transfer_tool_input",
-  message = "semantic transfer input exceeded",
+  messageKey = "tools.input.tooLong",
 } = {}) {
   const nameKey = requireText(toolName, "semantic_transfer_tool_name_required");
   if (inputPolicies.has(nameKey))
@@ -99,7 +99,7 @@ function registerToolInputPolicy({
           : () => requireText(name, "semantic_transfer_tool_input_name_required"),
       mimeType: requireText(mimeType, "semantic_transfer_tool_input_mime_required"),
       reason: requireText(reason, "semantic_transfer_tool_input_reason_required"),
-      message: requireText(message, "semantic_transfer_tool_input_message_required"),
+      messageKey: requireText(messageKey, "semantic_transfer_tool_input_message_key_required"),
     }),
   );
 }

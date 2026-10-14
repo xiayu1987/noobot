@@ -192,11 +192,11 @@ test("harness planning does not inject refinement tool by default in programming
     execution: {
       controllers: {
         runtime: {
-          runConfig: { scenarioProfile: { key: "programming", name: "编程" } },
+          runConfig: { scenarioProfile: { key: "programming" } },
           systemRuntime: {
             userId: "u11-rp",
             sessionId: "s11-rp",
-            runConfig: { scenarioProfile: { key: "programming", name: "编程" } },
+            runConfig: { scenarioProfile: { key: "programming" } },
           },
         },
       },

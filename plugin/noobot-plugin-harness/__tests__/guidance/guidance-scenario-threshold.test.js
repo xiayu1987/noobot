@@ -207,7 +207,7 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
   assert.equal(beforeTextThresholds.payload.harness.state.pending.planRevision, false);
 
   const atTextThresholds = createPlanningAgentContext({
-    scenario: "文本",
+    scenario: "text",
     counters: {
       summaryTurns: TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1,
       planUpdateTurns: TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,

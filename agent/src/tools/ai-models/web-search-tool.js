@@ -93,9 +93,7 @@ function parseBodyFormat(bodyFormat = "{}") {
 export function buildSearchEngineRequest({ toolCfg = {}, query = "" }) {
   const endpointCfg = toolCfg?.endpoints?.[WEB_SEARCH_SERVICE_ENDPOINT_NAME] || {};
   const endpointUrl = String(endpointCfg?.url || "").trim();
-  const { key: queryKey } = parseQueryStringFormat(
-    endpointCfg?.query_string_format || "q=搜索内容",
-  );
+  const { key: queryKey } = parseQueryStringFormat(endpointCfg?.query_string_format);
   const url = new URL(endpointUrl);
   url.searchParams.set(queryKey, String(query || "").trim());
   const body = parseBodyFormat(endpointCfg?.body_format || "{}");

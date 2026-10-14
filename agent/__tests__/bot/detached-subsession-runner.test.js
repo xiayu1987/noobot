@@ -135,10 +135,7 @@ test("detached sub-session delegates execution and persistence to the main runne
     allowedRoot: "runtime/plugin-data/workflow/session",
   });
   assert.equal(completedLifecycle.completionCommitId, "turn-1:completed");
-  assert.deepEqual(completedLifecycle.terminalStatus, {
-    command: "completed",
-    description: "子 Agent 已正常完成",
-  });
+  assert.deepEqual(completedLifecycle.terminalStatus, { command: "completed" });
 
   assert.equal(result.sessionId, "sub1");
   assert.equal(result.parentSessionId, "parent1");
@@ -609,10 +606,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     stoppedLifecycle.completionCommitId,
     `${stoppedLifecycle.turnScopeId}:stop-completed`,
   );
-  assert.deepEqual(stoppedLifecycle.terminalStatus, {
-    command: "user_stopped",
-    description: "子 Agent 已停止",
-  });
+  assert.deepEqual(stoppedLifecycle.terminalStatus, { command: "user_stopped" });
   assert.equal(Object.hasOwn(abortError, "lifecycle"), false);
   assert.equal(
     calls.executionLogs.some(

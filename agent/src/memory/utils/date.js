@@ -13,7 +13,7 @@ export function toDateKey(value = "") {
 export function toIsoWeekInfo(value = "") {
   const dateObj = new Date(value || Date.now());
   if (Number.isNaN(dateObj.getTime())) {
-    return { weekYear: 1970, weekNumber: 1, weekLabel: "1970-第1周" };
+    return { weekYear: 1970, weekNumber: 1, weekKey: "1970-W01" };
   }
   const utcDate = new Date(
     Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate()),
@@ -27,6 +27,5 @@ export function toIsoWeekInfo(value = "") {
     weekYear,
     weekNumber,
     weekKey: `${weekYear}-W${String(weekNumber).padStart(2, "0")}`,
-    weekLabel: `${weekYear}-第${weekNumber}周`,
   };
 }

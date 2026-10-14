@@ -14,7 +14,7 @@ export function isImageMime(mimeType = "") {
 
 export function attachmentName(item = {}) {
   return String(
-    item?.name || item?.filename || item?.fileName || item?.path || item?.relativePath || "附件",
+    item?.name || item?.filename || item?.fileName || item?.path || item?.relativePath || "",
   ).trim();
 }
 
@@ -24,19 +24,20 @@ export function attachmentMime(item = {}) {
 
 export function formatAttachmentSize(size = 0) {
   const value = Number(size || 0);
-  if (!Number.isFinite(value) || value <= 0) return "未知大小";
+  if (!Number.isFinite(value) || value <= 0) return "";
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function attachmentTypeLabel(attachment = {}) {
+export function attachmentTypeLabelKey(attachment = {}) {
   const mime = attachmentMime(attachment).toLowerCase();
-  if (mime.startsWith("image/")) return "图片";
-  if (mime.includes("pdf")) return "PDF";
-  if (mime.includes("zip") || mime.includes("compressed")) return "压缩包";
-  if (mime.includes("text") || mime.includes("json") || mime.includes("markdown")) return "文本";
-  return "文件";
+  if (mime.startsWith("image/")) return "message.attachmentTypeImage";
+  if (mime.includes("pdf")) return "message.attachmentTypePdf";
+  if (mime.includes("zip") || mime.includes("compressed")) return "message.attachmentTypeArchive";
+  if (mime.includes("text") || mime.includes("json") || mime.includes("markdown"))
+    return "message.attachmentTypeText";
+  return "message.attachmentTypeFile";
 }
 
 export function attachmentIcon(attachment = {}) {

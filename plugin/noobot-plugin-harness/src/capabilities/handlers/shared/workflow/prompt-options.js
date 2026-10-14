@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "../constants.js";
-import { isTextScenarioText } from "./matrix-resolver.js";
+import { isTextScenarioKey } from "./matrix-resolver.js";
 
 function resolveTextModeFromPromptSource(source = {}, data = {}) {
   return (
@@ -12,14 +12,12 @@ function resolveTextModeFromPromptSource(source = {}, data = {}) {
     source.isTextMode === true ||
     data.textMode === true ||
     data.isTextMode === true ||
-    isTextScenarioText(source.scenario) ||
-    isTextScenarioText(source.scenarioKey) ||
-    isTextScenarioText(source?.scenarioProfile?.key) ||
-    isTextScenarioText(source?.scenarioProfile?.name) ||
-    isTextScenarioText(data.scenario) ||
-    isTextScenarioText(data.scenarioKey) ||
-    isTextScenarioText(data?.scenarioProfile?.key) ||
-    isTextScenarioText(data?.scenarioProfile?.name)
+    isTextScenarioKey(source.scenario) ||
+    isTextScenarioKey(source.scenarioKey) ||
+    isTextScenarioKey(source?.scenarioProfile?.key) ||
+    isTextScenarioKey(data.scenario) ||
+    isTextScenarioKey(data.scenarioKey) ||
+    isTextScenarioKey(data?.scenarioProfile?.key)
   );
 }
 

@@ -27,12 +27,13 @@ describe("BaseThinkingLogLine", () => {
     const wrapper = mount(BaseThinkingLogLine, {
       props: {
         eventText: "tool_call",
-        contentText: "执行命令：npm test",
+        contentText: "调用：npm test",
         tool: true,
       },
     });
 
-    expect(wrapper.text()).toContain("执行命令：npm test");
+    expect(wrapper.text()).toContain("npm test");
+    expect(wrapper.text()).not.toContain("调用：");
     expect(wrapper.find(".base-thinking-log-line__event").attributes("title")).toBe("Call");
     expect(wrapper.find(".base-thinking-log-line__event svg").exists()).toBe(true);
   });
@@ -105,9 +106,9 @@ describe("BaseThinkingLogLine", () => {
     expect(searchCall.find(".base-thinking-log-line__event").attributes("data-icon-kind")).toBe(
       "do_search_web",
     );
-    expect(
-      failedResult.find(".base-thinking-log-line__event").attributes("data-icon-kind"),
-    ).toBe("result-error");
+    expect(failedResult.find(".base-thinking-log-line__event").attributes("data-icon-kind")).toBe(
+      "result-error",
+    );
   });
 
   it("renders the localized risk level immediately after the tool name", () => {

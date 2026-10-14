@@ -5,8 +5,9 @@
  */
 
 class ActionBase {
-  constructor() {
+  constructor(actionKind = "") {
     this.name = null;
+    this.actionKind = actionKind;
   }
   setName(name) {
     this.name = name;
@@ -14,6 +15,12 @@ class ActionBase {
   getName() {
     return this.name;
   }
+  isStartAction() {
+    return false;
+  }
+  getActionKind() {
+    return this.actionKind;
+  }
 }
 
-export default  ActionBase;
+export default ActionBase;

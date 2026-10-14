@@ -9,7 +9,7 @@ import ActionBase from "./action-base.js";
 
 class PreAddStepAction extends ActionBase {
   constructor() {
-    super();
+    super("model");
   }
   getName() {
     return "前加步骤";

@@ -13,7 +13,7 @@ import { createDesktopBootstrap } from "../../electron/runtime/bootstrap.js";
 
 const appUrl = "http://127.0.0.1:23456/";
 
-function createHarness(t, platform) {
+function createHarness(t, platform, { language = "zh-CN" } = {}) {
   const originalIcon = process.env.NOOBOT_DESKTOP_TRAY_ICON;
   process.env.NOOBOT_DESKTOP_TRAY_ICON = "test-icon.png";
   t.after(() => {
@@ -25,6 +25,8 @@ function createHarness(t, platform) {
   const loadFailures = [];
   const menus = [];
   let contextMenu;
+  let trayMenu;
+  const languageRef = { value: language };
   let reloads = 0;
   const webContents = new EventEmitter();
   webContents.isDestroyed = () => false;
@@ -62,7 +64,9 @@ function createHarness(t, platform) {
   }
   class Tray extends EventEmitter {
     setToolTip() {}
-    setContextMenu() {}
+    setContextMenu(menu) {
+      trayMenu = menu.template;
+    }
   }
   const manager = createDesktopWindowManager({
     app: { isPackaged: false },
@@ -70,6 +74,7 @@ function createHarness(t, platform) {
     agentProxyOrigin: appUrl,
     defaultClientUrl: appUrl,
     platform,
+    getLanguage: () => languageRef.value,
     electron: { BrowserWindow, Tray, Menu, shell },
     appendDesktopLog: (line) => logs.push(line),
     sendStatus: (status) => loadFailures.push(status),
@@ -109,6 +114,10 @@ function createHarness(t, platform) {
     navigate,
     input,
     getReloads: () => reloads,
+    trayMenu: () => trayMenu,
+    setLanguage: (value) => {
+      languageRef.value = value;
+    },
     contextMenu: (params = {}) => {
       webContents.emit("context-menu", {}, params);
       return contextMenu;
@@ -198,6 +207,17 @@ for (const platform of ["win32", "darwin"]) {
     ]);
     menu.find((item) => item.accelerator === "CmdOrCtrl+R").click();
     assert.equal(h.getReloads(), 1);
+  });
+
+  test(`${platform}: tray and context menu labels follow the desktop language`, (t) => {
+    const h = createHarness(t, platform, { language: "zh-CN" });
+    const labels = (items) => items.filter((item) => item.label).map((item) => item.label);
+    assert.deepEqual(labels(h.trayMenu()), ["显示 Noobot", "退出 Noobot"]);
+    assert.deepEqual(labels(h.contextMenu({})), ["返回 Noobot", "重新加载"]);
+    h.setLanguage("en-US");
+    h.manager.refreshTrayMenu();
+    assert.deepEqual(labels(h.trayMenu()), ["Show Noobot", "Quit Noobot"]);
+    assert.deepEqual(labels(h.contextMenu({})), ["Return to Noobot", "Reload"]);
   });
 
   test(`${platform}: menu policy preserves platform editing and refresh shortcuts`, (t) => {

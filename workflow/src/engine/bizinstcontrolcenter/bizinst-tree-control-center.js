@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import BizinstTreeRecord from '../bizinst/bizinst-tree-record.js';
-import StartAction from '../bizinst/action/start-action.js';
-import BizinstBoxFactory from '../bizinst/box/bizinstbox/bizinst-box-factory.js';
-import BizinstFlowEngine from './bizinst-flow-engine.js';
-import BizinstTreeFlowControler from './bizinst-tree-flow-controller.js';
-import BizinstTreeModelChangeControler from './bizinst-tree-model-change-controller.js';
-import StartBizinstInfo from './start-bizinst-info.js';
+import BizinstTreeRecord from "../bizinst/bizinst-tree-record.js";
+import StartAction from "../bizinst/action/start-action.js";
+import BizinstBoxFactory from "../bizinst/box/bizinstbox/bizinst-box-factory.js";
+import BizinstFlowEngine from "./bizinst-flow-engine.js";
+import BizinstTreeFlowControler from "./bizinst-tree-flow-controller.js";
+import BizinstTreeModelChangeControler from "./bizinst-tree-model-change-controller.js";
+import StartBizinstInfo from "./start-bizinst-info.js";
 
 class BizinstTreeControlCenter {
   constructor() {
@@ -21,11 +21,14 @@ class BizinstTreeControlCenter {
   execAction(action, bizinst, stepState, bizinstTreeRecord) {
     if (!action || !bizinst || !stepState || !bizinstTreeRecord) return null;
 
-    const bizinstTreeBox = BizinstBoxFactory.getInstance().getBizinstTreeBox(bizinst, bizinstTreeRecord);
+    const bizinstTreeBox = BizinstBoxFactory.getInstance().getBizinstTreeBox(
+      bizinst,
+      bizinstTreeRecord,
+    );
 
-    const name = action?.constructor?.name;
-    const isModelStateChangeAction = ['NextAddStepAction', 'NextSignatureAction', 'PreAddStepAction', 'PreSignatureAction'].includes(name);
-    const isFlowAction = ['AuditAction', 'BackAction', 'StartAction', 'StopAction', 'SubmitAction'].includes(name);
+    const actionKind = action.getActionKind();
+    const isModelStateChangeAction = actionKind === "model";
+    const isFlowAction = actionKind === "flow";
 
     if (isModelStateChangeAction) {
       this.bizinstTreeModelChangeControler.execAction(action, bizinstTreeBox, stepState);
@@ -47,14 +50,19 @@ class BizinstTreeControlCenter {
     const bizinstTreeRecord = new BizinstTreeRecord();
     bizinstTreeRecord.setRootBizinst(bizinst);
 
-    const bizinstTreeBox = BizinstBoxFactory.getInstance().getBizinstTreeBox(bizinst, bizinstTreeRecord);
+    const bizinstTreeBox = BizinstBoxFactory.getInstance().getBizinstTreeBox(
+      bizinst,
+      bizinstTreeRecord,
+    );
 
     const startAction = new StartAction();
     this.bizinstTreeFlowControler.execAction(startAction, bizinstTreeBox, null);
     bizinstTreeBox.saveProcess(startAction);
 
     result.setBizinst(bizinst);
-    result.setActionRecord(this.getActionRecord(startAction, bizinstTreeBox.getBizinstTreeRecord()));
+    result.setActionRecord(
+      this.getActionRecord(startAction, bizinstTreeBox.getBizinstTreeRecord()),
+    );
     result.setBizinstTreeRecord(bizinstTreeRecord);
     return result;
   }
@@ -71,4 +79,4 @@ class BizinstTreeControlCenter {
   }
 }
 
-export default  BizinstTreeControlCenter;
+export default BizinstTreeControlCenter;

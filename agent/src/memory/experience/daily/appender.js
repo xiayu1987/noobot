@@ -31,7 +31,7 @@ export async function appendDailyDomainResults({
     const domainName = sanitizeFileName(item?.domain, "");
     if (!domainName) continue;
     const filePath = path.join(dayDir, `${domainName}.md`);
-    const block = formatDomainBlock({ createdAt, item, sections: schema.sections });
+    const block = formatDomainBlock({ createdAt, item, schema });
     await storage.appendMemoryDocument(schema.documentKind, filePath, block);
     appendedCount += 1;
     domainNames.push(domainName);

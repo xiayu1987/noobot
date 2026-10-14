@@ -13,17 +13,17 @@ import {
   isCheckpointBoundaryToolMessage,
 } from "@noobot/context-protocol/policy/summary";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
+import { tSystem } from "noobot-i18n/agent/system-text";
 
 export function isCheckpointBoundaryToolResultMessage(msg = {}) {
   return isCheckpointBoundaryToolMessage(msg);
 }
 
-export function buildTaskSummaryFallbackHumanMessage(msg = {}) {
+export function buildTaskSummaryFallbackHumanMessage(msg = {}, { locale }) {
   const summaryText = extractTaskSummaryText(msg);
   if (!summaryText) return null;
   return new HumanMessage({
-    content: `[阶段小结]
-${summaryText}`,
+    content: `${tSystem("context.phaseSummaryTitle", locale)}\n${summaryText}`,
     additional_kwargs: {
       noobotInternalMessageType: CONTEXT_INTERNAL_MESSAGE_TYPE.PHASE_SUMMARY_MEMORY,
       recoveredFromUnpairedTaskSummary: true,

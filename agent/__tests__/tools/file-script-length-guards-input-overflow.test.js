@@ -53,7 +53,7 @@ test("search: text 输入超过上限时由 semantic-transfer 保存附件并直
   assert.equal(runnerResult.success, true);
   assert.equal(result.toolName, "search");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "text is too long; search in smaller chunks");
+  assert.equal(result.message, "搜索文本过长，请分批搜索");
   assert.equal(Array.isArray(result.transferEnvelopes), true);
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].version, 2);

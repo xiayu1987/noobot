@@ -5,6 +5,8 @@
  */
 import OpenAI from "openai";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { pickLocaleText } from "noobot-i18n/shared";
+import { BACKEND_I18N } from "noobot-i18n/agent/backend-messages";
 import {
   MODEL_IMAGE_GENERATION_API_TYPE,
   MODEL_OPERATION_KIND,
@@ -16,48 +18,16 @@ const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
 const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
 const RATIO_SIZE = /^(auto|\d+(?:\.\d+)?:\d+(?:\.\d+)?)$/i;
 
-const HTTP_STATUS_FALLBACKS = Object.freeze({
-  "zh-CN": Object.freeze({
-    400: "请求参数或格式无效",
-    401: "认证失败，请检查 API Key",
-    403: "没有访问该资源的权限",
-    404: "请求的资源不存在",
-    429: "请求过于频繁或账户额度已用尽",
-    500: "服务端处理错误，请稍后重试",
-    503: "服务当前过载，请稍后重试",
-  }),
-  "en-US": Object.freeze({
-    400: "Invalid request parameters or format",
-    401: "Authentication failed; check your API key",
-    403: "You do not have permission to access this resource",
-    404: "The requested resource was not found",
-    429: "Too many requests or account quota exhausted",
-    500: "Server error while processing the request; try again later",
-    503: "The service is currently overloaded; try again later",
-  }),
-});
-
-function normalizeLocale(locale = "") {
-  return String(locale || "")
-    .trim()
-    .toLowerCase()
-    .startsWith("en")
-    ? "en-US"
-    : "zh-CN";
+function modelRuntimeText(locale, key, params) {
+  return pickLocaleText({ locale, dict: BACKEND_I18N, key: `modelRuntime.${key}`, params });
 }
 
-const IMAGES_ASYNC_FALLBACKS = Object.freeze({
-  "zh-CN": Object.freeze({
-    taskIdMissing: "缺少任务 ID",
-    taskFailed: "任务执行失败",
-    taskTimeout: (id) => `任务超时：${id}`,
-  }),
-  "en-US": Object.freeze({
-    taskIdMissing: "Task ID is missing",
-    taskFailed: "Task failed",
-    taskTimeout: (id) => `Task timed out: ${id}`,
-  }),
-});
+function httpStatusFallback(locale, status) {
+  const key = `modelRuntime.httpStatus.${status}`;
+  return Object.hasOwn(BACKEND_I18N, key)
+    ? pickLocaleText({ locale, dict: BACKEND_I18N, key })
+    : "";
+}
 
 function normalizeBaseUrl(baseUrl = "") {
   const withoutTrailingSlashes = (value) => {
@@ -210,9 +180,7 @@ async function requestJson({
         "",
     ).trim();
     const message =
-      returnedMessage ||
-      HTTP_STATUS_FALLBACKS[normalizeLocale(locale)]?.[response.status] ||
-      `HTTP ${response.status}`;
+      returnedMessage || httpStatusFallback(locale, response.status) || `HTTP ${response.status}`;
     const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
@@ -234,7 +202,6 @@ async function executeImagesAsync({
   clock,
   locale,
 }) {
-  const localized = IMAGES_ASYNC_FALLBACKS[normalizeLocale(locale)];
   const baseUrl = normalizeBaseUrl(modelSpec.base_url);
   const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
   const requestHeaders = { ...headers, Authorization: `Bearer ${credential}` };
@@ -261,7 +228,7 @@ async function executeImagesAsync({
   });
   const id = taskId(created);
   if (!id) {
-    const error = new Error(String(options.taskIdMissingMessage || localized.taskIdMissing));
+    const error = new Error(modelRuntimeText(locale, "imagesTaskIdMissing"));
     error.capabilityUnavailable = true;
     throw error;
   }
@@ -284,14 +251,14 @@ async function executeImagesAsync({
     }
     if (status === "failed") {
       const error = new Error(
-        String(task.error || task.message || options.taskFailedMessage || localized.taskFailed),
+        String(task.error || task.message || modelRuntimeText(locale, "imagesTaskFailed")),
       );
       error.capabilityUnavailable = true;
       throw error;
     }
     await clock.sleep(Number(options.pollIntervalMs || POLL_INTERVAL_MS));
   }
-  const error = new Error(String(options.taskTimeoutMessage || localized.taskTimeout(id)));
+  const error = new Error(modelRuntimeText(locale, "imagesTaskTimeout", { id }));
   error.capabilityUnavailable = true;
   throw error;
 }

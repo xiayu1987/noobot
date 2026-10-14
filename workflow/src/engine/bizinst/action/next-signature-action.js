@@ -9,7 +9,7 @@ import ActionBase from "./action-base.js";
 
 class NextSignatureAction extends ActionBase {
   constructor() {
-    super();
+    super("model");
   }
   getName() {
     return "后加签";

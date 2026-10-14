@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { useLocale } from "../../../shared/i18n/useLocale.js";
 
 const props = defineProps({
   sending: { type: Boolean, default: false },
@@ -19,11 +20,12 @@ const snapshotList = computed(() =>
     String(right?.updatedAt || "").localeCompare(String(left?.updatedAt || "")),
   ),
 );
+const { translate } = useLocale();
 </script>
 
 <template>
   <details class="conversation-state-debug">
-    <summary>状态机调试面板</summary>
+    <summary>{{ translate("message.conversationStateDebugTitle") }}</summary>
     <div class="state-row">
       <span>sending: {{ sending }}</span>
       <span>interactionSubmitting: {{ interactionSubmitting }}</span>

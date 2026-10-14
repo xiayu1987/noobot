@@ -9,7 +9,7 @@ import ActionBase from "./action-base.js";
 
 class AuditAction extends ActionBase {
   constructor() {
-    super();
+    super("flow");
   }
   getName() {
     return "审核";

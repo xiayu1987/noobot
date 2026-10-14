@@ -14,6 +14,9 @@ const {
   subcategory: SUBCATEGORY_FIELD,
 } = EXPERIENCE_STRUCTURE_FIELDS;
 
+const DOCUMENT_TIME_LABEL = "时间";
+const DOCUMENT_EMPTY_VALUE = "（无）";
+
 const STAGE_STRUCTURE = Object.freeze({
   daily: Object.freeze({
     documentKind: MEMORY_DOCUMENT_KIND.DAILY_SUMMARY,
@@ -31,6 +34,7 @@ const STAGE_STRUCTURE = Object.freeze({
     parseErrorCode: "weekly_patch_command_not_found",
     structureFields: Object.freeze({ category: CATEGORY_FIELD }),
     requiredFields: Object.freeze(["category"]),
+    sourceLabel: "来源日期",
   }),
   monthly: Object.freeze({
     documentKind: MEMORY_DOCUMENT_KIND.MONTHLY_SUMMARY,
@@ -85,6 +89,8 @@ export function buildExperiencePatchSchema(stage, fields = BUILTIN_EXPERIENCE_FI
     subFields: hasSubcategory
       ? Object.freeze([SUBCATEGORY_FIELD.key, ...contentFields.map((item) => item.key)])
       : null,
+    timeLabel: DOCUMENT_TIME_LABEL,
+    emptyValueText: DOCUMENT_EMPTY_VALUE,
     sections: Object.freeze(
       contentFields.map((item) => Object.freeze({ heading: `${item.title}：`, field: item.key })),
     ),

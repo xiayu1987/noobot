@@ -37,17 +37,12 @@ export const BUILTIN_SCENARIOS = Object.freeze({
   default: "full",
   definitions: Object.freeze({
     full: Object.freeze({
-      name: "全能",
-      description: "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
       tools: Object.freeze(["*"]),
       context: Object.freeze(["*"]),
       services: Object.freeze(["*"]),
       mcpServers: Object.freeze(["*"]),
     }),
     programming: Object.freeze({
-      name: "编程",
-      description:
-        "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
       model: "",
       tools: PROGRAMMING_TOOL_NAMES,
       context: Object.freeze([
@@ -62,8 +57,6 @@ export const BUILTIN_SCENARIOS = Object.freeze({
       mcpServers: Object.freeze([]),
     }),
     text: Object.freeze({
-      name: "文本",
-      description: "文本情景：适合写作、改写、摘要、翻译与内容整理。",
       model: "",
       tools: PROGRAMMING_TOOL_NAMES,
       context: Object.freeze([
@@ -80,21 +73,6 @@ export const BUILTIN_SCENARIOS = Object.freeze({
   }),
 });
 
-const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
-  full: Object.freeze({
-    name: "scenarios.full.name",
-    description: "scenarios.full.description",
-  }),
-  programming: Object.freeze({
-    name: "scenarios.programming.name",
-    description: "scenarios.programming.description",
-  }),
-  text: Object.freeze({
-    name: "scenarios.text.name",
-    description: "scenarios.text.description",
-  }),
-});
-
 function assertTranslate(translate, caller) {
   if (typeof translate !== "function") {
     throw new TypeError(`${caller} requires an explicit translate function`);
@@ -102,12 +80,13 @@ function assertTranslate(translate, caller) {
 }
 
 function localizeScenarioEntry(scenarioKey, entry, { locale, translate }) {
-  const keys = BUILTIN_SCENARIO_I18N_KEYS[scenarioKey];
-  if (!keys) return entry;
+  if (!BUILTIN_SCENARIO_KEYS.includes(scenarioKey)) return entry;
+  const nameKey = `scenarios.${scenarioKey}.name`;
+  const descriptionKey = `scenarios.${scenarioKey}.description`;
   return {
     ...entry,
-    name: translate(keys.name, locale, entry.name),
-    description: translate(keys.description, locale, entry.description),
+    name: translate(nameKey, locale, nameKey),
+    description: translate(descriptionKey, locale, descriptionKey),
   };
 }
 

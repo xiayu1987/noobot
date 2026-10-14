@@ -173,10 +173,14 @@ test("scenario profile localization translates builtin keys and passes other pro
   const translate = (key, locale, fallback) => `${locale}:${key}:${fallback}`;
   assert.throws(() => localizeScenarioProfile({ key: "programming" }), /explicit translate/);
   const localized = localizeScenarioProfile(
-    { key: "programming", name: "编程", description: "d", tools: ["read_file"] },
+    { key: "programming", tools: ["read_file"] },
     { locale: "en-US", translate },
   );
-  assert.equal(localized.name, "en-US:scenarios.programming.name:编程");
+  assert.equal(localized.name, "en-US:scenarios.programming.name:scenarios.programming.name");
+  assert.equal(
+    localized.description,
+    "en-US:scenarios.programming.description:scenarios.programming.description",
+  );
   assert.deepEqual(localized.tools, ["read_file"]);
   const custom = { key: "custom", name: "n", description: "d" };
   assert.deepEqual(localizeScenarioProfile(custom, { translate }), custom);

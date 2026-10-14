@@ -32,7 +32,7 @@ export async function runWeeklySummaryIfNeeded({
     assertNotAborted(abortSignal);
     const targetDates = dateDirs.slice(0, 7);
     const weekInfo = toIsoWeekInfo(targetDates[targetDates.length - 1]);
-    const weekLabel = weekInfo.weekKey || weekInfo.weekLabel;
+    const weekLabel = weekInfo.weekKey;
     const mergedDomainMap = await mergeDomainText(basePath, targetDates);
     if (!mergedDomainMap.size) break;
 

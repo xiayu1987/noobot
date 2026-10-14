@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { resolveLocaleFromRuntime } from "noobot-i18n/shared";
 import {
   deriveContextMessageProjectionId,
   projectContextMessageIdentityMetadata,
@@ -115,7 +116,9 @@ export function buildHistoryMessages({
       const toolCallId = resolveContextToolCallId(msg);
       if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
         if (isCheckpointBoundaryToolResultMessage(msg)) {
-          const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg);
+          const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg, {
+            locale: resolveLocaleFromRuntime(runtime),
+          });
           if (fallbackSummaryMessage) history.push(fallbackSummaryMessage);
         }
         continue;
