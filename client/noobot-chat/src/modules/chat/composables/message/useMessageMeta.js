@@ -85,7 +85,7 @@ export function useMessageMeta({ getMessageItem = () => ({}), getRuntimeView = n
       messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem),
     ).trim();
     const turnRuntime = resolveTurnRuntimeByScope(turnRuntimeRegistry.value, turnScopeId, {
-      sessionId: String(messageItem?.sessionId || messageItem?.session_id || "").trim(),
+      sessionId: String(messageItem?.sessionId || "").trim(),
     });
     const projectedRuntime =
       typeof getRuntimeView === "function" ? getRuntimeView(messageItem) : null;

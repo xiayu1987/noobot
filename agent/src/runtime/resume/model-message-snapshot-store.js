@@ -69,7 +69,7 @@ function readMessageField(message = {}, field = "") {
 function snapshotMessageId(message = {}) {
   return (
     readMessageField(message, "noobotMessageId") ||
-    String(message?.messageUid || message?.messageId || message?.id || "").trim()
+    String(message?.messageUid || message?.messageId || "").trim()
   );
 }
 

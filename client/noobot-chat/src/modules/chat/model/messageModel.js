@@ -46,22 +46,18 @@ function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
 }
 
 function buildMessageIdentityFacet(canonicalMessage = {}) {
-  const sessionId = String(
-    canonicalMessage?.sessionId || canonicalMessage?.session_id || "",
-  ).trim();
+  const sessionId = String(canonicalMessage?.sessionId || "").trim();
   const messageRole = getMessageRole(canonicalMessage) || "assistant";
-  const sourceMessageId = String(canonicalMessage?.messageId || canonicalMessage?.id || "").trim();
+  const sourceMessageId = String(canonicalMessage?.messageId || "").trim();
   const presentationMessageId = String(canonicalMessage?.presentationMessageId || "").trim();
   const messageId =
     messageRole === "assistant" && presentationMessageId ? presentationMessageId : sourceMessageId;
   return {
-    id: messageId,
     messageId,
     ...(presentationMessageId ? { presentationMessageId } : {}),
     ...(sourceMessageId && sourceMessageId !== messageId ? { sourceMessageId } : {}),
     turnScopeId: getMessageTurnScopeId(canonicalMessage),
     sessionId,
-    session_id: sessionId,
     role: messageRole,
     dialogProcessId: getMessageDialogProcessId(canonicalMessage),
     parentDialogProcessId: getMessageParentDialogProcessId(canonicalMessage),

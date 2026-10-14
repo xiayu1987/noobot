@@ -29,7 +29,7 @@ import {
 } from "../src/index.js";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
-  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 7);
+  assert.equal(SESSION_ARTIFACT_SCHEMA_VERSION, 8);
   assert.deepEqual(
     normalizeTurnCommitMetadata({
       action: " SEND ",
@@ -100,7 +100,7 @@ test("canonical assistant presentation is unique and fully identified per Turn",
 
 test("Session artifact schema versions are explicit protocol facts", () => {
   assert.equal(resolveSessionArtifactSchemaVersion(undefined), 0);
-  assert.equal(resolveSessionArtifactSchemaVersion(SESSION_ARTIFACT_SCHEMA_VERSION), 7);
+  assert.equal(resolveSessionArtifactSchemaVersion(SESSION_ARTIFACT_SCHEMA_VERSION), 8);
   for (const value of [null, "7", 7.1, -1]) {
     assert.throws(
       () => resolveSessionArtifactSchemaVersion(value),

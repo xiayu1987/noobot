@@ -16,7 +16,7 @@ function resolveStableMessageIdentity(messageItem = {}) {
 function resolveMessageTurnScopeMergeKey(messageItem = {}) {
   const turnScopeId = getMessageTurnScopeId(messageItem);
   if (!turnScopeId) return "";
-  const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
+  const sessionId = String(messageItem?.sessionId || "").trim();
   return sessionId ? `${sessionId}::${turnScopeId}` : turnScopeId;
 }
 
@@ -38,7 +38,6 @@ function resolveFoldedSourceMessageId(sourceMessage, projectedMessage) {
     projectedMessage?.sourceMessageId ||
       sourceMessage?.sourceMessageId ||
       sourceMessage?.messageId ||
-      sourceMessage?.id ||
       "",
   ).trim();
 }

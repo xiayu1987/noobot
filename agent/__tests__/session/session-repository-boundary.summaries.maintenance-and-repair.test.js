@@ -14,7 +14,7 @@ import { createSessionServices } from "../../src/session/index.js";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
-  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
 import {
@@ -377,7 +377,7 @@ test("display summary repair migrates the previous canonical artifact before rev
     await writeFile(journalFile, journal, "utf8");
     turn.committedBytes = Buffer.byteLength(journal);
     turn.messageHashes[messageRecord.messageUid] = messageRecord.hash;
-    manifest.schemaVersion = SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION;
+    manifest.schemaVersion = SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION;
     manifest.turnLifecycle.commandReceipts = [
       {
         commandId: "command-previous",

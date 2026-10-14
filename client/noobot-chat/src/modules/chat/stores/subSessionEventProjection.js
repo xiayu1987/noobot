@@ -132,7 +132,7 @@ export function evaluateSubSessionEventGate({ eventData, registry, createEmptySe
 }
 
 function sameMessageId(message = {}, targetId) {
-  return text(message?.messageId || message?.id) === targetId;
+  return text(message?.messageId) === targetId;
 }
 
 export function findSubSessionMessageIndex(messages, targetId) {
@@ -148,7 +148,7 @@ export function materializeTurnPresentationMessages({
 }) {
   for (const source of [turnPresentation?.userMessage, turnPresentation?.assistantMessage]) {
     if (!source) continue;
-    const sourceId = text(source.messageId || source.id);
+    const sourceId = text(source.messageId);
     const sourceIndex = findSubSessionMessageIndex(messages, sourceId);
     const materialized = {
       ...source,

@@ -8,7 +8,7 @@ import { emitEvent } from "../../../events/index.js";
 function checkpointKey(message = {}, index = 0) {
   const messageUid = String(message?.messageUid || "").trim();
   if (messageUid) return `uid:${messageUid}`;
-  const messageId = String(message?.messageId || message?.id || "").trim();
+  const messageId = String(message?.messageId || "").trim();
   const dialogProcessId = String(message?.dialogProcessId || "").trim();
   const turnScopeId = String(message?.turnScopeId || "").trim();
   if (messageId) return `message:${dialogProcessId}:${turnScopeId}:${messageId}`;
@@ -58,7 +58,7 @@ function projectActivityDurability(activityMessages, durableMessages) {
 function projectPersistedMessage(message = {}) {
   return {
     messageUid: String(message.messageUid || "").trim(),
-    messageId: String(message.messageId || message.id || "").trim(),
+    messageId: String(message.messageId || "").trim(),
     presentationMessageId: String(message.presentationMessageId || "").trim(),
     role: String(message.role || "").trim(),
     type: String(message.type || "").trim(),

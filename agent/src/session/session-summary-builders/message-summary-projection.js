@@ -192,10 +192,7 @@ function applyDisplayIdentity(summary, message, presentationMessageId) {
   const messageUid = String(message.messageUid || "").trim();
   const sourceMessageId = String(message.messageId || "").trim();
   const messageId = presentationMessageId || sourceMessageId || messageUid;
-  if (messageId) {
-    summary.id = messageId;
-    summary.messageId = messageId;
-  }
+  if (messageId) summary.messageId = messageId;
   if (!presentationMessageId) {
     if (messageUid) summary.messageUid = messageUid;
     return;

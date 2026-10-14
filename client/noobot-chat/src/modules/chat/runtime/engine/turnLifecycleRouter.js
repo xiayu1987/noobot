@@ -98,7 +98,7 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
               ? projectedSession.messages
               : []
             ).map((message = {}) => ({
-              messageId: normalizeTrimmedString(message?.messageId || message?.id),
+              messageId: normalizeTrimmedString(message?.messageId),
               role: normalizeTrimmedString(message?.role),
               turnScopeId: normalizeTrimmedString(message?.turnScopeId),
               pending: message?.pending,

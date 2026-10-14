@@ -26,11 +26,8 @@ test("session display summary projects persisted messageUid as canonical message
   });
 
   assert.deepEqual(
-    (({ id, messageId, messageUid, role }) => ({ id, messageId, messageUid, role }))(
-      summary.messages[0],
-    ),
+    (({ messageId, messageUid, role }) => ({ messageId, messageUid, role }))(summary.messages[0]),
     {
-      id: "sm-persisted-user",
       messageId: "sm-persisted-user",
       messageUid: "sm-persisted-user",
       role: "user",
@@ -248,8 +245,7 @@ test("session display summary projects one explicit assistant presentation from 
   assert.equal(summary.messages[0].activityTimeline.length, 1);
   assert.equal(summary.messages[0].toolTimeline.length, 1);
   assert.deepEqual(
-    (({ id, messageId, messageUid, sourceMessageId, sourceMessageUid, content }) => ({
-      id,
+    (({ messageId, messageUid, sourceMessageId, sourceMessageUid, content }) => ({
       messageId,
       messageUid,
       sourceMessageId,
@@ -257,7 +253,6 @@ test("session display summary projects one explicit assistant presentation from 
       content,
     }))(summary.messages[0]),
     {
-      id: "presentation-1",
       messageId: "presentation-1",
       messageUid: undefined,
       sourceMessageId: "model-final",

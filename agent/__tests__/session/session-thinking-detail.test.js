@@ -293,7 +293,7 @@ test("session summary references canonical thinking detail without copying its t
   ];
 
   const summary = buildSessionDisplaySummary({ sessionId: "child-session", messages });
-  const summaryMessage = summary.messages.find((item) => item.id === "final-assistant");
+  const summaryMessage = summary.messages.find((item) => item.messageId === "final-assistant");
   const detail = buildThinkingDetailPayload(
     {
       sessionId: "child-session",

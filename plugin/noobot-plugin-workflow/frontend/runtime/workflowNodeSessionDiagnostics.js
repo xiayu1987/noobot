@@ -54,7 +54,7 @@ export function logWorkflowNodeDetailProjection(
     subSessionMessageRegistryVersion: Number(props.subSessionMessageRegistryVersion || 0),
     messageCount: messages.length,
     messages: messages.map((message = {}) => ({
-      id: text(message?.id || message?.messageId),
+      id: text(message?.messageId),
       role: text(message?.role),
       sessionId: text(message?.sessionId),
       turnScopeId: text(message?.turnScopeId),

@@ -263,7 +263,6 @@ export function createChatEngineConversationState({
 
     if (targetAssistantMessage && sessionId) {
       targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
-      targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;
     }
     if (dialogProcessId && targetAssistantMessage) {
       if (!getMessageDialogProcessId(targetAssistantMessage)) {

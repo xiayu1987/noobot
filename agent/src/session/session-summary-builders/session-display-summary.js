@@ -17,7 +17,7 @@ import {
 } from "../session-display-source-revision.js";
 import { text } from "@noobot/shared/value";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 27;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 28;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 function isValidTransferEnvelopeList(value) {

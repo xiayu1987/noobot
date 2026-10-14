@@ -44,11 +44,8 @@ function getAttachmentOwnership(attachmentItem = {}) {
     sessionId: trim(
       normalized.sessionId ||
         ownershipSource?.sessionId ||
-        ownershipSource?.session_id ||
         turnScope?.sessionId ||
-        turnScope?.session_id ||
-        attachmentItem?.sessionId ||
-        attachmentItem?.session_id,
+        attachmentItem?.sessionId,
     ),
   };
 }

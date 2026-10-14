@@ -15,7 +15,7 @@ import {
   TURN_PHASE,
   TURN_STATE,
   TURN_TERMINAL_STATUS,
-  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   createTurnCommitFingerprint,
   createTurnLifecycleCommandId,
@@ -69,6 +69,22 @@ function migrateTurnCommitMetadata(message) {
   return true;
 }
 
+function migrateMessageIdField(message, index) {
+  if (!Object.hasOwn(message, "id")) return false;
+  const legacyId = text(message.id);
+  const messageId = text(message.messageId);
+  if (legacyId && messageId && legacyId !== messageId) {
+    throw migrationError(
+      `Session message ${index} has conflicting id and messageId`,
+      "SESSION_MESSAGE_ID_CONFLICT",
+      Error,
+    );
+  }
+  if (!messageId && legacyId) message.messageId = legacyId;
+  delete message.id;
+  return true;
+}
+
 function migrateMessage(
   message = {},
   sessionId = "",
@@ -79,6 +95,7 @@ function migrateMessage(
   const hadSessionId = Object.hasOwn(message, "sessionId");
   const next = { ...message, sessionId: text(message.sessionId || sessionId) };
   let changed = false;
+  changed ||= migrateMessageIdField(next, index);
   if (
     next.chatPresentation === true &&
     text(next.presentationMessageId) &&
@@ -104,18 +121,8 @@ function migrateMessage(
   }
   if (migrateArtifactProtocol) changed ||= migrateTurnCommitMetadata(next);
   if (!text(next.messageUid) && next.chatPresentation !== true) {
-    const identitySeed = [
-      sessionId,
-      next.dialogProcessId,
-      next.turnScopeId,
-      next.messageId || next.id,
-      index,
-    ];
-    if (
-      !text(next.dialogProcessId) ||
-      !text(next.turnScopeId) ||
-      !text(next.messageId || next.id)
-    ) {
+    const identitySeed = [sessionId, next.dialogProcessId, next.turnScopeId, next.messageId, index];
+    if (!text(next.dialogProcessId) || !text(next.turnScopeId) || !text(next.messageId)) {
       throw Object.assign(
         new Error(`Session message ${index} has no migratable canonical identity`),
         {
@@ -532,7 +539,7 @@ function resolveReplacementDialogProcessId(context, replacement) {
   const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
   const replacementUserMessageId = text(replacement.replacementUserMessageId);
   const message = (Array.isArray(next.messages) ? next.messages : []).find(
-    (item) => text(item.messageId || item.id || item.messageUid) === replacementUserMessageId,
+    (item) => text(item.messageId || item.messageUid) === replacementUserMessageId,
   );
   const turn = (Array.isArray(next.turnOrder) ? next.turnOrder : []).find(
     (item) => text(item.turnScopeId) === replacementTurnScopeId,
@@ -611,7 +618,8 @@ function createDocumentMigrationContext(document, suppliedSessionId) {
     turns: ensureRecordField(lifecycle, "turns"),
     sessionId,
     transferMigration,
-    migrateArtifactProtocol: sourceSchemaVersion <= SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+    migrateArtifactProtocol:
+      sourceSchemaVersion <= SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION,
   };
 }
 

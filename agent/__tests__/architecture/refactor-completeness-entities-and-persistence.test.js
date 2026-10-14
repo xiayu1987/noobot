@@ -18,13 +18,13 @@ import {
 
 describe("2. 字段对齐测试", () => {
   describe("normalizeMessageEntity 字段对齐", () => {
-    it("应把权威 messageId 规范化为一致的 id/messageId", () => {
+    it("应把权威 messageId 规范化为唯一 messageId", () => {
       const normalized = normalizeMessageEntity({
         role: "assistant",
         content: "hello",
         additional_kwargs: { noobotMessageId: "message-1" },
       });
-      assert.equal(normalized.id, "message-1");
+      assert.equal("id" in normalized, false);
       assert.equal(normalized.messageId, "message-1");
     });
     it("缺失运行时 ID 时应使用已落盘的 messageUid 作为稳定身份", () => {
@@ -33,7 +33,7 @@ describe("2. 字段对齐测试", () => {
         content: "legacy user message",
         messageUid: "sm_persisted-1",
       });
-      assert.equal(normalized.id, "sm_persisted-1");
+      assert.equal("id" in normalized, false);
       assert.equal(normalized.messageId, "sm_persisted-1");
       assert.equal(normalized.messageUid, "sm_persisted-1");
     });

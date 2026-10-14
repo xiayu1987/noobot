@@ -41,10 +41,10 @@ const delay = (ms) =>
 function summarizeDeleteMessages(messages = []) {
   return (Array.isArray(messages) ? messages : []).map((message = {}, index) => ({
     index,
-    id: normalizeTrimmedString(message?.id || message?.messageId),
+    id: normalizeTrimmedString(message?.messageId),
     role: normalizeTrimmedString(getMessageRole(message)),
     type: normalizeTrimmedString(message?.type),
-    sessionId: normalizeTrimmedString(message?.sessionId || message?.session_id),
+    sessionId: normalizeTrimmedString(message?.sessionId),
     dialogProcessId: getMessageDialogProcessId(message),
     turnScopeId: getMessageTurnScopeId(message),
     contentLength: String(message?.content || "").length,

@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
 } from "@noobot/session-protocol";
 import {
@@ -233,6 +233,43 @@ test("migrates the historical multimodal parse reason from verified tool transfe
   assert.equal(repeated.changed, false);
   assert.deepEqual(repeated.migrations, []);
   assert.deepEqual(repeated.document, result.document);
+});
+
+test("migrates the legacy message id field into messageId", () => {
+  const source = {
+    schemaVersion: 7,
+    sessionId: "session-1",
+    messages: [
+      { messageUid: "u1", id: "m1", role: "user" },
+      { messageUid: "u2", id: "m2", messageId: "m2", role: "assistant" },
+      { messageUid: "u3", messageId: "m3", role: "assistant" },
+    ],
+  };
+  const result = migrateSessionDocument(source);
+  assert.equal(result.document.schemaVersion, SESSION_ARTIFACT_SCHEMA_VERSION);
+  assert.deepEqual(
+    result.document.messages.map((message) => [message.messageId, Object.hasOwn(message, "id")]),
+    [
+      ["m1", false],
+      ["m2", false],
+      ["m3", false],
+    ],
+  );
+  const repeated = migrateSessionDocument(result.document);
+  assert.equal(repeated.changed, false);
+  assert.deepEqual(repeated.document, result.document);
+});
+
+test("rejects messages whose legacy id conflicts with messageId", () => {
+  assert.throws(
+    () =>
+      migrateSessionDocument({
+        schemaVersion: 7,
+        sessionId: "session-1",
+        messages: [{ messageUid: "u1", id: "provider-1", messageId: "m1" }],
+      }),
+    (error) => error.code === "SESSION_MESSAGE_ID_CONFLICT",
+  );
 });
 
 test("does not reinterpret non-canonical fields in the current artifact protocol", () => {
@@ -670,7 +707,7 @@ test("protocol repair resegments a migrated checkpoint baseline and preserves th
     writeFile(
       path.join(root, "session.json"),
       JSON.stringify({
-        schemaVersion: SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+        schemaVersion: SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
         turnOrder: [
           {
             turnId: "turn-000001",

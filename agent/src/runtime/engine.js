@@ -16,9 +16,7 @@ import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistan
 import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
 
 function messageIdentity(message = {}) {
-  return String(
-    message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId || "",
-  ).trim();
+  return String(message?.messageId || message?.additional_kwargs?.noobotMessageId || "").trim();
 }
 
 function canonicalTurnMessages(runtime = {}) {

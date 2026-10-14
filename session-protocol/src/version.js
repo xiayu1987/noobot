@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 export const SESSION_PROTOCOL_VERSION = 1;
-export const SESSION_ARTIFACT_SCHEMA_VERSION = 7;
-export const SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION = 6;
+export const SESSION_ARTIFACT_SCHEMA_VERSION = 8;
+export const SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION = 6;
+export const SESSION_ARTIFACT_LEGACY_TURN_COMMIT_SCHEMA_VERSION = 6;
 
 export function resolveSessionArtifactSchemaVersion(value) {
   if (value === undefined) return 0;

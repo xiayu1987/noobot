@@ -54,7 +54,7 @@ test("commitTurn persists the preallocated user message identity", async () => {
     messageId: "msg_user-1",
   });
 
-  assert.equal(result.userMessage.id, "msg_user-1");
+  assert.equal("id" in result.userMessage, false);
   assert.equal(result.userMessage.messageId, "msg_user-1");
   assert.equal(h.get().messages[0].messageId, "msg_user-1");
 });

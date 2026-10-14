@@ -59,7 +59,7 @@ function normalizeAttachmentOwner(owner = null) {
 
 function resolveRuntimeMessageId(message = {}, messageUid = "") {
   return firstTextField([
-    message?.messageId || message?.id,
+    message?.messageId,
     message?.additional_kwargs?.noobotMessageId,
     message?.additional_kwargs?.messageId,
     message?.lc_kwargs?.noobotMessageId,
@@ -241,10 +241,7 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
   const runtimeMessageId = resolveRuntimeMessageId(message, messageUid);
   const normalizedMessage = createBaseMessageEntity(message, now);
   if (messageUid) normalizedMessage.messageUid = messageUid;
-  if (runtimeMessageId) {
-    normalizedMessage.id = runtimeMessageId;
-    normalizedMessage.messageId = runtimeMessageId;
-  }
+  if (runtimeMessageId) normalizedMessage.messageId = runtimeMessageId;
   const turnCommit = normalizeTurnCommitMetadata(message?.turnCommit);
   if (turnCommit) normalizedMessage.turnCommit = turnCommit;
   applyMessageArtifacts(normalizedMessage, message, normalizedAttachments);

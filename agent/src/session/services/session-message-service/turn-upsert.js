@@ -177,7 +177,6 @@ function mergeExistingTurn(service, existing, turn, messageUid) {
       ...existing,
       ...turn,
       messageUid: existing.messageUid || messageUid || createSessionMessageUid(),
-      id: turn.messageId,
       messageId: turn.messageId,
       ts: existing.ts || turn.ts,
     },

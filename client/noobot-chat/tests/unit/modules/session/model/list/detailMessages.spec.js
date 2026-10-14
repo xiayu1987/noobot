@@ -19,7 +19,6 @@ describe("buildNormalizedDetailMessages turnTimings", () => {
 
     expect(messages[0]).toMatchObject({
       sessionId: "session-envelope",
-      session_id: "session-envelope",
       turnScopeId: "turn-session",
     });
   });

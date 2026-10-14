@@ -66,8 +66,8 @@ test("realtime projection cannot erase persisted user messages", () => {
     {
       sessionId: "child-session-a",
       messages: [
-        { id: "user-1", role: "user", content: "request", turnScopeId: "turn-1" },
-        { id: "assistant-1", role: "assistant", content: "", turnScopeId: "turn-1" },
+        { messageId: "user-1", role: "user", content: "request", turnScopeId: "turn-1" },
+        { messageId: "assistant-1", role: "assistant", content: "", turnScopeId: "turn-1" },
       ],
       sessionSummary: {
         sessionId: "child-session-a",
@@ -77,21 +77,23 @@ test("realtime projection cannot erase persisted user messages", () => {
     {
       sessionId: "child-session-a",
       messages: [
-        { id: "assistant-1", role: "assistant", content: "streamed", turnScopeId: "turn-1" },
+        { messageId: "assistant-1", role: "assistant", content: "streamed", turnScopeId: "turn-1" },
       ],
       sessionSummary: { sessionId: "child-session-a", messages: [] },
     },
   );
 
   assert.deepEqual(
-    merged.messages.map(({ id }) => id),
+    merged.messages.map(({ messageId }) => messageId),
     ["user-1", "assistant-1"],
   );
   assert.equal(merged.messages[1].content, "streamed");
 });
 
 test("running child Execution creates a view-only placeholder", () => {
-  const messages = [{ id: "user-1", role: "user", content: "request", turnScopeId: "turn-1" }];
+  const messages = [
+    { messageId: "user-1", role: "user", content: "request", turnScopeId: "turn-1" },
+  ];
   const placeholder = createRunningAssistantPlaceholderViewModel(messages, {
     sessionId: "child-session-a",
     turnScopeId: "turn-1",
@@ -111,7 +113,7 @@ test("running placeholder view model inherits the persisted child user identity"
   const placeholder = createRunningAssistantPlaceholderViewModel(
     [
       {
-        id: "user-1",
+        messageId: "user-1",
         role: "user",
         sessionId: "child-session",
         dialogProcessId: "child-dialog",
@@ -132,8 +134,8 @@ test("running placeholder view model inherits the persisted child user identity"
 
 test("running placeholder view model is absent beside a real assistant or in terminal state", () => {
   const realMessages = [
-    { id: "user-1", role: "user", turnScopeId: "turn-1" },
-    { id: "assistant-1", role: "assistant", turnScopeId: "turn-1" },
+    { messageId: "user-1", role: "user", turnScopeId: "turn-1" },
+    { messageId: "assistant-1", role: "assistant", turnScopeId: "turn-1" },
   ];
   assert.equal(
     createRunningAssistantPlaceholderViewModel(realMessages, {
@@ -159,17 +161,17 @@ test("real assistant message merges without a synthetic placeholder entity", () 
     {
       sessionId: "child-session-a",
       execution: { state: "running" },
-      messages: [{ id: "user-1", role: "user", turnScopeId }],
+      messages: [{ messageId: "user-1", role: "user", turnScopeId }],
     },
   );
   const completed = mergeUnifiedSessionDetail(running, {
     sessionId: "child-session-a",
     execution: { state: "completed" },
-    messages: [{ id: "assistant-1", role: "assistant", content: "done", turnScopeId }],
+    messages: [{ messageId: "assistant-1", role: "assistant", content: "done", turnScopeId }],
   });
 
   assert.deepEqual(
-    completed.messages.map(({ id }) => id),
+    completed.messages.map(({ messageId }) => messageId),
     ["user-1", "assistant-1"],
   );
 });
@@ -179,17 +181,17 @@ test("terminal child state does not persist a thinking placeholder as a message"
   const running = {
     sessionId: "child-session-a",
     execution: { state: "running" },
-    messages: [{ id: "user-1", role: "user", turnScopeId }],
+    messages: [{ messageId: "user-1", role: "user", turnScopeId }],
   };
   const completed = mergeUnifiedSessionDetail(running, {
     sessionId: "child-session-a",
     execution: { state: "running" },
     sessionSummary: { status: "succeeded" },
-    messages: [{ id: "user-1", role: "user", turnScopeId }],
+    messages: [{ messageId: "user-1", role: "user", turnScopeId }],
   });
 
   assert.deepEqual(
-    completed.messages.map(({ id }) => id),
+    completed.messages.map(({ messageId }) => messageId),
     ["user-1"],
   );
 });
@@ -201,15 +203,20 @@ function selectSessionMessages(sessionId) {
     parentSessionId: "parent-session",
     messages: [
       {
-        id: "m-1",
+        messageId: "m-1",
         role: "assistant",
         content: "kept",
         turnScopeId: "workflow-node:node-exec-a",
         toolLogs: [{ id: "tool-1" }],
       },
-      { id: "m-2", role: "assistant", content: "other", turnScopeId: "workflow-node:node-exec-b" },
       {
-        id: "m-3",
+        messageId: "m-2",
+        role: "assistant",
+        content: "other",
+        turnScopeId: "workflow-node:node-exec-b",
+      },
+      {
+        messageId: "m-3",
         role: "assistant",
         content: "dialog",
         metadata: { dialogProcessId: "wf_node_node-exec-a" },
@@ -258,7 +265,7 @@ test("prefers authoritative child Execution detail and exposes its complete subt
               state: "processing",
             },
             session: { sessionId: "child-session-a" },
-            messages: [{ id: "m-execution", content: "authoritative" }],
+            messages: [{ messageId: "m-execution", content: "authoritative" }],
             children: [{ executionId: "agent:grandchild" }],
             descendants: [
               { executionId: "agent:grandchild" },
@@ -273,7 +280,7 @@ test("prefers authoritative child Execution detail and exposes its complete subt
   assert.equal(detail.executionId, "agent:attempt-2");
   assert.equal(detail.sessionId, "child-session-a");
   assert.deepEqual(
-    detail.messages.map(({ id }) => id),
+    detail.messages.map(({ messageId }) => messageId),
     ["m-execution"],
   );
   assert.deepEqual(
@@ -309,21 +316,23 @@ test("does not let a root-bound Execution overwrite the isolated workflow node s
       },
       session: { sessionId: "root-session" },
       messages: [
-        { id: "root-user", role: "user", content: "root request", turnScopeId: "root-turn" },
+        { messageId: "root-user", role: "user", content: "root request", turnScopeId: "root-turn" },
       ],
     }),
     selectSessionMessages: (sessionId) =>
       sessionId === "child-session-a"
         ? {
             sessionId,
-            messages: [{ id: "child-user", role: "user", content: "node request", turnScopeId }],
+            messages: [
+              { messageId: "child-user", role: "user", content: "node request", turnScopeId },
+            ],
           }
         : null,
   });
 
   assert.equal(detail.sessionId, "child-session-a");
   assert.deepEqual(
-    detail.messages.map(({ id }) => id),
+    detail.messages.map(({ messageId }) => messageId),
     ["child-user"],
   );
   const placeholder = createRunningAssistantPlaceholderViewModel(detail.messages, {
@@ -334,7 +343,7 @@ test("does not let a root-bound Execution overwrite the isolated workflow node s
   assert.equal(placeholder.viewKey, `workflow-node-running:${turnScopeId}`);
   assert.equal(placeholder.sessionId, "child-session-a");
   assert.equal(
-    detail.messages.some(({ id }) => id === "root-user"),
+    detail.messages.some(({ messageId }) => messageId === "root-user"),
     false,
   );
 });
@@ -359,7 +368,7 @@ test("keeps a REST-hydrated child snapshot when its local Execution still points
     selectExecutionDetail: () => ({
       execution: { executionId: "agent:attempt-1", sessionId: "root-session", state: "running" },
       session: { sessionId: "root-session" },
-      messages: [{ id: "root-user", role: "user", turnScopeId: "root-turn" }],
+      messages: [{ messageId: "root-user", role: "user", turnScopeId: "root-turn" }],
     }),
     selectSessionMessages: () => null,
   });
@@ -388,13 +397,13 @@ test("keeps authoritative child Execution timing facts for a running assistant p
         turnTimings,
       },
       session: { sessionId: "child-session-a" },
-      messages: [{ id: "assistant-1", role: "assistant", turnScopeId }],
+      messages: [{ messageId: "assistant-1", role: "assistant", turnScopeId }],
     }),
   });
 
   assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
   assert.deepEqual(
-    detail.messages.map(({ id }) => id),
+    detail.messages.map(({ messageId }) => messageId),
     ["assistant-1"],
   );
 });
@@ -407,12 +416,15 @@ test("uses only the node's preallocated session when authoritative child Executi
       sessionId: "legacy-session",
     },
     selectExecutionDetail: () => null,
-    selectSessionMessages: () => ({ sessionId: "legacy-session", messages: [{ id: "legacy" }] }),
+    selectSessionMessages: () => ({
+      sessionId: "legacy-session",
+      messages: [{ messageId: "legacy" }],
+    }),
   });
   assert.equal(detail.executionId, "agent:missing");
   assert.equal(detail.sessionId, "legacy-session");
   assert.deepEqual(
-    detail.messages.map(({ id }) => id),
+    detail.messages.map(({ messageId }) => messageId),
     ["legacy"],
   );
 });
@@ -422,8 +434,8 @@ test("hydrates child messages when the local Execution projection has not arrive
     {
       sessionId: "child-session-a",
       sessionSummary: { sessionId: "child-session-a", messages: [] },
-      messages: [{ id: "live-child-message", content: "running" }],
-      rawMessages: [{ id: "live-child-message", content: "running" }],
+      messages: [{ messageId: "live-child-message", content: "running" }],
+      rawMessages: [{ messageId: "live-child-message", content: "running" }],
     },
     {
       executionId: "agent:starting",
@@ -433,11 +445,11 @@ test("hydrates child messages when the local Execution projection has not arrive
   assert.equal(hydrated.sessionSummary.executionId, "agent:starting");
   assert.equal(hydrated.sessionSummary.turnRuntime, undefined);
   assert.deepEqual(
-    hydrated.sessionSummary.messages.map(({ id }) => id),
+    hydrated.sessionSummary.messages.map(({ messageId }) => messageId),
     ["live-child-message"],
   );
   assert.deepEqual(
-    hydrated.rawMessages.map(({ id }) => id),
+    hydrated.rawMessages.map(({ messageId }) => messageId),
     ["live-child-message"],
   );
 });
@@ -477,7 +489,7 @@ test("builds content-only unified detail with scoped messages", () => {
   assert.equal(detail.sessionSummary.turnScopeId, "workflow-node:node-exec-a");
   assert.equal(detail.sessionSummary.turnRuntime, undefined);
   assert.deepEqual(
-    detail.messages.map((item) => item.id),
+    detail.messages.map((item) => item.messageId),
     ["m-1"],
   );
   assert.deepEqual(detail.messages[0].toolLogs, [{ id: "tool-1" }]);
@@ -498,14 +510,14 @@ test("copies persisted turn facts from realtime child session projection", () =>
     selectSessionMessages: () => ({
       sessionId: "child-session-a",
       turnTimings,
-      messages: [{ id: "assistant-1", role: "assistant", turnScopeId }],
+      messages: [{ messageId: "assistant-1", role: "assistant", turnScopeId }],
     }),
     turnRuntimeRegistry: {},
   });
 
   assert.deepEqual(detail.sessionSummary.turnTimings, turnTimings);
   assert.deepEqual(
-    detail.messages.map(({ id }) => id),
+    detail.messages.map(({ messageId }) => messageId),
     ["assistant-1"],
   );
 });
@@ -542,13 +554,13 @@ test("uses the preallocated session realtime projection before Execution project
       sessionId: "child-session-a",
       messages: [
         {
-          id: "user-live",
+          messageId: "user-live",
           role: "user",
           content: "run this",
           turnScopeId: "workflow-node:node-exec-a",
         },
         {
-          id: "assistant-live",
+          messageId: "assistant-live",
           role: "assistant",
           content: "",
           thinking: "working",
@@ -562,7 +574,7 @@ test("uses the preallocated session realtime projection before Execution project
   assert.equal(detail.executionId, "agent-exec-a");
   assert.equal(detail.sessionId, "child-session-a");
   assert.deepEqual(
-    detail.messages.map((item) => item.id),
+    detail.messages.map((item) => item.messageId),
     ["user-live", "assistant-live"],
   );
 });
@@ -620,14 +632,12 @@ for (const state of ["processing", "completed"]) {
     const turnScopeId = `turn-${state}`;
     const messages = [
       {
-        id: `user-${state}`,
         messageId: `user-${state}`,
         role: "user",
         content: `request-${state}`,
         turnScopeId,
       },
       {
-        id: `message-${state}`,
         messageId: `message-${state}`,
         role: "assistant",
         content: state,
@@ -691,7 +701,7 @@ for (const state of ["processing", "completed"]) {
     assert.equal(detail.sessionId, "child-session-a");
     assert.equal(detail.sessionSummary.state, state);
     assert.deepEqual(
-      detail.messages.map(({ id }) => id),
+      detail.messages.map(({ messageId }) => messageId),
       [`user-${state}`, `message-${state}`],
     );
     assert.equal(detail.sessionSummary.turnTimings[0].turnScopeId, `turn-${state}`);

@@ -450,7 +450,7 @@ watch(
           sessionId: String(session?.sessionId || ""),
           messages: (Array.isArray(session?.messages) ? session.messages : []).map(
             (message = {}) => ({
-              id: String(message?.id || message?.messageId || ""),
+              id: String(message?.messageId || ""),
               role: String(message?.role || ""),
               contentLength: String(message?.content || "").length,
             }),

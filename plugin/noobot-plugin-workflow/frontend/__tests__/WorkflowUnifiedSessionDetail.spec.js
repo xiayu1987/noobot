@@ -17,7 +17,7 @@ const childIdentity = {
 
 function childAssistant(overrides = {}) {
   return {
-    id: "assistant-a",
+    messageId: "assistant-a",
     role: "assistant",
     content: "done",
     ...childIdentity,
@@ -54,7 +54,7 @@ describe("workflow child unified session detail", () => {
   });
 
   it("keeps the running placeholder outside canonical messages", () => {
-    const user = { id: "user-a", role: "user", content: "run", ...childIdentity };
+    const user = { messageId: "user-a", role: "user", content: "run", ...childIdentity };
     const detail = buildUnifiedSessionDetail({
       nodeItem: {
         ...childIdentity,
@@ -85,9 +85,9 @@ describe("workflow child unified session detail", () => {
   });
 
   it("merges a terminal canonical assistant without retaining a view placeholder as a message", () => {
-    const user = { id: "user-a", role: "user", content: "run", ...childIdentity };
+    const user = { messageId: "user-a", role: "user", content: "run", ...childIdentity };
     const finalAssistant = {
-      id: "assistant-final",
+      messageId: "assistant-final",
       role: "assistant",
       content: "done once",
       ...childIdentity,
@@ -99,19 +99,19 @@ describe("workflow child unified session detail", () => {
     );
 
     expect(detail.messages).toEqual([user, finalAssistant]);
-    expect(detail.messages.every((message) => Boolean(message.id))).toBe(true);
+    expect(detail.messages.every((message) => Boolean(message.messageId))).toBe(true);
   });
 
   it("keeps assistants with different stable message identities separate", () => {
     const liveAssistant = {
-      id: "assistant-live-tool-stream",
+      messageId: "assistant-live-tool-stream",
       role: "assistant",
       content: "done once",
       ...childIdentity,
       rawEvents: [{ type: "tool_call_start" }],
     };
     const finalAssistant = {
-      id: "assistant-terminal",
+      messageId: "assistant-terminal",
       role: "assistant",
       content: "done once",
       ...childIdentity,

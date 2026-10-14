@@ -19,7 +19,7 @@ export function summarizeDebugMessage(message = {}) {
   if (!message || typeof message !== "object") return null;
   const channelState = getMessageRuntimeChannelState(message);
   return {
-    id: message.id || message.messageId || "",
+    id: message.messageId || "",
     sourceMessageId: message.sourceMessageId || "",
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.messageRole || message.type || "",

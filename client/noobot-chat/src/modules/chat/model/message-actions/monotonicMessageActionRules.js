@@ -48,8 +48,7 @@ function firstIdentityValue(...values) {
 }
 function getMessagePrimaryId(messageItem = {}) {
   return normalizeIdentityValue(
-    messageItem?.id ||
-      messageItem?.messageId ||
+    messageItem?.messageId ||
       messageItem?.message_id ||
       messageItem?.clientMessageId ||
       messageItem?.client_message_id,
@@ -81,10 +80,8 @@ function getMessageSessionId(messageItem = {}) {
   return normalizeIdentityValue(
     firstIdentityValue(
       messageItem?.sessionId,
-      messageItem?.session_id,
       messageItem?.backend_session_id,
       messageItem?.channelState?.sessionId,
-      messageItem?.channelState?.session_id,
       messageItem?.channelState?.backend_session_id,
     ),
   );

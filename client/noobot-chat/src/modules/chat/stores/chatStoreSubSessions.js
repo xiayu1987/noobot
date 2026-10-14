@@ -42,7 +42,7 @@ function logSubSessionProjection({ id, session, projection, turnRuntime, workflo
     turnScopeId: text(session?.turnScopeId),
     messageCount: projection.messages.length,
     messages: projection.messages.map((message = {}) => ({
-      messageId: text(message?.messageId || message?.id),
+      messageId: text(message?.messageId),
       role: text(message?.role),
       pending: message?.pending,
       contentLength: String(message?.content || "").length,

@@ -36,12 +36,7 @@ const thinkingIdentity = computed(() =>
   [
     String(props.messageItem?.sessionId || "").trim(),
     normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
-    String(
-      props.messageItem?.dialogProcessId ||
-        props.messageItem?.id ||
-        props.messageItem?.messageId ||
-        "",
-    ).trim(),
+    String(props.messageItem?.dialogProcessId || props.messageItem?.messageId || "").trim(),
   ].join("::"),
 );
 const panelVisible = computed(() =>

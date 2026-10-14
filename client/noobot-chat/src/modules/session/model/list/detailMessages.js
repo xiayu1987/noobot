@@ -31,7 +31,6 @@ export function buildNormalizedDetailMessages({
   for (const messageItem of normalizedMessages) {
     if (!messageItem.sessionId && rootSessionId) {
       messageItem.sessionId = rootSessionId;
-      messageItem.session_id = rootSessionId;
     }
   }
   mergeChildTurnAttachmentsIntoRootMessages({

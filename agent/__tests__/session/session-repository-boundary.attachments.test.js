@@ -309,8 +309,8 @@ test("session display summary binds completed tool artifacts to one explicit ass
     ],
   });
 
-  const first = summary.messages.find((item) => item.id === "assistant-one");
-  const second = summary.messages.find((item) => item.id === "assistant-two");
+  const first = summary.messages.find((item) => item.messageId === "assistant-one");
+  const second = summary.messages.find((item) => item.messageId === "assistant-two");
   assert.equal("toolLogSummaries" in summary, false);
   assert.equal(first.toolTimeline.length, 1);
   assert.equal(

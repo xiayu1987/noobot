@@ -165,7 +165,7 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].messages[1].turnId, undefined);
   assert.match(saved[0].messages[1].messageUid, /^sm_/);
   assert.equal(saved[0].messages[1].messageId, saved[0].messages[1].messageUid);
-  assert.equal(saved[0].messages[1].id, saved[0].messages[1].messageUid);
+  assert.equal("id" in saved[0].messages[1], false);
   assert.equal(saved[0].messages[1].turnScopeId, "turn-scope-new");
   assert.equal(saved[0].messages[1].dialogProcessId, "dialog-replacement");
   assert.equal(

@@ -8,11 +8,7 @@ import { emitEvent } from "../events/index.js";
 
 export function canonicalMessageId(message = {}) {
   return String(
-    message?.messageUid ||
-      message?.messageId ||
-      message?.id ||
-      message?.additional_kwargs?.noobotMessageId ||
-      "",
+    message?.messageUid || message?.messageId || message?.additional_kwargs?.noobotMessageId || "",
   ).trim();
 }
 

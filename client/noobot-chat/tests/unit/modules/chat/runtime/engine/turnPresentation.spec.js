@@ -51,7 +51,7 @@ function liveRegistry(item = workflow()) {
 
 function persistedWorkflow(overrides = {}) {
   return {
-    id: "persisted-workflow-a",
+    messageId: "persisted-workflow-a",
     sessionId: "session-a",
     role: "assistant",
     type: "workflow",
@@ -71,7 +71,7 @@ function persistedWorkflow(overrides = {}) {
 describe("selectTurnPresentations", () => {
   it("materializes one normal assistant shell when only the user and live workflow exist", () => {
     const user = {
-      id: "user-a",
+      messageId: "user-a",
       sessionId: "session-a",
       role: "user",
       turnScopeId: "turn-a",
@@ -85,7 +85,7 @@ describe("selectTurnPresentations", () => {
     expect(result).toHaveLength(2);
     expect(result[0]).toBe(user);
     expect(result[1]).toMatchObject({
-      id: "assistant-presentation-a",
+      messageId: "assistant-presentation-a",
       presentationMessageId: "assistant-presentation-a",
       role: "assistant",
       type: "workflow",
@@ -104,7 +104,7 @@ describe("selectTurnPresentations", () => {
 
   it("projects live workflow content onto the existing assistant shell", () => {
     const shell = {
-      id: "assistant-shell-a",
+      messageId: "assistant-shell-a",
       presentationMessageId: "assistant-presentation-a",
       sessionId: "session-a",
       role: "assistant",
@@ -121,7 +121,7 @@ describe("selectTurnPresentations", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: "assistant-shell-a",
+      messageId: "assistant-shell-a",
       ts: 123,
       pending: true,
       type: "workflow",
@@ -131,7 +131,6 @@ describe("selectTurnPresentations", () => {
 
   it("never lets a planning projection overwrite authoritative canonical content", () => {
     const canonical = {
-      id: "assistant-shell-a",
       messageId: "assistant-presentation-a",
       presentationMessageId: "assistant-presentation-a",
       sessionId: "session-a",
@@ -148,7 +147,7 @@ describe("selectTurnPresentations", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: "assistant-shell-a",
+      messageId: "assistant-presentation-a",
       type: "workflow",
       content: "WORKFLOW_DSL/1\n\n插件拼接的附件结果",
       attachments: [{ name: "workflow-result.txt" }],
@@ -165,7 +164,7 @@ describe("selectTurnPresentations", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: persisted.id,
+      messageId: persisted.messageId,
       content: "final workflow content",
       presentationMessageId: "assistant-presentation-a",
     });
@@ -174,7 +173,7 @@ describe("selectTurnPresentations", () => {
 
   it("coalesces a placeholder and persisted workflow into one stable Turn shell", () => {
     const placeholder = {
-      id: "assistant-shell-a",
+      messageId: "assistant-shell-a",
       sessionId: "session-a",
       role: "assistant",
       type: "message",
@@ -189,7 +188,7 @@ describe("selectTurnPresentations", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: "assistant-shell-a",
+      messageId: "assistant-shell-a",
       ts: 123,
       type: "workflow",
       content: "WORKFLOW_DSL/1 persisted",
@@ -199,7 +198,6 @@ describe("selectTurnPresentations", () => {
 
   it("coalesces an empty canonical assistant and terminal status into one presentation", () => {
     const canonicalAssistant = {
-      id: "assistant-canonical-a",
       messageId: "assistant-canonical-a",
       sessionId: "session-a",
       role: "assistant",
@@ -210,7 +208,7 @@ describe("selectTurnPresentations", () => {
       activityTimeline: [{ eventId: "activity-a" }],
     };
     const terminalPresentation = {
-      id: "turn-status-placeholder:turn-a",
+      messageId: "turn-status-placeholder:turn-a",
       sessionId: "session-a",
       role: "assistant",
       turnScopeId: "turn-a",
@@ -228,7 +226,6 @@ describe("selectTurnPresentations", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: "assistant-canonical-a",
       messageId: "assistant-canonical-a",
       content: "本轮已由用户停止\n原因：user_stop",
       status: "user_stopped",
@@ -242,14 +239,14 @@ describe("selectTurnPresentations", () => {
 
   it("derives terminal presentation from the authoritative runtime when detail status has not arrived", () => {
     const user = {
-      id: "user-runtime-stop",
+      messageId: "user-runtime-stop",
       sessionId: "session-runtime-stop",
       role: "user",
       turnScopeId: "turn-runtime-stop",
       content: "stop",
     };
     const assistant = {
-      id: "assistant-runtime-stop",
+      messageId: "assistant-runtime-stop",
       sessionId: "session-runtime-stop",
       role: "assistant",
       turnScopeId: "turn-runtime-stop",
@@ -273,7 +270,7 @@ describe("selectTurnPresentations", () => {
     });
 
     expect(result[1]).toMatchObject({
-      id: "assistant-runtime-stop",
+      messageId: "assistant-runtime-stop",
       status: "user_stopped",
       turnStatusPlaceholder: true,
     });
@@ -281,14 +278,14 @@ describe("selectTurnPresentations", () => {
 
   it("keeps partial assistant content and terminal reason in one presentation", () => {
     const canonicalAssistant = {
-      id: "assistant-partial-a",
+      messageId: "assistant-partial-a",
       sessionId: "session-a",
       role: "assistant",
       turnScopeId: "turn-a",
       content: "partial answer",
     };
     const terminalPresentation = {
-      id: "turn-status-placeholder:turn-a",
+      messageId: "turn-status-placeholder:turn-a",
       sessionId: "session-a",
       role: "assistant",
       turnScopeId: "turn-a",
@@ -305,7 +302,7 @@ describe("selectTurnPresentations", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: "assistant-partial-a",
+      messageId: "assistant-partial-a",
       content: "partial answer\n\n本轮异常停止\n原因：model_failed",
       status: "error",
       __turnStatusPresentation: true,
@@ -317,9 +314,9 @@ describe("selectTurnPresentations", () => {
       activeSession: {
         sessionId: "session-a",
         messages: [
-          { id: "assistant-a", role: "assistant", turnScopeId: "turn-a", content: "" },
+          { messageId: "assistant-a", role: "assistant", turnScopeId: "turn-a", content: "" },
           {
-            id: "turn-status-placeholder:turn-b",
+            messageId: "turn-status-placeholder:turn-b",
             role: "assistant",
             turnScopeId: "turn-b",
             content: "本轮已由用户停止",
@@ -342,28 +339,28 @@ describe("selectTurnPresentations", () => {
         sessionId: "session-a",
         messages: [
           {
-            id: "user-old",
+            messageId: "user-old",
             sessionId: "session-a",
             role: "user",
             turnScopeId: "turn-old",
             content: "old",
           },
           {
-            id: "assistant-old",
+            messageId: "assistant-old",
             sessionId: "session-a",
             role: "assistant",
             turnScopeId: "turn-old",
             content: "old answer",
           },
           {
-            id: "assistant-tail",
+            messageId: "assistant-tail",
             sessionId: "session-a",
             role: "assistant",
             turnScopeId: "turn-tail",
             content: "tail answer",
           },
           {
-            id: "user-new",
+            messageId: "user-new",
             sessionId: "session-a",
             role: "user",
             turnScopeId: "turn-new",
@@ -375,7 +372,9 @@ describe("selectTurnPresentations", () => {
       turnRuntimeRegistry,
     });
 
-    expect(result).toEqual([expect.objectContaining({ id: "user-new", turnScopeId: "turn-new" })]);
+    expect(result).toEqual([
+      expect.objectContaining({ messageId: "user-new", turnScopeId: "turn-new" }),
+    ]);
   });
 
   it("rejects multiple canonical assistant presentations for one Turn", () => {
@@ -385,7 +384,6 @@ describe("selectTurnPresentations", () => {
           sessionId: "session-a",
           messages: [
             {
-              id: "assistant-source-a",
               messageId: "assistant-source-a",
               presentationMessageId: "assistant-presentation-a",
               sessionId: "session-a",
@@ -395,7 +393,6 @@ describe("selectTurnPresentations", () => {
               content: "first",
             },
             {
-              id: "assistant-source-b",
               messageId: "assistant-source-b",
               presentationMessageId: "assistant-presentation-a",
               sessionId: "session-a",

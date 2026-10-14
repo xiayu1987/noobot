@@ -113,11 +113,12 @@ describe("messageModel projections", () => {
     const message = buildViewMessage({
       role: "user",
       content: "edit me",
-      id: "storage-id-1",
+      messageId: "storage-id-1",
       turnScopeId: "client-turn:backend-scope-1",
     });
 
-    expect(message.id).toBe("storage-id-1");
+    expect(message.messageId).toBe("storage-id-1");
+    expect(message.id).toBeUndefined();
     expect(message.turnScopeId).toBe("client-turn:backend-scope-1");
   });
 

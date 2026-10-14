@@ -72,9 +72,7 @@ function materializeCommittedPresentation(messageEvent, context) {
 function addLiveBotProjection(targetMessages, targetSessionId, identity, context) {
   const botMessage = context.botMessage;
   if (!botMessage) return;
-  const sameSession =
-    String(botMessage.sessionId || botMessage.session_id || targetSessionId).trim() ===
-    targetSessionId;
+  const sameSession = String(botMessage.sessionId || targetSessionId).trim() === targetSessionId;
   const sameTurn =
     String(botMessage.turnScopeId || botMessage.turn_scope_id || context.turnScopeId).trim() ===
     String(identity.turnScopeId || context.turnScopeId).trim();

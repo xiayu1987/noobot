@@ -302,7 +302,7 @@ test("appendTurns updates an existing message with the same authoritative messag
 
   assert.equal(session.messages.length, 1);
   assert.equal(session.messages[0].content, "completed");
-  assert.equal(session.messages[0].id, "message-1");
+  assert.equal("id" in session.messages[0], false);
   assert.equal(session.messages[0].messageId, "message-1");
   assert.match(session.messages[0].messageUid, /^sm_/);
   assert.equal(session.messages[0].ts, "2026-07-25T00:00:00.000Z");
@@ -384,7 +384,7 @@ test("appendTurns assigns a stable persisted identity when no runtime messageId 
   assert.equal(session.messages.length, 1);
   assert.match(session.messages[0].messageUid, /^sm_/);
   assert.equal(session.messages[0].messageId, session.messages[0].messageUid);
-  assert.equal(session.messages[0].id, session.messages[0].messageUid);
+  assert.equal("id" in session.messages[0], false);
 });
 
 test("appendTurns uses messageUid as the persistence identity and validates its dialog scope", async () => {

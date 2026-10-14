@@ -84,7 +84,7 @@ function hasTurnOwner(owner = {}) {
 }
 
 export function getMessageSessionId(messageItem = {}) {
-  return trim(messageItem?.sessionId || messageItem?.session_id);
+  return trim(messageItem?.sessionId);
 }
 
 export function getMessageInternalType(messageItem = {}) {

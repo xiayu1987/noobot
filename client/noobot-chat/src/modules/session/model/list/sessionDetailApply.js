@@ -174,7 +174,7 @@ export function createSessionDetailApplicator({
       projectedTerminalPresentations: detailProjection.messages
         .filter((messageItem) => messageItem?.turnStatusPlaceholder === true)
         .map((messageItem) => ({
-          messageId: String(messageItem?.messageId || messageItem?.id || "").trim(),
+          messageId: String(messageItem?.messageId || "").trim(),
           turnScopeId: String(messageItem?.turnScopeId || "").trim(),
           status: String(messageItem?.status || messageItem?.turnStatus?.status || "").trim(),
           contentLength: typeof messageItem?.content === "string" ? messageItem.content.length : 0,

@@ -142,7 +142,6 @@ function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
   const dialogProcessId = text(status?.dialogProcessId);
   const timestamp = text(status?.updatedAt || status?.createdAt);
   return {
-    id: `turn-status-placeholder:${turnScopeId}`,
     messageId: `turn-status-placeholder:${turnScopeId}`,
     sessionId: text(fallbackSessionId || status?.sessionId),
     role: "assistant",
@@ -180,7 +179,6 @@ function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId =
   if (!workflowRunId || !sessionId || !turnScopeId || !presentationMessageId || !workflowPayload)
     return null;
   return {
-    id: presentationMessageId,
     messageId: presentationMessageId,
     presentationMessageId,
     sessionId,
@@ -208,19 +206,19 @@ function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
   const merged = {
     ...shell,
     ...workflowMessage,
-    id: shell?.id || workflowMessage?.id,
+    messageId: shell?.messageId || workflowMessage?.messageId,
     ts: shell?.ts || workflowMessage?.ts,
     sessionId: getMessageSessionId(shell) || getMessageSessionId(workflowMessage),
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(workflowMessage),
     dialogProcessId: shell?.dialogProcessId || workflowMessage?.dialogProcessId || "",
     content,
-    __turnPresentationShellId: text(shell?.id || workflowMessage?.id),
+    __turnPresentationShellId: text(shell?.messageId || workflowMessage?.messageId),
   };
   logThinkingReplayDebug("frontend.turnPresentation.workflowMerged", () => ({
     sessionId: getMessageSessionId(merged),
     dialogProcessId: text(merged?.dialogProcessId),
     turnScopeId: getMessageTurnScopeId(merged),
-    canonicalMessageId: text(shell?.messageId || shell?.id),
+    canonicalMessageId: text(shell?.messageId),
     presentationMessageId: text(
       workflowMessage?.presentationMessageId || workflowMessage?.messageId,
     ),
@@ -245,9 +243,7 @@ function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
   return {
     ...shell,
     ...terminalPresentation,
-    id: shell?.id || shell?.messageId || terminalPresentation?.id,
-    messageId:
-      shell?.messageId || shell?.id || terminalPresentation?.messageId || terminalPresentation?.id,
+    messageId: shell?.messageId || terminalPresentation?.messageId,
     sessionId: getMessageSessionId(shell) || getMessageSessionId(terminalPresentation),
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(terminalPresentation),
     dialogProcessId: shell?.dialogProcessId || terminalPresentation?.dialogProcessId || "",
@@ -257,7 +253,7 @@ function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
     attachments: shell?.attachments || terminalPresentation?.attachments || [],
     ts: shell?.ts || terminalPresentation?.ts,
     __turnStatusPresentation: true,
-    __turnStatusPlaceholderId: text(terminalPresentation?.id),
+    __turnStatusPlaceholderId: text(terminalPresentation?.messageId),
   };
 }
 

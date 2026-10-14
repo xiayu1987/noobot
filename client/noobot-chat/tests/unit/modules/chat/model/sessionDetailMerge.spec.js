@@ -12,8 +12,8 @@ describe("mergeCanonicalSessionDetail", () => {
     const persisted = {
       sessionId: "session-1",
       messages: [
-        { id: "u1", role: "user", content: "question", turnScopeId: "turn-1" },
-        { id: "a1", role: "assistant", content: "partial", turnScopeId: "turn-1" },
+        { messageId: "u1", role: "user", content: "question", turnScopeId: "turn-1" },
+        { messageId: "a1", role: "assistant", content: "partial", turnScopeId: "turn-1" },
       ],
       turnTimings: [
         { turnScopeId: "turn-1", thinkingStartedAt: "start", thinkingFinishedAt: "end" },
@@ -22,12 +22,12 @@ describe("mergeCanonicalSessionDetail", () => {
 
     const merged = mergeCanonicalSessionDetail(persisted, {
       sessionId: "session-1",
-      messages: [{ id: "a1", role: "assistant", content: "final", turnScopeId: "turn-1" }],
+      messages: [{ messageId: "a1", role: "assistant", content: "final", turnScopeId: "turn-1" }],
     });
 
     expect(merged.messages).toHaveLength(2);
-    expect(merged.messages.find((item) => item.id === "u1")?.content).toBe("question");
-    expect(merged.messages.find((item) => item.id === "a1")?.content).toBe("final");
+    expect(merged.messages.find((item) => item.messageId === "u1")?.content).toBe("question");
+    expect(merged.messages.find((item) => item.messageId === "a1")?.content).toBe("final");
     expect(merged.turnTimings[0].thinkingFinishedAt).toBe("end");
   });
 
@@ -36,17 +36,17 @@ describe("mergeCanonicalSessionDetail", () => {
       { sessionId: "session-1" },
       {
         sessionId: "session-2",
-        messages: [{ id: "u2", role: "user", content: "new" }],
+        messages: [{ messageId: "u2", role: "user", content: "new" }],
       },
     );
     expect(isolated.sessionId).toBe("session-2");
-    expect(isolated.messages.map((item) => item.id)).toEqual(["u2"]);
+    expect(isolated.messages.map((item) => item.messageId)).toEqual(["u2"]);
   });
 
   it("only deletes facts through explicit replacement", () => {
     const base = {
       sessionId: "session-1",
-      messages: [{ id: "u1", role: "user", content: "old" }],
+      messages: [{ messageId: "u1", role: "user", content: "old" }],
     };
     const sparse = mergeCanonicalSessionDetail(base, { sessionId: "session-1", messages: [] });
     expect(sparse.messages).toHaveLength(1);
@@ -63,7 +63,6 @@ describe("mergeCanonicalSessionDetail", () => {
 
   it("merges assistant records by presentation identity without duplicating final content", () => {
     const realtime = {
-      id: "presentation-1",
       messageId: "presentation-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
@@ -73,7 +72,6 @@ describe("mergeCanonicalSessionDetail", () => {
       toolTimeline: [{ eventId: "tool-1" }],
     };
     const persisted = {
-      id: "source-1",
       messageId: "source-1",
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
@@ -91,7 +89,7 @@ describe("mergeCanonicalSessionDetail", () => {
 
     expect(merged.messages).toHaveLength(1);
     expect(merged.messages[0]).toMatchObject({
-      id: "source-1",
+      messageId: "source-1",
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
       content: "final answer",
@@ -102,7 +100,6 @@ describe("mergeCanonicalSessionDetail", () => {
 
   it("does not regress a persisted assistant terminal fact when a realtime shell arrives later", () => {
     const persisted = {
-      id: "source-1",
       messageId: "source-1",
       messageUid: "uid-1",
       presentationMessageId: "presentation-1",
@@ -113,7 +110,6 @@ describe("mergeCanonicalSessionDetail", () => {
       turnScopeId: "turn-1",
     };
     const realtime = {
-      id: "presentation-1",
       messageId: "presentation-1",
       presentationMessageId: "presentation-1",
       role: "assistant",
@@ -130,7 +126,7 @@ describe("mergeCanonicalSessionDetail", () => {
 
     expect(merged.messages).toHaveLength(1);
     expect(merged.messages[0]).toMatchObject({
-      id: "source-1",
+      messageId: "source-1",
       messageUid: "uid-1",
       content: "final answer",
       pending: false,
@@ -142,7 +138,7 @@ describe("mergeCanonicalSessionDetail", () => {
 
   it("uses presentation identity when a persisted terminal assistant has no messageUid", () => {
     const persisted = {
-      id: "presentation-2",
+      messageId: "presentation-2",
       presentationMessageId: "presentation-2",
       role: "assistant",
       type: "message",
@@ -151,7 +147,7 @@ describe("mergeCanonicalSessionDetail", () => {
       turnScopeId: "workflow-node:node-2",
     };
     const realtime = {
-      id: "presentation-2",
+      messageId: "presentation-2",
       presentationMessageId: "presentation-2",
       role: "assistant",
       content: "",

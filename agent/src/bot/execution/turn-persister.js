@@ -55,7 +55,6 @@ function resolveMessageBooleanField(message = {}, field = "") {
 function resolveAuthoritativeMessageId(message = {}) {
   const candidates = [
     message?.messageId,
-    message?.id,
     message?.additional_kwargs?.noobotMessageId,
     message?.additional_kwargs?.messageId,
     message?.lc_kwargs?.noobotMessageId,

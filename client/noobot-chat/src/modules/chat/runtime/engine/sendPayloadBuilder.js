@@ -19,9 +19,7 @@ export function createTurnPayloadBuilder({ preferences, request, turn }) {
       requestedTextStreaming: turn.requestedTextStreaming,
       dialogProcessId: request.dialogProcessId,
       turnScopeId: request.turnScopeId,
-      userMessageId: normalizeTrimmedString(
-        turn.userMessage?.messageId || turn.userMessage?.id || request.userMessageId,
-      ),
+      userMessageId: normalizeTrimmedString(turn.userMessage?.messageId || request.userMessageId),
       assistantMessageId: request.assistantMessageId,
       continueFromStopped: continueFromUserStopped,
       resumeDialogProcessId: continueFromUserStopped ? request.resumeDialogProcessId : "",

@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import {
-  SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION,
+  SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION,
   SESSION_ARTIFACT_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
@@ -109,7 +109,7 @@ export async function readSessionForProtocolRepair({ sessionDir = "", session = 
     let turnMessages;
     if (path.extname(artifact) === ".jsonl") {
       const records = await readRepairJournal(artifact, item?.committedBytes);
-      if (schemaVersion === SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION) {
+      if (schemaVersion >= SESSION_ARTIFACT_CHECKPOINT_RECORDS_SCHEMA_VERSION) {
         const checkpointRecords = await readPreviousCheckpointRecords(sessionDir, records);
         turnMessages = materializeRepairRecords(
           [...checkpointRecords, ...records.filter((record) => record?.op !== "summary_snapshot")],

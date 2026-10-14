@@ -22,7 +22,7 @@ import { getAgentContextEnvelope } from "../../../context/agent-context-accessor
 
 function messageIdentity(message = {}) {
   const messageId = String(
-    message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId || "",
+    message?.messageId || message?.additional_kwargs?.noobotMessageId || "",
   ).trim();
   return messageId;
 }

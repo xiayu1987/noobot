@@ -12,7 +12,7 @@ function messageRole(item = {}) {
 function isPersistedFinalAssistant(item = {}) {
   return (
     messageRole(item) === "assistant" &&
-    Boolean(text(item?.presentationMessageId || item?.messageUid || item?.messageId || item?.id)) &&
+    Boolean(text(item?.presentationMessageId || item?.messageUid || item?.messageId)) &&
     text(item?.type).toLowerCase() === "message" &&
     Boolean(text(item?.content)) &&
     item?.pending === false
@@ -47,11 +47,11 @@ function entityKey(item = {}, index = 0, kind = "entity") {
     }
     const messageIdentity =
       role === "tool"
-        ? text(item?.messageUid || item?.messageId || item?.id || item?.toolCallId)
-        : text(item?.messageUid || item?.messageId || item?.id);
+        ? text(item?.messageUid || item?.messageId || item?.toolCallId)
+        : text(item?.messageUid || item?.messageId);
     return messageIdentity ? `message:${messageIdentity}` : "";
   }
-  const stableId = text(item?.id || item?.messageId || item?.toolCallId);
+  const stableId = text(item?.messageId || item?.toolCallId);
   if (stableId) return `id:${stableId}`;
 
   if (kind === "message") return "";

@@ -25,12 +25,12 @@ export function summarizeStateMachineMessage(message = {}) {
   if (!message || typeof message !== "object") return null;
   const channelState = getMessageRuntimeChannelState(message);
   return {
-    id: message.id || message.messageId || "",
-    messageId: message.messageId || message.id || "",
+    id: message.messageId || "",
+    messageId: message.messageId || "",
     sourceMessageId: message.sourceMessageId || "",
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.messageRole || message.type || "",
-    sessionId: message.sessionId || message.session_id || message.owner?.sessionId || "",
+    sessionId: message.sessionId || message.owner?.sessionId || "",
     dialogProcessId:
       message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",

@@ -9,7 +9,7 @@ import { text } from "@noobot/shared/value";
 
 export function summarizeSubSessionMessage(message = {}) {
   return {
-    messageId: text(message?.messageId || message?.id),
+    messageId: text(message?.messageId),
     presentationMessageId: text(message?.presentationMessageId),
     role: text(message?.role),
     type: text(message?.type),
@@ -22,7 +22,6 @@ export function subSessionMessageIdentity(message = {}) {
   const stableId = text(
     message?.presentationMessageId ||
       message?.messageId ||
-      message?.id ||
       message?.additional_kwargs?.noobotMessageId,
   );
   return stableId ? `id:${stableId}` : "";
@@ -75,7 +74,7 @@ function pickRealtimeFinalContentFacet(realtime = {}) {
 }
 
 function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
-  const canonicalMessageId = text(messageId || realtime.messageId || realtime.id);
+  const canonicalMessageId = text(messageId || realtime.messageId);
   const merged = {
     ...realtime,
     ...snapshot,
@@ -116,9 +115,7 @@ export function mergeSnapshotWithRealtimeMessages(snapshotMessages = [], realtim
   const claimedRealtimeIndexes = new Set();
   const messages = snapshotMessages.map((rawSnapshot = {}) => {
     const snapshot = normalizeSubSessionSnapshotMessage(rawSnapshot);
-    const messageId = text(
-      snapshot.messageId || snapshot.id || snapshot?.additional_kwargs?.noobotMessageId,
-    );
+    const messageId = text(snapshot.messageId || snapshot?.additional_kwargs?.noobotMessageId);
     const realtimeIndex = subSessionMessageIdentityCandidates(snapshot)
       .map((identity) => realtimeIndexByIdentity.get(identity))
       .find((index) => Number.isInteger(index));
@@ -128,7 +125,7 @@ export function mergeSnapshotWithRealtimeMessages(snapshotMessages = [], realtim
     return mergePersistedSubSessionMessage(
       realtime,
       snapshot,
-      messageId || text(realtime.messageId || realtime.id),
+      messageId || text(realtime.messageId),
     );
   });
   realtimeMessages.forEach((realtime, index) => {
@@ -152,7 +149,7 @@ export function dedupeSubSessionMessagesByIdentity(messages = []) {
     deduplicatedMessages[index] = mergePersistedSubSessionMessage(
       previous,
       message,
-      text(message?.messageId || message?.id || previous?.messageId || previous?.id),
+      text(message?.messageId || previous?.messageId),
     );
   }
   return deduplicatedMessages;
