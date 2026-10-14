@@ -29,3 +29,4 @@ export {
   resolveDrawerSize,
   useMobileViewport,
 } from "../composables/useMobileViewport.js";
+export { useOverlayHistory } from "../composables/useOverlayHistory.js";

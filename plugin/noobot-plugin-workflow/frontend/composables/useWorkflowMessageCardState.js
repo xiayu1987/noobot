@@ -20,7 +20,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   const selectedNodeSessionId = ref("");
   const runningPlaceholderViewModel = ref(null);
   const semanticPreviewExpanded = ref(false);
-  const applyingWorkflowDrawerHistory = ref(false);
 
   const {
     selectedExecutionId,
@@ -100,7 +99,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     runningPlaceholderViewModel,
     selectedGraphDialogProcessId,
     runtimeNodeSessions,
-    applyingWorkflowDrawerHistory,
     applyWorkflowRuntimeEvent: props.applyWorkflowRuntimeEvent,
   });
 

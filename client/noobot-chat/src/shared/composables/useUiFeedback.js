@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
+import { overlayMessageBox } from "./overlayMessageBox.js";
 import { useLocale } from "../i18n/useLocale.js";
 
 export function useUiFeedback() {
@@ -27,11 +28,15 @@ export function useUiFeedback() {
   }
 
   async function confirmDeleteSession() {
-    await ElMessageBox.confirm(translate("infra.confirmDelete"), translate("infra.deleteSessionTitle"), {
-      confirmButtonText: translate("infra.confirm"),
-      cancelButtonText: translate("infra.cancel"),
-      type: "warning",
-    });
+    await overlayMessageBox.confirm(
+      translate("infra.confirmDelete"),
+      translate("infra.deleteSessionTitle"),
+      {
+        confirmButtonText: translate("infra.confirm"),
+        cancelButtonText: translate("infra.cancel"),
+        type: "warning",
+      },
+    );
   }
 
   return {

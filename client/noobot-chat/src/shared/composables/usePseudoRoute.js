@@ -201,6 +201,7 @@ export function usePseudoRoute({
       routeFromState && typeof routeFromState === "object"
         ? normalizeRoute(routeFromState)
         : parseFromLocation();
+    if (isSamePseudoRoute(route, resolveActiveRoute(), { allowedPanels: allowedPanelSet })) return;
     await applyPseudoRoute(route);
   }
 

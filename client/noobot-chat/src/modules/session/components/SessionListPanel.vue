@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { ElMessageBox } from "element-plus";
+import { overlayMessageBox } from "../../../shared/composables/overlayMessageBox.js";
 import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { selectSessionTurnRuntime } from "../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
@@ -135,7 +135,7 @@ function formatSessionTime(value = "") {
 async function promptRenameSession(sessionItem = {}) {
   const currentTitle = String(sessionItem?.title || "").trim();
   try {
-    const { value } = await ElMessageBox.prompt(
+    const { value } = await overlayMessageBox.prompt(
       translate("common.renameSessionPlaceholder"),
       translate("common.renameSessionTitle"),
       {

@@ -17,7 +17,8 @@ import {
   SwitchButton,
   WarningFilled,
 } from "@element-plus/icons-vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
+import { overlayMessageBox } from "../../../shared/composables/overlayMessageBox.js";
 import {
   connectUserConnector,
   createUserConnector,
@@ -28,6 +29,7 @@ import {
 } from "../../../infrastructure/api/connectors/connectorApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { DESKTOP_DRAWER_SIZE } from "../../../shared/composables/useMobileViewport.js";
+import { useOverlayHistory } from "../../../shared/composables/useOverlayHistory.js";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -43,6 +45,7 @@ const catalog = ref([]);
 const connectors = ref([]);
 const loading = ref(false);
 const dialogVisible = ref(false);
+useOverlayHistory(dialogVisible, () => (dialogVisible.value = false));
 const form = reactive({ name: "", type: "", subType: "", parameters: {} });
 let refreshRevision = 0;
 
@@ -168,7 +171,7 @@ async function setConnection(connector, shouldConnect) {
 }
 
 async function removeConnector(connector) {
-  await ElMessageBox.confirm(
+  await overlayMessageBox.confirm(
     translate("connectors.deleteConfirm"),
     translate("connectors.management"),
     { type: "warning" },

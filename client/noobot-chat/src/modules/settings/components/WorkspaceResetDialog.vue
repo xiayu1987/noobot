@@ -4,7 +4,9 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-defineProps({
+import { useOverlayHistory } from "../../../shared/composables/useOverlayHistory.js";
+
+const props = defineProps({
   visible: { type: Boolean, default: false },
   sections: { type: Array, default: () => [] },
   title: { type: String, default: "" },
@@ -13,7 +15,17 @@ defineProps({
   translate: { type: Function, required: true },
 });
 
-defineEmits(["update:visible", "update:sections", "select-all", "clear-all", "confirm"]);
+const emit = defineEmits([
+  "update:visible",
+  "update:sections",
+  "select-all",
+  "clear-all",
+  "confirm",
+]);
+useOverlayHistory(
+  () => props.visible,
+  () => emit("update:visible", false),
+);
 </script>
 
 <template>

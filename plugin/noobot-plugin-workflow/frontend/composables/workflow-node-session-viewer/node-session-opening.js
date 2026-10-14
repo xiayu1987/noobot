@@ -78,9 +78,8 @@ function prepareOpen(context, nodeItem, options) {
 }
 
 function beginOpen(context, prepared) {
-  const { props, translate, flowNodes, refs, pushWorkflowDrawerHistory, nodeViewTransaction } =
-    context;
-  const { canonicalNodeItem, canonicalRuntimeNode, route, fromHistory, viewKey } = prepared;
+  const { props, translate, flowNodes, refs, nodeViewTransaction } = context;
+  const { canonicalNodeItem, canonicalRuntimeNode, route, viewKey } = prepared;
   refs.selectedGraphDialogProcessId.value = resolveWorkflowDialogProcessId(canonicalNodeItem);
   logOpenStarted(context, prepared);
   if (!props.userId || !route.rootSessionId || !route.dialogProcessId) {
@@ -88,8 +87,6 @@ function beginOpen(context, prepared) {
     return null;
   }
   refs.viewerVisible.value = true;
-  if (!fromHistory && route.rootSessionId && route.dialogProcessId)
-    pushWorkflowDrawerHistory(route);
   refs.viewerError.value = "";
   const owningRuntimeNode = findWorkflowOwningRuntimeNode(canonicalNodeItem, flowNodes?.value);
   if (owningRuntimeNode) refs.selectedRuntimeNode.value = owningRuntimeNode;

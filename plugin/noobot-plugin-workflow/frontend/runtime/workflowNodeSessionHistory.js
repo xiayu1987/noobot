@@ -3,9 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { onBeforeUnmount, onMounted, watch } from "vue";
-const text = (value) => String(value || "").trim();
+import { onMounted, watch } from "vue";
+import { useOverlayHistory } from "noobot-chat/plugin-api/ui";
 import { isSameWorkflowDrawerRoute } from "./workflowNodeSessionIdentity.js";
+import {
+  readWorkflowDrawerQuery,
+  writeWorkflowDrawerQuery,
+} from "../services/workflowDrawerHistory.js";
+
+const text = (value) => String(value || "").trim();
 
 export function useWorkflowNodeSessionHistory({
   props,
@@ -14,44 +20,39 @@ export function useWorkflowNodeSessionHistory({
   selectedNode,
   selectedRuntimeNode,
   selectedRuntimeStep,
-  applyingWorkflowDrawerHistory,
   nodeViewTransaction,
   buildWorkflowDrawerRoute,
-  replaceWorkflowDrawerHistory,
-  parseWorkflowDrawerRoute,
   findWorkflowSessionTarget,
   openNodeSession,
 }) {
-  async function applyWorkflowDrawerRoute(route = {}) {
-    const target = findWorkflowSessionTarget(route);
-    applyingWorkflowDrawerHistory.value = true;
-    try {
-      if (target) {
-        selectedRuntimeNode.value = flowNodes.value.find((nodeItem = {}) =>
-          (Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : []).some((stateBox = {}) =>
-            (Array.isArray(stateBox?.steps) ? stateBox.steps : []).includes(target),
-          ),
-        ) || selectedRuntimeNode.value;
-        await openNodeSession(target, { fromHistory: true });
-        return;
-      }
-      viewerVisible.value = false;
-    } finally {
-      applyingWorkflowDrawerHistory.value = false;
-    }
-  }
+  useOverlayHistory(viewerVisible, () => {
+    viewerVisible.value = false;
+  });
 
-  async function handleWorkflowDrawerPopState(event) {
-    await applyWorkflowDrawerRoute(parseWorkflowDrawerRoute(event?.state));
-  }
+  watch(
+    () =>
+      viewerVisible.value && selectedNode.value
+        ? buildWorkflowDrawerRoute(selectedNode.value)
+        : null,
+    (route) => writeWorkflowDrawerQuery(route || {}),
+    { flush: "sync" },
+  );
+
+  watch(
+    () => viewerVisible.value,
+    (visible) => {
+      if (visible) return;
+      selectedRuntimeNode.value = null;
+      selectedRuntimeStep.value = null;
+      nodeViewTransaction.invalidate();
+    },
+    { flush: "sync" },
+  );
 
   onMounted(() => {
-    window.addEventListener("popstate", handleWorkflowDrawerPopState);
-    const initialRoute = parseWorkflowDrawerRoute(history.state);
+    const initialRoute = readWorkflowDrawerQuery();
     if (!initialRoute.dialogProcessId || !initialRoute.rootSessionId) return;
-    const selectedRoute = selectedNode.value
-      ? buildWorkflowDrawerRoute(selectedNode.value)
-      : null;
+    const selectedRoute = selectedNode.value ? buildWorkflowDrawerRoute(selectedNode.value) : null;
     if (selectedRoute && isSameWorkflowDrawerRoute(initialRoute, selectedRoute)) {
       props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.initialRouteConsumed", {
         sessionId: text(initialRoute.rootSessionId),
@@ -61,25 +62,19 @@ export function useWorkflowNodeSessionHistory({
         nodeExecutionId: text(selectedNode.value?.nodeExecutionId),
         reason: "existing_viewer_selection",
       });
-      replaceWorkflowDrawerHistory({ dialogProcessId: "", rootSessionId: "" });
+      writeWorkflowDrawerQuery({});
       return;
     }
-    applyWorkflowDrawerRoute(initialRoute);
+    const target = findWorkflowSessionTarget(initialRoute);
+    writeWorkflowDrawerQuery({});
+    if (!target) return;
+    selectedRuntimeNode.value =
+      flowNodes.value.find((nodeItem = {}) =>
+        (Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : []).some(
+          (stateBox = {}) =>
+            (Array.isArray(stateBox?.steps) ? stateBox.steps : []).includes(target),
+        ),
+      ) || selectedRuntimeNode.value;
+    openNodeSession(target);
   });
-
-  onBeforeUnmount(() => {
-    window.removeEventListener("popstate", handleWorkflowDrawerPopState);
-  });
-
-  watch(
-    () => viewerVisible.value,
-    (visible) => {
-      if (visible || applyingWorkflowDrawerHistory.value) return;
-      selectedRuntimeNode.value = null;
-      selectedRuntimeStep.value = null;
-      nodeViewTransaction.invalidate();
-      replaceWorkflowDrawerHistory({ dialogProcessId: "", rootSessionId: "" });
-    },
-    { flush: "sync" },
-  );
 }

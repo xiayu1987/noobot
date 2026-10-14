@@ -5,7 +5,8 @@
 -->
 <script setup>
 import { nextTick, ref } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
+import { overlayMessageBox } from "../../../../../shared/composables/overlayMessageBox.js";
 import { useMonotonicEditAttachments } from "../../../model/message-actions/useMonotonicEditAttachments.js";
 import MonotonicActionBar from "./MonotonicActionBar.vue";
 import MonotonicEditCard from "./MonotonicEditCard.vue";
@@ -88,7 +89,7 @@ async function handleSendEdited() {
 
 async function handleDelete() {
   await runAction(async () => {
-    await ElMessageBox.confirm(
+    await overlayMessageBox.confirm(
       t("message.monotonicDeleteConfirm"),
       t("message.monotonicDeleteTitle"),
       {

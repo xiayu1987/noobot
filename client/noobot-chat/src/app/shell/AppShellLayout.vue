@@ -22,6 +22,7 @@ import ExtensionOutlet from "../../extensions/components/ExtensionOutlet.vue";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { resolveExtensionPoint } from "../../extensions/extension-registry.js";
 import { resolveDrawerSize } from "../../shared/composables/useMobileViewport.js";
+import { useOverlayHistory } from "../../shared/composables/useOverlayHistory.js";
 
 const props = defineProps({
   ...sharedSidebarProps,
@@ -159,6 +160,11 @@ function toggleChatNavigator() {
   if (nextVisible) featurePanelVisible.value = false;
   emit("toggle-chat-navigator-visible");
 }
+
+useOverlayHistory(
+  () => props.isMobile && featurePanelVisible.value,
+  () => (featurePanelVisible.value = false),
+);
 
 function handleMobileFeaturePanelUpdate(visible) {
   featurePanelVisible.value = visible === true;

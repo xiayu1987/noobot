@@ -14,36 +14,6 @@ export function buildSessionPseudoRoute(sessionId = "") {
   };
 }
 
-export function buildPanelPseudoRoute(sessionId = "", panel = "") {
-  return {
-    sessionId: normalizePseudoRouteValue(sessionId),
-    panel: normalizePseudoRouteValue(panel),
-  };
-}
-
 export function buildClosePseudoPanelRoute() {
   return { panel: "" };
-}
-
-export function resolveActivePseudoPanel({
-  workspaceVisible = false,
-  connectorVisible = false,
-  userSettingsVisible = false,
-  configParamsVisible = false,
-  mobileSidebarOpen = false,
-  isMobile = false,
-  composerMorePanelVisible = false,
-  thinkingDetailsVisible = false,
-  mobileChatNavigatorVisible = false,
-  panels = {},
-} = {}) {
-  if (workspaceVisible) return panels.WORKSPACE;
-  if (connectorVisible) return panels.CONNECTORS;
-  if (userSettingsVisible) return panels.USER_SETTINGS;
-  if (configParamsVisible) return panels.CONFIG_PARAMS;
-  if (mobileSidebarOpen && isMobile) return panels.SIDEBAR;
-  if (composerMorePanelVisible) return panels.COMPOSER;
-  if (thinkingDetailsVisible) return panels.THINKING_DETAILS;
-  if (mobileChatNavigatorVisible && isMobile) return panels.CHAT_NAVIGATOR;
-  return "";
 }

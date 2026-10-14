@@ -12,7 +12,10 @@ import {
   shouldRejectRootSessionProjection,
   useWorkflowNodeSessionViewer,
 } from "../composables/useWorkflowNodeSessionViewer.js";
-import { writeWorkflowDrawerHistory } from "../services/workflowDrawerHistory.js";
+import {
+  readWorkflowDrawerQuery,
+  writeWorkflowDrawerQuery,
+} from "../services/workflowDrawerHistory.js";
 import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
@@ -134,7 +137,6 @@ function mountViewer({
     selectedNodeSessionId: ref(""),
     runningPlaceholderViewModel: ref(null),
     selectedGraphDialogProcessId: ref(""),
-    applyingWorkflowDrawerHistory: ref(false),
   };
   const applyWorkflowRuntimeEvent = vi.fn((record = {}) => {
     const sessionId = String(record?.payload?.nodeSessionId || "");
@@ -210,7 +212,7 @@ describe("workflow node session view ownership", () => {
     };
     const fetcher = vi.fn(async () => detailResponse("session-remount", "done"));
     const diagnostics = vi.fn();
-    writeWorkflowDrawerHistory({
+    writeWorkflowDrawerQuery({
       rootSessionId: routedStep.rootSessionId,
       dialogProcessId: routedStep.dialogProcessId,
     });
@@ -226,7 +228,7 @@ describe("workflow node session view ownership", () => {
 
     expect(state.viewerVisible.value).toBe(false);
     expect(fetcher).not.toHaveBeenCalled();
-    expect(history.state?.noobotWorkflowNodeSession).toBe(null);
+    expect(readWorkflowDrawerQuery()).toEqual({ dialogProcessId: "", rootSessionId: "" });
     expect(diagnostics).toHaveBeenCalledWith(
       "frontend.workflowNodeDetail.initialRouteConsumed",
       expect.objectContaining({ reason: "existing_viewer_selection" }),
@@ -241,10 +243,11 @@ describe("workflow node session view ownership", () => {
       actionNodeStates: [{ actionNodeStateId: "box-refresh", steps: [routedStep] }],
     };
     const fetcher = vi.fn(async () => detailResponse("session-refresh", "restored"));
-    writeWorkflowDrawerHistory({
+    writeWorkflowDrawerQuery({
       rootSessionId: routedStep.rootSessionId,
       dialogProcessId: routedStep.dialogProcessId,
     });
+    const baseState = history.state;
     const { wrapper, state } = mountViewer({
       fetcher,
       sessionDocs: reactive({}),
@@ -256,8 +259,14 @@ describe("workflow node session view ownership", () => {
     expect(state.viewerVisible.value).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(state.selectedNodeSessionId.value).toBe("session-refresh");
+    expect(history.state?.noobotOverlayDepth).toBe((baseState?.noobotOverlayDepth || 0) + 1);
+    expect(readWorkflowDrawerQuery()).toEqual({
+      rootSessionId: routedStep.rootSessionId,
+      dialogProcessId: routedStep.dialogProcessId,
+    });
+    state.viewerVisible.value = false;
+    expect(readWorkflowDrawerQuery()).toEqual({ dialogProcessId: "", rootSessionId: "" });
     wrapper.unmount();
-    writeWorkflowDrawerHistory({ dialogProcessId: "", rootSessionId: "" });
   });
 
   it("rejects a root projection after the isolated child session is known", () => {

@@ -142,4 +142,20 @@ describe("usePseudoRoute", () => {
       anchor: "",
     });
   });
+
+  it("skips popstate entries that keep the active route, e.g. overlay-only history", async () => {
+    const applyRoute = vi.fn(async () => {});
+    const router = usePseudoRoute({
+      resolveCurrentSessionId: () => "s1",
+      resolveCurrentPanel: () => PSEUDO_PANEL.WORKSPACE,
+      applyRoute,
+    });
+    router.initialPseudoRouteApplied.value = true;
+
+    await router.handlePseudoRoutePopState({
+      state: { noobotPseudoRoute: { sessionId: "s1", panel: PSEUDO_PANEL.WORKSPACE } },
+    });
+
+    expect(applyRoute).not.toHaveBeenCalled();
+  });
 });

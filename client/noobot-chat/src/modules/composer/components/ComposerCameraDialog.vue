@@ -5,8 +5,10 @@
 -->
 <script setup>
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { useOverlayHistory } from "../../../shared/composables/useOverlayHistory.js";
 
 const visible = defineModel({ type: Boolean, default: false });
+useOverlayHistory(visible, () => (visible.value = false));
 
 const emit = defineEmits([
   "camera-capture-change",

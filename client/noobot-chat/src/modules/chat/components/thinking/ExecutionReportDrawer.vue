@@ -13,6 +13,7 @@ import {
 import { executionReportService } from "../../../../infrastructure/api/thinking/executionReportService.js";
 import { getMessageDialogProcessId, getMessageSessionId } from "../../model/messageIdentity.js";
 import { buildExecutionReportView } from "../../model/executionReportModel.js";
+import { useOverlayHistory } from "../../../../shared/composables/useOverlayHistory.js";
 
 const props = defineProps({
   visible: Boolean,
@@ -22,6 +23,10 @@ const props = defineProps({
   fetchExecutionReport: { type: Function, default: null },
 });
 const emit = defineEmits(["update:visible"]);
+useOverlayHistory(
+  () => props.visible,
+  () => emit("update:visible", false),
+);
 
 const loading = ref(false);
 const errorText = ref("");

@@ -29,6 +29,7 @@ import {
   setTurnAssistantContentExpanded,
 } from "../../runtime/engine/turnUiStore.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
+import { useOverlayHistory } from "../../../../shared/composables/useOverlayHistory.js";
 import { useChatStore } from "../../stores/useChatStore.js";
 import MonotonicMessageActions from "./actions/MonotonicMessageActions.vue";
 import AssistantCopyActions from "./AssistantCopyActions.vue";
@@ -163,6 +164,9 @@ watch(
   { immediate: true },
 );
 const mutationPreviewVisible = ref(false);
+useOverlayHistory(mutationPreviewVisible, () => (mutationPreviewVisible.value = false));
+useOverlayHistory(previewVisible, () => (previewVisible.value = false));
+useOverlayHistory(attachmentPreviewVisible, () => (attachmentPreviewVisible.value = false));
 const mutationPreviewLoading = ref(false);
 const mutationPreviewError = ref("");
 const mutationPreviewMutation = ref(null);

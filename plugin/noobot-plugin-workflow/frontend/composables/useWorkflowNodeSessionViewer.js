@@ -180,16 +180,11 @@ export function useWorkflowNodeSessionViewer(input) {
     workflowPayload,
     flowNodes,
     runtimeNodeSessions,
-    applyingWorkflowDrawerHistory,
     applyWorkflowRuntimeEvent,
   } = input;
   const refs = createViewerRefs(input);
   const labels = useWorkflowNodeSessionLabels(translate);
-  const history = useWorkflowDrawerHistory({
-    workflowPayload,
-    flowNodes,
-    applyingWorkflowDrawerHistory,
-  });
+  const history = useWorkflowDrawerHistory({ workflowPayload, flowNodes });
   const snapshotCallbacks = { controller: null };
   const nodeViewTransaction = createWorkflowNodeViewTransaction({
     clearSnapshot: () => snapshotCallbacks.controller.reset(),
@@ -232,7 +227,6 @@ export function useWorkflowNodeSessionViewer(input) {
     refs,
     nodeViewTransaction,
     buildWorkflowDrawerRoute: history.buildWorkflowDrawerRoute,
-    pushWorkflowDrawerHistory: history.pushWorkflowDrawerHistory,
     resolveExecutionSessionId: execution.resolveExecutionSessionId,
     applyUnifiedSessionDetailIfAvailable: liveProjection.applyAvailable,
     stepHasSession: labels.stepHasSession,
@@ -246,11 +240,8 @@ export function useWorkflowNodeSessionViewer(input) {
     selectedNode: refs.selectedNode,
     selectedRuntimeNode: refs.selectedRuntimeNode,
     selectedRuntimeStep: refs.selectedRuntimeStep,
-    applyingWorkflowDrawerHistory,
     nodeViewTransaction,
     buildWorkflowDrawerRoute: history.buildWorkflowDrawerRoute,
-    replaceWorkflowDrawerHistory: history.replaceWorkflowDrawerHistory,
-    parseWorkflowDrawerRoute: history.parseWorkflowDrawerRoute,
     findWorkflowSessionTarget: history.findWorkflowSessionTarget,
     openNodeSession: context.openNodeSession,
   });
