@@ -14,8 +14,8 @@
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"
   },
   "dependencies": {
-    "@langchain/openai": "^1.5.13",
-    "openai": "^7.19.0",
+    "@langchain/openai": "^1.6.2",
+    "openai": "^7.33.0",
     "@noobot/model-protocol": "file:../model-protocol",
     "@noobot/shared": "file:../shared",
     "noobot-i18n": "file:../i18n"

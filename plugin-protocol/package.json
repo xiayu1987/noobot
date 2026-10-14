@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@noobot/hook-protocol": "file:../hook-protocol",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "scripts": {
     "test": "node ../scripts/run-with-isolated-tmp.mjs node --test __tests__/*.test.js"

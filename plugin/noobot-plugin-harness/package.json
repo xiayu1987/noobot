@@ -24,8 +24,8 @@
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/shared": "file:../../shared",
     "@noobot/workspace-protocol": "file:../../workspace-protocol",
-    "@langchain/core": "^1.2.11",
-    "zod": "^4.6.5"
+    "@langchain/core": "^1.2.17",
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "noobot-chat": "^4.1.3"
