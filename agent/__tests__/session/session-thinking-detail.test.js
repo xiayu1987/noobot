@@ -254,7 +254,7 @@ test("stopped turn detail uses the persisted presentation identity without a fin
 test("session summary references canonical thinking detail without copying its timeline", () => {
   const messages = [
     {
-      id: "tool-call-one",
+      messageId: "tool-call-one",
       role: "assistant",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
@@ -269,7 +269,7 @@ test("session summary references canonical thinking detail without copying its t
       ],
     },
     {
-      id: "tool-call-two",
+      messageId: "tool-call-two",
       role: "assistant",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
@@ -284,7 +284,7 @@ test("session summary references canonical thinking detail without copying its t
       ],
     },
     {
-      id: "final-assistant",
+      messageId: "final-assistant",
       role: "assistant",
       type: "message",
       turnScopeId: "workflow-node:turn-2",

@@ -55,7 +55,7 @@ function stateFor(message, event) {
 }
 
 function conflicts(message, event) {
-  const messageId = text(message.messageId || message.id);
+  const messageId = text(message.messageId);
   const presentationId = text(message.presentationMessageId);
   const eventPresentationId = resolveMessageEventPresentationId(event.payload);
   if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId)

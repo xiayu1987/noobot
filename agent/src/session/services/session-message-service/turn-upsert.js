@@ -124,7 +124,7 @@ function findCompositeIdentityIndex(messages, turn, dialogProcessId, turnScopeId
   if (!turn.messageId) return -1;
   return messages.findIndex(
     (message = {}) =>
-      normalizedString(message?.messageId || message?.id) === turn.messageId &&
+      normalizedString(message?.messageId) === turn.messageId &&
       resolveContextMessageDialogProcessId(message) === dialogProcessId &&
       normalizedString(message?.turnScopeId) === turnScopeId,
   );

@@ -63,7 +63,7 @@ function summarizePreferences(resolvedRunConfig) {
 }
 
 function summarizePresentation({ currentUserMessage, resolvedRunConfig, dispatchRuntime }) {
-  const persistedUserMessageId = clean(currentUserMessage?.messageId || currentUserMessage?.id);
+  const persistedUserMessageId = clean(currentUserMessage?.messageId);
   const requestedUserMessageId = clean(resolvedRunConfig?.userMessageId);
   const requestedAssistantMessageId = clean(resolvedRunConfig?.presentationMessageId);
   const messageEventStream = dispatchRuntime?.systemRuntime?.messageEventStream;

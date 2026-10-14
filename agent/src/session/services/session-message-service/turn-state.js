@@ -39,12 +39,12 @@ function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
     return assistantMessage;
   const clean = (value) => String(value || "").trim();
   const turn = session?.turnLifecycle?.turns?.[clean(turnScopeId)] || {};
-  return {
+  return normalizeMessageEntity({
     ...assistantMessage,
     messageUid: clean(assistantMessage.messageUid) || createSessionMessageUid(),
     presentationMessageId:
       clean(assistantMessage.presentationMessageId) || clean(turn.presentationMessageId),
-  };
+  });
 }
 
 async function appendCommittedTurnLifecycleEvent(sessionDir, committedEvent) {

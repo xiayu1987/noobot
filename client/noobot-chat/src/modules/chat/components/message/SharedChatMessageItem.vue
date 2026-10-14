@@ -298,7 +298,7 @@ const workflowChildRenderDiagnosticsSignature = computed(() => {
     parentSessionId,
     dialogProcessId: getMessageDialogProcessId(props.messageItem),
     turnScopeId,
-    messageId: String(props.messageItem?.messageId || props.messageItem?.id || ""),
+    messageId: String(props.messageItem?.messageId || ""),
     pending: props.messageItem?.pending === true,
     statusStepState: String(statusStepState.value || ""),
     statusStepRunning: statusStepRunning.value,

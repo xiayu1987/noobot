@@ -69,9 +69,7 @@ function emitCurrentUserIdentityDebug({
     resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
     {
       messageUid: persistedMessageUid,
-      persistedMessageId: String(
-        currentUserMessage?.messageId || currentUserMessage?.id || "",
-      ).trim(),
+      persistedMessageId: String(currentUserMessage?.messageId || "").trim(),
       canonicalMessageId: canonicalMessageId(currentUserMessage),
       role: String(currentUserMessage?.role || "").trim(),
       messageOrigin: String(currentUserMessage?.messageOrigin || "")

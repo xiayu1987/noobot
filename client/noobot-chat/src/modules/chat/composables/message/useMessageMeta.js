@@ -58,7 +58,7 @@ export function useMessageMeta({ getMessageItem = () => ({}), getRuntimeView = n
   const subTaskStatusSignature = computed(() => {
     const messageItem = getMessageItem() || {};
     return [
-      messageItem.id || messageItem.messageId || "",
+      messageItem.messageId || "",
       messageItem.pending === true ? "pending" : "settled",
       normalizeTerminalOutcome(messageItem.terminalOutcome),
       subTaskStatusText.value,

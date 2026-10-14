@@ -41,7 +41,7 @@ export async function writeSessionSummaryDetails({ storageService, sessionDir, s
       continue;
     }
     const presentationMessageId = String(
-      message?.presentationMessageId || message?.messageId || message?.id || "",
+      message?.presentationMessageId || message?.messageId || "",
     ).trim();
     if (!presentationMessageId)
       throw new TypeError("summary detail requires presentation message identity");
@@ -90,7 +90,7 @@ export async function hydrateSessionSummaryDetails({ storageService, sessionDir,
       if (
         !detail ||
         detail.presentationMessageId !==
-          String(message?.presentationMessageId || message?.messageId || message?.id || "") ||
+          String(message?.presentationMessageId || message?.messageId || "") ||
         summaryDetailHash(detail) !== ref.contentHash
       ) {
         const error = new Error(`session summary detail does not match its reference: ${ref.file}`);

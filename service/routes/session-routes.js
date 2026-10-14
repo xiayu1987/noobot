@@ -72,7 +72,7 @@ function projectWorkflowMessage(doc, message, index, payload, facts) {
   return {
     sessionDocId: toText(doc?.sessionId),
     index,
-    id: toText(message?.id || message?.messageId),
+    id: toText(message?.messageId),
     role: toText(message?.role),
     type: toText(message?.type),
     pluginSource: toText(message?.pluginMeta?.source),
@@ -206,7 +206,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           messages: sessionDocs.flatMap((doc = {}) =>
             (Array.isArray(doc.messages) ? doc.messages : []).map((message = {}) => ({
               messageUid: String(message.messageUid || "").trim(),
-              messageId: String(message.messageId || message.id || "").trim(),
+              messageId: String(message.messageId || "").trim(),
               presentationMessageId: String(message.presentationMessageId || "").trim(),
               sourceMessageId: String(message.sourceMessageId || "").trim(),
               sourceMessageUid: String(message.sourceMessageUid || "").trim(),
@@ -398,7 +398,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           deduplicated: result.deduplicated === true,
           remainingMessages: result.session.messages.map((message = {}, index) => ({
             index,
-            id: String(message?.id || message?.messageId || "").trim(),
+            id: String(message?.messageId || "").trim(),
             role: String(message?.role || "").trim(),
             type: String(message?.type || "").trim(),
             dialogProcessId: String(message?.dialogProcessId || "").trim(),

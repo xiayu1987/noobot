@@ -29,9 +29,7 @@ function openThinkingDetails(payload = {}, messageItem = {}) {
 }
 
 function messageRenderKey(messageItem = {}, messageIndex = 0) {
-  const explicitId = String(
-    messageItem?.id || messageItem?.messageId || messageItem?.uuid || "",
-  ).trim();
+  const explicitId = String(messageItem?.messageId || "").trim();
   if (explicitId) return `${props.executionId}-message-${explicitId}`;
   const turnScopeKey = normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
   const role = String(messageItem?.role || "message").trim();

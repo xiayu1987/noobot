@@ -35,8 +35,7 @@ function projectPersistedMessages(messages) {
 function findPresentation(messages, presentationMessageId) {
   return messages.find(
     (message) =>
-      text(message?.presentationMessageId || message?.messageId || message?.id) ===
-      presentationMessageId,
+      text(message?.presentationMessageId || message?.messageId) === presentationMessageId,
   );
 }
 
@@ -76,7 +75,7 @@ function mergeAssistantPresentation(existing, incoming) {
 function dedupeDisplayMessages(messages) {
   const byIdentity = new Map();
   for (const message of messages) {
-    const identity = text(message?.presentationMessageId || message?.messageId || message?.id);
+    const identity = text(message?.presentationMessageId || message?.messageId);
     if (!identity || message?.role !== "assistant") {
       byIdentity.set(`${identity}:${byIdentity.size}`, message);
       continue;

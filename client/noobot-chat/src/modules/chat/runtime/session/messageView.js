@@ -128,9 +128,9 @@ export function createSessionMessageView({
         sessionId,
         ts: source.ts || source.createdAt || envelope.occurredAt,
       };
-      const messageId = String(sourceMessage.messageId || sourceMessage.id || "").trim();
+      const messageId = String(sourceMessage.messageId || "").trim();
       const existing = messages.find(
-        (message) => String(message?.messageId || message?.id || "").trim() === messageId,
+        (message) => String(message?.messageId || "").trim() === messageId,
       );
       const canonical = makeViewMessage(sourceMessage);
       if (existing) {

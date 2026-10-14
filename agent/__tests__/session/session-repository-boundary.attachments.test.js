@@ -199,7 +199,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
     sessionId: "s-tool-artifacts",
     messages: [
       {
-        id: "assistant-one",
+        messageId: "assistant-one",
         role: "assistant",
         content: "first result",
         turnScopeId: "turn-one",
@@ -255,7 +255,7 @@ test("session display summary binds completed tool artifacts to one explicit ass
         ],
       },
       {
-        id: "assistant-two",
+        messageId: "assistant-two",
         role: "assistant",
         content: "second result",
         turnScopeId: "turn-two",

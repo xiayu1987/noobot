@@ -97,7 +97,7 @@ function validatePresentationMessage(message, expectedRole, value) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
     return [`invalid_${expectedRole}_presentation`];
   }
-  const messageId = text(message.messageId || message.id);
+  const messageId = text(message.messageId);
   if (!messageId) errors.push(`missing_${expectedRole}_message_id`);
   if (text(message.role) !== expectedRole) errors.push(`invalid_${expectedRole}_role`);
   if (!text(message.sessionId)) errors.push(`missing_${expectedRole}_session_id`);

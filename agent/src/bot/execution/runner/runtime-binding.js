@@ -32,7 +32,7 @@ function projectUserPresentationMessage({
   parentDialogProcessId,
   turnScopeId,
 }) {
-  const messageId = String(currentUserMessage?.messageId || currentUserMessage?.id || "").trim();
+  const messageId = String(currentUserMessage?.messageId || "").trim();
   return {
     id: messageId,
     messageId,

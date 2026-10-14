@@ -10,7 +10,7 @@ function resolveStableMessageIdentity(messageItem = {}) {
   if (getMessageRole(messageItem) === "assistant" && presentationMessageId) {
     return presentationMessageId;
   }
-  return String(messageItem?.messageId || messageItem?.id || "").trim();
+  return String(messageItem?.messageId || "").trim();
 }
 
 function resolveMessageTurnScopeMergeKey(messageItem = {}) {
