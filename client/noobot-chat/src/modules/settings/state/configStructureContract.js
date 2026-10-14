@@ -217,7 +217,7 @@ export function buildConfigFormTree(scope = CONFIG_DOCUMENT_SCOPE.USER) {
   });
 }
 
-export const USER_CONFIG_FORM_TREE = Object.freeze(buildConfigFormTree(CONFIG_DOCUMENT_SCOPE.USER));
+const USER_CONFIG_FORM_TREE = Object.freeze(buildConfigFormTree(CONFIG_DOCUMENT_SCOPE.USER));
 
 export const USER_CONFIG_SECTIONS = Object.freeze(
   (USER_CONFIG_FORM_TREE?.children || []).map((child) => Object.freeze(child)),

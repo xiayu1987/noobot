@@ -5,9 +5,9 @@
  */
 import { ref } from "vue";
 
-export const PSEUDO_ROUTE_SESSION_KEY = "session";
+const PSEUDO_ROUTE_SESSION_KEY = "session";
 export const PSEUDO_ROUTE_PANEL_KEY = "panel";
-export const PSEUDO_ROUTE_ANCHOR_KEY = "anchor";
+const PSEUDO_ROUTE_ANCHOR_KEY = "anchor";
 
 export const PSEUDO_PANEL = Object.freeze({
   WORKSPACE: "workspace",
@@ -40,7 +40,7 @@ export function normalizePseudoPanel(panel = "", allowedPanels = DEFAULT_ALLOWED
   return allowedSet.has(value) ? value : "";
 }
 
-export function normalizePseudoRoute(route = {}, { allowedPanels = DEFAULT_ALLOWED_PANELS } = {}) {
+function normalizePseudoRoute(route = {}, { allowedPanels = DEFAULT_ALLOWED_PANELS } = {}) {
   return {
     sessionId: String(route?.sessionId || "").trim(),
     panel: normalizePseudoPanel(route?.panel || "", allowedPanels),

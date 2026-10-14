@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  createSessionIdentity,
-  isSameSessionIdentity,
-  validateSessionIdentity,
-} from "./identity/session-identity.js";
+import { createSessionIdentity, validateSessionIdentity } from "./identity/session-identity.js";
 import { normalizeTurnIdentity } from "./identity/turn-identity.js";
 import { text as clean } from "./normalize.js";
 
@@ -56,8 +52,4 @@ export function createTurnIdentity({ dialogProcessId = "", turnScopeId = "" } = 
 
 export function sessionIdentity(session = {}) {
   return clean(session.sessionId);
-}
-
-export function isSameSession(left = {}, right = {}) {
-  return isSameSessionIdentity(left, right);
 }

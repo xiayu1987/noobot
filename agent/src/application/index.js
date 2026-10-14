@@ -4,20 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const AGENT_CLIENT_KIND = Object.freeze({
-  SERVICE: "service",
-  CLI: "cli",
-  API: "api",
-  IDE: "ide",
-});
-
-export const AGENT_APPLICATION_EVENT = Object.freeze({
-  RUNTIME: "runtime",
-  INTERACTION_REQUESTED: "interaction.requested",
-  COMPLETED: "completed",
-  FAILED: "failed",
-});
-
 function requireMethod(target, methodName) {
   const method = target?.[methodName];
   if (typeof method !== "function") {

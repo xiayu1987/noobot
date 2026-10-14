@@ -16,7 +16,6 @@ const coreRoot = path.join(projectRoot, "src/runtime");
 
 const allowedFiles = new Set([
   path.normalize(path.join(coreRoot, "message-context/message-store.js")),
-  path.normalize(path.join(coreRoot, "context/model-only-message.js")),
   path.normalize(path.join(coreRoot, "loop-control.js")),
   path.normalize(path.join(coreRoot, "turn/orchestrator.js")),
   path.normalize(path.join(coreRoot, "turn/no-tools-reasoning-retry-stage.js")),

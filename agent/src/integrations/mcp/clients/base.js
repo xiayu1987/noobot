@@ -8,7 +8,7 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 
-export function resolveFetchImpl(fetchImpl = null) {
+function resolveFetchImpl(fetchImpl = null) {
   if (typeof fetchImpl === "function") return fetchImpl;
   if (typeof globalThis.fetch === "function") return globalThis.fetch.bind(globalThis);
   throw recoverableToolError(tSystem("mcp.fetchUnavailable"));
@@ -23,14 +23,6 @@ export function buildJsonRpcRequest(id, method, params = {}) {
   };
 }
 
-export function buildJsonRpcNotification(method, params = {}) {
-  return {
-    jsonrpc: "2.0",
-    method,
-    params: params && typeof params === "object" ? params : {},
-  };
-}
-
 export function buildRequestHeaders(extraHeaders = {}, sessionHeaders = {}) {
   return {
     "content-type": MIME_TYPE.APPLICATION_JSON,
@@ -40,7 +32,7 @@ export function buildRequestHeaders(extraHeaders = {}, sessionHeaders = {}) {
   };
 }
 
-export function throwRpcError(method, payloadError, baseUrl = "") {
+function throwRpcError(method, payloadError, baseUrl = "") {
   throw recoverableToolError(
     `${tSystem("mcp.rpcError")}(${method}): ${payloadError?.message || JSON.stringify(payloadError)}`,
     {

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createRequire } from "node:module";
 import { readFile, stat } from "node:fs/promises";
 import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS, filePath as path } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
@@ -25,7 +26,6 @@ import {
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 import { MIME_TYPE, resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
-import { HAS_SHARP, getSharp } from "../../shared/utils/web/web2img/web2img-config.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { createFileInputSchema, isUserAttachment, resolveFileInput } from "../core/file-input.js";
@@ -47,6 +47,19 @@ import {
 } from "../constants/index.js";
 
 const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
+const require = createRequire(import.meta.url);
+
+let sharpModule;
+function loadSharp() {
+  if (sharpModule === undefined) {
+    try {
+      sharpModule = require("sharp");
+    } catch {
+      sharpModule = null;
+    }
+  }
+  return sharpModule;
+}
 
 function resolveMimeType(filePath = "", sourceAttachment = null) {
   return String(sourceAttachment?.mimeType || "").trim() || resolveMimeTypeFromFileName(filePath);
@@ -72,13 +85,14 @@ async function buildModelAttachment({
       fileName: resolveModelFileName(filePath, sourceAttachment, mimeType),
     };
   }
-  if (!HAS_SHARP) {
+  const sharp = loadSharp();
+  if (!sharp) {
     throw recoverableToolError(tTool(runtime, "tools.multimodalParse.svgRasterizerUnavailable"), {
       code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
       details: { mimeType, fileName: sourceAttachment?.name || path.basename(filePath) },
     });
   }
-  const pngData = await getSharp()(sourceData).png().toBuffer();
+  const pngData = await sharp(sourceData).png().toBuffer();
   return {
     mimeType: MIME_TYPE.IMAGE_PNG,
     data: `data:${MIME_TYPE.IMAGE_PNG};base64,${pngData.toString("base64")}`,

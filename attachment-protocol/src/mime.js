@@ -35,7 +35,7 @@ export const MIME_TYPE = Object.freeze({
   VIDEO_X_M4V: "video/x-m4v",
 });
 
-export const IMAGE_EXTENSION_TO_MIME = Object.freeze({
+const IMAGE_EXTENSION_TO_MIME = Object.freeze({
   ".png": MIME_TYPE.IMAGE_PNG,
   ".jpg": MIME_TYPE.IMAGE_JPEG,
   ".jpeg": MIME_TYPE.IMAGE_JPEG,
@@ -43,7 +43,7 @@ export const IMAGE_EXTENSION_TO_MIME = Object.freeze({
   ".bmp": MIME_TYPE.IMAGE_BMP,
 });
 
-export const AUDIO_EXTENSION_TO_MIME = Object.freeze({
+const AUDIO_EXTENSION_TO_MIME = Object.freeze({
   ".mp3": MIME_TYPE.AUDIO_MPEG,
   ".wav": MIME_TYPE.AUDIO_WAV,
   ".m4a": MIME_TYPE.AUDIO_MP4,
@@ -54,7 +54,7 @@ export const AUDIO_EXTENSION_TO_MIME = Object.freeze({
   ".webm": MIME_TYPE.AUDIO_WEBM,
 });
 
-export const VIDEO_EXTENSION_TO_MIME = Object.freeze({
+const VIDEO_EXTENSION_TO_MIME = Object.freeze({
   ".mp4": MIME_TYPE.VIDEO_MP4,
   ".webm": MIME_TYPE.VIDEO_WEBM,
   ".mov": MIME_TYPE.VIDEO_QUICKTIME,
@@ -63,7 +63,7 @@ export const VIDEO_EXTENSION_TO_MIME = Object.freeze({
   ".m4v": MIME_TYPE.VIDEO_X_M4V,
 });
 
-export const EXTENSION_TO_MIME = Object.freeze({
+const EXTENSION_TO_MIME = Object.freeze({
   ...IMAGE_EXTENSION_TO_MIME,
   ...AUDIO_EXTENSION_TO_MIME,
   ...VIDEO_EXTENSION_TO_MIME,

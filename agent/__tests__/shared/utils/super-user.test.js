@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import {
   isSuperAdminRole,
   isSuperUserAgentContext,
-  isSuperUserRuntime,
   resolveConfiguredSuperUserId,
   SUPER_ADMIN_ROLE,
 } from "../../../src/shared/utils/super-user.js";
@@ -21,28 +20,6 @@ test("super-user: configured super user id alone does not grant super user", () 
     configuredUserId,
   );
   assert.equal(resolveConfiguredSuperUserId({ super_admin: { user_id: configuredUserId } }), "");
-  assert.equal(
-    isSuperUserRuntime({
-      userId: configuredUserId,
-      globalConfig: { superAdmin: { userId: configuredUserId } },
-    }),
-    false,
-  );
-  assert.equal(
-    isSuperUserRuntime({
-      userId: configuredUserId,
-      globalConfig: { superAdmin: { userId: configuredUserId } },
-      systemRuntime: { isSuperUser: true },
-    }),
-    true,
-  );
-  assert.equal(
-    isSuperUserRuntime({
-      userId: "admin",
-      globalConfig: { superAdmin: { userId: configuredUserId } },
-    }),
-    false,
-  );
 });
 
 test("super-user: role and agent context checks share the same helper", () => {

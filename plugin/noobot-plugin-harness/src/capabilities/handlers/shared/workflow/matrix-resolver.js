@@ -11,17 +11,21 @@ export const HARNESS_SCENARIO = Object.freeze({
   PROGRAMMING: "programming",
 });
 
-export function normalizeScenarioText(value = "") {
-  return String(value || "").trim().toLowerCase();
+function normalizeScenarioText(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
-export function isProgrammingScenarioText(value = "") {
+function isProgrammingScenarioText(value = "") {
   const text = normalizeScenarioText(value);
-  return text === "programming" ||
+  return (
+    text === "programming" ||
     text === "coding" ||
     text.includes("programming") ||
     text.includes("coding") ||
-    text.includes("\u7f16\u7a0b");
+    text.includes("\u7f16\u7a0b")
+  );
 }
 
 export function isTextScenarioText(value = "") {
@@ -66,10 +70,19 @@ function scenarioCandidatesFromRunConfig(runConfig = {}) {
 export function resolveHarnessScenarioFromOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
   const data = source.data && typeof source.data === "object" ? source.data : {};
-  if (source.programmingMode === true || source.isProgrammingMode === true || data.programmingMode === true) {
+  if (
+    source.programmingMode === true ||
+    source.isProgrammingMode === true ||
+    data.programmingMode === true
+  ) {
     return HARNESS_SCENARIO.PROGRAMMING;
   }
-  if (source.textMode === true || source.isTextMode === true || data.textMode === true || data.isTextMode === true) {
+  if (
+    source.textMode === true ||
+    source.isTextMode === true ||
+    data.textMode === true ||
+    data.isTextMode === true
+  ) {
     return HARNESS_SCENARIO.TEXT;
   }
   for (const candidate of scenarioCandidatesFromOptions(source)) {
@@ -111,14 +124,9 @@ export function resolveScenarioPolicyFlagsFromContext(ctx = {}) {
   const dynamicScenario = String(dynamicPolicyPromptRecord?.scenario || "").trim();
   const dynamicProgrammingMode = dynamicScenario === HARNESS_SCENARIO.PROGRAMMING;
   const dynamicTextMode = dynamicScenario === HARNESS_SCENARIO.TEXT;
-  const programmingMode = dynamicProgrammingMode || (
-    !dynamicTextMode &&
-    resolveProgrammingModeFromContext(ctx)
-  );
-  const textMode = !programmingMode && (
-    dynamicTextMode ||
-    resolveTextModeFromContext(ctx)
-  );
+  const programmingMode =
+    dynamicProgrammingMode || (!dynamicTextMode && resolveProgrammingModeFromContext(ctx));
+  const textMode = !programmingMode && (dynamicTextMode || resolveTextModeFromContext(ctx));
   return {
     programmingMode,
     textMode,

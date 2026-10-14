@@ -7,33 +7,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildToolNameByCallId,
-  buildToolResultSummary,
   isToolResultFailure,
   projectToolFileDisplay,
 } from "../../../../../src/modules/chat/model/toolLogFormatting.js";
-
-describe("tool log formatting", () => {
-  it("uses the tool_call_id association for fallback result summaries", () => {
-    const messages = [
-      {
-        role: "assistant",
-        tool_calls: [
-          {
-            id: "call-1",
-            function: { name: "read_file", arguments: "{}" },
-          },
-        ],
-      },
-    ];
-    const names = buildToolNameByCallId(messages);
-
-    expect(buildToolResultSummary("plain file content", names.get("call-1"))).toBe("read_file");
-    expect(buildToolResultSummary(JSON.stringify({ ok: true }), names.get("call-1"))).toBe(
-      "read_file ok=true",
-    );
-  });
-});
 
 describe("tool file display projection", () => {
   it("projects logical paths and attachment identities without implicit object strings", () => {

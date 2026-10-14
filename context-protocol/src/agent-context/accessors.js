@@ -9,15 +9,3 @@ import { resolveAgentContextIdentity } from "./identity.js";
 export function getAgentContextIdentity(context = {}) {
   return resolveAgentContextIdentity(context);
 }
-
-export function getAgentContextWorkspace(context = {}) {
-  return context?.environment?.workspace || {};
-}
-
-export function getAgentContextModelContext(context = {}) {
-  return context?.modelContext || null;
-}
-
-export function getAgentContextExecutionFlags(context = {}) {
-  return context?.execution?.flags || {};
-}

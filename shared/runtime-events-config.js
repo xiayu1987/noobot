@@ -259,7 +259,7 @@ export function resolveExecutionCategoryDebugType(category = "") {
   return EXECUTION_CATEGORY_DEBUG_TYPES[normalized] || "";
 }
 
-export const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([
+const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([
   "verbose",
   "trace",
   "debug",
@@ -309,14 +309,6 @@ export function resolveRuntimeEventsMaxArchives(env = process.env) {
     RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxArchives,
     RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.maxArchives,
   );
-}
-
-export function resolveRuntimeEventsStorageConfig(env = process.env) {
-  return {
-    maxFileBytes: resolveRuntimeEventsMaxFileBytes(env),
-    retentionDays: resolveRuntimeEventsRetentionDays(env),
-    maxArchives: resolveRuntimeEventsMaxArchives(env),
-  };
 }
 
 export function resolveRuntimeEventsSessionLogControls(env = process.env) {

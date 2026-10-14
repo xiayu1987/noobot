@@ -7,16 +7,12 @@
 import { getMessageRuntimeChannelState } from "../../chat/runtime/sessionRunStateMachine.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 export { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
-import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebugSafely } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
 export function setResendDebugLogSink(sink = null) {
   sessionLogSink = acceptsDebugSink(sink) ? sink : null;
-}
-
-export function isResendDebugEnabled() {
-  return isDebugTypeEnabled(sessionLogSink, "resend");
 }
 
 export function summarizeDebugMessage(message = {}) {

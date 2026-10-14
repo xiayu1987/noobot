@@ -3,18 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  CAPABILITY_DOMAIN,
-  LOCALE,
-  appendCapabilityLog,
-  ensureHarnessBucket,
-} from "./deps.js";
+import { CAPABILITY_DOMAIN, LOCALE, appendCapabilityLog, ensureHarnessBucket } from "./deps.js";
 import { createPlanRevisionHelpers } from "../shared/plan/revision-helpers.js";
 import {
   buildPlanningRevisionPromptText,
   getPlanningRevisionMarker,
 } from "../shared/workflow/prompts.js";
-import { canAttemptPlanUpdate } from "./plan-update-engine.js";
 
 const planRevisionHelpers = createPlanRevisionHelpers({
   CAPABILITY_DOMAIN,
@@ -23,7 +17,8 @@ const planRevisionHelpers = createPlanRevisionHelpers({
   ensureHarnessBucket,
 });
 
-export const resolveRefinementTargetMainSteps = planRevisionHelpers.resolveRefinementTargetMainSteps;
+export const resolveRefinementTargetMainSteps =
+  planRevisionHelpers.resolveRefinementTargetMainSteps;
 export const resolveRefinementTargetMainStepIndexesAfterRevision =
   planRevisionHelpers.resolveRefinementTargetMainStepIndexesAfterRevision;
 export const applyRevisedPlanFromText = planRevisionHelpers.applyRevisedPlanFromText;
@@ -43,8 +38,4 @@ export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, 
       includeCurrentMainPlans: false,
     },
   });
-}
-
-export function canAttemptPlanRevision(ctx = {}, state = {}, { increment = false, stage = "revision" } = {}) {
-  return canAttemptPlanUpdate(ctx, state, { increment, stage });
 }

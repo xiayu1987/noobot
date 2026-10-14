@@ -371,6 +371,7 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
   const existingInjected = {
     role: "user",
     content: "<!-- harness-existing-note -->\nexisting takeover note",
+    promptInjectionId: "harness-existing-note",
   };
   const ctx = withModelContext(
     {
@@ -417,5 +418,69 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
         msg?.additional_kwargs?.noobotInternalMessageType === "tool_choice_required_retry_prompt",
     ),
     false,
+  );
+});
+
+test("harness ctx message takeover ignores id markers echoed in tool results", async () => {
+  const hookManager = createAgentHookManager();
+  registerHarnessCore(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      capabilityHandlers: {
+        guidance: async ({ point }) => {
+          if (point !== "agent.before_llm_call") return null;
+          return {
+            messageTakeover: {
+              id: "harness-echo-note",
+              content: "echo takeover note",
+              mode: "append",
+              target: "ctx_messages",
+            },
+          };
+        },
+      },
+    },
+  );
+
+  const toolCallMessage = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_echo", name: "read_file", args: {} }],
+  };
+  const toolResult = {
+    role: "tool",
+    tool_call_id: "call_echo",
+    content: "file text: <!-- harness-echo-note -->",
+  };
+  const ctx = withModelContext(
+    {
+      userId: "u11",
+      sessionId: "s11",
+      dialogProcessId: "dp11",
+      agentContext: {
+        payload: {
+          harness: {
+            planText: "1. 已有主计划",
+            taskChecklist: [{ index: 1, task: "已有主计划" }],
+            state: { flags: { planningCaptured: true, planningPromptInjected: true } },
+          },
+        },
+      },
+    },
+    {
+      messages: [toolCallMessage, toolResult],
+      messageBlocks: { system: [], history: [], incremental: [toolCallMessage, toolResult] },
+    },
+  );
+
+  await hookManager.emit("agent.before_llm_call", ctx);
+
+  const { system, incremental } = ctx.modelContext.messageBlocks;
+  assert.equal(incremental.length, 2);
+  assert.equal(
+    system.filter((message) => message?.promptInjectionId === "harness-echo-note").length,
+    1,
   );
 });

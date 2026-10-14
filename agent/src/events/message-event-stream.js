@@ -5,7 +5,12 @@
  */
 import { randomUUID } from "node:crypto";
 import { deepFreeze } from "@noobot/shared/deep-freeze";
-import { EVENT_FAMILY, createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
+import {
+  EVENT_FAMILY,
+  createEventEnvelope,
+  createEventId,
+  validateProtocolEvent,
+} from "@noobot/event-protocol";
 import { emitEvent } from "./emitter.js";
 import {
   MODEL_MESSAGE_SCOPED_EVENT_TYPES,
@@ -146,10 +151,6 @@ export function currentAssistantPresentationMessageId(runtime = {}) {
   return text(runtimeState(runtime)?.messageEventStream?.activePresentationMessageId);
 }
 
-export function currentAssistantModelMessageId(runtime = {}) {
-  return text(runtimeState(runtime)?.messageEventStream?.activeModelMessageId);
-}
-
 export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   const id = text(messageId);
   if (!message || typeof message !== "object" || !id) return message;
@@ -166,7 +167,7 @@ export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   return target;
 }
 
-export function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
+function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
   const state = runtimeState(runtime);
   const stream = state.messageEventStream || (state.messageEventStream = {});
   const messageId = text(data?.messageId || stream.activeMessageId);
@@ -237,7 +238,7 @@ function createTransientMessageEventEnvelope(input) {
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
     identity: {
-      eventId: `evt_${randomUUID()}`,
+      eventId: createEventId(),
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: input.sessionId,
       turnScopeId: input.turnScopeId,

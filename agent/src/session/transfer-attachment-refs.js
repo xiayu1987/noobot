@@ -22,7 +22,7 @@ function validatedEnvelopes(value) {
   return normalizeTransferEnvelopes(source);
 }
 
-export function compactAttachmentRef(reference = {}) {
+function compactAttachmentRef(reference = {}) {
   if (!isPlainObject(reference) || !isPlainObject(reference.identity)) return null;
   const envelopeRef = {
     identity: reference.identity,
@@ -71,7 +71,7 @@ export function dedupeSessionAttachmentRefs(refs = []) {
   );
 }
 
-export function compactTransferEnvelope(envelope = {}) {
+function compactTransferEnvelope(envelope = {}) {
   const validated = validatedEnvelopes(envelope)[0];
   if (!validated) return null;
   const output = {
@@ -113,5 +113,3 @@ export function dedupeAttachmentRefs(refs = []) {
     (reference) => reference.identity,
   );
 }
-
-export { compactAttachmentRef as compactRef };

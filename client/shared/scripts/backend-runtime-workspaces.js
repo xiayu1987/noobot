@@ -6,7 +6,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { clientFilePath as path } from "../path-resolver.js";
 
-export const DESKTOP_BACKEND_ENTRY_WORKSPACES = Object.freeze([
+const DESKTOP_BACKEND_ENTRY_WORKSPACES = Object.freeze([
   "service",
   "agent-proxy",
   "model-proxy",

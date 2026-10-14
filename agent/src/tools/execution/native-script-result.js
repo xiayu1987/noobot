@@ -62,7 +62,7 @@ function normalizeJsonObject(value, seen) {
   return normalized;
 }
 
-export function serializeNativeScriptResult(value) {
+function serializeNativeScriptResult(value) {
   if (value === undefined) return { present: false };
   let normalized;
   let serialized;

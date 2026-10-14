@@ -25,7 +25,6 @@ export * from "./message/store.js";
 export * from "./message/session-projection.js";
 export * from "./mutation/context.js";
 export * from "./policy/block.js";
-export * from "./policy/context.js";
 export * from "./policy/injected-message.js";
 export * from "./policy/message.js";
 export * from "./policy/snapshot.js";

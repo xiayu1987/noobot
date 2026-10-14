@@ -13,7 +13,7 @@ import { AUTHORITY_EVENT_CONSUMER } from "../ws/chat-websocket/authority-event-d
 const SOCKET_OPEN = 1;
 const SOCKET_CLOSED = 3;
 
-export const IN_PROCESS_EXIT_CODE = Object.freeze({
+const IN_PROCESS_EXIT_CODE = Object.freeze({
   done: 0,
   user_stopped: 130,
   timeout: 1,

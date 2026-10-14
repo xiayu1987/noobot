@@ -9,13 +9,11 @@ import {
   SESSION_TREE_ERROR,
   WORKSPACE_LAYOUT,
   collectSessionTreeBranch,
-  isSessionTreeSessionId,
   normalizeSessionTree,
   resolveSessionDirSegments,
   resolveSessionTreeChain,
   resolveSessionTreeDepth,
   resolveSessionTreePlacement,
-  resolveSessionTreeRootId,
 } from "../src/index.js";
 
 const tree = normalizeSessionTree({
@@ -52,7 +50,6 @@ test("normalizeSessionTree rejects legacy schema fields", () => {
 test("resolveSessionTreeChain returns the root-first chain", () => {
   assert.deepEqual(resolveSessionTreeChain(tree, "leafC"), ["rootA", "branchB", "leafC"]);
   assert.deepEqual(resolveSessionTreeChain(tree, "rootA"), ["rootA"]);
-  assert.equal(resolveSessionTreeRootId(tree, "leafC"), "rootA");
   assert.equal(resolveSessionTreeDepth(tree, "leafC"), 3);
 });
 
@@ -126,9 +123,7 @@ test("resolveSessionTreePlacement places registered and unregistered sessions", 
 });
 
 test("session ids must be workspace path segments and are never rewritten", () => {
-  assert.equal(isSessionTreeSessionId("0b6f7c1e-1d2a-4b3c-8d4e-5f6a7b8c9d0e"), true);
   for (const invalid of ["s:1", "../escape", "a/b", ".hidden"]) {
-    assert.equal(isSessionTreeSessionId(invalid), false);
     assert.throws(
       () => resolveSessionTreePlacement(tree, invalid),
       (error) => error.code === SESSION_TREE_ERROR.INVALID_SESSION_ID,

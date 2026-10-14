@@ -27,10 +27,6 @@ export function resolveConfigNodeHint(translate, key) {
   return label === rawKey ? "" : rawKey;
 }
 
-export function resolveConfigPathLabels(translate, trail = []) {
-  return trail.map((navNode) => resolveConfigFieldLabel(translate, navNode.key));
-}
-
 export function resolveConfigFieldDescription(translate, key) {
   const rawKey = String(key ?? "");
   if (!rawKey) return "";

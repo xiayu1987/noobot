@@ -5,11 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  CHANNEL_TERMINAL_STATUSES,
-  CLIENT_ROLE,
-  TRANSPORT_TRACE_PROTOCOL_KIND,
-} from "./constants.js";
+import { CLIENT_ROLE, TRANSPORT_TRACE_PROTOCOL_KIND } from "./constants.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
@@ -46,18 +42,6 @@ export function resolveMessageEventTrace(eventName = "", data = {}, transportSeq
     turnScopeId: String(authoritative?.identity?.turnScopeId || "").trim(),
     dialogProcessId: String(authoritative?.payload?.dialogProcessId || "").trim(),
   };
-}
-
-export function messageEventHasContent(eventName = "", data = {}) {
-  const normalizedEventName = String(eventName || "").trim();
-  if (normalizedEventName !== MESSAGE_EVENT_WIRE_EVENT) return false;
-  const validation = validateProtocolEvent(data);
-  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE)
-    return false;
-  const payload = data.payload;
-  return Boolean(
-    payload?.content || payload?.text || payload?.delta?.content || payload?.delta?.text,
-  );
 }
 
 export function normalizeApiKey(input = "") {
@@ -135,10 +119,6 @@ export function buildClientPermissions(role = CLIENT_ROLE.USER) {
 
 export function nowMs() {
   return Date.now();
-}
-
-export function isTerminalStatus(status = "") {
-  return CHANNEL_TERMINAL_STATUSES.includes(String(status || "").trim());
 }
 
 export function buildFingerprint(payload = {}) {

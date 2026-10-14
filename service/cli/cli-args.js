@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { parseArgs } from "node:util";
+import { SECURITY_RISK_LEVELS } from "@noobot/security-assessment-protocol";
 
-export const OUTPUT_FORMATS = Object.freeze(["text", "json", "stream-json"]);
-export const CONFIRMATION_LEVELS = Object.freeze(["low", "medium", "high", "critical"]);
+const OUTPUT_FORMATS = Object.freeze(["text", "json", "stream-json"]);
 
 const OPTIONS = Object.freeze({
   print: { type: "string", short: "p" },
@@ -89,8 +89,8 @@ function resolveAction(values, positionals) {
 
 function buildPreferences(values, { interactive }) {
   const confirmationLevel = values["confirm-level"];
-  if (confirmationLevel && !CONFIRMATION_LEVELS.includes(confirmationLevel)) {
-    throw new CliUsageError(`--confirm-level must be one of ${CONFIRMATION_LEVELS.join("|")}`);
+  if (confirmationLevel && !SECURITY_RISK_LEVELS.includes(confirmationLevel)) {
+    throw new CliUsageError(`--confirm-level must be one of ${SECURITY_RISK_LEVELS.join("|")}`);
   }
   const summaryPolicy = {
     phaseSummaryLoopTurns: positiveInteger(values["summary-loop"], "summary-loop"),
@@ -188,7 +188,7 @@ Options:
       --plugin <key>            Enable plugin (repeatable)
       --plugin-model <k>=<json> Plugin model config (repeatable)
       --connector <id>          Connector for a new session (repeatable)
-      --confirm-level <level>   ${CONFIRMATION_LEVELS.join(" | ")}
+      --confirm-level <level>   ${SECURITY_RISK_LEVELS.join(" | ")}
       --no-safe-confirm         Disable safe confirmation
       --[no-]interaction        Allow interaction requests (default: on for TTY)
       --no-sanitize             Disable output sanitization

@@ -18,9 +18,6 @@ export const ATTACHMENT_SOURCE = Object.freeze({
   EMAIL: "email",
   SUBTASK: "subtask",
 });
-export function isKnownAttachmentSource(value) {
-  return Object.values(ATTACHMENT_SOURCE).includes(value);
-}
 export function parseAttachmentIdentity(value) {
   const source = requirePlainObject(value, "invalid_attachment_identity");
   assertKnownFields(source, FIELDS, "unknown_attachment_identity_field");
@@ -30,7 +27,6 @@ export function parseAttachmentIdentity(value) {
     attachmentSource: requireNonEmptyString(source.attachmentSource, "invalid_attachment_source"),
   });
 }
-export const createAttachmentIdentity = parseAttachmentIdentity;
 export function projectAttachmentIdentity(value) {
   const source = requirePlainObject(value, "invalid_attachment_metadata");
   return parseAttachmentIdentity({
@@ -53,10 +49,6 @@ export function formatAttachmentIdentityRef(value) {
     (component) => encodeURIComponent(component),
   );
   return `${ATTACHMENT_IDENTITY_REF_PREFIX}${components.join("/")}`;
-}
-
-export function formatAttachmentIdentityJson(value) {
-  return JSON.stringify(parseAttachmentIdentity(value));
 }
 
 export function parseAttachmentIdentityRef(value) {

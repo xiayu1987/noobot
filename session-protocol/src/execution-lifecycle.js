@@ -11,7 +11,6 @@ export const EXECUTION_KIND = Object.freeze({
   WORKFLOW: "workflow",
 });
 
-export const EXECUTION_LIFECYCLE_WIRE_EVENT = "execution_lifecycle";
 export const EXECUTION_TREE_WIRE_EVENT = "execution_tree";
 export const EXECUTION_SNAPSHOT_WIRE_EVENT = "execution_snapshot";
 export const EXECUTION_CHILDREN_WIRE_EVENT = "execution_children";
@@ -58,15 +57,13 @@ export function normalizeExecutionIdentity(source = {}) {
   const executionId =
     executionKind === EXECUTION_KIND.AGENT
       ? deriveAgentExecutionId(source)
-      : clean(source.executionId || source.workflowExecutionId || source.workflowRunId);
+      : clean(source.executionId);
   const parentExecutionId = clean(source.parentExecutionId);
   return Object.freeze({
     executionId,
     executionKind,
     parentExecutionId,
-    rootExecutionId:
-      clean(source.rootExecutionId) ||
-      (parentExecutionId ? clean(source.rootExecutionId) : executionId),
+    rootExecutionId: clean(source.rootExecutionId) || (parentExecutionId ? "" : executionId),
     sessionId: clean(source.sessionId),
     parentSessionId: clean(source.parentSessionId),
     turnScopeId: canonicalizeTurnScopeId(source.turnScopeId),
@@ -88,31 +85,6 @@ export function validateExecutionIdentity(source = {}) {
   if (identity.executionKind === EXECUTION_KIND.AGENT && !identity.sessionId)
     errors.push("missing_session_id");
   return { valid: errors.length === 0, errors, identity };
-}
-
-export function createExecutionLifecycleEnvelope(source = {}) {
-  const identity = normalizeExecutionIdentity(source);
-  return {
-    protocolVersion: Number(source.protocolVersion || 1),
-    eventType: clean(source.eventType),
-    eventId: clean(source.eventId),
-    commandId: clean(source.commandId),
-    causationId: clean(source.causationId),
-    correlationId: clean(source.correlationId),
-    ...identity,
-    revision: Number(source.revision || 0),
-    sequence: Number(source.sequence || 0),
-    phase: clean(source.phase),
-    state: clean(source.state),
-    action: clean(source.action),
-    executionState: clean(source.executionState).toLowerCase(),
-    capabilities:
-      source.capabilities && typeof source.capabilities === "object" ? source.capabilities : {},
-    failure: source.failure && typeof source.failure === "object" ? source.failure : undefined,
-    updatedAt: clean(source.updatedAt),
-    occurredAt: clean(source.occurredAt),
-    payload: source.payload && typeof source.payload === "object" ? source.payload : {},
-  };
 }
 
 export function buildExecutionTree(executions = []) {

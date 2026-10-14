@@ -57,8 +57,8 @@ function canonicalAttachments(attachments = []) {
   });
 }
 
-export const TOOL_TIMELINE_AUTHORITY = TIMELINE_AUTHORITY;
-export const TOOL_SEQUENCE_DOMAIN = SEQUENCE_DOMAIN;
+const TOOL_TIMELINE_AUTHORITY = TIMELINE_AUTHORITY;
+const TOOL_SEQUENCE_DOMAIN = SEQUENCE_DOMAIN;
 
 function toolCallIdOf(value = {}) {
   return text(value.toolCallId || value.tool_call_id || value.id);
@@ -183,15 +183,6 @@ function selectProjectedToolLogs(message = {}, { completedOnly = false } = {}) {
   return completedOnly ? logs.filter((log) => log.event === "tool_result") : logs;
 }
 
-export function selectToolTimelineLogWindow(
-  message = {},
-  { completedOnly = false, limit = 10 } = {},
-) {
-  const maximum = Math.max(0, Number(limit) || 0);
-  if (!maximum) return [];
-  return selectProjectedToolLogs(message, { completedOnly }).slice(-maximum);
-}
-
 export function reduceToolTimeline(timeline = [], envelope = {}) {
   const target = Array.isArray(timeline) ? timeline : [];
   return applyCanonicalToolTimelineEvent(target, envelope, {
@@ -244,10 +235,6 @@ export function selectCompletedToolArtifacts(message = {}) {
       return canonicalAttachments(eventAttachments);
     }),
   };
-}
-
-export function countCompletedToolAttachments(message = {}) {
-  return selectCompletedToolArtifacts(message).attachments.length;
 }
 
 export function selectToolTimelineCount(message = {}) {

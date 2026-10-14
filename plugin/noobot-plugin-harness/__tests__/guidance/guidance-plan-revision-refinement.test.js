@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import {
   createGuidanceHandler,
   createPlanningHandler,
-  canAttemptPlanRevision,
   runPlanUpdateAfterSummary,
   MAX_PLAN_UPDATE_ATTEMPTS,
   FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
@@ -23,21 +22,6 @@ import {
 } from "../helpers/public-runtime-fixtures.js";
 
 const resolveModelMessages = createTestResolveModelMessages();
-
-test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets", () => {
-  const state = {
-    counters: {
-      planRevisionAttempts: 0,
-      planRefinementAttempts: 0,
-    },
-  };
-  for (let index = 0; index < MAX_PLAN_UPDATE_ATTEMPTS; index += 1) {
-    assert.equal(canAttemptPlanRevision({}, state, { increment: true, stage: "revision" }), true);
-  }
-  assert.equal(state.counters.planRevisionAttempts, MAX_PLAN_UPDATE_ATTEMPTS);
-  assert.equal(canAttemptPlanRevision({}, state, { increment: false, stage: "revision" }), false);
-  assert.equal(canAttemptPlanRevision({}, state, { increment: false, stage: "refinement" }), true);
-});
 
 test("unified attempts no longer block revision scheduling in planning handler", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });

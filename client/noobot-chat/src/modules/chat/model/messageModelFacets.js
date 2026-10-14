@@ -100,5 +100,4 @@ export {
   buildMessageOriginFacet,
   buildMessageStatusFacet,
   buildMessageTimelineFacet,
-  normalizeMessageType,
 };

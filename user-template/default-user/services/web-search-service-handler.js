@@ -206,7 +206,10 @@ async function requestWithFallback({
     try {
       normalizedUrl = new URL(normalizedCustomParam).toString().replace(/\/+$/, "");
     } catch (error) {
-      console.warn("[web-search] fallback provider request failed", { base, error });
+      console.warn("[web-search] invalid custom fallback instance", {
+        customParam: normalizedCustomParam,
+        error,
+      });
       return {
         ok: false,
         status: 0,
@@ -339,7 +342,7 @@ export default async function webSearchServiceHandler({
     status: result.status,
     statusText: result.statusText,
     source: result.source,
-    custom_param: outputFormat,
+    output_format: outputFormat,
     ...(result.source !== "primary"
       ? {
           searx_instances_source: {

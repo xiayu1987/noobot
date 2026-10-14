@@ -116,7 +116,6 @@ test("do_search_web: search_engine 模式按配置生成直连搜索引擎请求
         description: "搜索网页",
         prompt: "返回可引用的检索结果摘要与来源。",
         custom_param_format: "searx实例地址",
-        custom_param: "http://searxng.local",
         url: "http://search.local/search",
         query_string_format: "q=搜索内容",
         body_format: "{}",
@@ -132,9 +131,8 @@ test("do_search_web: search_engine 模式按配置生成直连搜索引擎请求
   assert.equal(request.url, "http://search.local/search?q=noobot+web+search");
   assert.equal(request.method, "GET");
   assert.equal(request.headers.Authorization, "Bearer secret");
-  assert.equal(request.headers["X-Noobot-Custom-Param"], "http://searxng.local");
+  assert.deepEqual(Object.keys(request.headers).sort(), ["Accept", "Authorization"]);
   assert.deepEqual(request.queryString, { q: "noobot web search" });
-  assert.equal(request.customParam, "http://searxng.local");
   assert.equal(request.body, undefined);
 });
 

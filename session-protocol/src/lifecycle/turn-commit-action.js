@@ -16,10 +16,6 @@ export function normalizeTurnCommitAction(value = "") {
   return clean(value).toLowerCase();
 }
 
-export function isTurnCommitAction(value = "") {
-  return TURN_COMMIT_ACTION_VALUES.includes(normalizeTurnCommitAction(value));
-}
-
 export function resolveTurnCommitAction(value = "") {
   const normalized = normalizeTurnCommitAction(value);
   return normalized === TURN_COMMIT_ACTION.CONTINUE

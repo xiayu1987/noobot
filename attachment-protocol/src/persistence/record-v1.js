@@ -26,7 +26,7 @@ const FIELDS = new Set([
   "createdAt",
   "updatedAt",
 ]);
-export function parsePersistedAttachmentRecordV1(value) {
+function parsePersistedAttachmentRecordV1(value) {
   const s = requirePlainObject(value, "invalid_persisted_attachment_record");
   assertKnownFields(s, FIELDS, "unknown_persisted_attachment_record_field");
   if (s.schema !== ATTACHMENT_RECORD_SCHEMA)

@@ -6,7 +6,7 @@
 import { dedupeTextList } from "../text.js";
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
 
-export const EXPERIENCE_METADATA_ERROR_CODE = "EXPERIENCE_METADATA_DOCUMENT_INVALID";
+const EXPERIENCE_METADATA_ERROR_CODE = "EXPERIENCE_METADATA_DOCUMENT_INVALID";
 
 const DOMAIN_LINE_RE = /^DOMAIN:\s*(\S.*)$/;
 const UPDATED_LINE_RE = /^UPDATED_AT:\s*(\S+)$/;

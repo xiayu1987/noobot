@@ -44,7 +44,7 @@ function createCapabilityState() {
   };
 }
 
-export function createDefaultCapabilityProfile() {
+function createDefaultCapabilityProfile() {
   return HARNESS_ENGINEERING_CAPABILITIES.reduce((acc, capability) => {
     const base = createCapabilityState();
     if (capability === "planning") {
@@ -76,9 +76,8 @@ export function resolveCapabilityProfile(profile = {}) {
   const incoming = profile && typeof profile === "object" ? profile : {};
   const fallback = createDefaultCapabilityProfile();
   return HARNESS_ENGINEERING_CAPABILITIES.reduce((acc, capability) => {
-    const next = incoming[capability] && typeof incoming[capability] === "object"
-      ? incoming[capability]
-      : {};
+    const next =
+      incoming[capability] && typeof incoming[capability] === "object" ? incoming[capability] : {};
     acc[capability] = {
       ...fallback[capability],
       ...next,

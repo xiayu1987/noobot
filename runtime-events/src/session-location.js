@@ -36,14 +36,14 @@ async function readJsonFile(file, fallback) {
   return JSON.parse(raw);
 }
 
-export async function readWorkspaceSessionTree(context = {}) {
+async function readWorkspaceSessionTree(context = {}) {
   const userRoot = userRootOf(context);
   return normalizeSessionTree(
     await readJsonFile(path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TREE_FILE), { nodes: {} }),
   );
 }
 
-export async function readWorkspaceSessionTombstones(context = {}) {
+async function readWorkspaceSessionTombstones(context = {}) {
   const userRoot = userRootOf(context);
   const marker = await readJsonFile(path.join(userRoot, WORKSPACE_LAYOUT.SESSION_TOMBSTONE_FILE), {
     sessions: {},
@@ -92,9 +92,4 @@ async function isPersistedSessionDir(sessionDir) {
     if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
     throw error;
   }
-}
-
-export async function isWorkspaceSessionDeleted({ workspaceRoot, userId, sessionId } = {}) {
-  const tombstones = await readWorkspaceSessionTombstones({ workspaceRoot, userId });
-  return Object.hasOwn(tombstones, normalizeId(sessionId));
 }

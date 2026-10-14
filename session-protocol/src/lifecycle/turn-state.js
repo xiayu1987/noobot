@@ -40,7 +40,7 @@ export const TURN_FAILED_STATES = Object.freeze([
   TURN_STATE.STOP_FAILED,
 ]);
 
-export const TURN_FINALIZE_FAILURE_STATES = Object.freeze([
+const TURN_FINALIZE_FAILURE_STATES = Object.freeze([
   TURN_STATE.COMPLETION_FAILED,
   TURN_STATE.STOP_FAILED,
 ]);

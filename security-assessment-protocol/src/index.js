@@ -89,7 +89,7 @@ export function normalizeSecurityRiskLevel(value, fallback = "") {
   return Object.hasOwn(RISK_ORDER, normalized) ? normalized : fallback;
 }
 
-export function securityRiskRank(value) {
+function securityRiskRank(value) {
   const normalized = normalizeSecurityRiskLevel(value);
   return normalized ? RISK_ORDER[normalized] : -1;
 }
@@ -198,7 +198,7 @@ export function validateSecurityAssessment(value) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-export function assertSecurityAssessment(value) {
+function assertSecurityAssessment(value) {
   const validation = validateSecurityAssessment(value);
   if (!validation.valid) {
     throw new TypeError(`invalid security assessment: ${validation.errors.join(",")}`);

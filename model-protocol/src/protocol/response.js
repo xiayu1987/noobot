@@ -16,7 +16,7 @@ const MODEL_ATTEMPT_STATUSES = new Set(Object.values(MODEL_ATTEMPT_STATUS));
 const MODEL_ATTEMPT_KINDS = new Set(Object.values(MODEL_ATTEMPT_KIND));
 const MODEL_ADAPTER_IDS = new Set(Object.values(MODEL_ADAPTER_ID));
 
-export function normalizeModelExecutionProvider(provider = {}) {
+function normalizeModelExecutionProvider(provider = {}) {
   const adapterId = String(provider?.adapterId || "").trim();
   if (!MODEL_ADAPTER_IDS.has(adapterId)) {
     throw new TypeError(`invalid model execution adapter id: ${adapterId || "missing"}`);

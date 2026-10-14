@@ -7,7 +7,7 @@ import { requireModelContextSequencePolicy } from "../policy/context-policy.js";
 function text(value) {
   return String(value ?? "").trim();
 }
-export function normalizeInvocationIdentity(input = {}) {
+function normalizeInvocationIdentity(input = {}) {
   return Object.freeze({
     requestId: text(input.requestId),
     invocationId: text(input.invocationId),

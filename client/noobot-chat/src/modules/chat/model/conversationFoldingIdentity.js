@@ -80,16 +80,16 @@ function canMergeIntoPreviousAssistantMessage(previousMessage, currentMessage) {
     currentStableMessageIdentity !== previousStableMessageIdentity;
   return Boolean(
     previousMessage &&
-      currentRole === "assistant" &&
-      previousRole === "assistant" &&
-      previousMessage?.workflowMessage !== true &&
-      currentMessage?.workflowMessage !== true &&
-      currentTurnScopeKey &&
-      previousTurnScopeKey &&
-      currentTurnScopeKey === previousTurnScopeKey &&
-      !hasDifferentStableMessageIdentity &&
-      !hasUnpairedStableMessageIdentity &&
-      !(previousMessage?.chatPresentation === true && currentMessage?.chatPresentation === true),
+    currentRole === "assistant" &&
+    previousRole === "assistant" &&
+    previousMessage?.workflowMessage !== true &&
+    currentMessage?.workflowMessage !== true &&
+    currentTurnScopeKey &&
+    previousTurnScopeKey &&
+    currentTurnScopeKey === previousTurnScopeKey &&
+    !hasDifferentStableMessageIdentity &&
+    !hasUnpairedStableMessageIdentity &&
+    !(previousMessage?.chatPresentation === true && currentMessage?.chatPresentation === true),
   );
 }
 
@@ -98,5 +98,4 @@ export {
   canMergeIntoPreviousAssistantMessage,
   normalizeFoldedPresentationMessage,
   resolveMessageTurnScopeMergeKey,
-  resolveStableMessageIdentity,
 };

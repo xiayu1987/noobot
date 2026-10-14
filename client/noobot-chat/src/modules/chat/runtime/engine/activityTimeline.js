@@ -19,10 +19,6 @@ export function mergeActivityTimelines(...timelines) {
   return mergeCanonicalActivityTimelines(...timelines);
 }
 
-export function selectActivityTimeline(message = {}) {
-  return selectCanonicalActivityTimeline(message);
-}
-
 export function selectActivityTimelineLogs(message = {}) {
   return selectCanonicalActivityTimeline(message);
 }

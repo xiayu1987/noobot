@@ -15,14 +15,7 @@ const eventId = (event = {}) => text(event?.identity?.eventId);
 
 import { EVENT_PROTOCOL_NAME, EVENT_PROTOCOL_VERSION } from "./envelope.js";
 import { text } from "./normalize.js";
-export const REPLAY_BATCH_SCHEMA = "replay.batch";
-
-export const EVENT_CATEGORY = Object.freeze({
-  AUTHORITY: "authority",
-  INTERACTION: "interaction",
-  DATA: "data",
-  TRANSPORT: "transport",
-});
+const REPLAY_BATCH_SCHEMA = "replay.batch";
 
 export function createReplayBatch({
   sessionId = "",
@@ -204,39 +197,6 @@ export function validateReplayBatch(batch = {}) {
   collectPendingInteractionErrors(batch.pendingInteractions, sessionId, errors);
   collectCursorErrors(batch.cursor, { snapshotSequence, lastSequence }, errors);
   return { valid: errors.length === 0, errors };
-}
-
-export function assertLosslessForward(original, forwarded) {
-  if (original === forwarded) return true;
-  const identityKeys = [
-    "eventType",
-    "eventId",
-    "sessionId",
-    "turnScopeId",
-    "messageId",
-    "executionId",
-  ];
-  for (const key of identityKeys) {
-    const originalValue = original?.identity?.[key];
-    const forwardedValue = forwarded?.identity?.[key];
-    if (originalValue !== forwardedValue) throw new Error(`event_forwarding_mutated_${key}`);
-  }
-  const originalVersion = original?.protocol?.version;
-  const forwardedVersion = forwarded?.protocol?.version;
-  if (originalVersion !== forwardedVersion)
-    throw new Error("event_forwarding_mutated_protocolVersion");
-  const orderingKeys = ["revision", "sequence", "aggregateVersion"];
-  for (const key of orderingKeys) {
-    const originalValue = original?.ordering?.[key];
-    const forwardedValue = forwarded?.ordering?.[key];
-    if (originalValue !== undefined || forwardedValue !== undefined) {
-      if (originalValue !== forwardedValue) throw new Error(`event_forwarding_mutated_${key}`);
-    }
-  }
-  if (JSON.stringify(original?.payload) !== JSON.stringify(forwarded?.payload)) {
-    throw new Error("event_forwarding_mutated_payload");
-  }
-  return true;
 }
 
 export function replayEventTail({

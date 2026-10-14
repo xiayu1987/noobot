@@ -9,7 +9,6 @@ import {
   isExecutionAbortError,
   isExecutionUserStop,
   raceExecutionAbort,
-  resolveExecutionAbortReason,
   resolveExecutionAbortType,
 } from "@noobot/session-protocol/execution-abort";
 
@@ -60,10 +59,6 @@ export function resolveErrorMessage(error = null) {
   }
 
   return normalizeErrorText(error);
-}
-
-export function readAbortReason(error = null, abortSignal = null) {
-  return resolveExecutionAbortReason({ error, abortSignal });
 }
 
 export function isUserStopAbort(error = null, abortSignal = null) {

@@ -35,7 +35,7 @@ function canonicalAttachmentProjectionKey(attachment = {}) {
   return "";
 }
 
-export function handleAttachmentsStreamEvent({
+function handleAttachmentsStreamEvent({
   data,
   botMessage,
   mergeAssistantAttachments,

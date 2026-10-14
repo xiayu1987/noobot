@@ -30,9 +30,7 @@ const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   FrontendRunState.USER_STOPPING,
 ]);
 
-const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([
-  BackendChannelState.SENDING,
-]);
+const MESSAGE_CAN_STOP_TARGET_STATES = Object.freeze([BackendChannelState.SENDING]);
 
 function isFinalizedAssistantMessage(messageItem = {}) {
   if (getMessageRole(messageItem) !== "assistant") return false;
@@ -49,14 +47,14 @@ function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activ
   return Boolean(runTurnScopeId && messageTurnScopeId && runTurnScopeId === messageTurnScopeId);
 }
 
-export function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
+function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {}) {
   const stateSessionId = trim(stateSnapshot?.sessionId);
   if (!stateSessionId) return true;
   const activeSessionId = trim(activeSession?.sessionId);
   return !activeSessionId || activeSessionId === stateSessionId;
 }
 
-export function getLatestAssistantMessage(activeSession = {}) {
+function getLatestAssistantMessage(activeSession = {}) {
   const messages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
   return [...messages].reverse().find((item = {}) => getMessageRole(item) === "assistant") || null;
 }
@@ -86,7 +84,7 @@ export function resolveSessionRunStateForMessage({
   return null;
 }
 
-export function buildSessionRunMessageRuntimeKey(stateItem = {}) {
+function buildSessionRunMessageRuntimeKey(stateItem = {}) {
   return [
     stateItem?.state,
     stateItem?.sessionId,
@@ -98,15 +96,13 @@ export function buildSessionRunMessageRuntimeKey(stateItem = {}) {
     .join("|");
 }
 
-export function getMessageChannelState(messageItem = {}) {
+function getMessageChannelState(messageItem = {}) {
   const channelState = messageItem?.channelState;
   if (channelState && typeof channelState === "object" && !Array.isArray(channelState)) {
     return { ...channelState, state: normalizeState(channelState.state || channelState.status) };
   }
   const state = normalizeState(
-    typeof channelState === "string"
-      ? channelState
-      : messageItem?.status || messageItem?.state,
+    typeof channelState === "string" ? channelState : messageItem?.status || messageItem?.state,
   );
   return state ? { state } : {};
 }
@@ -156,7 +152,11 @@ export function resolveTurnRuntimeView({
   };
 }
 
-export function resolveSessionRunMessageRuntimeView(messageItem = {}, turnTiming = null, turnStatus = null) {
+export function resolveSessionRunMessageRuntimeView(
+  messageItem = {},
+  turnTiming = null,
+  turnStatus = null,
+) {
   return resolveTurnRuntimeView({ messageItem, turnTiming, turnStatus });
 }
 
@@ -168,7 +168,7 @@ export function isMessageInFlightAssistant(messageItem = {}) {
   return resolveSessionRunMessageRuntimeView(messageItem).inFlightAssistant;
 }
 
-export function buildInFlightMessageRuntimePatch(stateItem = {}) {
+function buildInFlightMessageRuntimePatch(stateItem = {}) {
   const channelState = {
     state: normalizeState(stateItem?.backendState) || normalizeState(stateItem?.state),
     sessionId: trim(stateItem?.sessionId),
@@ -184,7 +184,7 @@ export function buildInFlightMessageRuntimePatch(stateItem = {}) {
   };
 }
 
-export function buildClearMessageRuntimePatch({
+function buildClearMessageRuntimePatch({
   messageItem = {},
   stateSnapshot = createInitialSessionRunState(),
 } = {}) {
@@ -198,7 +198,7 @@ export function buildClearMessageRuntimePatch({
   };
 }
 
-export function buildFailedMessageRuntimePatch({
+function buildFailedMessageRuntimePatch({
   messageItem = {},
   stateSnapshot = createInitialSessionRunState(),
 } = {}) {
@@ -212,7 +212,7 @@ export function buildFailedMessageRuntimePatch({
   };
 }
 
-export function buildStoppedMessageRuntimePatch({
+function buildStoppedMessageRuntimePatch({
   messageItem = {},
   stateSnapshot = createInitialSessionRunState(),
 } = {}) {
@@ -223,16 +223,18 @@ export function buildStoppedMessageRuntimePatch({
     channelState: {
       state: BackendChannelState.USER_STOPPED,
       sessionId: trim(channelState?.sessionId),
-      dialogProcessId: getMessageDialogProcessId(messageItem) || trim(channelState?.dialogProcessId),
+      dialogProcessId:
+        getMessageDialogProcessId(messageItem) || trim(channelState?.dialogProcessId),
       turnScopeId: getMessageTurnScopeId(messageItem) || trim(channelState?.turnScopeId),
-      sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
+      sourceEvent:
+        trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
       seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
     },
     terminalOutcome: MESSAGE_TERMINAL_OUTCOME.STOPPED,
   };
 }
 
-export function isObsoletePendingAssistantMessage(messageItem = {}, activeSession = {}) {
+function isObsoletePendingAssistantMessage(messageItem = {}, activeSession = {}) {
   if (!messageItem || getMessageRole(messageItem) !== "assistant") return false;
   if (messageItem.pending !== true) return false;
   const latestAssistant = getLatestAssistantMessage(activeSession);
@@ -248,7 +250,11 @@ export function resolveSessionRunMessageRuntimePatch({
   activeSession = {},
 } = {}) {
   const stateBelongsToActiveSession = isRunStateForActiveSession(stateSnapshot, activeSession);
-  const terminalOwnsMessage = terminalSnapshotOwnsMessage(stateSnapshot, messageItem, activeSession);
+  const terminalOwnsMessage = terminalSnapshotOwnsMessage(
+    stateSnapshot,
+    messageItem,
+    activeSession,
+  );
   const stateItem = resolveSessionRunStateForMessage({
     stateSnapshot,
     messageItem,
@@ -278,19 +284,15 @@ export function resolveSessionRunMessageRuntimePatch({
   }
   if (
     stateBelongsToActiveSession &&
-    (
-      normalizeState(stateSnapshot?.state) === FrontendRunState.USER_STOP_COMPLETED ||
-      normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED
-    ) &&
-    (
-      terminalOwnsMessage ||
+    (normalizeState(stateSnapshot?.state) === FrontendRunState.USER_STOP_COMPLETED ||
+      normalizeState(stateSnapshot?.backendState) === BackendChannelState.USER_STOPPED) &&
+    (terminalOwnsMessage ||
       messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] ||
       resolveSessionRunStateForMessage({
         stateSnapshot: { ...stateSnapshot, state: FrontendRunState.USER_STOPPING },
         messageItem,
         activeSession,
-      })
-    )
+      }))
   ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
@@ -299,7 +301,8 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    stateBelongsToActiveSession && terminalOwnsMessage &&
+    stateBelongsToActiveSession &&
+    terminalOwnsMessage &&
     resolveStateTerminalOutcome(stateSnapshot?.state) === MESSAGE_TERMINAL_OUTCOME.FAILED
   ) {
     return {
@@ -309,7 +312,8 @@ export function resolveSessionRunMessageRuntimePatch({
     };
   }
   if (
-    stateBelongsToActiveSession && terminalOwnsMessage &&
+    stateBelongsToActiveSession &&
+    terminalOwnsMessage &&
     normalizeState(stateSnapshot?.state) === FrontendRunState.FRONTEND_COMPLETED &&
     stateSnapshot?.lifecycleObserved === true
   ) {
@@ -319,7 +323,10 @@ export function resolveSessionRunMessageRuntimePatch({
       patch: buildClearMessageRuntimePatch({ messageItem, stateSnapshot }),
     };
   }
-  if (stateBelongsToActiveSession && isObsoletePendingAssistantMessage(messageItem, activeSession)) {
+  if (
+    stateBelongsToActiveSession &&
+    isObsoletePendingAssistantMessage(messageItem, activeSession)
+  ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,
       reason: SESSION_RUN_MESSAGE_RUNTIME_REASON.OBSOLETE_PENDING_ASSISTANT,

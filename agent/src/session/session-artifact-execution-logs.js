@@ -35,11 +35,11 @@ function assertIndexSchema(index, indexPath) {
   throw failure;
 }
 
-export function resolveExecutionEventsDir(sessionDir = "") {
+function resolveExecutionEventsDir(sessionDir = "") {
   return path.join(String(sessionDir || ""), SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
 }
 
-export function resolveExecutionTurnDir(sessionDir = "", dialogProcessId) {
+function resolveExecutionTurnDir(sessionDir = "", dialogProcessId) {
   return path.join(
     resolveExecutionEventsDir(sessionDir),
     EXECUTION_EVENT_TURNS_DIR,

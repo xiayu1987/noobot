@@ -17,7 +17,6 @@ export const FAILURE_THRESHOLD = Object.freeze({
   ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
 });
 
-export const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.turnsThreshold;
 export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD =
   WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({

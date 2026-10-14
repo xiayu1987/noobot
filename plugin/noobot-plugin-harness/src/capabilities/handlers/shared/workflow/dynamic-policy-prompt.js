@@ -18,7 +18,8 @@ function normalizeText(value = "") {
 function normalizeScenario(value = "") {
   const text = normalizeText(value).toLowerCase();
   if (VALID_SCENARIOS.has(text)) return text;
-  if (text.includes("program") || text.includes("coding") || text.includes("\u7f16\u7a0b")) return "programming";
+  if (text.includes("program") || text.includes("coding") || text.includes("\u7f16\u7a0b"))
+    return "programming";
   if (text.includes("text") || text.includes("\u6587\u672c")) return "text";
   return "general";
 }
@@ -40,13 +41,18 @@ function extractProtocolBody(text = "") {
 }
 
 function readField(lines = [], field = "") {
-  const key = String(field || "").trim().toLowerCase();
+  const key = String(field || "")
+    .trim()
+    .toLowerCase();
   if (!key) return "";
   for (const line of lines) {
     const text = String(line || "").trim();
     const matched = text.match(/^([a-zA-Z_][\w-]*)\s*[:=]\s*(.*)$/);
     if (!matched) continue;
-    const name = String(matched[1] || "").trim().toLowerCase().replace(/-/g, "_");
+    const name = String(matched[1] || "")
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, "_");
     if (name === key) return normalizeText(matched[2] || "");
   }
   return "";
@@ -61,7 +67,7 @@ function extractPromptFromBody(body = "") {
   return clipPrompt(body.slice(start));
 }
 
-export function parseDynamicPolicyPromptProtocol(text = "") {
+function parseDynamicPolicyPromptProtocol(text = "") {
   const body = extractProtocolBody(text);
   if (!body) return null;
   const lines = body.split(/\r?\n/);
@@ -85,9 +91,11 @@ export function buildDynamicPolicyPromptSignature(record = null) {
 export function applyDynamicPolicyPromptFromText(ctx = {}, text = "", meta = {}) {
   const parsed = parseDynamicPolicyPromptProtocol(text);
   if (!parsed) return null;
-  const bucket = ctx?.agentContext?.bindings?.extensions?.harness && typeof ctx.agentContext.bindings.extensions.harness === "object"
-    ? ctx.agentContext.bindings.extensions.harness
-    : null;
+  const bucket =
+    ctx?.agentContext?.bindings?.extensions?.harness &&
+    typeof ctx.agentContext.bindings.extensions.harness === "object"
+      ? ctx.agentContext.bindings.extensions.harness
+      : null;
   if (!bucket) return null;
   const record = {
     ...parsed,

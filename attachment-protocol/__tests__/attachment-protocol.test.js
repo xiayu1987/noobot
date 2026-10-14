@@ -10,22 +10,18 @@ import {
   ATTACHMENT_LIFECYCLE,
   attachmentIdentityKey,
   formatAttachmentIdentityRef,
-  formatAttachmentIdentityJson,
   createAttachmentLifecycleEvent,
-  createAttachmentSetUpdate,
   parseAttachmentAccessRef,
   parseAttachmentDescriptor,
   parseAttachmentIdentity,
   parseAttachmentIdentityRef,
   projectAttachmentIdentity,
-  parseAttachmentUiView,
   parsePersistedAttachmentRecord,
   ATTACHMENT_RECORD_SCHEMA,
   ATTACHMENT_RECORD_VERSION,
   ATTACHMENT_RELATION_TYPE,
   mergeAttachmentsByIdentity,
   reduceAttachmentLifecycle,
-  parseRuntimeAttachmentRef,
 } from "../src/index.js";
 import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "../src/mime.js";
 
@@ -74,10 +70,6 @@ test("canonical identity refs preserve the complete identity without inference",
   assert.throws(
     () => parseAttachmentIdentityRef("attachment:v1:session%3a1/user/att-1"),
     /non_canonical_attachment_identity_ref/,
-  );
-  assert.equal(
-    formatAttachmentIdentityJson(identityWithReservedCharacters),
-    '{"attachmentId":"att/1","sessionId":"session:1","attachmentSource":"user upload"}',
   );
 });
 
@@ -129,32 +121,10 @@ test("persistence, runtime, access and UI models stay separate", () => {
   });
   assert.equal(record.storageRef.ref, "scope/att-1");
   assert.equal(record.descriptor.owner.type, "plugin");
-  assert.deepEqual(
-    parseRuntimeAttachmentRef({ identity, turnScopeId: "turn-1", runId: "run-1" }).identity,
-    identity,
-  );
   assert.equal(
     parseAttachmentAccessRef({ identity, capability: "download", href: "/attachments/att-1" })
       .capability,
     "download",
-  );
-  assert.equal(
-    parseAttachmentUiView({ identity, name: "report.pdf", mimeType: "application/pdf" }).name,
-    "report.pdf",
-  );
-  assert.throws(
-    () =>
-      parseAttachmentUiView({
-        identity,
-        name: "report.pdf",
-        mimeType: "application/pdf",
-        parsedResultAccess: {
-          identity: { ...identity, attachmentId: "parsed-1" },
-          capability: "preview",
-          href: "/attachments/parsed-1",
-        },
-      }),
-    /unknown_attachment_ui_view_field:parsedResultAccess/,
   );
   assert.throws(
     () =>
@@ -201,16 +171,6 @@ test("lifecycle events require stable identity and versioned message identity", 
     () => createAttachmentLifecycleEvent({ ...event, identity: { ...identity, sessionId: "" } }),
     /invalid_attachment_session_id/,
   );
-});
-
-test("attachment set update distinguishes unchanged from explicit delete-all", () => {
-  assert.deepEqual(createAttachmentSetUpdate(), { kind: "unchanged" });
-  assert.deepEqual(createAttachmentSetUpdate([]), { kind: "replace", identities: [] });
-  assert.throws(
-    () => createAttachmentSetUpdate([identity, identity]),
-    /duplicate_attachment_identity/,
-  );
-  assert.throws(() => createAttachmentSetUpdate({}), /attachments_must_be_array_or_undefined/);
 });
 
 test("persisted records are explicitly versioned and relations are source-bound", () => {

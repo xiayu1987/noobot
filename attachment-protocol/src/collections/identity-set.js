@@ -4,15 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AttachmentProtocolError } from "../errors.js";
-import {
-  attachmentIdentityKey,
-  parseAttachmentIdentity,
-  projectAttachmentIdentity,
-} from "../identity.js";
-export function parseAttachmentIdentityList(v) {
-  if (!Array.isArray(v)) throw new AttachmentProtocolError("attachments_must_be_array");
-  return Object.freeze(v.map(parseAttachmentIdentity));
-}
+import { attachmentIdentityKey, projectAttachmentIdentity } from "../identity.js";
 export function assertUniqueAttachmentIdentities(v, select = projectAttachmentIdentity) {
   if (!Array.isArray(v)) throw new AttachmentProtocolError("attachments_must_be_array");
   const seen = new Set();

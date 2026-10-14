@@ -37,7 +37,7 @@ export function resolveAttachments(msg = {}, fallbackAttachments = []) {
   return Array.isArray(fallbackAttachments) ? fallbackAttachments : [];
 }
 
-export function resolveFallbackAttachments(meta = {}) {
+function resolveFallbackAttachments(meta = {}) {
   if (Array.isArray(meta?.userMessageAttachments)) return meta.userMessageAttachments;
   return [];
 }
@@ -147,7 +147,7 @@ export function isDerivedUserMetaMessage(msg = {}) {
   );
 }
 
-export function resolveMessageTurnScopeId(msg = {}) {
+function resolveMessageTurnScopeId(msg = {}) {
   return String(
     msg?.turnScopeId ||
       msg?.additional_kwargs?.turnScopeId ||

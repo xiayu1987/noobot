@@ -7,7 +7,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  assertConfigParamsDocumentKeys,
   buildConfigParamCatalog,
   CONFIG_ERROR_CODE,
   createConfigValueLookup,
@@ -63,22 +62,19 @@ test("config params document rejects ambiguous, invalid, and unknown facts", () 
 
 test("config params document preserves valid keys outside the current template", () => {
   assert.deepEqual(
-    assertConfigParamsDocumentKeys(
-      {
-        values: { api_key: "secret" },
-        descriptions: { api_key: "Credential" },
-      },
-      ["API_KEY", "REGION"],
-    ),
+    normalizeConfigParamsDocument({
+      values: { api_key: "secret" },
+      descriptions: { api_key: "Credential" },
+    }),
     {
       values: { API_KEY: "secret" },
       descriptions: { API_KEY: "Credential" },
     },
   );
-  assert.deepEqual(
-    assertConfigParamsDocumentKeys({ values: { UNUSED_KEY: "value" } }, ["API_KEY"]),
-    { values: { UNUSED_KEY: "value" }, descriptions: { UNUSED_KEY: "" } },
-  );
+  assert.deepEqual(normalizeConfigParamsDocument({ values: { UNUSED_KEY: "value" } }), {
+    values: { UNUSED_KEY: "value" },
+    descriptions: { UNUSED_KEY: "" },
+  });
 });
 
 test("config params synchronization preserves stored keys and adds template keys", () => {

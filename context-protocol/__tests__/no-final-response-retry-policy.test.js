@@ -9,7 +9,6 @@ import test from "node:test";
 import {
   NO_FINAL_RESPONSE_RETRY_POLICY,
   hasNoFinalResponseRetryBudget,
-  isNoFinalResponseRetryPrompt,
   resolveNextNoFinalResponseRetryOrdinal,
 } from "../src/policy/no-final-response-retry.js";
 import {
@@ -34,8 +33,6 @@ test("empty response retry prompt is a context control type marked at summary", 
       CONTEXT_INJECTED_MESSAGE_TYPE.NO_FINAL_RESPONSE_RETRY_PROMPT,
     ),
   );
-  assert.equal(isNoFinalResponseRetryPrompt(retryPrompt), true);
-  assert.equal(isNoFinalResponseRetryPrompt({ role: "user", content: "hi" }), false);
   assert.equal(
     shouldMarkCurrentTurnSummarizedMessageInScope(retryPrompt, {
       messages: [retryPrompt],

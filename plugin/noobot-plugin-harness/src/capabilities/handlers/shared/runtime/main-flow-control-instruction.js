@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const HARNESS_MAIN_FLOW_CONTROL_ACTION = Object.freeze({
+const HARNESS_MAIN_FLOW_CONTROL_ACTION = Object.freeze({
   FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
   SUMMARY_CHECKPOINT: "summary_checkpoint",
 });
@@ -41,11 +41,13 @@ export function requestSummaryCheckpointMainFlowInstruction(
   const runtime = resolveAgentRuntimeFromHookContext(ctx);
   if (!runtime) return null;
   if (!asObject(runtime.systemRuntime)) runtime.systemRuntime = {};
-  const canonicalMessageIds = [...new Set(
-    (Array.isArray(summarizedMessageIds) ? summarizedMessageIds : [])
-      .map((id) => String(id || "").trim())
-      .filter(Boolean),
-  )];
+  const canonicalMessageIds = [
+    ...new Set(
+      (Array.isArray(summarizedMessageIds) ? summarizedMessageIds : [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean),
+    ),
+  ];
   if (!canonicalMessageIds.length) return null;
   const instruction = {
     action: HARNESS_MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,

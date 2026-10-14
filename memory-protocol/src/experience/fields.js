@@ -6,7 +6,7 @@
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
 import { EXPERIENCE_STRUCTURE_FIELDS } from "./structure.js";
 
-export const EXPERIENCE_STAGES = Object.freeze(["daily", "weekly", "monthly", "yearly"]);
+const EXPERIENCE_STAGES = Object.freeze(["daily", "weekly", "monthly", "yearly"]);
 
 const FIELD_KEY_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
 
@@ -39,7 +39,7 @@ function cleanCell(value) {
     .trim();
 }
 
-export function createExperienceFields(definition = {}) {
+function createExperienceFields(definition = {}) {
   const out = {};
   for (const stage of EXPERIENCE_STAGES) {
     const items = Array.isArray(definition?.[stage]) ? definition[stage] : [];

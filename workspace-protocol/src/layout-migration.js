@@ -81,7 +81,7 @@ export const WORKSPACE_LAYOUT_MIGRATIONS = Object.freeze([
   }),
 ]);
 
-export const WORKSPACE_LAYOUT_MIGRATION_ACTION = Object.freeze({
+const WORKSPACE_LAYOUT_MIGRATION_ACTION = Object.freeze({
   MOVE: "move",
 });
 

@@ -28,7 +28,7 @@ export function removeDeniedToolNamesFromAllow({
   };
 }
 
-export function mergeToolPolicyDenyToolNames({
+function mergeToolPolicyDenyToolNames({
   toolPolicy = {},
   appendToolNames = [],
   normalizeStringArray = normalizeStringArrayFallback,

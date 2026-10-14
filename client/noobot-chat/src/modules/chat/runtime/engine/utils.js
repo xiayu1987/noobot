@@ -5,8 +5,6 @@
  */
 import { nowIso } from "../../model/timeFields.js";
 import { translateStoredLocaleMessageKey } from "../../../../shared/i18n/messageCatalog.js";
-import { foldConversationMessages } from "../../model/messageModel.js";
-import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -15,7 +13,7 @@ export function normalizeTrimmedString(value) {
 const INTERNAL_EVENT_PLACEHOLDER_LINE_RE =
   /^\[(tool_call|tool_result|session_turn_full|assistant_message_saved|system)\]$/;
 
-export const INTERNAL_EXECUTION_EVENT_NAMES = new Set([
+const INTERNAL_EXECUTION_EVENT_NAMES = new Set([
   "session_turn_full",
   "assistant_message_saved",
   "system",
@@ -27,12 +25,6 @@ export function stripInternalEventPlaceholderLines(value) {
     .filter((line) => !INTERNAL_EVENT_PLACEHOLDER_LINE_RE.test(line.trim()))
     .join("\n")
     .trim();
-}
-
-export function isInternalEventPlaceholderText(value) {
-  const rawText = normalizeTrimmedString(value);
-  if (!rawText) return false;
-  return !stripInternalEventPlaceholderLines(rawText);
 }
 
 export function sanitizeExecutionLogText(value) {
@@ -168,7 +160,7 @@ function pickExecutionCommandText(logItem = {}) {
   return stripExecutionCommandPrefix(text);
 }
 
-export function buildExecutionLogDisplayText(logItem = {}) {
+function buildExecutionLogDisplayText(logItem = {}) {
   const eventName = normalizeTrimmedString(logItem?.event).toLowerCase();
   const typeName = normalizeTrimmedString(logItem?.type).toLowerCase();
   const text = sanitizeExecutionLogText(logItem?.text);
@@ -189,7 +181,7 @@ export function buildExecutionLogDisplayText(logItem = {}) {
   return text;
 }
 
-export function isDisplayableExecutionLog(logItem = {}) {
+function isDisplayableExecutionLog(logItem = {}) {
   const text = buildExecutionLogDisplayText(logItem);
   if (!text) return false;
   const eventName = normalizeTrimmedString(logItem?.event).toLowerCase();
@@ -214,61 +206,6 @@ export function isBlankCompatibleSameId(left, right) {
   const normalizedLeft = normalizeTrimmedString(left);
   const normalizedRight = normalizeTrimmedString(right);
   return !normalizedLeft || !normalizedRight || normalizedLeft === normalizedRight;
-}
-
-export function mergeAssistantContents(assistantMessages = []) {
-  const contentList = [];
-  for (const assistantMessage of assistantMessages) {
-    const content = stripInternalEventPlaceholderLines(assistantMessage?.content);
-    if (!content) continue;
-    if (contentList[contentList.length - 1] === content) continue;
-    contentList.push(content);
-  }
-  return contentList.join("\n\n");
-}
-
-export function buildWorkflowMessageSignature(messageItem = {}) {
-  const workflowMeta =
-    messageItem?.workflowMeta &&
-    typeof messageItem.workflowMeta === "object" &&
-    !Array.isArray(messageItem.workflowMeta)
-      ? messageItem.workflowMeta
-      : {};
-  const semanticPreview = String(
-    workflowMeta?.semanticTextPreview ||
-      workflowMeta?.payload?.interaction?.semanticTextPreview ||
-      "",
-  ).trim();
-  return [
-    getMessageDialogProcessId(messageItem),
-    normalizeTrimmedString(messageItem?.content),
-    semanticPreview,
-  ].join("|");
-}
-
-export function patchAssistantFromWorkflowMessage(targetMessage = null, workflowMessageItem = {}) {
-  if (!targetMessage || !workflowMessageItem) return false;
-  const previousPending = Boolean(targetMessage.pending);
-  const previousTerminalOutcome = String(targetMessage.terminalOutcome || "");
-  const previousToolTimeline = targetMessage.toolTimeline;
-  const previousActivityTimeline = targetMessage.activityTimeline;
-  const previousHasFirstStreamEvent = targetMessage.hasFirstStreamEvent === true;
-  const [normalizedWorkflowMessage] = foldConversationMessages(
-    [workflowMessageItem],
-    (messageItem = {}) => ({ ...messageItem }),
-  );
-  Object.assign(targetMessage, normalizedWorkflowMessage || workflowMessageItem);
-  targetMessage.content = stripInternalEventPlaceholderLines(targetMessage.content);
-  targetMessage.pending = previousPending;
-  targetMessage.terminalOutcome = previousTerminalOutcome;
-  if (previousToolTimeline !== undefined) targetMessage.toolTimeline = previousToolTimeline;
-  if (previousActivityTimeline !== undefined)
-    targetMessage.activityTimeline = previousActivityTimeline;
-  targetMessage.hasFirstStreamEvent =
-    previousHasFirstStreamEvent || workflowMessageItem?.hasFirstStreamEvent === true;
-  delete targetMessage.workflowMessage;
-  delete targetMessage.workflowMeta;
-  return true;
 }
 
 export function normalizeExecutionLogForRealtime(logItem = {}) {

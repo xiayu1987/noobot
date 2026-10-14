@@ -30,7 +30,7 @@ function compareDialogAnchors(left, right) {
   return left.sourceIndex - right.sourceIndex;
 }
 
-export function deriveDialogOrderFromMessages(messages = []) {
+function deriveDialogOrderFromMessages(messages = []) {
   const source = Array.isArray(messages) ? messages : [];
   const anchorsByDialog = new Map();
   source.forEach((message, sourceIndex) => {

@@ -5,93 +5,25 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  mergeAssistantContents,
   normalizeExecutionLogForRealtime,
-  patchAssistantFromWorkflowMessage,
   sanitizeExecutionLogForDisplay,
   stripInternalEventPlaceholderLines,
 } from "../../../../../../src/modules/chat/runtime/engine/utils.js";
 
 describe("chatEngine utils", () => {
   it("strips internal event placeholder lines from assistant content", () => {
-    const content = stripInternalEventPlaceholderLines([
-      "[tool_call]",
-      "[session_turn_full]",
-      "[system]",
-      "[assistant_message_saved]",
-      "[tool_result]",
-    ].join("\n"));
+    const content = stripInternalEventPlaceholderLines(
+      [
+        "[tool_call]",
+        "[session_turn_full]",
+        "[system]",
+        "[assistant_message_saved]",
+        "[tool_result]",
+      ].join("\n"),
+    );
 
     expect(content).toBe("");
   });
-
-  it("keeps normal assistant text while removing internal event placeholders", () => {
-    const content = mergeAssistantContents([
-      {
-        content: [
-          "准备执行。",
-          "[tool_call]",
-          "执行完成。",
-          "[tool_result]",
-          "[not_internal_event]",
-        ].join("\n"),
-      },
-    ]);
-
-    expect(content).toContain("准备执行。");
-    expect(content).toContain("执行完成。");
-    expect(content).toContain("[not_internal_event]");
-    expect(content).not.toContain("[tool_call]");
-    expect(content).not.toContain("[tool_result]");
-  });
-
-  it("strips workflow assistant content copied into the active bot message", () => {
-    const targetMessage = {
-      pending: true,
-      terminalOutcome: "",
-      realtimeLogs: [],
-      executionLogTotal: 0,
-      content: "",
-    };
-
-    patchAssistantFromWorkflowMessage(targetMessage, {
-      role: "assistant",
-      content: "[session_turn_full]\n真正回复",
-    });
-
-    expect(targetMessage.content).toBe("真正回复");
-    expect(targetMessage.content).not.toContain("[session_turn_full]");
-  });
-
-  it("patches workflow assistant through the shared folded message shape", () => {
-    const targetMessage = {
-      pending: false,
-      terminalOutcome: "",
-      realtimeLogs: [],
-      executionLogTotal: 0,
-      content: "",
-    };
-    const workflowMessageItem = {
-      role: "assistant",
-      type: "tool_call",
-      content: "工作流节点回复",
-      tool_calls: [{ id: "call-1", name: "read_file" }],
-      tool_call_id: "call-1",
-    };
-
-    patchAssistantFromWorkflowMessage(targetMessage, workflowMessageItem);
-
-    expect(targetMessage.content).toBe("工作流节点回复");
-    expect(targetMessage.tool_calls).toEqual([{ id: "call-1", name: "read_file" }]);
-    expect(targetMessage.tool_call_id).toBe("call-1");
-    expect(targetMessage.type).toBe("tool_call");
-    expect(targetMessage.workflowMessage).toBeUndefined();
-    expect(targetMessage.workflowMeta).toBeUndefined();
-    expect(workflowMessageItem.tool_calls).toEqual([{ id: "call-1", name: "read_file" }]);
-    expect(workflowMessageItem.tool_call_id).toBe("call-1");
-    expect(workflowMessageItem.type).toBe("tool_call");
-  });
-
 
   it("sanitizes internal placeholders from execution logs", () => {
     const samples = [
@@ -126,7 +58,6 @@ describe("chatEngine utils", () => {
       }),
     );
   });
-
 
   it("shows concrete command during tool_call from command fields", () => {
     const logItem = normalizeExecutionLogForRealtime({

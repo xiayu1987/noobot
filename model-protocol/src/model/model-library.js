@@ -106,8 +106,3 @@ export function resolveModelLibraryProvider(alias = "") {
 export function resolveDefaultModelLibraryProvider() {
   return clone(GENERIC_PROVIDER_TEMPLATE);
 }
-
-export function resolveModelLibraryPromptCacheFields(model = "") {
-  const fields = MODEL_LIBRARY_CACHE_FIELDS.get(String(model).trim().toLowerCase());
-  return fields ? Object.freeze([...fields]) : null;
-}

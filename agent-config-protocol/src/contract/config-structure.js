@@ -317,7 +317,7 @@ export function resolveConfigNodeSemantics(node = {}, scope = CONFIG_DOCUMENT_SC
   });
 }
 
-export function configNodeAllowsDocument(node = {}, scope = CONFIG_DOCUMENT_SCOPE.GLOBAL) {
+function configNodeAllowsDocument(node = {}, scope = CONFIG_DOCUMENT_SCOPE.GLOBAL) {
   return resolveConfigNodeSemantics(node, scope).allowedInScope;
 }
 
@@ -368,17 +368,6 @@ function projectDelegatedContract(contract, value, options) {
     Object.entries(properties)
       .map(([key, child]) => [key, projectConfigNode(child, value[key], options)])
       .filter(([, child]) => child !== undefined),
-  );
-}
-
-export function projectConfigDocumentForScope(document = {}, scope = CONFIG_DOCUMENT_SCOPE.USER) {
-  if (!document || typeof document !== "object" || Array.isArray(document)) return {};
-  return (
-    projectConfigNode(CONFIG_STRUCTURE, document, {
-      scope,
-      access: null,
-      representation: CONFIG_PATH_REPRESENTATION.PERSISTED,
-    }) || {}
   );
 }
 
@@ -440,58 +429,6 @@ function walkStructure(node, path, visit) {
   }
 }
 
-function toRuntimePath(path) {
-  return path.map((key) => SNAKE_TO_CANONICAL_KEY_MAP[key] || key).join(".");
-}
-
-function collectScopeForbiddenPaths(node, path, scope, paths) {
-  if (path.length && !structureAllowsScope(node, scope)) {
-    paths.push([...path]);
-    return;
-  }
-  const delegatedProperties = node.delegatedContract?.properties || node.properties;
-  if (delegatedProperties && typeof delegatedProperties === "object") {
-    for (const [key, child] of Object.entries(delegatedProperties)) {
-      collectScopeForbiddenPaths(child, [...path, key], scope, paths);
-    }
-  }
-  if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT && node.fields) {
-    for (const [key, child] of Object.entries(node.fields)) {
-      collectScopeForbiddenPaths(child, [...path, key], scope, paths);
-    }
-  }
-  if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION && node.entry) {
-    collectScopeForbiddenPaths(node.entry, [...path, CONFIG_STRUCTURE_PLACEHOLDER], scope, paths);
-  }
-}
-
-export function listConfigNodePathsByPolicy({
-  policy,
-  representation = CONFIG_PATH_REPRESENTATION.PERSISTED,
-} = {}) {
-  if (!Object.values(CONFIG_NODE_POLICY).includes(policy)) {
-    throw new TypeError(`unsupported config node policy: ${policy}`);
-  }
-  if (!Object.values(CONFIG_PATH_REPRESENTATION).includes(representation)) {
-    throw new TypeError(`unsupported config path representation: ${representation}`);
-  }
-  const paths = [];
-  if (policy === CONFIG_NODE_POLICY.GLOBAL_ONLY) {
-    collectScopeForbiddenPaths(CONFIG_STRUCTURE, [], CONFIG_DOCUMENT_SCOPE.USER, paths);
-  } else {
-    walkStructure(CONFIG_STRUCTURE, [], (node, path) => {
-      if (!path.length) return;
-      const declared = node.policy || CONFIG_NODE_POLICY.USER_CONFIGURABLE;
-      if (declared === policy) paths.push([...path]);
-    });
-  }
-  return Object.freeze(
-    paths.map((path) =>
-      representation === CONFIG_PATH_REPRESENTATION.RUNTIME ? toRuntimePath(path) : path.join("."),
-    ),
-  );
-}
-
 export function listStructureModelReferences() {
   const references = [];
   walkStructure(CONFIG_STRUCTURE, [], (node, path) => {
@@ -503,7 +440,7 @@ export function listStructureModelReferences() {
   return Object.freeze(references);
 }
 
-export function assertConfigStructure(node = CONFIG_STRUCTURE, path = []) {
+function assertConfigStructure(node = CONFIG_STRUCTURE, path = []) {
   const where = path.length ? path.join(".") : "$";
   if (!node || typeof node !== "object" || typeof node.kind !== "string") {
     throw new TypeError(`config structure node is not declared at ${where}`);

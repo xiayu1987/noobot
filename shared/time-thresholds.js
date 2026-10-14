@@ -87,19 +87,6 @@ export const TIME_THRESHOLDS = deepFreeze({
   web: {
     browserDefaultTimeoutMs: TIME_TIERS.standardCommandMs,
     browserNetworkIdleTimeoutMs: 4500,
-    web2img: {
-      loadTimeoutMs: TIME_TIERS.browserLoadMs,
-      readyStateTimeoutMs: 20000,
-      networkIdleTimeoutMs: 12000,
-      readyPostWaitMs: 800,
-      gotoTimeoutMs: TIME_TIERS.browserLoadMs,
-      expandVisibleTimeoutMs: TIME_TIERS.fastProbeMs,
-      expandClickTimeoutMs: 800,
-      expandPostClickWaitMs: TIME_TIERS.uiThrottleMs,
-      scrollWaitMs: 450,
-      scrollFinalTopWaitMs: TIME_TIERS.shortDelayMs,
-      textStableIntervalMs: 700,
-    },
   },
 
   harness: {

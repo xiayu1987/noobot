@@ -11,13 +11,11 @@ import {
   configLeafFields,
   defaultValueForConfigNode,
   ensureConfigNavContainer,
-  findConfigNavNode,
   findConfigNavTrail,
   firstConfigNavPath,
   isConfigContainerNode,
   isConfigGroupNode,
   resolveConfigNavContainer,
-  resolveConfigNavParent,
 } from "../../../../src/modules/settings/state/configNavigation.js";
 import { CONFIG_FORM_NODE_KIND } from "../../../../src/modules/settings/state/configStructureContract.js";
 
@@ -42,17 +40,6 @@ describe("configNavigation", () => {
     expect(absent.exists).toBe(false);
   });
 
-  it("keeps leaf fields out of the nav tree and only nests group children", () => {
-    const tree = buildConfigNavTree(documentFixture());
-    const providerEntry = findConfigNavNode(tree, "providers/p1");
-    const childKeys = providerEntry.children.map((child) => child.key);
-    expect(childKeys).not.toContain("capabilities");
-    expect(childKeys).not.toContain("model");
-    expect(childKeys).not.toContain("temperature");
-    expect(providerEntry.children.every((child) => isConfigGroupNode(child.node))).toBe(true);
-    expect(configLeafFields(providerEntry.node).map((field) => field.key)).toContain("model");
-  });
-
   it("resolves a trail across nested objects and keeps list fields as leaves", () => {
     const tree = buildConfigNavTree(documentFixture());
     const trail = findConfigNavTrail(tree, "plugins/character");
@@ -64,7 +51,6 @@ describe("configNavigation", () => {
     );
     expect(firstConfigNavPath(tree)).toBe(tree[0].path);
     expect(findConfigNavTrail(tree, "")).toEqual([]);
-    expect(findConfigNavNode(tree, "providers/missing")).toBeNull();
   });
 
   it("reads containers and parents along a trail without mutating the document", () => {
@@ -72,7 +58,6 @@ describe("configNavigation", () => {
     const tree = buildConfigNavTree(document);
     const trail = findConfigNavTrail(tree, "providers/p1");
     expect(resolveConfigNavContainer(document, trail)).toEqual({ model: "m1", temperature: 0.5 });
-    expect(resolveConfigNavParent(document, trail)).toBe(document.providers);
     const missingTrail = findConfigNavTrail(buildConfigNavTree({}), "providers");
     expect(resolveConfigNavContainer({}, missingTrail)).toBeUndefined();
   });
@@ -117,42 +102,5 @@ describe("configNavigation", () => {
     expect(configEntryNodes({ kind: CONFIG_FORM_NODE_KIND.COLLECTION, entry: {} }, [])).toEqual([]);
     expect(configEntryNodes({ kind: CONFIG_FORM_NODE_KIND.OBJECT, children: [] }, {})).toEqual([]);
     expect(configLeafFields({ kind: CONFIG_FORM_NODE_KIND.COLLECTION })).toEqual([]);
-  });
-
-  it("keeps only user-editable provider fields in config.json declaration order", () => {
-    const tree = buildConfigNavTree(documentFixture());
-    const providerEntry = findConfigNavNode(tree, "providers/p1");
-    const keys = configLeafFields(providerEntry.node).map((field) => field.key);
-    expect(keys.slice(0, 6)).toEqual([
-      "enabled",
-      "used_for_conversation",
-      "api_key",
-      "base_url",
-      "model",
-      "description",
-    ]);
-    expect(keys).toContain("reasoning_effort");
-    expect(keys).not.toContain("reasoning_effort_options");
-    expect(keys).toContain("prompt_cache_fields");
-    expect(keys).not.toContain("prompt_cache_key");
-    expect(keys).not.toContain("prompt_cache_options");
-    expect(keys).not.toContain("prompt_cache_retention");
-    expect(keys).not.toContain("cache_control");
-    expect(keys).not.toContain("use_responses_api");
-    expect(keys).toContain("temperature");
-    expect(keys).not.toContain("sampling_fields");
-
-    const cacheFields = configLeafFields(providerEntry.node).find(
-      (field) => field.key === "prompt_cache_fields",
-    );
-    expect(cacheFields).toMatchObject({
-      kind: CONFIG_FORM_NODE_KIND.ENUM_LIST,
-      options: [
-        "prompt_cache_key",
-        "prompt_cache_options",
-        "prompt_cache_retention",
-        "cache_control",
-      ],
-    });
   });
 });

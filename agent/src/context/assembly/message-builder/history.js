@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { filterCurrentTurnMessagesFromHistory } from "@noobot/context-protocol/policy/block";
 import {
   deriveContextMessageProjectionId,
   projectContextMessageIdentityMetadata,
@@ -28,16 +27,6 @@ import {
   shouldBuildUserMetaForHistoryMessage,
   isDerivedUserMetaMessage,
 } from "./user-meta.js";
-
-export function filterCurrentTurnUserMessageFromHistory(
-  historyMessages = [],
-  { turnScopeId = "", currentDialogProcessId = "" } = {},
-) {
-  return filterCurrentTurnMessagesFromHistory(historyMessages, {
-    currentTurnScopeId: turnScopeId,
-    currentDialogProcessId,
-  });
-}
 
 function hasMaterializedUserMeta(messages = [], index = 0, sourceMessage = {}) {
   const sourceId = String(

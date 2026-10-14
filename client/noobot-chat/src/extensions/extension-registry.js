@@ -24,8 +24,6 @@ function bumpRevision(mutate) {
 
 export const contributeExtension = bumpRevision(registry.contribute);
 export const listExtensionContributions = registry.list;
-export const replacePluginExtensions = bumpRevision(registry.replacePlugin);
-export const removePluginExtensions = bumpRevision(registry.removePlugin);
 export const resolveExtensionPoint = registry.resolve;
 export const resolveExtensionProps = registry.resolveProps;
 export const resolveExtensionListeners = registry.resolveListeners;

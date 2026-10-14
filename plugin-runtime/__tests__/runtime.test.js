@@ -65,6 +65,48 @@ test("extension registry publishes candidate generations atomically", () => {
   assert.equal(registry.list("point")[0].id, "new");
 });
 
+function registryIds(registry, point) {
+  return registry.resolve(point).map(({ id }) => id);
+}
+
+function createOwnedRegistry() {
+  const registry = createExtensionRegistry({
+    pointDefinitions: { pre: { strategy: "multi" }, post: { strategy: "multi" } },
+  });
+  registry.contribute("pre", { id: "owned-pre", pluginId: "owned" });
+  registry.contribute("post", { id: "owned-post", pluginId: "owned" });
+  registry.contribute("pre", { id: "other-pre", pluginId: "other" });
+  return registry;
+}
+
+test("extension registry removes every contribution owned by a plugin", () => {
+  const registry = createOwnedRegistry();
+  registry.removePlugin("owned");
+  assert.deepEqual(registryIds(registry, "pre"), ["other-pre"]);
+  assert.deepEqual(registryIds(registry, "post"), []);
+});
+
+test("extension registry replaces only the owning plugin contributions in one commit", () => {
+  const registry = createOwnedRegistry();
+  registry.replacePlugin("owned", [{ point: "post", contribution: { id: "owned-new" } }]);
+  assert.deepEqual(registryIds(registry, "pre"), ["other-pre"]);
+  assert.deepEqual(registryIds(registry, "post"), ["owned-new"]);
+});
+
+test("extension registry keeps the previous registration when a replacement is invalid", () => {
+  const registry = createOwnedRegistry();
+  assert.throws(
+    () =>
+      registry.replacePlugin("owned", [
+        { point: "pre", contribution: { id: "new-pre" } },
+        { point: "unknown", contribution: { id: "invalid" } },
+      ]),
+    /unknown extension point "unknown"/,
+  );
+  assert.deepEqual(registryIds(registry, "pre"), ["other-pre", "owned-pre"]);
+  assert.deepEqual(registryIds(registry, "post"), ["owned-post"]);
+});
+
 test("runtime loads only Manifest V2 activate entries", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-plugin-runtime-"));
   const pluginDir = path.join(root, "example");

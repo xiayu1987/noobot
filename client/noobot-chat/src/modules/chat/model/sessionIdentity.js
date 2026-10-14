@@ -38,17 +38,9 @@ function resolveSessionPrimaryId(sessionItems = [], sessionId = "") {
   return normalizeSessionId(targetSession?.sessionId || sessionId);
 }
 
-function isSessionIdInIdentity(sessionItem = {}, sessionId = "") {
-  const normalizedSessionId = normalizeSessionId(sessionId);
-  if (!normalizedSessionId) return false;
-  return getSessionIdentityList(sessionItem).includes(normalizedSessionId);
-}
-
 function getActiveSessionIdCandidates({ activeSession, activeSessionId } = {}) {
   return new Set(
-    [activeSession?.sessionId, activeSessionId]
-      .map(normalizeSessionId)
-      .filter(Boolean),
+    [activeSession?.sessionId, activeSessionId].map(normalizeSessionId).filter(Boolean),
   );
 }
 
@@ -64,16 +56,10 @@ function isCurrentActiveSessionId({
   if (activeCandidates.has(normalizedSessionId)) return true;
 
   const targetSession = findSessionByAnyId(sessionItems, normalizedSessionId);
-  return getSessionIdentityList(targetSession).some((candidate) =>
-    activeCandidates.has(candidate),
-  );
+  return getSessionIdentityList(targetSession).some((candidate) => activeCandidates.has(candidate));
 }
 
-function confirmSessionIdentity({
-  sessionItem,
-  sessionId = "",
-  activeSessionId = "",
-} = {}) {
+function confirmSessionIdentity({ sessionItem, sessionId = "", activeSessionId = "" } = {}) {
   const normalizedSessionId = normalizeSessionId(sessionId);
   if (!sessionItem || !normalizedSessionId) {
     return { changed: false, nextActiveSessionId: activeSessionId };
@@ -89,10 +75,7 @@ function confirmSessionIdentity({
 export {
   buildSessionIdentityMap,
   findSessionByAnyId,
-  getActiveSessionIdCandidates,
-  getSessionIdentityList,
   isCurrentActiveSessionId,
-  isSessionIdInIdentity,
   normalizeSessionId,
   confirmSessionIdentity,
   resolveSessionPrimaryId,

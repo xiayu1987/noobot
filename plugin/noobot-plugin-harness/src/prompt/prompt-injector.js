@@ -4,17 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
-  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
-  HARNESS_INJECTED_MESSAGE_TYPE_FIELD,
-  HARNESS_PROMPT_INJECTION_ID_FIELD,
-} from "../capabilities/handlers/shared/constants.js";
-import {
   buildHarnessInjectedMessage,
   persistHarnessMessageToCurrentTurn,
+  resolvePromptInjectionId as resolvePromptInjectionIdFromMetadata,
 } from "../capabilities/handlers/shared/message/injected-message-utils.js";
 import {
-  replaceMessages,
+  replaceMessageProjection,
   resolveModelMessageBlocks,
   resolveModelMessages,
   writeMessageBlocks,
@@ -22,52 +17,15 @@ import {
 import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
 
 const injectedPromptCache = new WeakMap();
-const HARNESS_MARKER_PATTERN = /<!--\s*([^<>]*?)\s*-->/g;
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function readMessageField(message = {}, field = "") {
-  const key = String(field || "").trim();
-  if (!key) return undefined;
-  return (
-    message?.[key] ??
-    message?.lc_kwargs?.[key] ??
-    message?.additional_kwargs?.[key] ??
-    message?.lc_kwargs?.additional_kwargs?.[key]
-  );
-}
-
-function resolvePromptInjectionIdFromMetadata(message = {}) {
-  const direct = String(readMessageField(message, HARNESS_PROMPT_INJECTION_ID_FIELD) || "").trim();
-  if (direct) return direct;
-  const injectedMessageType = String(
-    readMessageField(message, HARNESS_INJECTED_MESSAGE_TYPE_FIELD) || "",
-  ).trim();
-  const prefix = "harness_prompt:";
-  if (injectedMessageType.startsWith(prefix))
-    return injectedMessageType.slice(prefix.length).trim();
-  return "";
-}
-
-function scanLegacyInjectedIdsInContent(content = "", target = new Set()) {
-  const text = typeof content === "string" ? content : "";
-  if (!text) return target;
-  HARNESS_MARKER_PATTERN.lastIndex = 0;
-  let matched = HARNESS_MARKER_PATTERN.exec(text);
-  while (matched) {
-    const id = String(matched?.[1] || "").trim();
-    if (id) target.add(id);
-    matched = HARNESS_MARKER_PATTERN.exec(text);
-  }
-  return target;
-}
-
 function scanInjectedIdsInMessage(message = {}, target = new Set()) {
   const metadataId = resolvePromptInjectionIdFromMetadata(message);
   if (metadataId) target.add(metadataId);
-  return scanLegacyInjectedIdsInContent(message?.content, target);
+  return target;
 }
 
 function rebuildInjectedPromptCache(messages = []) {
@@ -111,13 +69,6 @@ export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
   return found;
 }
 
-export function markPromptAsInjected(messages, id) {
-  if (!messages || !id || messages.length === 0 || !Array.isArray(messages)) return;
-  const cache = getOrCreateInjectedPromptCache(messages);
-  cache.ids.add(id);
-  cache.scannedLength = messages.length;
-}
-
 function normalizePromptEntries(prompts = []) {
   return (Array.isArray(prompts) ? prompts : [])
     .map((item = {}) => ({
@@ -137,17 +88,11 @@ function normalizePromptEntries(prompts = []) {
 function isPromptMessage(message = {}, id = "") {
   const promptId = String(id || "").trim();
   if (!promptId) return false;
-  if (resolvePromptInjectionIdFromMetadata(message) === promptId) return true;
-  return String(message?.content || "").includes(`<!-- ${promptId} -->`);
+  return resolvePromptInjectionIdFromMetadata(message) === promptId;
 }
 
 function isAnyPromptInjectionMessage(message = {}) {
-  if (resolvePromptInjectionIdFromMetadata(message)) return true;
-  return (
-    (message?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] === HARNESS_INJECTED_MESSAGE_FLAG_VALUE ||
-      isContextSystemMessage(message)) &&
-    String(message?.content || "").startsWith("<!-- noobot-harness")
-  );
+  return !!resolvePromptInjectionIdFromMetadata(message);
 }
 
 function removePromptMessagesFromList(messages = [], id = "", { removeSystem = false } = {}) {
@@ -204,6 +149,35 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
   return changed;
 }
 
+function commitPromptMessages(
+  ctx = {},
+  nextMessages = [],
+  promptMessages = [],
+  { replaceExisting = false } = {},
+) {
+  const blocks = resolveModelMessageBlocks(ctx);
+  const keep = (message) => !(replaceExisting && isAnyPromptInjectionMessage(message));
+  const nextBlocks = {
+    system: (blocks.system || []).filter(keep),
+    history: [...(blocks.history || [])],
+    incremental: (blocks.incremental || []).filter(keep),
+  };
+  for (const message of promptMessages) {
+    nextBlocks[isContextSystemMessage(message) ? "system" : "incremental"].push(message);
+  }
+  writeMessageBlocks(ctx, nextBlocks);
+  const committedByUid = new Map();
+  for (const blockName of ["system", "incremental"]) {
+    for (const message of resolveModelMessageBlocks(ctx)[blockName]) {
+      if (message?.messageUid) committedByUid.set(message.messageUid, message);
+    }
+  }
+  replaceMessageProjection(
+    ctx,
+    nextMessages.map((message) => committedByUid.get(message?.messageUid) || message),
+  );
+}
+
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
   while (index < messages.length && isContextSystemMessage(messages[index])) {
@@ -236,6 +210,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   }
 
   let injected = false;
+  let replaceExisting = false;
   const cache = getOrCreateInjectedPromptCache(messages);
   const existingIds = cache.ids;
 
@@ -252,6 +227,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
 
     const promptContent = content;
     if (mode === "replace") {
+      replaceExisting = true;
       nextMessages = nextMessages.filter((message) => !isAnyPromptInjectionMessage(message));
       prependItems.push(
         buildHarnessInjectedMessage(promptContent, {
@@ -299,10 +275,10 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   for (const item of appendItems) {
     nextMessages.push(item);
   }
-  replaceMessages(ctx, nextMessages);
+  const promptMessages = [...prependItems, ...afterSystemItems, ...appendItems];
+  if (injected) commitPromptMessages(ctx, nextMessages, promptMessages, { replaceExisting });
   const updatedMessages = resolveModelMessages(ctx);
 
-  const promptMessages = [...prependItems, ...afterSystemItems, ...appendItems];
   if (injected) {
     if (options.persistToCurrentTurn !== false) {
       persistPromptMessagesToCurrentTurn(ctx, promptMessages);

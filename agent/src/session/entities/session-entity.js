@@ -37,7 +37,7 @@ function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   return events;
 }
 
-export function normalizeTurnTimingEntity(timing = {}) {
+function normalizeTurnTimingEntity(timing = {}) {
   if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
   const turnScopeId = String(timing?.turnScopeId || "").trim();
   const dialogProcessId = resolveContextMessageDialogProcessId(timing);
@@ -54,7 +54,7 @@ export function normalizeTurnTimingEntity(timing = {}) {
   return normalized;
 }
 
-export function normalizeTurnTimingsEntity(turnTimings = []) {
+function normalizeTurnTimingsEntity(turnTimings = []) {
   const source = Array.isArray(turnTimings)
     ? turnTimings
     : Object.values(turnTimings && typeof turnTimings === "object" ? turnTimings : {});

@@ -35,7 +35,7 @@ export const SANDBOX_PROVIDER_EXECUTABLE = Object.freeze({
   [SANDBOX_PROVIDER.DOCKER]: "docker",
 });
 
-export const DOCKER_CONTAINER_SCOPE = Object.freeze({
+const DOCKER_CONTAINER_SCOPE = Object.freeze({
   GLOBAL: "global",
   USER: "user",
 });
@@ -47,7 +47,7 @@ export const TOOL_EXECUTION_CLASS = Object.freeze({
   SERVICE_CONTROL: "service_control",
 });
 
-export const EXECUTION_ISOLATION_DEFAULTS = Object.freeze({
+const EXECUTION_ISOLATION_DEFAULTS = Object.freeze({
   mode: EXECUTION_ISOLATION_MODE.HOST,
   sandbox: Object.freeze({
     provider: SANDBOX_PROVIDER.DOCKER,
@@ -119,7 +119,7 @@ function requiredString(value, field) {
   return normalized;
 }
 
-export function sanitizeExecutionIdentity(input = "") {
+function sanitizeExecutionIdentity(input = "") {
   const normalized = String(input || "")
     .toLowerCase()
     .replace(/[^a-z0-9_.-]/g, "-");
@@ -177,7 +177,7 @@ function normalizeOptionalLockWaitTimeout(value) {
   return timeout;
 }
 
-export function normalizeSandboxProvider(input = SANDBOX_PROVIDER.DOCKER) {
+function normalizeSandboxProvider(input = SANDBOX_PROVIDER.DOCKER) {
   const provider = String(input || "")
     .trim()
     .toLowerCase();
@@ -194,7 +194,7 @@ export function resolveSandboxProviderExecutable(provider = SANDBOX_PROVIDER.DOC
   return executable;
 }
 
-export function normalizeDockerContainerScope(input = DOCKER_CONTAINER_SCOPE.USER) {
+function normalizeDockerContainerScope(input = DOCKER_CONTAINER_SCOPE.USER) {
   const scope = String(input || "")
     .trim()
     .toLowerCase();

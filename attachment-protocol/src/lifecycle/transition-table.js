@@ -55,9 +55,6 @@ const ALLOWED = Object.freeze({
   [ATTACHMENT_LIFECYCLE.INVALID]: new Set([ATTACHMENT_LIFECYCLE.DELETED]),
   [ATTACHMENT_LIFECYCLE.DELETED]: new Set(),
 });
-export function isTerminalAttachmentLifecycle(s) {
-  return s === ATTACHMENT_LIFECYCLE.DELETED;
-}
 export function canTransitionAttachmentLifecycle(current, next) {
   return current === undefined || current === next || ALLOWED[current]?.has(next) === true;
 }

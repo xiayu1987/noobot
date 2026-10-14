@@ -9,13 +9,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   CONFIG_DOCUMENT_SCOPE,
-  CONFIG_NODE_POLICY,
-  CONFIG_PATH_REPRESENTATION,
   CONFIG_REPAIR_ACTION,
-  CONFIG_STRUCTURE_PLACEHOLDER,
-  listConfigNodePathsByPolicy,
   mergeConfig,
-  normalizeKnownConfigKeys,
   repairConfigDocument,
   sanitizeUserConfig,
   WEB_SEARCH_MODE,
@@ -27,29 +22,6 @@ import {
 
 function readJsonFixture(relativePath) {
   return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
-}
-
-function collectObjectOnlyPaths(source, reference, prefix = "") {
-  const paths = [];
-  for (const key of Object.keys(source || {})) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (!Object.prototype.hasOwnProperty.call(reference || {}, key)) {
-      paths.push(path);
-      continue;
-    }
-    const sourceValue = source[key];
-    const referenceValue = reference[key];
-    if (
-      sourceValue &&
-      typeof sourceValue === "object" &&
-      !Array.isArray(sourceValue) &&
-      referenceValue &&
-      typeof referenceValue === "object" &&
-      !Array.isArray(referenceValue)
-    )
-      paths.push(...collectObjectOnlyPaths(sourceValue, referenceValue, path));
-  }
-  return paths;
 }
 
 test("user config generated from the global config is idempotent and omits system-owned nodes", () => {
@@ -66,57 +38,28 @@ test("user config generated from the global config is idempotent and omits syste
   });
   assert.deepEqual(regenerated.document, generated);
   assert.deepEqual(regenerated.report.changes, []);
-  const globalOnlyPaths = collectObjectOnlyPaths(globalTemplate, generated).sort();
-  const systemOwnedPaths = [
-    ...listConfigNodePathsByPolicy({
-      policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
-      representation: CONFIG_PATH_REPRESENTATION.PERSISTED,
-    }),
-  ].sort();
-  const systemOwnedRuntimePaths = [
-    ...listConfigNodePathsByPolicy({
-      policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
-      representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
-    }),
-  ].sort();
-  const coversPath = (ownedPath, path) => {
-    const owned = ownedPath.split(".");
-    const actual = path.split(".");
-    if (owned.length < actual.length) return false;
-    return actual.every(
-      (key, index) => owned[index] === key || owned[index] === CONFIG_STRUCTURE_PLACEHOLDER,
-    );
-  };
-  for (const path of globalOnlyPaths)
-    assert.ok(
-      systemOwnedPaths.some((ownedPath) => coversPath(ownedPath, path)),
-      `${path} is dropped from user scope without a protocol declaration`,
-    );
   const legacyUserConfig = structuredClone(globalTemplate);
+  assert.deepEqual(
+    repairConfigDocument({
+      scope: CONFIG_DOCUMENT_SCOPE.USER,
+      baseValues: globalTemplate,
+      target: legacyUserConfig,
+    }).document,
+    generated,
+  );
+  assert.deepEqual(sanitizeUserConfig(legacyUserConfig), sanitizeUserConfig(generated));
+  assert.deepEqual(
+    mergeConfig(globalTemplate, legacyUserConfig),
+    mergeConfig(globalTemplate, generated),
+  );
   legacyUserConfig.tools.execute_native_script = { enabled: false };
-  const repaired = repairConfigDocument({
+  const overridden = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
     baseValues: globalTemplate,
     target: legacyUserConfig,
-  });
-  for (const path of systemOwnedPaths)
-    assert.equal(
-      path.split(".").reduce((node, key) => node?.[key], repaired.document),
-      undefined,
-    );
-  const sanitized = sanitizeUserConfig(legacyUserConfig);
-  const merged = mergeConfig(globalTemplate, legacyUserConfig);
-  const normalizedGlobalTemplate = normalizeKnownConfigKeys(globalTemplate);
-  for (const path of systemOwnedRuntimePaths) {
-    assert.equal(
-      path.split(".").reduce((node, key) => node?.[key], sanitized),
-      undefined,
-    );
-    assert.deepEqual(
-      path.split(".").reduce((node, key) => node?.[key], merged),
-      path.split(".").reduce((node, key) => node?.[key], normalizedGlobalTemplate),
-    );
-  }
+  }).document;
+  assert.deepEqual(overridden.tools.execute_native_script, { enabled: false });
+  assert.deepEqual(Object.keys(overridden).sort(), Object.keys(generated).sort());
 });
 
 test("global and generated user providers project model-library cache defaults", () => {

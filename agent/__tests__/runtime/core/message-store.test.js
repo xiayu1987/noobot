@@ -15,10 +15,7 @@ import {
   resolveMessagesByIds,
   writeMessageBlocks,
 } from "@noobot/context-protocol/message/store";
-import {
-  attachModelContextRuntime,
-  resolveCanonicalContextMessages,
-} from "@noobot/context-protocol/assembly/model-runtime";
+import { attachModelContextRuntime } from "@noobot/context-protocol/assembly/model-runtime";
 
 function attachRuntime(holder) {
   attachModelContextRuntime(holder);
@@ -262,14 +259,6 @@ test("summary pruning clears only incremental blocks and rebuilds canonical inde
     ["latest-summary"],
   );
   assert.deepEqual(resolveMessagesByIds(holder, [removedIncrementalId]), []);
-  assert.equal(
-    resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "old-increment"),
-    false,
-  );
-  assert.equal(
-    resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "history-summary"),
-    true,
-  );
 });
 
 test("summary pruning preserves every unmarked incremental message byte-for-byte and in order", () => {

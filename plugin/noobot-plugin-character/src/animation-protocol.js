@@ -791,9 +791,7 @@ export const AnimationProtocolUpdateInputSchema =
   animationProtocolUpdateFields.superRefine(validateTimeline);
 export const AnimationIdSchema = animationId;
 export const AnimationAssetSchema = animationAsset;
-export const AnimationTrackSchema = track;
-export const AnimationRootTransformSchema = rootTransform;
-export const AnimationAssetListSchema = z.array(animationAsset).min(1).max(32);
+const AnimationAssetListSchema = z.array(animationAsset).min(1).max(32);
 export const parseAnimationProtocol = (value) => AnimationProtocolSchema.parse(value);
 export const safeParseAnimationProtocol = (value) => AnimationProtocolSchema.safeParse(value);
 export const safeParseAnimationAssets = (value) => AnimationAssetListSchema.safeParse(value);

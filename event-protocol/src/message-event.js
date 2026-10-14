@@ -29,7 +29,7 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
   USER_INTERJECTION: "user_interjection",
 });
 
-export const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
+const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
 
 export const ACTIVITY_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MODEL_ANALYSIS]),
@@ -48,7 +48,7 @@ export function isHostActivity(activity = {}) {
   return !activityKind || HOST_ACTIVITY_KINDS.has(activityKind);
 }
 
-export const TRANSIENT_MESSAGE_EVENT_TYPES = Object.freeze(
+const TRANSIENT_MESSAGE_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.LLM_DELTA, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA]),
 );
 
@@ -78,11 +78,11 @@ export function resolveMessageEventModelMessageId(value = {}) {
   return text(value?.modelMessageId);
 }
 
-export const AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES = Object.freeze(
+const AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT]),
 );
 
-export const REPLACE_MESSAGE_CONTENT_EVENT_TYPES = Object.freeze(
+const REPLACE_MESSAGE_CONTENT_EVENT_TYPES = Object.freeze(
   new Set([MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT]),
 );
 
@@ -390,9 +390,4 @@ export function projectMessageEventToolFacets(event = {}) {
         }
       : undefined;
   return Object.freeze({ toolCall, toolResult });
-}
-
-export function hasMessageEventToolPayload(event = {}) {
-  const { toolCall, toolResult } = projectMessageEventToolFacets(event);
-  return toolCall !== undefined || toolResult !== undefined;
 }

@@ -16,7 +16,7 @@ function stable(value) {
   );
 }
 
-export function canonicalizeCommandRequest(value = {}) {
+function canonicalizeCommandRequest(value = {}) {
   return JSON.stringify(stable(value));
 }
 

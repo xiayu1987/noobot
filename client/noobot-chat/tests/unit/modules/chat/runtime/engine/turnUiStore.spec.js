@@ -9,7 +9,6 @@ import {
   clearTurnUiState,
   getTurnUiState,
   isTurnDetailExpanded,
-  promoteSessionTurnUiStates,
   setTurnThinkingOpenNames,
   setTurnAssistantContentExpanded,
   toggleTurnDetailKey,
@@ -85,16 +84,6 @@ describe("turnUiStore lifecycle", () => {
     expect(getTurnUiState(turn("session-b", "turn-1")).scrollTop).toBe(30);
   });
 
-  it("promotes optimistic session UI state without leaking it to another turn", () => {
-    const local = turn("session-a", "turn-1");
-    getTurnUiState(local).animationKeys = ["analysis-1"];
-
-    expect(promoteSessionTurnUiStates("session-a", "session-canonical")).toBe(1);
-    expect(getTurnUiState(turn("session-canonical", "turn-1")).animationKeys).toEqual(["analysis-1"]);
-    expect(getTurnUiState(local).animationKeys).toEqual([]);
-    expect(getTurnUiState(turn("session-canonical", "turn-2")).animationKeys).toEqual([]);
-  });
-
   it("keeps UI state outside versioned domain snapshot hydration", () => {
     const identity = turn("session-a", "turn-1");
     const targetMessage = { ...identity, content: "live" };
@@ -102,17 +91,22 @@ describe("turnUiStore lifecycle", () => {
     ui.thinkingOpenNames = ["activity"];
     ui.scrollTop = 88;
 
-    expect(hydrateTurnSnapshot({
-      targetMessage,
-      throughSequence: 2,
-      snapshot: {
-        ...identity,
-        content: "snapshot",
-        thinkingOpenNames: ["must-not-enter-ui-store"],
-        scrollTop: 0,
-        messageEventState: { lastSequence: 2, consumedEventIds: [] },
-      },
-    }).applied).toBe(true);
-    expect(getTurnUiState(identity)).toMatchObject({ thinkingOpenNames: ["activity"], scrollTop: 88 });
+    expect(
+      hydrateTurnSnapshot({
+        targetMessage,
+        throughSequence: 2,
+        snapshot: {
+          ...identity,
+          content: "snapshot",
+          thinkingOpenNames: ["must-not-enter-ui-store"],
+          scrollTop: 0,
+          messageEventState: { lastSequence: 2, consumedEventIds: [] },
+        },
+      }).applied,
+    ).toBe(true);
+    expect(getTurnUiState(identity)).toMatchObject({
+      thinkingOpenNames: ["activity"],
+      scrollTop: 88,
+    });
   });
 });

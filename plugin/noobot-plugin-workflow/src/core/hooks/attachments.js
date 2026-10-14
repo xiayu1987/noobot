@@ -12,17 +12,7 @@ import {
   projectAttachmentIdentity,
   mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
-import {
-  createAttachmentReference,
-  createTransferIdentity,
-  createTransferEnvelope,
-  assertTransferEnvelope,
-  TRANSFER_DIRECTION,
-} from "@noobot/semantic-transfer-protocol";
-
-function assertTransferAttachmentIdentity(attachment = {}) {
-  return projectAttachmentIdentity(attachment);
-}
+import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 
 export function mergeAttachments(existing = [], incoming = []) {
   return mergeAttachmentsByIdentity(existing, incoming, {
@@ -115,43 +105,6 @@ export function applyWorkflowTransferPayload(target = {}, payload = {}) {
     target.transferEnvelopes = merged;
   }
   return target;
-}
-
-export function buildWorkflowTransferPayloadFromAttachments({
-  attachments = [],
-  transferId = "",
-  messageId = "",
-  identity = null,
-  intent = {},
-  meta = {},
-} = {}) {
-  const metas = (Array.isArray(attachments) ? attachments : []).filter(
-    (item) => item && typeof item === "object" && !Array.isArray(item),
-  );
-  if (!metas.length) return normalizeWorkflowTransferPayload();
-  if (!String(transferId || "").trim() || !String(messageId || "").trim())
-    throw new Error("workflow transfer identity is required");
-  const refs = metas.map((item, index) =>
-    createAttachmentReference({
-      identity: assertTransferAttachmentIdentity(item),
-      role: index === 0 ? "primary" : "secondary",
-      name: item.name,
-      mimeType: item.mimeType,
-      size: Number.isSafeInteger(item.size) && item.size >= 0 ? item.size : undefined,
-    }),
-  );
-  const envelope = createTransferEnvelope({
-    transferId: String(transferId).trim(),
-    messageId: String(messageId).trim(),
-    identity: createTransferIdentity(identity),
-    direction: TRANSFER_DIRECTION.OUTPUT,
-    payload: { mode: "attachment", attachments: refs },
-    intent,
-    meta,
-  });
-  return normalizeWorkflowTransferPayload({
-    transferEnvelopes: [envelope],
-  });
 }
 
 export function resolveWorkflowTransferAttachmentReferences(payload = {}) {

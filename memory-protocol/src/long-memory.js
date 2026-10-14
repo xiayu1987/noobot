@@ -6,20 +6,20 @@
 import { stripMarkdownFence } from "./text.js";
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "./document.js";
 
-export const LONG_MEMORY_VALUE_SEPARATOR = "：";
+const LONG_MEMORY_VALUE_SEPARATOR = "：";
 
 export const LONG_MEMORY_FIELD_KIND = Object.freeze({
   SINGLE: "single",
   LIST: "list",
 });
 
-export const LONG_MEMORY_PATCH_ACTION = Object.freeze({
+const LONG_MEMORY_PATCH_ACTION = Object.freeze({
   ADD: "ADD",
   UPDATE: "UPDATE",
   DELETE: "DELETE",
 });
 
-export const LONG_MEMORY_PATCH_NOOP = "NOOP";
+const LONG_MEMORY_PATCH_NOOP = "NOOP";
 
 export const LONG_MEMORY_ERROR_CODE = Object.freeze({
   DOCUMENT_INVALID: "LONG_MEMORY_DOCUMENT_INVALID",

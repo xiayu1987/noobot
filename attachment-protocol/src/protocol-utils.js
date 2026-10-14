@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const ATTACHMENT_PROTOCOL_NAME = "noobot.attachment";
-export const ATTACHMENT_PROTOCOL_VERSION = 1;
-
 import { AttachmentProtocolError } from "./errors.js";
 
 export function isPlainObject(value) {

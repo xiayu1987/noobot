@@ -52,7 +52,7 @@ export function writeStorageValue(key, value) {
   }
 }
 
-export function removeStorageValue(key) {
+function removeStorageValue(key) {
   try {
     getStorage()?.removeItem?.(key);
     return true;
@@ -61,15 +61,15 @@ export function removeStorageValue(key) {
   }
 }
 
-export function normalizePreferenceString(value = "") {
+function normalizePreferenceString(value = "") {
   return String(value || "").trim();
 }
 
-export function normalizeScenarioPreferenceKey(value = "") {
+function normalizeScenarioPreferenceKey(value = "") {
   return normalizePreferenceString(value) || "__default__";
 }
 
-export function normalizeSelectedModelByScenarioPreference(value = {}) {
+function normalizeSelectedModelByScenarioPreference(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const nextValue = {};
   for (const [rawScenarioKey, rawModel] of Object.entries(value)) {
@@ -80,7 +80,7 @@ export function normalizeSelectedModelByScenarioPreference(value = {}) {
   return nextValue;
 }
 
-export function normalizeSelectedModelSelectionByScenarioPreference(value = {}) {
+function normalizeSelectedModelSelectionByScenarioPreference(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const nextValue = {};
   for (const [rawScenarioKey, rawSelection] of Object.entries(value)) {
@@ -168,7 +168,7 @@ export function applyPluginPreferenceDefaults(value = {}, defaultsByPluginId = {
   );
 }
 
-export function normalizePluginModelConfigByScenarioPreference(value = {}) {
+function normalizePluginModelConfigByScenarioPreference(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const nextValue = {};
   for (const [rawScenarioKey, rawConfig] of Object.entries(value)) {
@@ -179,7 +179,7 @@ export function normalizePluginModelConfigByScenarioPreference(value = {}) {
   return nextValue;
 }
 
-export function readJsonStorageValue(key, fallback = {}) {
+function readJsonStorageValue(key, fallback = {}) {
   try {
     const rawValue = readStorageValue(key, "");
     if (!rawValue) return fallback;
@@ -190,21 +190,21 @@ export function readJsonStorageValue(key, fallback = {}) {
   }
 }
 
-export function writeJsonStorageValue(key, value = {}) {
+function writeJsonStorageValue(key, value = {}) {
   return writeStorageValue(key, JSON.stringify(value && typeof value === "object" ? value : {}));
 }
 
-export function loadBooleanPreference(key, defaultValue = true) {
+function loadBooleanPreference(key, defaultValue = true) {
   const storedValue = readStorageValue(key, null);
   if (defaultValue) return storedValue !== "false";
   return storedValue === "true";
 }
 
-export function normalizeSafeConfirmLevel(value) {
+function normalizeSafeConfirmLevel(value) {
   return normalizeSecurityRiskLevel(value, SECURITY_RISK_LEVEL.LOW);
 }
 
-export function persistBooleanPreference(key, value) {
+function persistBooleanPreference(key, value) {
   return writeStorageValue(key, Boolean(value) ? "true" : "false");
 }
 
@@ -240,7 +240,7 @@ export function persistBotScenarioPreference(value = "") {
   );
 }
 
-export function loadSelectedModelByScenarioPreference() {
+function loadSelectedModelByScenarioPreference() {
   const selectedModelSelectionByScenario = loadSelectedModelSelectionByScenarioPreference();
   const selectedModelByScenario = {};
   for (const [scenarioKey, selection] of Object.entries(selectedModelSelectionByScenario)) {
@@ -249,7 +249,7 @@ export function loadSelectedModelByScenarioPreference() {
   return selectedModelByScenario;
 }
 
-export function loadSelectedModelSelectionByScenarioPreference() {
+function loadSelectedModelSelectionByScenarioPreference() {
   return normalizeSelectedModelSelectionByScenarioPreference(
     readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.selectedModelSelectionByScenario, {}),
   );
@@ -282,7 +282,7 @@ export function persistSelectedModelPreference(value = "", scenarioKey = "") {
   );
 }
 
-export function loadMemoryModelByScenarioPreference() {
+function loadMemoryModelByScenarioPreference() {
   return normalizeSelectedModelByScenarioPreference(
     readJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.memoryModelByScenario, {}),
   );
@@ -366,7 +366,7 @@ export function normalizeAvailableBotScenarios(definitions = {}) {
     }));
 }
 
-export function getAvailableScenarioKeySet(availableBotScenarios = []) {
+function getAvailableScenarioKeySet(availableBotScenarios = []) {
   return new Set(
     (Array.isArray(availableBotScenarios) ? availableBotScenarios : [])
       .map((scenarioItem) => normalizePreferenceString(scenarioItem?.key))
@@ -422,7 +422,7 @@ export function syncBotScenarioWithConfig({
   return resolved;
 }
 
-export function updateBooleanPreference({ preferenceRef, key, value } = {}) {
+function updateBooleanPreference({ preferenceRef, key, value } = {}) {
   const nextValue = Boolean(value);
   if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
     preferenceRef.value = nextValue;

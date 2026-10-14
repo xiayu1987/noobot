@@ -6,12 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  filterSummarizedMessages,
   markCurrentTurnArraySummarized,
-  markCurrentTurnModelMessagesSummarized,
   markCurrentTurnStoreSummarized,
   shouldMarkCurrentTurnSummarizedMessage,
-  shouldMarkCurrentTurnSummarizedModelMessage,
 } from "@noobot/context-protocol/policy/summary";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { resolveModelHistoryMessages } from "@noobot/context-protocol/policy/window";
@@ -20,6 +17,7 @@ import {
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
+import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 
 const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 
@@ -162,16 +160,15 @@ test("summarization includes every restored incremental tool call and result wit
     latestSummaryCall,
   ];
 
-  markCurrentTurnModelMessagesSummarized(messages);
+  const marked = markCurrentTurnArraySummarized(messages);
 
-  assert.equal(messages.length, 6);
+  assert.equal(marked.length, 6);
   assert.deepEqual(
-    messages.slice(1, 5).map((message) => message.tool_call_id || message.tool_calls?.[0]?.id),
+    marked.slice(1, 5).map((message) => message.tool_call_id || message.tool_calls?.[0]?.id),
     ["call_search", "call_search", "call_read", "call_read"],
   );
-  assert.ok(messages.slice(1, 5).every((message) => message.summarized === true));
-  assert.ok(messages.slice(1, 5).every((message) => message.lc_kwargs.summarized === true));
-  assert.equal(latestSummaryCall.summarized, undefined);
+  assert.ok(marked.slice(1, 5).every((message) => message.summarized === true));
+  assert.equal(marked[5].summarized, undefined);
 });
 
 test("LangChain AIMessage-like task_summary tool_call is not marked summarized", () => {
@@ -189,10 +186,10 @@ test("LangChain AIMessage-like task_summary tool_call is not marked summarized",
     ],
   };
 
-  assert.equal(shouldMarkCurrentTurnSummarizedModelMessage(aiMessage), false);
+  assert.equal(shouldMarkCurrentTurnSummarizedMessage(aiMessage), false);
 });
 
-test("markCurrentTurnModelMessagesSummarized preserves only latest LangChain task_summary message", () => {
+test("markCurrentTurnArraySummarized preserves only latest LangChain task_summary message", () => {
   const messages = [
     {
       type: "ai",
@@ -232,17 +229,14 @@ test("markCurrentTurnModelMessagesSummarized preserves only latest LangChain tas
     },
   ];
 
-  markCurrentTurnModelMessagesSummarized(messages);
+  const marked = markCurrentTurnArraySummarized(messages);
 
-  assert.equal(messages[0].summarized, true);
-  assert.equal(messages[0].lc_kwargs.summarized, true);
-  assert.equal(messages[1].summarized, true);
-  assert.equal(messages[1].lc_kwargs.summarized, true);
-  assert.equal(messages[2].summarized, undefined);
-  assert.equal(messages[2].lc_kwargs.summarized, undefined);
+  assert.equal(marked[0].summarized, true);
+  assert.equal(marked[1].summarized, true);
+  assert.equal(marked[2].summarized, undefined);
 });
 
-test("filterSummarizedMessages excludes only summarized in one policy", () => {
+test("filterForModelContext excludes only summarized in one policy", () => {
   const input = [
     { role: "user", content: "keep me" },
     { role: "assistant", content: "old", summarized: true },
@@ -250,14 +244,14 @@ test("filterSummarizedMessages excludes only summarized in one policy", () => {
     { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
     { role: "assistant", content: "keep too" },
   ];
-  const result = filterSummarizedMessages(input);
+  const result = filterForModelContext(input);
   assert.deepEqual(
     result.map((item) => item.content),
     ["keep me", "call", '{"ok":true}', "keep too"],
   );
 });
 
-test("filterSummarizedMessages keeps summarized current system context marker", () => {
+test("filterForModelContext keeps summarized current system context marker", () => {
   const input = [
     { role: "system", content: "old system", summarized: true },
     {
@@ -270,7 +264,7 @@ test("filterSummarizedMessages keeps summarized current system context marker", 
     },
     { role: "user", content: "task" },
   ];
-  const result = filterSummarizedMessages(input);
+  const result = filterForModelContext(input);
   assert.deepEqual(
     result.map((item) => item.content),
     ["current system context", "task"],
@@ -402,7 +396,7 @@ test("user interjections remain fully retained through completion and history", 
   );
 });
 
-test("markCurrentTurnModelMessagesSummarized includes restored old injections and preserves latest per type", () => {
+test("markCurrentTurnArraySummarized includes restored old injections and preserves latest per type", () => {
   const messages = [
     {
       type: "human",
@@ -444,13 +438,12 @@ test("markCurrentTurnModelMessagesSummarized includes restored old injections an
     },
   ];
 
-  markCurrentTurnModelMessagesSummarized(messages);
+  const marked = markCurrentTurnArraySummarized(messages);
 
-  assert.equal(messages[0].summarized, true);
-  assert.equal(messages[0].lc_kwargs.summarized, true);
-  assert.equal(messages[1].summarized, undefined);
-  assert.equal(messages[2].summarized, undefined);
-  assert.equal(messages[3].summarized, undefined);
+  assert.equal(marked[0].summarized, true);
+  assert.equal(marked[1].summarized, undefined);
+  assert.equal(marked[2].summarized, undefined);
+  assert.equal(marked[3].summarized, undefined);
 });
 
 test("model and store projections apply one summarization scope policy", () => {
@@ -505,10 +498,9 @@ test("model and store projections apply one summarization scope policy", () => {
       lc_kwargs: {},
     },
   ];
-  const modelMessages = structuredClone(source);
+  const modelMessages = markCurrentTurnArraySummarized(structuredClone(source));
   const store = createCurrentTurnMessagesStore(structuredClone(source));
 
-  markCurrentTurnModelMessagesSummarized(modelMessages);
   markCurrentTurnStoreSummarized(store);
 
   assert.deepEqual(
@@ -521,8 +513,8 @@ test("model and store projections apply one summarization scope policy", () => {
   );
 });
 
-test("filterSummarizedMessages preserves every unsummarized injected message", () => {
-  const result = filterSummarizedMessages([
+test("filterForModelContext preserves every unsummarized injected message", () => {
+  const result = filterForModelContext([
     {
       role: "user",
       content: "old relay",

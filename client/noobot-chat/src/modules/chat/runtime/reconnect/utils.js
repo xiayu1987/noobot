@@ -11,12 +11,6 @@ export function _trimStr(x) {
   return String(x || "").trim();
 }
 
-export function normalizeReplayError(value) {
-  if (typeof value === "string") return value.trim();
-  if (!value || typeof value !== "object") return "";
-  return _trimStr(value.message || value.reason || value.description);
-}
-
 export function _ensureArray(x) {
   return Array.isArray(x) ? x : [];
 }
@@ -35,12 +29,12 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
   const text = _trimStr(data?.text || logItem?.text);
   return {
     ...data,
-    event: String(data?.event || rawEvent || logItem?.status || "execution_step").trim() || "execution_step",
+    event:
+      String(data?.event || rawEvent || logItem?.status || "execution_step").trim() ||
+      "execution_step",
     type: String(data?.type || logItem?.type || "execution").trim() || "execution",
     category: String(data?.category || logItem?.category || "execution").trim() || "execution",
-    dialogProcessId: String(
-      data?.dialogProcessId || logItem?.dialogProcessId || "",
-    ).trim(),
+    dialogProcessId: String(data?.dialogProcessId || logItem?.dialogProcessId || "").trim(),
     ts: _trimStr(data?.ts || logItem?.ts) || nowIso(),
     text,
   };

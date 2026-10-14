@@ -13,7 +13,7 @@ import {
   NON_IMAGE_PREVIEW_MAX_BYTES,
 } from "./constants.js";
 
-export function getFileExtension(fileName = "") {
+function getFileExtension(fileName = "") {
   const normalized = String(fileName || "")
     .trim()
     .toLowerCase();
@@ -92,7 +92,7 @@ export function isImagePreviewType(mimeType = "", fileName = "", isImageMimeChec
   return Boolean(isImageMimeChecker(mime)) || mime.startsWith("image/") || isImageFile(fileName);
 }
 
-export function resolveKnownFileSize(fileItem = {}) {
+function resolveKnownFileSize(fileItem = {}) {
   for (const value of [
     fileItem?.size,
     fileItem?.fileSize,

@@ -39,7 +39,7 @@ function normalizeEpochMs(value = 0) {
   return numberValue > 1e11 ? numberValue : numberValue * 1000;
 }
 
-export function firstTimeValue(...values) {
+function firstTimeValue(...values) {
   for (const value of values) {
     if (value === null || value === undefined || value === "") continue;
     if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
@@ -57,7 +57,7 @@ export function resolveTimeMs(...values) {
   return 0;
 }
 
-export function resolveTimeIso(...values) {
+function resolveTimeIso(...values) {
   for (const value of values) {
     const text = trim(value);
     if (text && !Number.isFinite(Number(text))) {
@@ -108,15 +108,6 @@ export function getMessageTimestamp(messageItem = {}) {
   );
 }
 
-export function getConnectorTimestamp(connectorItem = {}) {
-  return firstTimeValue(
-    connectorItem?.checkedAt,
-    connectorItem?.checked_at,
-    connectorItem?.connectedAt,
-    connectorItem?.connected_at,
-  );
-}
-
 export function formatLocalTime(value, options = {}) {
   const ms = parseTimeMs(value);
   if (ms <= 0) return "";
@@ -128,28 +119,6 @@ export function formatLocalTime(value, options = {}) {
     minute: "2-digit",
     ...options,
   });
-}
-
-export function getThinkingStartedAt(messageItem = {}) {
-  return resolveTimeIso(messageItem?.thinkingStartedAt);
-}
-
-export function getThinkingFinishedAt(messageItem = {}) {
-  return resolveTimeIso(messageItem?.thinkingFinishedAt);
-}
-
-export function setThinkingStartedAt(messageItem = {}, value = "") {
-  const iso = resolveTimeIso(value);
-  if (!messageItem || !iso) return "";
-  messageItem.thinkingStartedAt = iso;
-  return iso;
-}
-
-export function setThinkingFinishedAt(messageItem = {}, value = "") {
-  const iso = resolveTimeIso(value);
-  if (!messageItem || !iso) return "";
-  messageItem.thinkingFinishedAt = iso;
-  return iso;
 }
 
 export function formatDurationMs(ms = 0) {
@@ -178,13 +147,4 @@ export function resolveThinkingDurationMs({
   if (!running) return null;
   const currentMs = parseTimeMs(now) || nowMs();
   return Math.max(0, currentMs - startMs);
-}
-
-export function preserveThinkingTimes(targetMessage = {}, sourceMessage = {}) {
-  const startedAt = getThinkingStartedAt(targetMessage);
-  const finishedAt = getThinkingFinishedAt(targetMessage);
-  if (startedAt && !getThinkingStartedAt(sourceMessage))
-    setThinkingStartedAt(targetMessage, startedAt);
-  if (finishedAt && !getThinkingFinishedAt(sourceMessage))
-    setThinkingFinishedAt(targetMessage, finishedAt);
 }

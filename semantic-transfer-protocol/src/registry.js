@@ -34,7 +34,7 @@ function requireText(value, code) {
   return normalized;
 }
 
-export function registerSemanticTransferScenario({ name, strategies = [], categories = {} } = {}) {
+function registerSemanticTransferScenario({ name, strategies = [], categories = {} } = {}) {
   const scenario = requireText(name, "semantic_transfer_scenario_required");
   if (scenarios.has(scenario)) throw new Error(`semantic_transfer_scenario_duplicate:${scenario}`);
   const registeredStrategies = new Set(
@@ -68,7 +68,7 @@ export function registerSemanticTransferScenario({ name, strategies = [], catego
   return scenarios.get(scenario);
 }
 
-export function registerToolInputPolicy({
+function registerToolInputPolicy({
   toolName,
   field,
   maxChars,
@@ -104,7 +104,7 @@ export function registerToolInputPolicy({
   );
 }
 
-export function registerToolOutputPolicy({ toolName, type = "text" } = {}) {
+function registerToolOutputPolicy({ toolName, type = "text" } = {}) {
   const name = requireText(toolName, "semantic_transfer_tool_name_required");
   if (outputPolicies.has(name))
     throw new Error(`semantic_transfer_tool_output_policy_duplicate:${name}`);

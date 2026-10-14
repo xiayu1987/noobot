@@ -9,7 +9,7 @@ import {
   parseLongMemoryModelText,
 } from "@noobot/memory-protocol/long-memory";
 
-export async function readLongMemoryModel(storage, basePath) {
+async function readLongMemoryModel(storage, basePath) {
   const modelPath = storage.longMemoryModelPath(basePath);
   if (!(await storage.fileExists(modelPath))) {
     return { model: LONG_MEMORY_MODEL, modelError: null };

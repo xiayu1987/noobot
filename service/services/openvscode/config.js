@@ -14,7 +14,7 @@ const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_COMMAND = "openvscode-server";
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_START_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.startTimeoutMs;
-export const DEFAULT_IDLE_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.idleTimeoutMs;
+const DEFAULT_IDLE_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.idleTimeoutMs;
 export const DEFAULT_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.openvscode.cleanupIntervalMs;
 export const DEFAULT_SHUTDOWN_GRACE_MS = TIME_THRESHOLDS.openvscode.shutdownGraceMs;
 export const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = TIME_THRESHOLDS.openvscode.touchPersistIntervalMs;
@@ -22,7 +22,10 @@ export const IDE_PATH_PREFIX = "/ide";
 export const IDE_TOKEN_QUERY_KEY = "tkn";
 
 function resolveManagedOpenVSCodeCommand() {
-  const candidate = path.resolve(CURRENT_DIR, "../../vendor/openvscode-server/bin/openvscode-server");
+  const candidate = path.resolve(
+    CURRENT_DIR,
+    "../../vendor/openvscode-server/bin/openvscode-server",
+  );
   return existsSync(candidate) ? candidate : "";
 }
 function resolveOpenVSCodeTimeMs({ envName, source, key, fallback, min }) {
@@ -31,16 +34,43 @@ function resolveOpenVSCodeTimeMs({ envName, source, key, fallback, min }) {
   return resolveTimeMs(source, { key, fallback, min, allowZero: min <= 0 });
 }
 export function getOpenVSCodeConfig(globalConfig = {}) {
-  const source = isPlainObject(globalConfig?.openVSCode) ? globalConfig.openVSCode : isPlainObject(globalConfig?.openvscode) ? globalConfig.openvscode : {};
+  const source = isPlainObject(globalConfig?.openVSCode)
+    ? globalConfig.openVSCode
+    : isPlainObject(globalConfig?.openvscode)
+      ? globalConfig.openvscode
+      : {};
   const envArgs = String(process.env.OPENVSCODE_SERVER_EXTRA_ARGS || "").trim();
-  const configuredCommand = String(process.env.OPENVSCODE_SERVER_COMMAND || source.command || "").trim();
+  const configuredCommand = String(
+    process.env.OPENVSCODE_SERVER_COMMAND || source.command || "",
+  ).trim();
   return {
     command: configuredCommand || resolveManagedOpenVSCodeCommand() || DEFAULT_COMMAND,
-    host: String(process.env.OPENVSCODE_SERVER_HOST || source.host || DEFAULT_HOST).trim() || DEFAULT_HOST,
+    host:
+      String(process.env.OPENVSCODE_SERVER_HOST || source.host || DEFAULT_HOST).trim() ||
+      DEFAULT_HOST,
     startTimeoutMs: DEFAULT_START_TIMEOUT_MS,
     idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
-    cleanupIntervalMs: resolveOpenVSCodeTimeMs({ envName: "OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS", source, key: "cleanupIntervalMs", fallback: DEFAULT_CLEANUP_INTERVAL_MS, min: 1000 }),
-    shutdownGraceMs: resolveOpenVSCodeTimeMs({ envName: "OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS", source, key: "shutdownGraceMs", fallback: DEFAULT_SHUTDOWN_GRACE_MS, min: 0 }),
-    extraArgs: Array.isArray(source.extraArgs) ? source.extraArgs.map((item) => String(item || "").trim()).filter(Boolean) : envArgs ? envArgs.split(" ").map((item) => item.trim()).filter(Boolean) : [],
+    cleanupIntervalMs: resolveOpenVSCodeTimeMs({
+      envName: "OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS",
+      source,
+      key: "cleanupIntervalMs",
+      fallback: DEFAULT_CLEANUP_INTERVAL_MS,
+      min: 1000,
+    }),
+    shutdownGraceMs: resolveOpenVSCodeTimeMs({
+      envName: "OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS",
+      source,
+      key: "shutdownGraceMs",
+      fallback: DEFAULT_SHUTDOWN_GRACE_MS,
+      min: 0,
+    }),
+    extraArgs: Array.isArray(source.extraArgs)
+      ? source.extraArgs.map((item) => String(item || "").trim()).filter(Boolean)
+      : envArgs
+        ? envArgs
+            .split(" ")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : [],
   };
 }

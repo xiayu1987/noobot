@@ -10,19 +10,13 @@ import { buildAcceptanceReport } from "../../src/capabilities/handlers/acceptanc
 import {
   buildPlanChecklistSystemContent,
   resolveCompletePlanChecklistText,
-  resolvePlanChecklistText,
 } from "../../src/capabilities/handlers/shared/plan/checklist-context.js";
 import { applyPhaseAcceptanceReportToPlanStatus } from "../../src/capabilities/handlers/shared/plan/acceptance-status.js";
 
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({
     bucket: {
-      planText: [
-        "1. 主计划一",
-        "1.1 子计划一",
-        "1.2 子计划二",
-        "2. 主计划二",
-      ].join("\n"),
+      planText: ["1. 主计划一", "1.1 子计划一", "1.2 子计划二", "2. 主计划二"].join("\n"),
     },
     state: { locale: "zh-CN", signals: {} },
   });
@@ -36,32 +30,10 @@ test("acceptance report checklist includes first-level sub plans from planText",
   assert.equal(checklist[3].index, 2);
 });
 
-test("plan checklist context strips refinement patch appendix when plan text is parseable", () => {
-  const text = resolvePlanChecklistText({
-    planText: [
-      "1. 主计划一",
-      "1.1 子计划一",
-      "2. 主计划二",
-      "# planning_refinement",
-      "ADD 1.2.1 非法二级子计划",
-      "ADD 1.2 合法一级子计划补丁",
-    ].join("\n"),
-  });
-  assert.match(String(text), /^1\. 主计划一/m);
-  assert.match(String(text), /^1\.1 子计划一/m);
-  assert.doesNotMatch(String(text), /planning_refinement/);
-  assert.doesNotMatch(String(text), /^ADD /m);
-});
-
 test("summary checklist context preserves complete plan sub-plans from planText", () => {
   const content = buildPlanChecklistSystemContent({
     locale: "zh-CN",
-    planText: [
-      "1. 主计划一",
-      "1.1 子计划一",
-      "2. 主计划二",
-      "2.1 子计划二一",
-    ].join("\n"),
+    planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二", "2.1 子计划二一"].join("\n"),
   });
   assert.match(String(content), /当前完整计划清单/);
   assert.match(String(content), /^1\.1 子计划一/m);
@@ -116,11 +88,7 @@ test("complete plan resolver prefers bucket.planDocument over planText", () => {
 
 test("phase acceptance status is written back to complete plan checklist context", () => {
   const bucket = {
-    planText: [
-      "1. 主计划一",
-      "1.1 子计划一",
-      "2. 主计划二",
-    ].join("\n"),
+    planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二"].join("\n"),
   };
   const reportEntry = {
     type: "phase",

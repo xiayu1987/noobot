@@ -162,14 +162,10 @@ if (
 } else {
   pass("message policy uses only noobotMessageId as canonical id");
 }
-assertFileContains("agent/src/bot/session/session-execution-engine-utils.js", [
+assertFileContains("agent/src/context/assembly/message-builder/history.js", [
   {
-    name: "model runtime normalization preserves canonical message id",
-    pattern: /const noobotMessageId = getMessageId\(messageItem\)[\s\S]*?noobotMessageId/,
-  },
-  {
-    name: "model runtime normalization delegates canonical identity metadata",
-    pattern: /projectContextMessageIdentityMetadata\(messageItem\)/,
+    name: "history assembly delegates canonical identity metadata",
+    pattern: /additional_kwargs:\s*projectContextMessageIdentityMetadata\(msg\)/,
   },
 ]);
 assertFileContains("context-protocol/src/policy/block.js", [

@@ -8,7 +8,7 @@ import {
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
 } from "../../model/reconnectReplayModel.js";
-import { _ensureArray, _isAssistantRole, _trimStr } from "./utils.js";
+import { _ensureArray, _trimStr } from "./utils.js";
 
 export { renderActiveSessionBeforeReplay } from "./hydrationReplay.js";
 export {
@@ -74,36 +74,5 @@ export function applyFoldedMessagesToActiveSession(activeSession, foldedMessages
     activeSession.value.messages = existingMessages;
   }
   existingMessages.splice(0, existingMessages.length, ...nextMessages);
-  return existingMessages;
-}
-
-export function applyFoldedMessagesForDialogProcess(
-  activeSession,
-  foldedMessages = [],
-  dialogProcessId = "",
-) {
-  if (!activeSession?.value) return [];
-  const normalizedDpId = _trimStr(dialogProcessId);
-  if (!normalizedDpId) return applyFoldedMessagesToActiveSession(activeSession, foldedMessages);
-  const existingMessages = Array.isArray(activeSession.value.messages)
-    ? activeSession.value.messages
-    : [];
-  const assistantMessagesForDialogProcess = _ensureArray(foldedMessages).filter(
-    (messageItem) =>
-      _isAssistantRole(messageItem) && _trimStr(messageItem?.dialogProcessId) === normalizedDpId,
-  );
-  if (!assistantMessagesForDialogProcess.length) return existingMessages;
-
-  for (const nextMessage of assistantMessagesForDialogProcess) {
-    const presentationMessageId = _trimStr(nextMessage?.presentationMessageId);
-    if (!presentationMessageId) continue;
-    const reusableMessage = existingMessages.find(
-      (messageItem) =>
-        _isAssistantRole(messageItem) &&
-        _trimStr(messageItem?.presentationMessageId) === presentationMessageId,
-    );
-    if (!reusableMessage) continue;
-    patchMessageObjectPreservingUiState(reusableMessage, nextMessage);
-  }
   return existingMessages;
 }

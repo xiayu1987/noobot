@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const THRESHOLD_SOURCE = Object.freeze({
+const THRESHOLD_SOURCE = Object.freeze({
   runtime: "runtime",
   workflowParams: "workflow_params",
 });
@@ -21,16 +21,16 @@ export function normalizeClampedPositiveInteger(value = undefined, min = 1, max 
   return Math.min(max, Math.max(min, normalized));
 }
 
-export function isFrontendThresholdsEnabled(meta = {}) {
+function isFrontendThresholdsEnabled(meta = {}) {
   return meta?.harness?.frontendThresholdsEnabled === true;
 }
 
-export function resolveGatedRuntimeThreshold(meta = {}, runtimeValue = undefined) {
+function resolveGatedRuntimeThreshold(meta = {}, runtimeValue = undefined) {
   if (!isFrontendThresholdsEnabled(meta)) return 0;
   return normalizePositiveInteger(runtimeValue, 0);
 }
 
-export function resolveThresholdWithSource({
+function resolveThresholdWithSource({
   runtimeValue = 0,
   scopedValue = undefined,
   defaultValue = 0,

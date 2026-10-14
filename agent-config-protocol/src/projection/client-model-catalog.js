@@ -9,7 +9,7 @@ function readText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function createClientModelOption(alias = "", provider = {}) {
+function createClientModelOption(alias = "", provider = {}) {
   return Object.freeze({
     alias: readText(alias),
     model: readText(provider?.model),

@@ -16,7 +16,6 @@ import {
   MESSAGE_EVENT_TYPE,
   MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_WIRE_EVENT,
-  hasMessageEventToolPayload,
   isAuthoritativeFinalContentEvent,
   isHostActivity,
   projectMessageEventContent,
@@ -268,7 +267,6 @@ test("message payload validates and projects tool facts", () => {
     output: "body",
     success: true,
   });
-  assert.equal(hasMessageEventToolPayload(payload()), true);
 });
 
 test("message payload rejects nested and aliased tool facts", () => {

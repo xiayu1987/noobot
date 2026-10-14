@@ -5,7 +5,7 @@
  */
 import { WORKSPACE_OPERATION } from "./sections.js";
 
-export const WORKSPACE_ASSET_STATE_VERSION = 1;
+const WORKSPACE_ASSET_STATE_VERSION = 1;
 
 export const WORKSPACE_ASSET_ACTION = Object.freeze({
   INSTALL: "install",

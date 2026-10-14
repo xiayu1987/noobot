@@ -14,7 +14,7 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-export const AUTHORITY_EVENT_DELIVERY_STATUS = Object.freeze({
+const AUTHORITY_EVENT_DELIVERY_STATUS = Object.freeze({
   PENDING: "pending",
   DELIVERED: "delivered",
 });

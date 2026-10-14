@@ -72,18 +72,6 @@ function resolveSearchEngineConfig(toolCfg = {}) {
   };
 }
 
-function resolveSearchEngineCustomParam(toolCfg = {}, endpointCfg = {}) {
-  return String(
-    endpointCfg?.custom_param ||
-      endpointCfg?.customParam ||
-      toolCfg?.custom_param ||
-      toolCfg?.customParam ||
-      toolCfg?.search_engine_address ||
-      toolCfg?.searchEngineAddress ||
-      "",
-  ).trim();
-}
-
 function parseQueryStringFormat(format = "") {
   const raw = String(format || "").trim();
   if (!raw) return { key: "q", value: "" };
@@ -113,11 +101,9 @@ export function buildSearchEngineRequest({ toolCfg = {}, query = "" }) {
   const body = parseBodyFormat(endpointCfg?.body_format || "{}");
   const method = body && Object.keys(body).length > 0 ? "POST" : "GET";
   const apiKey = String(toolCfg?.api_key || "").trim();
-  const customParam = resolveSearchEngineCustomParam(toolCfg, endpointCfg);
   const headers = {
     Accept: "application/json, text/plain, */*",
     ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    ...(customParam ? { "X-Noobot-Custom-Param": customParam } : {}),
   };
   return {
     url: url.toString(),
@@ -129,7 +115,6 @@ export function buildSearchEngineRequest({ toolCfg = {}, query = "" }) {
         : undefined,
     endpointCfg,
     queryString: { [queryKey]: String(query || "").trim() },
-    customParam,
   };
 }
 
@@ -157,7 +142,6 @@ export async function searchWithSearchEngine({ runtime = {}, toolCfg = {}, query
     statusCode: response.status,
     url: request.url,
     queryString: request.queryString,
-    customParam: request.customParam,
     data,
   };
 }

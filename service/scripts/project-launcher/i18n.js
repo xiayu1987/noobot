@@ -162,7 +162,7 @@ export function resolveTextLocaleFromConfigLanguage(configLanguage = "") {
     : "zh";
 }
 
-export function localizeConfigTextValue(value, targetLocale = "zh") {
+function localizeConfigTextValue(value, targetLocale = "zh") {
   if (typeof value !== "string") return value;
   if (targetLocale === "en") return CONFIG_TEXT_TO_EN.get(value) || value;
   return CONFIG_TEXT_TO_ZH.get(value) || value;

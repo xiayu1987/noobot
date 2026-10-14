@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const BOT_DISPATCH_OUTCOME_KIND = "noobot.bot_dispatch_outcome";
-export const BOT_DISPATCH_OUTCOME_VERSION = 1;
+const BOT_DISPATCH_OUTCOME_KIND = "noobot.bot_dispatch_outcome";
+const BOT_DISPATCH_OUTCOME_VERSION = 1;
 export const BOT_DISPATCH_DISPOSITION = Object.freeze({ PASS: "pass", HANDLED: "handled" });
 
 const clean = (value) => String(value || "").trim();

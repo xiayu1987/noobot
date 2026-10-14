@@ -76,19 +76,3 @@ export function clearSessionTurnUiStates(sessionId = "") {
   });
   return removed;
 }
-
-export function promoteSessionTurnUiStates(fromSessionId = "", toSessionId = "") {
-  const from = String(fromSessionId || "").trim();
-  const to = String(toSessionId || "").trim();
-  if (!from || !to || from === to) return 0;
-  let promoted = 0;
-  Object.keys(states).forEach((key) => {
-    const identity = parseTurnKey(key);
-    if (identity?.sessionId !== from) return;
-    const nextKey = createTurnKey({ sessionId: to, turnScopeId: identity.turnScopeId });
-    if (!states[nextKey]) states[nextKey] = states[key];
-    delete states[key];
-    promoted += 1;
-  });
-  return promoted;
-}

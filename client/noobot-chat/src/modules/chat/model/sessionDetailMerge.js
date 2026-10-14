@@ -82,7 +82,7 @@ function mergeEntity(previous = {}, incoming = {}, kind = "entity") {
   return { ...previous, ...incoming };
 }
 
-export function mergeSessionDetailEntities(
+function mergeSessionDetailEntities(
   baseItems = [],
   incomingItems = [],
   { kind = "entity", replace = false } = {},

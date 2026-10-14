@@ -41,12 +41,3 @@ export function normalizeConnectorSecretEnvelope(input = {}) {
   }
   return Object.freeze(envelope);
 }
-
-export function isConnectorSecretEnvelope(input) {
-  try {
-    normalizeConnectorSecretEnvelope(input);
-    return true;
-  } catch {
-    return false;
-  }
-}

@@ -11,26 +11,9 @@ import { createNativeScriptTool } from "../../src/tools/execution/native-script-
 import {
   buildLibreOfficeUserInstallationUrl,
   resolveLibreOfficeOutputFormat,
-  resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createRuntime } from "./native-script-tool.fixtures.js";
-
-test("native browser proxy derives Playwright options without exposing its URL", () => {
-  assert.deepEqual(
-    resolveBrowserProxyFromEnv({
-      HTTPS_PROXY: "http://user:secret@127.0.0.1:7890/",
-      NO_PROXY: "localhost,127.0.0.1",
-    }),
-    {
-      server: "http://127.0.0.1:7890",
-      username: "user",
-      password: "secret",
-      bypass: "localhost,127.0.0.1",
-    },
-  );
-  assert.equal(resolveBrowserProxyFromEnv({}), undefined);
-});
 
 test("native LibreOffice profile uses an encoded file URL", () => {
   const value = buildLibreOfficeUserInstallationUrl(

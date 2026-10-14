@@ -46,7 +46,6 @@ import {
 } from "../../debug/loggers/stateMachineLogger.js";
 import { setResendDebugLogSink } from "../../debug/loggers/resendDebugLogger.js";
 import { setStopDebugLogSink } from "../../debug/loggers/stopDebugLogger.js";
-import { setStopContinueDebugLogSink } from "../../debug/loggers/stopContinueDebugLogger.js";
 import { setReconnectTimingDebugLogSink } from "../../debug/loggers/reconnectTimingDebugLogger.js";
 import { setWorkflowDiagnosticsLogSink } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
@@ -331,7 +330,6 @@ export function useChatSession({
   setStateMachineDebugLogSink(sessionLogWebSocketClient);
   setResendDebugLogSink(sessionLogWebSocketClient);
   setStopDebugLogSink(sessionLogWebSocketClient);
-  setStopContinueDebugLogSink(sessionLogWebSocketClient);
   setReconnectTimingDebugLogSink(sessionLogWebSocketClient);
   setWorkflowDiagnosticsLogSink(sessionLogWebSocketClient);
   setThinkingReplayDebugLogSink(sessionLogWebSocketClient);

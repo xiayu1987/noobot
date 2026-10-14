@@ -14,7 +14,7 @@ import {
 import { isContextControlMessage } from "./injected-message.js";
 import { resolveContextMessageOrigin } from "../message/codec.js";
 
-export const TERMINAL_HISTORY_STATUS = Object.freeze({
+const TERMINAL_HISTORY_STATUS = Object.freeze({
   USER_STOPPED: "user_stopped",
   ERROR: "error",
   TIMEOUT: "timeout",

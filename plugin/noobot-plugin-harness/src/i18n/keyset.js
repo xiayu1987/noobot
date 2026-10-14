@@ -25,12 +25,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     SEMANTIC_VALIDATION_LABEL: "acceptanceSemanticValidationLabel",
     MODEL_ACCEPTANCE_LABEL: "acceptanceModelAcceptanceLabel",
     EMPTY_LINE: "acceptanceEmptyLine",
-    DIGEST_TITLE: "acceptanceDigestTitle",
-    DIGEST_MODE_LABEL: "acceptanceDigestModeLabel",
-    DIGEST_ACCEPTED_AT_LABEL: "acceptanceDigestAcceptedAtLabel",
-    DIGEST_PLAN_TEXT_LABEL: "acceptanceDigestPlanTextLabel",
-    DIGEST_SUMMARY_LABEL: "acceptanceDigestSummaryLabel",
-    DIGEST_SEMANTIC_VALIDATION_LABEL: "acceptanceDigestSemanticValidationLabel",
   }),
   ACCEPTANCE_FINAL_OUTPUT: Object.freeze({
     FORCED_HEADER: "forcedAcceptanceHeader",

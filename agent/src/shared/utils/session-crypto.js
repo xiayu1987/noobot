@@ -26,14 +26,14 @@ function normalizeSessionId(sessionId = "") {
   return normalized;
 }
 
-export function encryptTextBySessionId(text = "", sessionId = "") {
+function encryptTextBySessionId(text = "", sessionId = "") {
   const sid = normalizeSessionId(sessionId);
   const source = toUtf8Bytes(String(text || ""));
   const key = toUtf8Bytes(sid);
   return xorBytes(source, key).toString("base64");
 }
 
-export function decryptTextBySessionId(cipherText = "", sessionId = "") {
+function decryptTextBySessionId(cipherText = "", sessionId = "") {
   const sid = normalizeSessionId(sessionId);
   const source = Buffer.from(String(cipherText || ""), "base64");
   const key = toUtf8Bytes(sid);
@@ -41,8 +41,7 @@ export function decryptTextBySessionId(cipherText = "", sessionId = "") {
 }
 
 export function encryptPayloadBySessionId(payload = {}, sessionId = "") {
-  const plainText =
-    typeof payload === "string" ? payload : JSON.stringify(payload || {});
+  const plainText = typeof payload === "string" ? payload : JSON.stringify(payload || {});
   return encryptTextBySessionId(plainText, sessionId);
 }
 

@@ -51,10 +51,6 @@ export function normalizeSessionTree(tree = {}) {
   return { nodes };
 }
 
-export function isSessionTreeSessionId(value) {
-  return isWorkspacePathSegment(normalizeId(value));
-}
-
 function requireSessionId(value) {
   const sessionId = normalizeId(value);
   if (!sessionId) {
@@ -99,10 +95,6 @@ export function resolveSessionTreeChain(tree, sessionId) {
     currentId = normalizeId(node.parentSessionId);
   }
   return chain.reverse();
-}
-
-export function resolveSessionTreeRootId(tree, sessionId) {
-  return resolveSessionTreeChain(tree, sessionId)[0];
 }
 
 export function resolveSessionTreeDepth(tree, sessionId) {

@@ -18,7 +18,7 @@ export const HARNESS_FSM_STATES = Object.freeze({
 
 const HARNESS_FSM_STATE_SET = new Set(Object.values(HARNESS_FSM_STATES));
 
-export const HARNESS_FSM_ALLOWED_TRANSITIONS = Object.freeze({
+const HARNESS_FSM_ALLOWED_TRANSITIONS = Object.freeze({
   [HARNESS_FSM_STATES.IDLE]: new Set([HARNESS_FSM_STATES.PLANNING, HARNESS_FSM_STATES.FAILED]),
   [HARNESS_FSM_STATES.PLANNING]: new Set([HARNESS_FSM_STATES.PLANNED, HARNESS_FSM_STATES.FAILED]),
   [HARNESS_FSM_STATES.PLANNED]: new Set([
@@ -30,7 +30,10 @@ export const HARNESS_FSM_ALLOWED_TRANSITIONS = Object.freeze({
     HARNESS_FSM_STATES.EXECUTING,
     HARNESS_FSM_STATES.FAILED,
   ]),
-  [HARNESS_FSM_STATES.EXECUTING]: new Set([HARNESS_FSM_STATES.VERIFYING, HARNESS_FSM_STATES.FAILED]),
+  [HARNESS_FSM_STATES.EXECUTING]: new Set([
+    HARNESS_FSM_STATES.VERIFYING,
+    HARNESS_FSM_STATES.FAILED,
+  ]),
   [HARNESS_FSM_STATES.VERIFYING]: new Set([HARNESS_FSM_STATES.DONE, HARNESS_FSM_STATES.FAILED]),
   [HARNESS_FSM_STATES.DONE]: new Set(),
   [HARNESS_FSM_STATES.FAILED]: new Set(),
@@ -50,11 +53,13 @@ export const HARNESS_FSM_EFFECTS = Object.freeze({
 });
 
 export function normalizeFsmState(state = "") {
-  const value = String(state || "").trim().toLowerCase();
+  const value = String(state || "")
+    .trim()
+    .toLowerCase();
   return HARNESS_FSM_STATE_SET.has(value) ? value : HARNESS_FSM_STATES.IDLE;
 }
 
-export function isAllowedFsmTransition(from, to) {
+function isAllowedFsmTransition(from, to) {
   if (from === to) return true;
   return HARNESS_FSM_ALLOWED_TRANSITIONS[from]?.has(to) === true;
 }
@@ -115,7 +120,10 @@ const FSM_TARGET_RULES = Object.freeze([
   {
     points: new Set([HOOK_POINT.AGENT.AFTER_LLM_CALL]),
     resolve: ({ ctx = {}, currentState = HARNESS_FSM_STATES.IDLE }) => {
-      if (currentState !== HARNESS_FSM_STATES.IDLE && currentState !== HARNESS_FSM_STATES.PLANNING) {
+      if (
+        currentState !== HARNESS_FSM_STATES.IDLE &&
+        currentState !== HARNESS_FSM_STATES.PLANNING
+      ) {
         return null;
       }
       return resolveChecklistLength(ctx) > 0 || hasToolCalls(ctx)

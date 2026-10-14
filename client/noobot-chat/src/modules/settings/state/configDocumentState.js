@@ -50,7 +50,7 @@ export function ensureObjectAt(container, key) {
   return container[key];
 }
 
-export function isEmptyNodeValue(node, value) {
+function isEmptyNodeValue(node, value) {
   if (value === undefined || value === null) return true;
   if (
     node.kind === CONFIG_FORM_NODE_KIND.STRING_LIST ||

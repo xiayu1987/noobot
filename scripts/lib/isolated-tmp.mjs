@@ -10,7 +10,7 @@ import { withoutRuntimeInstancePaths } from "@noobot/runtime-topology-protocol/i
 import { WORKSPACE_ROOT_ENV } from "@noobot/runtime-topology-protocol/workspace-root";
 
 export const ISOLATED_TMP_ENV = "NOOBOT_TEST_TMP_DIR";
-export const DEFAULT_TMP_MIN_AGE_MS = 60 * 60 * 1000;
+const DEFAULT_TMP_MIN_AGE_MS = 60 * 60 * 1000;
 
 export function pruneOldest(dir, matches, keep, { minAgeMs = 0, now = Date.now() } = {}) {
   let entries;

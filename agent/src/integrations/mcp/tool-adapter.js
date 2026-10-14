@@ -83,7 +83,7 @@ export function normalizeMcpToolResult(result = {}) {
   return JSON.stringify(result || {});
 }
 
-export function resolveMcpToolBindingName(toolName = "", usedNames = new Set()) {
+function resolveMcpToolBindingName(toolName = "", usedNames = new Set()) {
   const base =
     String(toolName || "")
       .trim()

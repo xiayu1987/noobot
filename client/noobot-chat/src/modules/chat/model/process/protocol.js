@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowIso } from "../timeFields.js";
 
 export const PROCESS_EVENT_VERSION = 1;
 
@@ -35,13 +34,6 @@ export const ProcessEventType = Object.freeze({
   NODE_FINISHED: "node_finished",
 });
 
-export const ProcessEventSource = Object.freeze({
-  STREAM: "stream",
-  SNAPSHOT: "snapshot",
-  SESSION_DETAIL: "session_detail",
-  UNKNOWN: "unknown",
-});
-
 export function normalizeProcessString(value = "") {
   return String(value ?? "").trim();
 }
@@ -51,40 +43,4 @@ export function toProcessSequence(value, fallback = 0) {
   if (Number.isFinite(sequence) && sequence >= 0) return sequence;
   const fallbackSequence = Number(fallback);
   return Number.isFinite(fallbackSequence) && fallbackSequence >= 0 ? fallbackSequence : 0;
-}
-
-export function resolveProcessId(input = {}) {
-  return normalizeProcessString(
-    input.processId || input.dialogProcessId || input.parentDialogProcessId || input.sessionId,
-  );
-}
-
-export function resolveProcessTimestamp(input = {}) {
-  return normalizeProcessString(input.timestamp || input.ts || input.createdAt || input.updatedAt) || nowIso();
-}
-
-export function resolveExplicitProcessTimestamp(input = {}) {
-  return normalizeProcessString(input.timestamp || input.ts || input.createdAt || input.updatedAt);
-}
-
-export function buildProcessEventId({
-  source = ProcessEventSource.UNKNOWN,
-  type = "event",
-  processId = "",
-  nodeId = "",
-  sequence = 0,
-  timestamp = "",
-  event = "",
-  text = "",
-} = {}) {
-  return [
-    source,
-    type,
-    processId,
-    nodeId,
-    sequence,
-    timestamp,
-    event,
-    String(text || "").slice(0, 120),
-  ].join("|");
 }

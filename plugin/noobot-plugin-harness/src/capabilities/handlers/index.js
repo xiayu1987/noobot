@@ -19,7 +19,7 @@ function createNoopHandler(capability = "") {
   });
 }
 
-export function createDefaultCapabilityHandlers() {
+function createDefaultCapabilityHandlers() {
   const fallback = HARNESS_ENGINEERING_CAPABILITIES.reduce((acc, capability) => {
     acc[capability] = createNoopHandler(capability);
     return acc;

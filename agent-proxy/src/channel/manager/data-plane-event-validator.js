@@ -48,7 +48,7 @@ function text(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function locateDataPlaneFrame(eventName, data) {
+function locateDataPlaneFrame(eventName, data) {
   const eventId = text(data?.identity?.eventId);
   const commandId = text(data?.commandId) || text(data?.causality?.commandId);
   if (!eventId && !commandId) return null;

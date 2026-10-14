@@ -9,9 +9,9 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { clientFilePath as path } from "../../path-resolver.js";
 import { createDesktopRuntimeEventWriter } from "./runtime-events.js";
 
-export const desktopAppName = "Noobot";
-export const DEFAULT_DESKTOP_LOG_MAX_BYTES = LENGTH_THRESHOLDS.desktopLogging.maxFileBytes;
-export const DEFAULT_DESKTOP_LOG_RETAIN = 5;
+const desktopAppName = "Noobot";
+const DEFAULT_DESKTOP_LOG_MAX_BYTES = LENGTH_THRESHOLDS.desktopLogging.maxFileBytes;
+const DEFAULT_DESKTOP_LOG_RETAIN = 5;
 
 const desktopLogQueues = new Map();
 
@@ -83,7 +83,7 @@ export function appendDesktopLogLine(
   });
 }
 
-export function getEarlyLogFilePath() {
+function getEarlyLogFilePath() {
   const base =
     process.platform === "win32"
       ? process.env.APPDATA || process.env.LOCALAPPDATA || process.env.TEMP || process.cwd()
@@ -103,7 +103,7 @@ export function appendEarlyLog(message) {
   }
 }
 
-export function appendFallbackDebugLog(message) {
+function appendFallbackDebugLog(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   const candidates = [
     path.join(process.env.HOME || process.cwd(), `${desktopAppName}-startup-debug.log`),
@@ -120,12 +120,12 @@ export function appendFallbackDebugLog(message) {
   }
 }
 
-export function appendStartupTrace(message) {
+function appendStartupTrace(message) {
   appendEarlyLog(message);
   appendFallbackDebugLog(message);
 }
 
-export function formatLogValue(value) {
+function formatLogValue(value) {
   if (value === undefined || value === null) return "";
   if (value instanceof Error) return value.stack || value.message || String(value);
   if (typeof value === "object") {
@@ -138,7 +138,7 @@ export function formatLogValue(value) {
   return String(value);
 }
 
-export function formatLogFields(fields = {}) {
+function formatLogFields(fields = {}) {
   return Object.entries(fields)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
     .map(([key, value]) => `${key}=${formatLogValue(value).replace(/\s+/g, " ").slice(0, 1200)}`)

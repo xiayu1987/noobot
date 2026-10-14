@@ -6,7 +6,7 @@
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeAnchorValue } from "./anchor-utils.js";
 
-export function resolveTurnTimingKey(item = {}) {
+function resolveTurnTimingKey(item = {}) {
   return normalizeAnchorValue(item?.turnScopeId);
 }
 

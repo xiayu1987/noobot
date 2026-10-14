@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import {
   resolveConfigFieldLabel,
   resolveConfigNodeHint,
-  resolveConfigPathLabels,
 } from "../../../../src/modules/settings/state/configLabels.js";
 
 const dictionary = {
@@ -40,11 +39,5 @@ describe("configLabels", () => {
     expect(resolveConfigNodeHint(translate, "providers")).toBe("providers");
     expect(resolveConfigNodeHint(translate, "unmapped_field")).toBe("");
     expect(resolveConfigNodeHint(translate, "")).toBe("");
-  });
-
-  it("maps a nav trail to breadcrumb labels", () => {
-    const trail = [{ key: "providers" }, { key: "p1" }, { key: "model" }];
-    expect(resolveConfigPathLabels(translate, trail)).toEqual(["模型提供方", "p1", "模型名称"]);
-    expect(resolveConfigPathLabels(translate)).toEqual([]);
   });
 });

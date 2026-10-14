@@ -20,7 +20,7 @@ export const WORKSPACE_SECTION = Object.freeze({
   CONFIG: "config",
 });
 
-export const WORKSPACE_SECTION_OWNER = Object.freeze({
+const WORKSPACE_SECTION_OWNER = Object.freeze({
   MEMORY_PROTOCOL: "memory-protocol",
   CONFIG_PROTOCOL: "agent-config-protocol",
   WORKSPACE_LAYOUT: "workspace-layout",

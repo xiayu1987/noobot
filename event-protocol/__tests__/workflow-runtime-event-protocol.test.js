@@ -13,7 +13,6 @@ import {
   validateWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
-  workflowRuntimeEventComparable,
 } from "@noobot/event-protocol/workflow-runtime-event";
 
 test("constructs the canonical workflow snapshot envelope at its producing boundary", () => {
@@ -122,16 +121,6 @@ test("requires authoritative snapshot identity and aggregate version", () => {
     "invalid_turn_lifecycle_snapshot",
     "invalid_turn_timings",
   ]);
-});
-
-test("events from different sequence domains are never comparable", () => {
-  assert.equal(
-    workflowRuntimeEventComparable(
-      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE },
-      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT },
-    ),
-    false,
-  );
 });
 
 test("orders facts only inside one explicit sequence domain", () => {

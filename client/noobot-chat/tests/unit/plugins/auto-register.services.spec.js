@@ -77,14 +77,12 @@ vi.mock("../../../src/infrastructure/http/authenticatedHttpService.js", () => ({
   createScopedAuthenticatedHttpService: vi.fn(() => Object.freeze({ request: vi.fn() })),
 }));
 
-import {
-  disposeExternalFrontendPlugins,
-  registerExternalFrontendPlugins,
-} from "../../../src/plugins/auto-register.js";
-
 describe("external frontend plugin service boundary", () => {
+  let registerExternalFrontendPlugins;
+
   beforeEach(async () => {
-    await disposeExternalFrontendPlugins();
+    vi.resetModules();
+    ({ registerExternalFrontendPlugins } = await import("../../../src/plugins/auto-register.js"));
     captured.contexts.length = 0;
     captured.activate = null;
     captured.publish.mockReset();
@@ -156,24 +154,5 @@ describe("external frontend plugin service boundary", () => {
     await first;
     await second;
     expect(activations).toBe(2);
-  });
-
-  it("keeps the active scope authoritative when empty-generation publication fails", async () => {
-    const dispose = vi.fn();
-    captured.activate = () => ({
-      protocolVersion: 2,
-      pluginId: captured.manifest.id,
-      surface: "frontend",
-      dispose,
-    });
-    await registerExternalFrontendPlugins();
-    captured.publish.mockImplementationOnce(() => {
-      throw new Error("empty publication failed");
-    });
-
-    await expect(disposeExternalFrontendPlugins()).rejects.toThrow("empty publication failed");
-    expect(dispose).not.toHaveBeenCalled();
-    await disposeExternalFrontendPlugins();
-    expect(dispose).toHaveBeenCalledTimes(1);
   });
 });

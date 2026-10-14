@@ -113,7 +113,6 @@ export {
   buildAppendMessage,
   buildViewMessage,
   foldConversationMessages,
-  createMessageModel,
   getMessageAttachments,
   findVisibleLastMessage,
   isPluginInjectedMessage,

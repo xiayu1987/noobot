@@ -5,7 +5,7 @@
  */
 import { messages } from "noobot-i18n/client/messages";
 
-export const LOCALE_STORAGE_KEY = "noobot_locale";
+const LOCALE_STORAGE_KEY = "noobot_locale";
 export const FALLBACK_LOCALE = "zh-CN";
 export const SUPPORTED_LOCALES = Object.freeze(["zh-CN", "en-US"]);
 

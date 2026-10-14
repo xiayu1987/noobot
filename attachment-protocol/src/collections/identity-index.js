@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { attachmentIdentityKey, projectAttachmentIdentity } from "../identity.js";
-export function indexAttachmentsByIdentity(v, select = projectAttachmentIdentity) {
+function indexAttachmentsByIdentity(v, select = projectAttachmentIdentity) {
   if (!Array.isArray(v)) throw new TypeError("attachments_must_be_array");
   return new Map(v.map((x) => [attachmentIdentityKey(select(x)), x]));
 }

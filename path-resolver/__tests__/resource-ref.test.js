@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createResourceRef, isResourceRef, projectResourceRef } from "../src/index.js";
+import { createResourceRef, projectResourceRef } from "../src/index.js";
 
 test("resource refs have an opaque identity independent of path", () => {
   const first = createResourceRef({
@@ -20,7 +20,6 @@ test("resource refs have an opaque identity independent of path", () => {
     capabilities: { read: true, scriptInput: true },
   });
   assert.notEqual(first.resourceId, second.resourceId);
-  assert.equal(isResourceRef(first), true);
   assert.equal(projectResourceRef(first).resourceId, first.resourceId);
 });
 

@@ -5,7 +5,7 @@
  */
 import { text as clean } from "../normalize.js";
 
-export function normalizeTurnTiming(timing = {}) {
+function normalizeTurnTiming(timing = {}) {
   if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
   const turnScopeId = clean(timing.turnScopeId);
   if (!turnScopeId) return null;
@@ -17,7 +17,7 @@ export function normalizeTurnTiming(timing = {}) {
   return normalized;
 }
 
-export function normalizeTurnTimings(timings = []) {
+function normalizeTurnTimings(timings = []) {
   const byTurnScopeId = new Map();
   for (const item of Array.isArray(timings) ? timings : []) {
     const timing = normalizeTurnTiming(item);

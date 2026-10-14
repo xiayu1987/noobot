@@ -139,16 +139,6 @@ export function attachmentMatchKeys(item = {}) {
   }
 }
 
-export function findMatchingAttachmentMeta(source = {}, candidates = []) {
-  const sourceKeys = new Set(attachmentMatchKeys(source));
-  if (!sourceKeys.size) return null;
-  return (
-    (Array.isArray(candidates) ? candidates : []).find((candidate) =>
-      attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
-    ) || null
-  );
-}
-
 export function normalizeAttachmentMetas(attachmentMetas = []) {
   if (!Array.isArray(attachmentMetas)) {
     throw new TypeError("attachments must be a canonical array");

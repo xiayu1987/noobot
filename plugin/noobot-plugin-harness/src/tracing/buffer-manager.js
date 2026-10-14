@@ -188,7 +188,7 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
   return next;
 }
 
-export async function updateManifest(
+async function updateManifest(
   paths,
   ctx = {},
   patch = {},

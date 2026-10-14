@@ -6,10 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  filterSummarizedMessages,
-  markCurrentTurnArraySummarized,
-} from "@noobot/context-protocol/policy/summary";
+import { markCurrentTurnArraySummarized } from "@noobot/context-protocol/policy/summary";
 import {
   resolveModelFinalMessages,
   resolveModelHistoryMessages,
@@ -32,14 +29,14 @@ const resolveMainModelHistoryMessages = (options = {}) =>
 const resolveMainModelIncrementalMessages = (options = {}) =>
   resolveModelIncrementalMessages(options);
 
-test("filterSummarizedMessages removes only summarized messages", () => {
+test("filterForModelContext removes only summarized messages", () => {
   const input = [
     { role: "user", content: "a", summarized: false },
     { role: "assistant", content: "b", summarized: true },
     { role: "tool", content: "c" },
     { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "x" } }] },
   ];
-  const result = filterSummarizedMessages(input);
+  const result = filterForModelContext(input);
   assert.deepEqual(
     result.map((item) => item.content),
     ["a"],
@@ -133,7 +130,7 @@ test("task_summary pair is not marked summarized and remains in model context", 
   assert.equal(marked[3]?.summarized, undefined);
   assert.equal(marked[4]?.summarized, undefined);
 
-  const result = filterSummarizedMessages(marked);
+  const result = filterForModelContext(marked);
   assert.deepEqual(
     result.map((item) =>
       String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || ""),
@@ -161,7 +158,7 @@ test("manually summarized task_summary pair is filtered by unified summarized po
     { role: "assistant", content: "old normal", summarized: true },
   ];
 
-  const result = filterSummarizedMessages(input);
+  const result = filterForModelContext(input);
   assert.deepEqual(
     result.map((item) =>
       String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || ""),
@@ -180,7 +177,7 @@ test("unpaired task_summary assistant tool call is dropped to avoid invalid mode
     },
   ];
 
-  const result = filterSummarizedMessages(input);
+  const result = filterForModelContext(input);
   assert.deepEqual(
     result.map((item) => String(item?.tool_calls?.[0]?.id || item?.content || "")),
     ["u0"],

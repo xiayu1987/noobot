@@ -37,7 +37,7 @@ export function isThinkingDetailUserInterjection(message = {}) {
   );
 }
 
-export function isThinkingDetailControlMessage(message = {}) {
+function isThinkingDetailControlMessage(message = {}) {
   if (isThinkingDetailUserInterjection(message)) return false;
   return Boolean(resolveContextInternalMessageType(message));
 }

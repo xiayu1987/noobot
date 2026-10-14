@@ -13,9 +13,7 @@ import {
   getMessageExplicitTurnIdentity,
   isSameMessageIdentity,
   isSameExplicitMessageTurn,
-  isSameMessageRound,
   normalizeTurnScopeIdKey,
-  shouldCollectAttachmentsFromMessage,
 } from "../../../../../src/modules/chat/model/messageIdentity.js";
 
 describe("messageIdentity", () => {
@@ -53,21 +51,6 @@ describe("messageIdentity", () => {
     ).toBe("user");
   });
 
-  it("matches same message round by turn scope before dialog id", () => {
-    expect(
-      isSameMessageRound(
-        { turnScopeId: "client-1", dialogProcessId: "dp-1" },
-        { turnScopeId: "client-1", dialogProcessId: "dp-2" },
-      ),
-    ).toBe(true);
-    expect(
-      isSameMessageRound(
-        { turnScopeId: "client-1", dialogProcessId: "dp-1" },
-        { turnScopeId: "client-2", dialogProcessId: "dp-1" },
-      ),
-    ).toBe(false);
-  });
-
   it("normalizes workflow-node turn scope keys for persisted/runtime matching", () => {
     expect(normalizeTurnScopeIdKey("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1")).toBe(
       "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
@@ -78,12 +61,6 @@ describe("messageIdentity", () => {
     expect(
       getMessageTurnScopeIdKey({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }),
     ).toBe("workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1");
-    expect(
-      isSameMessageRound(
-        { turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1" },
-        { turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" },
-      ),
-    ).toBe(true);
   });
 
   it("does not treat user and assistant in the same turn scope as the same message", () => {
@@ -114,26 +91,5 @@ describe("messageIdentity", () => {
         { role: "assistant", dialogProcessId: "dp-1" },
       ),
     ).toBe(false);
-  });
-
-  it("blocks assistant attachment collection when explicit turn identity is missing", () => {
-    expect(
-      shouldCollectAttachmentsFromMessage(
-        { role: "assistant", dialogProcessId: "dp-1" },
-        { role: "assistant", dialogProcessId: "dp-1" },
-      ),
-    ).toBe(false);
-    expect(
-      shouldCollectAttachmentsFromMessage(
-        { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
-        { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
-      ),
-    ).toBe(true);
-    expect(
-      shouldCollectAttachmentsFromMessage(
-        { role: "assistant", dialogProcessId: "dp-1" },
-        { role: "tool", dialogProcessId: "dp-1" },
-      ),
-    ).toBe(true);
   });
 });

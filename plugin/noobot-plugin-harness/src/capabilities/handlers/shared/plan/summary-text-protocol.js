@@ -7,9 +7,12 @@
 const SUMMARY_LINE_RE = /^\s*(\d+)\.\s+(.+?)\s*$/;
 const PATCH_ADD_UPDATE_RE = /^\s*(ADD|UPDATE)\s+(?:S\s*)?\[?(\d+)\]?\s+(.+?)\s*$/i;
 const PATCH_DELETE_RE = /^\s*(DELETE)\s+(?:S\s*)?\[?(\d+)\]?\s*$/i;
-const SUMMARY_OVERVIEW_BLOCK_RE = /\[SUMMARY_OVERVIEW\]([\s\S]*?)(?=\[SUMMARY_DETAIL\]|\[SUMMARY_END\]|$)/i;
-const SUMMARY_DETAIL_BLOCK_RE = /\[SUMMARY_DETAIL\]([\s\S]*?)(?=\[NEXT_EXECUTION_SUGGESTION\]|\[SUMMARY_END\]|$)/i;
-const NEXT_EXECUTION_SUGGESTION_BLOCK_RE = /\[NEXT_EXECUTION_SUGGESTION\]([\s\S]*?)(?=\[SUMMARY_END\]|$)/i;
+const SUMMARY_OVERVIEW_BLOCK_RE =
+  /\[SUMMARY_OVERVIEW\]([\s\S]*?)(?=\[SUMMARY_DETAIL\]|\[SUMMARY_END\]|$)/i;
+const SUMMARY_DETAIL_BLOCK_RE =
+  /\[SUMMARY_DETAIL\]([\s\S]*?)(?=\[NEXT_EXECUTION_SUGGESTION\]|\[SUMMARY_END\]|$)/i;
+const NEXT_EXECUTION_SUGGESTION_BLOCK_RE =
+  /\[NEXT_EXECUTION_SUGGESTION\]([\s\S]*?)(?=\[SUMMARY_END\]|$)/i;
 const SUMMARY_END_MARKER_RE = /\[SUMMARY_END\]/i;
 
 function splitLines(text = "") {
@@ -31,7 +34,7 @@ function normalizeSummaryItems(items = []) {
   return [...map.values()].sort((a, b) => a.id - b.id);
 }
 
-export function parseSummaryItemsFromText(text = "") {
+function parseSummaryItemsFromText(text = "") {
   const items = [];
   for (const line of splitLines(text)) {
     const match = line.match(SUMMARY_LINE_RE);
@@ -41,7 +44,7 @@ export function parseSummaryItemsFromText(text = "") {
   return normalizeSummaryItems(items);
 }
 
-export function renderSummaryItems(items = []) {
+function renderSummaryItems(items = []) {
   return normalizeSummaryItems(items)
     .map((item = {}) => `${item.id}. ${item.content}`)
     .join("\n")
@@ -79,7 +82,9 @@ export function mergeSummaryText(existingText = "", incomingText = "") {
 
   const patchCommands = parseSummaryPatchCommands(incoming);
   if (patchCommands.length) {
-    const map = new Map(parseSummaryItemsFromText(current).map((item = {}) => [Number(item.id), item]));
+    const map = new Map(
+      parseSummaryItemsFromText(current).map((item = {}) => [Number(item.id), item]),
+    );
     for (const command of patchCommands) {
       const id = Number(command.id);
       if (!Number.isFinite(id) || id <= 0) continue;
@@ -105,13 +110,26 @@ export function mergeSummaryText(existingText = "", incomingText = "") {
 
 export function parseSummaryOverviewAndDetailFromText(text = "") {
   const raw = String(text || "").trim();
-  if (!raw) return { overviewText: "", detailText: "", nextSuggestionText: "", trailingText: "", usedV2: false };
+  if (!raw)
+    return {
+      overviewText: "",
+      detailText: "",
+      nextSuggestionText: "",
+      trailingText: "",
+      usedV2: false,
+    };
   const overviewMatch = raw.match(SUMMARY_OVERVIEW_BLOCK_RE);
   const detailMatch = raw.match(SUMMARY_DETAIL_BLOCK_RE);
   const nextSuggestionMatch = raw.match(NEXT_EXECUTION_SUGGESTION_BLOCK_RE);
   const endMatch = raw.match(SUMMARY_END_MARKER_RE);
   if (!overviewMatch && !detailMatch && !nextSuggestionMatch) {
-    return { overviewText: raw, detailText: "", nextSuggestionText: "", trailingText: "", usedV2: false };
+    return {
+      overviewText: raw,
+      detailText: "",
+      nextSuggestionText: "",
+      trailingText: "",
+      usedV2: false,
+    };
   }
   const overviewText = String(overviewMatch?.[1] || "").trim();
   const detailText = String(detailMatch?.[1] || "").trim();

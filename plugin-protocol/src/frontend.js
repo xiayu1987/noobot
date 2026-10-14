@@ -57,13 +57,3 @@ export const EXTENSION_POINT_DEFINITIONS = Object.freeze(
     ]),
   ),
 );
-
-export function requirePluginFrontendExtensionPoint(point = "") {
-  const normalized = String(point || "").trim();
-  const descriptor = EXTENSION_POINT_DEFINITIONS[normalized];
-  if (!descriptor)
-    throw new TypeError(`unknown plugin frontend extension point: ${normalized || "<empty>"}`);
-  return descriptor;
-}
-
-export const KNOWN_EXTENSION_POINTS = Object.freeze(new Set(Object.values(EXTENSION_POINTS)));

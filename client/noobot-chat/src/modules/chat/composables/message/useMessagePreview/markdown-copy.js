@@ -19,7 +19,7 @@ export function buildNoCopyableSet(translate, key) {
   ]);
 }
 
-export function matchesAnyText(messageText = "", textSet) {
+function matchesAnyText(messageText = "", textSet) {
   return [...textSet]
     .filter(Boolean)
     .some((candidateText) => String(messageText || "").includes(candidateText));

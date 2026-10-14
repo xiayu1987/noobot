@@ -6,7 +6,7 @@
 import { dedupeTextList, sanitizeFileName } from "../text.js";
 import { MEMORY_DOCUMENT_KIND, readMemoryDocumentBody, renderMemoryDocument } from "../document.js";
 
-export const EXPERIENCE_MODEL_ERROR_CODE = "EXPERIENCE_MODEL_DOCUMENT_INVALID";
+const EXPERIENCE_MODEL_ERROR_CODE = "EXPERIENCE_MODEL_DOCUMENT_INVALID";
 
 function modelError(message) {
   const error = new Error(message);

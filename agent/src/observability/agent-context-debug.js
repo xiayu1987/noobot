@@ -24,7 +24,7 @@ function isJsonSerializable(value) {
   }
 }
 
-export function buildAgentContextDebugData(scope = {}) {
+function buildAgentContextDebugData(scope = {}) {
   const context = scope?.context || {};
   const bindings = scope?.bindings || {};
   const identity = context?.identity || {};

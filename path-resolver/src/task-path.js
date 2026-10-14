@@ -10,8 +10,6 @@ export const TASK_PATH_KINDS = Object.freeze({
   OUTPUT: "output",
   TEMP: "temp",
 });
-export const TASK_PATH_VIEW = "task-local";
-
 const TASK_PATH_KIND_SET = new Set(Object.values(TASK_PATH_KINDS));
 
 function normalizeTaskPathKind(kind = "") {

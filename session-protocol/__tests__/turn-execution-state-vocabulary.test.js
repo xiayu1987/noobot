@@ -8,7 +8,6 @@ import test from "node:test";
 import {
   deriveAuthoritativeTurnCapabilities,
   deriveTurnExecutionState,
-  isTurnExecutionState,
   isUnsuccessfulTurnTerminalStatus,
   normalizeTurnExecutionState,
   TURN_EVENT,
@@ -43,11 +42,6 @@ test("non terminal turn events keep the current execution state", () => {
 test("execution state vocabulary is frozen and validated", () => {
   assert.equal(Object.isFrozen(TURN_EXECUTION_STATE), true);
   assert.equal(Object.isFrozen(TURN_EXECUTION_STATE_VALUES), true);
-  for (const value of TURN_EXECUTION_STATE_VALUES) {
-    assert.equal(isTurnExecutionState(value), true);
-  }
-  assert.equal(isTurnExecutionState("stopping"), false);
-  assert.equal(isTurnExecutionState(""), false);
   assert.equal(normalizeTurnExecutionState("  ERROR "), TURN_EXECUTION_STATE.ERROR);
 });
 

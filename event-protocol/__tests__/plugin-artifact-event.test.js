@@ -9,12 +9,12 @@ import {
   PLUGIN_ARTIFACT_EVENT,
   PLUGIN_ARTIFACT_SCHEMA_VERSION,
   PLUGIN_ARTIFACT_SEQUENCE_DOMAIN,
+  createPluginArtifactCommitRequest,
   createPluginArtifactEnvelope,
   EVENT_FAMILY,
   EVENT_REDUCER_INPUT,
   EVENT_REDUCER_TARGET,
   getEventFamily,
-  getEventFamilyByWireEvent,
   validateProtocolEvent,
 } from "../src/index.js";
 
@@ -109,7 +109,6 @@ const assets = [
 
 test("plugin artifacts have one authoritative registry descriptor", () => {
   const descriptor = getEventFamily(EVENT_FAMILY.PLUGIN_ARTIFACT);
-  assert.equal(getEventFamilyByWireEvent(PLUGIN_ARTIFACT_EVENT), descriptor);
   assert.equal(descriptor.reducerTarget, EVENT_REDUCER_TARGET.PLUGIN_ARTIFACT);
   assert.equal(descriptor.reducerInput, EVENT_REDUCER_INPUT.ENVELOPE);
   assert.equal(descriptor.persisted, true);
@@ -129,6 +128,7 @@ test("plugin artifact ordering is scoped by plugin and artifact ID", () => {
   });
   assert.deepEqual(validateProtocolEvent(envelope).errors, []);
   assert.equal(envelope.identity.eventType, PLUGIN_ARTIFACT_EVENT);
+  assert.match(envelope.identity.eventId, /^evt_[0-9a-f-]{36}$/);
   assert.equal(envelope.protocol.schemaVersion, PLUGIN_ARTIFACT_SCHEMA_VERSION);
   assert.equal(envelope.ordering.domain, PLUGIN_ARTIFACT_SEQUENCE_DOMAIN);
   assert.equal(
@@ -157,5 +157,46 @@ test("plugin artifact authority rejects mismatched ordering", () => {
       },
     }).errors,
     ["sequence_scope_mismatch"],
+  );
+});
+
+test("plugin artifact commit request leaves authority-assigned facts to the authority", () => {
+  const request = createPluginArtifactCommitRequest({
+    pluginId: "character",
+    artifactType: "character.animation",
+    artifactId: protocol.animationId,
+    sessionId: "session-1",
+    turnScopeId: "turn-1",
+    data: { protocol, assets },
+    operation: "replaced",
+    baseRevision: 2,
+  });
+  assert.equal(request.identity.eventType, PLUGIN_ARTIFACT_EVENT);
+  assert.equal(
+    request.ordering.scopeId,
+    `session-1:character:character.animation:${protocol.animationId}`,
+  );
+  assert.equal("eventId" in request.identity, false);
+  assert.equal("sequence" in request.ordering, false);
+  assert.equal("revision" in request.payload, false);
+  assert.equal(request.payload.baseRevision, 2);
+});
+
+test("plugin artifact commit request rejects missing turn scope and replace without base revision", () => {
+  const base = {
+    pluginId: "character",
+    artifactType: "character.animation",
+    artifactId: protocol.animationId,
+    sessionId: "session-1",
+    data: { protocol, assets },
+  };
+  assert.throws(
+    () => createPluginArtifactCommitRequest(base),
+    /invalid plugin artifact commit request: missing_turn_scope_id/,
+  );
+  assert.throws(
+    () =>
+      createPluginArtifactCommitRequest({ ...base, turnScopeId: "turn-1", operation: "replaced" }),
+    /invalid plugin artifact commit request: invalid_replaced_revision/,
   );
 });

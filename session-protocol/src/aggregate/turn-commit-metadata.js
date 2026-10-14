@@ -49,13 +49,3 @@ export function validateTurnCommitMetadata(turnCommit = null) {
   }
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
-
-export function assertTurnCommitMetadata(turnCommit = null) {
-  const validation = validateTurnCommitMetadata(turnCommit);
-  if (!validation.valid) {
-    const error = new TypeError(`invalid Turn commit metadata: ${validation.errors.join(",")}`);
-    error.code = "SESSION_TURN_COMMIT_METADATA_INVALID";
-    throw error;
-  }
-  return turnCommit;
-}

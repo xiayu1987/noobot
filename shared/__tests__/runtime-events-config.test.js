@@ -18,7 +18,6 @@ import {
   resolveRuntimeEventsExecutionLogControls,
   resolveRuntimeEventsRetentionDays,
   resolveRuntimeEventsSessionLogControls,
-  resolveRuntimeEventsStorageConfig,
   resolveExecutionCategoryDebugType,
   shouldRecordRuntimeExecutionLog,
 } from "../runtime-events-config.js";
@@ -104,13 +103,6 @@ test("session log registries reference controls with defaults and environment ke
   }
 });
 
-test("runtime-events storage config uses shared defaults", () => {
-  assert.deepEqual(
-    resolveRuntimeEventsStorageConfig({}),
-    RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents,
-  );
-});
-
 test("execution log controls are centralized and suppress full successful turn diagnostics by default", () => {
   for (const controlKey of Object.values(RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS)) {
     assert.equal(typeof RUNTIME_EVENTS_CONFIG_DEFAULTS.executionLogControls[controlKey], "boolean");
@@ -165,19 +157,6 @@ test("runtime-events storage config falls back on invalid values", () => {
     resolveRuntimeEventsMaxArchives(env),
     RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents.maxArchives,
   );
-});
-
-test("runtime-events storage cleanup can be disabled with zero values", () => {
-  const env = {
-    [RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxFileBytes]: "0",
-    [RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.retentionDays]: "0",
-    [RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxArchives]: "0",
-  };
-  assert.deepEqual(resolveRuntimeEventsStorageConfig(env), {
-    maxFileBytes: 0,
-    retentionDays: 0,
-    maxArchives: 0,
-  });
 });
 
 test("session log controls honor explicit environment values independently of defaults", () => {

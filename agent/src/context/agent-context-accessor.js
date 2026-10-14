@@ -52,10 +52,6 @@ export function getSystemRuntimeFromAgentContext(scope = {}) {
   return getSystemRuntimeFromRuntime(getRuntimeFromAgentContext(scope));
 }
 
-export function getDialogProcessIdFromRuntime(runtime = {}) {
-  return String(getSystemRuntimeFromRuntime(runtime).dialogProcessId || "").trim();
-}
-
 export function getSessionIdsFromAgentContext(scope = {}) {
   return getAgentContextIdentity(getAgentContextEnvelope(scope));
 }

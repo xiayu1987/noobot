@@ -94,13 +94,6 @@ function applyParams(text = "", params = {}) {
   return output;
 }
 
-export function translateHarnessFallback(key = "", params = {}) {
-  const fallbackTable = HARNESS_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
-  const raw = resolvePath(fallbackTable, key);
-  if (raw === undefined || raw === null) return String(key || "");
-  return applyParams(raw, params);
-}
-
 export function useHarnessLocale() {
   const { locale, translate: translateGlobal } = useLocale();
 

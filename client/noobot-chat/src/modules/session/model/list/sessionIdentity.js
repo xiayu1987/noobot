@@ -9,7 +9,7 @@ export function normalizeSessionId(value = "") {
   return String(value || "").trim();
 }
 
-export function collectSessionIdentityIds(sessionItem = null) {
+function collectSessionIdentityIds(sessionItem = null) {
   const sessionId = normalizeSessionId(sessionItem?.sessionId);
   return sessionId ? [sessionId] : [];
 }

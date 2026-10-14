@@ -419,7 +419,7 @@ export async function executeOpenAiOperation({
   throw new TypeError(`unsupported OpenAI model operation: ${operation.kind}`);
 }
 
-export function mapOpenAiMultimodalAttachment(attachment = {}) {
+function mapOpenAiMultimodalAttachment(attachment = {}) {
   const mimeType = String(attachment.mimeType || "application/octet-stream").trim();
   const data = String(attachment.data || "").trim();
   const normalizedMimeType = mimeType.toLowerCase();

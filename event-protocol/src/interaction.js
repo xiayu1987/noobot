@@ -62,7 +62,7 @@ export const INTERACTION_LIFECYCLE = Object.freeze({
   FAILED: "failed",
 });
 
-export const INTERACTION_RESOLVED_BY = Object.freeze({
+const INTERACTION_RESOLVED_BY = Object.freeze({
   USER: "user",
   SYSTEM: "system",
   AUTO: "auto",
@@ -133,10 +133,6 @@ export function validateInteractionRequestPayload(data = {}) {
     return { valid: false, reason: "missing_terminal_resolved_by", missing: ["resolvedBy"] };
   }
   return { valid: true, reason: "", missing: [] };
-}
-
-export function validateInteractionRequest(event = {}) {
-  return validateInteractionRequestPayload(event?.payload);
 }
 
 export function isPendingInteractionReplay(record = {}) {

@@ -6,19 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { runWeb2Img } from "../../../src/shared/utils/web/web2img.js";
 import { browserLikeFetch } from "../../../src/shared/utils/web/fetch.js";
 import { NoobotError } from "../../../src/shared/errors/index.js";
-
-test("runWeb2Img throws recoverable error when input/outputDir is missing", async () => {
-  await assert.rejects(
-    runWeb2Img({ input: "", outputDir: "" }),
-    (error) =>
-      error instanceof NoobotError &&
-      error.code === "RECOVERABLE_INPUT_MISSING" &&
-      error.fatal === false,
-  );
-});
 
 test("browserLikeFetch throws recoverable error when redirects exceed limit", async () => {
   const originalFetch = globalThis.fetch;

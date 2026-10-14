@@ -82,7 +82,7 @@ export function isExecutionUserStop({ error = null, abortSignal = null } = {}) {
   return resolveExecutionAbortType({ error, abortSignal }) === EXECUTION_ABORT_TYPE.USER_STOP;
 }
 
-export function createExecutionAbortError({ abortSignal = null } = {}) {
+function createExecutionAbortError({ abortSignal = null } = {}) {
   const reason = resolveExecutionAbortReason({ abortSignal });
   const error = new Error(clean(reason?.reason) || clean(reason?.type) || EXECUTION_ABORTED);
   error.name = "AbortError";

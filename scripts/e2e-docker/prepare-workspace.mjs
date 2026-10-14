@@ -56,7 +56,7 @@ async function readWorkspaceUserIds(sourceRoot, globalConfigPath) {
   return [...new Set(userIds)];
 }
 
-export async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath }) {
+async function prepareE2eWorkspace({ sourceRoot, targetRoot, globalConfigPath }) {
   const source = requireAbsoluteDir(sourceRoot, "source workspace");
   const target = requireAbsoluteDir(targetRoot, "e2e workspace");
   const configPath = requireAbsoluteDir(globalConfigPath, "global config path");

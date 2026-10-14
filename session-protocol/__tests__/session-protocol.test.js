@@ -15,7 +15,6 @@ import {
   createTurnAcceptanceReceipt,
   validateTurnAttachmentsBoundEventData,
   createSessionCommand,
-  createSessionSnapshot,
   normalizeDialogProcessId,
   normalizeParentSessionId,
   normalizeSessionId,
@@ -27,7 +26,6 @@ import {
   validateCanonicalAssistantPresentation,
   validateTurnAcceptanceUserMessage,
   validateSessionCommand,
-  validateSessionSnapshot,
 } from "../src/index.js";
 
 test("Session artifact and Turn commit metadata have one canonical protocol shape", () => {
@@ -283,21 +281,5 @@ test("aggregate concurrency and command idempotency are deterministic", () => {
       receipts: [{ commandId: "c1", type: SESSION_COMMAND.TURN_COMMIT, requestHash: "h1" }],
     }).reason,
     "command_id_reuse_conflict",
-  );
-});
-
-test("session snapshot closes aggregate and event sequence coordinates", () => {
-  const snapshot = createSessionSnapshot({
-    scope,
-    aggregateVersion: 7,
-    throughSequence: 12,
-    session: { title: "Protocol" },
-    turns: [],
-    messages: [],
-  });
-  assert.deepEqual(validateSessionSnapshot(snapshot), { valid: true, errors: [] });
-  assert.equal(
-    validateSessionSnapshot({ ...snapshot, session: { sessionId: "other" } }).valid,
-    false,
   );
 });

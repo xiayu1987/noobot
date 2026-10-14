@@ -6,9 +6,9 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-export const FIRST_PARTY_AUXILIARY_ROOTS = Object.freeze(["scripts", "user-template"]);
+const FIRST_PARTY_AUXILIARY_ROOTS = Object.freeze(["scripts", "user-template"]);
 
-export const FIRST_PARTY_IGNORED_DIRECTORIES = Object.freeze([
+const FIRST_PARTY_IGNORED_DIRECTORIES = Object.freeze([
   ".git",
   ".pm2",
   "__mocks__",

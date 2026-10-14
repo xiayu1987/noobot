@@ -87,10 +87,3 @@ export function convertPathView({
     mapped,
   };
 }
-
-export const toHostPath = (options = {}) =>
-  convertPathView({ ...options, targetView: PATH_VIEWS.HOST });
-export const toSandboxPath = (options = {}) =>
-  convertPathView({ ...options, targetView: PATH_VIEWS.SANDBOX });
-export const toClientPath = (options = {}) =>
-  convertPathView({ ...options, targetView: PATH_VIEWS.CLIENT });

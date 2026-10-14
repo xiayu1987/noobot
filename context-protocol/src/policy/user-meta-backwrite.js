@@ -57,5 +57,3 @@ export function normalizeUserMetaBackwrites(records = []) {
     return normalized;
   });
 }
-
-export const USER_META_BACKWRITE_STATUS = Object.freeze({ PENDING: STATUS_PENDING });

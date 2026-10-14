@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function createCapabilityModelTimeoutError(timeoutMs = 0) {
+function createCapabilityModelTimeoutError(timeoutMs = 0) {
   const error = new Error(`capability model timeout (${timeoutMs}ms)`);
   error.name = "AbortError";
   error.code = "CAPABILITY_MODEL_TIMEOUT";

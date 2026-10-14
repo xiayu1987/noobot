@@ -13,7 +13,7 @@ export const SYSTEM_RUNTIME_COUNTER_KEYS = Object.freeze([
   "noFinalResponseRetryConsecutiveCount",
 ]);
 
-export const SYSTEM_RUNTIME_TURN_PROGRESS_FLAG_KEYS = Object.freeze([
+const SYSTEM_RUNTIME_TURN_PROGRESS_FLAG_KEYS = Object.freeze([
   "needsPhaseSummary",
   "phaseSummaryByCharsPrompted",
 ]);

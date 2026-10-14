@@ -5,12 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  createReplayBatch,
-  validateReplayBatch,
-  assertLosslessForward,
-  replayEventTail,
-} from "../src/replay-batch.js";
+import { createReplayBatch, validateReplayBatch, replayEventTail } from "../src/replay-batch.js";
 import { createEventEnvelope } from "../src/envelope.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "../src/event-registry.js";
 import { createTurnSnapshotEnvelope } from "../src/turn-snapshot.js";
@@ -118,26 +113,6 @@ test("replay batch rejects duplicate event identity conflicts", () => {
     events: [first, second],
   });
   assert.ok(validateReplayBatch(batch).errors.includes("event_identity_conflict"));
-});
-
-test("lossless forwarding accepts nested envelope and rejects identity, ordering and payload mutation", () => {
-  const original = event(1);
-  assert.equal(assertLosslessForward(original, structuredClone(original)), true);
-  for (const mutate of [
-    (copy) => {
-      copy.identity.eventId = "changed";
-    },
-    (copy) => {
-      copy.ordering.sequence = 2;
-    },
-    (copy) => {
-      copy.payload.state = "completed";
-    },
-  ]) {
-    const copy = structuredClone(original);
-    mutate(copy);
-    assert.throws(() => assertLosslessForward(original, copy), /event_forwarding_mutated_/);
-  }
 });
 
 test("replayEventTail rejects duplicate identities and sequence gaps", () => {

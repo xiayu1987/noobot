@@ -5,16 +5,12 @@
  */
 
 import { summarizeDebugMessage, summarizeDebugMessages } from "./resendDebugLogger.js";
-import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebugSafely } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
 export function setStopDebugLogSink(sink = null) {
   sessionLogSink = acceptsDebugSink(sink) ? sink : null;
-}
-
-export function isStopDebugEnabled() {
-  return isDebugTypeEnabled(sessionLogSink, "stop");
 }
 
 export { summarizeDebugMessage, summarizeDebugMessages };

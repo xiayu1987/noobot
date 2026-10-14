@@ -13,7 +13,7 @@ import { normalizeSessionRunEvent } from "./core.js";
 import { trim } from "./normalize.js";
 import { nowMs } from "../../model/timeFields.js";
 
-export function readStopRequests() {
+function readStopRequests() {
   try {
     const storage = globalThis?.localStorage;
     if (!storage) return [];
@@ -25,7 +25,7 @@ export function readStopRequests() {
   }
 }
 
-export function writeStopRequests(entries = []) {
+function writeStopRequests(entries = []) {
   try {
     const storage = globalThis?.localStorage;
     if (!storage) return;
@@ -35,7 +35,7 @@ export function writeStopRequests(entries = []) {
   }
 }
 
-export function isFreshStopRequest(entry = {}, timestamp = nowMs()) {
+function isFreshStopRequest(entry = {}, timestamp = nowMs()) {
   return Number(timestamp || 0) - Number(entry?.timestamp || 0) <= USER_STOP_REQUEST_TTL_MS;
 }
 

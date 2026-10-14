@@ -36,7 +36,7 @@ function stripResourceSuffix(specifier) {
   return suffixAt < 0 ? specifier : specifier.slice(0, suffixAt);
 }
 
-export function classifyFrontendImport(importer, specifier) {
+function classifyFrontendImport(importer, specifier) {
   if (typeof specifier !== "string" || !specifier) return null;
   if (specifier.startsWith("./") || specifier.startsWith("../")) {
     const target = path.resolve(path.dirname(importer), stripResourceSuffix(specifier));
@@ -97,7 +97,7 @@ async function walkFiles(rootDir) {
   return output;
 }
 
-export async function checkPluginFrontendBoundaries() {
+async function checkPluginFrontendBoundaries() {
   let pluginDirs = [];
   try {
     pluginDirs = await fs.readdir(pluginRoot, { withFileTypes: true });

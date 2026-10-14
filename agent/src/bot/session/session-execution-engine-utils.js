@@ -3,70 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveMessageRole } from "@noobot/context-protocol/policy/message";
-import {
-  projectContextMessageIdentityMetadata,
-  resolveContextMessageContent,
-  resolveContextMessageFlags,
-  resolveContextToolCallId,
-  resolveContextToolCalls,
-} from "@noobot/context-protocol/message/codec";
-import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
+
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
 import {
-  getMessageId,
   isInjectedMessage,
   readMessageField,
-  resolveContextInternalMessageType,
   resolveInjectedMessageType,
 } from "@noobot/context-protocol";
-
-export function normalizePluginSelectorSet(keys = []) {
-  return new Set(normalizeTrimmedStringList(keys));
-}
-
-export function resolvePluginOptionsFromConfig(sourceConfig = {}, pluginSelectors = new Set()) {
-  const plugins =
-    sourceConfig?.plugins && typeof sourceConfig.plugins === "object" ? sourceConfig.plugins : {};
-  const merged = {};
-  for (const selector of pluginSelectors) {
-    const item = plugins?.[selector];
-    if (!item || typeof item !== "object") continue;
-    Object.assign(merged, item);
-  }
-  return merged;
-}
-
-export function normalizeMessageForModelRuntime(messageItem = {}) {
-  const role = resolveMessageRole(messageItem);
-  if (!role) return null;
-  const content = resolveContextMessageContent(messageItem);
-  const normalized = {
-    role,
-    content: role === "tool" ? compactToolResultTextForModel(content) : content,
-    summarized: resolveContextMessageFlags(messageItem).summarized,
-  };
-  const noobotMessageId = getMessageId(messageItem);
-  if (noobotMessageId) {
-    normalized.additional_kwargs = {
-      ...(normalized.additional_kwargs || {}),
-      noobotMessageId,
-    };
-  }
-  const toolCalls = resolveContextToolCalls(messageItem);
-  if (toolCalls.length) normalized.tool_calls = toolCalls;
-  const toolCallId = resolveContextToolCallId(messageItem);
-  if (toolCallId) normalized.tool_call_id = toolCallId;
-  const internalType = resolveContextInternalMessageType(messageItem);
-  if (internalType) {
-    normalized.additional_kwargs = {
-      ...(normalized.additional_kwargs || {}),
-      noobotInternalMessageType: internalType,
-    };
-  }
-  Object.assign(normalized, projectContextMessageIdentityMetadata(messageItem));
-  return applyNormalizedMessageFlags(normalized, messageItem);
-}
 
 export function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);

@@ -155,10 +155,3 @@ export async function closeAllBrowserSessions() {
   );
   return { closed: settled.filter((entry) => entry.status === "fulfilled").length };
 }
-
-export function listBrowserSessions() {
-  return [...sessions.keys()].map((key) => {
-    const [userId, profileName] = key.split("\u0000");
-    return { userId, profileName };
-  });
-}

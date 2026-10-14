@@ -122,10 +122,6 @@ export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
   };
 }
 
-export function hasNewProtocolNodeIdentity(nodeItem = {}) {
-  return Boolean(text(nodeItem?.activeChildExecutionId || nodeItem?.nodeExecutionId));
-}
-
 export function resolveNodeChildExecutionIds(nodeItem = {}, runtimeNodeSessions = []) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
   const current = text(runtimeNode?.activeChildExecutionId || nodeItem?.activeChildExecutionId);

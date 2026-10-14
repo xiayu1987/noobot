@@ -5,12 +5,12 @@
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-export const TRANSFER_PREFERENCE = Object.freeze({
+const TRANSFER_PREFERENCE = Object.freeze({
   AUTO: "auto",
   DIRECT: "direct",
   ATTACHMENT: "attachment",
 });
-export const TRANSFER_DECISION_REASON = Object.freeze({
+const TRANSFER_DECISION_REASON = Object.freeze({
   FORCED: "forced_attachment",
   REQUESTED: "requested_attachment",
   THRESHOLD: "threshold_exceeded",
@@ -21,7 +21,7 @@ function positive(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
 }
-export function normalizeTransferPolicy({
+function normalizeTransferPolicy({
   policy = {},
   maxDirectChars = LENGTH_THRESHOLDS.semanticTransfer.directChars,
   previewChars = LENGTH_THRESHOLDS.semanticTransfer.previewChars,

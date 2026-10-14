@@ -16,12 +16,10 @@ import {
   detectPathPlatform,
   isAbsolutePathAnyPlatform,
   isAbsolutePathForPlatform,
-  isCaseInsensitivePathContext,
   isCaseInsensitivePathPlatform,
   joinPathForPlatform,
   normalizePathForPlatform,
   resolvePathPlatformFromContext,
-  resolvePathUnderRoot,
   resolveAgentPathContext,
   resolveRuntimePathContext,
   resolveToolInputPath,
@@ -150,27 +148,6 @@ test("resolves path platform and case-sensitivity from context", () => {
   assert.equal(isCaseInsensitivePathPlatform("windows"), true);
   assert.equal(isCaseInsensitivePathPlatform("darwin"), true);
   assert.equal(isCaseInsensitivePathPlatform("linux"), false);
-  assert.equal(
-    isCaseInsensitivePathContext({ context: { environment: { os: { platform: "win32" } } } }),
-    true,
-  );
-});
-
-test("resolves relative targets under root without corrupting foreign absolute paths", () => {
-  assert.equal(resolvePathUnderRoot("/workspace/app", "src/file.js"), "/workspace/app/src/file.js");
-  assert.equal(resolvePathUnderRoot("C:\\work\\app", "src\\file.js"), "C:/work/app/src/file.js");
-  assert.equal(
-    resolvePathUnderRoot("/workspace/app", "C:\\work\\src\\file.js"),
-    "C:/work/src/file.js",
-  );
-  assert.equal(
-    resolvePathUnderRoot("/workspace/app", "file:///C:/work/src/file.js"),
-    "C:/work/src/file.js",
-  );
-  assert.equal(
-    resolvePathUnderRoot("/workspace/app", "\\\\server\\share\\file.js"),
-    "//server/share/file.js",
-  );
 });
 
 test("classifies tool input path views explicitly", () => {

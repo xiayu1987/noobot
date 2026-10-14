@@ -5,17 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  AGENT_APPLICATION_EVENT,
-  AGENT_CLIENT_KIND,
-  createAgentApplication,
-} from "../../src/application/index.js";
-
-test("Agent Application exposes transport-neutral client and event contracts", () => {
-  assert.equal(AGENT_CLIENT_KIND.SERVICE, "service");
-  assert.equal(AGENT_CLIENT_KIND.CLI, "cli");
-  assert.equal(AGENT_APPLICATION_EVENT.INTERACTION_REQUESTED, "interaction.requested");
-});
+import { createAgentApplication } from "../../src/application/index.js";
 
 test("Agent Application delegates execution without exposing BotManager", async () => {
   const calls = [];

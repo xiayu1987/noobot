@@ -45,11 +45,7 @@ async function fetchWithMissingDetailRetry(runFetch, identity, { retryLimit, ret
   }
 }
 
-export function thinkingDetailCacheKey({
-  sessionId = "",
-  turnScopeId = "",
-  dialogProcessId = "",
-} = {}) {
+function thinkingDetailCacheKey({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
   const sid = text(sessionId);
   const turnKey = normalizeTurnScopeIdKey(turnScopeId);
   const route = turnKey || text(dialogProcessId);

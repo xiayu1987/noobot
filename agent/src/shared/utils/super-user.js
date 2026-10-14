@@ -30,14 +30,6 @@ export function isSuperAdminRole(role = "") {
   return String(role || "").trim() === SUPER_ADMIN_ROLE;
 }
 
-export function isSuperUserRuntime(runtime = {}) {
-  const sourceRuntime = asObject(runtime) || {};
-  const systemRuntime = asObject(sourceRuntime?.systemRuntime) || {};
-  if (systemRuntime?.isSuperUser === true) return true;
-  if (isSuperAdminRole(sourceRuntime?.role || systemRuntime?.role)) return true;
-  return false;
-}
-
 export function isSuperUserAgentContext(agentContext = {}) {
   const context = asObject(agentContext) || {};
   const runtime = resolveRuntimeFromAgentContext(context);

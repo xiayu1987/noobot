@@ -47,10 +47,6 @@ export function getModelContextRevision(document) {
   return getModelContextRuntime(document).revision;
 }
 
-export function resolveCanonicalContextMessages(document) {
-  return [...getModelContextRuntime(document).messageStore.messages];
-}
-
 export function commitModelContextRevision(document) {
   const runtime = getModelContextRuntime(document);
   runtime.revision += 1;

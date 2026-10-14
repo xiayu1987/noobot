@@ -13,7 +13,7 @@ export function resolveWorkflowMode(meta = {}) {
   return meta?.harness?.planningGuidanceMode === "separate_model" ? "separate_model" : "inject";
 }
 
-export function appendWorkflowPriorityDecision(
+function appendWorkflowPriorityDecision(
   ctx = {},
   {
     domain = "",
@@ -48,7 +48,9 @@ export function appendWorkflowPriorityDecision(
       chosenStage: String(chosenStage || "").trim() || undefined,
       candidateActions: normalizedCandidateActions,
       deferredActions: Array.isArray(deferredActions) ? deferredActions : [],
-      triggeredActions: normalizedTriggeredActions.length ? normalizedTriggeredActions : normalizedCandidateActions,
+      triggeredActions: normalizedTriggeredActions.length
+        ? normalizedTriggeredActions
+        : normalizedCandidateActions,
       blockedActions: Array.isArray(blockedActions) ? blockedActions : [],
       blockedReasons: Array.isArray(blockedReasons) ? blockedReasons : [],
       blockedReasonLabels: Array.isArray(blockedReasonLabels) ? blockedReasonLabels : [],
@@ -57,7 +59,7 @@ export function appendWorkflowPriorityDecision(
   });
 }
 
-export function appendWorkflowExecutionResult(
+function appendWorkflowExecutionResult(
   ctx = {},
   {
     domain = "",
@@ -100,7 +102,7 @@ export function appendWorkflowExecutionResult(
   });
 }
 
-export function captureWorkflowLogCursor(ctx = {}, domain = "") {
+function captureWorkflowLogCursor(ctx = {}, domain = "") {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return 0;
   const logs = holder?.bucket?.logs?.[domain];
@@ -126,10 +128,7 @@ function resolveThrownErrorCode(error = null) {
     .toUpperCase();
 }
 
-export function resolveWorkflowExecutionMetrics(
-  ctx = {},
-  { domain = "", startCursor = 0 } = {},
-) {
+function resolveWorkflowExecutionMetrics(ctx = {}, { domain = "", startCursor = 0 } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return { retryCount: 0, errorCode: "" };
   const logs = holder?.bucket?.logs?.[domain];
@@ -161,21 +160,25 @@ export async function runWorkflowLifecycle(
     domain = "",
     point = "",
     mode = "",
-    resolveDecision = () =>
-      ({
-        category: "",
-        chosenAction: "none",
-        chosenReason: "idle",
-        chosenReasonLabel: "",
-        candidateActions: [],
-        deferredActions: [],
-        triggeredActions: [],
-        blockedActions: [],
-        blockedReasons: [],
-        blockedReasonLabels: [],
-        pending: {},
-      }),
-    execute = async () => ({ requestedAction: "none", executedPrimary: false, executedFollowup: false, changed: false }),
+    resolveDecision = () => ({
+      category: "",
+      chosenAction: "none",
+      chosenReason: "idle",
+      chosenReasonLabel: "",
+      candidateActions: [],
+      deferredActions: [],
+      triggeredActions: [],
+      blockedActions: [],
+      blockedReasons: [],
+      blockedReasonLabels: [],
+      pending: {},
+    }),
+    execute = async () => ({
+      requestedAction: "none",
+      executedPrimary: false,
+      executedFollowup: false,
+      changed: false,
+    }),
   } = {},
 ) {
   const startedAt = Date.now();
@@ -198,7 +201,12 @@ export async function runWorkflowLifecycle(
     blockedReasonLabels: decision.blockedReasonLabels || [],
     pending: decision.pending || {},
   });
-  let execution = { requestedAction: "none", executedPrimary: false, executedFollowup: false, changed: false };
+  let execution = {
+    requestedAction: "none",
+    executedPrimary: false,
+    executedFollowup: false,
+    changed: false,
+  };
   let caughtError = null;
   try {
     execution = (await execute(decision)) || execution;

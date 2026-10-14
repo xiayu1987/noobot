@@ -11,7 +11,6 @@ import {
   EVENT_REDUCER_TARGET,
   createInteractionAuthority,
   getEventFamily,
-  getEventFamilyByWireEvent,
   validateInteractionAuthority,
   validateInteractionRequestPayload,
   isPendingInteractionReplay,
@@ -86,13 +85,9 @@ test("interaction authority rejects alternate shapes and conflicting persistence
 });
 
 test("event family registry delegates authoritative domain events only", () => {
-  assert.equal(getEventFamilyByWireEvent("turn.completed"), null);
-  assert.equal(getEventFamilyByWireEvent("delta"), null);
-  assert.equal(getEventFamilyByWireEvent("reconnect_data"), null);
   const interaction = getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST);
   assert.equal(interaction.authority, EVENT_AUTHORITY.AUTHORITATIVE);
   assert.equal(interaction.reducerTarget, EVENT_REDUCER_TARGET.INTERACTION);
-  assert.equal(getEventFamilyByWireEvent("interaction_request"), interaction);
 });
 
 test("protocol payload reader validates wire identity and returns the canonical domain fact", () => {

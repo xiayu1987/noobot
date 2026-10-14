@@ -7,7 +7,6 @@ import {
   createGuidanceHandler,
   createPlanningHandler,
 } from "../helpers/context-aware-handler-fixtures.js";
-import { canAttemptPlanRevision } from "../../src/capabilities/handlers/planning/revision-engine.js";
 import { runPlanUpdateAfterSummary } from "../../src/capabilities/handlers/guidance/model-runner.js";
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
 export { WORKFLOW_PARAMS };
@@ -97,9 +96,4 @@ export function createPlanningAgentContext({ counters = {}, scenario = "full" } 
   };
 }
 
-export {
-  createGuidanceHandler,
-  createPlanningHandler,
-  canAttemptPlanRevision,
-  runPlanUpdateAfterSummary,
-};
+export { createGuidanceHandler, createPlanningHandler, runPlanUpdateAfterSummary };

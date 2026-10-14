@@ -67,7 +67,6 @@ describe("workflow runtime architecture guard", () => {
     expect(reconnectModel).not.toMatch(/byTurnScopeId/);
     expect(reconnectModel).toMatch(/presentationMessageId/);
     expect(reconnectReplay).not.toMatch(/messageItem\?\.(?:messageId|id)\).*nextMessageId/s);
-    expect(reconnectReplay).toMatch(/messageItem\?\.presentationMessageId/);
     expect(thinkingDetailsPanel).not.toMatch(/leftTurnScopeId|leftDialogProcessId/);
     expect(thinkingDetailsPanel).toMatch(/leftPresentationMessageId/);
     expect(thinkingPresentation).not.toMatch(/toolLogIndex.*toolLogItem\?\.ts/s);
@@ -84,10 +83,8 @@ describe("workflow runtime architecture guard", () => {
     expect(thinkingRealtimeRenderer).not.toMatch(
       /logItem\.(?:id|seq|tool_call_id|timestamp|ts)|logIndex}`/,
     );
-    expect(toolLogIdentity).toMatch(/detail\(item\.detailText\)/);
     expect(toolLogIdentity).not.toMatch(/item\.content/);
     expect(toolLogIdentity).not.toMatch(/toolLogContentKey|findMatchIndex/);
-    expect(toolLogIdentity).toMatch(/indexByIdentity/);
     expect(turnUiStore).toMatch(/expandedToolDetailKeys/);
     expect(turnUiStore).not.toMatch(/expandedDetailLogKeys/);
   });
@@ -114,9 +111,7 @@ describe("workflow runtime architecture guard", () => {
 
   it("keeps canonical workflow nodes on status without persisting stepStatus", () => {
     const workflowStore = source("src/modules/chat/stores/chatStoreWorkflows.js");
-    const nodeProjection = source(
-      "src/modules/chat/stores/workflowNodeStateProjection.js",
-    );
+    const nodeProjection = source("src/modules/chat/stores/workflowNodeStateProjection.js");
     expect(nodeProjection).toMatch(/stepStatus:\s*_incomingStepStatus/);
     expect(nodeProjection).toMatch(/stepStatus:\s*_currentStepStatus/);
     expect(workflowStore).not.toMatch(/next\s*=\s*\{[\s\S]*?stepStatus\s*:/);

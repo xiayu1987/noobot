@@ -6,7 +6,7 @@
 import { isSettledTurn, TURN_STATE } from "./turn-state.js";
 import { positiveInteger, text as clean } from "../normalize.js";
 
-export const TURN_TERMINAL_COMMAND = Object.freeze({
+const TURN_TERMINAL_COMMAND = Object.freeze({
   COMPLETED: "completed",
   USER_STOPPED: "user_stopped",
   ERROR: "error",
@@ -21,7 +21,7 @@ export const TURN_TERMINAL_STATUS = Object.freeze({
   TIMEOUT: "timeout",
 });
 
-export const TURN_TERMINAL_REASON = Object.freeze({
+const TURN_TERMINAL_REASON = Object.freeze({
   RUN_COMPLETED: "run_completed",
   USER_STOP: "user_stop",
   RUN_ERROR: "run_error",
@@ -165,7 +165,7 @@ export function materializeTurnTerminalMessages({
   });
 }
 
-export function deriveTerminalStatusFromTurn(turn = {}) {
+function deriveTerminalStatusFromTurn(turn = {}) {
   if (!isSettledTurn(turn)) return null;
   if (turn.terminalStatus && typeof turn.terminalStatus === "object") return turn.terminalStatus;
   const command =

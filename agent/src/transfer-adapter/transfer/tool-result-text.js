@@ -38,7 +38,7 @@ export function resolveToolResultInlineTextLimit(
   return toSafePositiveInt(userLimit ?? globalLimit, fallback, 512);
 }
 
-export function buildTextResultFields({
+function buildTextResultFields({
   text = "",
   transferEnvelopes = [],
   inlineMaxChars = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,

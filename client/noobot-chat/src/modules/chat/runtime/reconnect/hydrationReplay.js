@@ -13,7 +13,7 @@ function sessionIdentity(value = {}) {
   return _trimStr(value?.sessionId);
 }
 
-export function resolveMatchingSessionDetail(detail, sessionId = "") {
+function resolveMatchingSessionDetail(detail, sessionId = "") {
   const expectedSessionId = _trimStr(sessionId);
   if (!expectedSessionId || !detail || typeof detail !== "object") return null;
   const detailSessionId = sessionIdentity(detail);

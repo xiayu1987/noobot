@@ -8,7 +8,7 @@ import { isPlainObject } from "../utils.js";
 
 export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming", "text"]);
 export const PROGRAMMING_SCENARIO_KEY = "programming";
-export const TEXT_SCENARIO_KEY = "text";
+const TEXT_SCENARIO_KEY = "text";
 
 export const PROGRAMMING_REQUIRED_TOOL_NAMES = Object.freeze([
   "read_file",
@@ -80,7 +80,7 @@ export const BUILTIN_SCENARIOS = Object.freeze({
   }),
 });
 
-export const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
+const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
   full: Object.freeze({
     name: "scenarios.full.name",
     description: "scenarios.full.description",

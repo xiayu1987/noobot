@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const TOOL_SEMANTIC_CLASS = Object.freeze({
+const TOOL_SEMANTIC_CLASS = Object.freeze({
   FLOW_CONTROL: "flow_control",
 });
 
@@ -26,7 +26,7 @@ export function createFlowControlContextPolicy(flowControlRole) {
   });
 }
 
-export function normalizeToolContextPolicy(value = null) {
+function normalizeToolContextPolicy(value = null) {
   const candidate = value && typeof value === "object" && !Array.isArray(value) ? value : null;
   if (!candidate) return null;
   const semanticClass = String(candidate.semanticClass || "").trim();

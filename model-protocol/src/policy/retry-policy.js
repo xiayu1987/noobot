@@ -4,7 +4,7 @@
  */
 import { MODEL_ERROR_CODE } from "../protocol/constants.js";
 
-export const DEFAULT_RETRY_POLICY = Object.freeze({
+const DEFAULT_RETRY_POLICY = Object.freeze({
   transport: Object.freeze({ maxAttempts: 3, baseDelayMs: 250 }),
   reasoningOnly: Object.freeze({ maxAttempts: 1 }),
   emptyResponse: Object.freeze({ maxAttempts: 3, baseDelayMs: 500 }),
@@ -12,7 +12,7 @@ export const DEFAULT_RETRY_POLICY = Object.freeze({
   providerFallback: Object.freeze({ enabled: false, candidates: Object.freeze([]) }),
 });
 
-export const NO_FINAL_RESPONSE_ERROR_CODES = Object.freeze([
+const NO_FINAL_RESPONSE_ERROR_CODES = Object.freeze([
   MODEL_ERROR_CODE.EMPTY_RESPONSE_RETRY_EXHAUSTED,
   MODEL_ERROR_CODE.REASONING_RETRY_EXHAUSTED,
 ]);

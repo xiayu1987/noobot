@@ -46,7 +46,7 @@ export function resolvePreferredStreaming({ requested, cached } = {}) {
   return typeof cached === "boolean" ? cached : requested === true;
 }
 
-export function isExplicitModelError(error = {}) {
+function isExplicitModelError(error = {}) {
   const code = String(error?.code || error?.kind || error?.cause?.code || "")
     .trim()
     .toLowerCase();

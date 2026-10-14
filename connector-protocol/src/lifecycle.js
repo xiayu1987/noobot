@@ -16,7 +16,7 @@ export const CONNECTOR_ACCESS_CANCELLATION = Object.freeze({
   NOT_CANCELLABLE: "not_cancellable",
 });
 
-export function assertConnectorAccessCancellation(value) {
+function assertConnectorAccessCancellation(value) {
   const normalized = String(value || "").trim();
   if (!Object.values(CONNECTOR_ACCESS_CANCELLATION).includes(normalized)) {
     throw new TypeError(`connector access cancellation is invalid: ${value}`);

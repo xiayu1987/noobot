@@ -119,7 +119,7 @@ async function loadStaticNamespace(absolute, state = {}) {
   }
 }
 
-export async function inspectBarrel({ root, barrel }) {
+async function inspectBarrel({ root, barrel }) {
   const absolute = path.join(root, barrel.relative);
   const state = { cache: new Map(), resolving: new Set() };
   const exported = await loadStaticNamespace(absolute, state);
@@ -148,7 +148,7 @@ export async function checkRepository({ root, ignoredDirectories } = {}) {
   return { barrels: barrels.length, violations };
 }
 
-export function formatViolations(violations) {
+function formatViolations(violations) {
   const lines = ["Barrel star export collisions detected (symbols silently dropped by ESM):"];
   for (const violation of violations) {
     lines.push(`  ${violation.relative}`);

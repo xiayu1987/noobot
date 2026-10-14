@@ -6,14 +6,14 @@
 import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "./constants.js";
 import { normalizeState } from "./normalize.js";
 
-export const CHANNEL_IN_FLIGHT_STATES = Object.freeze([
+const CHANNEL_IN_FLIGHT_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.INTERACTION_PENDING,
   BackendChannelState.STOPPING,
   BackendChannelState.RECONNECTING,
 ]);
 
-export const CHANNEL_TERMINAL_STATES = Object.freeze([
+const CHANNEL_TERMINAL_STATES = Object.freeze([
   ...BackendTerminalStates,
   FrontendRunState.CANCELLED,
 ]);

@@ -15,7 +15,7 @@ function resolveRole(message = {}) {
   return resolveContextMessageRole(message);
 }
 
-export function extractContextTextContent(content = "") {
+function extractContextTextContent(content = "") {
   if (content === undefined || content === null) return "";
   if (typeof content === "string") return content.trim();
   if (Array.isArray(content)) {

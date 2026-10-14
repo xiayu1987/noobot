@@ -102,6 +102,7 @@ const productionRoots = [
   "sanitize/src",
   "semantic-transfer-protocol/src",
   "service/bootstrap",
+  "service/cli",
   "service/config",
   "service/deps",
   "service/routes",

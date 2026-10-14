@@ -40,9 +40,9 @@ export const BackendTerminalStates = Object.freeze([
   BackendChannelState.NO_CONVERSATION,
 ]);
 
-export const AUTHORITATIVE_TERMINAL_STATES = TURN_TERMINAL_STATES;
+const AUTHORITATIVE_TERMINAL_STATES = TURN_TERMINAL_STATES;
 
-export const LEGACY_TERMINAL_DISCOVERY_STATES = Object.freeze([
+const LEGACY_TERMINAL_DISCOVERY_STATES = Object.freeze([
   ...AUTHORITATIVE_TERMINAL_STATES,
   "user_stopped",
   "failed",
@@ -126,8 +126,6 @@ export const MESSAGE_IN_FLIGHT_CHANNEL_STATES = Object.freeze([
   FrontendRunState.USER_STOPPING,
 ]);
 
-export const USER_STOP_LOCK_STATES = Object.freeze([FrontendRunState.USER_STOPPING]);
-
 export const MESSAGE_TERMINAL_OUTCOME = Object.freeze({
   GENERATED: "generated",
   FAILED: "failed",
@@ -139,143 +137,6 @@ export const MESSAGE_TERMINAL_OUTCOME_PRECEDENCE = Object.freeze({
   [MESSAGE_TERMINAL_OUTCOME.FAILED]: 2,
   [MESSAGE_TERMINAL_OUTCOME.STOPPED]: 3,
 });
-
-export const USER_STOP_LOCK_REOPEN_STATES = Object.freeze([
-  FrontendRunState.ACTION_REQUESTING,
-  BackendChannelState.SENDING,
-  BackendChannelState.RECONNECTING,
-  FrontendRunState.CONTINUE_REQUESTING,
-  FrontendRunState.RESEND_REPLACING_TURN,
-  FrontendRunState.RESEND_STREAMING,
-]);
-
-export const SESSION_RUN_TRANSITION_RULE = Object.freeze({
-  PRIORITY_FORWARD: "priority_forward",
-  USER_STOP_LOCKED: "user_stop_locked",
-  TERMINAL_LOCKED: "terminal_locked",
-});
-
-export const SESSION_RUN_TRANSITION_GUARD_ID = Object.freeze({
-  HAS_EVENT_STATE: "has_event_state",
-  SAME_CONVERSATION_SCOPE_OR_NEW_TURN: "same_conversation_scope_or_new_turn",
-  USER_STOP_LOCK_NOT_REOPENED: "user_stop_lock_not_reopened",
-  TERMINAL_NOT_REOPENED: "terminal_not_reopened",
-  NO_STALE_SEQ_REGRESSION: "no_stale_seq_regression",
-  PRIORITY_FORWARD_OR_NEW_TURN: "priority_forward_or_new_turn",
-});
-
-export const SESSION_RUN_TRANSITION_DECISION_REASON = Object.freeze({
-  APPLIED: "applied",
-  LOCAL_RESET: "local_reset",
-  MISSING_EVENT_STATE: "missing_event_state",
-  DIFFERENT_SCOPE: "different_scope",
-  USER_STOP_LOCK_REOPEN: "user_stop_lock_reopen",
-  TERMINAL_LOCK_REOPEN: "terminal_lock_reopen",
-  STALE_SEQ_REGRESSION: "stale_seq_regression",
-  PRIORITY_REGRESSION: "priority_regression",
-});
-
-export const COMMON_TRANSITION_GUARD_IDS = Object.freeze([
-  SESSION_RUN_TRANSITION_GUARD_ID.HAS_EVENT_STATE,
-  SESSION_RUN_TRANSITION_GUARD_ID.SAME_CONVERSATION_SCOPE_OR_NEW_TURN,
-]);
-
-export const FINAL_TRANSITION_GUARD_IDS = Object.freeze([
-  SESSION_RUN_TRANSITION_GUARD_ID.NO_STALE_SEQ_REGRESSION,
-  SESSION_RUN_TRANSITION_GUARD_ID.PRIORITY_FORWARD_OR_NEW_TURN,
-]);
-
-export const SESSION_RUN_TRANSITION_RULE_GUARDS = Object.freeze({
-  [SESSION_RUN_TRANSITION_RULE.PRIORITY_FORWARD]: Object.freeze([]),
-  [SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED]: Object.freeze([
-    SESSION_RUN_TRANSITION_GUARD_ID.USER_STOP_LOCK_NOT_REOPENED,
-  ]),
-  [SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED]: Object.freeze([
-    SESSION_RUN_TRANSITION_GUARD_ID.TERMINAL_NOT_REOPENED,
-  ]),
-});
-
-function createTransitionConfig(priority, rule = SESSION_RUN_TRANSITION_RULE.PRIORITY_FORWARD) {
-  return Object.freeze({
-    priority,
-    rule,
-    guards: Object.freeze([
-      ...COMMON_TRANSITION_GUARD_IDS,
-      ...(SESSION_RUN_TRANSITION_RULE_GUARDS[rule] || []),
-      ...FINAL_TRANSITION_GUARD_IDS,
-    ]),
-  });
-}
-
-export const SESSION_RUN_TRANSITION_TABLE = Object.freeze({
-  [FrontendRunState.IDLE]: createTransitionConfig(0),
-  [FrontendRunState.ACTION_REQUESTING]: createTransitionConfig(30),
-  [FrontendRunState.PROCESSING]: createTransitionConfig(40),
-  [BackendChannelState.SENDING]: createTransitionConfig(40),
-  [BackendChannelState.RECONNECTING]: createTransitionConfig(40),
-  [FrontendRunState.CONTINUE_REQUESTING]: createTransitionConfig(45),
-  [BackendChannelState.INTERACTION_PENDING]: createTransitionConfig(50),
-  [FrontendRunState.RESEND_REPLACING_TURN]: createTransitionConfig(55),
-  [FrontendRunState.RESEND_STREAMING]: createTransitionConfig(60),
-  [FrontendRunState.USER_STOPPING]: createTransitionConfig(
-    80,
-    SESSION_RUN_TRANSITION_RULE.USER_STOP_LOCKED,
-  ),
-  [BackendChannelState.COMPLETED]: createTransitionConfig(90),
-  [FrontendRunState.FRONTEND_COMPLETION_REQUESTING]: createTransitionConfig(95),
-  [FrontendRunState.FRONTEND_COMPLETED]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [FrontendRunState.USER_STOP_COMPLETED]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [BackendChannelState.ERROR]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [BackendChannelState.EXPIRED]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [BackendChannelState.NO_CONVERSATION]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [FrontendRunState.CANCELLED]: createTransitionConfig(
-    110,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [FrontendRunState.ACTION_REQUEST_ERROR]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [FrontendRunState.PROCESSING_ERROR]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [FrontendRunState.COMPLETION_ERROR]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-  [FrontendRunState.STOP_ERROR]: createTransitionConfig(
-    100,
-    SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED,
-  ),
-});
-
-export const FrontendTerminalStates = Object.freeze(
-  Object.entries(SESSION_RUN_TRANSITION_TABLE)
-    .filter(([, config]) => config.rule === SESSION_RUN_TRANSITION_RULE.TERMINAL_LOCKED)
-    .map(([state]) => state),
-);
-
-export const EXCLUSIVE_TERMINAL_STATES = Object.freeze([
-  BackendChannelState.ERROR,
-  FrontendRunState.USER_STOP_COMPLETED,
-  FrontendRunState.CANCELLED,
-]);
 
 export const MESSAGE_TERMINAL_STATE_OUTCOME = Object.freeze({
   [BackendChannelState.COMPLETED]: MESSAGE_TERMINAL_OUTCOME.GENERATED,

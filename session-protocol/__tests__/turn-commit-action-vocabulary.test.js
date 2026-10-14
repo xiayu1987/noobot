@@ -6,13 +6,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  isTurnCommitAction,
   isTurnCommitContinuation,
   normalizeTurnCommitAction,
   resolveTurnCommitAction,
   TURN_COMMIT_ACTION,
   TURN_COMMIT_ACTION_VALUES,
-  TURN_EXECUTION_STATE_VALUES,
   TURN_PHASE,
 } from "../src/index.js";
 
@@ -20,18 +18,6 @@ test("commit action vocabulary is frozen and exhaustive", () => {
   assert.equal(Object.isFrozen(TURN_COMMIT_ACTION), true);
   assert.equal(Object.isFrozen(TURN_COMMIT_ACTION_VALUES), true);
   assert.deepEqual([...TURN_COMMIT_ACTION_VALUES].sort(), ["continue", "send"]);
-  for (const value of TURN_COMMIT_ACTION_VALUES) {
-    assert.equal(isTurnCommitAction(value), true);
-  }
-});
-
-test("commit action rejects values from other vocabularies", () => {
-  assert.equal(isTurnCommitAction(""), false);
-  assert.equal(isTurnCommitAction("stop"), false);
-  assert.equal(isTurnCommitAction("resend"), false);
-  for (const value of TURN_EXECUTION_STATE_VALUES) {
-    assert.equal(isTurnCommitAction(value), false);
-  }
 });
 
 test("commit action axis does not intersect the turn phase axis", () => {

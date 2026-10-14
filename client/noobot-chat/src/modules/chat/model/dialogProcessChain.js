@@ -66,23 +66,3 @@ export function resolveRootDialogProcessIdByChain({
   }
   return "";
 }
-
-export function collectRelatedDialogProcessIds(messages = [], rootDialogProcessId = "") {
-  const normalizedRootDialogProcessId = String(rootDialogProcessId || "").trim();
-  if (!normalizedRootDialogProcessId) return new Set();
-  const relatedDialogProcessIdSet = new Set([normalizedRootDialogProcessId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const sessionMessage of Array.isArray(messages) ? messages : []) {
-      const parentDialogProcessId = getMessageParentDialogProcessId(sessionMessage);
-      const childDialogProcessId = getMessageDialogProcessId(sessionMessage);
-      if (!parentDialogProcessId || !childDialogProcessId) continue;
-      if (!relatedDialogProcessIdSet.has(parentDialogProcessId)) continue;
-      if (relatedDialogProcessIdSet.has(childDialogProcessId)) continue;
-      relatedDialogProcessIdSet.add(childDialogProcessId);
-      changed = true;
-    }
-  }
-  return relatedDialogProcessIdSet;
-}

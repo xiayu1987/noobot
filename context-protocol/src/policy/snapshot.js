@@ -124,7 +124,7 @@ export function serializeContextMessage(message = {}) {
   return serialized;
 }
 
-export function deserializeContextMessageRecord(item = {}) {
+function deserializeContextMessageRecord(item = {}) {
   const raw = item?.raw && typeof item.raw === "object" ? cloneJson(item.raw) : {};
   const message = {
     ...raw,
@@ -202,7 +202,7 @@ export function createModelContextSnapshot({
   };
 }
 
-export function assertModelContextSnapshotIdentity(snapshot = {}, identity = {}) {
+function assertModelContextSnapshotIdentity(snapshot = {}, identity = {}) {
   const normalized = normalizeSnapshotIdentity(identity);
   for (const field of ["userId", "sessionId", "dialogProcessId", "turnScopeId"]) {
     if (String(snapshot?.[field] || "").trim() !== normalized[field]) {

@@ -49,7 +49,7 @@ export async function ensureAgentProxyConfig({ serviceRoot } = {}) {
   await copyFile(examplePath, configPath);
 }
 
-export async function upsertConfigParams({
+async function upsertConfigParams({
   workspaceRootAbsolutePath,
   configParamsFilePath = "",
   entries = {},
@@ -83,11 +83,7 @@ export async function upsertConfigParams({
   await writeJson(filePath, normalizeConfigParamsDocument({ values, descriptions }));
 }
 
-export async function repairUserConfigFile({
-  targetFilePath,
-  baseValues = {},
-  transform = null,
-} = {}) {
+async function repairUserConfigFile({ targetFilePath, baseValues = {}, transform = null } = {}) {
   const targetExists = await fileExists(targetFilePath);
   const targetRead = targetExists
     ? await readJsonWithInvalidBackup(targetFilePath)
@@ -141,7 +137,7 @@ async function readWorkspaceDirectoryEntries(workspaceRootAbsolutePath) {
   }
 }
 
-export async function collectWorkspaceUserIds({ workspaceRootAbsolutePath } = {}) {
+async function collectWorkspaceUserIds({ workspaceRootAbsolutePath } = {}) {
   const entries = await readWorkspaceDirectoryEntries(workspaceRootAbsolutePath);
   return entries
     .filter((entry) => entry.isDirectory() && String(entry.name || "").trim())

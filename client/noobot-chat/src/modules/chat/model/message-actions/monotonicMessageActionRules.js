@@ -16,7 +16,7 @@ function normalizeText(value = "") {
     .toLowerCase();
 }
 
-export function normalizeMessageRole(messageItem = {}) {
+function normalizeMessageRole(messageItem = {}) {
   const explicitRole = normalizeText(
     messageItem?.role ||
       messageItem?.messageRole ||

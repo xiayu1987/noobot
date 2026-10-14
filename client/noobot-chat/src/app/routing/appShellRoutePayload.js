@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export function normalizePseudoRouteValue(value = "") {
+function normalizePseudoRouteValue(value = "") {
   return String(value || "").trim();
 }
 
@@ -19,14 +19,6 @@ export function buildPanelPseudoRoute(sessionId = "", panel = "") {
     sessionId: normalizePseudoRouteValue(sessionId),
     panel: normalizePseudoRouteValue(panel),
   };
-}
-
-export function buildPanelVisibilityPseudoRoute({
-  sessionId = "",
-  visible = false,
-  panel = "",
-} = {}) {
-  return buildPanelPseudoRoute(sessionId, visible ? panel : "");
 }
 
 export function buildClosePseudoPanelRoute() {

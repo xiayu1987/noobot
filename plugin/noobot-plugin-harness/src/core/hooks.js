@@ -14,7 +14,7 @@ import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-
 import { migrateHarnessBucket } from "./bucket-migration.js";
 import { invokeCapabilityModelWithinDeadline } from "./capability-model-invocation.js";
 
-export const HARNESS_TRACE_POINTS = Object.freeze([
+const HARNESS_TRACE_POINTS = Object.freeze([
   HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
   HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD,
   HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
@@ -35,16 +35,14 @@ export const HARNESS_TRACE_POINTS = Object.freeze([
   HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
 ]);
 
-export const HARNESS_FLUSH_POINTS = Object.freeze([
+const HARNESS_FLUSH_POINTS = Object.freeze([
   HOOK_POINT.AGENT.AFTER_TURN,
   HOOK_POINT.AGENT.ON_ABORT,
   HOOK_POINT.AGENT.ON_ERROR,
   HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
 ]);
 
-export const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([
-  HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
-]);
+const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([HOOK_POINT.SERVICE.AFTER_SESSION_DELETE]);
 
 export function shouldInjectPromptAtPoint(point = "", options = {}) {
   return point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false;

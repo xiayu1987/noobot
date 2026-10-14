@@ -18,14 +18,6 @@ export function hasOwnProperty(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);
 }
 
-export function firstNonEmptyString(...values) {
-  for (const value of values) {
-    const text = String(value || "").trim();
-    if (text) return text;
-  }
-  return "";
-}
-
 export async function fileExists(filePath = "") {
   try {
     await access(filePath);

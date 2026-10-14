@@ -5,7 +5,7 @@
  */
 import { text } from "./normalize.js";
 
-export const SESSION_PERSISTENCE_SCOPE_FIELDS = Object.freeze([
+const SESSION_PERSISTENCE_SCOPE_FIELDS = Object.freeze([
   "scopeId",
   "parentSessionId",
   "relativeDir",

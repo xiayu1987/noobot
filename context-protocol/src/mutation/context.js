@@ -21,7 +21,7 @@ import {
 } from "../assembly/model-runtime.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 
-export const CONTEXT_MUTATION_PROTOCOL_VERSION = 2;
+const CONTEXT_MUTATION_PROTOCOL_VERSION = 2;
 
 export const CONTEXT_MUTATION_TYPES = Object.freeze({
   APPEND_MESSAGE: "context.message.append",
@@ -114,7 +114,7 @@ export function dispatchContextMutation(document, command = {}) {
   return result;
 }
 
-export function executeContextMutation(document, commandType, payload = {}) {
+function executeContextMutation(document, commandType, payload = {}) {
   return dispatchContextMutation(document, createContextMutation(document, commandType, payload));
 }
 

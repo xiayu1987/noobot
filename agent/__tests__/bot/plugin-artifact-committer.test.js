@@ -73,6 +73,7 @@ test("plugin artifact port owns persistence and publication behind one generic c
     },
   );
   assert.equal(publications[0].event, "authority_event_committed");
+  assert.equal("revision" in commits[0].payload, false);
   assert.equal(publications[0].data.envelope, envelope);
   assert.equal(commits[0].persistenceScope, persistenceScope);
   assert.equal("persistenceContext" in commits[0], false);

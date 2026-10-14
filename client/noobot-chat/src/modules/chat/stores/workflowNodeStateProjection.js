@@ -18,7 +18,7 @@ const preferNumber = (primary, fallback, key) => Number(primary?.[key] ?? fallba
 const resolveNodeStatus = (primary, fallback) =>
   text(primary?.status || primary?.stepStatus || fallback?.status || fallback?.stepStatus);
 
-export function shouldApplyWorkflowNodeStateEvent(current, incoming) {
+function shouldApplyWorkflowNodeStateEvent(current, incoming) {
   if (!current) return true;
   const c = compareWorkflowRuntimeFacts(incoming, current, {
     defaultDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,

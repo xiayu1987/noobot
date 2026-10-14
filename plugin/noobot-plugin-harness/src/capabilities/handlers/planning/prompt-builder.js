@@ -128,7 +128,7 @@ function resolveLatestUserTextFromMessages(messageList = [], { preferFrontend = 
   return "";
 }
 
-export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
+function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
   return [
     getPlanningToolContextMarker(locale),
     buildPlanningToolCatalogPrompt(ctx, locale),
@@ -144,7 +144,7 @@ export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, 
   ].join("\n");
 }
 
-export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
+function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
   const latestUserGoal =
     resolveLatestUserMessageText(ctx) ||
     translateI18nText(
@@ -167,12 +167,7 @@ export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {
   ].join("\n");
 }
 
-export function buildPlanningPromptBase(
-  locale = LOCALE.ZH_CN,
-  _ctx = {},
-  _meta = {},
-  options = {},
-) {
+function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}, options = {}) {
   const userGoal =
     resolveLatestUserMessageText(_ctx) ||
     translateI18nText(

@@ -9,7 +9,6 @@ import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
 import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 
 import {
-  buildWorkflowTransferPayloadFromAttachments,
   mergeAttachments,
   resolveNodeInputAttachments,
   resolveWorkflowTransferAttachmentReferences,
@@ -81,21 +80,6 @@ test("workflow attachment operations reject incomplete identity", () => {
   );
   assert.throws(
     () =>
-      buildWorkflowTransferPayloadFromAttachments({
-        attachments: [
-          {
-            attachmentId: "shared",
-            sessionId: "session-a",
-            attachmentSource: "user",
-            name: "same.txt",
-            mimeType: "text/plain",
-          },
-        ],
-      }),
-    /workflow transfer identity is required/,
-  );
-  assert.throws(
-    () =>
       resolveWorkflowTransferAttachmentReferences({
         transferEnvelopes: [
           {
@@ -127,40 +111,5 @@ test("workflow attachment operations reject incomplete identity", () => {
         ],
       }),
     /invalid_attachment_session_id/,
-  );
-});
-
-test("workflow transfer preserves canonical identity isolation without flattening metadata", () => {
-  const attachments = [
-    base,
-    { ...base, sessionId: "session-b" },
-    { ...base, attachmentSource: "model" },
-  ];
-  const payload = buildWorkflowTransferPayloadFromAttachments({
-    attachments,
-    transferId: "transfer-shared",
-    messageId: "message-shared",
-    identity: {
-      sessionId: "session-a",
-      turnScopeId: "turn-shared",
-      runId: "run-shared",
-      producer: { type: "workflow", id: "workflow-1" },
-    },
-    intent: {
-      source: "plugin",
-      reason: TRANSFER_REASON.WORKFLOW_SUBAGENT,
-      scenario: "workflow",
-      strategy: "workflow_subagent",
-    },
-  });
-  assert.equal(payload.transferEnvelopes[0].payload.attachments.length, 3);
-  assert.equal(payload.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "shared");
-  assert.deepEqual(
-    resolveWorkflowTransferAttachmentReferences(payload).map((ref) => ref.identity),
-    attachments.map(({ attachmentId, sessionId, attachmentSource }) => ({
-      attachmentId,
-      sessionId,
-      attachmentSource,
-    })),
   );
 });

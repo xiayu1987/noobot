@@ -118,18 +118,6 @@ export const BACKEND_COMMON_ZH_CN = {
   "session.workspaceNotInitialized": "工作区未初始化",
   "session.treeNodeMissing": "会话未登记在会话树中",
   "status.disconnectedFromHistory": "已断开历史连接",
-  "web2img.readabilityNotInstalledWarn":
-    "@mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom",
-  "web2img.contentTruncated": "内容过长，已截断",
-  "web2img.descriptionLabel": "描述",
-  "web2img.mainContentTitle": "正文",
-  "web2img.noContentExtracted": "未提取到内容",
-  "web2img.textCleanAppendixTitle": "文本清洗附录",
-  "web2img.noReadableTextExtracted": "未提取到 trafilatura/readability 文本",
-  "web2img.resultIndex": "结果索引",
-  "web2img.sharpNotInstalledRawWarn":
-    "sharp 未安装，无法做图片缩放/切分/转码，将返回原始截图。请执行: npm i sharp",
-  "web2img.sharpNotInstalledSplitWarn": "sharp 未安装，图片后处理/分切不可用。可执行: npm i sharp",
   "ws.badRequest": "请求无效",
   "ws.dialogStoppedByUser": "对话已被用户停止",
   "ws.interactionEncryptedRequired": "交互响应需要加密负载",

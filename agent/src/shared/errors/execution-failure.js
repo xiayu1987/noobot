@@ -11,7 +11,7 @@ function resolveFailureMessage(error) {
   ).trim();
 }
 
-export class ExecutionFailure extends Error {
+class ExecutionFailure extends Error {
   constructor(error, lifecycle = null) {
     super(resolveFailureMessage(error), { cause: error });
     this.name = "ExecutionFailure";

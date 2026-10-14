@@ -18,10 +18,7 @@ import {
   NATIVE_SCRIPT_BROWSER_PAGE_METHODS,
   NATIVE_SCRIPT_CAPABILITY_BINDINGS,
   NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
-  NATIVE_SCRIPT_FORBIDDEN_PROPERTIES,
-  NATIVE_SCRIPT_FORBIDDEN_SYNTAX,
   NATIVE_SCRIPT_RESULT_FIELD,
-  NATIVE_SCRIPT_SOURCE_POLICY,
   resolveExecutionIsolation,
   resolveCommandShell,
   resolveSandboxMountMappings,
@@ -34,14 +31,6 @@ import {
 
 test("native script source and result protocol is immutable and canonical", () => {
   assert.equal(NATIVE_SCRIPT_RESULT_FIELD, "script_result");
-  assert.equal(
-    NATIVE_SCRIPT_SOURCE_POLICY.forbiddenIdentifiers,
-    NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
-  );
-  assert.equal(NATIVE_SCRIPT_SOURCE_POLICY.forbiddenProperties, NATIVE_SCRIPT_FORBIDDEN_PROPERTIES);
-  assert.equal(NATIVE_SCRIPT_SOURCE_POLICY.forbiddenSyntax, NATIVE_SCRIPT_FORBIDDEN_SYNTAX);
-  assert.equal(NATIVE_SCRIPT_SOURCE_POLICY.dynamicComputedPropertyAccess, false);
-  assert.equal(Object.isFrozen(NATIVE_SCRIPT_SOURCE_POLICY), true);
   assert.equal(Object.isFrozen(NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS), true);
   assert.deepEqual(NATIVE_SCRIPT_CAPABILITY_BINDINGS, {
     browser: ["browser"],

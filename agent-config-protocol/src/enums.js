@@ -92,7 +92,7 @@ export const CONTEXT_SECTION_ALIASES = {
   [CONTEXT_SECTION.ATTACHMENTS]: [CONTEXT_SECTION.ATTACHMENTS],
 };
 
-export const CONTEXT_RUNTIME_CAPABILITY = Object.freeze({
+const CONTEXT_RUNTIME_CAPABILITY = Object.freeze({
   ATTACHMENTS: "attachments",
 });
 

@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  extractReadableTextFromHtml,
-  extractVisibleTextFromHtml,
-} from "./web/text-cleaner.js";
-import { cleanTerminalOutputForLLM, cleanDatabaseOutputForLLM } from "./cleaners/output-cleaner.js";
+import { extractReadableTextFromHtml, extractVisibleTextFromHtml } from "./web/text-cleaner.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 const NOISE_PATTERNS = [
@@ -65,18 +61,25 @@ function cleanMarkdownText(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.clean
   return cleanPlainText(raw, maxChars);
 }
 
-function cleanHtmlText(input = "", { url = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars } = {}) {
+function cleanHtmlText(
+  input = "",
+  { url = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars } = {},
+) {
   const html = String(input || "");
   if (!html) return "";
   const cleaned =
-    extractReadableTextFromHtml(html, String(url || "")) ||
-    extractVisibleTextFromHtml(html);
+    extractReadableTextFromHtml(html, String(url || "")) || extractVisibleTextFromHtml(html);
   return postCleanText(cleaned, maxChars);
 }
 
 export function cleanTextUniversal(
   input = "",
-  { format = "auto", contentType = "", url = "", maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars } = {},
+  {
+    format = "auto",
+    contentType = "",
+    url = "",
+    maxChars = LENGTH_THRESHOLDS.toolIO.cleanedTextChars,
+  } = {},
 ) {
   const text = String(input || "");
   const normalizedFormat = String(format || "auto").toLowerCase();
@@ -94,18 +97,4 @@ export function cleanTextUniversal(
   if (autoFormat === "html") return cleanHtmlText(text, { url, maxChars });
   if (autoFormat === "markdown") return cleanMarkdownText(text, maxChars);
   return cleanPlainText(text, maxChars);
-}
-
-export function cleanConnectorOutputForLLM(
-  { connectorType = "", output = {} } = {},
-  { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
-) {
-  const normalizedType = String(connectorType || "").trim().toLowerCase();
-  if (normalizedType === "terminal") {
-    return cleanTerminalOutputForLLM(output, { maxChars });
-  }
-  if (normalizedType === "database") {
-    return cleanDatabaseOutputForLLM(output, { maxChars });
-  }
-  return cleanTerminalOutputForLLM(output, { maxChars });
 }

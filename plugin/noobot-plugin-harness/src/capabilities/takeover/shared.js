@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolvePromptInjectionId } from "../handlers/shared/message/injected-message-utils.js";
+
 export function isMessageInjected(messages = [], id = "", content = "") {
   if (!Array.isArray(messages) || !messages.length) return false;
-  if (id) {
-    return messages.some((msg) => String(msg?.content || "").includes(`<!-- ${id} -->`));
-  }
+  if (id) return messages.some((msg) => resolvePromptInjectionId(msg) === id);
   return messages.some((msg) => String(msg?.content || "") === content);
 }

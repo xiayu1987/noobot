@@ -13,7 +13,7 @@ export {
   parseTaskCheckReceipt,
 } from "./check-receipt.js";
 
-export const TASK_CHECK_PROTOCOL_HEADER = "NOOBOT_TASK_CHECK/1";
+const TASK_CHECK_PROTOCOL_HEADER = "NOOBOT_TASK_CHECK/1";
 
 function protocolError(message) {
   const error = new TypeError(`invalid ${TASK_CHECK_PROTOCOL_HEADER} content: ${message}`);

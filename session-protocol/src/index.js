@@ -35,7 +35,6 @@ export * from "./turn-acceptance.js";
 export * from "./turn-presentation.js";
 export * from "./identity/session-identity.js";
 export * from "./identity/turn-identity.js";
-export * from "./identity/message-identity.js";
 export {
   SESSION_COMMAND,
   assertSessionCommand,
@@ -67,8 +66,5 @@ export * from "./lifecycle/turn-replacement.js";
 export * from "./lifecycle/turn-timing.js";
 export * from "./lifecycle/execution-abort.js";
 export * from "./lifecycle/execution-cancellation-scope.js";
-export * from "./aggregate/session-aggregate-core.js";
 export * from "./aggregate/session-invariants.js";
 export * from "./aggregate/turn-commit-metadata.js";
-export * from "./transport/snapshot.js";
-export * from "./transport/result.js";

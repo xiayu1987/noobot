@@ -271,53 +271,6 @@ export function getMessageId(message = {}) {
   return resolveMessageId(message);
 }
 
-export function removeMessagesByInternalTypes(holder = {}, internalTypes = []) {
-  if (!holder || typeof holder !== "object") {
-    throw new TypeError("modelContext document is required");
-  }
-  const normalizedTypes = new Set(
-    normalizeList(internalTypes)
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
-  );
-  if (normalizedTypes.size === 0) {
-    throw new TypeError("internalTypes must contain at least one internal message type");
-  }
-  const blocks = holder.messageBlocks;
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {
-    throw new TypeError("modelContext.messageBlocks is required");
-  }
-
-  const removedMessages = [];
-  const nextBlocks = {};
-  for (const blockName of ["system", "history", "incremental"]) {
-    const source = normalizeList(blocks[blockName]);
-    nextBlocks[blockName] = source.filter((message) => {
-      if (!normalizedTypes.has(readContextMessageField(message, "noobotInternalMessageType"))) {
-        return true;
-      }
-      removedMessages.push(message);
-      return false;
-    });
-  }
-  if (removedMessages.length === 0) {
-    return { removedCount: 0, removedMessageIds: [], removedInternalTypes: [] };
-  }
-
-  writeMessageBlocks(holder, nextBlocks);
-  return {
-    removedCount: removedMessages.length,
-    removedMessageIds: [...new Set(removedMessages.map(resolveMessageId).filter(Boolean))],
-    removedInternalTypes: [
-      ...new Set(
-        removedMessages
-          .map((message) => readContextMessageField(message, "noobotInternalMessageType"))
-          .filter(Boolean),
-      ),
-    ],
-  };
-}
-
 export function removeMessagesByIds(holder = {}, messageIds = []) {
   if (!holder || typeof holder !== "object") {
     throw new TypeError("modelContext document is required");

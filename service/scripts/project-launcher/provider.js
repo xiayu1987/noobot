@@ -65,10 +65,7 @@ export function resolveProviderTemplate(providers = {}, providerAlias = "") {
   return resolveModelLibraryProvider(alias);
 }
 
-export function normalizeBuiltinScenarioConfigForLauncher(
-  scenarios = {},
-  { programmingModel = "" } = {},
-) {
+function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programmingModel = "" } = {}) {
   const source = isPlainObject(scenarios) ? scenarios : {};
   const defaultScenario = String(source.default || "full").trim();
   const definitions = isPlainObject(source.definitions) ? source.definitions : {};

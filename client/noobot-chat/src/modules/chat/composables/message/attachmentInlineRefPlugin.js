@@ -189,5 +189,3 @@ export function attachmentInlineRefPlugin(md) {
   md.core.ruler.push(`${ATTACHMENT_INLINE_TOKEN}_text`, rewriteAttachmentTextTokens);
   md.renderer.rules[ATTACHMENT_INLINE_TOKEN] = renderAttachmentToken;
 }
-
-export { ATTACHMENT_INLINE_TOKEN };

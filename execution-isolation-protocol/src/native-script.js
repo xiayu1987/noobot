@@ -86,10 +86,3 @@ export const NATIVE_SCRIPT_FORBIDDEN_PROPERTIES = Object.freeze([
   "__proto__",
   "prototype",
 ]);
-
-export const NATIVE_SCRIPT_SOURCE_POLICY = Object.freeze({
-  forbiddenSyntax: NATIVE_SCRIPT_FORBIDDEN_SYNTAX,
-  forbiddenIdentifiers: NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS,
-  forbiddenProperties: NATIVE_SCRIPT_FORBIDDEN_PROPERTIES,
-  dynamicComputedPropertyAccess: false,
-});

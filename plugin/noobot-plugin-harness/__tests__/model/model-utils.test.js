@@ -15,7 +15,6 @@ import {
   AUXILIARY_SEQUENCE_IDENTITY_FIELD,
   resolveAuxiliarySequenceIdentity,
 } from "@noobot/context-protocol/assembly/auxiliary-sequence";
-import { buildModelMessagesWithStructuredEnvelope } from "../../src/capabilities/handlers/shared/message/utils.js";
 import { buildHarnessInjectedMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../src/capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { markHarnessTurnLifecycle } from "../../src/capabilities/handlers/shared/runtime/lifecycle-utils.js";
@@ -108,20 +107,6 @@ test("resolveCapabilityModelMessages delegates the authoritative modelContext to
     resolved.map((item) => item.content),
     ["history-from-block", "incremental-from-block"],
   );
-});
-
-test("buildModelMessagesWithStructuredEnvelope preserves provided agent messages without plugin-side filtering", () => {
-  const output = buildModelMessagesWithStructuredEnvelope({
-    locale: "zh-CN",
-    agentMessages: [
-      { role: "user", content: "keep" },
-      { role: "assistant", content: "drop", summarized: true },
-    ],
-    task: "task",
-  });
-
-  assert.match(output[0].content, /keep/);
-  assert.match(output[0].content, /drop/);
 });
 
 test("invokeCapabilityModel preserves provided messages before invoking capability model", async () => {
@@ -537,46 +522,4 @@ test("resolveCapabilityModelMessages does not filter resolver output or use payl
       ),
     /authoritative modelContext resolver/,
   );
-});
-
-test("buildModelMessagesWithStructuredEnvelope does not clip agent context in plugin structured envelope", () => {
-  const output = buildModelMessagesWithStructuredEnvelope({
-    locale: "zh-CN",
-    agentMessages: Array.from({ length: 22 }, (_, index) => ({
-      role: "user",
-      content: `m${index + 1}`,
-    })),
-    task: "task",
-  });
-
-  const jsonText = String(output[0].content || "").match(/```json\n([\s\S]*?)\n```/)?.[1] || "[]";
-  const agentContext = JSON.parse(jsonText);
-  assert.deepEqual(
-    agentContext.map((item) => item.content),
-    [
-      "m1",
-      "m2",
-      "m3",
-      "m4",
-      "m5",
-      "m6",
-      "m7",
-      "m8",
-      "m9",
-      "m10",
-      "m11",
-      "m12",
-      "m13",
-      "m14",
-      "m15",
-      "m16",
-      "m17",
-      "m18",
-      "m19",
-      "m20",
-      "m21",
-      "m22",
-    ],
-  );
-  assert.equal(output.at(-1).content, "task");
 });

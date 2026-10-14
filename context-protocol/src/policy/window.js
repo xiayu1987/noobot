@@ -96,18 +96,3 @@ export function resolveModelFinalMessages({
   );
   return { system, history, incremental, messages: [...system, ...history, ...incremental] };
 }
-
-export function materializeModelContext(context = {}) {
-  if (Number(context?.protocolVersion) !== 3) {
-    throw new Error("materializeModelContext requires modelContext protocolVersion=3");
-  }
-  const blocks =
-    context?.messageBlocks && typeof context.messageBlocks === "object"
-      ? context.messageBlocks
-      : {};
-  return resolveModelFinalMessages({
-    systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
-    historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
-    incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
-  });
-}

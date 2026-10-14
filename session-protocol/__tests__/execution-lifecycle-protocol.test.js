@@ -7,13 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   EXECUTION_CHILDREN_WIRE_EVENT,
-  EXECUTION_KIND,
   EXECUTION_QUERY_COMMAND,
   EXECUTION_QUERY_CONTRACT,
   EXECUTION_SNAPSHOT_WIRE_EVENT,
   EXECUTION_TREE_WIRE_EVENT,
   buildExecutionTree,
-  createExecutionLifecycleEnvelope,
   deriveAgentExecutionId,
   isExecutionQueryTargetValid,
   validateExecutionIdentity,
@@ -61,26 +59,6 @@ test("execution query target validity is derived from the contract", () => {
   assert.equal(isExecutionQueryTargetValid(TREE_GET, { rootExecutionId: "r1" }), true);
   assert.equal(isExecutionQueryTargetValid(TREE_GET, {}), false);
   assert.equal(isExecutionQueryTargetValid("execution.unknown", { executionId: "e1" }), false);
-});
-
-test("execution envelope retains lifecycle coordinates and parent identity", () => {
-  const envelope = createExecutionLifecycleEnvelope({
-    eventType: "turn.processing_started",
-    eventId: "event-1",
-    commandId: "command-1",
-    sessionId: "child-session",
-    parentSessionId: "root-session",
-    turnScopeId: "child-turn",
-    parentExecutionId: "agent:root-turn",
-    rootExecutionId: "agent:root-turn",
-    revision: 2,
-    sequence: 3,
-    state: "processing",
-  });
-  assert.equal(envelope.executionKind, EXECUTION_KIND.AGENT);
-  assert.equal(envelope.executionId, "agent:child-turn");
-  assert.equal(envelope.parentExecutionId, "agent:root-turn");
-  assert.equal(envelope.sequence, 3);
 });
 
 test("execution tree supports arbitrary child agent depth", () => {

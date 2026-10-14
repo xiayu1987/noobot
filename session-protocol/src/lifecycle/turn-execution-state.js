@@ -17,7 +17,3 @@ export const TURN_EXECUTION_STATE_VALUES = Object.freeze(Object.values(TURN_EXEC
 export function normalizeTurnExecutionState(value = "") {
   return clean(value).toLowerCase();
 }
-
-export function isTurnExecutionState(value = "") {
-  return TURN_EXECUTION_STATE_VALUES.includes(normalizeTurnExecutionState(value));
-}

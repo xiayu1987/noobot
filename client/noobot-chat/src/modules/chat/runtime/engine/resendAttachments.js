@@ -29,7 +29,7 @@ export function toPendingDisplayAttachment(attachment = {}) {
   return meta;
 }
 
-export function dedupeAttachmentMetas(attachments = []) {
+function dedupeAttachmentMetas(attachments = []) {
   return dedupeAttachmentsByIdentity(
     (Array.isArray(attachments) ? attachments : []).map(normalizeAttachmentMeta).filter(Boolean),
   );

@@ -6,7 +6,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  isResendDebugEnabled,
   logResendDebug,
   setResendDebugLogSink,
 } from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
@@ -21,7 +20,6 @@ describe("resendDebugLogger", () => {
     const sink = { debug: vi.fn((debugType, factory) => factory()), isEnabled: () => true };
     setResendDebugLogSink(sink);
 
-    expect(isResendDebugEnabled()).toBe(true);
     logResendDebug("resend.disabled", { sessionId: "s-1" });
 
     expect(sink.debug).toHaveBeenCalledWith("resend", expect.any(Function));
@@ -70,7 +68,6 @@ describe("resendDebugLogger", () => {
     const sink = { debug: vi.fn(), isEnabled: () => false };
     setResendDebugLogSink(sink);
 
-    expect(isResendDebugEnabled()).toBe(false);
     expect(logResendDebug("resend.disabled", payload)).toBe(false);
     expect(payload).not.toHaveBeenCalled();
     expect(sink.debug).not.toHaveBeenCalled();

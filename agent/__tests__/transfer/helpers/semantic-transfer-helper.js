@@ -13,11 +13,7 @@ import {
   TRANSFER_DIRECTION,
   validateTransferEnvelope,
 } from "@noobot/semantic-transfer-protocol";
-import {
-  COMPACT_TRANSFER_FILE_FIELDS,
-  COMPACT_TRANSFER_PAYLOAD_FIELDS,
-  compactToolResultTextForModel,
-} from "../../../src/transfer-adapter/core/compact.js";
+import { compactToolResultTextForModel } from "../../../src/transfer-adapter/core/compact.js";
 import { transferSemanticContent } from "../../../src/transfer-adapter/transfer/semantic-transfer.js";
 import {
   materializeOutput,
@@ -84,8 +80,6 @@ export function isValidTransferEnvelope(value) {
 }
 
 export {
-  COMPACT_TRANSFER_FILE_FIELDS,
-  COMPACT_TRANSFER_PAYLOAD_FIELDS,
   attachmentTransfer,
   assertTransferEnvelope,
   compactToolResultTextForModel,

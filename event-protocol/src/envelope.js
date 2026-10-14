@@ -9,6 +9,10 @@ import { isRecord, selectFields, text } from "./normalize.js";
 export const EVENT_PROTOCOL_NAME = "@noobot/event-protocol";
 export const EVENT_PROTOCOL_VERSION = 3;
 
+export function createEventId() {
+  return `evt_${globalThis.crypto.randomUUID()}`;
+}
+
 export function isEventProtocolEnvelope(value = {}) {
   return isRecord(value) && value?.protocol?.name === EVENT_PROTOCOL_NAME;
 }
@@ -48,7 +52,7 @@ export function validateEventEnvelope(value = {}) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-export function assertEventEnvelope(value = {}) {
+function assertEventEnvelope(value = {}) {
   const validation = validateEventEnvelope(value);
   if (!validation.valid)
     throw new TypeError(`invalid event protocol envelope: ${validation.errors.join(",")}`);

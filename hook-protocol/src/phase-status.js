@@ -12,14 +12,3 @@ export const HOOK_PHASE_STATUS = Object.freeze({
 });
 
 export const HOOK_PHASE_STATUS_VALUES = Object.freeze(Object.values(HOOK_PHASE_STATUS));
-
-const HOOK_PHASE_STATUS_SET = Object.freeze(new Set(HOOK_PHASE_STATUS_VALUES));
-
-export function isHookPhaseStatus(value = "") {
-  return HOOK_PHASE_STATUS_SET.has(String(value || "").trim());
-}
-
-export function normalizeHookPhaseStatus(value = "") {
-  const status = String(value || "").trim();
-  return HOOK_PHASE_STATUS_SET.has(status) ? status : "";
-}

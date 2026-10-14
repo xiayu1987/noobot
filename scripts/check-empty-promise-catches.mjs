@@ -18,7 +18,7 @@ function lineNumberAt(source, offset) {
   return source.slice(0, offset).split("\n").length;
 }
 
-export async function checkEmptyPromiseCatches({ repoRoot = process.cwd() } = {}) {
+async function checkEmptyPromiseCatches({ repoRoot = process.cwd() } = {}) {
   const relativeFiles = await getFirstPartyProductionFiles({ repositoryRoot: repoRoot });
   const violations = [];
   for (const relativeFile of relativeFiles) {

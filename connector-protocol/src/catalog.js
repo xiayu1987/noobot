@@ -53,7 +53,7 @@ export function connectorOperation(
   });
 }
 
-export function normalizeConnectorType(value = "") {
+function normalizeConnectorType(value = "") {
   const normalized = String(value || "").trim();
   return CONNECTOR_IDENTIFIER_PATTERN.test(normalized) ? normalized : "";
 }

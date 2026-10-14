@@ -5,10 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  cleanTextUniversal,
-  cleanConnectorOutputForLLM,
-} from "../../../src/shared/utils/text-cleaner.js";
+import { cleanTextUniversal } from "../../../src/shared/utils/text-cleaner.js";
 
 test("cleanTextUniversal plain text", () => {
   const result = cleanTextUniversal("  hello   world  \n\n\n  foo  bar  ", { format: "text" });
@@ -59,30 +56,4 @@ test("cleanTextUniversal filters noise lines", () => {
   assert.ok(result.includes("Real content"));
   assert.ok(!result.includes("广告"));
   assert.ok(!result.toLowerCase().includes("copyright"));
-});
-
-test("cleanConnectorOutputForLLM terminal type", () => {
-  const result = cleanConnectorOutputForLLM({
-    connectorType: "terminal",
-    output: { stdout: "hello", stderr: "", code: 0 },
-  });
-  assert.equal(result.stdout, "hello");
-  assert.equal(result.code, 0);
-});
-
-test("cleanConnectorOutputForLLM database type returns stdout structure", () => {
-  const result = cleanConnectorOutputForLLM({
-    connectorType: "database",
-    output: { stdout: '[{"id":1}]', stderr: "", code: 0 },
-  });
-  assert.equal(result.stdout, '[{"id":1}]');
-  assert.equal(result.code, 0);
-});
-
-test("cleanConnectorOutputForLLM unknown type defaults to terminal", () => {
-  const result = cleanConnectorOutputForLLM({
-    connectorType: "unknown",
-    output: { stdout: "test", stderr: "", code: 0 },
-  });
-  assert.equal(result.stdout, "test");
 });

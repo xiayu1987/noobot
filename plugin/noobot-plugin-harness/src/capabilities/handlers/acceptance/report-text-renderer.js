@@ -10,9 +10,23 @@ const ALLOWED_STATUS = new Set(["completed", "in_progress", "pending"]);
 function hasRecognitionFailure(report = {}) {
   if (!report || typeof report !== "object") return true;
   if ("finalPlanChecklist" in report && !Array.isArray(report.finalPlanChecklist)) return true;
-  if ("summary" in report && (report.summary === null || typeof report.summary !== "object" || Array.isArray(report.summary))) return true;
-  if ("semanticValidation" in report && report.semanticValidation && typeof report.semanticValidation !== "object") return true;
-  if ("modelAcceptance" in report && report.modelAcceptance && typeof report.modelAcceptance !== "object") return true;
+  if (
+    "summary" in report &&
+    (report.summary === null || typeof report.summary !== "object" || Array.isArray(report.summary))
+  )
+    return true;
+  if (
+    "semanticValidation" in report &&
+    report.semanticValidation &&
+    typeof report.semanticValidation !== "object"
+  )
+    return true;
+  if (
+    "modelAcceptance" in report &&
+    report.modelAcceptance &&
+    typeof report.modelAcceptance !== "object"
+  )
+    return true;
 
   const checklist = Array.isArray(report.finalPlanChecklist) ? report.finalPlanChecklist : [];
   for (const item of checklist) {
@@ -22,10 +36,16 @@ function hasRecognitionFailure(report = {}) {
     if (!index || !task || !ALLOWED_STATUS.has(status)) return true;
   }
 
-  if (report?.semanticValidation?.content !== undefined && typeof report.semanticValidation.content !== "string") {
+  if (
+    report?.semanticValidation?.content !== undefined &&
+    typeof report.semanticValidation.content !== "string"
+  ) {
     return true;
   }
-  if (report?.modelAcceptance?.rawContent !== undefined && typeof report.modelAcceptance.rawContent !== "string") {
+  if (
+    report?.modelAcceptance?.rawContent !== undefined &&
+    typeof report.modelAcceptance.rawContent !== "string"
+  ) {
     return true;
   }
   return false;
@@ -40,37 +60,59 @@ function extractAcceptanceReportFields(report = {}) {
     planText: String(data.planText || data?.plan?.planText || "").trim(),
     checklist: Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [],
     summary: data?.summary && typeof data.summary === "object" ? data.summary : {},
-    semanticValidation: data?.semanticValidation && typeof data.semanticValidation === "object"
-      ? data.semanticValidation
-      : null,
-    modelAcceptance: data?.modelAcceptance && typeof data.modelAcceptance === "object"
-      ? data.modelAcceptance
-      : null,
+    semanticValidation:
+      data?.semanticValidation && typeof data.semanticValidation === "object"
+        ? data.semanticValidation
+        : null,
+    modelAcceptance:
+      data?.modelAcceptance && typeof data.modelAcceptance === "object"
+        ? data.modelAcceptance
+        : null,
   };
 }
 
 function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const {
-    mode, forcedReason, acceptedAt, planText, checklist, summary,
-    semanticValidation, modelAcceptance,
+    mode,
+    forcedReason,
+    acceptedAt,
+    planText,
+    checklist,
+    summary,
+    semanticValidation,
+    modelAcceptance,
   } = extractAcceptanceReportFields(report);
   const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
-  const forcedReasonField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_FORCED_REASON_FIELD);
-  const planTextField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_PLAN_TEXT_FIELD);
-  const checklistHeader = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_CHECKLIST_HEADER);
-  const summaryField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SUMMARY_FIELD);
-  const semanticField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SEMANTIC_FIELD);
-  const modelField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_MODEL_FIELD);
+  const forcedReasonField = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_FORCED_REASON_FIELD,
+  );
+  const planTextField = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_PLAN_TEXT_FIELD,
+  );
+  const checklistHeader = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_CHECKLIST_HEADER,
+  );
+  const summaryField = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SUMMARY_FIELD,
+  );
+  const semanticField = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SEMANTIC_FIELD,
+  );
+  const modelField = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_MODEL_FIELD,
+  );
   const lines = [
     title,
     `mode: ${mode}`,
-    mode === ACCEPTANCE_MODE.FORCED && forcedReason
-      ? `${forcedReasonField}: ${forcedReason}`
-      : "",
+    mode === ACCEPTANCE_MODE.FORCED && forcedReason ? `${forcedReasonField}: ${forcedReason}` : "",
     acceptedAt ? `acceptedAt: ${acceptedAt}` : "",
-    planText
-      ? `${planTextField}:\n${planText}`
-      : "",
+    planText ? `${planTextField}:\n${planText}` : "",
     checklistHeader,
     ...checklist.map((item = {}) => {
       const index = String(item?.index ?? "").trim();
@@ -78,31 +120,46 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
       const status = String(item?.status || "").trim() || "pending";
       return `${index}. [${status}] ${task}`;
     }),
-    Object.keys(summary).length
-      ? `${summaryField}: ${JSON.stringify(summary)}`
-      : "",
-    semanticValidation?.content
-      ? `${semanticField}:\n${String(semanticValidation.content)}`
-      : "",
-    modelAcceptance?.rawContent
-      ? `${modelField}:\n${String(modelAcceptance.rawContent)}`
-      : "",
+    Object.keys(summary).length ? `${summaryField}: ${JSON.stringify(summary)}` : "",
+    semanticValidation?.content ? `${semanticField}:\n${String(semanticValidation.content)}` : "",
+    modelAcceptance?.rawContent ? `${modelField}:\n${String(modelAcceptance.rawContent)}` : "",
   ].filter(Boolean);
   return lines.join("\n").trim();
 }
 
 function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const {
-    mode, forcedReason, acceptedAt, planText, checklist, summary,
-    semanticValidation, modelAcceptance,
+    mode,
+    forcedReason,
+    acceptedAt,
+    planText,
+    checklist,
+    summary,
+    semanticValidation,
+    modelAcceptance,
   } = extractAcceptanceReportFields(report);
   const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
   const modeLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.MODE_LABEL);
-  const forcedReasonLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.FORCED_REASON_LABEL);
-  const acceptedAtLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.ACCEPTED_AT_LABEL);
-  const planTextLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.PLAN_TEXT_LABEL);
-  const checklistLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.CHECKLIST_LABEL);
-  const summaryLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SUMMARY_LABEL);
+  const forcedReasonLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.FORCED_REASON_LABEL,
+  );
+  const acceptedAtLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.ACCEPTED_AT_LABEL,
+  );
+  const planTextLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.PLAN_TEXT_LABEL,
+  );
+  const checklistLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.CHECKLIST_LABEL,
+  );
+  const summaryLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SUMMARY_LABEL,
+  );
   const semanticLabel = translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SEMANTIC_VALIDATION_LABEL,
@@ -127,20 +184,25 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
       ? `- ${forcedReasonLabel}: ${forcedReason}`
       : "",
     acceptedAt ? `- ${acceptedAtLabel}: ${acceptedAt}` : "",
-    planText
-      ? ["", `## ${planTextLabel}`, "```text", planText, "```"].join("\n")
-      : "",
+    planText ? ["", `## ${planTextLabel}`, "```text", planText, "```"].join("\n") : "",
     `## ${checklistLabel}`,
     ...(checklist.length
       ? checklist.map((item = {}) => {
-        const index = String(item?.index ?? "").trim();
-        const task = String(item?.task || "").trim();
-        const status = String(item?.status || "").trim() || "pending";
-        return `- ${index}. [${status}] ${task}`;
-      })
+          const index = String(item?.index ?? "").trim();
+          const task = String(item?.task || "").trim();
+          const status = String(item?.status || "").trim() || "pending";
+          return `- ${index}. [${status}] ${task}`;
+        })
       : [emptyLine]),
     Object.keys(summary).length
-      ? ["", `## ${summaryLabel}`, `- total: ${summaryTotal}`, `- completed: ${summaryCompleted}`, `- inProgress: ${summaryInProgress}`, `- pending: ${summaryPending}`].join("\n")
+      ? [
+          "",
+          `## ${summaryLabel}`,
+          `- total: ${summaryTotal}`,
+          `- completed: ${summaryCompleted}`,
+          `- inProgress: ${summaryInProgress}`,
+          `- pending: ${summaryPending}`,
+        ].join("\n")
       : "",
     semanticValidation?.content
       ? ["", `## ${semanticLabel}`, String(semanticValidation.content)].join("\n")
@@ -152,67 +214,9 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
   return lines.join("\n").trim();
 }
 
-function renderAcceptanceDigestReportText(report = {}, locale = LOCALE.ZH_CN) {
-  const data = report && typeof report === "object" ? report : {};
-  const mode = String(data.mode || "").trim() || "active";
-  const acceptedAt = String(data.acceptedAt || "").trim() || "";
-  const planText = String(data.planText || data?.plan?.planText || "").trim();
-  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
-  const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
-    ? data.semanticValidation
-    : null;
-  const semanticValidationRaw = semanticValidation
-    ? String(semanticValidation?.content || "").trim() || JSON.stringify(semanticValidation, null, 2)
-    : "";
-  const digestTitle = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_TITLE);
-  const digestModeLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_MODE_LABEL);
-  const digestAcceptedAtLabel = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_ACCEPTED_AT_LABEL,
-  );
-  const digestPlanTextLabel = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_PLAN_TEXT_LABEL,
-  );
-  const digestSummaryLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_SUMMARY_LABEL);
-  const digestSemanticLabel = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_SEMANTIC_VALIDATION_LABEL,
-  );
-  const safeCodeBlock = (value = "") => String(value || "").replaceAll("```", "'''");
-
-  const lines = [
-    digestTitle,
-    `- **${digestModeLabel}**: \`${mode}\``,
-    `- **${digestAcceptedAtLabel}**: ${acceptedAt || "-"}`,
-    "",
-    `#### ${digestPlanTextLabel}`,
-    "```text",
-    safeCodeBlock(planText || "-"),
-    "```",
-    "",
-    `#### ${digestSummaryLabel}`,
-    "| total | completed | inProgress | pending |",
-    "| --- | --- | --- | --- |",
-    `| ${Number(summary?.total || 0)} | ${Number(summary?.completed || 0)} | ${Number(summary?.inProgress || 0)} | ${Number(summary?.pending || 0)} |`,
-    "",
-    `#### ${digestSemanticLabel}`,
-    "```text",
-    safeCodeBlock(semanticValidationRaw || "-"),
-    "```",
-  ];
-  return lines.join("\n").trim();
-}
-
 export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   if (hasRecognitionFailure(report)) {
     return renderRawAcceptanceReportText(report, locale);
   }
   return renderBeautifiedAcceptanceReportText(report, locale);
 }
-
-export {
-  renderAcceptanceDigestReportText,
-  renderBeautifiedAcceptanceReportText,
-  renderRawAcceptanceReportText,
-};

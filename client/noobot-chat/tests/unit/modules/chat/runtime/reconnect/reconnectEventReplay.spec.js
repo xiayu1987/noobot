@@ -8,7 +8,7 @@ import { applyReconnectEventReplay } from "../../../../../../src/modules/chat/ru
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 import {
   clearExtensionRegistry,
-  replacePluginExtensions,
+  contributeExtension,
 } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { activate as activateWorkflowFrontend } from "../../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
@@ -22,16 +22,12 @@ import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-arti
 
 describe("applyReconnectEventReplay", () => {
   beforeEach(() => {
-    const workflowContributions = [];
     void activateWorkflowFrontend({
-      contributeExtension: (point, contribution) => {
-        workflowContributions.push({ point, contribution });
-        return true;
-      },
+      contributeExtension: (point, contribution) =>
+        contributeExtension(point, { ...contribution, pluginId: "workflow" }),
       extensionPoints: EXTENSION_POINTS,
       services: {},
     });
-    replacePluginExtensions("workflow", workflowContributions);
   });
   afterEach(() => clearExtensionRegistry());
 

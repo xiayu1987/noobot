@@ -7,7 +7,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-export const BASE_IGNORE_DIRECTORIES = ["node_modules", ".git", "dist", "build", "coverage"];
+const BASE_IGNORE_DIRECTORIES = ["node_modules", ".git", "dist", "build", "coverage"];
 
 export const MISSING_DIRECTORY_POLICY = {
   SKIP_MISSING: "skip-missing",
@@ -101,10 +101,4 @@ export function createRelativeSourceCollector(options = {}) {
     return collected;
   };
   return collect;
-}
-
-export async function collectRelativeSourceFiles(directories, options = {}) {
-  const collect = createRelativeSourceCollector(options);
-  const groups = await Promise.all(directories.map((directory) => collect(directory)));
-  return [...new Set(groups.flat())];
 }

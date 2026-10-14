@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomUUID } from "node:crypto";
 import {
   acknowledgeAuthorityEventDelivery,
   compactAuthorityEventOutbox,
   createEventEnvelope,
+  createEventId,
   getEventFamily,
   listPendingAuthorityEvents,
   pluginArtifactKey,
@@ -164,7 +164,7 @@ export async function commitAuthorityEvent({
         schemaVersion,
         identity: {
           ...identity,
-          eventId: text(identity?.eventId) || `evt_${randomUUID()}`,
+          eventId: createEventId(),
           sessionId: owner.sessionId,
         },
         causality,

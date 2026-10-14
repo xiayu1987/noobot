@@ -8,7 +8,7 @@ import { TASK_PROTOCOL_STATE, parseTaskProtocolReceipt } from "./receipt-contrac
 import { createTaskProtocolReceipt } from "./protocol-receipt.js";
 
 export const TASK_SUMMARY_PROTOCOL_VERSION = 1;
-export const TASK_SUMMARY_PROTOCOL_HEADER = "NOOBOT_TASK_SUMMARY/1";
+const TASK_SUMMARY_PROTOCOL_HEADER = "NOOBOT_TASK_SUMMARY/1";
 export const TASK_SUMMARY_STATE = TASK_PROTOCOL_STATE;
 
 function protocolError(message) {

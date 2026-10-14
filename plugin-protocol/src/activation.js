@@ -12,7 +12,7 @@ export const PLUGIN_SURFACE = Object.freeze({
   FRONTEND: "frontend",
 });
 
-export const PLUGIN_ACTIVATION_STATUS = Object.freeze({
+const PLUGIN_ACTIVATION_STATUS = Object.freeze({
   ACTIVATED: "activated",
   DEACTIVATED: "deactivated",
   FAILED: "failed",
@@ -156,7 +156,7 @@ export function createPluginLifecycleRecord({
   return Object.freeze(record);
 }
 
-export class PluginProtocolError extends Error {
+class PluginProtocolError extends Error {
   constructor(code = "PLUGIN_PROTOCOL_ERROR", message = "plugin protocol error", details = {}) {
     super(message);
     this.name = "PluginProtocolError";

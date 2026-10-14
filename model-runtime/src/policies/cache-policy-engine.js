@@ -46,10 +46,6 @@ function segment(value) {
   return normalized.slice(start, end);
 }
 
-export function resolveCacheVendor(spec = {}) {
-  return operatorId(spec);
-}
-
 export function resolvePromptCacheHeaders(
   spec = {},
   flow = "agent.main",

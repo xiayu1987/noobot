@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export const SESSION_PROTOCOL_NAME = "@noobot/session-protocol";
 export const SESSION_PROTOCOL_VERSION = 1;
 export const SESSION_ARTIFACT_SCHEMA_VERSION = 7;
 export const SESSION_ARTIFACT_PREVIOUS_SCHEMA_VERSION = 6;

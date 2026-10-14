@@ -44,11 +44,11 @@ const authenticatedRouteSchema = z
     path: strictString,
   })
   .strict();
-export const pluginHookRegistrationContributionSchema = z
+const pluginHookRegistrationContributionSchema = z
   .object({ id: strictString, point: hookPointSchema })
   .strict();
 
-export const pluginRouteContributionSchema = z
+const pluginRouteContributionSchema = z
   .object({
     id: strictString,
     method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
@@ -57,14 +57,14 @@ export const pluginRouteContributionSchema = z
   })
   .strict();
 
-export const pluginToolContributionSchema = z
+const pluginToolContributionSchema = z
   .object({
     id: strictString,
     name: strictString,
   })
   .strict();
 
-export const pluginFrontendContributionSchema = z
+const pluginFrontendContributionSchema = z
   .object({
     id: strictString,
     point: frontendPointSchema,
@@ -78,7 +78,7 @@ export const pluginFrontendContributionSchema = z
   })
   .strict();
 
-export const pluginExecutionIntentSchema = z
+const pluginExecutionIntentSchema = z
   .object({
     kind: strictString,
     idPrefix: strictString,
@@ -277,7 +277,7 @@ function validateContributionIdUniqueness(manifest, context) {
   }
 }
 
-export const pluginManifestSchema = z
+const pluginManifestSchema = z
   .object({
     protocolVersion: z.literal(PLUGIN_PROTOCOL_VERSION),
     id: strictString,

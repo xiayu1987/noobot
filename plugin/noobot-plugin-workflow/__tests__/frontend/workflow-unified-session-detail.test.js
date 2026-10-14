@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import {
   buildUnifiedSessionDetail,
   createRunningAssistantPlaceholderViewModel,
-  hasNewProtocolNodeIdentity,
   mergeUnifiedSessionDetail,
   resolveNodeChildExecutionIds,
   resolveIsolatedNodeSessionId,
@@ -218,11 +217,6 @@ function selectSessionMessages(sessionId) {
     ],
   };
 }
-
-test("detects new protocol nodes by nodeExecutionId", () => {
-  assert.equal(hasNewProtocolNodeIdentity({ nodeExecutionId: "node-exec-a" }), true);
-  assert.equal(hasNewProtocolNodeIdentity({ dialogProcessId: "legacy" }), false);
-});
 
 test("never treats the workflow parent session as a node child session", () => {
   const node = {

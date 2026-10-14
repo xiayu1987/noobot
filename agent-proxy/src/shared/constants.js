@@ -13,12 +13,6 @@ export const CHANNEL_STATUS = {
   ERROR: "error",
 };
 
-export const CHANNEL_TERMINAL_STATUSES = Object.freeze([
-  CHANNEL_STATUS.DONE,
-  CHANNEL_STATUS.USER_STOPPED,
-  CHANNEL_STATUS.ERROR,
-]);
-
 export const CHANNEL_RETENTION_PHASE = Object.freeze({
   ACTIVE: "active",
   TERMINAL_RETAINED: "terminal_retained",

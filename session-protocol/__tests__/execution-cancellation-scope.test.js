@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import {
   createExecutionCancellationScope,
   resolveExecutionCancellationScope,
-  withExecutionCancellationScope,
 } from "../src/lifecycle/execution-cancellation-scope.js";
 
 test("scope runs registered disposers once when the bound signal aborts", () => {
@@ -97,36 +96,4 @@ test("missing scope resolves to a no-op scope so callers need no branching", () 
   assert.equal(typeof scope.register, "function");
   assert.equal(scope.abortSignal, null);
   assert.equal(typeof scope.register(() => {}), "function");
-});
-
-test("withExecutionCancellationScope unregisters on the normal completion path", async () => {
-  const controller = new AbortController();
-  const scope = createExecutionCancellationScope({ abortSignal: controller.signal });
-  let closed = 0;
-  const result = await withExecutionCancellationScope(
-    scope,
-    () => {
-      closed += 1;
-    },
-    async () => "done",
-  );
-  assert.equal(result, "done");
-  assert.equal(scope.size, 0);
-  controller.abort();
-  assert.equal(closed, 0);
-});
-
-test("withExecutionCancellationScope unregisters when the body throws", async () => {
-  const scope = createExecutionCancellationScope({ abortSignal: new AbortController().signal });
-  await assert.rejects(
-    withExecutionCancellationScope(
-      scope,
-      () => {},
-      async () => {
-        throw new Error("body failed");
-      },
-    ),
-    /body failed/,
-  );
-  assert.equal(scope.size, 0);
 });

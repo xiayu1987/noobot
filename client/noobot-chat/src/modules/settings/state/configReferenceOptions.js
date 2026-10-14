@@ -11,7 +11,7 @@ import {
   resolveModelPromptCacheTtlOptions,
 } from "@noobot/model-protocol";
 
-export const CONFIG_MODEL_REFERENCE_SOURCE = "providers";
+const CONFIG_MODEL_REFERENCE_SOURCE = "providers";
 
 function readContainerKeys(document, sourcePath) {
   if (!isPlainObject(document) || !sourcePath) return [];

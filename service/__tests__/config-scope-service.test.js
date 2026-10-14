@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  assertConfigParamsDocumentKeys,
   buildConfigParamCatalog,
+  normalizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
 import { createConfigScopeService } from "../services/config-scope-service.js";
 
@@ -27,10 +27,7 @@ function createService({ existingPayload = { values: {}, descriptions: {} } } = 
     collectConfigTemplateKeys: async () => ["API_KEY"],
     collectUserConfigTemplateKeys: async () => ["API_KEY"],
     buildConfigParamCatalog: (options) => {
-      assertConfigParamsDocumentKeys(
-        { values: options.values, descriptions: options.descriptions },
-        options.keys,
-      );
+      normalizeConfigParamsDocument({ values: options.values, descriptions: options.descriptions });
       return buildConfigParamCatalog(options);
     },
     translateText: (key) => key,

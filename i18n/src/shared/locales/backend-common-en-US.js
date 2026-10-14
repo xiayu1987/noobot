@@ -119,19 +119,6 @@ export const BACKEND_COMMON_EN_US = {
   "session.workspaceNotInitialized": "workspace not initialized",
   "session.treeNodeMissing": "session is not registered in the session tree",
   "status.disconnectedFromHistory": "disconnected from history",
-  "web2img.readabilityNotInstalledWarn":
-    "@mozilla/readability/jsdom not installed; fallback to DOM extraction. Run: npm i @mozilla/readability jsdom",
-  "web2img.contentTruncated": "content too long, truncated",
-  "web2img.descriptionLabel": "Description",
-  "web2img.mainContentTitle": "Main Content",
-  "web2img.noContentExtracted": "no content extracted",
-  "web2img.textCleanAppendixTitle": "Text Cleaning Appendix",
-  "web2img.noReadableTextExtracted": "no trafilatura/readability text extracted",
-  "web2img.resultIndex": "Result index",
-  "web2img.sharpNotInstalledRawWarn":
-    "sharp not installed, cannot post-process images; raw screenshot will be returned. Run: npm i sharp",
-  "web2img.sharpNotInstalledSplitWarn":
-    "sharp not installed; image post-processing/splitting unavailable. Run: npm i sharp",
   "ws.badRequest": "Bad Request",
   "ws.dialogStoppedByUser": "dialog stopped by user",
   "ws.interactionEncryptedRequired": "encrypted interaction response required",

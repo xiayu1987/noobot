@@ -93,7 +93,7 @@ function resolveRuntimeHookManager(runtime = {}) {
 
 export { resolveRuntimeHookManager };
 
-export function resolveHookRuntimeMeta(runtime = {}) {
+function resolveHookRuntimeMeta(runtime = {}) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
     userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),

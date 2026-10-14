@@ -105,7 +105,3 @@ export function attachRuntimeEventPayload(record, event = {}) {
   if (Array.isArray(tags) && tags.length) record.tags = tags.map((tag) => safeSegment(tag));
   return record;
 }
-
-export function normalizeRuntimeEvent(event = {}) {
-  return attachRuntimeEventPayload(normalizeRuntimeEventEnvelope(event), event);
-}

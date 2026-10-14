@@ -275,12 +275,7 @@ export {
   findLatestPendingAssistantAfterLastUser,
   findRecoverableReconnectSessionId,
   findReusableMessageObject,
-  getLastUserMessageIndex,
   isDialogProcessRecoverable,
-  isSessionEntryRunning,
   mergeCurrentUserMessagesIntoFoldedMessages,
-  messageCompareKey,
-  normalizeMessageContentForCompare,
-  parseMessageTimeMs,
   patchMessageObjectPreservingUiState,
 };

@@ -9,7 +9,6 @@ import {
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { isInjectedMessage, readMessageField } from "@noobot/context-protocol/policy/message";
-import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
   const expectedRole = String(role || "").trim();
@@ -52,58 +51,4 @@ export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
     return Boolean(String(content || "").trim());
   }
   return false;
-}
-
-function normalizePromptMessageItem(message = {}) {
-  if (isHarnessInjectedMessage(message)) return null;
-  const role = String(message?.role || "")
-    .trim()
-    .toLowerCase();
-  if (!role) return null;
-  const content = extractRawTextContent(message?.content ?? message);
-  const text = String(content || "").trim();
-  if (!text) return null;
-  return { role, content: text };
-}
-
-export function buildModelMessagesWithStructuredEnvelope({
-  locale = "zh-CN",
-  agentMessages = [],
-  constraints = [],
-  task = "",
-} = {}) {
-  const normalizedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
-    .map((item = {}) => normalizePromptMessageItem(item))
-    .filter(Boolean);
-  const normalizedConstraints = (Array.isArray(constraints) ? constraints : [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
-  const taskText = String(task || "").trim();
-
-  const output = [];
-  output.push({
-    role: "system",
-    content: [
-      translateI18nText(locale, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER),
-      "```json",
-      JSON.stringify(normalizedAgentMessages, null, 2),
-      "```",
-    ].join("\n"),
-  });
-  if (normalizedConstraints.length) {
-    output.push({
-      role: "system",
-      content: [
-        translateI18nText(locale, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.CONSTRAINT_HEADER),
-        ...normalizedConstraints,
-      ].join("\n"),
-    });
-  }
-  if (taskText) {
-    output.push({
-      role: "user",
-      content: taskText,
-    });
-  }
-  return output;
 }

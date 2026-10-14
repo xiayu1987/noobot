@@ -20,7 +20,7 @@ const RISK_TONES = Object.freeze({
   [SECURITY_RISK_LEVEL.CRITICAL]: "error",
 });
 
-export function formatDuration(durationMs) {
+function formatDuration(durationMs) {
   if (!Number.isFinite(durationMs)) return "-";
   return durationMs < 1000 ? `${Math.round(durationMs)}ms` : `${(durationMs / 1000).toFixed(1)}s`;
 }

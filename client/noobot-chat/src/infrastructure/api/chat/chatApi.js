@@ -490,11 +490,3 @@ export async function putConfigParamsApi(
     body: JSON.stringify({ scope, values, descriptions }),
   });
 }
-
-export function buildWorkspaceDownloadUrl({ userId = "", path = "" }) {
-  return `/api/internal/workspace/${encodeURIComponent(userId)}/download?path=${encodeURIComponent(path)}`;
-}
-
-export function buildWorkspaceAllDownloadUrl({ path = "" }) {
-  return `/api/internal/admin/workspace-all/download?path=${encodeURIComponent(path)}`;
-}

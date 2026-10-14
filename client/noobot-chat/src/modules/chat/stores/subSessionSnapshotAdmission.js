@@ -27,7 +27,7 @@ export function buildSnapshotContextFacet(snapshotContext = {}) {
   };
 }
 
-export function resolveAppliedAggregateVersion(current = {}) {
+function resolveAppliedAggregateVersion(current = {}) {
   return num(current?.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT]);
 }
 

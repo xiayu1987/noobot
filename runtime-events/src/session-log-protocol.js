@@ -34,9 +34,9 @@ export const SESSION_LOG_CATEGORIES = Object.freeze([
 const SESSION_LOG_CATEGORY_SET = new Set(SESSION_LOG_CATEGORIES);
 export const SESSION_LOG_DEBUG_CATEGORY = RUNTIME_EVENT_CATEGORIES.DEBUG;
 
-export const SESSION_LOG_CONTROL_KEYS = RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS;
+const SESSION_LOG_CONTROL_KEYS = RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS;
 
-export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(
+const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(
   Object.fromEntries(
     Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES).map(([debugType, descriptor]) => [
       debugType,
@@ -45,12 +45,12 @@ export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(
   ),
 );
 
-export function normalizeSessionLogText(value = "", { fallback = "", maxLength = 4000 } = {}) {
+function normalizeSessionLogText(value = "", { fallback = "", maxLength = 4000 } = {}) {
   const text = String(value || fallback || "").trim();
   return maxLength > 0 ? text.slice(0, maxLength) : text;
 }
 
-export function normalizeSessionLogTime(value) {
+function normalizeSessionLogTime(value) {
   const parsed = value ? new Date(value) : null;
   return parsed && Number.isFinite(parsed.getTime())
     ? parsed.toISOString()
@@ -65,11 +65,11 @@ export function normalizeSessionLogCategory(category) {
   return value;
 }
 
-export function isSessionLogDebugCategory(category) {
+function isSessionLogDebugCategory(category) {
   return category === SESSION_LOG_DEBUG_CATEGORY;
 }
 
-export function resolveSessionLogControlConfig({ env = process.env } = {}) {
+function resolveSessionLogControlConfig({ env = process.env } = {}) {
   return resolveRuntimeEventsSessionLogControls(env);
 }
 

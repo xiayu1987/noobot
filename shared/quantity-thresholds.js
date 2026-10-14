@@ -26,8 +26,6 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
   },
 
   toolIO: {
-    logSummaryLimit: 180,
-
     readMaxLines: 1000,
 
     searchMaxResults: QUANTITY_TIERS.standardBatch,

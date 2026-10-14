@@ -16,12 +16,12 @@ function numericValue(value) {
   return null;
 }
 
-export function getCurrentSessionAggregateVersion(activeSession) {
+function getCurrentSessionAggregateVersion(activeSession) {
   const session = activeSession?.value || activeSession;
   return session?.aggregateVersion;
 }
 
-export function isSessionAggregateVersionConflict(result, payload) {
+function isSessionAggregateVersionConflict(result, payload) {
   return (
     String(payload?.errorCode || result?.errorCode || "").trim() ===
     SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT
@@ -51,10 +51,7 @@ export function applyLatestSessionAggregateVersion(session, source = {}) {
   return true;
 }
 
-export function createSessionAggregateVersionManager({
-  activeSession,
-  log = null,
-} = {}) {
+export function createSessionAggregateVersionManager({ activeSession, log = null } = {}) {
   function getVersion() {
     return getCurrentSessionAggregateVersion(activeSession);
   }

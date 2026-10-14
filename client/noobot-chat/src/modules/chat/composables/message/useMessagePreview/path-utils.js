@@ -20,7 +20,7 @@ export function parseContentDisposition(contentDisposition = "") {
   return String(basicMatch?.[1] || "").trim();
 }
 
-export function sanitizeWorkspaceRelativePath(pathValue = "") {
+function sanitizeWorkspaceRelativePath(pathValue = "") {
   const normalized = String(pathValue || "")
     .trim()
     .replaceAll("\\", "/")
@@ -33,7 +33,7 @@ export function sanitizeWorkspaceRelativePath(pathValue = "") {
   return normalized;
 }
 
-export function resolveWorkspaceRelativePath(pathValue = "", userId = "") {
+function resolveWorkspaceRelativePath(pathValue = "", userId = "") {
   const normalizedPath = String(pathValue || "")
     .trim()
     .replaceAll("\\", "/");

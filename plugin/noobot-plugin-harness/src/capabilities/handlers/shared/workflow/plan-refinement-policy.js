@@ -25,14 +25,9 @@ function resolveExplicitPlanRefinementEnabledFromSource(source = {}) {
   return undefined;
 }
 
-export function resolveExplicitPlanRefinementEnabled(ctx = {}, meta = {}) {
+function resolveExplicitPlanRefinementEnabled(ctx = {}, meta = {}) {
   const harnessPayload = ctx?.agentContext?.bindings?.extensions?.harness;
-  const sources = [
-    meta?.harness,
-    meta,
-    harnessPayload?.options,
-    harnessPayload,
-  ];
+  const sources = [meta?.harness, meta, harnessPayload?.options, harnessPayload];
   for (const source of sources) {
     const value = resolveExplicitPlanRefinementEnabledFromSource(source);
     if (typeof value === "boolean") return value;
@@ -40,7 +35,7 @@ export function resolveExplicitPlanRefinementEnabled(ctx = {}, meta = {}) {
   return undefined;
 }
 
-export function resolvePlanRefinementEnabledForContext(ctx = {}, meta = {}) {
+function resolvePlanRefinementEnabledForContext(ctx = {}, meta = {}) {
   const explicit = resolveExplicitPlanRefinementEnabled(ctx, meta);
   if (typeof explicit === "boolean") return explicit;
   const mode = resolveWorkflowThresholdModeFromContext(ctx);

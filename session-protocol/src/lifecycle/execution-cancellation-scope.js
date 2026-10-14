@@ -74,13 +74,3 @@ export function resolveExecutionCancellationScope(scope = null) {
   if (scope && typeof scope.register === "function") return scope;
   return createExecutionCancellationScope();
 }
-
-export async function withExecutionCancellationScope(scope, disposer, run) {
-  const resolved = resolveExecutionCancellationScope(scope);
-  const unregister = resolved.register(disposer);
-  try {
-    return await run();
-  } finally {
-    unregister();
-  }
-}

@@ -78,7 +78,7 @@ function userRootOf(workspaceRoot, userId) {
   return path.join(workspaceRoot, userId);
 }
 
-export async function readSessionTreeFixture(workspaceRoot, userId) {
+async function readSessionTreeFixture(workspaceRoot, userId) {
   const treeFile = path.join(userRootOf(workspaceRoot, userId), WORKSPACE_LAYOUT.SESSION_TREE_FILE);
   return normalizeSessionTree(await readJsonOr(treeFile, { nodes: {} }));
 }

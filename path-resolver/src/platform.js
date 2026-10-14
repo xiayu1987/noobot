@@ -53,18 +53,8 @@ export function isCaseInsensitivePathPlatform(platform = "") {
   return isCaseInsensitivePlatform(platform);
 }
 
-export function isCaseInsensitivePathContext(agentContext = {}) {
-  return isCaseInsensitivePathPlatform(resolvePathPlatformFromContext(agentContext));
-}
-
 export function isAbsolutePathAnyPlatform(value = "", platform = "") {
   return nodePath.isAbsolute(String(value || "")) || isAbsolutePathForPlatform(value, platform);
-}
-
-export function resolvePathUnderRoot(rootPath = "", targetPath = "", { platform = "" } = {}) {
-  const normalizedTarget = normalizePathForPlatform(targetPath);
-  if (!rootPath || isAbsolutePathAnyPlatform(normalizedTarget, platform)) return normalizedTarget;
-  return joinPathForPlatform(rootPath, normalizedTarget);
 }
 
 export function joinPathForPlatform(basePath = "", ...segments) {

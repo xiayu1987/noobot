@@ -11,10 +11,16 @@ import {
   resolveExecutionAbortType,
 } from "@noobot/session-protocol/execution-abort";
 
-export function buildStoppedPartialAssistant({ stopPayload = {}, runMeta = {}, result = {}, fallbackMessage = "" } = {}) {
-  const sourcePartial = stopPayload?.partialAssistant && typeof stopPayload.partialAssistant === "object"
-    ? stopPayload.partialAssistant
-    : {};
+export function buildStoppedPartialAssistant({
+  stopPayload = {},
+  runMeta = {},
+  result = {},
+  fallbackMessage = "",
+} = {}) {
+  const sourcePartial =
+    stopPayload?.partialAssistant && typeof stopPayload.partialAssistant === "object"
+      ? stopPayload.partialAssistant
+      : {};
   const dialogProcessId =
     normalizeRunIdentityPart(sourcePartial.dialogProcessId) ||
     normalizeRunIdentityPart(stopPayload?.dialogProcessId) ||
@@ -29,7 +35,9 @@ export function buildStoppedPartialAssistant({ stopPayload = {}, runMeta = {}, r
     normalizeRunIdentityPart(stopPayload?.sessionId) ||
     normalizeRunIdentityPart(runMeta?.sessionId) ||
     normalizeRunIdentityPart(result?.sessionId);
-  const content = String(sourcePartial.content ?? stopPayload?.message ?? fallbackMessage ?? "").trim();
+  const content = String(
+    sourcePartial.content ?? stopPayload?.message ?? fallbackMessage ?? "",
+  ).trim();
   return {
     ...sourcePartial,
     content,
@@ -43,7 +51,7 @@ export function isAbortLikeError(error) {
   return isExecutionAbortError({ error });
 }
 
-export function isUserStopAbortReason(reason = {}) {
+function isUserStopAbortReason(reason = {}) {
   return (
     resolveExecutionAbortType({ abortSignal: { aborted: true, reason } }) ===
     EXECUTION_ABORT_TYPE.USER_STOP
@@ -58,7 +66,12 @@ export function isSocketCloseRunAbort(abortSignal = null) {
   return resolveExecutionAbortType({ abortSignal }) === EXECUTION_ABORT_TYPE.SOCKET_CLOSE;
 }
 
-export function buildAbortErrorMessage({ error = null, abortSignal = null, currentLocale = "", translateText = (key) => key } = {}) {
+export function buildAbortErrorMessage({
+  error = null,
+  abortSignal = null,
+  currentLocale = "",
+  translateText = (key) => key,
+} = {}) {
   const reasonType = resolveExecutionAbortType({ error, abortSignal });
   return resolveExecutionAbortMessage({
     error,

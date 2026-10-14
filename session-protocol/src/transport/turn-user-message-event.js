@@ -5,7 +5,7 @@
  */
 import { text as trim } from "../normalize.js";
 
-export function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
+function validateTurnUserMessageEventData(data = {}, { attachmentMode } = {}) {
   const errors = [];
   const sessionId = trim(data?.sessionId);
   const dialogProcessId = trim(data?.dialogProcessId);

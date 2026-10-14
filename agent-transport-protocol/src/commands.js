@@ -388,7 +388,7 @@ export function validateAgentCommand(command) {
   return { valid: errors.length === 0, errors };
 }
 
-export function validateAgentCommandEnvelope(command) {
+function validateAgentCommandEnvelope(command) {
   const errors = [];
   if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
   validateCommandHeader(command, errors);
@@ -396,7 +396,7 @@ export function validateAgentCommandEnvelope(command) {
   return { valid: errors.length === 0, errors };
 }
 
-export class AgentTransportProtocolError extends Error {
+class AgentTransportProtocolError extends Error {
   constructor(errors = [], command = null) {
     super(`invalid_agent_command: ${errors.join(", ")}`);
     this.name = "AgentTransportProtocolError";

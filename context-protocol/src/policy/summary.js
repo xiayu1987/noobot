@@ -5,7 +5,6 @@
  */
 
 import {
-  filterForModelContext,
   getMessageToolCalls,
   isInjectedMessage,
   readMessageField,
@@ -141,8 +140,6 @@ export function shouldMarkCurrentTurnSummarizedMessage(message = {}) {
   if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) return false;
   return shouldMarkCurrentTurnSummarizedByPolicy(message);
 }
-
-export const shouldMarkCurrentTurnSummarizedModelMessage = shouldMarkCurrentTurnSummarizedMessage;
 
 export function shouldMarkCurrentTurnSummarizedMessageInScope(
   message = {},
@@ -295,10 +292,7 @@ function enforceToolCallBatchClosure(
   );
 }
 
-export function collectClosedToolCallBatchMessages(
-  messages = [],
-  { retentionMessages = messages } = {},
-) {
+function collectClosedToolCallBatchMessages(messages = [], { retentionMessages = messages } = {}) {
   const source = Array.isArray(messages) ? messages : [];
   const retainedMessages = Array.isArray(retentionMessages) ? retentionMessages : source;
   return enforceToolCallBatchClosure(
@@ -380,22 +374,6 @@ export function markCurrentTurnArraySummarized(messages = [], { policyOptions = 
       ? { ...(message || {}), summarized: true }
       : message,
   );
-}
-
-export function markCurrentTurnModelMessagesSummarized(messages = [], { policyOptions = {} } = {}) {
-  const dimensions = summaryScope(messages, { policyOptions });
-  for (const [index, message] of dimensions.source.entries()) {
-    if (
-      !shouldMarkCurrentTurnSummarizedMessageInScope(message, {
-        ...dimensions,
-        messages: dimensions.source,
-        index,
-        policyOptions,
-      })
-    )
-      continue;
-    markContextMessageSummarized(message);
-  }
 }
 
 export function collectScopedMessagesToSummarize(
@@ -512,8 +490,4 @@ export function collectDialogScopedMessagesToSummarize(
         retentionMessages: retentionGroups.get(dialogProcessId) || group,
       }).messages,
   );
-}
-
-export function filterSummarizedMessages(messages = [], policyOptions = {}) {
-  return filterForModelContext(messages, policyOptions);
 }

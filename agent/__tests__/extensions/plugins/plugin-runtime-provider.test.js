@@ -5,10 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  createSessionPluginRuntimeBundle,
-  getDefaultPluginDiagnostics,
-} from "../../../src/extensions/plugins/session-plugin-runtime-provider.js";
+import { createSessionPluginRuntimeBundle } from "../../../src/extensions/plugins/session-plugin-runtime-provider.js";
 
 test("agent host loads Manifest V2 plugins from the authoritative runtime", async () => {
   const bundle = await createSessionPluginRuntimeBundle();
@@ -23,11 +20,4 @@ test("agent host loads Manifest V2 plugins from the authoritative runtime", asyn
     "workflow",
   ]);
   assert.equal(bundle.pluginRuntime.surface, "agent");
-});
-
-test("agent plugin diagnostics expose protocol and surface", () => {
-  const diagnostics = getDefaultPluginDiagnostics();
-  assert.equal(diagnostics.protocolVersion, 2);
-  assert.equal(diagnostics.surface, "agent");
-  assert.equal(diagnostics.errors.length, 0);
 });

@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  countCanonicalThinkingDetailEvents,
-  countCanonicalToolTimelineEvents,
-} from "@noobot/event-protocol/tool-timeline";
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 
 function protocolCount(messageItem = {}) {
   const count = Number(messageItem?.thinkingDetailCount);
@@ -20,8 +17,4 @@ export function selectThinkingDetailCount(messageItem = {}) {
     activityTimeline: messageItem?.activityTimeline,
   });
   return Math.max(explicitCount, timelineCount);
-}
-
-export function selectExecutionRecordCount(messageItem = {}) {
-  return countCanonicalToolTimelineEvents(messageItem?.toolTimeline);
 }

@@ -368,7 +368,7 @@ export async function applyTurnLifecycleEvent({
   return resolveDeletedSessionAs(mutation, { applied: false });
 }
 
-export async function provisionSessionWithInitialTurn({
+async function provisionSessionWithInitialTurn({
   userId,
   sessionId,
   parentSessionId = "",

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const TURN_REPLACEMENT_PROTOCOL_VERSION = 1;
-export const TURN_REPLACEMENT_EVENT = "turn.replaced";
+const TURN_REPLACEMENT_PROTOCOL_VERSION = 1;
+const TURN_REPLACEMENT_EVENT = "turn.replaced";
 
 import { text } from "../normalize.js";
 

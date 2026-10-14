@@ -46,7 +46,7 @@ export async function readJsonArtifactFile(filePath = "", fallback = null) {
   return readPersistedJsonFile({ filePath, fallback, readFile });
 }
 
-export function requireSessionWritableGuard(assertSessionWritable) {
+function requireSessionWritableGuard(assertSessionWritable) {
   if (typeof assertSessionWritable !== "function") {
     throw new TypeError("assertSessionWritable is required for session artifact mutation");
   }

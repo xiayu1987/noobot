@@ -28,7 +28,6 @@
     "./message/store": "./src/message/store.js",
     "./mutation/context": "./src/mutation/context.js",
     "./policy/block": "./src/policy/block.js",
-    "./policy/context": "./src/policy/context.js",
     "./policy/no-final-response-retry": "./src/policy/no-final-response-retry.js",
     "./policy/injected-message": "./src/policy/injected-message.js",
     "./policy/message": "./src/policy/message.js",

@@ -29,7 +29,6 @@ import {
 } from "@noobot/plugin-runtime/contributions";
 
 let activeScope = null;
-let activeGeneration = null;
 let lifecycleOperation = Promise.resolve();
 
 function runLifecycleOperation(operation) {
@@ -151,7 +150,6 @@ async function activateFrontendPluginGeneration() {
   }
   const previousScope = activeScope;
   activeScope = scope;
-  activeGeneration = generation;
   if (previousScope) await previousScope.dispose();
   for (const entry of scope.entries) {
     const committed = listExtensionContributions().filter(
@@ -175,20 +173,4 @@ async function activateFrontendPluginGeneration() {
 
 export function registerExternalFrontendPlugins() {
   return runLifecycleOperation(activateFrontendPluginGeneration);
-}
-
-async function disposeFrontendPluginGeneration() {
-  const scope = activeScope;
-  if (activeGeneration) {
-    const emptyGeneration = activeGeneration.createGeneration();
-    for (const entry of scope?.entries || []) emptyGeneration.removePlugin(entry.pluginId);
-    publishExtensionRegistryGeneration(emptyGeneration);
-    activeGeneration = emptyGeneration;
-  }
-  activeScope = null;
-  if (scope) await scope.dispose();
-}
-
-export function disposeExternalFrontendPlugins() {
-  return runLifecycleOperation(disposeFrontendPluginGeneration);
 }

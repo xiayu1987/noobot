@@ -22,7 +22,7 @@ export function createContextScope({
   });
 }
 
-export function messageBelongsToContextScope(message = {}, scope = {}) {
+function messageBelongsToContextScope(message = {}, scope = {}) {
   const dialogProcessId = text(message?.dialogProcessId);
   const turnScopeId = text(message?.turnScopeId);
   const expectedDialog = text(scope?.dialogProcessId);

@@ -58,11 +58,11 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error || "unknown error");
 }
 
-export function resolveDefaultPluginRootDir() {
+function resolveDefaultPluginRootDir() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../plugin");
 }
 
-export async function discoverNoobotPluginManifests({ pluginRootDir = "" } = {}) {
+async function discoverNoobotPluginManifests({ pluginRootDir = "" } = {}) {
   const root = path.resolve(String(pluginRootDir || "").trim() || resolveDefaultPluginRootDir());
   let directoryEntries;
   try {
@@ -218,10 +218,6 @@ export async function refreshNoobotPluginRuntime(options = {}) {
   return runtime;
 }
 
-export function clearNoobotPluginRuntimeCache() {
-  runtimeCache.clear();
-}
-
 export function listLoadedNoobotPluginEntries(runtime = null) {
   return runtime?.registry instanceof Map ? Array.from(runtime.registry.values()) : [];
 }
@@ -231,15 +227,6 @@ export function resolveLoadedNoobotPlugin(runtime = null, pluginId = "") {
   return normalized && runtime?.registry instanceof Map
     ? runtime.registry.get(normalized) || null
     : null;
-}
-
-export function listPluginsContributingHook(runtime = null, point = "") {
-  const normalized = String(point || "").trim();
-  return listLoadedNoobotPluginEntries(runtime).filter((entry) =>
-    (contributionsForSurface(entry.manifest, entry.surface)?.hooks?.registers || []).some(
-      (item) => item.point === normalized,
-    ),
-  );
 }
 
 export function resolvePluginExecutionIntent(runtime = null, pluginId = "") {

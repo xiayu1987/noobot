@@ -13,7 +13,6 @@ import {
   acquireBrowserSession,
   closeAllBrowserSessions,
   closeBrowserSession,
-  listBrowserSessions,
   resolveBrowserProfileDirectory,
   resolveBrowserProfileName,
 } from "../../src/tools/execution/browser-session-registry.js";
@@ -131,7 +130,6 @@ test("acquireBrowserSession launches a persistent profile under the owner direct
     assert.equal(stub.calls.length, 1);
     assert.equal(stub.calls[0].profileDirectory, path.join(root, "alice", "work"));
     assert.equal(stub.calls[0].options.headless, false);
-    assert.deepEqual(listBrowserSessions(), [{ userId: "alice", profileName: "work" }]);
   });
 });
 
@@ -170,12 +168,6 @@ test("acquireBrowserSession reuses one browser per owner and profile", async () 
     assert.equal(second.endpoint, first.endpoint);
     assert.equal(stub.calls.length, 2);
     assert.equal(other.profileName, DEFAULT_BROWSER_PROFILE_NAME);
-    assert.deepEqual(
-      listBrowserSessions()
-        .map((entry) => entry.userId)
-        .sort(),
-      ["alice", "bob"],
-    );
   });
 });
 
@@ -218,7 +210,6 @@ test("acquireBrowserSession drops the session when the launch fails", async () =
         }),
       /launch refused/,
     );
-    assert.deepEqual(listBrowserSessions(), []);
   });
 });
 
@@ -235,35 +226,8 @@ test("closeBrowserSession closes the browser once and stays idempotent", async (
 
     const closed = await closeBrowserSession({ userId: "alice", profileName: "work" });
     assert.deepEqual(closed, { closed: true, profileName: "work" });
-    assert.deepEqual(listBrowserSessions(), []);
-
     const again = await closeBrowserSession({ userId: "alice", profileName: "work" });
     assert.deepEqual(again, { closed: false, profileName: "work" });
-  });
-});
-
-test("a browser closed outside the registry stops being tracked", async () => {
-  await withProfileRoot(async (root) => {
-    const stub = createPlaywrightStub();
-    let capturedContext = null;
-    const observing = {
-      chromium: {
-        async launchPersistentContext(directory, options) {
-          capturedContext = await stub.module.chromium.launchPersistentContext(directory, options);
-          return capturedContext;
-        },
-      },
-    };
-    await acquireBrowserSession({
-      userId: "alice",
-      profileRoot: root,
-      executablePath: "/bin/chromium",
-      playwrightModule: observing,
-    });
-    assert.equal(listBrowserSessions().length, 1);
-
-    await capturedContext.close();
-    assert.deepEqual(listBrowserSessions(), []);
   });
 });
 
@@ -280,7 +244,6 @@ test("closeAllBrowserSessions releases every tracked browser", async () => {
     await acquireBrowserSession({ ...base, userId: "bob", profileName: "home" });
 
     assert.deepEqual(await closeAllBrowserSessions(), { closed: 2 });
-    assert.deepEqual(listBrowserSessions(), []);
     assert.deepEqual(await closeAllBrowserSessions(), { closed: 0 });
   } finally {
     await fs.rm(root, { recursive: true, force: true });

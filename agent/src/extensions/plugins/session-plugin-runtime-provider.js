@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { PLUGIN_LIFECYCLE_EVENT, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
-import { buildNoobotPluginDiagnostics, getNoobotPluginRuntime } from "@noobot/plugin-runtime";
+import { getNoobotPluginRuntime } from "@noobot/plugin-runtime";
 import { createRunConfigPluginPreparer } from "../../bot/session/session-plugin-runtime-adapter.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -76,8 +76,4 @@ export function createDefaultRunConfigPluginPreparer(options = {}) {
     ...options,
     loadedPlugins: loadedDynamicPlugins,
   });
-}
-
-export function getDefaultPluginDiagnostics() {
-  return buildNoobotPluginDiagnostics(loadedDynamicPlugins);
 }

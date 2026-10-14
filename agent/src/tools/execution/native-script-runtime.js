@@ -229,33 +229,6 @@ function isAllowedBrowserResource(value) {
   }
 }
 
-export function resolveBrowserProxyFromEnv(env = process.env) {
-  const value = String(
-    env.HTTPS_PROXY ||
-      env.https_proxy ||
-      env.HTTP_PROXY ||
-      env.http_proxy ||
-      env.ALL_PROXY ||
-      env.all_proxy ||
-      "",
-  ).trim();
-  if (!value) return undefined;
-  try {
-    const proxy = new URL(value);
-    if (!proxy.hostname || !proxy.port) return undefined;
-    const options = {
-      server: `${proxy.protocol}//${proxy.hostname}:${proxy.port}`,
-    };
-    if (proxy.username) options.username = decodeURIComponent(proxy.username);
-    if (proxy.password) options.password = decodeURIComponent(proxy.password);
-    const bypass = String(env.NO_PROXY || env.no_proxy || "").trim();
-    if (bypass) options.bypass = bypass;
-    return options;
-  } catch {
-    return undefined;
-  }
-}
-
 async function captureScreenshot(target, options, resolveOutput) {
   const source = options && typeof options === "object" ? options : {};
   const requested = source.path;

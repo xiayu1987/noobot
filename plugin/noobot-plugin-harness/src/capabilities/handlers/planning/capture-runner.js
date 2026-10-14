@@ -56,7 +56,7 @@ function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
   return `${raw.slice(0, maxChars)}...`;
 }
 
-export function recordPlanningRawOutput(
+function recordPlanningRawOutput(
   ctx = {},
   { source = "unknown", content = "", parsedCount = 0 } = {},
 ) {

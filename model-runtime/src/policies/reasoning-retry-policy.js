@@ -7,11 +7,3 @@ import { extractReasoningText, extractResponseText } from "../normalization/resp
 export function classifyReasoningOnly(response) {
   return !extractResponseText(response) && Boolean(extractReasoningText(response));
 }
-
-export function createReasoningRetryState(policy = {}) {
-  return { attempts: 0, maxAttempts: Math.max(0, Number(policy.maxAttempts) || 0) };
-}
-
-export function shouldRetryReasoningOnly(state) {
-  return state.attempts < state.maxAttempts;
-}

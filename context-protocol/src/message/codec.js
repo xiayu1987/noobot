@@ -25,7 +25,7 @@ export function readContextMessageField(message = {}, field = "") {
   );
 }
 
-export const CONTEXT_MESSAGE_ROLE_ALIASES = Object.freeze({
+const CONTEXT_MESSAGE_ROLE_ALIASES = Object.freeze({
   system: CONTEXT_MESSAGE_ROLE.SYSTEM,
   developer: CONTEXT_MESSAGE_ROLE.SYSTEM,
   user: CONTEXT_MESSAGE_ROLE.USER,
@@ -152,14 +152,6 @@ export function resolveContextMessageFlags(message = {}) {
       Boolean(readContextMessageField(message, "injectedBy")),
     plugin: readContextMessageField(message, "pluginMessage").toLowerCase() === "true",
   };
-}
-
-export function contextMessageIdentityKey(message = {}) {
-  const messageId = resolveContextMessageId(message);
-  if (messageId) return `message:${messageId}`;
-  const dialogProcessId = resolveContextMessageDialogProcessId(message);
-  const turnScopeId = resolveContextMessageTurnScopeId(message);
-  return dialogProcessId && turnScopeId ? `round:${dialogProcessId}\u0000${turnScopeId}` : "";
 }
 
 export function projectContextMessageIdentityMetadata(message = {}) {

@@ -6,6 +6,5 @@ export * from "./default-retry-policy.js";
 export * from "./reasoning-retry-policy.js";
 export * from "./empty-response-retry-policy.js";
 export * from "./tool-call-retry-policy.js";
-export * from "./provider-fallback-policy.js";
 export * from "./cache-policy-engine.js";
 export * from "./streaming-mode-policy.js";

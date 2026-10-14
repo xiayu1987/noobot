@@ -10,7 +10,7 @@ import { CHARACTER_PLUGIN_ID } from "./contract.js";
 import { AnimationAssetSchema } from "./animation-protocol.js";
 import { migrateLegacyAssetDescriptor } from "./asset-metadata-migration.js";
 
-export async function readCharacterAssetCatalog(basePath) {
+async function readCharacterAssetCatalog(basePath) {
   const workspacePath = String(basePath || "").trim();
   if (!workspacePath) throw new Error("character asset workspace path is required");
   const catalogPath = path.resolve(

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const CONTEXT_BUILD_STATUS = Object.freeze({
+const CONTEXT_BUILD_STATUS = Object.freeze({
   BUILDING: "building",
   READY: "ready",
   FAILED: "failed",

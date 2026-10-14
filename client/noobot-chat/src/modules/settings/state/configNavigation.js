@@ -56,7 +56,7 @@ export function configEntryNodes(node, value) {
   return [];
 }
 
-export function configChildGroups(node, value) {
+function configChildGroups(node, value) {
   if (node?.kind === CONFIG_FORM_NODE_KIND.OBJECT) {
     return (node.children || [])
       .filter((child) => isConfigGroupNode(child))
@@ -98,11 +98,6 @@ export function findConfigNavTrail(tree = [], path = "") {
   return [];
 }
 
-export function findConfigNavNode(tree = [], path = "") {
-  const trail = findConfigNavTrail(tree, path);
-  return trail.length ? trail[trail.length - 1] : null;
-}
-
 export function firstConfigNavPath(tree = []) {
   return tree[0]?.path || "";
 }
@@ -125,8 +120,4 @@ export function ensureConfigNavContainer(document, trail = []) {
     container = ensureObjectAt(container, navNode.key);
   }
   return container;
-}
-
-export function resolveConfigNavParent(document, trail = []) {
-  return resolveConfigNavContainer(document, trail.slice(0, -1));
 }

@@ -7,8 +7,6 @@ import { TRANSFER_REASON } from "@noobot/semantic-transfer-protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  COMPACT_TRANSFER_FILE_FIELDS,
-  COMPACT_TRANSFER_PAYLOAD_FIELDS,
   compactToolResultTextForModel,
   getTransferAttachments,
   getTransferEnvelopes,
@@ -48,16 +46,19 @@ test("compact model view retains only V2 transfer envelopes and canonical attach
       JSON.stringify({ toolName: "tool", transferEnvelopes: [envelope] }),
     ),
   );
-  assert.deepEqual(COMPACT_TRANSFER_PAYLOAD_FIELDS, ["transferEnvelopes"]);
   assert.deepEqual(Object.keys(compacted), ["toolName", "transferEnvelopes"]);
   assert.deepEqual(
     compacted.transferEnvelopes[0].payload.attachments[0].identity,
     attachment("att-1").identity,
   );
-  assert.deepEqual(
-    Object.keys(compacted.transferEnvelopes[0].payload.attachments[0]).sort(),
-    COMPACT_TRANSFER_FILE_FIELDS.slice().sort(),
-  );
+  assert.deepEqual(Object.keys(compacted.transferEnvelopes[0].payload.attachments[0]).sort(), [
+    "identity",
+    "mimeType",
+    "name",
+    "preview",
+    "role",
+    "size",
+  ]);
 });
 
 test("consumer returns only validated V2 envelopes and canonical attachment references", () => {

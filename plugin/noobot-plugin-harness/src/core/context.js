@@ -15,7 +15,7 @@ import { normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION, resolveHarnessRunsRelativePath } from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 
-export function normalizePlanningGuidance(options = {}) {
+function normalizePlanningGuidance(options = {}) {
   if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
     options.planningGuidanceMode = "inject";
   }
@@ -30,7 +30,7 @@ export function extractBasePath(ctx = {}, options = {}) {
   ).trim();
 }
 
-export function extractRunId(ctx = {}) {
+function extractRunId(ctx = {}) {
   return safeId(resolveDialogProcessIdFromContext(ctx) || ctx.sessionId || "run");
 }
 

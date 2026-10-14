@@ -41,7 +41,7 @@ export function getClientIp(request = null, trustedProxies = []) {
   return hops[0] || remoteAddress;
 }
 
-export function matchTrustedRule(value = "", rule = "") {
+function matchTrustedRule(value = "", rule = "") {
   const normalizedValue = String(value || "").trim();
   const normalizedRule = String(rule || "").trim();
   if (!normalizedValue || !normalizedRule) return false;

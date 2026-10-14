@@ -186,12 +186,6 @@ export function validateWorkflowRuntimeEnvelope(envelope = {}) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-export function workflowRuntimeEventComparable(left = {}, right = {}) {
-  const leftDomain = text(left?.sequenceDomain);
-  const rightDomain = text(right?.sequenceDomain);
-  return Boolean(leftDomain && rightDomain && leftDomain === rightDomain);
-}
-
 export function compareWorkflowRuntimeFacts(
   incoming = {},
   current = {},

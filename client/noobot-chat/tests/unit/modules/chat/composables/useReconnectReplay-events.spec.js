@@ -18,7 +18,6 @@ import {
 import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
-import { clearExtensionRegistry } from "../../../../../src/extensions/extension-registry.js";
 import { INTERACTION_EVENT_TYPE, createReplayBatch } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
@@ -26,7 +25,6 @@ import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protoco
 
 afterEach(() => {
   vi.useRealTimers();
-  clearExtensionRegistry();
 });
 
 describe("useReconnectReplay", () => {

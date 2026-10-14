@@ -28,29 +28,20 @@ export function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
-export const COMPACT_TRANSFER_PAYLOAD_FIELDS = Object.freeze(["transferEnvelopes"]);
-export const COMPACT_TRANSFER_FILE_FIELDS = Object.freeze([
-  "identity",
-  "role",
-  "name",
-  "mimeType",
-  "size",
-  "preview",
-]);
-
 function validateAndDedupeEnvelopes(value) {
-  const source = isPlainObject(value) && Array.isArray(value.transferEnvelopes)
-    ? value.transferEnvelopes
-    : value;
+  const source =
+    isPlainObject(value) && Array.isArray(value.transferEnvelopes)
+      ? value.transferEnvelopes
+      : value;
   return normalizeTransferEnvelopes(source);
 }
 
-export function compactTransferPayloadForModel(payload = {}) {
+function compactTransferPayloadForModel(payload = {}) {
   const envelopes = validateAndDedupeEnvelopes(payload);
   return envelopes.length ? { transferEnvelopes: envelopes } : {};
 }
 
-export function compactToolResultPayloadForModel(payload = {}) {
+function compactToolResultPayloadForModel(payload = {}) {
   if (!isPlainObject(payload)) return payload;
   const compactPayload = { ...payload };
   delete compactPayload.compactTransferPayload;
@@ -69,4 +60,3 @@ export function compactToolResultTextForModel(toolResultText = "") {
     return raw;
   }
 }
-

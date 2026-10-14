@@ -59,7 +59,7 @@ function workflowPayload(message = {}) {
     : {};
 }
 
-export function isWorkflowPresentationMessage(message = {}) {
+function isWorkflowPresentationMessage(message = {}) {
   const payload = workflowPayload(message);
   return Boolean(
     text(message?.type).toLowerCase() === "workflow" ||
@@ -169,7 +169,7 @@ function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
   };
 }
 
-export function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId = "") {
+function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId = "") {
   const workflowRunId = text(workflow?.workflowRunId);
   const sessionId = text(workflow?.sessionId || fallbackSessionId);
   const turnScopeId = text(workflow?.turnScopeId);

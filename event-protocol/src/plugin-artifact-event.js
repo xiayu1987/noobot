@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createEventEnvelope } from "./envelope.js";
+import { createEventEnvelope, createEventId } from "./envelope.js";
 import { nullishText as text } from "./normalize.js";
 
 export const PLUGIN_ARTIFACT_EVENT = "plugin.artifact.committed";
@@ -20,45 +20,76 @@ export const PLUGIN_ARTIFACT_ERROR_CODE = Object.freeze({
 
 const tokenPattern = /^[A-Za-z][A-Za-z0-9_.-]{0,159}$/;
 
-export function createPluginArtifactEnvelope({
+function collectCommitRequestErrors({ keys, sessionId, turnScopeId, data, baseRevision }) {
+  const errors = [];
+  pushIf(errors, !text(sessionId), "missing_session_id");
+  pushIf(errors, !text(turnScopeId), "missing_turn_scope_id");
+  pushIf(errors, !tokenPattern.test(keys.pluginId), "invalid_plugin_id");
+  pushIf(errors, !tokenPattern.test(keys.artifactType), "invalid_artifact_type");
+  pushIf(errors, !tokenPattern.test(keys.artifactId), "invalid_artifact_id");
+  pushIf(errors, !PLUGIN_ARTIFACT_OPERATIONS.includes(keys.operation), "invalid_operation");
+  pushIf(errors, !data || typeof data !== "object", "invalid_artifact_data");
+  pushIf(errors, keys.operation === "created" && baseRevision !== null, "invalid_created_revision");
+  pushIf(
+    errors,
+    keys.operation === "replaced" && !isIntegerAtLeast(baseRevision, 1),
+    "invalid_replaced_revision",
+  );
+  return errors;
+}
+
+export function createPluginArtifactCommitRequest({
   pluginId = "",
   artifactType = "",
   artifactId = "",
   sessionId = "",
   turnScopeId = "",
   data = {},
-  sequence = 1,
   operation = "created",
-  revision = 1,
   baseRevision = null,
-  occurredAt = new Date().toISOString(),
 } = {}) {
-  const envelope = createEventEnvelope({
+  const keys = {
+    pluginId: text(pluginId),
+    artifactType: text(artifactType),
+    artifactId: text(artifactId),
+    operation: text(operation),
+  };
+  const errors = collectCommitRequestErrors({ keys, sessionId, turnScopeId, data, baseRevision });
+  if (errors.length > 0) {
+    throw new TypeError(`invalid plugin artifact commit request: ${errors.join(",")}`);
+  }
+  return Object.freeze({
     family: PLUGIN_ARTIFACT_FAMILY,
     schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
-    identity: {
-      eventId: `${PLUGIN_ARTIFACT_EVENT}:${text(sessionId)}:${text(pluginId)}:${text(artifactType)}:${text(artifactId)}:${sequence}`,
-      eventType: PLUGIN_ARTIFACT_EVENT,
-      sessionId: text(sessionId),
-      turnScopeId: text(turnScopeId),
-    },
+    identity: { eventType: PLUGIN_ARTIFACT_EVENT, turnScopeId: text(turnScopeId) },
+    causality: { correlationId: text(turnScopeId) },
     ordering: {
       domain: PLUGIN_ARTIFACT_SEQUENCE_DOMAIN,
-      scopeId: `${text(sessionId)}:${text(pluginId)}:${text(artifactType)}:${text(artifactId)}`,
-      sequence,
-      revision,
+      scopeId: `${text(sessionId)}:${keys.pluginId}:${keys.artifactType}:${keys.artifactId}`,
     },
-    producer: { type: "plugin", id: text(pluginId) },
+    producer: { type: "plugin", id: keys.pluginId },
+    payload: { ...keys, data, baseRevision },
+  });
+}
+
+export function createPluginArtifactEnvelope({
+  sessionId = "",
+  sequence = 1,
+  revision = 1,
+  occurredAt = new Date().toISOString(),
+  ...request
+} = {}) {
+  const commitRequest = createPluginArtifactCommitRequest({ ...request, sessionId });
+  const envelope = createEventEnvelope({
+    ...commitRequest,
+    identity: {
+      ...commitRequest.identity,
+      eventId: createEventId(),
+      sessionId: text(sessionId),
+    },
+    ordering: { ...commitRequest.ordering, sequence, revision },
     occurredAt,
-    payload: {
-      pluginId: text(pluginId),
-      artifactType: text(artifactType),
-      artifactId: text(artifactId),
-      data,
-      operation: text(operation),
-      revision,
-      baseRevision,
-    },
+    payload: { ...commitRequest.payload, revision },
   });
   const validation = validatePluginArtifactEnvelope(envelope);
   if (!validation.valid) {

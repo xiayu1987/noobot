@@ -11,7 +11,7 @@ import {
   RUNTIME_EVENTS_CONFIG_ENVS,
   RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES,
 } from "@noobot/shared/runtime-events-config";
-import { normalizeRuntimeEvent, writeRuntimeEvent } from "../src/index.js";
+import { writeRuntimeEvent } from "../src/index.js";
 import {
   buildSessionLogRecord,
   getSessionLogControlKey,
@@ -59,61 +59,11 @@ test("session log protocol exports stable categories and helpers from runtime-ev
   assert.throws(() => normalizeSessionLogCategory(undefined), /Invalid session log category/);
   assert.equal(normalizeSessionLogCategory("DEBUG"), SESSION_LOG_DEBUG_CATEGORY);
 
-  for (const category of SESSION_LOG_CATEGORIES) {
-    const debugType = category === SESSION_LOG_DEBUG_CATEGORY ? "state-machine" : undefined;
-    assert.doesNotThrow(
-      () =>
-        normalizeRuntimeEvent({
-          scope: "system",
-          source: "test",
-          event: "test.category",
-          category,
-          debugType,
-        }),
-      `schema rejects session log category: ${category}`,
-    );
-  }
-  assert.throws(
-    () =>
-      normalizeRuntimeEvent({
-        scope: "system",
-        source: "test",
-        event: "test.debug",
-        category: SESSION_LOG_DEBUG_CATEGORY,
-      }),
-    /Invalid runtime event debugType/,
-  );
-  assert.throws(
-    () =>
-      normalizeRuntimeEvent({
-        scope: "system",
-        source: "test",
-        event: "test.debugType",
-        category: "system",
-        debugType: "state-machine",
-      }),
-    /debugType is only allowed for category debug: system/,
-  );
-  assert.throws(
-    () =>
-      normalizeRuntimeEvent({
-        scope: "system",
-        source: "test",
-        event: "test.level",
-        category: "system",
-        level: "debug",
-      }),
-    /level debug requires category debug, got: system/,
-  );
   assert.equal(getSessionLogControlKey("message"), "message");
   assert.equal(getSessionLogControlKey(SESSION_LOG_DEBUG_CATEGORY), "");
   for (const category of SESSION_LOG_CATEGORIES) {
     assert.doesNotThrow(() => getSessionLogControlKey(category), `no control key: ${category}`);
   }
-  assert.throws(
-    () => normalizeRuntimeEvent({ scope: "system", source: "test", event: "test.noCategory" }),
-    /Invalid runtime event category: undefined/,
-  );
   assert.equal(getSessionLogDebugControlKey({ debugType: "state-machine" }), "stateMachine");
   assert.equal(
     getSessionLogDebugControlKey({ debugType: "stop-continue" }),
@@ -346,25 +296,6 @@ test("session log record carries debug type only at top level", () => {
   assert.equal(record.debugType, "stop-continue");
   assert.equal(record.data.debugType, undefined);
   assert.equal(getSessionLogDebugControlKey(record), "frontendStopContinue");
-});
-
-test("normalizeRuntimeEvent builds a sanitized structured record", () => {
-  const record = normalizeRuntimeEvent({
-    source: "service",
-    scope: "system",
-    category: "security",
-    level: "warn",
-    event: "service.auth.failed",
-    data: { token: "secret", reason: "bad-token" },
-    error: new Error("boom"),
-  });
-
-  assert.equal(record.version, 1);
-  assert.equal(record.source, "service");
-  assert.equal(record.scope, "system");
-  assert.equal(record.data.token, "[Redacted]");
-  assert.equal(record.data.reason, "bad-token");
-  assert.equal(record.error.name, "Error");
 });
 
 test("isSessionLogDebugTypeEnabled gates delivery-timing before collection", async () => {

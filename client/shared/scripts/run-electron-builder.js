@@ -70,7 +70,7 @@ export function buildDesktopBuilderEnv({ env = process.env, proxy = {} } = {}) {
   return { ...env, ...getDependencyProxyEnv(proxy.proxyUrl) };
 }
 
-export async function runElectronBuilder({
+async function runElectronBuilder({
   args = process.argv.slice(2),
   env = process.env,
   cwd = process.cwd(),

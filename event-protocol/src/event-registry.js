@@ -5,7 +5,6 @@
  */
 import {
   EXECUTION_CHILDREN_WIRE_EVENT,
-  EXECUTION_LIFECYCLE_WIRE_EVENT,
   EXECUTION_SNAPSHOT_WIRE_EVENT,
   EXECUTION_TREE_WIRE_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
@@ -58,7 +57,6 @@ export const EVENT_REDUCER_INPUT = Object.freeze({
 export const EVENT_FAMILY = Object.freeze({
   TURN_LIFECYCLE: "turn.lifecycle",
   TURN_SNAPSHOT: TURN_SNAPSHOT_EVENT_FAMILY,
-  EXECUTION_LIFECYCLE: "execution.lifecycle",
   EXECUTION_SNAPSHOT: "execution.snapshot",
   EXECUTION_CHILDREN: "execution.children",
   EXECUTION_TREE: "execution.tree",
@@ -85,12 +83,6 @@ const descriptors = Object.freeze(
       minimumSequence: 0,
       validateEnvelope: validateTurnSnapshotEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
-    },
-    {
-      family: EVENT_FAMILY.EXECUTION_LIFECYCLE,
-      wireEvents: [EXECUTION_LIFECYCLE_WIRE_EVENT],
-      reducerTarget: EVENT_REDUCER_TARGET.EXECUTION,
-      validatePayload: validateExecutionPayload,
     },
     ...[
       [EVENT_FAMILY.EXECUTION_SNAPSHOT, EXECUTION_SNAPSHOT_WIRE_EVENT],
@@ -164,12 +156,6 @@ const descriptors = Object.freeze(
   ),
 );
 const byFamily = new Map(descriptors.map((descriptor) => [descriptor.family, descriptor]));
-const byWireEvent = new Map(
-  descriptors.flatMap((descriptor) =>
-    descriptor.wireEvents.map((wireEvent) => [wireEvent, descriptor]),
-  ),
-);
-
 export function getEventFamily(family = "") {
   return byFamily.get(text(family)) || null;
 }
@@ -222,12 +208,6 @@ export function readProtocolEventReducerInput(envelope = {}) {
     descriptor: validation.descriptor,
     input,
   };
-}
-export function getEventFamilyByWireEvent(wireEvent = "") {
-  return byWireEvent.get(text(wireEvent)) || null;
-}
-export function listEventFamilies() {
-  return [...descriptors];
 }
 export function validateProtocolEvent(envelope = {}) {
   const envelopeValidation = validateEventEnvelope(envelope);

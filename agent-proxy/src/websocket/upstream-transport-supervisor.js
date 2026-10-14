@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const UPSTREAM_TRANSPORT_PHASE = Object.freeze({
+const UPSTREAM_TRANSPORT_PHASE = Object.freeze({
   IDLE: "idle",
   CONNECTING: "connecting",
   OPEN: "open",

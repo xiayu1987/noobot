@@ -31,11 +31,14 @@ export const WORKFLOW_ACTION_META = Object.freeze(
   }, {}),
 );
 
-export const WORKFLOW_ACTION_EXECUTOR = Object.freeze(
-  Object.entries(WORKFLOW_ACTION_META).reduce((acc, [action, meta]) => {
-    acc[action] = meta.executor || "none";
-    return acc;
-  }, { [GUIDANCE_DECISION.label.none]: "none" }),
+const WORKFLOW_ACTION_EXECUTOR = Object.freeze(
+  Object.entries(WORKFLOW_ACTION_META).reduce(
+    (acc, [action, meta]) => {
+      acc[action] = meta.executor || "none";
+      return acc;
+    },
+    { [GUIDANCE_DECISION.label.none]: "none" },
+  ),
 );
 
 function normalizePending(state = {}) {
@@ -45,9 +48,10 @@ function normalizePending(state = {}) {
 export function resolvePendingPlanUpdateForWorkflow(state = {}) {
   const pending = normalizePending(state);
   if (pending.planRevision === true) {
-    const context = pending.planRevisionContext && typeof pending.planRevisionContext === "object"
-      ? pending.planRevisionContext
-      : {};
+    const context =
+      pending.planRevisionContext && typeof pending.planRevisionContext === "object"
+        ? pending.planRevisionContext
+        : {};
     return {
       active: true,
       stage: GUIDANCE_DECISION.stage.revision,
@@ -62,9 +66,10 @@ export function resolvePendingPlanUpdateForWorkflow(state = {}) {
     return { active: false, stage: "", action: "", reason: "", targetMainStepIndexes: [] };
   }
   if (pending.planRefinement === true) {
-    const context = pending.planRefinementContext && typeof pending.planRefinementContext === "object"
-      ? pending.planRefinementContext
-      : {};
+    const context =
+      pending.planRefinementContext && typeof pending.planRefinementContext === "object"
+        ? pending.planRefinementContext
+        : {};
     return {
       active: true,
       stage: GUIDANCE_DECISION.stage.refinement,
@@ -121,16 +126,21 @@ function resolveBlockReason(action = "", state = {}) {
   const pending = normalizePending(state);
   const planUpdate = resolvePendingPlanUpdateForWorkflow(state);
   if (action === ACCEPTANCE_DECISION.action.phaseAcceptance) {
-    if (state?.flags?.planningCaptured !== true) return "phase_acceptance_blocked_by_planning_not_captured";
+    if (state?.flags?.planningCaptured !== true)
+      return "phase_acceptance_blocked_by_planning_not_captured";
     if (pending.guidance) return "phase_acceptance_blocked_by_guidance";
     if (planUpdate.active) return "phase_acceptance_blocked_by_plan_update";
     return "";
   }
-  if (action === ACCEPTANCE_DECISION.action.acceptanceSemanticValidation && pending.phaseAcceptance === true) {
+  if (
+    action === ACCEPTANCE_DECISION.action.acceptanceSemanticValidation &&
+    pending.phaseAcceptance === true
+  ) {
     return "acceptance_semantic_validation_deferred_by_phase_acceptance";
   }
   if (
-    (action === GUIDANCE_DECISION.label.summaryOverflow || action === GUIDANCE_DECISION.label.summaryTurns) &&
+    (action === GUIDANCE_DECISION.label.summaryOverflow ||
+      action === GUIDANCE_DECISION.label.summaryTurns) &&
     pending.phaseAcceptance === true &&
     !pending.guidance &&
     !planUpdate.active &&
@@ -143,12 +153,17 @@ function resolveBlockReason(action = "", state = {}) {
 
 function reasonForAction(action = "", state = {}) {
   if (action === GUIDANCE_DECISION.label.guidance) return GUIDANCE_DECISION.reason.pendingGuidance;
-  if (action === GUIDANCE_DECISION.label.planUpdateRevision) return GUIDANCE_DECISION.reason.pendingRevision;
-  if (action === GUIDANCE_DECISION.label.planUpdateRefinement) return GUIDANCE_DECISION.reason.pendingRefinement;
+  if (action === GUIDANCE_DECISION.label.planUpdateRevision)
+    return GUIDANCE_DECISION.reason.pendingRevision;
+  if (action === GUIDANCE_DECISION.label.planUpdateRefinement)
+    return GUIDANCE_DECISION.reason.pendingRefinement;
   if (action === GUIDANCE_DECISION.label.analysis) return GUIDANCE_DECISION.reason.pendingAnalysis;
-  if (action === GUIDANCE_DECISION.label.summaryOverflow) return GUIDANCE_DECISION.reason.pendingSummaryOverflow;
-  if (action === GUIDANCE_DECISION.label.summaryTurns) return GUIDANCE_DECISION.reason.pendingSummaryTurns;
-  if (action === ACCEPTANCE_DECISION.action.phaseAcceptance) return ACCEPTANCE_DECISION.reason.phaseAcceptancePending;
+  if (action === GUIDANCE_DECISION.label.summaryOverflow)
+    return GUIDANCE_DECISION.reason.pendingSummaryOverflow;
+  if (action === GUIDANCE_DECISION.label.summaryTurns)
+    return GUIDANCE_DECISION.reason.pendingSummaryTurns;
+  if (action === ACCEPTANCE_DECISION.action.phaseAcceptance)
+    return ACCEPTANCE_DECISION.reason.phaseAcceptancePending;
   if (action === ACCEPTANCE_DECISION.action.acceptanceSemanticValidation) {
     return ACCEPTANCE_DECISION.reason.acceptanceSemanticValidationPending;
   }
@@ -160,8 +175,10 @@ function reasonForAction(action = "", state = {}) {
 }
 
 function stageForAction(action = "") {
-  if (action === GUIDANCE_DECISION.label.planUpdateRevision) return GUIDANCE_DECISION.stage.revision;
-  if (action === GUIDANCE_DECISION.label.planUpdateRefinement) return GUIDANCE_DECISION.stage.refinement;
+  if (action === GUIDANCE_DECISION.label.planUpdateRevision)
+    return GUIDANCE_DECISION.stage.revision;
+  if (action === GUIDANCE_DECISION.label.planUpdateRefinement)
+    return GUIDANCE_DECISION.stage.refinement;
   return "";
 }
 
@@ -203,9 +220,10 @@ export function resolveWorkflowActionDecision(state = {}) {
 
   eligible.sort((a, b) => actionSortScore(a) - actionSortScore(b));
   const chosenAction = eligible[0] || GUIDANCE_DECISION.label.none;
-  const chosenReason = chosenAction === GUIDANCE_DECISION.label.none
-    ? GUIDANCE_DECISION.reason.idle
-    : reasonForAction(chosenAction, state);
+  const chosenReason =
+    chosenAction === GUIDANCE_DECISION.label.none
+      ? GUIDANCE_DECISION.reason.idle
+      : reasonForAction(chosenAction, state);
 
   return {
     chosenAction,

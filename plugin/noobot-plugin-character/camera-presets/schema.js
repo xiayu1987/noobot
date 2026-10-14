@@ -30,7 +30,7 @@ const follow = z
   .object({ type: z.literal("follow"), side: z.enum(["behind", "left", "right"]) })
   .strict();
 
-export const CameraPresetOperatorSchema = z.discriminatedUnion("type", [
+const CameraPresetOperatorSchema = z.discriminatedUnion("type", [
   frameSubjects,
   translate,
   dolly,
@@ -38,7 +38,7 @@ export const CameraPresetOperatorSchema = z.discriminatedUnion("type", [
   follow,
 ]);
 
-export const CameraPresetSchema = z
+const CameraPresetSchema = z
   .object({
     presetId: z.string().regex(/^camera\.[a-z][a-z0-9_.-]{0,151}$/),
     version: z.number().int().positive(),
@@ -84,7 +84,7 @@ export const CameraPresetInvocationSchema = z
     subjectIds: subjectIds.optional(),
   })
   .strict();
-export const CameraShotSchema = z
+const CameraShotSchema = z
   .object({
     presetId: z.string().regex(/^camera\.[a-z][a-z0-9_.-]{0,151}$/),
     subjectIds: subjectIds.optional(),

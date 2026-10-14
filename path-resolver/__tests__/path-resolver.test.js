@@ -20,9 +20,7 @@ import {
   isTrustedDirectoryPath,
   PLATFORM_PROTECTED_ROOTS,
   resolveTrustedDirectories,
-  resolvePathUnderRoot,
   TASK_PATH_KINDS,
-  TASK_PATH_VIEW,
   createTaskPath,
   isTaskPath,
   normalizeTaskPathRelative,
@@ -41,11 +39,6 @@ import {
 test("normalizes cross-platform path syntax through the protocol", () => {
   assert.equal(detectPathPlatform("C:\\work\\file.txt"), PATH_PLATFORMS.WINDOWS);
   assert.equal(normalizePathForPlatform("C:\\work\\..\\src\\file.txt"), "C:/src/file.txt");
-  assert.equal(resolvePathUnderRoot("/workspace/app", "src/file.js"), "/workspace/app/src/file.js");
-  assert.equal(
-    resolvePathUnderRoot("/workspace/app", "C:\\work\\src\\file.js"),
-    "C:/work/src/file.js",
-  );
 });
 
 test("path containment distinguishes parent traversal from dot-prefixed names", () => {
@@ -129,7 +122,6 @@ test("sandbox mode treats unmapped absolute paths as execution paths, never host
 });
 
 test("task-local paths have one token and resolution protocol", () => {
-  assert.equal(TASK_PATH_VIEW, "task-local");
   const output = createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative: "media/result.mp4" });
   assert.equal(output, "output://media/result.mp4");
   assert.equal(isTaskPath(output, { kind: TASK_PATH_KINDS.OUTPUT }), true);

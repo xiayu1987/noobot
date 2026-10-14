@@ -11,7 +11,6 @@ import {
   normalizeAttachmentMetas,
   normalizeAttachmentTurnScopeMeta,
   attachmentMatchKeys,
-  findMatchingAttachmentMeta,
   projectCanonicalAttachmentIdentity,
 } from "../../src/artifacts/meta-ops.js";
 
@@ -85,22 +84,7 @@ test("attachment matching uses only the shared three-field identity", () => {
     mimeType: "text/plain",
     path: "/one/same.txt",
   };
-  const sameIdentity = { ...canonical, name: "renamed.txt", path: "/two/renamed.txt" };
-  const differentIdentity = { ...canonical, attachmentId: "att_2" };
-
   assert.deepEqual(attachmentMatchKeys(canonical), [JSON.stringify(["s1", "user", "att_1"])]);
-  assert.equal(
-    findMatchingAttachmentMeta(canonical, [differentIdentity, sameIdentity]),
-    sameIdentity,
-  );
-  assert.equal(
-    findMatchingAttachmentMeta({ ...canonical, path: "/other/same.txt" }, [sameIdentity]),
-    sameIdentity,
-  );
-  assert.equal(
-    findMatchingAttachmentMeta({ attachmentId: "att_1", name: "same.txt" }, [canonical]),
-    null,
-  );
 });
 
 test("normalizeAttachmentMetas accepts only canonical attachment fields", () => {

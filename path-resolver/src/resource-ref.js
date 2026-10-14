@@ -6,9 +6,9 @@
 
 import { randomUUID } from "node:crypto";
 
-export const RESOURCE_REF_VERSION = 1;
-export const RESOURCE_KINDS = Object.freeze(["file"]);
-export const RESOURCE_SOURCES = Object.freeze(["workspace", "attachment", "host"]);
+const RESOURCE_REF_VERSION = 1;
+const RESOURCE_KINDS = Object.freeze(["file"]);
+const RESOURCE_SOURCES = Object.freeze(["workspace", "attachment", "host"]);
 
 function text(value = "") {
   return String(value ?? "").trim();
@@ -18,7 +18,7 @@ function clone(value) {
   return value && typeof value === "object" ? structuredClone(value) : value;
 }
 
-export function createResourceId() {
+function createResourceId() {
   return `res_${randomUUID().replaceAll("-", "")}`;
 }
 
@@ -60,7 +60,7 @@ export function createResourceRef({
   return Object.freeze(result);
 }
 
-export function assertResourceRef(value = {}) {
+function assertResourceRef(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("resource reference must be an object");
   if (Number(value.version || RESOURCE_REF_VERSION) !== RESOURCE_REF_VERSION)
@@ -77,15 +77,6 @@ export function assertResourceRef(value = {}) {
   if (value.source === "attachment" && (!value.attachment || typeof value.attachment !== "object"))
     throw new TypeError("attachment resource identity is required");
   return value;
-}
-
-export function isResourceRef(value = null) {
-  try {
-    assertResourceRef(value);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function projectResourceRef(value = {}) {

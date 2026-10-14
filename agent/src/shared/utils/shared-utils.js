@@ -23,10 +23,6 @@ export function deepMerge(base, override) {
   return out;
 }
 
-export function isString(value) {
-  return typeof value === "string";
-}
-
 export function safeStr(value, fallback = "") {
   return String(value ?? fallback).trim();
 }

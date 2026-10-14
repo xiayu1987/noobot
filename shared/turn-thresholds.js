@@ -108,10 +108,4 @@ export const TURN_THRESHOLDS = deepFreeze({
   client: {
     admissionMaxRetries: 3,
   },
-
-  web2img: {
-    textStableRounds: 10,
-
-    textStableThreshold: 3,
-  },
 });

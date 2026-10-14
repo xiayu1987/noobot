@@ -43,7 +43,7 @@ export function compactStdout(input = "") {
   return normalizeText(text);
 }
 
-export function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars) {
+function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars) {
   const text = String(input || "");
   const limit = Math.max(256, Number(maxChars || LENGTH_THRESHOLDS.toolIO.connectorOutputChars));
   if (text.length <= limit) {

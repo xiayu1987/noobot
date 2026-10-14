@@ -31,12 +31,12 @@ export function subSessionMessageIdentity(message = {}) {
   return stableId ? `id:${stableId}` : "";
 }
 
-export function subSessionMessageIdentityCandidates(message = {}) {
+function subSessionMessageIdentityCandidates(message = {}) {
   const identity = subSessionMessageIdentity(message);
   return identity ? [identity] : [];
 }
 
-export function normalizeSubSessionSnapshotMessage(snapshot = {}) {
+function normalizeSubSessionSnapshotMessage(snapshot = {}) {
   const {
     thinking: _thinking,
     toolCall: _toolCall,
@@ -77,7 +77,7 @@ function pickRealtimeFinalContentFacet(realtime = {}) {
   };
 }
 
-export function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
+function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
   const canonicalMessageId = text(messageId || realtime.messageId || realtime.id);
   const merged = {
     ...realtime,

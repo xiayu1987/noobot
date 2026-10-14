@@ -50,7 +50,7 @@ export function normalizeConfigParamValues(input = {}) {
   return normalizeConfigParamMap(input, { field: "values", omitEmptyValues: false });
 }
 
-export function normalizeConfigParamDescriptions(input = {}) {
+function normalizeConfigParamDescriptions(input = {}) {
   return normalizeConfigParamMap(input, { field: "descriptions", omitEmptyValues: false });
 }
 
@@ -102,11 +102,6 @@ function normalizeExplicitConfigParamKeys(keys = []) {
     }
   }
   return Array.from(new Set(normalizedKeys));
-}
-
-export function assertConfigParamsDocumentKeys(document = {}, keys = []) {
-  void keys;
-  return normalizeConfigParamsDocument(document);
 }
 
 export function synchronizeConfigParamsDocument({ document = {}, keys = [] } = {}) {

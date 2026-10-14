@@ -17,13 +17,7 @@ export const PATH_REF_VIEWS = Object.freeze({
   ATTACHMENT: "attachment",
   TASK_LOCAL: "task-local",
 });
-export const EXECUTION_PATH_VIEWS = Object.freeze({
-  HOST: "host",
-  SANDBOX: "sandbox",
-  TASK_LOCAL: "task-local",
-  SERVICE_LOCAL: "service-local",
-});
-export const DISPLAY_PATH_VIEWS = Object.freeze({
+const DISPLAY_PATH_VIEWS = Object.freeze({
   LOGICAL: "logical",
   RUNTIME: "runtime",
   ATTACHMENT: "attachment",
@@ -48,7 +42,7 @@ export const PLATFORM_PROTECTED_ROOTS = deepFreeze({
   [PLATFORM.WINDOWS]: [],
 });
 
-export const TRUST_ALL_DIRECTORIES = "*";
+const TRUST_ALL_DIRECTORIES = "*";
 
 export const HOST_FILESYSTEM_ROOT = "<host-filesystem>";
 const WORKSPACE_ACCESS_LEVELS = Object.freeze(["deny", "read_only", "read_write"]);

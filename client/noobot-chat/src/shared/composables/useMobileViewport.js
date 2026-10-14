@@ -5,11 +5,11 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-export const EXTRA_NARROW_BREAKPOINT = 480;
-export const NARROW_BREAKPOINT = 640;
+const EXTRA_NARROW_BREAKPOINT = 480;
+const NARROW_BREAKPOINT = 640;
 export const MOBILE_BREAKPOINT = 768;
-export const PANEL_COLLAPSE_BREAKPOINT = 960;
-export const HEADER_COLLAPSE_BREAKPOINT = 1080;
+const PANEL_COLLAPSE_BREAKPOINT = 960;
+const HEADER_COLLAPSE_BREAKPOINT = 1080;
 export const RESPONSIVE_BREAKPOINTS = Object.freeze([
   EXTRA_NARROW_BREAKPOINT,
   NARROW_BREAKPOINT,
@@ -23,10 +23,6 @@ export const DESKTOP_DRAWER_SIZE = "72%";
 
 export function resolveDrawerSize(isMobileViewport) {
   return isMobileViewport ? MOBILE_DRAWER_SIZE : DESKTOP_DRAWER_SIZE;
-}
-
-export function matchesMobileViewport() {
-  return window.matchMedia(MOBILE_MEDIA_QUERY).matches;
 }
 
 export function useMobileViewport() {

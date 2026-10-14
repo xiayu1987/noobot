@@ -196,10 +196,6 @@ export function resolveCompletePlanChecklistText({
   });
 }
 
-export function resolvePlanChecklistText(options = {}) {
-  return resolveCompletePlanChecklistText(options);
-}
-
 export function buildPlanChecklistSystemContent({
   locale = LOCALE.ZH_CN,
   planText = "",

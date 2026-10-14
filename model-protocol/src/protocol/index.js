@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./constants.js";
-export * from "./versions.js";
 export * from "./invocation.js";
 export * from "./request.js";
 export * from "./response.js";

@@ -13,7 +13,7 @@ export function resolveRawAttachmentFile(fileItem) {
   return null;
 }
 
-export async function attachmentFileToBase64(file) {
+async function attachmentFileToBase64(file) {
   if (typeof FileReader === "undefined" && typeof file?.arrayBuffer === "function") {
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64");
@@ -35,7 +35,7 @@ export async function serializeAttachments(files = []) {
     const rawFile = resolveRawAttachmentFile(fileItem);
     if (!rawFile) continue;
     output.push({
-      ...((fileItem.clientAttachmentId || fileItem.draftAttachmentId)
+      ...(fileItem.clientAttachmentId || fileItem.draftAttachmentId
         ? { clientAttachmentId: String(fileItem.clientAttachmentId || fileItem.draftAttachmentId) }
         : {}),
       name: fileItem.name || rawFile.name || "attachment",

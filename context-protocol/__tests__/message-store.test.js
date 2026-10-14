@@ -16,10 +16,7 @@ import {
   resolveMessagesByIds,
   writeMessageBlocks,
 } from "../src/message/store.js";
-import {
-  attachModelContextRuntime,
-  resolveCanonicalContextMessages,
-} from "../src/assembly/model-runtime.js";
+import { attachModelContextRuntime } from "../src/assembly/model-runtime.js";
 
 function attachRuntime(holder, options = {}) {
   attachModelContextRuntime(holder, options);
@@ -40,7 +37,6 @@ test("persisted entities use messageUid as their canonical context identity", ()
 
   assert.equal(getMessageId(message), "sm_injected");
   assert.equal(message.additional_kwargs.noobotMessageId, "sm_injected");
-  assert.equal(resolveCanonicalContextMessages(holder)[0], message);
 });
 
 test("persisted and canonical identities cannot diverge", () => {
@@ -101,14 +97,6 @@ test("canonical store reserves explicit ids before assigning ids to unidentified
 
   assert.equal(getMessageId(holder.messageBlocks.system[0]), "am_2");
   assert.equal(getMessageId(holder.messageBlocks.history[0]), "am_1");
-  assert.equal(
-    resolveCanonicalContextMessages(holder).includes(holder.messageBlocks.history[0]),
-    true,
-  );
-  assert.equal(
-    resolveCanonicalContextMessages(holder).includes(holder.messageBlocks.system[0]),
-    true,
-  );
 });
 
 test("agent message store canonicalizes messages and block views", () => {
@@ -467,14 +455,6 @@ test("summary pruning clears only incremental blocks and rebuilds canonical inde
     ["latest-summary"],
   );
   assert.deepEqual(resolveMessagesByIds(holder, [removedIncrementalId]), []);
-  assert.equal(
-    resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "old-increment"),
-    false,
-  );
-  assert.equal(
-    resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "history-summary"),
-    true,
-  );
 });
 
 test("summary pruning preserves every unmarked incremental message byte-for-byte and in order", () => {

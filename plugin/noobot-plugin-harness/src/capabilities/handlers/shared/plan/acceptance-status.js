@@ -13,7 +13,7 @@ const PLAN_ACCEPTANCE_STATUS = Object.freeze({
   FAIL: "fail",
 });
 
-export const TASK_ACCEPTANCE_STATUS = Object.freeze({
+const TASK_ACCEPTANCE_STATUS = Object.freeze({
   COMPLETED: "completed",
   IN_PROGRESS: "in_progress",
   PENDING: "pending",
@@ -33,7 +33,9 @@ function normalizePlanId(value = "") {
 }
 
 function normalizeAcceptanceStatus(status = "") {
-  const normalized = String(status || "").trim().toLowerCase();
+  const normalized = String(status || "")
+    .trim()
+    .toLowerCase();
   if (normalized === PLAN_ACCEPTANCE_STATUS.PASS) return PLAN_ACCEPTANCE_STATUS.PASS;
   if (normalized === PLAN_ACCEPTANCE_STATUS.WARN) return PLAN_ACCEPTANCE_STATUS.WARN;
   if (normalized === PLAN_ACCEPTANCE_STATUS.FAIL) return PLAN_ACCEPTANCE_STATUS.FAIL;
@@ -48,16 +50,21 @@ export function mapPlanAcceptanceStatusToTaskStatus(status = "") {
   return "";
 }
 
-export function parseAcceptanceItemsFromText(text = "", {
-  normalizePlanId: normalizePlanIdValue = normalizePlanId,
-  normalizeStatus: normalizeStatusValue = normalizeAcceptanceStatus,
-} = {}) {
+export function parseAcceptanceItemsFromText(
+  text = "",
+  {
+    normalizePlanId: normalizePlanIdValue = normalizePlanId,
+    normalizeStatus: normalizeStatusValue = normalizeAcceptanceStatus,
+  } = {},
+) {
   const raw = String(text || "").trim();
   if (!raw) return [];
   const lines = raw.replace(/\r\n?/g, "\n").split("\n");
   const items = [];
   for (const line of lines) {
-    const match = String(line || "").trim().match(MODEL_ACCEPTANCE_LINE_RE);
+    const match = String(line || "")
+      .trim()
+      .match(MODEL_ACCEPTANCE_LINE_RE);
     if (!match) continue;
     const tail = String(match[3] || "").trim();
     const planMatch = tail.match(/(?:^|\s)plan=\[?([0-9]+(?:\.[0-9]+)?)\]?/i);
@@ -66,21 +73,29 @@ export function parseAcceptanceItemsFromText(text = "", {
     const evidencePos = tail.search(/(?:^|\s)evidence=/i);
     let evidence = "";
     if (evidencePos >= 0) {
-      const evidenceStart = tail.slice(0, evidencePos).length + (tail.slice(evidencePos).startsWith("evidence=") ? 9 : 10);
+      const evidenceStart =
+        tail.slice(0, evidencePos).length +
+        (tail.slice(evidencePos).startsWith("evidence=") ? 9 : 10);
       const evidenceTail = tail.slice(evidenceStart).trim();
       const conclusionStart = evidenceTail.search(/\s+\[[^\]]+\]\s*$/);
-      evidence = (conclusionStart >= 0 ? evidenceTail.slice(0, conclusionStart) : evidenceTail).trim();
+      evidence = (
+        conclusionStart >= 0 ? evidenceTail.slice(0, conclusionStart) : evidenceTail
+      ).trim();
     }
     const conclusionMatch = tail.match(/\[([^\]]+)\]\s*$/);
     const planId = normalizePlanIdValue(planMatch?.[1]);
     const status = normalizeStatusValue(statusMatch?.[1]);
     if (!planId || !status) continue;
     items.push({
-      action: String(match[1] || "").trim().toUpperCase(),
+      action: String(match[1] || "")
+        .trim()
+        .toUpperCase(),
       acceptanceId: `A${String(match[2] || "").trim()}`,
       planId,
       status,
-      risk: String(riskMatch?.[1] || "").trim().toLowerCase(),
+      risk: String(riskMatch?.[1] || "")
+        .trim()
+        .toLowerCase(),
       evidence,
       conclusion: String(conclusionMatch?.[1] || "").trim(),
       raw: String(line || "").trim(),
@@ -96,16 +111,17 @@ export function parsePlanAcceptanceItemsFromText(text = "") {
 function flattenPlanDocument(planDocument = {}) {
   const doc = planDocument && typeof planDocument === "object" ? planDocument : {};
   const mainPlans = Array.isArray(doc?.mainPlans) ? doc.mainPlans : [];
-  const subPlansByMainId = doc?.subPlansByMainId && typeof doc.subPlansByMainId === "object"
-    ? doc.subPlansByMainId
-    : {};
+  const subPlansByMainId =
+    doc?.subPlansByMainId && typeof doc.subPlansByMainId === "object" ? doc.subPlansByMainId : {};
   const rows = [];
   for (const main of mainPlans) {
     const mainId = normalizePlanId(main?.id);
     const mainContent = String(main?.content || "").trim();
     if (!mainId || !mainContent) continue;
     rows.push({ planId: mainId, mainId, isMainStep: true, content: mainContent });
-    const subPlans = Array.isArray(subPlansByMainId[String(mainId)]) ? subPlansByMainId[String(mainId)] : [];
+    const subPlans = Array.isArray(subPlansByMainId[String(mainId)])
+      ? subPlansByMainId[String(mainId)]
+      : [];
     for (const sub of subPlans) {
       const subIndex = Number(sub?.subIndex);
       const subId = normalizePlanId(sub?.id || `${mainId}.${subIndex}`);
@@ -119,23 +135,30 @@ function flattenPlanDocument(planDocument = {}) {
 
 function buildPlanContentMapFromText(planText = "") {
   return new Map(
-    flattenPlanDocument(parsePlanDocumentFromText(planText))
-      .map((item = {}) => [item.planId, item.content]),
+    flattenPlanDocument(parsePlanDocumentFromText(planText)).map((item = {}) => [
+      item.planId,
+      item.content,
+    ]),
   );
 }
 
 function ensureStatusMap(bucket = {}) {
   if (!bucket || typeof bucket !== "object") return {};
-  if (!bucket.planAcceptanceStatusByPlanId || typeof bucket.planAcceptanceStatusByPlanId !== "object" || Array.isArray(bucket.planAcceptanceStatusByPlanId)) {
+  if (
+    !bucket.planAcceptanceStatusByPlanId ||
+    typeof bucket.planAcceptanceStatusByPlanId !== "object" ||
+    Array.isArray(bucket.planAcceptanceStatusByPlanId)
+  ) {
     bucket.planAcceptanceStatusByPlanId = {};
   }
   return bucket.planAcceptanceStatusByPlanId;
 }
 
 export function getPlanAcceptanceStatusMap(bucket = {}) {
-  const source = bucket?.planAcceptanceStatusByPlanId && typeof bucket.planAcceptanceStatusByPlanId === "object"
-    ? bucket.planAcceptanceStatusByPlanId
-    : {};
+  const source =
+    bucket?.planAcceptanceStatusByPlanId && typeof bucket.planAcceptanceStatusByPlanId === "object"
+      ? bucket.planAcceptanceStatusByPlanId
+      : {};
   return source;
 }
 
@@ -154,7 +177,8 @@ export function applyPhaseAcceptanceReportToPlanStatus(bucket = {}, report = nul
       ...(map[planId] && typeof map[planId] === "object" ? map[planId] : {}),
       planId,
       status: item.status,
-      taskStatus: mapPlanAcceptanceStatusToTaskStatus(item.status) || TASK_ACCEPTANCE_STATUS.PENDING,
+      taskStatus:
+        mapPlanAcceptanceStatusToTaskStatus(item.status) || TASK_ACCEPTANCE_STATUS.PENDING,
       risk: item.risk || "",
       evidence: item.evidence || "",
       conclusion: item.conclusion || "",
@@ -170,10 +194,12 @@ export function applyPhaseAcceptanceReportToPlanStatus(bucket = {}, report = nul
   return { applied: count > 0, count };
 }
 
-export function resetPlanAcceptanceStatusForPlanChange(bucket = {}, previousPlanText = "", nextPlanText = "", {
-  stage = "revision",
-  reason = "plan_changed",
-} = {}) {
+export function resetPlanAcceptanceStatusForPlanChange(
+  bucket = {},
+  previousPlanText = "",
+  nextPlanText = "",
+  { stage = "revision", reason = "plan_changed" } = {},
+) {
   if (!bucket || typeof bucket !== "object") return { resetCount: 0, removedCount: 0 };
   const map = ensureStatusMap(bucket);
   const keys = Object.keys(map);
@@ -211,11 +237,13 @@ export function resetPlanAcceptanceStatusForPlanChange(bucket = {}, previousPlan
   return { resetCount, removedCount };
 }
 
-export function resolvePlanAcceptanceForPlanId(bucket = {}, planId = "") {
+function resolvePlanAcceptanceForPlanId(bucket = {}, planId = "") {
   const normalizedPlanId = normalizePlanId(planId);
   if (!normalizedPlanId) return null;
   const map = getPlanAcceptanceStatusMap(bucket);
-  return map[normalizedPlanId] && typeof map[normalizedPlanId] === "object" ? map[normalizedPlanId] : null;
+  return map[normalizedPlanId] && typeof map[normalizedPlanId] === "object"
+    ? map[normalizedPlanId]
+    : null;
 }
 
 export function resolvePlanAcceptanceForChecklistItem(bucket = {}, item = {}) {

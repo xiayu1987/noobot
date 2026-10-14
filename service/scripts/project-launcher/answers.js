@@ -16,7 +16,7 @@ import {
 import { normalizeSetupLocale, resolveConfigLanguage, t } from "./i18n.js";
 import { listConversationModelOptions, resolveLibraryModelKey } from "./provider.js";
 
-export function validateCollectedAnswers(raw = {}) {
+function validateCollectedAnswers(raw = {}) {
   const setupLocale = normalizeSetupLocale(raw.setupLocale, "zh");
   const workspaceRoot = String(raw.workspaceRoot || "").trim();
   const workspaceTemplatePath = String(raw.workspaceTemplatePath || "").trim();
@@ -65,14 +65,14 @@ export function validateCollectedAnswers(raw = {}) {
   };
 }
 
-export function resolveDefaultSetupLocale(cliOptions = {}) {
+function resolveDefaultSetupLocale(cliOptions = {}) {
   return normalizeSetupLocale(
     cliOptions.lang || process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG,
     "zh",
   );
 }
 
-export function collectAnswersFromEnv(cliOptions = {}) {
+function collectAnswersFromEnv(cliOptions = {}) {
   const setupLocale = resolveDefaultSetupLocale(cliOptions);
   const raw = {
     setupLocale,
@@ -90,7 +90,7 @@ export function collectAnswersFromEnv(cliOptions = {}) {
   return validateCollectedAnswers(raw);
 }
 
-export async function askInteractiveQuestions(cliOptions = {}) {
+async function askInteractiveQuestions(cliOptions = {}) {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,

@@ -11,6 +11,7 @@ import {
   HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
   HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
   HARNESS_INJECTION_MESSAGE_ROLE,
+  HARNESS_PROMPT_INJECTION_ID_FIELD,
 } from "../handlers/shared/constants.js";
 import {
   resolveModelMessageBlocks,
@@ -72,6 +73,7 @@ function buildTakeoverMessage(directive = {}) {
       content: messageContent,
       [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
       [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
+      ...(id ? { [HARNESS_PROMPT_INJECTION_ID_FIELD]: id } : {}),
     },
   };
 }
