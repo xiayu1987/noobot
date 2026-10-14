@@ -16,4 +16,4 @@ class CanPersistenceBase {
   }
 }
 
-export default  CanPersistenceBase;
+export default CanPersistenceBase;

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class ISplitNode {
-}
+class ISplitNode {}
 
-export default  ISplitNode;
+export default ISplitNode;

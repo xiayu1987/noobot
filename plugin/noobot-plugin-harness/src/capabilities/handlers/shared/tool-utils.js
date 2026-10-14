@@ -8,13 +8,13 @@ import { BLOCKED_AGENT_TOOL_NAMES } from "./constants.js";
 export function resolveSceneToolNames(ctx = {}) {
   const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return [];
-  return registry
-    .map((tool) => String(tool?.name || "").trim())
-    .filter(Boolean);
+  return registry.map((tool) => String(tool?.name || "").trim()).filter(Boolean);
 }
 
 export function shouldProcessPrimaryToolHooks(ctx = {}) {
-  const scope = String(ctx?.executionScope || "").trim().toLowerCase();
+  const scope = String(ctx?.executionScope || "")
+    .trim()
+    .toLowerCase();
   if (!scope) return true;
   return scope === "primary";
 }
@@ -33,7 +33,9 @@ export function disableBlockedToolsInRegistry(ctx = {}) {
 
 export function disableBlockedCalls(calls = []) {
   if (!Array.isArray(calls)) return false;
-  const next = calls.filter((call) => !BLOCKED_AGENT_TOOL_NAMES.has(String(call?.name || "").trim()));
+  const next = calls.filter(
+    (call) => !BLOCKED_AGENT_TOOL_NAMES.has(String(call?.name || "").trim()),
+  );
   if (next.length === calls.length) return false;
   calls.splice(0, calls.length, ...next);
   return true;

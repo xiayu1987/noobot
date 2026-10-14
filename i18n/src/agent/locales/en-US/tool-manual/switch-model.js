@@ -9,8 +9,7 @@ export const SWITCH_MODEL_MANUAL = {
     summary: "Switch the model used by the current session.",
     usage: ["switch_model({ modelName })"],
     params: {
-      modelName:
-        "Target model name. Must be declared in configuration with its provider enabled.",
+      modelName: "Target model name. Must be declared in configuration with its provider enabled.",
     },
     notes: [
       "Use it when the nature of the task changes, for example moving from long-form reasoning to fast lightweight replies.",

@@ -37,15 +37,11 @@ function resolveHandlerFromModule(mod, handlerName = "") {
   const name = normalizeName(handlerName);
   if (name && typeof mod?.[name] === "function") return mod[name];
   if (typeof mod?.default === "function") return mod.default;
-  if (name && typeof mod?.default?.[name] === "function")
-    return mod.default[name];
+  if (name && typeof mod?.default?.[name] === "function") return mod.default[name];
   return null;
 }
 
-async function tryLoadUserServiceModule({
-  basePath = "",
-  handlerModuleName = "",
-}) {
+async function tryLoadUserServiceModule({ basePath = "", handlerModuleName = "" }) {
   const handlerPath = resolveHandlerPath({ basePath, handlerModuleName });
   if (!handlerPath) return null;
   try {
@@ -56,9 +52,7 @@ async function tryLoadUserServiceModule({
   const mtimeMs = Number((await stat(handlerPath)).mtimeMs || 0);
   const cached = moduleCache.get(handlerPath);
   if (cached && cached.mtimeMs === mtimeMs) return cached.mod;
-  const importedModule = await import(
-    `${pathToFileURL(handlerPath).href}?t=${mtimeMs}`,
-  );
+  const importedModule = await import(`${pathToFileURL(handlerPath).href}?t=${mtimeMs}`);
   moduleCache.set(handlerPath, { mtimeMs, mod: importedModule });
   return importedModule;
 }

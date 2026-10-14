@@ -9,4 +9,3 @@ export function resolveToolHookMeta(configuredMeta = null, fallbackMeta = {}) {
   if (runtimeMeta?.harness && typeof runtimeMeta.harness === "object") return runtimeMeta;
   return fallbackMeta && typeof fallbackMeta === "object" ? fallbackMeta : {};
 }
-

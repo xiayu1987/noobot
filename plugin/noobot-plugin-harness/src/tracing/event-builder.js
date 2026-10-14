@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  buildContextSnapshot,
-  buildEvent,
-  buildPromptRecord,
-} from "../data/record-builders.js";
+import { buildContextSnapshot, buildEvent, buildPromptRecord } from "../data/record-builders.js";
 
 export function buildTraceEvent({ point, ctx, options, pluginName, pluginVersion }) {
   return buildEvent({ point, ctx, options, pluginName, pluginVersion });

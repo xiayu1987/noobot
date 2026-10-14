@@ -10,15 +10,14 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN } from "../shared/constants.js";
 import { ensureHarnessBucket } from "../shared/bucket-utils.js";
 import { translateI18nText } from "../shared/i18n.js";
-import {
-  resolveWorkflowMode,
-  runWorkflowLifecycle,
-} from "../shared/workflow/pattern.js";
+import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 const REVIEW_DECISION = WORKFLOW_PARAMS.review.decisions;
 const REVIEW_HOOKS = new Set(
-  Array.isArray(WORKFLOW_PARAMS.review?.hooks) ? WORKFLOW_PARAMS.review.hooks : [HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, HOOK_POINT.AGENT.ON_ERROR, HOOK_POINT.AGENT.ON_ABORT],
+  Array.isArray(WORKFLOW_PARAMS.review?.hooks)
+    ? WORKFLOW_PARAMS.review.hooks
+    : [HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, HOOK_POINT.AGENT.ON_ERROR, HOOK_POINT.AGENT.ON_ABORT],
 );
 const REVIEW_REASON_LABEL_KEY = Object.freeze({
   [REVIEW_DECISION.reason.hookReview]: "reviewReasonHookReview",
@@ -39,10 +38,10 @@ export function createReviewHandler() {
     const mode = resolveWorkflowMode(meta);
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.REVIEW });
     const locale = String(ensureHarnessBucket(ctx)?.state?.locale || "zh-CN").trim() || "zh-CN";
-    const reviewOptions = meta?.harness?.review && typeof meta.harness.review === "object"
-      ? meta.harness.review
-      : {};
-    const attachToFinalOutput = hook === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && reviewOptions.attachToFinalOutput === true;
+    const reviewOptions =
+      meta?.harness?.review && typeof meta.harness.review === "object" ? meta.harness.review : {};
+    const attachToFinalOutput =
+      hook === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && reviewOptions.attachToFinalOutput === true;
     const lifecycle = await runWorkflowLifecycle(ctx, {
       domain: CAPABILITY_DOMAIN.REVIEW,
       point: hook,

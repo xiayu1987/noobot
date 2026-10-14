@@ -27,10 +27,7 @@ function trace({ flow = "agent.main", roles = { system: 1, user: 1 }, evidence }
 
 describe("model system message E2E audit", () => {
   it("audits main and non-main provider invocations from the same authority", () => {
-    const audit = auditModelSystemMessages([
-      trace(),
-      trace({ flow: "plugin.analysis" }),
-    ]);
+    const audit = auditModelSystemMessages([trace(), trace({ flow: "plugin.analysis" })]);
 
     expect(audit.status).toBe("passed");
     expect(audit.mainInvocationCount).toBe(1);
@@ -41,9 +38,10 @@ describe("model system message E2E audit", () => {
 
   it("rejects missing and invalid system messages without inferring message order", () => {
     const audit = auditModelSystemMessages([
-      trace({ roles: { user: 1 }, evidence: [
-        { index: 0, role: "user", contentLength: 4, contentHash: "b".repeat(16) },
-      ] }),
+      trace({
+        roles: { user: 1 },
+        evidence: [{ index: 0, role: "user", contentLength: 4, contentHash: "b".repeat(16) }],
+      }),
       trace({
         flow: "plugin.analysis",
         roles: { system: 1, user: 1 },
@@ -55,10 +53,12 @@ describe("model system message E2E audit", () => {
     ]);
 
     expect(audit.status).toBe("failed");
-    expect(audit.violations.map((item) => item.type)).toEqual(expect.arrayContaining([
-      "system_message_missing",
-      "system_message_empty",
-      "system_message_hash_invalid",
-    ]));
+    expect(audit.violations.map((item) => item.type)).toEqual(
+      expect.arrayContaining([
+        "system_message_missing",
+        "system_message_empty",
+        "system_message_hash_invalid",
+      ]),
+    );
   });
 });

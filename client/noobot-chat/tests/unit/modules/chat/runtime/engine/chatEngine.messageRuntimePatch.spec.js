@@ -6,13 +6,24 @@
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
 import { projectTurnRuntimeToMessages } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
-import { applyTurnRuntimeEvent, createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import {
+  applyTurnRuntimeEvent,
+  createTurnRuntimeRegistryState,
+} from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+} from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
 describe("chatEngine message runtime patch isolation", () => {
   it("patches the event's background session and matching turn only", () => {
     const aMessage = { role: "assistant", pending: true, turnScopeId: "ta", dialogProcessId: "da" };
-    const otherTurn = { role: "assistant", pending: true, turnScopeId: "old", dialogProcessId: "old-dialog" };
+    const otherTurn = {
+      role: "assistant",
+      pending: true,
+      turnScopeId: "old",
+      dialogProcessId: "old-dialog",
+    };
     const bMessage = { role: "assistant", pending: true, turnScopeId: "tb", dialogProcessId: "db" };
     const sessions = ref([
       { id: "a", messages: [aMessage, otherTurn] },

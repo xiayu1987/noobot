@@ -93,16 +93,19 @@ export function createWorkflowStore({
     } else if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
       result = upsertWorkflowNodeStateEvent(data);
     } else if (eventType === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
-      result = reduceSubSessionSnapshot({
-        ...data,
-        sessionId: canonical.payload.nodeSessionId,
-        parentSessionId: canonical.identity.sessionId,
-      }, {
-        source,
-        eventId: canonical.identity.eventId,
-        sequenceDomain: canonical.ordering.domain,
-        authoritativeSequence: canonical.ordering.sequence,
-      });
+      result = reduceSubSessionSnapshot(
+        {
+          ...data,
+          sessionId: canonical.payload.nodeSessionId,
+          parentSessionId: canonical.identity.sessionId,
+        },
+        {
+          source,
+          eventId: canonical.identity.eventId,
+          sequenceDomain: canonical.ordering.domain,
+          authoritativeSequence: canonical.ordering.sequence,
+        },
+      );
     } else {
       result = { applied: false, reason: "unsupported_event" };
     }

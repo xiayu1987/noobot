@@ -95,7 +95,7 @@ test("acceptance report maps latest model phase acceptance to checklist status a
         {
           acceptedAt: "2026-05-30T12:00:00.000Z",
           content: [
-            "ADD A1 plan=1 status=pass risk=low evidence=用户打招呼\"你好\"，意图明确 [确认用户意图与需求：通过]",
+            'ADD A1 plan=1 status=pass risk=low evidence=用户打招呼"你好"，意图明确 [确认用户意图与需求：通过]',
             "ADD A2 plan=2 status=pass risk=low evidence=已给出回应 [提供相应的帮助与回应：通过]",
           ].join("\n"),
         },
@@ -117,11 +117,7 @@ test("acceptance report maps latest model phase acceptance to checklist status a
 test("acceptance report inherits main-plan model status to sub-plans when sub-plan status missing", () => {
   const report = buildAcceptanceReport({
     bucket: {
-      planText: [
-        "1. 主计划一",
-        "1.1 子计划一",
-        "1.2 子计划二",
-      ].join("\n"),
+      planText: ["1. 主计划一", "1.1 子计划一", "1.2 子计划二"].join("\n"),
       phaseAcceptanceReports: [
         {
           acceptedAt: "2026-05-31T00:00:00.000Z",
@@ -141,10 +137,7 @@ test("acceptance report inherits main-plan model status to sub-plans when sub-pl
 test("acceptance report accepts bracketed plan id in model acceptance text", () => {
   const report = buildAcceptanceReport({
     bucket: {
-      planText: [
-        "1. 主计划一",
-        "1.1 子计划一",
-      ].join("\n"),
+      planText: ["1. 主计划一", "1.1 子计划一"].join("\n"),
       phaseAcceptanceReports: [
         {
           acceptedAt: "2026-05-31T00:00:00.000Z",
@@ -163,11 +156,7 @@ test("acceptance report accepts bracketed plan id in model acceptance text", () 
 test("semantic acceptance overrides phase checklist status and updates summary", () => {
   const report = buildAcceptanceReport({
     bucket: {
-      planText: [
-        "1. 主计划一",
-        "1.1 子计划一",
-        "2. 主计划二",
-      ].join("\n"),
+      planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二"].join("\n"),
       phaseAcceptanceReports: [
         {
           acceptedAt: "2026-05-31T00:00:00.000Z",

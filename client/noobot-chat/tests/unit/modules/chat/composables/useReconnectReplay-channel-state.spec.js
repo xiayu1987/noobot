@@ -22,7 +22,11 @@ describe("useReconnectReplay channel_state contract", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      createCanonicalAssistant({ sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1" }),
+      createCanonicalAssistant({
+        sessionId: "s-1",
+        dialogProcessId: "dp-1",
+        turnScopeId: "turn-1",
+      }),
     ];
     const before = JSON.parse(JSON.stringify(refs.activeSession.value.messages));
 
@@ -39,7 +43,11 @@ describe("useReconnectReplay channel_state contract", () => {
       const { api, refs, mocks } = createFixture();
       refs.activeSession.value.messages = [
         { role: RoleEnum.USER, content: "q" },
-        createCanonicalAssistant({ sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1" }),
+        createCanonicalAssistant({
+          sessionId: "s-1",
+          dialogProcessId: "dp-1",
+          turnScopeId: "turn-1",
+        }),
       ];
       const before = JSON.parse(JSON.stringify(refs.activeSession.value.messages));
 
@@ -73,7 +81,11 @@ describe("useReconnectReplay channel_state contract", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      createCanonicalAssistant({ sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1" }),
+      createCanonicalAssistant({
+        sessionId: "s-1",
+        dialogProcessId: "dp-1",
+        turnScopeId: "turn-1",
+      }),
     ];
 
     await applyTransportState(api, {
@@ -89,7 +101,12 @@ describe("useReconnectReplay channel_state contract", () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "new", turnScopeId: "turn-new" },
-      createCanonicalAssistant({ sessionId: "s-1", dialogProcessId: "dp-new", turnScopeId: "turn-new", pending: true }),
+      createCanonicalAssistant({
+        sessionId: "s-1",
+        dialogProcessId: "dp-new",
+        turnScopeId: "turn-new",
+        pending: true,
+      }),
     ];
 
     const result = await applyTransportState(api, {

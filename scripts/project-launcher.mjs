@@ -21,7 +21,9 @@ const result = spawnSync(process.execPath, [launcherPath, ...forwardedArgs], {
 });
 
 if (result.error) {
-  console.error(`[project-launcher-wrapper] failed: ${String(result.error?.message || result.error)}`);
+  console.error(
+    `[project-launcher-wrapper] failed: ${String(result.error?.message || result.error)}`,
+  );
   process.exit(1);
 }
 

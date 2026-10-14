@@ -58,4 +58,3 @@ test("workflow extension runtime supports plugin-side mounter and extension list
     ["customB", true],
   ]);
 });
-

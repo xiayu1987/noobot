@@ -30,23 +30,27 @@ export function useChatMessageNavigatorPanel({
   const mobileChatNavigatorVisible = ref(false);
   const currentMessageAnchorId = ref("");
 
-  const presentationMessages = computed(() => selectTurnPresentations({
-    activeSession: activeSession?.value || {},
-    workflowRegistry: workflowNodeStateRegistry?.value || workflowNodeStateRegistry || {},
-    turnRuntimeRegistry: turnRuntimeRegistry?.value || turnRuntimeRegistry || {},
-  }));
-  const chatMessageNavItems = computed(() => buildChatMessageNavItems({
-    messages: presentationMessages.value,
-    shouldRenderMessageInChat,
-    getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId,
-    translateSession: () => translate?.("common.session") || "session",
-    translateRole: (role) => {
-      if (role === "user") return "ME";
-      if (role === "assistant") return translate?.("message.ai") || "AI";
-      if (role === "tool") return translate?.("message.tool") || "Tool";
-      return "";
-    },
-  }));
+  const presentationMessages = computed(() =>
+    selectTurnPresentations({
+      activeSession: activeSession?.value || {},
+      workflowRegistry: workflowNodeStateRegistry?.value || workflowNodeStateRegistry || {},
+      turnRuntimeRegistry: turnRuntimeRegistry?.value || turnRuntimeRegistry || {},
+    }),
+  );
+  const chatMessageNavItems = computed(() =>
+    buildChatMessageNavItems({
+      messages: presentationMessages.value,
+      shouldRenderMessageInChat,
+      getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId,
+      translateSession: () => translate?.("common.session") || "session",
+      translateRole: (role) => {
+        if (role === "user") return "ME";
+        if (role === "assistant") return translate?.("message.ai") || "AI";
+        if (role === "tool") return translate?.("message.tool") || "Tool";
+        return "";
+      },
+    }),
+  );
 
   function handleSelectChatMessageNavItem(item = {}) {
     selectChatMessageNavigatorItem({
@@ -87,10 +91,7 @@ export function useChatMessageNavigatorPanel({
     });
   }
 
-  const {
-    bindChatMessageScrollSync,
-    unbindChatMessageScrollSync,
-  } = createChatMessageScrollSync({
+  const { bindChatMessageScrollSync, unbindChatMessageScrollSync } = createChatMessageScrollSync({
     currentMessageAnchorId,
     messageListPanelRef,
   });

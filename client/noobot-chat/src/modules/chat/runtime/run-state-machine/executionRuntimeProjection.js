@@ -170,7 +170,12 @@ export function applyExecutionTree(registry, payload = {}) {
     ) {
       continue;
     }
-    if (!Number.isInteger(revision) || revision < 1 || !Number.isInteger(sequence) || sequence < 1) {
+    if (
+      !Number.isInteger(revision) ||
+      revision < 1 ||
+      !Number.isInteger(sequence) ||
+      sequence < 1
+    ) {
       continue;
     }
     if (

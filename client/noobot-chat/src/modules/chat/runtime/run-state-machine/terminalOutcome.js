@@ -11,7 +11,9 @@ import {
 import { normalizeState } from "./normalize.js";
 
 export function normalizeTerminalOutcome(outcome = "") {
-  const normalizedOutcome = String(outcome || "").trim().toLowerCase();
+  const normalizedOutcome = String(outcome || "")
+    .trim()
+    .toLowerCase();
   return MESSAGE_TERMINAL_OUTCOME_PRECEDENCE[normalizedOutcome] ? normalizedOutcome : "";
 }
 

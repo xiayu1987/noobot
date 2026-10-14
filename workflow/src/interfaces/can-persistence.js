@@ -9,4 +9,4 @@ class ICanPersistence {
   setDataContext(dataContext) {}
 }
 
-export default  ICanPersistence;
+export default ICanPersistence;

@@ -8,11 +8,7 @@ import { isSuperAdminRole } from "#agent/utils";
 
 export function registerIdeRoutes(
   app,
-  {
-    openVSCodeService,
-    readWorkspaceUsers,
-    translateText,
-  } = {},
+  { openVSCodeService, readWorkspaceUsers, translateText } = {},
 ) {
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
@@ -22,10 +18,7 @@ export function registerIdeRoutes(
       const userId = String(req.params?.userId || req.auth?.userId || "").trim();
       const authUserId = String(req.auth?.userId || "").trim();
       const isSuperAdmin = isSuperAdminRole(req.auth?.role);
-      if (
-        !isSuperAdmin &&
-        authUserId !== userId
-      ) {
+      if (!isSuperAdmin && authUserId !== userId) {
         res.status(403).json({ ok: false, error: "forbidden user scope" });
         return;
       }

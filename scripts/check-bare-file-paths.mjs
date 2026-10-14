@@ -11,11 +11,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtimeSourceRoots = ["client", "agent/src"];
 const ignoredDirectories = new Set(["node_modules", "dist", "build", "coverage", ".git"]);
 const sourceExtension = /\.(?:[cm]?js|jsx|ts|tsx)$/;
-const resolverFiles = new Set([
-  "client/shared/path-resolver.js",
-]);
+const resolverFiles = new Set(["client/shared/path-resolver.js"]);
 const violations = [];
-export const directPathModulePattern = /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](?:node:)?path(?:\/(?:posix|win32))?["']/g;
+export const directPathModulePattern =
+  /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](?:node:)?path(?:\/(?:posix|win32))?["']/g;
 
 function lineAt(text, index) {
   return text.slice(0, index).split("\n").length;
@@ -47,4 +46,6 @@ if (violations.length) {
   console.error(`File path APIs must use the shared path resolver:\n${violations.join("\n")}`);
   process.exit(1);
 }
-console.log(`Bare file path guard passed (${runtimeSourceRoots.join(", ")} runtime sources; resolver-only exceptions).`);
+console.log(
+  `Bare file path guard passed (${runtimeSourceRoots.join(", ")} runtime sources; resolver-only exceptions).`,
+);

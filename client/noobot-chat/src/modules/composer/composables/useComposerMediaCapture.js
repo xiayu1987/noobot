@@ -77,10 +77,15 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
         clearMicTimers();
         const chunks = [...micChunksRef.value];
         micChunksRef.value = [];
-        if (micCancelBySendingRef.value || micSlideCancelReady.value || captureActionsDisabled.value) {
+        if (
+          micCancelBySendingRef.value ||
+          micSlideCancelReady.value ||
+          captureActionsDisabled.value
+        ) {
           micCancelBySendingRef.value = false;
           micSlideCancelReady.value = false;
-          if (!captureActionsDisabled.value) ElMessage.info(translate("composer.recordingCancelled"));
+          if (!captureActionsDisabled.value)
+            ElMessage.info(translate("composer.recordingCancelled"));
         } else if (chunks.length) {
           const recordingMimeType = mediaRecorder.mimeType || "audio/webm";
           const audioBlob = new Blob(chunks, { type: recordingMimeType });
@@ -108,7 +113,9 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
       }, 1000);
       micAutoStopTimerRef.value = setTimeout(() => {
         if (mediaRecorder.state !== "inactive") {
-          ElMessage.info(translate("composer.recordingMaxReached", { max: MIC_MAX_DURATION_SECONDS }));
+          ElMessage.info(
+            translate("composer.recordingMaxReached", { max: MIC_MAX_DURATION_SECONDS }),
+          );
           mediaRecorder.stop();
         }
       }, MIC_MAX_DURATION_SECONDS * 1000);
@@ -186,7 +193,9 @@ export function useComposerMediaCapture(props, emitAppendUploads, translate) {
 
   async function startCameraPreview() {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
       cameraStreamRef.value = mediaStream;
       cameraDialogVisible.value = true;
       await Promise.resolve();

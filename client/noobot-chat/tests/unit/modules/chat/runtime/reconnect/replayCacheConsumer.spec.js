@@ -17,17 +17,17 @@ import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 function authoritative(eventType, sequence, extra = {}) {
   const messageId = extra.messageId || "message-1";
   return canonicalMessageEvent({
-        eventId: extra.eventId || `${messageId}-event-${sequence}`,
-        eventType,
-        sessionId: "s-1",
-        messageId,
-        presentationMessageId: extra.presentationMessageId || messageId,
-        dialogProcessId: extra.dialogProcessId || "dp-1",
-        turnScopeId: extra.turnScopeId || "turn-1",
-        sequence,
-        occurredAt: `2026-07-22T05:00:${String(sequence).padStart(2, "0")}.000Z`,
-        ...extra,
-      });
+    eventId: extra.eventId || `${messageId}-event-${sequence}`,
+    eventType,
+    sessionId: "s-1",
+    messageId,
+    presentationMessageId: extra.presentationMessageId || messageId,
+    dialogProcessId: extra.dialogProcessId || "dp-1",
+    turnScopeId: extra.turnScopeId || "turn-1",
+    sequence,
+    occurredAt: `2026-07-22T05:00:${String(sequence).padStart(2, "0")}.000Z`,
+    ...extra,
+  });
 }
 
 function createActiveReplayFixture(overrides = {}) {
@@ -62,13 +62,18 @@ function createActiveReplayFixture(overrides = {}) {
     scrollBottom: vi.fn(),
     ...overrides,
   };
-  fixture.findCanonicalMessageById = overrides.findCanonicalMessageById || ((sessionId, messageId) => {
-    const targetSessionId = fixture.activeSession.value.sessionId || fixture.activeSession.value.id;
-    if (sessionId !== targetSessionId) return null;
-    return fixture.activeSession.value.messages.find(
-      (message) => (message.messageId || message.id) === messageId,
-    ) || null;
-  });
+  fixture.findCanonicalMessageById =
+    overrides.findCanonicalMessageById ||
+    ((sessionId, messageId) => {
+      const targetSessionId =
+        fixture.activeSession.value.sessionId || fixture.activeSession.value.id;
+      if (sessionId !== targetSessionId) return null;
+      return (
+        fixture.activeSession.value.messages.find(
+          (message) => (message.messageId || message.id) === messageId,
+        ) || null
+      );
+    });
   return fixture;
 }
 
@@ -93,18 +98,20 @@ function createFakeProcessStore() {
 
 describe("replayCacheConsumer", () => {
   it("keeps cached workflow-node replay out of the root message consumer", async () => {
-    const childMessages = [canonicalMessageEvent({
-      eventId: "workflow-child-1",
-      eventType: "thinking",
-      sessionId: "child-session-1",
-      turnScopeId: "workflow-node:node-1",
-      messageId: "child-message-1",
-      presentationMessageId: "child-message-1",
-      workflowRunId: "workflow-run-1",
-      nodeExecutionId: "node-1",
-      parentSessionId: "s-1",
-      text: "working",
-    })];
+    const childMessages = [
+      canonicalMessageEvent({
+        eventId: "workflow-child-1",
+        eventType: "thinking",
+        sessionId: "child-session-1",
+        turnScopeId: "workflow-node:node-1",
+        messageId: "child-message-1",
+        presentationMessageId: "child-message-1",
+        workflowRunId: "workflow-run-1",
+        nodeExecutionId: "node-1",
+        parentSessionId: "s-1",
+        text: "working",
+      }),
+    ];
     const replayCache = {
       "s-1": { "__turn__s-1::workflow-node:node-1": childMessages },
     };
@@ -128,16 +135,26 @@ describe("replayCacheConsumer", () => {
 
   it("consumes cached replay groups for a session and removes the session cache", async () => {
     const turnOne = authoritative("llm_delta", 1, {
-      eventId: "turn-1-event-1", messageId: "turn-1-message", text: "a",
-      dialogProcessId: "dp-1", turnScopeId: "turn-1",
+      eventId: "turn-1-event-1",
+      messageId: "turn-1-message",
+      text: "a",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
     });
     const turnTwo = authoritative("llm_delta", 1, {
-      eventId: "turn-2-event-1", messageId: "turn-2-message", text: "b",
-      dialogProcessId: "dp-2", turnScopeId: "turn-2",
+      eventId: "turn-2-event-1",
+      messageId: "turn-2-message",
+      text: "b",
+      dialogProcessId: "dp-2",
+      turnScopeId: "turn-2",
     });
     const otherSession = authoritative("llm_delta", 1, {
-      eventId: "turn-3-event-1", sessionId: "s-2", messageId: "turn-3-message",
-      text: "c", dialogProcessId: "dp-3", turnScopeId: "turn-3",
+      eventId: "turn-3-event-1",
+      sessionId: "s-2",
+      messageId: "turn-3-message",
+      text: "c",
+      dialogProcessId: "dp-3",
+      turnScopeId: "turn-3",
     });
     const replayCache = {
       "s-1": {
@@ -157,18 +174,12 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(2);
-    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(
-      1,
-      [turnOne],
-      "dp-1",
-      { turnScopeId: "turn-1" },
-    );
-    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(
-      2,
-      [turnTwo],
-      "dp-2",
-      { turnScopeId: "turn-2" },
-    );
+    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(1, [turnOne], "dp-1", {
+      turnScopeId: "turn-1",
+    });
+    expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(2, [turnTwo], "dp-2", {
+      turnScopeId: "turn-2",
+    });
     expect(replayCache).toEqual({
       "s-2": {
         [createTurnKey({ sessionId: "s-2", turnScopeId: "turn-3" })]: [otherSession],
@@ -183,9 +194,7 @@ describe("replayCacheConsumer", () => {
       ...fixture,
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
-      messages: [
-        authoritative("llm_delta", 1, { text: "final" }),
-      ],
+      messages: [authoritative("llm_delta", 1, { text: "final" })],
     });
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
   });
@@ -225,9 +234,7 @@ describe("replayCacheConsumer", () => {
       ...fixture,
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
-      messages: [
-        authoritative("thinking", 1, { text: "next step" }),
-      ],
+      messages: [authoritative("thinking", 1, { text: "next step" })],
     });
 
     const targetMessage = fixture.activeSession.value.messages[0];
@@ -253,7 +260,12 @@ describe("replayCacheConsumer", () => {
             dialogProcessId: "dp-1",
             executionLogs: [
               { event: "tool_call", text: "run tool", dialogProcessId: "dp-1" },
-              { event: "tool_result", text: "tool failed", status: "error", dialogProcessId: "dp-1" },
+              {
+                event: "tool_result",
+                text: "tool failed",
+                status: "error",
+                dialogProcessId: "dp-1",
+              },
             ],
           },
         },
@@ -330,12 +342,14 @@ describe("replayCacheConsumer", () => {
       ...fixture,
       dialogProcessId: "dp-shared",
       turnScopeId: "turn-continuation",
-      messages: [authoritative("thinking", 1, {
-        messageId: "message-continuation",
-        text: "continuation tool",
-        dialogProcessId: "dp-shared",
-        turnScopeId: "turn-continuation",
-      })],
+      messages: [
+        authoritative("thinking", 1, {
+          messageId: "message-continuation",
+          text: "continuation tool",
+          dialogProcessId: "dp-shared",
+          turnScopeId: "turn-continuation",
+        }),
+      ],
     });
 
     expect(stoppedAssistant.realtimeLogs).toEqual([]);
@@ -343,6 +357,8 @@ describe("replayCacheConsumer", () => {
     expect(selectActivityTimelineLogs(stoppedAssistant)).toEqual([]);
     expect(continuationAssistant.turnScopeId).toBe("turn-continuation");
     expect(selectActivityTimelineLogs(continuationAssistant)).toHaveLength(1);
-    expect(selectActivityTimelineLogs(continuationAssistant)[0].text).toContain("continuation tool");
+    expect(selectActivityTimelineLogs(continuationAssistant)[0].text).toContain(
+      "continuation tool",
+    );
   });
 });

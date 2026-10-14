@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { buildViewMessage, foldConversationMessages } from "../../../../../src/modules/chat/model/messageModel.js";
+import {
+  buildViewMessage,
+  foldConversationMessages,
+} from "../../../../../src/modules/chat/model/messageModel.js";
 
 describe("messageModel child execution projections", () => {
   it("keeps summary thinking entry fields when merging assistant messages", () => {
@@ -150,5 +153,4 @@ describe("messageModel child execution projections", () => {
       "completing",
     ]);
   });
-
 });

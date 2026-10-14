@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../can-persistence-base.js';
+import CanPersistenceBase from "../../can-persistence-base.js";
 
 class BizinstTreeRecord extends CanPersistenceBase {
   constructor() {
@@ -27,4 +27,4 @@ class BizinstTreeRecord extends CanPersistenceBase {
   }
 }
 
-export default  BizinstTreeRecord;
+export default BizinstTreeRecord;

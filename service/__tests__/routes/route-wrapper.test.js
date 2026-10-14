@@ -72,9 +72,12 @@ test("createJsonRouteWrapper: 可复用默认 translate/fallback 配置", async 
   });
   app.get(
     "/wrapper",
-    jsonRoute(async () => {
-      throw { message: "" };
-    }, { statusCode: HTTP_STATUS.NOT_FOUND, fallbackErrorKey: "common.notFound" }),
+    jsonRoute(
+      async () => {
+        throw { message: "" };
+      },
+      { statusCode: HTTP_STATUS.NOT_FOUND, fallbackErrorKey: "common.notFound" },
+    ),
   );
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/wrapper`);

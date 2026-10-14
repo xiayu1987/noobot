@@ -6,11 +6,7 @@
 import { HOOK_POINT } from "@noobot/hook-protocol";
 function normalizeToolNameSet(input) {
   if (!Array.isArray(input)) return new Set();
-  return new Set(
-    input
-      .map((item) => String(item || "").trim())
-      .filter(Boolean),
-  );
+  return new Set(input.map((item) => String(item || "").trim()).filter(Boolean));
 }
 
 function normalizeCallShape(call = null) {
@@ -20,10 +16,7 @@ function normalizeCallShape(call = null) {
   return {
     ...call,
     name,
-    args:
-      call?.args && typeof call.args === "object" && !Array.isArray(call.args)
-        ? call.args
-        : {},
+    args: call?.args && typeof call.args === "object" && !Array.isArray(call.args) ? call.args : {},
   };
 }
 

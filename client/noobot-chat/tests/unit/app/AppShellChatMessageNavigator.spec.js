@@ -406,8 +406,8 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain(
       '@mobile-chat-navigator-closed="handleMobileChatNavigatorClosed"',
     );
-    expect(chatMessageNavigatorStateSource).toContain(
-      "replacePseudoRoute(buildChatMessageNavigatorCloseRoute({",
+    expect(chatMessageNavigatorStateSource).toMatch(
+      /replacePseudoRoute\(\s*buildChatMessageNavigatorCloseRoute\(\{/,
     );
     expect(appShellLayoutSource).toContain(
       'class="mobile-chat-message-nav-trigger mobile-floating-trigger noobot-floating-action-btn noobot-icon-button"',

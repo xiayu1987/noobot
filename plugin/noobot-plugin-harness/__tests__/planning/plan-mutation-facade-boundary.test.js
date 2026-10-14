@@ -13,19 +13,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "../..");
 const srcRoot = path.join(projectRoot, "src");
-const allowedImporter = path.join(
-  srcRoot,
-  "capabilities/handlers/shared/plan/mutation-facade.js",
-);
+const allowedImporter = path.join(srcRoot, "capabilities/handlers/shared/plan/mutation-facade.js");
 
 async function collectJsFiles(rootDir) {
   const entries = await fs.readdir(rootDir, { withFileTypes: true });
-  const files = await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(rootDir, entry.name);
-    if (entry.isDirectory()) return collectJsFiles(fullPath);
-    if (!entry.isFile()) return [];
-    return fullPath.endsWith(".js") ? [fullPath] : [];
-  }));
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const fullPath = path.join(rootDir, entry.name);
+      if (entry.isDirectory()) return collectJsFiles(fullPath);
+      if (!entry.isFile()) return [];
+      return fullPath.endsWith(".js") ? [fullPath] : [];
+    }),
+  );
   return files.flat();
 }
 

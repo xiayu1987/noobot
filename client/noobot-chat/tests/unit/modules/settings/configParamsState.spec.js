@@ -12,10 +12,12 @@ import {
 
 describe("config params catalog state", () => {
   it("projects only catalog-owned keys and keeps their persisted values", () => {
-    expect(configParamsFromCatalog({
-      catalog: [{ key: "REGION" }, { key: "API_KEY" }],
-      values: { API_KEY: "secret", UNUSED_KEY: "ignored" },
-    })).toEqual([
+    expect(
+      configParamsFromCatalog({
+        catalog: [{ key: "REGION" }, { key: "API_KEY" }],
+        values: { API_KEY: "secret", UNUSED_KEY: "ignored" },
+      }),
+    ).toEqual([
       { key: "API_KEY", value: "secret" },
       { key: "REGION", value: "" },
     ]);
@@ -34,9 +36,11 @@ describe("config params catalog state", () => {
         key: "UNUSED_KEY",
       });
     }
-    expect(assertConfigParamListMatchesCatalog(
-      normalizeConfigParamList([{ key: "API_KEY", value: " value " }]),
-      [{ key: "API_KEY" }],
-    )).toBe(true);
+    expect(
+      assertConfigParamListMatchesCatalog(
+        normalizeConfigParamList([{ key: "API_KEY", value: " value " }]),
+        [{ key: "API_KEY" }],
+      ),
+    ).toBe(true);
   });
 });

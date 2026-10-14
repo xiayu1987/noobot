@@ -18,8 +18,12 @@ export function createPluginContext({ pluginId = "", getConfig, updateConfig } =
       patch(patch = {}) {
         if (typeof updateConfig !== "function") return;
         const root = typeof getConfig === "function" ? getConfig() : {};
-        const current = root?.[namespace] && typeof root[namespace] === "object" ? root[namespace] : {};
-        updateConfig({ ...root, [namespace]: { ...current, ...(patch && typeof patch === "object" ? patch : {}) } });
+        const current =
+          root?.[namespace] && typeof root[namespace] === "object" ? root[namespace] : {};
+        updateConfig({
+          ...root,
+          [namespace]: { ...current, ...(patch && typeof patch === "object" ? patch : {}) },
+        });
       },
     }),
   });

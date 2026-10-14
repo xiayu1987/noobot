@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  WORKFLOW_HOOKS,
-  WORKFLOW_PLUGIN_DEFAULTS,
-} from "./constants.js";
+import { WORKFLOW_HOOKS, WORKFLOW_PLUGIN_DEFAULTS } from "./constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { handleBeforeAgentDispatch } from "./orchestrator/hook-handler.js";
 import { registerWorkflowSessionCleanupHook } from "./orchestrator/session-cleanup.js";
@@ -26,12 +23,13 @@ export function registerWorkflowAgentHooks({ hookManager, options }) {
   disposers.push(
     hookManager.on(
       hookPoint,
-      async (ctx = {}) => handleBeforeAgentDispatch({
-        hookManager,
-        options: runtimeOptions,
-        ctx,
-        hookPoint,
-      }),
+      async (ctx = {}) =>
+        handleBeforeAgentDispatch({
+          hookManager,
+          options: runtimeOptions,
+          ctx,
+          hookPoint,
+        }),
       {
         id: WORKFLOW_HOOKS.AFTER_AGENT_DISPATCH_LISTENER_ID,
         priority: Number(runtimeOptions.priority) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_PRIORITY,

@@ -16,9 +16,12 @@ function versionNumber(input) {
 
 export function terminalResolutionMetadata(payload = {}) {
   const raw = payload?.raw && typeof payload.raw === "object" ? payload.raw : {};
-  const turn = payload?.turn && typeof payload.turn === "object"
-    ? payload.turn
-    : raw?.turn && typeof raw.turn === "object" ? raw.turn : {};
+  const turn =
+    payload?.turn && typeof payload.turn === "object"
+      ? payload.turn
+      : raw?.turn && typeof raw.turn === "object"
+        ? raw.turn
+        : {};
   const source = { ...raw, ...payload, ...turn };
   const metadata = { commandId: clean(source.commandId) };
   const completionCommitId = clean(source.completionCommitId);

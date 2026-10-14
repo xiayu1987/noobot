@@ -38,13 +38,16 @@ export function createConfigScopeService({
     values = undefined,
     descriptions = undefined,
   } = {}) {
-    const { scope, userId, payload: existingPayload } = await readScopedConfigParams({
+    const {
+      scope,
+      userId,
+      payload: existingPayload,
+    } = await readScopedConfigParams({
       req,
       createIfMissing: true,
     });
     const nextPayload = {
-      values:
-        values && typeof values === "object" ? values : existingPayload?.values || {},
+      values: values && typeof values === "object" ? values : existingPayload?.values || {},
       descriptions:
         descriptions && typeof descriptions === "object"
           ? descriptions

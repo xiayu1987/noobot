@@ -33,14 +33,17 @@ const DSL_ERROR_I18N_KEY_BY_CODE = Object.freeze({
   [DSL_ERROR_MESSAGE.NODE_ID_DUPLICATE]: WORKFLOW_I18N_KEYSET.DSL_ERROR.NODE_ID_DUPLICATE,
   [DSL_ERROR_MESSAGE.NODE_TYPE_INVALID]: WORKFLOW_I18N_KEYSET.DSL_ERROR.NODE_TYPE_INVALID,
   [DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED]: WORKFLOW_I18N_KEYSET.DSL_ERROR.EDGE_FROM_TO_REQUIRED,
-  [DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED]: WORKFLOW_I18N_KEYSET.DSL_ERROR.EDGE_CONDITION_UNSUPPORTED,
+  [DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED]:
+    WORKFLOW_I18N_KEYSET.DSL_ERROR.EDGE_CONDITION_UNSUPPORTED,
   [DSL_ERROR_MESSAGE.EDGE_UNDEFINED_NODE]: WORKFLOW_I18N_KEYSET.DSL_ERROR.EDGE_UNDEFINED_NODE,
   [DSL_ERROR_MESSAGE.AUTO_TYPE_INVALID]: WORKFLOW_I18N_KEYSET.DSL_ERROR.AUTO_TYPE_INVALID,
   [DSL_ERROR_MESSAGE.UNKNOWN_COMMAND]: WORKFLOW_I18N_KEYSET.DSL_ERROR.UNKNOWN_COMMAND,
 });
 
 export function normalizeDslLocale(input = "") {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   return value.startsWith("en") ? "en-US" : "zh-CN";
 }
 
@@ -72,7 +75,8 @@ export function dslError(message = "", { locale = "zh-CN" } = {}) {
 export function dslLineError(lineNo = 0, message = "", { locale = "zh-CN" } = {}) {
   const normalized = normalizeDslLocale(locale);
   const lineText =
-    tWorkflow(normalized, WORKFLOW_I18N_KEYSET.DSL_ERROR.LINE_LABEL, { lineNo }) || `line ${lineNo}`;
+    tWorkflow(normalized, WORKFLOW_I18N_KEYSET.DSL_ERROR.LINE_LABEL, { lineNo }) ||
+    `line ${lineNo}`;
   return `${resolveDslErrorPrefix(locale)} (${lineText}): ${String(message || "").trim()}`;
 }
 

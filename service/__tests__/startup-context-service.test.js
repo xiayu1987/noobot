@@ -19,8 +19,14 @@ import {
 
 test("startup-context-service resolves --startup-context argument forms", () => {
   const filePath = path.join(os.tmpdir(), "noobot-startup-context.json");
-  assert.equal(resolveStartupContextPath(["node", "app.js", "--startup-context", filePath]), path.resolve(filePath));
-  assert.equal(resolveStartupContextPath(["node", "app.js", `--startup-context=${filePath}`]), path.resolve(filePath));
+  assert.equal(
+    resolveStartupContextPath(["node", "app.js", "--startup-context", filePath]),
+    path.resolve(filePath),
+  );
+  assert.equal(
+    resolveStartupContextPath(["node", "app.js", `--startup-context=${filePath}`]),
+    path.resolve(filePath),
+  );
 });
 
 test("startup-context-service normalizes pluginRootDir from backendRoot", () => {
@@ -35,39 +41,45 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
   const backendRoot = path.join(tempDir, "resources", "backend");
   const pluginRootDir = path.join(backendRoot, "plugin");
   const startupContextPath = path.join(tempDir, "startup-context.json");
-  await fs.writeFile(startupContextPath, JSON.stringify({
-    schemaVersion: 1,
-    app: { platform: "desktop", channel: "win32", packaged: true },
-    paths: { backendRoot, pluginRootDir },
-    service: { port: 10061, host: "127.0.0.1", origin: "http://127.0.0.1:10061" },
-    runtime: {
-      env: {
-        PATH: "/managed/bin:/usr/bin",
-        NOOBOT_FFMPEG_PATH: "/managed/bin/ffmpeg",
-        LIBRE_OFFICE_EXE: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-      },
-      dependencies: {
-        hasFfmpeg: true,
-        hasLibreOffice: true,
-        ffmpegPath: "/managed/bin/ffmpeg",
-        libreOfficePath: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-        sourceSummary: {
-          platform: "darwin",
-          dependencies: [{
-            key: "ffmpeg",
-            name: "FFmpeg",
-            available: true,
-            installMode: "managed",
-            sourceType: "self-hosted",
-            hasCustomSource: true,
-            customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
-            configKeys: ["darwinManaged.url"],
-            url: "https://example.internal/ffmpeg.tar.gz?token=secret",
-          }],
+  await fs.writeFile(
+    startupContextPath,
+    JSON.stringify({
+      schemaVersion: 1,
+      app: { platform: "desktop", channel: "win32", packaged: true },
+      paths: { backendRoot, pluginRootDir },
+      service: { port: 10061, host: "127.0.0.1", origin: "http://127.0.0.1:10061" },
+      runtime: {
+        env: {
+          PATH: "/managed/bin:/usr/bin",
+          NOOBOT_FFMPEG_PATH: "/managed/bin/ffmpeg",
+          LIBRE_OFFICE_EXE: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        },
+        dependencies: {
+          hasFfmpeg: true,
+          hasLibreOffice: true,
+          ffmpegPath: "/managed/bin/ffmpeg",
+          libreOfficePath: "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+          sourceSummary: {
+            platform: "darwin",
+            dependencies: [
+              {
+                key: "ffmpeg",
+                name: "FFmpeg",
+                available: true,
+                installMode: "managed",
+                sourceType: "self-hosted",
+                hasCustomSource: true,
+                customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
+                configKeys: ["darwinManaged.url"],
+                url: "https://example.internal/ffmpeg.tar.gz?token=secret",
+              },
+            ],
+          },
         },
       },
-    },
-  }), "utf8");
+    }),
+    "utf8",
+  );
 
   const context = await loadStartupContext({
     argv: ["node", "app.js", "--startup-context", startupContextPath],
@@ -81,35 +93,46 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
   assert.equal(context.service.port, 10061);
   assert.equal(context.service.host, "127.0.0.1");
   assert.equal(context.runtime.env.NOOBOT_FFMPEG_PATH, "/managed/bin/ffmpeg");
-  assert.equal(context.runtime.env.LIBRE_OFFICE_EXE, "/Applications/LibreOffice.app/Contents/MacOS/soffice");
+  assert.equal(
+    context.runtime.env.LIBRE_OFFICE_EXE,
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+  );
   assert.equal(context.runtime.dependencies.hasFfmpeg, true);
   assert.deepEqual(context.runtime.dependencies.sourceSummary, {
     platform: "darwin",
-    dependencies: [{
-      key: "ffmpeg",
-      name: "FFmpeg",
-      available: true,
-      installMode: "managed",
-      sourceType: "self-hosted",
-      hasCustomSource: true,
-      customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
-      configKeys: ["darwinManaged.url"],
-    }],
+    dependencies: [
+      {
+        key: "ffmpeg",
+        name: "FFmpeg",
+        available: true,
+        installMode: "managed",
+        sourceType: "self-hosted",
+        hasCustomSource: true,
+        customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
+        configKeys: ["darwinManaged.url"],
+      },
+    ],
   });
-  assert.equal(JSON.stringify(context.runtime.dependencies.sourceSummary).includes("token=secret"), false);
+  assert.equal(
+    JSON.stringify(context.runtime.dependencies.sourceSummary).includes("token=secret"),
+    false,
+  );
 });
 
 test("startup-context-service applies runtime env to service process env", () => {
   const env = {};
-  const applied = applyStartupRuntimeEnv({
-    runtime: {
-      env: {
-        PATH: "/managed/bin:/usr/bin",
-        NOOBOT_FFMPEG_PATH: "/managed/bin/ffmpeg",
-        EMPTY_VALUE: "",
+  const applied = applyStartupRuntimeEnv(
+    {
+      runtime: {
+        env: {
+          PATH: "/managed/bin:/usr/bin",
+          NOOBOT_FFMPEG_PATH: "/managed/bin/ffmpeg",
+          EMPTY_VALUE: "",
+        },
       },
     },
-  }, { env });
+    { env },
+  );
 
   assert.deepEqual(applied, {
     PATH: "/managed/bin:/usr/bin",
@@ -138,7 +161,10 @@ test("startup-context-service uses repository root when service cwd is the servi
 
 test("startup-context-service safe log returns normalized startup fields", () => {
   const cwd = path.join(os.tmpdir(), "noobot-safe-log");
-  const logContext = safeStartupContextForLog({ paths: { backendRoot: cwd }, service: { port: 12345 } });
+  const logContext = safeStartupContextForLog({
+    paths: { backendRoot: cwd },
+    service: { port: 12345 },
+  });
   assert.equal(logContext.paths.pluginRootDir, path.join(path.resolve(cwd), "plugin"));
   assert.equal(logContext.service.port, 12345);
   assert.equal(typeof logContext.createdAt, "string");

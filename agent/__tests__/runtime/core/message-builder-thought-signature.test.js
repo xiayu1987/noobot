@@ -98,7 +98,13 @@ test("buildContextMessages restores OpenAI Responses reasoning output sequence",
   ]);
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
-      { systemRuntime: { sessionId: "session-responses", dialogProcessId: "dialog-responses", turnScopeId: "turn-responses" } },
+      {
+        systemRuntime: {
+          sessionId: "session-responses",
+          dialogProcessId: "dialog-responses",
+          turnScopeId: "turn-responses",
+        },
+      },
       { messageBlocks: { system: [], history } },
     ),
     { currentUserMessage: null },

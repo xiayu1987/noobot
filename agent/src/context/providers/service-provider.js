@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 function normalizeStringArray(input = []) {
-  return Array.isArray(input)
-    ? input
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-    : [];
+  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
 }
 
 function resolveServiceFilter(includeRefs = []) {

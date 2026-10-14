@@ -12,12 +12,7 @@ function isWorkspaceControlEntry(name = "") {
   return normalized.endsWith(".mutation-lock") || normalized.endsWith(".mutation-locks");
 }
 
-export async function buildWorkspaceTree(
-  rootPath,
-  currentPath = "",
-  depth = 0,
-  maxDepth = 12,
-) {
+export async function buildWorkspaceTree(rootPath, currentPath = "", depth = 0, maxDepth = 12) {
   if (depth > maxDepth) return [];
   const absolutePath = currentPath ? safeJoin(rootPath, currentPath) : rootPath;
   const directoryEntries = (await readdir(absolutePath, { withFileTypes: true }))
@@ -42,12 +37,7 @@ export async function buildWorkspaceTree(
       type: directoryEntry.isDirectory() ? "dir" : "file",
     };
     if (directoryEntry.isDirectory()) {
-      node.children = await buildWorkspaceTree(
-        rootPath,
-        relativePath,
-        depth + 1,
-        maxDepth,
-      );
+      node.children = await buildWorkspaceTree(rootPath, relativePath, depth + 1, maxDepth);
     }
     nodes.push(node);
   }

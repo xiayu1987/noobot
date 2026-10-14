@@ -34,10 +34,7 @@ export function useOpenVSCodeAction({
     const popupWindow = openInCurrentTab ? null : window.open("about:blank", "_blank");
     try {
       if (popupWindow) popupWindow.opener = null;
-      const res = await postOpenVSCodeServerApi(
-        { userId: userId?.value },
-        { fetcher: authFetch },
-      );
+      const res = await postOpenVSCodeServerApi({ userId: userId?.value }, { fetcher: authFetch });
       const data = await res.json();
       if (!res.ok || !data.ok || !data.url) {
         throw new Error(data.error || translate("infra.openVSCodeFailed"));

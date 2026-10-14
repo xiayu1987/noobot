@@ -65,7 +65,9 @@ defineExpose({ getTextarea });
           :placeholder="translate('settings.startEdit')"
           @update:model-value="emit('update:content', $event)"
         />
-        <div v-else class="empty-tip"><el-empty :description="translate('settings.binaryNoPreview')" :image-size="72" /></div>
+        <div v-else class="empty-tip">
+          <el-empty :description="translate('settings.binaryNoPreview')" :image-size="72" />
+        </div>
       </template>
       <div v-else class="empty-tip">
         <el-empty :description="translate('settings.chooseFileFromTree')" :image-size="72" />

@@ -46,24 +46,18 @@ test("upstream supervisor closes only the connection generation and purpose owne
   const runConnection = supervisor.connect("ws://run", {}, { purpose: "run" });
 
   assert.equal(
-    supervisor.closeOwnedConnection(
-      queryConnection,
-      1000,
-      "snapshot_query_complete",
-      { purpose: "snapshot_query" },
-    ),
+    supervisor.closeOwnedConnection(queryConnection, 1000, "snapshot_query_complete", {
+      purpose: "snapshot_query",
+    }),
     false,
   );
   assert.equal(supervisor.socket, runConnection.socket);
   assert.equal(supervisor.status().purpose, "run");
 
   assert.equal(
-    supervisor.closeOwnedConnection(
-      runConnection,
-      1000,
-      "snapshot_query_complete",
-      { purpose: "snapshot_query" },
-    ),
+    supervisor.closeOwnedConnection(runConnection, 1000, "snapshot_query_complete", {
+      purpose: "snapshot_query",
+    }),
     false,
   );
   assert.equal(supervisor.socket, runConnection.socket);
@@ -79,7 +73,9 @@ test("upstream supervisor terminates a replaced socket that never completes clos
       this.closeCalls = 0;
       this.terminateCalls = 0;
     }
-    close() { this.closeCalls += 1; }
+    close() {
+      this.closeCalls += 1;
+    }
     terminate() {
       this.terminateCalls += 1;
       this.readyState = HangingWebSocket.CLOSED;
@@ -103,7 +99,11 @@ test("downstream registry finalizes error and close only once", () => {
   let finalized = 0;
   const socket = { __agentProxySocketId: "connection-1" };
   const registry = new DownstreamConnectionRegistry();
-  registry.register(socket, { onFinalize: () => { finalized += 1; } });
+  registry.register(socket, {
+    onFinalize: () => {
+      finalized += 1;
+    },
+  });
 
   assert.equal(registry.finalize(socket, "error"), true);
   assert.equal(registry.finalize(socket, "close"), false);
@@ -116,10 +116,16 @@ test("downstream registry owns graceful physical close and finalization", () => 
   const socket = {
     __agentProxySocketId: "connection-close",
     closeCalls: [],
-    close(code, reason) { this.closeCalls.push({ code, reason }); },
+    close(code, reason) {
+      this.closeCalls.push({ code, reason });
+    },
   };
   const registry = new DownstreamConnectionRegistry();
-  registry.register(socket, { onFinalize: (record) => { finalizedReason = record.finalizeReason; } });
+  registry.register(socket, {
+    onFinalize: (record) => {
+      finalizedReason = record.finalizeReason;
+    },
+  });
 
   assert.equal(registry.close(socket, { code: 1001, reason: "heartbeat_timeout" }), true);
   assert.deepEqual(socket.closeCalls, [{ code: 1001, reason: "heartbeat_timeout" }]);
@@ -132,7 +138,9 @@ test("downstream registry terminates errored physical sockets before finalizatio
   let terminated = 0;
   const socket = {
     __agentProxySocketId: "connection-error",
-    terminate() { terminated += 1; },
+    terminate() {
+      terminated += 1;
+    },
   };
   const registry = new DownstreamConnectionRegistry();
   registry.register(socket);
@@ -146,7 +154,9 @@ test("upstream supervisor reports constructor failures without corrupting owners
   class ThrowingWebSocket {
     static OPEN = 1;
     static CLOSED = 3;
-    constructor() { throw Object.assign(new Error("invalid upstream url"), { code: "ERR_INVALID_URL" }); }
+    constructor() {
+      throw Object.assign(new Error("invalid upstream url"), { code: "ERR_INVALID_URL" });
+    }
   }
   const errors = [];
   const supervisor = new UpstreamTransportSupervisor(ThrowingWebSocket);
@@ -179,7 +189,9 @@ test("upstream supervisor contains open-handler failures and closes the failed g
   const closed = [];
   const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);
   const connection = supervisor.connect("ws://upstream", {
-    open() { throw new TypeError("open handler failed"); },
+    open() {
+      throw new TypeError("open handler failed");
+    },
     handlerError: (event) => handlerErrors.push(event),
     close: (event) => closed.push(event),
   });
@@ -196,7 +208,9 @@ test("upstream supervisor contains close-handler failures", () => {
   const handlerErrors = [];
   const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);
   const connection = supervisor.connect("ws://upstream", {
-    close() { throw new Error("close handler failed"); },
+    close() {
+      throw new Error("close handler failed");
+    },
     handlerError: (event) => handlerErrors.push(event),
   });
 
@@ -212,8 +226,14 @@ test("downstream heartbeat closes only records that missed pong", () => {
   const socket = { __agentProxySocketId: "connection-heartbeat", ping() {} };
   const registry = new DownstreamConnectionRegistry({ now: () => currentMs });
   registry.register(socket);
-  registry.sweepHeartbeat({ timeoutMs: 100, onTimeout: (record) => timedOut.push(record.connectionId) });
+  registry.sweepHeartbeat({
+    timeoutMs: 100,
+    onTimeout: (record) => timedOut.push(record.connectionId),
+  });
   currentMs = 100;
-  registry.sweepHeartbeat({ timeoutMs: 100, onTimeout: (record) => timedOut.push(record.connectionId) });
+  registry.sweepHeartbeat({
+    timeoutMs: 100,
+    onTimeout: (record) => timedOut.push(record.connectionId),
+  });
   assert.deepEqual(timedOut, ["connection-heartbeat"]);
 });

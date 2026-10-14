@@ -30,14 +30,16 @@ const envelope = {
   direction: "output",
   payload: {
     mode: "attachment",
-    attachments: [{
-      identity: attachmentIdentity,
-      role: "primary",
-      name: "report.md",
-      mimeType: "text/markdown",
-      size: 10,
-      preview: "report",
-    }],
+    attachments: [
+      {
+        identity: attachmentIdentity,
+        role: "primary",
+        name: "report.md",
+        mimeType: "text/markdown",
+        size: 10,
+        preview: "report",
+      },
+    ],
   },
   intent: {
     source: "tool",
@@ -71,19 +73,27 @@ describe("transferEnvelopes", () => {
         transferRole: "primary",
       }),
     ]);
-    expect(getMessageTransferAttachments({ transferEnvelopes: [envelope] })[0]).not.toHaveProperty("path");
+    expect(getMessageTransferAttachments({ transferEnvelopes: [envelope] })[0]).not.toHaveProperty(
+      "path",
+    );
   });
 
   it("rejects legacy and path-based envelopes instead of translating them", () => {
-    expect(() => getMessageTransferAttachments({
-      transferEnvelopes: [{ ...envelope, version: 1, files: [{ filePath: "/legacy/a.txt" }] }],
-    })).toThrow(/invalid_transfer_envelope/);
-    expect(() => getMessageTransferAttachments({
-      transferEnvelopes: [{ ...envelope, filePath: "/legacy/a.txt" }],
-    })).toThrow(/invalid_transfer_envelope/);
+    expect(() =>
+      getMessageTransferAttachments({
+        transferEnvelopes: [{ ...envelope, version: 1, files: [{ filePath: "/legacy/a.txt" }] }],
+      }),
+    ).toThrow(/invalid_transfer_envelope/);
+    expect(() =>
+      getMessageTransferAttachments({
+        transferEnvelopes: [{ ...envelope, filePath: "/legacy/a.txt" }],
+      }),
+    ).toThrow(/invalid_transfer_envelope/);
   });
 
   it("collects valid envelopes from the canonical transfer field only", () => {
-    expect(getMessageTransferEnvelopes({ transferEnvelopes: [envelope], files: [envelope] })).toEqual([envelope]);
+    expect(
+      getMessageTransferEnvelopes({ transferEnvelopes: [envelope], files: [envelope] }),
+    ).toEqual([envelope]);
   });
 });

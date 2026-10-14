@@ -10,9 +10,10 @@ import {
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
 function validated(value) {
-  const source = isPlainObject(value) && Array.isArray(value.transferEnvelopes)
-    ? value.transferEnvelopes
-    : value;
+  const source =
+    isPlainObject(value) && Array.isArray(value.transferEnvelopes)
+      ? value.transferEnvelopes
+      : value;
   return normalizeTransferEnvelopes(source);
 }
 

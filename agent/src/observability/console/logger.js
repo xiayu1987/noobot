@@ -6,9 +6,7 @@
 import pino from "pino";
 import { createLoggerAdapterStore } from "./logger-adapter.js";
 
-const DEFAULT_LEVEL = String(
-  process.env.NOOBOT_LOG_LEVEL || process.env.NB_LOG_LEVEL || "error",
-)
+const DEFAULT_LEVEL = String(process.env.NOOBOT_LOG_LEVEL || process.env.NB_LOG_LEVEL || "error")
   .trim()
   .toLowerCase();
 
@@ -26,7 +24,9 @@ const defaultLoggerAdapter = {
   warn: (message, ...args) => writePino("warn", message, ...args),
   error: (message, ...args) => writePino("error", message, ...args),
   setLevel: (level) => {
-    const normalized = String(level || "").trim().toLowerCase();
+    const normalized = String(level || "")
+      .trim()
+      .toLowerCase();
     if (normalized) pinoLogger.level = normalized;
   },
   raw: pinoLogger,

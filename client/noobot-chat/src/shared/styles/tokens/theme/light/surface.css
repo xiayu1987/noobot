@@ -1,5 +1,9 @@
 :root[data-theme="light"] {
-  --noobot-surface-sidebar: color-mix(in srgb, var(--noobot-base-slate-50) 84%, var(--noobot-base-white));
+  --noobot-surface-sidebar: color-mix(
+    in srgb,
+    var(--noobot-base-slate-50) 84%,
+    var(--noobot-base-white)
+  );
   --noobot-surface-soft: color-mix(in srgb, var(--noobot-base-slate-900) 4%, transparent);
   --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
   --noobot-surface-item-hover: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);

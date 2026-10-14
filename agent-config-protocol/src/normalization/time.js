@@ -26,13 +26,7 @@ export function normalizeTimeMs(
 
 export function resolveTimeMs(
   source = {},
-  {
-    key = "",
-    fallback = 0,
-    min = 0,
-    max = Number.POSITIVE_INFINITY,
-    allowZero = false,
-  } = {},
+  { key = "", fallback = 0, min = 0, max = Number.POSITIVE_INFINITY, allowZero = false } = {},
 ) {
   const normalizedSource =
     source && typeof source === "object" && !Array.isArray(source) ? source : {};

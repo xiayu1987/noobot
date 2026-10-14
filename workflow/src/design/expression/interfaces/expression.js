@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IExpression {
-}
+class IExpression {}
 
-export default  IExpression;
+export default IExpression;

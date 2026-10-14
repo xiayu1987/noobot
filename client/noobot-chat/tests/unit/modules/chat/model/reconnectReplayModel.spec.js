@@ -16,11 +16,12 @@ import {
   patchMessageObjectPreservingUiState,
 } from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
 
-const createReplayBatch = (options = {}) => createProtocolReplayBatch({
-  ...options,
-  orderingDomain: "session",
-  orderingScopeId: String(options.sessionId || "").trim(),
-});
+const createReplayBatch = (options = {}) =>
+  createProtocolReplayBatch({
+    ...options,
+    orderingDomain: "session",
+    orderingScopeId: String(options.sessionId || "").trim(),
+  });
 
 describe("reconnectReplayModel", () => {
   it("isDialogProcessRecoverable respects running/pending interaction only", () => {

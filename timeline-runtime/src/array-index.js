@@ -34,4 +34,3 @@ export function createWeakArrayIndex({ keyOf } = {}) {
 
   return Object.freeze({ indexFor, recordInsertion });
 }
-

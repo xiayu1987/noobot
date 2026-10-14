@@ -8,7 +8,11 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
-import { appendDesktopLogLine, DESKTOP_LOG_FILES, createStartupLogger } from "../../electron/runtime/logging.js";
+import {
+  appendDesktopLogLine,
+  DESKTOP_LOG_FILES,
+  createStartupLogger,
+} from "../../electron/runtime/logging.js";
 
 function waitForLogWrites() {
   return new Promise((resolve) => setTimeout(resolve, 40));
@@ -36,13 +40,31 @@ test("desktop logger writes role-specific files under one logs directory", async
     const logsDir = path.join(rootDir, "logs");
     assert.equal(logger.getLogDir(), logsDir);
     assert.equal(logger.getLogFilePath(), path.join(logsDir, DESKTOP_LOG_FILES.STARTUP));
-    assert.equal(logger.getLogFilePath(DESKTOP_LOG_FILES.SERVICE), path.join(logsDir, DESKTOP_LOG_FILES.SERVICE));
+    assert.equal(
+      logger.getLogFilePath(DESKTOP_LOG_FILES.SERVICE),
+      path.join(logsDir, DESKTOP_LOG_FILES.SERVICE),
+    );
 
-    assert.match(await readFile(path.join(logsDir, DESKTOP_LOG_FILES.STARTUP), "utf8"), /main:status/);
-    assert.match(await readFile(path.join(logsDir, DESKTOP_LOG_FILES.MAIN), "utf8"), /window ready/);
-    assert.match(await readFile(path.join(logsDir, DESKTOP_LOG_FILES.DEPENDENCY), "utf8"), /dependency:ensure:start/);
-    assert.match(await readFile(path.join(logsDir, DESKTOP_LOG_FILES.SERVICE), "utf8"), /service stdout line/);
-    assert.match(await readFile(path.join(logsDir, DESKTOP_LOG_FILES.AGENT_PROXY), "utf8"), /agent proxy stdout line/);
+    assert.match(
+      await readFile(path.join(logsDir, DESKTOP_LOG_FILES.STARTUP), "utf8"),
+      /main:status/,
+    );
+    assert.match(
+      await readFile(path.join(logsDir, DESKTOP_LOG_FILES.MAIN), "utf8"),
+      /window ready/,
+    );
+    assert.match(
+      await readFile(path.join(logsDir, DESKTOP_LOG_FILES.DEPENDENCY), "utf8"),
+      /dependency:ensure:start/,
+    );
+    assert.match(
+      await readFile(path.join(logsDir, DESKTOP_LOG_FILES.SERVICE), "utf8"),
+      /service stdout line/,
+    );
+    assert.match(
+      await readFile(path.join(logsDir, DESKTOP_LOG_FILES.AGENT_PROXY), "utf8"),
+      /agent proxy stdout line/,
+    );
   } finally {
     await rm(rootDir, { recursive: true, force: true });
   }

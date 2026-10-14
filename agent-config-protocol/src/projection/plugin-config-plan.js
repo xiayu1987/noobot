@@ -4,9 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "../utils.js";
-import { readPluginSelectionInput, resolvePluginSelection } from "../normalization/plugin-selection.js";
+import {
+  readPluginSelectionInput,
+  resolvePluginSelection,
+} from "../normalization/plugin-selection.js";
 
-export function createPluginConfigPlan({ runConfig = {}, effectiveConfig = {}, manifests = [] } = {}) {
+export function createPluginConfigPlan({
+  runConfig = {},
+  effectiveConfig = {},
+  manifests = [],
+} = {}) {
   const selection = resolvePluginSelection(readPluginSelectionInput(runConfig));
   const selectedSet = new Set(selection.enabledPluginIds);
   return {
@@ -19,9 +26,15 @@ export function createPluginConfigPlan({ runConfig = {}, effectiveConfig = {}, m
         options: Object.assign(
           {},
           isPlainObject(manifest.defaults) ? manifest.defaults : {},
-          isPlainObject(effectiveConfig?.plugins?.[manifest.pluginId]) ? effectiveConfig.plugins[manifest.pluginId] : {},
-          isPlainObject(runConfig?.plugins?.[manifest.pluginId]) ? runConfig.plugins[manifest.pluginId] : {},
-          isPlainObject(runConfig?.pluginModelConfig?.[manifest.pluginId]) ? runConfig.pluginModelConfig[manifest.pluginId] : {},
+          isPlainObject(effectiveConfig?.plugins?.[manifest.pluginId])
+            ? effectiveConfig.plugins[manifest.pluginId]
+            : {},
+          isPlainObject(runConfig?.plugins?.[manifest.pluginId])
+            ? runConfig.plugins[manifest.pluginId]
+            : {},
+          isPlainObject(runConfig?.pluginModelConfig?.[manifest.pluginId])
+            ? runConfig.pluginModelConfig[manifest.pluginId]
+            : {},
         ),
       })),
   };

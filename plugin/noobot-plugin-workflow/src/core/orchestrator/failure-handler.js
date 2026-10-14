@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  WORKFLOW_PHASE_STATUS,
-  WORKFLOW_PHASES,
-  WORKFLOW_TRACE,
-} from "../constants.js";
+import { WORKFLOW_PHASE_STATUS, WORKFLOW_PHASES, WORKFLOW_TRACE } from "../constants.js";
 import { appendWorkflowTrace } from "../hooks/phase.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";

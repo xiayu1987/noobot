@@ -39,14 +39,19 @@ describe("useMessageFiles plugin attachments", () => {
     });
 
     expect(displayedAttachments.value).toHaveLength(2);
-    expect(displayedAttachments.value.find((item) => item.attachmentId === "att-harness-1")).toMatchObject({
+    expect(
+      displayedAttachments.value.find((item) => item.attachmentId === "att-harness-1"),
+    ).toMatchObject({
       owner: { type: "plugin" },
     });
-    expect(displayedAttachments.value.find((item) => item.attachmentId === "att-agent-1")).toMatchObject({
+    expect(
+      displayedAttachments.value.find((item) => item.attachmentId === "att-agent-1"),
+    ).toMatchObject({
       attachmentId: "att-agent-1",
     });
-    expect(displayedAttachments.value.find((item) => item.attachmentId === "att-agent-1"))
-      .not.toHaveProperty("owner");
+    expect(
+      displayedAttachments.value.find((item) => item.attachmentId === "att-agent-1"),
+    ).not.toHaveProperty("owner");
   });
 
   it("keeps refreshed harness attachments as plugin-owned without duplicating agent copies", () => {
@@ -85,8 +90,20 @@ describe("useMessageFiles plugin attachments", () => {
           dialogProcessId: "dp-1",
           content: "done",
           attachments: [
-            { attachmentId: "plan-1", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
-            { attachmentId: "report-1", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
+            {
+              attachmentId: "plan-1",
+              sessionId: "session-1",
+              attachmentSource: "test",
+              name: "harness-plan-text.txt",
+              size: 1400,
+            },
+            {
+              attachmentId: "report-1",
+              sessionId: "session-1",
+              attachmentSource: "test",
+              name: "harness-acceptance-report.txt",
+              size: 5600,
+            },
           ],
         },
       ],
@@ -124,7 +141,13 @@ describe("useMessageFiles plugin attachments", () => {
       dialogProcessId: "dp-1",
       content: "done",
       attachments: [
-        { attachmentId: "report-1", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
+        {
+          attachmentId: "report-1",
+          sessionId: "session-1",
+          attachmentSource: "test",
+          name: "harness-acceptance-report.txt",
+          size: 5600,
+        },
         {
           attachmentId: "report-1",
           sessionId: "session-1",
@@ -187,8 +210,20 @@ describe("useMessageFiles plugin attachments", () => {
           dialogProcessId: "dp-1",
           content: "done",
           attachments: [
-            { attachmentId: "plan-agent-refresh", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
-            { attachmentId: "report-agent-refresh", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
+            {
+              attachmentId: "plan-agent-refresh",
+              sessionId: "session-1",
+              attachmentSource: "test",
+              name: "harness-plan-text.txt",
+              size: 1400,
+            },
+            {
+              attachmentId: "report-agent-refresh",
+              sessionId: "session-1",
+              attachmentSource: "test",
+              name: "harness-acceptance-report.txt",
+              size: 5600,
+            },
           ],
         },
       ],
@@ -207,8 +242,14 @@ describe("useMessageFiles plugin attachments", () => {
       "report-plugin-live",
     ]);
     expect(displayedAttachments.value).toEqual([
-      expect.objectContaining({ name: "harness-plan-text.txt", owner: expect.objectContaining({ type: "plugin" }) }),
-      expect.objectContaining({ name: "harness-acceptance-report.txt", owner: expect.objectContaining({ type: "plugin" }) }),
+      expect.objectContaining({
+        name: "harness-plan-text.txt",
+        owner: expect.objectContaining({ type: "plugin" }),
+      }),
+      expect.objectContaining({
+        name: "harness-acceptance-report.txt",
+        owner: expect.objectContaining({ type: "plugin" }),
+      }),
     ]);
   });
 
@@ -267,8 +308,20 @@ describe("useMessageFiles plugin attachments", () => {
       dialogProcessId: "dp-1",
       content: "done",
       attachments: [
-        { attachmentId: "plan-current", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
-        { attachmentId: "report-current", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
+        {
+          attachmentId: "plan-current",
+          sessionId: "session-1",
+          attachmentSource: "test",
+          name: "harness-plan-text.txt",
+          size: 1400,
+        },
+        {
+          attachmentId: "report-current",
+          sessionId: "session-1",
+          attachmentSource: "test",
+          name: "harness-acceptance-report.txt",
+          size: 5600,
+        },
       ],
     };
     const refreshedSessionDoc = {
@@ -281,8 +334,20 @@ describe("useMessageFiles plugin attachments", () => {
           dialogProcessId: "dp-1",
           content: "done",
           attachments: [
-            { attachmentId: "plan-refreshed", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
-            { attachmentId: "report-refreshed", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
+            {
+              attachmentId: "plan-refreshed",
+              sessionId: "session-1",
+              attachmentSource: "test",
+              name: "harness-plan-text.txt",
+              size: 1400,
+            },
+            {
+              attachmentId: "report-refreshed",
+              sessionId: "session-1",
+              attachmentSource: "test",
+              name: "harness-acceptance-report.txt",
+              size: 5600,
+            },
           ],
         },
       ],

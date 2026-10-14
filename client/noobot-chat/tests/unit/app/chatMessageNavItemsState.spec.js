@@ -25,13 +25,15 @@ describe("chatMessageNavItemsState", () => {
       content: "abcdefghijklmnopqrstuvwxyz0123456789",
     };
 
-    expect(buildChatMessageNavItem({
-      messageItem: message,
-      messageIndex: 2,
-      getMessageAnchorId: () => "chat-message-assistant-2",
-      translateSession: () => "Session",
-      translateRole: (role) => (role === "assistant" ? "AI" : ""),
-    })).toEqual({
+    expect(
+      buildChatMessageNavItem({
+        messageItem: message,
+        messageIndex: 2,
+        getMessageAnchorId: () => "chat-message-assistant-2",
+        translateSession: () => "Session",
+        translateRole: (role) => (role === "assistant" ? "AI" : ""),
+      }),
+    ).toEqual({
       id: "chat-message-assistant-2",
       role: "assistant",
       roleLabel: "AI",
@@ -40,12 +42,14 @@ describe("chatMessageNavItemsState", () => {
       title: "3. AI：abcdefghijklmnopqrstuvwxyz0123456789",
     });
 
-    expect(buildChatMessageNavItem({
-      messageItem: { content: "hello" },
-      messageIndex: 0,
-      getMessageAnchorId: () => "",
-      translateSession: () => "Session",
-    })).toEqual({
+    expect(
+      buildChatMessageNavItem({
+        messageItem: { content: "hello" },
+        messageIndex: 0,
+        getMessageAnchorId: () => "",
+        translateSession: () => "Session",
+      }),
+    ).toEqual({
       id: "chat-message-0",
       role: "",
       roleLabel: "Session",
@@ -59,17 +63,19 @@ describe("chatMessageNavItemsState", () => {
     const shouldRenderMessageInChat = vi.fn((message) => message.role !== "system");
     const getMessageAnchorId = vi.fn((message, index) => `anchor-${message.role}-${index}`);
 
-    expect(buildChatMessageNavItems({
-      messages: [
-        { role: "user", content: "hello" },
-        { role: "system", content: "hidden" },
-        { role: "assistant", text: "answer" },
-      ],
-      shouldRenderMessageInChat,
-      getMessageAnchorId,
-      translateSession: () => "Session",
-      translateRole: (role) => ({ user: "我", assistant: "AI" })[role] || "",
-    })).toEqual([
+    expect(
+      buildChatMessageNavItems({
+        messages: [
+          { role: "user", content: "hello" },
+          { role: "system", content: "hidden" },
+          { role: "assistant", text: "answer" },
+        ],
+        shouldRenderMessageInChat,
+        getMessageAnchorId,
+        translateSession: () => "Session",
+        translateRole: (role) => ({ user: "我", assistant: "AI" })[role] || "",
+      }),
+    ).toEqual([
       {
         id: "anchor-user-0",
         role: "user",
@@ -96,26 +102,32 @@ describe("chatMessageNavItemsState", () => {
 
   it("tolerates non-array message sources and missing callbacks", () => {
     expect(buildChatMessageNavItems({ messages: null })).toEqual([]);
-    expect(buildChatMessageNavItems({
-      messages: [{ role: "", content: "hello" }],
-      shouldRenderMessageInChat: null,
-      getMessageAnchorId: null,
-      translateSession: null,
-    })).toEqual([{
-      id: "chat-message-0",
-      role: "",
-      roleLabel: "session",
-      content: "hello",
-      preview: "hello",
-      title: "1. session：hello",
-    }]);
+    expect(
+      buildChatMessageNavItems({
+        messages: [{ role: "", content: "hello" }],
+        shouldRenderMessageInChat: null,
+        getMessageAnchorId: null,
+        translateSession: null,
+      }),
+    ).toEqual([
+      {
+        id: "chat-message-0",
+        role: "",
+        roleLabel: "session",
+        content: "hello",
+        preview: "hello",
+        title: "1. session：hello",
+      },
+    ]);
   });
 
   it("resolves visible user and assistant role labels for navigator items", () => {
     expect(resolveChatMessageNavRoleLabel("user")).toBe("ME");
     expect(resolveChatMessageNavRoleLabel("assistant")).toBe("AI");
-    expect(resolveChatMessageNavRoleLabel("user", {
-      translateRole: (role) => (role === "user" ? "我" : ""),
-    })).toBe("ME");
+    expect(
+      resolveChatMessageNavRoleLabel("user", {
+        translateRole: (role) => (role === "user" ? "我" : ""),
+      }),
+    ).toBe("ME");
   });
 });

@@ -31,7 +31,10 @@ export function submitInteractionConfirm({
   try {
     submitInteractionResponse?.(payload || {});
   } catch (error) {
-    notify?.({ type: "error", message: error.message || translate("common.interactionSubmitFailed") });
+    notify?.({
+      type: "error",
+      message: error.message || translate("common.interactionSubmitFailed"),
+    });
   }
 }
 
@@ -43,7 +46,10 @@ export function submitInteractionCancel({
   try {
     submitInteractionResponse?.(buildCancelledInteractionPayload());
   } catch (error) {
-    notify?.({ type: "error", message: error.message || translate("common.interactionCancelFailed") });
+    notify?.({
+      type: "error",
+      message: error.message || translate("common.interactionCancelFailed"),
+    });
   }
 }
 

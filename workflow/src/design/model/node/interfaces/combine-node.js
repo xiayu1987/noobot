@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class ICombineNode {
-}
+class ICombineNode {}
 
-export default  ICombineNode;
+export default ICombineNode;

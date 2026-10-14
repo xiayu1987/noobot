@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import NodeStateBoxBase from './node-state-box-base.js';
+import NodeStateBoxBase from "./node-state-box-base.js";
 
 class CompositeNodeStateBox extends NodeStateBoxBase {}
 
-export default  CompositeNodeStateBox;
+export default CompositeNodeStateBox;

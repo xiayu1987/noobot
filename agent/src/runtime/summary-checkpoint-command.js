@@ -38,9 +38,7 @@ export async function consumeSummaryCheckpointCommand({
       requestedMessageIds: Array.isArray(error?.requestedMessageIds)
         ? error.requestedMessageIds
         : instruction.summarizedMessageIds,
-      resolvedMessageIds: Array.isArray(error?.resolvedMessageIds)
-        ? error.resolvedMessageIds
-        : [],
+      resolvedMessageIds: Array.isArray(error?.resolvedMessageIds) ? error.resolvedMessageIds : [],
       unresolvedMessageIds: Array.isArray(error?.unresolvedMessageIds)
         ? error.unresolvedMessageIds
         : [],

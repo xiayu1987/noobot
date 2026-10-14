@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class ILogicExpression {
-}
+class ILogicExpression {}
 
-export default  ILogicExpression;
+export default ILogicExpression;

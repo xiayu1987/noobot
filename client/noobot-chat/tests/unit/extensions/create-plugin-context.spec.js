@@ -8,9 +8,18 @@ import { createPluginContext } from "../../../src/extensions/create-plugin-conte
 
 describe("plugin context", () => {
   it("isolates reads and merges patches inside the plugin namespace", () => {
-    let root = { harness: { enabled: true, nested: { keep: true } }, workflow: { semanticModel: "m1" } };
-    const updateConfig = vi.fn((next) => { root = next; });
-    const context = createPluginContext({ pluginId: "harness", getConfig: () => root, updateConfig });
+    let root = {
+      harness: { enabled: true, nested: { keep: true } },
+      workflow: { semanticModel: "m1" },
+    };
+    const updateConfig = vi.fn((next) => {
+      root = next;
+    });
+    const context = createPluginContext({
+      pluginId: "harness",
+      getConfig: () => root,
+      updateConfig,
+    });
 
     expect(context.config.get()).toEqual({ enabled: true, nested: { keep: true } });
     context.config.patch({ enabled: false, model: "m2" });

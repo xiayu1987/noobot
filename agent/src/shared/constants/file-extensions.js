@@ -48,13 +48,7 @@ export const TEXT_EXTENSIONS = new Set([
   ".hpp",
 ]);
 
-export const IMAGE_EXTENSIONS = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".webp",
-  ".bmp",
-]);
+export const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp"]);
 
 export const AUDIO_EXTENSIONS = new Set([
   ".mp3",

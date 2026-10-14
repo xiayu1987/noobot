@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { buildViewMessage, foldConversationMessages } from "../../../../../src/modules/chat/model/messageModel.js";
+import {
+  buildViewMessage,
+  foldConversationMessages,
+} from "../../../../../src/modules/chat/model/messageModel.js";
 
 describe("messageModel workflow messages", () => {
   it("infers workflow messages from canonical pluginMeta for card matching and folding", () => {

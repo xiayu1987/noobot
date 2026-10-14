@@ -22,7 +22,10 @@ describe("workflow viewer state ownership", () => {
     live.viewerVisible.value = true;
     await nextTick();
 
-    const persistedPayload = ref({ workflowRunId: "workflow-a", execution: { workflowRunId: "workflow-a" } });
+    const persistedPayload = ref({
+      workflowRunId: "workflow-a",
+      execution: { workflowRunId: "workflow-a" },
+    });
     const persisted = useWorkflowViewerState(persistedPayload, registry);
 
     expect(persisted.viewerVisible.value).toBe(false);

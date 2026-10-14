@@ -15,15 +15,18 @@ import {
 } from "@noobot/event-protocol";
 
 export function authoritativeSnapshot(fields = {}) {
-  return createTurnSnapshotEnvelope(createTurnLifecycleSnapshot({
-    generatedAt: "2026-08-17T00:00:00.000Z",
-    recentTerminalTurns: [],
-    replacedTurns: [],
-    ...fields,
-  }), {
-    eventId: fields.eventId || `${fields.commandId}:snapshot:${fields.sequence || 0}`,
-    producer: { type: "test", id: "agent-proxy-reconnect-fixture" },
-  });
+  return createTurnSnapshotEnvelope(
+    createTurnLifecycleSnapshot({
+      generatedAt: "2026-08-17T00:00:00.000Z",
+      recentTerminalTurns: [],
+      replacedTurns: [],
+      ...fields,
+    }),
+    {
+      eventId: fields.eventId || `${fields.commandId}:snapshot:${fields.sequence || 0}`,
+      producer: { type: "test", id: "agent-proxy-reconnect-fixture" },
+    },
+  );
 }
 
 export function authoritativeLifecycle(fields = {}) {

@@ -50,18 +50,23 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
     bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
       ? bucket.lastAcceptanceReport
       : buildAcceptanceReport({
-        bucket,
-        state,
-        ctx,
-        mode: ACCEPTANCE_MODE.FORCED,
-        forcedReason: [
-          translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS),
-          translateI18nText(
-            LOCALE.EN_US,
-            HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
-          ),
-        ].filter(Boolean).join(" | "),
-      });
+          bucket,
+          state,
+          ctx,
+          mode: ACCEPTANCE_MODE.FORCED,
+          forcedReason: [
+            translateI18nText(
+              locale,
+              HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
+            ),
+            translateI18nText(
+              LOCALE.EN_US,
+              HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
+            ),
+          ]
+            .filter(Boolean)
+            .join(" | "),
+        });
 
   let transferPayload = { transferEnvelopes: [] };
   try {
@@ -73,7 +78,9 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         mimeType: "text/plain",
         generationSource: "harness_checklist",
         domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-        content: [generatedAt, "[planText]", String(bucket?.planText || "").trim()].filter(Boolean).join("\n"),
+        content: [generatedAt, "[planText]", String(bucket?.planText || "").trim()]
+          .filter(Boolean)
+          .join("\n"),
       }),
       saveCapabilityOutputAsTransferArtifacts(ctx, {
         purpose: "acceptance_report",
@@ -81,7 +88,9 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         mimeType: "text/plain",
         generationSource: "harness_checklist",
         domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-        content: [generatedAt, renderAcceptanceReportText(acceptanceReport, locale)].filter(Boolean).join("\n\n"),
+        content: [generatedAt, renderAcceptanceReportText(acceptanceReport, locale)]
+          .filter(Boolean)
+          .join("\n\n"),
       }),
     ]);
     transferPayload = normalizeTransferPayload({
@@ -97,17 +106,19 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   }
 
   if (!transferPayload.transferEnvelopes.length) return false;
-  const attachedToInjectedMessage = attachTransferPayloadToLatestInjectedMessage(ctx, transferPayload);
+  const attachedToInjectedMessage = attachTransferPayloadToLatestInjectedMessage(
+    ctx,
+    transferPayload,
+  );
   const attachedToFinalOutput = attachTransferPayloadToFinalOutputTurn(ctx, transferPayload);
   if (!attachedToInjectedMessage && !attachedToFinalOutput) {
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "acceptance_checklist",
-      content:
-        translateI18nText(
-          locale,
-          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.CHECKLIST_ARTIFACTS_GENERATED_NOTICE,
-        ),
+      content: translateI18nText(
+        locale,
+        HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.CHECKLIST_ARTIFACTS_GENERATED_NOTICE,
+      ),
       dedupe: true,
       transferPayload,
     });
@@ -130,25 +141,29 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   const forcedReason =
     state?.flags?.overflowForceAcceptancePending === true
       ? [
-        translateI18nText(
-          locale,
-          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_OVERFLOW_FALLBACK,
-        ),
-        translateI18nText(
-          LOCALE.EN_US,
-          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_OVERFLOW_FALLBACK,
-        ),
-      ].filter(Boolean).join(" | ")
+          translateI18nText(
+            locale,
+            HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_OVERFLOW_FALLBACK,
+          ),
+          translateI18nText(
+            LOCALE.EN_US,
+            HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_OVERFLOW_FALLBACK,
+          ),
+        ]
+          .filter(Boolean)
+          .join(" | ")
       : [
-        translateI18nText(
-          locale,
-          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_NO_ACTIVE_REQUEST,
-        ),
-        translateI18nText(
-          LOCALE.EN_US,
-          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_NO_ACTIVE_REQUEST,
-        ),
-      ].filter(Boolean).join(" | ");
+          translateI18nText(
+            locale,
+            HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_NO_ACTIVE_REQUEST,
+          ),
+          translateI18nText(
+            LOCALE.EN_US,
+            HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_NO_ACTIVE_REQUEST,
+          ),
+        ]
+          .filter(Boolean)
+          .join(" | ");
   const report = buildAcceptanceReport({
     bucket,
     state,

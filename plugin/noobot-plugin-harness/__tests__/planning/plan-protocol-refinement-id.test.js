@@ -14,10 +14,7 @@ import {
 import { buildPlanningRefinementPromptText } from "../../src/capabilities/handlers/shared/workflow/prompts.js";
 
 test("refinement patch parser accepts deep ids like 1.1.1 for flatten fallback", () => {
-  const patchText = [
-    "ADD 1.1.1 非法二级子计划",
-    "ADD 1.1 合法一级子计划",
-  ].join("\n");
+  const patchText = ["ADD 1.1.1 非法二级子计划", "ADD 1.1 合法一级子计划"].join("\n");
   const commands = parsePatchCommands(patchText);
   assert.equal(commands.length, 2);
   assert.equal(String(commands[0]?.target?.raw || ""), "1.1.1");
@@ -26,11 +23,7 @@ test("refinement patch parser accepts deep ids like 1.1.1 for flatten fallback",
 });
 
 test("refinement patch parser accepts canonical bracketed ids from prompt examples", () => {
-  const patchText = [
-    "ADD [1.1] 子计划A",
-    "UPDATE [1.2] 子计划B",
-    "DELETE [1.3]",
-  ].join("\n");
+  const patchText = ["ADD [1.1] 子计划A", "UPDATE [1.2] 子计划B", "DELETE [1.3]"].join("\n");
   const commands = parsePatchCommands(patchText);
   assert.equal(commands.length, 3);
   assert.equal(String(commands[0]?.target?.raw || ""), "1.1");
@@ -43,10 +36,7 @@ test("refinement apply patch flattens deep sub-plan ids into one-level sub-plans
     mainPlans: [{ id: 1, content: "主步骤一" }],
     subPlansByMainId: {},
   };
-  const patchText = [
-    "ADD 1.1.1 非法二级子计划",
-    "ADD 1.1 合法一级子计划",
-  ].join("\n");
+  const patchText = ["ADD 1.1.1 非法二级子计划", "ADD 1.1 合法一级子计划"].join("\n");
   const result = applyPatchCommandsToPlanDocument(doc, patchText, { stage: "refinement" });
   assert.equal(result.changed, true);
   assert.equal(Array.isArray(doc.subPlansByMainId["1"]), true);
@@ -59,7 +49,7 @@ test("refinement ADD with duplicated sub-plan id auto-allocates next available i
   const doc = {
     mainPlans: [{ id: 1, content: "主步骤一" }],
     subPlansByMainId: {
-      "1": [{ id: "1.1", mainId: 1, subIndex: 1, content: "已存在子计划" }],
+      1: [{ id: "1.1", mainId: 1, subIndex: 1, content: "已存在子计划" }],
     },
   };
   const patchText = "ADD 1.1 新增子计划（模型误用重复ID）";
@@ -101,11 +91,9 @@ test("refinement prompt supports multiple target main plan ids", () => {
 });
 
 test("main-plan parser does not synthesize placeholder main steps from sub-plan-only patch lines", () => {
-  const parsed = parseMainPlansFromPlanText([
-    "UPDATE 2.8 标记完成",
-    "UPDATE 2.9 标记完成",
-    "UPDATE 2.10 标记完成",
-  ].join("\n"));
+  const parsed = parseMainPlansFromPlanText(
+    ["UPDATE 2.8 标记完成", "UPDATE 2.9 标记完成", "UPDATE 2.10 标记完成"].join("\n"),
+  );
   assert.equal(Array.isArray(parsed), true);
   assert.equal(parsed.length, 0);
 });

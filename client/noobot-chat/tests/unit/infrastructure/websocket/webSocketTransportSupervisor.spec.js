@@ -18,7 +18,9 @@ class MockWebSocket {
   constructor(url) {
     this.url = url;
     this.readyState = MockWebSocket.CONNECTING;
-    this.close = vi.fn(() => { this.readyState = MockWebSocket.CLOSED; });
+    this.close = vi.fn(() => {
+      this.readyState = MockWebSocket.CLOSED;
+    });
   }
 }
 
@@ -61,7 +63,7 @@ describe("webSocketTransportSupervisor", () => {
     const createWebSocket = vi.fn((url) => new MockWebSocket(url));
     const supervisor = createWebSocketTransportSupervisor({
       resolveWebSocketUrl: () => `ws://test/channel?apikey=${apiKey}`,
-      resolveTransportOwner: () => apiKey === "admin-key" ? "admin" : "xiayu",
+      resolveTransportOwner: () => (apiKey === "admin-key" ? "admin" : "xiayu"),
       createWebSocket,
     });
     const admin = supervisor.acquire();
@@ -108,14 +110,19 @@ describe("webSocketTransportSupervisor", () => {
     expect(supervisor.release(first.socket)).toBe(false);
     expect(supervisor.current()).toBe(replacement.socket);
     expect(supervisor.release(replacement.socket)).toBe(true);
-    expect(supervisor.status()).toMatchObject({ phase: WEB_SOCKET_TRANSPORT_PHASE.IDLE, hasSocket: false });
+    expect(supervisor.status()).toMatchObject({
+      phase: WEB_SOCKET_TRANSPORT_PHASE.IDLE,
+      hasSocket: false,
+    });
   });
 
   it("contains constructor exceptions without publishing a partial generation", () => {
     const supervisor = createWebSocketTransportSupervisor({
       channelId: "chat",
       resolveWebSocketUrl: () => "invalid",
-      createWebSocket: () => { throw new DOMException("invalid url", "SyntaxError"); },
+      createWebSocket: () => {
+        throw new DOMException("invalid url", "SyntaxError");
+      },
     });
 
     expect(() => supervisor.acquire()).not.toThrow();
@@ -170,7 +177,9 @@ describe("webSocketTransportSupervisor", () => {
 
   it("contains websocket URL resolver failures", () => {
     const supervisor = createWebSocketTransportSupervisor({
-      resolveWebSocketUrl: () => { throw new Error("auth state unavailable"); },
+      resolveWebSocketUrl: () => {
+        throw new Error("auth state unavailable");
+      },
     });
 
     expect(() => supervisor.acquire()).not.toThrow();
@@ -222,9 +231,12 @@ describe("webSocketTransportSupervisor", () => {
 
   it("shares one authentication recovery promise per channel failure series", async () => {
     let resolveRefresh;
-    const refreshAuthentication = vi.fn(() => new Promise((resolve) => {
-      resolveRefresh = resolve;
-    }));
+    const refreshAuthentication = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
     const supervisor = createWebSocketTransportSupervisor({ refreshAuthentication });
 
     const first = supervisor.refreshCredentials();
@@ -261,10 +273,12 @@ describe("webSocketTransportSupervisor", () => {
       refreshAuthentication: vi.fn(async () => false),
     });
 
-    await expect(supervisor.recover({
-      reconnect: vi.fn(),
-      suspendOnAuthenticationFailure: true,
-    })).resolves.toBe(false);
+    await expect(
+      supervisor.recover({
+        reconnect: vi.fn(),
+        suspendOnAuthenticationFailure: true,
+      }),
+    ).resolves.toBe(false);
     expect(supervisor.status().phase).toBe(WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED);
   });
 

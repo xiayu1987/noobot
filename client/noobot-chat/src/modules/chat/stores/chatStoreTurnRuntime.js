@@ -4,9 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  applyExecutionChildren, applyExecutionSnapshot, applyExecutionTree,
-  applyTurnLifecycleEnvelope, applyTurnLifecycleSnapshot, applyTurnTimingSnapshot, applyTurnTimingUpdate,
-  applyTurnTerminalResolution, applyTurnRuntimeEvent, createTurnRuntimeRegistryState,
+  applyExecutionChildren,
+  applyExecutionSnapshot,
+  applyExecutionTree,
+  applyTurnLifecycleEnvelope,
+  applyTurnLifecycleSnapshot,
+  applyTurnTimingSnapshot,
+  applyTurnTimingUpdate,
+  applyTurnTerminalResolution,
+  applyTurnRuntimeEvent,
+  createTurnRuntimeRegistryState,
   pruneTerminalTurns,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 
@@ -41,7 +48,8 @@ export function createTurnRuntimeStoreActions(
     pruneTerminalTurns(options = {}) {
       const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
       const result = pruneTerminalTurns(registry, options);
-      const applied = Array.isArray(result?.removedTurnScopeIds) && result.removedTurnScopeIds.length > 0;
+      const applied =
+        Array.isArray(result?.removedTurnScopeIds) && result.removedTurnScopeIds.length > 0;
       if (applied) turnRuntimeRegistry.value = { ...registry };
       return { ...(result || {}), applied };
     },

@@ -11,7 +11,11 @@ import {
   resolvePluginSelection,
 } from "../normalization/plugin-selection.js";
 
-export function mergeRunConfigPluginPolicy({ baseRunConfig = {}, runConfigPatch = {}, disabledPlugins = [] } = {}) {
+export function mergeRunConfigPluginPolicy({
+  baseRunConfig = {},
+  runConfigPatch = {},
+  disabledPlugins = [],
+} = {}) {
   const merged = {
     ...(isPlainObject(baseRunConfig) ? baseRunConfig : {}),
     ...(isPlainObject(runConfigPatch) ? runConfigPatch : {}),

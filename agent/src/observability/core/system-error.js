@@ -3,7 +3,4 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export {
-  getSystemErrorLogFilePath,
-  appendSystemErrorLog,
-} from "../error-log/system-error-log.js";
+export { getSystemErrorLogFilePath, appendSystemErrorLog } from "../error-log/system-error-log.js";

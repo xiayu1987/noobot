@@ -39,16 +39,12 @@ export async function buildDirectoryArchiveFile({
   absoluteDirectoryPath = "",
   archiveName = "workspace-directory",
 } = {}) {
-  const safeArchiveName = String(archiveName || "workspace-directory")
-    .replace(/[^a-zA-Z0-9._-]+/g, "_")
-    .replace(/^_+|_+$/g, "") || "workspace-directory";
-  const temporaryDirectory = await mkdtemp(
-    path.join(os.tmpdir(), "noobgo-workspace-download-"),
-  );
-  const archiveFilePath = path.join(
-    temporaryDirectory,
-    `${safeArchiveName}.zip`,
-  );
+  const safeArchiveName =
+    String(archiveName || "workspace-directory")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "workspace-directory";
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "noobgo-workspace-download-"));
+  const archiveFilePath = path.join(temporaryDirectory, `${safeArchiveName}.zip`);
   const sourceDirectoryName = path.basename(absoluteDirectoryPath);
   const zipFile = new yazl.ZipFile();
   await addDirectoryToZip({

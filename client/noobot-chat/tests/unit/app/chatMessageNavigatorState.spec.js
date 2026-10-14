@@ -18,26 +18,32 @@ function ref(value) {
 
 describe("chatMessageNavigatorState", () => {
   it("normalizes selected navigator item anchors", () => {
-    expect(normalizeChatMessageNavigatorAnchor({ id: "  chat-message-2  " })).toBe("chat-message-2");
+    expect(normalizeChatMessageNavigatorAnchor({ id: "  chat-message-2  " })).toBe(
+      "chat-message-2",
+    );
     expect(normalizeChatMessageNavigatorAnchor({ id: 42 })).toBe("42");
     expect(normalizeChatMessageNavigatorAnchor(null)).toBe("");
   });
 
   it("builds pseudo routes for opening and closing the mobile navigator", () => {
-    expect(buildChatMessageNavigatorOpenRoute({
-      sessionId: "session-1",
-      anchor: "chat-message-1",
-      chatNavigatorPanel: "chatNavigator",
-    })).toEqual({
+    expect(
+      buildChatMessageNavigatorOpenRoute({
+        sessionId: "session-1",
+        anchor: "chat-message-1",
+        chatNavigatorPanel: "chatNavigator",
+      }),
+    ).toEqual({
       sessionId: "session-1",
       panel: "chatNavigator",
       anchor: "chat-message-1",
     });
 
-    expect(buildChatMessageNavigatorCloseRoute({
-      sessionId: "session-1",
-      anchor: "chat-message-1",
-    })).toEqual({
+    expect(
+      buildChatMessageNavigatorCloseRoute({
+        sessionId: "session-1",
+        anchor: "chat-message-1",
+      }),
+    ).toEqual({
       sessionId: "session-1",
       panel: "",
       anchor: "chat-message-1",
@@ -75,11 +81,7 @@ describe("chatMessageNavigatorState", () => {
   });
 
   it("selects the last navigator item anchor and pushes its pseudo route", () => {
-    const navItems = [
-      { id: "chat-message-1" },
-      { id: "chat-message-2" },
-      { id: "chat-message-5" },
-    ];
+    const navItems = [{ id: "chat-message-1" }, { id: "chat-message-2" }, { id: "chat-message-5" }];
     const scrollToMessageAnchor = vi.fn();
     const pushPseudoRoute = vi.fn();
 
@@ -106,15 +108,17 @@ describe("chatMessageNavigatorState", () => {
     const scrollToMessageAnchor = vi.fn();
     const pushPseudoRoute = vi.fn();
 
-    expect(() => selectChatMessageNavigatorItem({
-      item: null,
-      currentMessageAnchorId,
-      messageListPanelRef: ref({ scrollToMessageAnchor }),
-      isMobile: ref(false),
-      mobileChatNavigatorVisible: ref(false),
-      activeSessionId: ref("session-empty"),
-      pushPseudoRoute,
-    })).not.toThrow();
+    expect(() =>
+      selectChatMessageNavigatorItem({
+        item: null,
+        currentMessageAnchorId,
+        messageListPanelRef: ref({ scrollToMessageAnchor }),
+        isMobile: ref(false),
+        mobileChatNavigatorVisible: ref(false),
+        activeSessionId: ref("session-empty"),
+        pushPseudoRoute,
+      }),
+    ).not.toThrow();
 
     expect(currentMessageAnchorId.value).toBe("");
     expect(scrollToMessageAnchor).toHaveBeenCalledWith("");

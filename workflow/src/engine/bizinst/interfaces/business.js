@@ -9,4 +9,4 @@ class IBusiness {
   getBizinst() {}
 }
 
-export default  IBusiness;
+export default IBusiness;

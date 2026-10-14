@@ -64,10 +64,11 @@ export function streamCommand(identity = {}) {
   });
 }
 
-export function emitCommandReceipt(socket, payload, {
-  outcome = AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
-  error,
-} = {}) {
+export function emitCommandReceipt(
+  socket,
+  payload,
+  { outcome = AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED, error } = {},
+) {
   const receipt = createAgentCommandReceipt({
     commandId: payload.commandId,
     commandType: payload.commandType,

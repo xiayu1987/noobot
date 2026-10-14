@@ -14,13 +14,17 @@ const expected = new Map([
   ["noobot-client", { cwd: path.join(root, "client/noobot-chat"), script: "deploy/run-caddy.sh" }],
 ]);
 
-const apps = JSON.parse(await new Promise((resolve, reject) => {
-  let input = "";
-  process.stdin.setEncoding("utf8");
-  process.stdin.on("data", (chunk) => { input += chunk; });
-  process.stdin.on("end", () => resolve(input));
-  process.stdin.on("error", reject);
-}));
+const apps = JSON.parse(
+  await new Promise((resolve, reject) => {
+    let input = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      input += chunk;
+    });
+    process.stdin.on("end", () => resolve(input));
+    process.stdin.on("error", reject);
+  }),
+);
 
 const errors = [];
 const seenPids = new Set();
@@ -35,7 +39,8 @@ for (const [name, definition] of expected) {
   const expectedScript = path.join(definition.cwd, definition.script);
   const actualCwd = path.resolve(env.pm_cwd || "");
   if (actualCwd !== definition.cwd) errors.push(`${name}: cwd=${actualCwd}`);
-  if (pmExecPath !== expectedScript) errors.push(`${name}: entry=${pmExecPath}, expected=${expectedScript}`);
+  if (pmExecPath !== expectedScript)
+    errors.push(`${name}: entry=${pmExecPath}, expected=${expectedScript}`);
   const pid = Number(app.pid);
   if (!Number.isInteger(pid) || pid <= 0) errors.push(`${name}: invalid pid=${app.pid}`);
   else if (seenPids.has(pid)) errors.push(`${name}: duplicate pid=${pid}`);

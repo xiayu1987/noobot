@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import FlowException from './flow-exception.js';
+import FlowException from "./flow-exception.js";
 
 class FlowPolicyException extends FlowException {
-  constructor(msg = 'FlowPolicyException') {
+  constructor(msg = "FlowPolicyException") {
     super(msg);
-    this.name = 'FlowPolicyException';
+    this.name = "FlowPolicyException";
   }
 }
 
-export default  FlowPolicyException;
+export default FlowPolicyException;

@@ -10,10 +10,7 @@ export function nowIsoTimestamp() {
 
 export function buildStatusSummary(
   items = [],
-  {
-    statusAccessor = (item = {}) => item?.status,
-    fields = [],
-  } = {},
+  { statusAccessor = (item = {}) => item?.status, fields = [] } = {},
 ) {
   const source = Array.isArray(items) ? items : [];
   const summary = { total: source.length };

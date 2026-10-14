@@ -70,10 +70,7 @@ export function createServiceTool({ agentContext }) {
         .optional()
         .describe(tTool(agentContext, "tools.service.fieldCustomParam")),
       queryString: z
-        .record(
-          z.string(),
-          z.union([z.string(), z.number(), z.boolean(), z.null()]),
-        )
+        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
         .optional()
         .describe(tTool(agentContext, "tools.service.fieldQueryString")),
       body: z.unknown().optional().describe(tTool(agentContext, "tools.service.fieldBody")),
@@ -81,10 +78,7 @@ export function createServiceTool({ agentContext }) {
     func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
       const globalConfig = runtime?.globalConfig || {};
       const userId = String(
-        agentContext?.userId ||
-          runtime?.userId ||
-          runtime?.systemRuntime?.userId ||
-          "",
+        agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
       ).trim();
       const inputErr = validateInput({
         serviceName,
@@ -163,9 +157,7 @@ export function createServiceTool({ agentContext }) {
         body,
       });
       const normalizedResult =
-        result && typeof result === "object" && !Array.isArray(result)
-          ? result
-          : { data: result };
+        result && typeof result === "object" && !Array.isArray(result) ? result : { data: result };
       return toToolJsonResult(
         TOOL_NAME.CALL_SERVICE,
         {

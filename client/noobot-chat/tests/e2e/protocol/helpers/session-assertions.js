@@ -52,9 +52,9 @@ export function assertResendReplacementIdentityChain(commands = [], session = {}
     expect(dialogProcessId).toBeTruthy();
     expect(turnScopeId).toBeTruthy();
     const materializedTurn = turnOrder.find((turn = {}) => turn.turnScopeId === turnScopeId);
-    const replacementTombstones = replacements.filter((replacement = {}) => (
-      replacement.replacementTurnScopeId === turnScopeId
-    ));
+    const replacementTombstones = replacements.filter(
+      (replacement = {}) => replacement.replacementTurnScopeId === turnScopeId,
+    );
     expect(Boolean(materializedTurn) || replacementTombstones.length > 0).toBe(true);
     if (materializedTurn) expect(materializedTurn.dialogProcessId).toBe(dialogProcessId);
     for (const replacement of replacementTombstones) {

@@ -481,33 +481,31 @@ describe("useChatList", () => {
     refs.sessions.value.push(session);
     refs.activeSessionId.value = "reload-backend";
 
-    api.applySessionDetail(
-      {
-        sessionId: "reload-backend",
-        sessions: [
-          {
-            sessionId: "reload-backend",
-            currentTaskId: "",
-            createdAt: "2026-05-14T00:00:00.000Z",
-            updatedAt: "2026-05-14T00:02:00.000Z",
-            messages: [
-              {
-                id: "restored-user",
-                messageId: "restored-user",
-                role: RoleEnum.USER,
-                content: "restored question",
-              },
-              {
-                id: "restored-assistant",
-                messageId: "restored-assistant",
-                role: RoleEnum.ASSISTANT,
-                content: "restored answer",
-              },
-            ],
-          },
-        ],
-      },
-    );
+    api.applySessionDetail({
+      sessionId: "reload-backend",
+      sessions: [
+        {
+          sessionId: "reload-backend",
+          currentTaskId: "",
+          createdAt: "2026-05-14T00:00:00.000Z",
+          updatedAt: "2026-05-14T00:02:00.000Z",
+          messages: [
+            {
+              id: "restored-user",
+              messageId: "restored-user",
+              role: RoleEnum.USER,
+              content: "restored question",
+            },
+            {
+              id: "restored-assistant",
+              messageId: "restored-assistant",
+              role: RoleEnum.ASSISTANT,
+              content: "restored answer",
+            },
+          ],
+        },
+      ],
+    });
 
     expect(refs.activeSessionId.value).toBe("reload-backend");
     expect(session.loaded).toBe(true);

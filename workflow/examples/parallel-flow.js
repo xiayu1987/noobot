@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import Model from '../src/design/model/model.js';
-import Flowto from '../src/design/model/flowto/flowto.js';
-import NodeLineRLAT from '../src/design/model/flowto/node-line-rlat.js';
-import ActionNode from '../src/design/model/node/action-node.js';
-import StateNode from '../src/design/model/node/state-node.js';
-import ENodeType from '../src/design/model/node/enums/node-type.js';
-import Business from '../src/engine/bizinst/business.js';
-import SubmitAction from '../src/engine/bizinst/action/submit-action.js';
-import BizinstTreeControlCenter from '../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js';
+import Model from "../src/design/model/model.js";
+import Flowto from "../src/design/model/flowto/flowto.js";
+import NodeLineRLAT from "../src/design/model/flowto/node-line-rlat.js";
+import ActionNode from "../src/design/model/node/action-node.js";
+import StateNode from "../src/design/model/node/state-node.js";
+import ENodeType from "../src/design/model/node/enums/node-type.js";
+import Business from "../src/engine/bizinst/business.js";
+import SubmitAction from "../src/engine/bizinst/action/submit-action.js";
+import BizinstTreeControlCenter from "../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js";
 
 function linkFlow(flowName, fromNode, toNode) {
   const flow = new Flowto();
@@ -44,23 +44,23 @@ function createStateNode(name, stateType, model) {
 
 function buildParallelModel() {
   const model = new Model();
-  const startParallelNode = createStateNode('并发开始节点', 2, model);
-  const endParallelNode = createStateNode('并发结束节点', 3, model);
+  const startParallelNode = createStateNode("并发开始节点", 2, model);
+  const endParallelNode = createStateNode("并发结束节点", 3, model);
 
   const actionA = new ActionNode();
-  actionA.setName('并发审核A');
+  actionA.setName("并发审核A");
   actionA.setNodeType(ENodeType.ActionNode);
   actionA.setModel(model);
 
   const actionB = new ActionNode();
-  actionB.setName('并发审核B');
+  actionB.setName("并发审核B");
   actionB.setNodeType(ENodeType.ActionNode);
   actionB.setModel(model);
 
-  const s2a = linkFlow('并发开始到A', startParallelNode, actionA);
-  const s2b = linkFlow('并发开始到B', startParallelNode, actionB);
-  const a2e = linkFlow('A到并发结束', actionA, endParallelNode);
-  const b2e = linkFlow('B到并发结束', actionB, endParallelNode);
+  const s2a = linkFlow("并发开始到A", startParallelNode, actionA);
+  const s2b = linkFlow("并发开始到B", startParallelNode, actionB);
+  const a2e = linkFlow("A到并发结束", actionA, endParallelNode);
+  const b2e = linkFlow("B到并发结束", actionB, endParallelNode);
 
   model.setNodes([startParallelNode, actionA, actionB, endParallelNode]);
   model.setFlowtos([s2a.flow, s2b.flow, a2e.flow, b2e.flow]);
@@ -87,24 +87,29 @@ function main() {
   const treeRecord = startResult.getBizinstTreeRecord();
 
   let currentSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
-  console.log('启动后当前步骤数:', currentSteps.length);
+  console.log("启动后当前步骤数:", currentSteps.length);
   console.log(
-    '当前步骤节点:',
-    currentSteps.map((s) => s.getActionNodeState().getNode().getName()).join(', '),
+    "当前步骤节点:",
+    currentSteps.map((s) => s.getActionNodeState().getNode().getName()).join(", "),
   );
 
   controlCenter.execAction(new SubmitAction(), bizinst, currentSteps[0], treeRecord);
   currentSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
-  console.log('提交一个分支后当前步骤数:', currentSteps.length);
+  console.log("提交一个分支后当前步骤数:", currentSteps.length);
 
   controlCenter.execAction(new SubmitAction(), bizinst, currentSteps[0], treeRecord);
   currentSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
-  console.log('提交全部分支后当前步骤数:', currentSteps.length);
+  console.log("提交全部分支后当前步骤数:", currentSteps.length);
 
-  const sourceNodeName =
-    bizinst.getState().getCurrentState().getSourceInfo()?.getModelState()?.getNode()?.getName?.();
-  console.log('当前状态来源节点:', sourceNodeName);
-  console.log('动作记录数:', treeRecord.getActionRecords().length);
+  const sourceNodeName = bizinst
+    .getState()
+    .getCurrentState()
+    .getSourceInfo()
+    ?.getModelState()
+    ?.getNode()
+    ?.getName?.();
+  console.log("当前状态来源节点:", sourceNodeName);
+  console.log("动作记录数:", treeRecord.getActionRecords().length);
 }
 
 main();

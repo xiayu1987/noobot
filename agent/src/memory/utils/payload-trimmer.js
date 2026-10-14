@@ -29,10 +29,7 @@ export function trimPromptPayloadByCharLimit(
 
   let next = [...source];
   while (next.length > 0 && resolveSerializedLength(next) > safeMaxChars) {
-    const removeCount = Math.max(
-      1,
-      Math.ceil(next.length * (Number(shrinkRatio) || 1 / 3)),
-    );
+    const removeCount = Math.max(1, Math.ceil(next.length * (Number(shrinkRatio) || 1 / 3)));
     next = next.slice(removeCount);
   }
   return next;

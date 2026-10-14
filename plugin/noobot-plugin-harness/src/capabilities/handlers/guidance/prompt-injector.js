@@ -5,12 +5,7 @@
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { resolveModelMessages } from "../../../core/message-store.js";
-import {
-  CAPABILITY_DOMAIN,
-  LOCALE,
-  appendCapabilityLog,
-  ensureHarnessBucket,
-} from "./deps.js";
+import { CAPABILITY_DOMAIN, LOCALE, appendCapabilityLog, ensureHarnessBucket } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
@@ -57,13 +52,14 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
   const locale = state?.locale || LOCALE.ZH_CN;
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
 
-  const requestedAction = String(action || "auto").trim().toLowerCase();
+  const requestedAction = String(action || "auto")
+    .trim()
+    .toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === "summary";
   const allowGuidance = requestedAction === "auto" || requestedAction === "guidance";
 

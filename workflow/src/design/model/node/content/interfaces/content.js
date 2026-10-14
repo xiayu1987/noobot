@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IContent {
-}
+class IContent {}
 
-export default  IContent;
+export default IContent;

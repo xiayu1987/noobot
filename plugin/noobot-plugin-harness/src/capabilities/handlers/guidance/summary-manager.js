@@ -6,7 +6,10 @@
 import { ensureHarnessBucket } from "./deps.js";
 import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
-import { mergeTransferEnvelopes, normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import {
+  mergeTransferEnvelopes,
+  normalizeTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);
@@ -38,13 +41,7 @@ export function shouldSaveSummaryToAttachment(meta = {}) {
 
 export async function transferSummaryInjectionMessage(
   ctx = {},
-  {
-    fullText = "",
-    summaryText = "",
-    detailText = "",
-    injectMode = "full",
-    meta = {},
-  } = {},
+  { fullText = "", summaryText = "", detailText = "", injectMode = "full", meta = {} } = {},
 ) {
   const runtime = ctx?.agentContext?.bindings?.runtime || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
@@ -62,9 +59,9 @@ export async function transferSummaryInjectionMessage(
     detailText,
     meta,
   });
-  const directEnvelope = (Array.isArray(transferred?.transferEnvelopes)
-    ? transferred.transferEnvelopes
-    : []).find((envelope = {}) => envelope?.payload?.mode === "direct");
+  const directEnvelope = (
+    Array.isArray(transferred?.transferEnvelopes) ? transferred.transferEnvelopes : []
+  ).find((envelope = {}) => envelope?.payload?.mode === "direct");
   if (!directEnvelope || typeof directEnvelope?.payload?.content !== "string") {
     throw new Error("harness_summary_direct_transfer_required");
   }
@@ -82,8 +79,9 @@ export function recordSummaryTransferEnvelopes(ctx = {}, transferPayload = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return [];
   const { bucket } = holder;
-  const envelopes = normalizeTransferEnvelopes(transferPayload?.transferEnvelopes || [])
-    .filter((envelope) => envelope.payload.mode === "attachment");
+  const envelopes = normalizeTransferEnvelopes(transferPayload?.transferEnvelopes || []).filter(
+    (envelope) => envelope.payload.mode === "attachment",
+  );
   bucket.summaryTransferEnvelopes = mergeTransferEnvelopes(
     bucket.summaryTransferEnvelopes || [],
     envelopes,

@@ -38,7 +38,10 @@ const nodes = [
 
 test("workflow node state repository initializes planning snapshot with stable identities", async () => {
   const repo = createInMemoryWorkflowNodeStateRepository();
-  const snapshot = await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
+  const snapshot = await repo.initialize({
+    workflowRunId: "wf-run-1",
+    planningNodeSessions: nodes,
+  });
 
   assert.equal(snapshot.workflowRunId, "wf-run-1");
   assert.equal(snapshot.sequence, 2);
@@ -118,11 +121,27 @@ test("workflow node state repository deduplicates same target and rejects revisi
 test("workflow node state repository protects terminal nodes from rollback", async () => {
   const repo = createInMemoryWorkflowNodeStateRepository();
   await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
-  await repo.commit({ workflowRunId: "wf-run-1", nodeExecutionId: "node-a-exec", status: "running", expectedRevision: 1 });
-  await repo.commit({ workflowRunId: "wf-run-1", nodeExecutionId: "node-a-exec", status: "failed", expectedRevision: 2, failure: "boom" });
+  await repo.commit({
+    workflowRunId: "wf-run-1",
+    nodeExecutionId: "node-a-exec",
+    status: "running",
+    expectedRevision: 1,
+  });
+  await repo.commit({
+    workflowRunId: "wf-run-1",
+    nodeExecutionId: "node-a-exec",
+    status: "failed",
+    expectedRevision: 2,
+    failure: "boom",
+  });
 
   await assert.rejects(
-    repo.commit({ workflowRunId: "wf-run-1", nodeExecutionId: "node-a-exec", status: "running", expectedRevision: 3 }),
+    repo.commit({
+      workflowRunId: "wf-run-1",
+      nodeExecutionId: "node-a-exec",
+      status: "running",
+      expectedRevision: 3,
+    }),
     /terminal/,
   );
 });
@@ -130,8 +149,18 @@ test("workflow node state repository protects terminal nodes from rollback", asy
 test("workflow node state repository isolates parallel nodes and supports reload", async () => {
   const repo = createInMemoryWorkflowNodeStateRepository();
   await repo.initialize({ workflowRunId: "wf-run-1", planningNodeSessions: nodes });
-  await repo.commit({ workflowRunId: "wf-run-1", nodeExecutionId: "node-a-exec", status: "running", expectedRevision: 1 });
-  await repo.commit({ workflowRunId: "wf-run-1", nodeExecutionId: "node-b-exec", status: "running", expectedRevision: 1 });
+  await repo.commit({
+    workflowRunId: "wf-run-1",
+    nodeExecutionId: "node-a-exec",
+    status: "running",
+    expectedRevision: 1,
+  });
+  await repo.commit({
+    workflowRunId: "wf-run-1",
+    nodeExecutionId: "node-b-exec",
+    status: "running",
+    expectedRevision: 1,
+  });
 
   const state = repo.exportState();
   const reloaded = createInMemoryWorkflowNodeStateRepository({ initialState: state });

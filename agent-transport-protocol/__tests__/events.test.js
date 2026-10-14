@@ -34,7 +34,10 @@ test("transport event keeps routing identity separate from authoritative data", 
 });
 
 test("transport event rejects missing event identity and non-object data", () => {
-  assert.throws(() => createAgentTransportEvent({ event: "", data: {} }), /missing_transport_event/);
+  assert.throws(
+    () => createAgentTransportEvent({ event: "", data: {} }),
+    /missing_transport_event/,
+  );
   assert.throws(
     () => createAgentTransportEvent({ event: "delta", data: [] }),
     /invalid_transport_event_data/,

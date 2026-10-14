@@ -124,7 +124,8 @@ export function useWorkflowLocale() {
   const { locale, translate: translateGlobal } = useLocale();
 
   function translate(key = "", params = {}) {
-    const localTable = WORKFLOW_FRONTEND_MESSAGES[locale.value] || WORKFLOW_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
+    const localTable =
+      WORKFLOW_FRONTEND_MESSAGES[locale.value] || WORKFLOW_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
     const fallbackTable = WORKFLOW_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
     const localHit = resolvePath(localTable, key);
     const fallbackHit = resolvePath(fallbackTable, key);

@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ActionRecord from '../../action-record.js';
-import ProcessRecord from '../../process-record.js';
-import BizinstBox from './bizinst-box.js';
-import ECompositeNodeStateProcessHandleWay from '../../state/proc/fschange/enums/composite-node-state-process-handle-way.js';
+import ActionRecord from "../../action-record.js";
+import ProcessRecord from "../../process-record.js";
+import BizinstBox from "./bizinst-box.js";
+import ECompositeNodeStateProcessHandleWay from "../../state/proc/fschange/enums/composite-node-state-process-handle-way.js";
 
 class BizinstTreeBox {
   constructor() {
@@ -43,7 +43,8 @@ class BizinstTreeBox {
     let currentBizinst = null;
 
     this.loopBizinst(this.rootBizinst, (bizinst) => {
-      const actionNodeStates = bizinst?.getState?.()?.getBizinstModel?.()?.getActionNodeStates?.() || [];
+      const actionNodeStates =
+        bizinst?.getState?.()?.getBizinstModel?.()?.getActionNodeStates?.() || [];
       for (const actionNodeState of actionNodeStates) {
         if (actionNodeState === stepState.getActionNodeState()) {
           currentBizinst = bizinst;
@@ -67,9 +68,16 @@ class BizinstTreeBox {
     box.saveState(stateProcess);
     this.bizinstAndIsHasProcess.set(bizinst, true);
 
-    if (typeof stateProcess.getChildBizinst === 'function' && typeof stateProcess.getCompositeNodeStateProcessHandleWay === 'function') {
+    if (
+      typeof stateProcess.getChildBizinst === "function" &&
+      typeof stateProcess.getCompositeNodeStateProcessHandleWay === "function"
+    ) {
       const childBizinst = stateProcess.getChildBizinst();
-      if (childBizinst && stateProcess.getCompositeNodeStateProcessHandleWay() === ECompositeNodeStateProcessHandleWay.startChildBizinst) {
+      if (
+        childBizinst &&
+        stateProcess.getCompositeNodeStateProcessHandleWay() ===
+          ECompositeNodeStateProcessHandleWay.startChildBizinst
+      ) {
         this.bizinstAndBizinstBoxMap.set(childBizinst, this._createBizinstBox(childBizinst));
       }
     }
@@ -124,4 +132,4 @@ class BizinstTreeBox {
   }
 }
 
-export default  BizinstTreeBox;
+export default BizinstTreeBox;

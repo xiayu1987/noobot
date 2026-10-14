@@ -12,10 +12,7 @@ import {
   ensureHarnessBucket,
   relaySeparateModelOutputAsUserMessage,
 } from "./deps.js";
-import {
-  captureInjectedResult,
-  scheduleInjectTask,
-} from "../inject-fallback.js";
+import { captureInjectedResult, scheduleInjectTask } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
@@ -57,11 +54,15 @@ export function schedulePlanUpdateByInject(
   if (!holder) return false;
   const { bucket, state } = holder;
   const normalizedStage =
-    String(stage || "revision").trim().toLowerCase() === "revision"
+    String(stage || "revision")
+      .trim()
+      .toLowerCase() === "revision"
       ? "revision"
       : "refinement";
   const normalizedPreferredTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
-    ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
+    ? targetMainStepIndexes
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item) && item > 0)
     : [];
   const targetMainSteps =
     normalizedStage === "refinement"
@@ -103,7 +104,9 @@ export function schedulePlanUpdateByInject(
     buildScheduledDetail: ({ bucket, state }) => ({
       stage: normalizedStage,
       refinementTargetMainStepIndexes:
-        normalizedStage === "refinement" ? targetMainSteps.map((item = {}) => Number(item?.index)) : [],
+        normalizedStage === "refinement"
+          ? targetMainSteps.map((item = {}) => Number(item?.index))
+          : [],
       checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
     }),
   });
@@ -118,11 +121,10 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
   const systemChecklistContent = buildPlanChecklistSystemContent({
     locale,
     planText: bucket?.planText || "",
@@ -146,7 +148,8 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   const userInjection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: String(promptContent || "").trim(),
-    injectedMessageType: pendingData.stage === "revision" ? "planning_revision_prompt" : "planning_refinement_prompt",
+    injectedMessageType:
+      pendingData.stage === "revision" ? "planning_revision_prompt" : "planning_refinement_prompt",
     injectAt: "append",
     dedupe: false,
     avoidBreakToolCallContinuity: true,
@@ -159,9 +162,10 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
       pendingData.stage === "revision" ? "revision" : "refinement",
       { programmingMode, textMode, dynamicPolicyPrompt, includeWorkflowPolicy: false },
     ),
-    injectedMessageType: pendingData.stage === "revision"
-      ? "planning_revision_responsibility_constraint"
-      : "planning_refinement_responsibility_constraint",
+    injectedMessageType:
+      pendingData.stage === "revision"
+        ? "planning_revision_responsibility_constraint"
+        : "planning_refinement_responsibility_constraint",
     injectAt: "append",
     dedupe: false,
     avoidBreakToolCallContinuity: true,
@@ -228,7 +232,9 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
             stage === "refinement"
               ? formatOperationDirectoryForRelay(resolveOperationDirectoryContext(currentCtx))
               : "",
-          ].filter(Boolean).join("\n\n"),
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
           dedupe: true,
         });
       }
@@ -238,11 +244,9 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
           state,
         );
         const scheduled = applied
-          ? schedulePlanUpdateByInject(
-            currentCtx,
-            "refinement",
-            { targetMainStepIndexes: refinementTargetMainStepIndexes },
-          )
+          ? schedulePlanUpdateByInject(currentCtx, "refinement", {
+              targetMainStepIndexes: refinementTargetMainStepIndexes,
+            })
           : false;
         return {
           applied: applied || scheduled,

@@ -10,9 +10,7 @@ import {
   ATTACHMENT_RELATION_TYPE,
   createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
-import {
-  handleAttachmentLifecycleStreamEvent,
-} from "../../../../../../src/modules/chat/runtime/engine/streamHandlers.js";
+import { handleAttachmentLifecycleStreamEvent } from "../../../../../../src/modules/chat/runtime/engine/streamHandlers.js";
 import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 
 describe("chatEngine streamHandlers transport boundary", () => {
@@ -121,5 +119,4 @@ describe("chatEngine streamHandlers transport boundary", () => {
       relations: [relation],
     });
   });
-
 });

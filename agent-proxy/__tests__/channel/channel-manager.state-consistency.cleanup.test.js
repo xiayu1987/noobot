@@ -23,7 +23,10 @@ test("newly attached subscriber should receive no_conversation snapshot state", 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
   const stateEvents = listEvents(client, "channel_state");
-  assert.equal(stateEvents.some((item) => item?.data?.state === "no_conversation"), true);
+  assert.equal(
+    stateEvents.some((item) => item?.data?.state === "no_conversation"),
+    true,
+  );
 });
 
 test("detachSocketFromAllChannels should detach terminal subscribers and schedule cleanup", () => {
@@ -73,7 +76,10 @@ test("resolveChannelFromSocketMessage uses socket userId when continue payload o
     sessionId: "session-new",
   });
   const socket = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  socket.__agentProxyActiveChannelKey = createChannelKey({ userId: "user-1", sessionId: "session-old" });
+  socket.__agentProxyActiveChannelKey = createChannelKey({
+    userId: "user-1",
+    sessionId: "session-old",
+  });
 
   const resolvedChannel = manager.resolveChannelFromSocketMessage(socket, {
     action: "continue",
@@ -135,4 +141,3 @@ test("cleanup should remove expired idle channel without subscribers", () => {
   assert.equal(manager.hasChannel(channelKey), false);
   assert.deepEqual(closed, [{ code: 1000, reason: "cleanup" }]);
 });
-

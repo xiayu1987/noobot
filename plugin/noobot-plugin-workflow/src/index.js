@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export {
-  PLUGIN_NAME,
-  PLUGIN_VERSION,
-} from "./core/constants.js";
+export { PLUGIN_NAME, PLUGIN_VERSION } from "./core/constants.js";
 export { registerWorkflowCore, createWorkflowRegistration } from "./core/plugin.js";
 export { registerWorkflowHooks, createRegisterWorkflowHooks } from "./core/orchestrator.js";
 export { normalizeOptions, resolveWorkflowDenyToolNames } from "./core/options.js";

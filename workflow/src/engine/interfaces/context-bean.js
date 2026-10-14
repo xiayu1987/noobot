@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IContextBean {
-}
+class IContextBean {}
 
-export default  IContextBean;
+export default IContextBean;

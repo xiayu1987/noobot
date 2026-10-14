@@ -6,9 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { createMonotonicMessageActions } from "../../../../../../src/modules/chat/runtime/engine/monotonicMessageActions.js";
-import {
-  SESSION_RUN_EVENT,
-} from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyTurnRuntimeEvent,
@@ -91,12 +89,21 @@ describe("monotonicMessageActions stop-window gates", () => {
   it("does not delete messages while the session run state machine is waiting for stop completion", async () => {
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     lifecycle(turnRuntimeRegistry.value, {
-      sessionId: "s1", turnScopeId: "turn-1",
-      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
-      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+      eventType: "turn.action_accepted",
+      state: "action_requesting",
+      phase: "action",
+      executionState: "accepted",
+      revision: 1,
+      sequence: 1,
+      canStop: false,
     });
     lifecycle(turnRuntimeRegistry.value, {
-      sessionId: "s1", turnScopeId: "turn-1", revision: 2, sequence: 2,
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+      revision: 2,
+      sequence: 2,
     });
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
@@ -104,12 +111,21 @@ describe("monotonicMessageActions stop-window gates", () => {
       turnScopeId: "turn-1",
     });
     lifecycle(turnRuntimeRegistry.value, {
-      sessionId: "s1", turnScopeId: "turn-1",
-      eventType: "turn.stop_accepted", state: "stopping", phase: "stop",
-      action: "stop", executionState: "accepted", revision: 3, sequence: 3, canStop: false,
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+      eventType: "turn.stop_accepted",
+      state: "stopping",
+      phase: "stop",
+      action: "stop",
+      executionState: "accepted",
+      revision: 3,
+      sequence: 3,
+      canStop: false,
       commandId: "stop:turn-1",
     });
-    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({ turnRuntimeRegistry });
+    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({
+      turnRuntimeRegistry,
+    });
 
     const result = await actions.deleteMonotonicMessage(userMessage);
 
@@ -128,7 +144,13 @@ describe("monotonicMessageActions stop-window gates", () => {
   });
 
   it("applies the conflict version and retries delete-from without loading session detail", async () => {
-    const { actions, activeSession, userMessage, deleteSessionMessagesFromApi, fetchSessionDetail } = createActions();
+    const {
+      actions,
+      activeSession,
+      userMessage,
+      deleteSessionMessagesFromApi,
+      fetchSessionDetail,
+    } = createActions();
     deleteSessionMessagesFromApi
       .mockResolvedValueOnce({
         ok: false,
@@ -176,7 +198,7 @@ describe("monotonicMessageActions stop-window gates", () => {
   it("deletes a stopped turn after its authoritative summary clears the temporary lock", async () => {
     const applyRunStateEvent = vi.fn();
     const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({
-        applyRunStateEvent,
+      applyRunStateEvent,
     });
     deleteSessionMessagesFromApi.mockResolvedValueOnce({
       ok: true,

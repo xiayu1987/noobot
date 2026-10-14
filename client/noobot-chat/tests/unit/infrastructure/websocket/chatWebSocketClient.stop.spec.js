@@ -60,20 +60,25 @@ describe("chatWebSocketClient stop transport", () => {
     await vi.advanceTimersByTimeAsync(10000);
     expect(resolved).toBe(false);
 
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(createTurnLifecycleEnvelope({
-      eventType: TURN_EVENT.STOP_ACCEPTED,
-      eventId: "stop-accepted:main-turn",
-      commandId: "stop:main-turn",
-      sessionId: "s-1",
-      dialogProcessId: "main-dp",
-      turnScopeId: "main-turn",
-      messageId: "assistant:main-turn",
-      presentationMessageId: "assistant:main-turn",
-      revision: 3,
-      sequence: 3,
-      phase: TURN_PHASE.STOP,
-      state: TURN_STATE.ACTION_REQUESTING,
-    })));
+    socket.emit(
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(
+        createTurnLifecycleEnvelope({
+          eventType: TURN_EVENT.STOP_ACCEPTED,
+          eventId: "stop-accepted:main-turn",
+          commandId: "stop:main-turn",
+          sessionId: "s-1",
+          dialogProcessId: "main-dp",
+          turnScopeId: "main-turn",
+          messageId: "assistant:main-turn",
+          presentationMessageId: "assistant:main-turn",
+          revision: 3,
+          sequence: 3,
+          phase: TURN_PHASE.STOP,
+          state: TURN_STATE.ACTION_REQUESTING,
+        }),
+      ),
+    );
     await expect(stopPromise).resolves.toBe(true);
 
     emitCommandReceipt(socket, runCommand, { outcome: "stopped" });
@@ -84,7 +89,9 @@ describe("chatWebSocketClient stop transport", () => {
   it("rejects when no open transport can send the command", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
 
-    await expect(client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" }))).rejects.toThrow();
+    await expect(
+      client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" })),
+    ).rejects.toThrow();
     expect(client.isStopRequested).toBeUndefined();
     expect(client.getStopRequestedTurnScopeId).toBeUndefined();
     expect(client.clearStopRequested).toBeUndefined();
@@ -96,7 +103,9 @@ describe("chatWebSocketClient stop transport", () => {
     client.connect();
     const socket = MockWebSocket.instances[0];
 
-    await expect(client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" }))).rejects.toThrow();
+    await expect(
+      client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" })),
+    ).rejects.toThrow();
     expect(socket.readyState).toBe(MockWebSocket.CONNECTING);
   });
 
@@ -107,29 +116,38 @@ describe("chatWebSocketClient stop transport", () => {
 
     const firstCommand = stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" });
     const first = client.requestStop(firstCommand);
-    await expect(client.requestStop(stopCommand({
-      commandId: "stop:turn-1",
-      turnScopeId: "turn-1",
-      partialAssistant: { content: "partial" },
-    }))).rejects.toThrow("commandId request already pending");
+    await expect(
+      client.requestStop(
+        stopCommand({
+          commandId: "stop:turn-1",
+          turnScopeId: "turn-1",
+          partialAssistant: { content: "partial" },
+        }),
+      ),
+    ).rejects.toThrow("commandId request already pending");
 
     const stopMessages = socket.sent.map((item) => JSON.parse(item));
     expect(stopMessages).toHaveLength(1);
     expect(stopMessages[0]).toEqual(firstCommand);
-    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(createTurnLifecycleEnvelope({
-      eventType: TURN_EVENT.STOP_ACCEPTED,
-      eventId: "stop-accepted:turn-1",
-      commandId: "stop:turn-1",
-      sessionId: "s-1",
-      dialogProcessId: "main-dp",
-      turnScopeId: "turn-1",
-      messageId: "assistant:turn-1",
-      presentationMessageId: "assistant:turn-1",
-      revision: 3,
-      sequence: 3,
-      phase: TURN_PHASE.STOP,
-      state: TURN_STATE.ACTION_REQUESTING,
-    })));
+    socket.emit(
+      "turn_lifecycle",
+      turnLifecycleProtocolEvent(
+        createTurnLifecycleEnvelope({
+          eventType: TURN_EVENT.STOP_ACCEPTED,
+          eventId: "stop-accepted:turn-1",
+          commandId: "stop:turn-1",
+          sessionId: "s-1",
+          dialogProcessId: "main-dp",
+          turnScopeId: "turn-1",
+          messageId: "assistant:turn-1",
+          presentationMessageId: "assistant:turn-1",
+          revision: 3,
+          sequence: 3,
+          phase: TURN_PHASE.STOP,
+          state: TURN_STATE.ACTION_REQUESTING,
+        }),
+      ),
+    );
     await expect(first).resolves.toBe(true);
   });
 });

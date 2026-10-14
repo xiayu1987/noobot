@@ -30,10 +30,7 @@ describe("sessionIdentity", () => {
   });
 
   it("findSessionByAnyId resolves the unique sessionId", () => {
-    const sessions = [
-      { sessionId: "session-1" },
-      { sessionId: "session-2" },
-    ];
+    const sessions = [{ sessionId: "session-1" }, { sessionId: "session-2" }];
     expect(findSessionByAnyId(sessions, "session-1")).toBe(sessions[0]);
     expect(findSessionByAnyId(sessions, "session-2")).toBe(sessions[1]);
     expect(findSessionByAnyId(sessions, "missing")).toBeNull();
@@ -54,10 +51,12 @@ describe("sessionIdentity", () => {
   });
 
   it("confirmSessionIdentity rejects a different identity", () => {
-    expect(() => confirmSessionIdentity({
-      sessionItem: { sessionId: "session-1", isLocal: true },
-      sessionId: "session-2",
-      activeSessionId: "session-1",
-    })).toThrow("session identity mismatch");
+    expect(() =>
+      confirmSessionIdentity({
+        sessionItem: { sessionId: "session-1", isLocal: true },
+        sessionId: "session-2",
+        activeSessionId: "session-1",
+      }),
+    ).toThrow("session identity mismatch");
   });
 });

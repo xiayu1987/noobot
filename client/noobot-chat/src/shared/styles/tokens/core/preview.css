@@ -4,6 +4,10 @@
   --noobot-preview-border: var(--noobot-panel-border);
   --noobot-preview-danger-bg: var(--noobot-danger-soft);
   --noobot-preview-danger-text: var(--noobot-status-error);
-  --noobot-preview-danger-border: color-mix(in srgb, var(--noobot-status-error) 48%, var(--noobot-panel-border));
+  --noobot-preview-danger-border: color-mix(
+    in srgb,
+    var(--noobot-status-error) 48%,
+    var(--noobot-panel-border)
+  );
   --noobot-preview-media-bg: var(--noobot-base-black);
 }

@@ -10,8 +10,7 @@ function resolvePositiveNumber(value, fallback) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-export const MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS =
-  LENGTH_THRESHOLDS.memory.longPromptPayloadChars;
+export const MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS = LENGTH_THRESHOLDS.memory.longPromptPayloadChars;
 
 export const MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO = resolvePositiveNumber(
   process.env.NOOBOT_MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,

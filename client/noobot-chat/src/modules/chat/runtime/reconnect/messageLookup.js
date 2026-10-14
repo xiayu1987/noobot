@@ -14,21 +14,24 @@ import {
 export function findAssistantMessageByDialogProcessId(activeSession, dialogProcessId = "") {
   const normalizedDpId = _trimStr(dialogProcessId);
   if (!normalizedDpId || !activeSession?.value) return null;
-  return (activeSession.value.messages || []).find(
-    (messageItem) =>
-      _isAssistantRole(messageItem) &&
-      _matchesDialogProcessId(messageItem, normalizedDpId),
-  ) || null;
+  return (
+    (activeSession.value.messages || []).find(
+      (messageItem) =>
+        _isAssistantRole(messageItem) && _matchesDialogProcessId(messageItem, normalizedDpId),
+    ) || null
+  );
 }
 
 export function findAssistantMessageByTurnScopeId(activeSession, turnScopeId = "") {
   const normalizedTurnScopeId = _trimStr(turnScopeId);
   if (!normalizedTurnScopeId || !activeSession?.value) return null;
-  return (activeSession.value.messages || []).find(
-    (messageItem) =>
-      _isAssistantRole(messageItem) &&
-      getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
-  ) || null;
+  return (
+    (activeSession.value.messages || []).find(
+      (messageItem) =>
+        _isAssistantRole(messageItem) &&
+        getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
+    ) || null
+  );
 }
 
 export function hasAssistantMessageWithContent(activeSession, content = "") {
@@ -36,8 +39,7 @@ export function hasAssistantMessageWithContent(activeSession, content = "") {
   if (!normalizedContent || !activeSession?.value) return false;
   return (activeSession.value.messages || []).some(
     (messageItem) =>
-      _isAssistantRole(messageItem) &&
-      _trimStr(messageItem?.content) === normalizedContent,
+      _isAssistantRole(messageItem) && _trimStr(messageItem?.content) === normalizedContent,
   );
 }
 
@@ -48,10 +50,12 @@ export function findLatestAssistantMessageForRealtimeLogs({
   const messageList = Array.isArray(activeSession?.value?.messages)
     ? activeSession.value.messages
     : [];
-  return [...messageList].reverse().find((messageItem) => {
-    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
-    if (!normalizedDpId) return true;
-    const itemDpId = getMessageDialogProcessId(messageItem);
-    return !itemDpId || itemDpId === normalizedDpId;
-  }) || null;
+  return (
+    [...messageList].reverse().find((messageItem) => {
+      if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
+      if (!normalizedDpId) return true;
+      const itemDpId = getMessageDialogProcessId(messageItem);
+      return !itemDpId || itemDpId === normalizedDpId;
+    }) || null
+  );
 }

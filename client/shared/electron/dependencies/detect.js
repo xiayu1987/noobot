@@ -20,7 +20,8 @@ export function createDependencyDetector({
   prependManagedDependencyPath = () => {},
 } = {}) {
   async function hasPlaywrightChromium() {
-    const script = "import('playwright').then(async ({chromium})=>{const fs=await import('node:fs');process.exit(fs.existsSync(chromium.executablePath())?0:1)}).catch(()=>process.exit(1))";
+    const script =
+      "import('playwright').then(async ({chromium})=>{const fs=await import('node:fs');process.exit(fs.existsSync(chromium.executablePath())?0:1)}).catch(()=>process.exit(1))";
     const env = { ELECTRON_RUN_AS_NODE: "1" };
     const result = await runProcess(process.execPath, ["-e", script], {
       cwd: backendRoot || undefined,
@@ -44,7 +45,9 @@ export function createDependencyDetector({
     const result = await runProcess(command, ["--version"], {
       timeoutMs: desktopDependencyTimeouts.commandProbeMs,
     });
-    appendEarlyLog(`[dependency:probe:finish] command=${command}; ok=${result.ok}; error=${result.error || ""}`);
+    appendEarlyLog(
+      `[dependency:probe:finish] command=${command}; ok=${result.ok}; error=${result.error || ""}`,
+    );
     return result.ok;
   }
 
@@ -54,13 +57,19 @@ export function createDependencyDetector({
       joinClientPath("/Applications", appName),
       joinClientPath(process.env.HOME || "", "Applications", appName),
     ].filter(Boolean);
-    appendEarlyLog(`[dependency:installed:mac-app:start] app=${appName}; candidates=${candidates.join(" | ")}`);
+    appendEarlyLog(
+      `[dependency:installed:mac-app:start] app=${appName}; candidates=${candidates.join(" | ")}`,
+    );
     for (const candidate of candidates) {
       appendEarlyLog(`[dependency:installed:mac-app:path] app=${appName}; path=${candidate}`);
       const exists = hasExistingFile(candidate);
-      appendEarlyLog(`[dependency:installed:mac-app:path-result] app=${appName}; path=${candidate}; exists=${exists}`);
+      appendEarlyLog(
+        `[dependency:installed:mac-app:path-result] app=${appName}; path=${candidate}; exists=${exists}`,
+      );
       if (exists) {
-        appendEarlyLog(`[dependency:installed:mac-app:finish] app=${appName}; installed=true; path=${candidate}`);
+        appendEarlyLog(
+          `[dependency:installed:mac-app:finish] app=${appName}; installed=true; path=${candidate}`,
+        );
         return true;
       }
     }
@@ -71,8 +80,9 @@ export function createDependencyDetector({
   function parseWindowsRegistryDefaultValue(output) {
     const lines = String(output || "").split(/\r?\n/);
     for (const line of lines) {
-      const match = line.match(/^\s*\(Default\)\s+REG_\w+\s+(.+)\s*$/i)
-        || line.match(/^\s*默认\s+REG_\w+\s+(.+)\s*$/i);
+      const match =
+        line.match(/^\s*\(Default\)\s+REG_\w+\s+(.+)\s*$/i) ||
+        line.match(/^\s*默认\s+REG_\w+\s+(.+)\s*$/i);
       if (match?.[1]) return match[1].trim();
     }
     return "";
@@ -98,12 +108,23 @@ export function createDependencyDetector({
   }
 
   async function hasWindowsWingetPackage(spec) {
-    if (!spec.win32WingetPackages?.length || !(await findAvailableCommand(["winget"]))) return false;
+    if (!spec.win32WingetPackages?.length || !(await findAvailableCommand(["winget"])))
+      return false;
     for (const packageId of spec.win32WingetPackages) {
-      const result = await runProcess("winget", ["list", "--id", packageId, "--exact", "--accept-source-agreements"], {
-        timeoutMs: desktopDependencyTimeouts.packageQueryMs,
-      });
-      if (result.ok && String(result.stdout || "").toLowerCase().includes(packageId.toLowerCase())) return true;
+      const result = await runProcess(
+        "winget",
+        ["list", "--id", packageId, "--exact", "--accept-source-agreements"],
+        {
+          timeoutMs: desktopDependencyTimeouts.packageQueryMs,
+        },
+      );
+      if (
+        result.ok &&
+        String(result.stdout || "")
+          .toLowerCase()
+          .includes(packageId.toLowerCase())
+      )
+        return true;
     }
     return false;
   }
@@ -111,7 +132,9 @@ export function createDependencyDetector({
   async function isDependencyInstalled(spec) {
     if (spec.managedInstaller === "playwright") return hasPlaywrightChromium();
     const specKeys = Object.keys(spec || {}).join(",");
-    appendEarlyLog(`[dependency:installed:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; checkCommands=${(spec?.checkCommands || []).join(",")}; keys=${specKeys}`);
+    appendEarlyLog(
+      `[dependency:installed:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; checkCommands=${(spec?.checkCommands || []).join(",")}; keys=${specKeys}`,
+    );
     writeDependencyLog("installed:start", {
       label: spec?.label || "",
       platform: process.platform,
@@ -121,7 +144,9 @@ export function createDependencyDetector({
     });
     if (process.platform === "darwin" && spec.managedCommand) {
       const managedKey = getDarwinManagedKeyForSpec(spec);
-      const managedPath = managedKey ? getMacManagedCommandPath(managedKey, spec.managedCommand) : "";
+      const managedPath = managedKey
+        ? getMacManagedCommandPath(managedKey, spec.managedCommand)
+        : "";
       const managedExists = hasExistingFile(managedPath);
       writeDependencyLog("installed:managed:path", {
         label: spec.label,
@@ -133,7 +158,9 @@ export function createDependencyDetector({
       });
       if (managedExists) {
         const versionArgs = spec.managedVersionArgs || spec.versionArgs || ["--version"];
-        const result = await runProcess(managedPath, versionArgs, { timeoutMs: desktopDependencyTimeouts.commandProbeMs });
+        const result = await runProcess(managedPath, versionArgs, {
+          timeoutMs: desktopDependencyTimeouts.commandProbeMs,
+        });
         writeDependencyLog("installed:managed:probe", {
           label: spec.label,
           key: managedKey,
@@ -146,35 +173,56 @@ export function createDependencyDetector({
           stdout: String(result.stdout || "").slice(0, 500),
           stderr: String(result.stderr || "").slice(0, 1000),
         });
-        appendEarlyLog(`[dependency:installed:managed:probe] label=${spec.label}; path=${managedPath}; ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}; stderr=${String(result.stderr || "").slice(0, 500)}`);
+        appendEarlyLog(
+          `[dependency:installed:managed:probe] label=${spec.label}; path=${managedPath}; ok=${result.ok}; code=${result.code ?? ""}; error=${result.error || ""}; stderr=${String(result.stderr || "").slice(0, 500)}`,
+        );
         if (result.ok) {
           prependManagedDependencyPath();
-          appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=true; via=managed; path=${managedPath}`);
+          appendEarlyLog(
+            `[dependency:installed:finish] label=${spec.label}; installed=true; via=managed; path=${managedPath}`,
+          );
           return true;
         }
       } else if (managedPath) {
-        appendEarlyLog(`[dependency:installed:managed:missing] label=${spec.label}; path=${managedPath}`);
+        appendEarlyLog(
+          `[dependency:installed:managed:missing] label=${spec.label}; path=${managedPath}`,
+        );
       }
     }
     if (process.platform === "darwin" && spec.darwinAppBundle) {
-      appendEarlyLog(`[dependency:installed:mac-app] label=${spec.label}; app=${spec.darwinAppBundle}`);
+      appendEarlyLog(
+        `[dependency:installed:mac-app] label=${spec.label}; app=${spec.darwinAppBundle}`,
+      );
       if (hasMacAppBundle(spec.darwinAppBundle)) {
-        appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=true; via=mac-app`);
+        appendEarlyLog(
+          `[dependency:installed:finish] label=${spec.label}; installed=true; via=mac-app`,
+        );
         return true;
       }
     }
     for (const command of spec.checkCommands || []) {
       appendEarlyLog(`[dependency:installed:command] label=${spec.label}; command=${command}`);
       const installed = await hasCommand(command);
-      appendEarlyLog(`[dependency:installed:command-result] label=${spec.label}; command=${command}; installed=${installed}`);
+      appendEarlyLog(
+        `[dependency:installed:command-result] label=${spec.label}; command=${command}; installed=${installed}`,
+      );
       if (installed) {
-        appendEarlyLog(`[dependency:installed:finish] label=${spec.label}; installed=true; via=command; command=${command}`);
+        appendEarlyLog(
+          `[dependency:installed:finish] label=${spec.label}; installed=true; via=command; command=${command}`,
+        );
         return true;
       }
     }
     if (process.platform === "win32") {
       if (await hasWindowsRegistryInstallPath(spec)) return true;
-      const roots = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.ProgramData, process.env.LOCALAPPDATA, process.env.APPDATA, "C:\\"].filter(Boolean);
+      const roots = [
+        process.env.ProgramFiles,
+        process.env["ProgramFiles(x86)"],
+        process.env.ProgramData,
+        process.env.LOCALAPPDATA,
+        process.env.APPDATA,
+        "C:\\",
+      ].filter(Boolean);
       for (const root of roots) {
         for (const relative of spec.win32ExecutableCandidates || []) {
           if (hasExistingFile(joinClientPath(root, relative))) return true;
@@ -187,7 +235,9 @@ export function createDependencyDetector({
   }
 
   async function waitForDependencyInstalled(spec, { timeoutMs = 90000, intervalMs = 3000 } = {}) {
-    appendEarlyLog(`[dependency:wait:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; timeoutMs=${timeoutMs}; intervalMs=${intervalMs}`);
+    appendEarlyLog(
+      `[dependency:wait:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; timeoutMs=${timeoutMs}; intervalMs=${intervalMs}`,
+    );
     writeDependencyLog("wait:start", {
       label: spec?.label || "",
       platform: process.platform,
@@ -202,14 +252,26 @@ export function createDependencyDetector({
       appendEarlyLog(`[dependency:wait:attempt] label=${spec?.label || ""}; attempt=${attempt}`);
       writeDependencyLog("wait:attempt", { label: spec?.label || "", attempt }, { debug: true });
       if (await isDependencyInstalled(spec)) {
-        appendEarlyLog(`[dependency:wait:finish] label=${spec?.label || ""}; installed=true; attempts=${attempt}`);
-        writeDependencyLog("wait:finish", { label: spec?.label || "", installed: true, attempts: attempt });
+        appendEarlyLog(
+          `[dependency:wait:finish] label=${spec?.label || ""}; installed=true; attempts=${attempt}`,
+        );
+        writeDependencyLog("wait:finish", {
+          label: spec?.label || "",
+          installed: true,
+          attempts: attempt,
+        });
         return true;
       }
       await sleep(intervalMs);
     }
-    appendEarlyLog(`[dependency:wait:finish] label=${spec?.label || ""}; installed=false; attempts=${attempt}`);
-    writeDependencyLog("wait:finish", { label: spec?.label || "", installed: false, attempts: attempt });
+    appendEarlyLog(
+      `[dependency:wait:finish] label=${spec?.label || ""}; installed=false; attempts=${attempt}`,
+    );
+    writeDependencyLog("wait:finish", {
+      label: spec?.label || "",
+      installed: false,
+      attempts: attempt,
+    });
     return false;
   }
 

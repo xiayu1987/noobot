@@ -9,4 +9,4 @@ class IStateNode {
   getStateType() {}
 }
 
-export default  IStateNode;
+export default IStateNode;

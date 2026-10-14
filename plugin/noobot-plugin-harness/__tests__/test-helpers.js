@@ -6,7 +6,12 @@
 import fs from "node:fs/promises";
 
 export async function exists(file) {
-  try { await fs.access(file); return true; } catch { return false; }
+  try {
+    await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function waitForFile(file, retries = 200, delayMs = 20) {

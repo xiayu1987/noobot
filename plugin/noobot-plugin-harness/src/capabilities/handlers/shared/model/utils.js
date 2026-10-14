@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 export function resolvePlanningGuidanceMode(meta = {}) {
-  return String(meta?.harness?.planningGuidanceMode || "separate_model").trim().toLowerCase();
+  return String(meta?.harness?.planningGuidanceMode || "separate_model")
+    .trim()
+    .toLowerCase();
 }
 
 export function shouldUseSeparateModel(meta = {}) {
@@ -24,9 +26,7 @@ function normalizeCapabilityModelMap(source = {}) {
       .map(([key, value]) => [
         String(key || "").trim(),
         String(
-          value && typeof value === "object" && !Array.isArray(value)
-            ? value.model
-            : value || "",
+          value && typeof value === "object" && !Array.isArray(value) ? value.model : value || "",
         ).trim(),
       ])
       .filter(([key, value]) => key && value),
@@ -59,10 +59,7 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
   return "";
 }
 
-export function resolveCapabilityModelMessages(
-  meta = {},
-  { ctx = {}, purpose = "" } = {},
-) {
+export function resolveCapabilityModelMessages(meta = {}, { ctx = {}, purpose = "" } = {}) {
   const resolver = meta?.harness?.resolveModelMessages;
   if (typeof resolver !== "function") {
     throw new Error("capability model messages require the authoritative modelContext resolver");
@@ -84,7 +81,9 @@ export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {
     typeof meta.harness.capabilityToolAllowlistByPurpose === "object"
       ? meta.harness.capabilityToolAllowlistByPurpose
       : {};
-  const scoped = Array.isArray(byPurpose?.[normalizedPurpose]) ? byPurpose[normalizedPurpose] : null;
+  const scoped = Array.isArray(byPurpose?.[normalizedPurpose])
+    ? byPurpose[normalizedPurpose]
+    : null;
   if (scoped) {
     const normalized = scoped.map((item) => String(item || "").trim()).filter(Boolean);
     if (normalized.includes("*")) return ["*"];

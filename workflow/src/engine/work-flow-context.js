@@ -5,8 +5,8 @@
  */
 
 class WorkFlowContext {
-  static MODELBOXFACTORYNAME = 'ModelBoxFactory';
-  static MODELSTATEBOXFACTORYNAME = 'ModelStateBoxFactory';
+  static MODELBOXFACTORYNAME = "ModelBoxFactory";
+  static MODELSTATEBOXFACTORYNAME = "ModelStateBoxFactory";
   static instance = new WorkFlowContext();
   static map = new Map();
 
@@ -25,4 +25,4 @@ class WorkFlowContext {
   }
 }
 
-export default  WorkFlowContext;
+export default WorkFlowContext;

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class ICurrentStateListener {
-}
+class ICurrentStateListener {}
 
-export default  ICurrentStateListener;
+export default ICurrentStateListener;

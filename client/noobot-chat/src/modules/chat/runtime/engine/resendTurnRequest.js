@@ -10,7 +10,12 @@ import {
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
 
-export function createReplaceTurnRequester({ activeSession, authFetch, replaceSessionTurnApi, userId }) {
+export function createReplaceTurnRequester({
+  activeSession,
+  authFetch,
+  replaceSessionTurnApi,
+  userId,
+}) {
   return async function requestReplaceTurn({
     sessionId,
     originalSession,

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IBizinstContext {
-}
+class IBizinstContext {}
 
-export default  IBizinstContext;
+export default IBizinstContext;

@@ -4,17 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  ModelBoxFactory,
-  FlowtoBox,
-  registerModelBoxFactory,
-} from "workflow/extension";
+import { ModelBoxFactory, FlowtoBox, registerModelBoxFactory } from "workflow/extension";
 
 let cached = null;
 
 function assertFn(name = "", value = null) {
   if (typeof value !== "function") {
-    throw new Error(`invalid workflow extension api: ${String(name || "").trim()} must be a function`);
+    throw new Error(
+      `invalid workflow extension api: ${String(name || "").trim()} must be a function`,
+    );
   }
 }
 
@@ -31,4 +29,3 @@ export function getWorkflowExtensionApi() {
   cached = normalized;
   return cached;
 }
-

@@ -8,7 +8,11 @@ import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
-import { createMockSocket, getEvent, listEvents } from "./channel-manager.state-consistency.test-helpers.js";
+import {
+  createMockSocket,
+  getEvent,
+  listEvents,
+} from "./channel-manager.state-consistency.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
 import {
@@ -19,13 +23,7 @@ import {
 } from "@noobot/event-protocol";
 import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 
-function interactionRequest({
-  requestId,
-  sessionId,
-  turnScopeId,
-  sequence = 1,
-  ...payload
-}) {
+function interactionRequest({ requestId, sessionId, turnScopeId, sequence = 1, ...payload }) {
   return createEventEnvelope({
     family: EVENT_FAMILY.INTERACTION_REQUEST,
     identity: {
@@ -72,14 +70,18 @@ test("interaction_request resolved by one client should be consistent across all
     },
   };
 
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-1",
-    sessionId: "session-1",
-    dialogProcessId: "dp-1",
-    turnScopeId: "turn-1",
-    sequence: 2,
-    content: "confirm",
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-1",
+      sessionId: "session-1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      sequence: 2,
+      content: "confirm",
+    }),
+  );
 
   const clientA = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   const clientB = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
@@ -95,23 +97,27 @@ test("interaction_request resolved by one client should be consistent across all
   const beforeResolveB = JSON.stringify(getEvent(clientB, "reconnect_data")?.data || {});
   assert.equal(beforeResolveA.includes("__agentProxyPendingInteraction"), false);
   assert.equal(beforeResolveB.includes("__agentProxyPendingInteraction"), false);
-  for (const data of [getEvent(clientA, "reconnect_data")?.data, getEvent(clientB, "reconnect_data")?.data]) {
+  for (const data of [
+    getEvent(clientA, "reconnect_data")?.data,
+    getEvent(clientB, "reconnect_data")?.data,
+  ]) {
     assert.equal(hasPendingRequest(data?.sessions?.[0]?.replayBatch, "req-1"), true);
   }
 
-  const forwarded = manager.forwardToUpstream(channel, interactionResponse({
-    sessionId: "session-1",
-    requestId: "req-1",
-  }));
+  const forwarded = manager.forwardToUpstream(
+    channel,
+    interactionResponse({
+      sessionId: "session-1",
+      requestId: "req-1",
+    }),
+  );
   assert.equal(forwarded, true, "interaction_response should be forwarded");
 
   const clientBAfterResolve = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
   manager.handleReconnect(clientBAfterResolve, {
     currentSessionId: "session-1",
   });
-  const afterResolve = JSON.stringify(
-    getEvent(clientBAfterResolve, "reconnect_data")?.data || {},
-  );
+  const afterResolve = JSON.stringify(getEvent(clientBAfterResolve, "reconnect_data")?.data || {});
   assert.equal(
     afterResolve.includes("__agentProxyPendingInteraction"),
     false,
@@ -136,22 +142,30 @@ test("interaction_pending channel_state carries state only; interaction events o
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
 
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-a",
-    sessionId: "session-snapshot",
-    dialogProcessId: "dp-snapshot",
-    turnScopeId: "turn-snapshot",
-    sequence: 2,
-    content: "first",
-  }));
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-b",
-    sessionId: "session-snapshot",
-    dialogProcessId: "dp-snapshot",
-    turnScopeId: "turn-snapshot",
-    sequence: 3,
-    content: "second",
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-a",
+      sessionId: "session-snapshot",
+      dialogProcessId: "dp-snapshot",
+      turnScopeId: "turn-snapshot",
+      sequence: 2,
+      content: "first",
+    }),
+  );
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-b",
+      sessionId: "session-snapshot",
+      dialogProcessId: "dp-snapshot",
+      turnScopeId: "turn-snapshot",
+      sequence: 3,
+      content: "second",
+    }),
+  );
 
   const stateEvents = listEvents(client, "channel_state");
   assert.equal(stateEvents.length, 2);
@@ -166,30 +180,41 @@ test("interaction_pending channel_state carries state only; interaction events o
 test("failed interaction lifecycle closes the pending request across proxy and reconnect", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-timeout" });
-  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-timeout" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-timeout",
+  });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-timeout",
-    sessionId: "session-timeout",
-    dialogProcessId: "dp-timeout",
-    turnScopeId: "turn-timeout",
-    content: "confirm",
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-timeout",
+      sessionId: "session-timeout",
+      dialogProcessId: "dp-timeout",
+      turnScopeId: "turn-timeout",
+      content: "confirm",
+    }),
+  );
   assert.equal(channel.pendingInteractionRequests.has("req-timeout"), true);
 
-  const terminal = manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-timeout",
-    sessionId: "session-timeout",
-    dialogProcessId: "dp-timeout",
-    turnScopeId: "turn-timeout",
-    content: "confirm",
-    lifecycle: "failed",
-    resolvedBy: "system",
-    interactionData: { reason: "timeout" },
-    sequence: 2,
-  }));
+  const terminal = manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-timeout",
+      sessionId: "session-timeout",
+      dialogProcessId: "dp-timeout",
+      turnScopeId: "turn-timeout",
+      content: "confirm",
+      lifecycle: "failed",
+      resolvedBy: "system",
+      interactionData: { reason: "timeout" },
+      sequence: 2,
+    }),
+  );
   assert.ok(terminal);
   assert.equal(channel.pendingInteractionRequests.has("req-timeout"), false);
   assert.equal(channel.conversationStateByDialogProcessId.get("dp-timeout")?.state, "sending");
@@ -221,27 +246,38 @@ test("resolving one concurrent interaction atomically publishes the remaining pe
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
 
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-a",
-    sessionId: "session-concurrent",
-    dialogProcessId: "dp-concurrent",
-    turnScopeId: "turn-concurrent",
-    sequence: 2,
-    content: "first concurrent confirmation",
-  }));
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-b",
-    sessionId: "session-concurrent",
-    dialogProcessId: "dp-concurrent",
-    turnScopeId: "turn-concurrent",
-    sequence: 3,
-    content: "second concurrent confirmation",
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-a",
+      sessionId: "session-concurrent",
+      dialogProcessId: "dp-concurrent",
+      turnScopeId: "turn-concurrent",
+      sequence: 2,
+      content: "first concurrent confirmation",
+    }),
+  );
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-b",
+      sessionId: "session-concurrent",
+      dialogProcessId: "dp-concurrent",
+      turnScopeId: "turn-concurrent",
+      sequence: 3,
+      content: "second concurrent confirmation",
+    }),
+  );
   const stateEventsBeforeResponse = listEvents(client, "channel_state").length;
-  const forwarded = manager.forwardToUpstream(channel, interactionResponse({
-    sessionId: "session-concurrent",
-    requestId: "req-a",
-  }));
+  const forwarded = manager.forwardToUpstream(
+    channel,
+    interactionResponse({
+      sessionId: "session-concurrent",
+      requestId: "req-a",
+    }),
+  );
 
   assert.equal(forwarded, true);
   const stateEventsAfterResponse = listEvents(client, "channel_state");
@@ -263,15 +299,19 @@ test("channel_state snapshot never duplicates the pending interaction payload", 
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
 
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-snapshot",
-    sessionId: "session-1",
-    dialogProcessId: "dp-snapshot",
-    turnScopeId: "turn-snapshot",
-    interactionType: "confirm",
-    content: "confirm snapshot",
-    sequence: 8,
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-snapshot",
+      sessionId: "session-1",
+      dialogProcessId: "dp-snapshot",
+      turnScopeId: "turn-snapshot",
+      interactionType: "confirm",
+      content: "confirm snapshot",
+      sequence: 8,
+    }),
+  );
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
@@ -296,25 +336,33 @@ test("workflow child terminal events cannot discard a pending interaction owned 
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
 
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-child",
-    sessionId: "child-session",
-    parentSessionId: "root-session",
-    dialogProcessId: "child-dialog",
-    turnScopeId: "root-turn",
-    content: "confirm child action",
-    sequence: 49,
-  }));
-  manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
-    eventId: "sibling-terminal",
-    eventType: TURN_EVENT.COMPLETED,
-    sessionId: "sibling-session",
-    parentSessionId: "root-session",
-    dialogProcessId: "sibling-dialog",
-    turnScopeId: "workflow-node-turn",
-    sequence: 50,
-    revision: 1,
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-child",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "root-turn",
+      content: "confirm child action",
+      sequence: 49,
+    }),
+  );
+  manager.pushChannelEvent(
+    channel,
+    "turn_lifecycle",
+    authoritativeLifecycle({
+      eventId: "sibling-terminal",
+      eventType: TURN_EVENT.COMPLETED,
+      sessionId: "sibling-session",
+      parentSessionId: "root-session",
+      dialogProcessId: "sibling-dialog",
+      turnScopeId: "workflow-node-turn",
+      sequence: 50,
+      revision: 1,
+    }),
+  );
 
   assert.equal(channel.retention.phase, "active");
   assert.equal(channel.activity.phase, "running");
@@ -346,16 +394,20 @@ test("workflow child terminal state does not own root channel retention", () => 
   });
   channel.status = "running";
 
-  manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
-    eventId: "child-terminal",
-    eventType: TURN_EVENT.COMPLETED,
-    sessionId: "child-session",
-    parentSessionId: "root-session",
-    dialogProcessId: "child-dialog",
-    turnScopeId: "child-turn",
-    sequence: 10,
-    revision: 1,
-  }));
+  manager.pushChannelEvent(
+    channel,
+    "turn_lifecycle",
+    authoritativeLifecycle({
+      eventId: "child-terminal",
+      eventType: TURN_EVENT.COMPLETED,
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "child-turn",
+      sequence: 10,
+      revision: 1,
+    }),
+  );
 
   assert.equal(channel.activity.phase, "running");
   assert.equal(channel.retention.phase, "active");
@@ -364,52 +416,71 @@ test("workflow child terminal state does not own root channel retention", () => 
 
 test("authoritative terminal lifecycle closes pending interactions for the same turn", () => {
   const manager = new ChannelManager({ OPEN: 1 });
-  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId: "session-terminal" }), {
-    userId: "user-1", sessionId: "session-terminal",
-  });
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-terminal",
-    sessionId: "session-terminal",
-    dialogProcessId: "dp-terminal",
-    turnScopeId: "turn-terminal",
-    interactionType: "confirm",
-    content: "confirm",
-    sequence: 2,
-  }));
-  manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
-    eventId: "terminal-1",
-    eventType: "turn.completed",
-    sessionId: "session-terminal",
-    turnScopeId: "turn-terminal",
-    dialogProcessId: "dp-terminal",
-    messageId: "message-terminal",
-    presentationMessageId: "message-terminal",
-    revision: 3,
-    sequence: 3,
-    phase: "completion",
-    state: "completed",
-    action: "send",
-    executionState: "completed",
-    summaryVersion: 1,
-    completionCommitId: "terminal-commit",
-    capabilities: { actionLocked: false, canStop: false },
-  }));
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-terminal" }),
+    {
+      userId: "user-1",
+      sessionId: "session-terminal",
+    },
+  );
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-terminal",
+      sessionId: "session-terminal",
+      dialogProcessId: "dp-terminal",
+      turnScopeId: "turn-terminal",
+      interactionType: "confirm",
+      content: "confirm",
+      sequence: 2,
+    }),
+  );
+  manager.pushChannelEvent(
+    channel,
+    "turn_lifecycle",
+    authoritativeLifecycle({
+      eventId: "terminal-1",
+      eventType: "turn.completed",
+      sessionId: "session-terminal",
+      turnScopeId: "turn-terminal",
+      dialogProcessId: "dp-terminal",
+      messageId: "message-terminal",
+      presentationMessageId: "message-terminal",
+      revision: 3,
+      sequence: 3,
+      phase: "completion",
+      state: "completed",
+      action: "send",
+      executionState: "completed",
+      summaryVersion: 1,
+      completionCommitId: "terminal-commit",
+      capabilities: { actionLocked: false, canStop: false },
+    }),
+  );
   assert.equal(channel.pendingInteractionRequests.has("req-terminal"), false);
   assert.equal(manager.requestChannelMap.has("req-terminal"), false);
 });
 
 test("invalid interaction_request has no journal, route, pending, or state side effects", () => {
   const manager = new ChannelManager({ OPEN: 1 });
-  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId: "session-invalid" }), {
-    userId: "user-1",
-    sessionId: "session-invalid",
-  });
-  const result = manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-invalid",
-    sessionId: "session-invalid",
-    dialogProcessId: "dp-invalid",
-    turnScopeId: "turn-invalid",
-  }));
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-invalid" }),
+    {
+      userId: "user-1",
+      sessionId: "session-invalid",
+    },
+  );
+  const result = manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-invalid",
+      sessionId: "session-invalid",
+      dialogProcessId: "dp-invalid",
+      turnScopeId: "turn-invalid",
+    }),
+  );
   assert.equal(result, null);
   assert.equal(channel.eventJournal.events.length, 0);
   assert.equal(channel.pendingInteractionRequests.has("req-invalid"), false);
@@ -419,23 +490,30 @@ test("invalid interaction_request has no journal, route, pending, or state side 
 
 test("only an authoritative lifecycle envelope projects conversation state", () => {
   const manager = new ChannelManager({ OPEN: 1 });
-  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId: "session-authority" }), {
-    userId: "user-1",
-    sessionId: "session-authority",
-  });
-  manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
-    eventId: "authority-1",
-    eventType: "turn.processing_started",
-    sessionId: "session-authority",
-    turnScopeId: "turn-authority",
-    dialogProcessId: "dp-authority",
-    messageId: "message-authority",
-    presentationMessageId: "message-authority",
-    revision: 1,
-    sequence: 1,
-    state: "processing",
-    phase: "processing",
-  }));
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-authority" }),
+    {
+      userId: "user-1",
+      sessionId: "session-authority",
+    },
+  );
+  manager.pushChannelEvent(
+    channel,
+    "turn_lifecycle",
+    authoritativeLifecycle({
+      eventId: "authority-1",
+      eventType: "turn.processing_started",
+      sessionId: "session-authority",
+      turnScopeId: "turn-authority",
+      dialogProcessId: "dp-authority",
+      messageId: "message-authority",
+      presentationMessageId: "message-authority",
+      revision: 1,
+      sequence: 1,
+      state: "processing",
+      phase: "processing",
+    }),
+  );
   assert.equal(channel.conversationStateByDialogProcessId.get("dp-authority")?.state, "sending");
 });
 
@@ -447,14 +525,18 @@ test("interaction_response should resolve channel by pending requestId", () => {
     sessionId: "session-resolve",
   });
 
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, interactionRequest({
-    requestId: "req-resolve",
-    sessionId: "session-resolve",
-    dialogProcessId: "dp-resolve",
-    turnScopeId: "turn-resolve",
-    content: "confirm",
-    sequence: 1,
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    interactionRequest({
+      requestId: "req-resolve",
+      sessionId: "session-resolve",
+      dialogProcessId: "dp-resolve",
+      turnScopeId: "turn-resolve",
+      content: "confirm",
+      sequence: 1,
+    }),
+  );
 
   const resolvedChannel = manager.resolveChannelFromSocketMessage(
     createMockSocket({ apiKey: "api-key-2", userId: "user-1" }),

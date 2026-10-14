@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import NodeBase from './node-base.js';
+import NodeBase from "./node-base.js";
 
 class StateNode extends NodeBase {
   constructor() {
@@ -19,4 +19,4 @@ class StateNode extends NodeBase {
   }
 }
 
-export default  StateNode;
+export default StateNode;

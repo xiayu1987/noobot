@@ -14,8 +14,6 @@ export function hasAcceptancePhaseBlockers(state = {}) {
   const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
   const hasPlanUpdatePending = pending.planRevision === true || pending.planRefinement === true;
   return (
-    Boolean(pending.guidance) ||
-    hasPlanUpdatePending ||
-    state?.flags?.planningCaptured !== true
+    Boolean(pending.guidance) || hasPlanUpdatePending || state?.flags?.planningCaptured !== true
   );
 }

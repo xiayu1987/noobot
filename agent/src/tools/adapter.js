@@ -26,4 +26,3 @@ export async function runBuildToolsAdapter(ctx, buildToolsDefault) {
   }
   return toolBuilderAdapter(ctx, { buildToolsDefault });
 }
-

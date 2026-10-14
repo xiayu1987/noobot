@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function resolveFirstMatchedRuleResult(
-  rules = [],
-  context = {},
-  fallbackResult = null,
-) {
+export function resolveFirstMatchedRuleResult(rules = [], context = {}, fallbackResult = null) {
   for (const rule of Array.isArray(rules) ? rules : []) {
     if (typeof rule?.matches !== "function" || typeof rule?.resolve !== "function") {
       continue;

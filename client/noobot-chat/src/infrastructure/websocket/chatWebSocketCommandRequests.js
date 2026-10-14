@@ -71,22 +71,34 @@ export function createWebSocketCommandRequests({
     }
   }
 
-  function requestJson(payload = {}, { expectedEvents = [], timeoutMs: requestTimeoutMs = timeoutMs } = {}) {
+  function requestJson(
+    payload = {},
+    { expectedEvents = [], timeoutMs: requestTimeoutMs = timeoutMs } = {},
+  ) {
     const commandId = normalizeTrimmedString(payload?.commandId);
     if (!commandId) return Promise.reject(new Error("commandId is required"));
     if (pendingRequests.has(commandId)) {
       return Promise.reject(new Error("commandId request already pending"));
     }
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        pendingRequests.delete(commandId);
-        reject(new Error(translateText("infra.websocketRequestTimeout") || "websocket_request_timeout"));
-      }, Number(requestTimeoutMs) > 0 ? Number(requestTimeoutMs) : timeoutMs);
+      const timeout = setTimeout(
+        () => {
+          pendingRequests.delete(commandId);
+          reject(
+            new Error(
+              translateText("infra.websocketRequestTimeout") || "websocket_request_timeout",
+            ),
+          );
+        },
+        Number(requestTimeoutMs) > 0 ? Number(requestTimeoutMs) : timeoutMs,
+      );
       pendingRequests.set(commandId, {
         resolve,
         reject,
         timeout,
-        expectedEvents: new Set((Array.isArray(expectedEvents) ? expectedEvents : [expectedEvents]).filter(Boolean)),
+        expectedEvents: new Set(
+          (Array.isArray(expectedEvents) ? expectedEvents : [expectedEvents]).filter(Boolean),
+        ),
       });
       try {
         sendJson(payload);

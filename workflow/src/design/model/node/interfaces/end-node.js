@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IEndNode {
-}
+class IEndNode {}
 
-export default  IEndNode;
+export default IEndNode;

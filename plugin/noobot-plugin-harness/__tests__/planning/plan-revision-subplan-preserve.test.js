@@ -11,12 +11,7 @@ import { createPlanRevisionHelpers } from "../../src/capabilities/handlers/share
 test("planning revision full-main replacement preserves existing first-level sub-plans for retained main steps", () => {
   const ctx = {
     bucket: {
-      planText: [
-        "1. 旧主计划一",
-        "1.1 旧子计划一",
-        "2. 旧主计划二",
-        "2.1 旧子计划二",
-      ].join("\n"),
+      planText: ["1. 旧主计划一", "1.1 旧子计划一", "2. 旧主计划二", "2.1 旧子计划二"].join("\n"),
       globalRevisionCount: 0,
       lastRevisionChangedMainStepIndexes: [],
       planRevisions: [],
@@ -35,10 +30,7 @@ test("planning revision full-main replacement preserves existing first-level sub
 
   const applied = helpers.applyRevisedPlanFromText(
     ctx,
-    [
-      "1. 新主计划一",
-      "2. 新主计划二",
-    ].join("\n"),
+    ["1. 新主计划一", "2. 新主计划二"].join("\n"),
     { source: "planning_revision", stage: "revision" },
   );
 
@@ -50,12 +42,9 @@ test("planning revision full-main replacement preserves existing first-level sub
 });
 
 test("planning revision with sub-plan-only patch applies sub-plan updates without collapsing full main plan", () => {
-  const originalPlanText = [
-    "1. 主计划一",
-    "1.1 子计划一",
-    "2. 主计划二",
-    "2.1 子计划二",
-  ].join("\n");
+  const originalPlanText = ["1. 主计划一", "1.1 子计划一", "2. 主计划二", "2.1 子计划二"].join(
+    "\n",
+  );
   const ctx = {
     bucket: {
       planText: originalPlanText,
@@ -77,11 +66,7 @@ test("planning revision with sub-plan-only patch applies sub-plan updates withou
 
   const applied = helpers.applyRevisedPlanFromText(
     ctx,
-    [
-      "UPDATE 2.8 标记完成",
-      "UPDATE 2.9 标记完成",
-      "UPDATE 2.10 标记完成",
-    ].join("\n"),
+    ["UPDATE 2.8 标记完成", "UPDATE 2.9 标记完成", "UPDATE 2.10 标记完成"].join("\n"),
     { source: "planning_revision", stage: "revision" },
   );
 
@@ -98,12 +83,7 @@ test("planning revision with sub-plan-only patch applies sub-plan updates withou
 test("planning refinement allows main-plan patch and sub-plan patch in one payload", () => {
   const ctx = {
     bucket: {
-      planText: [
-        "1. 主计划一",
-        "1.1 子计划一",
-        "2. 主计划二",
-        "2.1 子计划二",
-      ].join("\n"),
+      planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二", "2.1 子计划二"].join("\n"),
       globalRevisionCount: 0,
       lastRevisionChangedMainStepIndexes: [],
       planRevisions: [],
@@ -122,10 +102,7 @@ test("planning refinement allows main-plan patch and sub-plan patch in one paylo
 
   const applied = helpers.applyRevisedPlanFromText(
     ctx,
-    [
-      "UPDATE [2] 主计划二（细化修正）",
-      "UPDATE [2.2] 子计划二-新增细化",
-    ].join("\n"),
+    ["UPDATE [2] 主计划二（细化修正）", "UPDATE [2.2] 子计划二-新增细化"].join("\n"),
     { source: "planning_refinement", stage: "refinement", targetMainStepIndexes: [2] },
   );
 
@@ -138,17 +115,13 @@ test("planning refinement allows main-plan patch and sub-plan patch in one paylo
 test("planning revision resets acceptance status for changed plan items only", () => {
   const ctx = {
     bucket: {
-      planText: [
-        "1. 主计划一",
-        "1.1 子计划一",
-        "2. 主计划二",
-      ].join("\n"),
+      planText: ["1. 主计划一", "1.1 子计划一", "2. 主计划二"].join("\n"),
       globalRevisionCount: 0,
       lastRevisionChangedMainStepIndexes: [],
       planRevisions: [],
       planAcceptanceStatusByPlanId: {
         1: { planId: "1", status: "pass", taskStatus: "completed", source: "phase_acceptance" },
-        "1.1": { planId: "1.1", status: "pass", taskStatus: "completed", source: "phase_acceptance" },
+        1.1: { planId: "1.1", status: "pass", taskStatus: "completed", source: "phase_acceptance" },
         2: { planId: "2", status: "pass", taskStatus: "completed", source: "phase_acceptance" },
       },
     },
@@ -164,11 +137,10 @@ test("planning revision resets acceptance status for changed plan items only", (
     }),
   });
 
-  const applied = helpers.applyRevisedPlanFromText(
-    ctx,
-    "UPDATE [1] 主计划一（已修正）",
-    { source: "planning_revision", stage: "revision" },
-  );
+  const applied = helpers.applyRevisedPlanFromText(ctx, "UPDATE [1] 主计划一（已修正）", {
+    source: "planning_revision",
+    stage: "revision",
+  });
 
   assert.equal(applied, true);
   assert.equal(ctx.bucket.planAcceptanceStatusByPlanId[1].taskStatus, "pending");

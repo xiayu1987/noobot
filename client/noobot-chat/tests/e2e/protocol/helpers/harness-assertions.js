@@ -24,7 +24,9 @@ export function assertCapabilityModelTraces(traces = []) {
     traceIds.add(record.traceId);
     expect(typeof record.domain).toBe("string");
     expect(record.domain.length).toBeGreaterThan(0);
-    expect(record.detail && typeof record.detail === "object" && !Array.isArray(record.detail)).toBe(true);
+    expect(
+      record.detail && typeof record.detail === "object" && !Array.isArray(record.detail),
+    ).toBe(true);
     expect(typeof record.detail.purpose).toBe("string");
     expect(record.detail.purpose.length).toBeGreaterThan(0);
     expect(Array.isArray(record.detail.modelAttempts)).toBe(true);

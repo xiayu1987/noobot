@@ -31,7 +31,12 @@ describe("chat websocket command transport diagnostics", () => {
 
   it("reports a failed command without swallowing the transport error", () => {
     const error = new Error("send failed");
-    const socket = { readyState: 1, send: vi.fn(() => { throw error; }) };
+    const socket = {
+      readyState: 1,
+      send: vi.fn(() => {
+        throw error;
+      }),
+    };
     const onCommandSendFailed = vi.fn();
     vi.stubGlobal("WebSocket", { OPEN: 1 });
     const requests = createWebSocketCommandRequests({

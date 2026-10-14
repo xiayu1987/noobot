@@ -12,8 +12,13 @@ export function normalizeChatMessageNavContent(messageItem = {}) {
     .trim();
 }
 
-export function resolveChatMessageNavRoleLabel(role = "", { translateRole, fallbackRole = "session" } = {}) {
-  const normalizedRole = String(role || "").trim().toLowerCase();
+export function resolveChatMessageNavRoleLabel(
+  role = "",
+  { translateRole, fallbackRole = "session" } = {},
+) {
+  const normalizedRole = String(role || "")
+    .trim()
+    .toLowerCase();
   if (normalizedRole === RoleEnum.USER) return "ME";
   if (normalizedRole === RoleEnum.ASSISTANT) return "AI";
   if (normalizedRole === RoleEnum.TOOL) return "Tool";
@@ -31,9 +36,8 @@ export function buildChatMessageNavItem({
   translateSession,
   translateRole,
 } = {}) {
-  const anchorId = typeof getMessageAnchorId === "function"
-    ? getMessageAnchorId(messageItem, messageIndex)
-    : "";
+  const anchorId =
+    typeof getMessageAnchorId === "function" ? getMessageAnchorId(messageItem, messageIndex) : "";
   const fallbackRole = typeof translateSession === "function" ? translateSession() : "session";
   const role = getMessageRole(messageItem);
   const roleLabel = resolveChatMessageNavRoleLabel(role, { translateRole, fallbackRole });
@@ -57,9 +61,8 @@ export function buildChatMessageNavItems({
   translateRole,
 } = {}) {
   if (!Array.isArray(messages)) return [];
-  const canRender = typeof shouldRenderMessageInChat === "function"
-    ? shouldRenderMessageInChat
-    : () => true;
+  const canRender =
+    typeof shouldRenderMessageInChat === "function" ? shouldRenderMessageInChat : () => true;
   return messages
     .map((messageItem = {}, messageIndex = 0) => {
       if (!canRender(messageItem)) return null;

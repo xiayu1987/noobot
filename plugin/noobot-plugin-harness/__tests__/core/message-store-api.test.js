@@ -25,7 +25,11 @@ test("message store API appends messages and keeps block arrays synchronized", (
 
 test("message store API replaces messages and writes canonical block views", () => {
   const ctx = createTestHookContext();
-  const toolCall = { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "write_file" } }] };
+  const toolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_1", function: { name: "write_file" } }],
+  };
   const toolCopy = structuredClone(toolCall);
 
   replaceMessages(ctx, [{ role: "system", content: "sys" }, toolCall]);

@@ -14,10 +14,7 @@ import {
 
 export function applyRunStateMessagePatch(message, patch = {}) {
   if (!message || !patch || typeof patch !== "object") return;
-  const {
-    clearRuntimeMark,
-    ...restPatch
-  } = patch;
+  const { clearRuntimeMark, ...restPatch } = patch;
 
   Object.entries(restPatch).forEach(([key, value]) => {
     if (key === "thinkingStartedAt" || key === "thinkingFinishedAt") return;
@@ -27,7 +24,9 @@ export function applyRunStateMessagePatch(message, patch = {}) {
     }
     if (key === "channelState" && value && typeof value === "object" && !Array.isArray(value)) {
       message.channelState = {
-        ...(message.channelState && typeof message.channelState === "object" && !Array.isArray(message.channelState)
+        ...(message.channelState &&
+        typeof message.channelState === "object" &&
+        !Array.isArray(message.channelState)
           ? message.channelState
           : {}),
         ...value,

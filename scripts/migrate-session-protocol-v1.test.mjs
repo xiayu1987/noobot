@@ -15,52 +15,62 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const migrationScript = path.join(repositoryRoot, "scripts/migrate-session-protocol-v1.mjs");
 
 function runMigration(workspaceRoot, backupRoot, ...args) {
-  return JSON.parse(execFileSync(process.execPath, [
-    migrationScript,
-    `--workspace=${workspaceRoot}`,
-    `--backup=${backupRoot}`,
-    ...args,
-  ], { encoding: "utf8" }));
+  return JSON.parse(
+    execFileSync(
+      process.execPath,
+      [migrationScript, `--workspace=${workspaceRoot}`, `--backup=${backupRoot}`, ...args],
+      { encoding: "utf8" },
+    ),
+  );
 }
 
 test("migrates entity message identity without creating an identity for presentation projections", () => {
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "noobot-session-protocol-migration-"));
+  const temporaryRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "noobot-session-protocol-migration-"),
+  );
   const workspaceRoot = path.join(temporaryRoot, "workspace");
   const backupRoot = path.join(temporaryRoot, "backup");
   const sessionDirectory = path.join(workspaceRoot, "user", "runtime", "session", "session-1");
   const summaryFile = path.join(sessionDirectory, "session-summary.json");
   fs.mkdirSync(sessionDirectory, { recursive: true });
-  fs.writeFileSync(summaryFile, `${JSON.stringify({
-    sessionId: "session-1",
-    messages: [
+  fs.writeFileSync(
+    summaryFile,
+    `${JSON.stringify(
       {
-        role: "user",
-        messageId: "message-1",
-        turnScopeId: "turn-1",
-        dialogProcessId: "dialog-1",
-        content: "source",
+        sessionId: "session-1",
+        messages: [
+          {
+            role: "user",
+            messageId: "message-1",
+            turnScopeId: "turn-1",
+            dialogProcessId: "dialog-1",
+            content: "source",
+          },
+          {
+            role: "assistant",
+            chatPresentation: true,
+            presentationMessageId: "presentation-1",
+            messageId: "presentation-1",
+            sourceMessageId: "message-2",
+            sourceMessageUid: "sm_source_2",
+            content: "projection",
+          },
+          {
+            role: "assistant",
+            chatPresentation: true,
+            presentationMessageId: "presentation-2",
+            messageId: "presentation-2",
+            messageUid: "sm_invalid_projection_identity",
+            sourceMessageId: "message-3",
+            sourceMessageUid: "sm_source_3",
+            content: "projection with an invalid second identity",
+          },
+        ],
       },
-      {
-        role: "assistant",
-        chatPresentation: true,
-        presentationMessageId: "presentation-1",
-        messageId: "presentation-1",
-        sourceMessageId: "message-2",
-        sourceMessageUid: "sm_source_2",
-        content: "projection",
-      },
-      {
-        role: "assistant",
-        chatPresentation: true,
-        presentationMessageId: "presentation-2",
-        messageId: "presentation-2",
-        messageUid: "sm_invalid_projection_identity",
-        sourceMessageId: "message-3",
-        sourceMessageUid: "sm_source_3",
-        content: "projection with an invalid second identity",
-      },
-    ],
-  }, null, 2)}\n`);
+      null,
+      2,
+    )}\n`,
+  );
 
   try {
     const dryRun = runMigration(workspaceRoot, backupRoot);

@@ -8,70 +8,111 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref } from "vue";
 import { useMessageMeta } from "../../../../../../src/modules/chat/composables/message/useMessageMeta.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
-import { applyTurnLifecycleEnvelope, applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  applyTurnLifecycleEnvelope,
+  applyTurnRuntimeEvent,
+  applyTurnTerminalResolution,
+} from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/session-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  createTurnTerminalResolution,
+} from "@noobot/session-protocol";
 
 function applyEvent(store, event) {
   applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);
 }
 
-function applyLifecycle(store, {
-  eventType,
-  sessionId,
-  turnScopeId,
-  revision,
-  phase,
-  state,
-  action = "send",
-  executionState,
-  canStop = false,
-}) {
-  return applyTurnLifecycleEnvelope(store.turnRuntimeRegistry, createTurnLifecycleEnvelope({
+function applyLifecycle(
+  store,
+  {
     eventType,
-    eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
-    commandId: `${action}:${turnScopeId}`,
-    userId: "u-1",
     sessionId,
     turnScopeId,
-    messageId: `event-message:${turnScopeId}`,
-    presentationMessageId: `message:${turnScopeId}`,
     revision,
-    sequence: revision,
     phase,
     state,
-    action,
+    action = "send",
     executionState,
-    capabilities: { actionLocked: true, canStop },
-  }));
+    canStop = false,
+  },
+) {
+  return applyTurnLifecycleEnvelope(
+    store.turnRuntimeRegistry,
+    createTurnLifecycleEnvelope({
+      eventType,
+      eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
+      commandId: `${action}:${turnScopeId}`,
+      userId: "u-1",
+      sessionId,
+      turnScopeId,
+      messageId: `event-message:${turnScopeId}`,
+      presentationMessageId: `message:${turnScopeId}`,
+      revision,
+      sequence: revision,
+      phase,
+      state,
+      action,
+      executionState,
+      capabilities: { actionLocked: true, canStop },
+    }),
+  );
 }
 
 function startAuthorityProcessing(store, sessionId, turnScopeId) {
   applyLifecycle(store, {
-    eventType: "turn.action_accepted", sessionId, turnScopeId, revision: 1,
-    phase: "action", state: "action_requesting", executionState: "accepted",
+    eventType: "turn.action_accepted",
+    sessionId,
+    turnScopeId,
+    revision: 1,
+    phase: "action",
+    state: "action_requesting",
+    executionState: "accepted",
   });
   applyLifecycle(store, {
-    eventType: "turn.processing_started", sessionId, turnScopeId, revision: 2,
-    phase: "processing", state: "processing", executionState: "sending", canStop: true,
+    eventType: "turn.processing_started",
+    sessionId,
+    turnScopeId,
+    revision: 2,
+    phase: "processing",
+    state: "processing",
+    executionState: "sending",
+    canStop: true,
   });
 }
 
 function settleTurn(store, { sessionId, turnScopeId, state }) {
   const revision = 100;
   const completionCommitId = `commit-${turnScopeId}-${state}`;
-  return applyTurnTerminalResolution(store.turnRuntimeRegistry, createTurnTerminalResolution({
-    commandId: `resolve-${turnScopeId}-${state}`,
-    sessionId,
-    turnScopeId,
-    resolved: true,
-    aggregateVersion: 1,
-    turn: { sessionId, turnScopeId, state, phase: state === "stop_completed" ? "stop" : "completion",
-      revision, sequence: revision, completionCommitId, summaryVersion: revision,
-      capabilities: { actionLocked: false, canStop: false } },
-    materialization: { completionCommitId, summaryVersion: revision, revision, sequence: revision,
-      terminalStatus: { status: state }, messages: [] },
-  }));
+  return applyTurnTerminalResolution(
+    store.turnRuntimeRegistry,
+    createTurnTerminalResolution({
+      commandId: `resolve-${turnScopeId}-${state}`,
+      sessionId,
+      turnScopeId,
+      resolved: true,
+      aggregateVersion: 1,
+      turn: {
+        sessionId,
+        turnScopeId,
+        state,
+        phase: state === "stop_completed" ? "stop" : "completion",
+        revision,
+        sequence: revision,
+        completionCommitId,
+        summaryVersion: revision,
+        capabilities: { actionLocked: false, canStop: false },
+      },
+      materialization: {
+        completionCommitId,
+        summaryVersion: revision,
+        revision,
+        sequence: revision,
+        terminalStatus: { status: state },
+        messages: [],
+      },
+    }),
+  );
 }
 
 describe("useMessageMeta status steps", () => {
@@ -113,8 +154,14 @@ describe("useMessageMeta status steps", () => {
     expect(statusStepState.value).toBe("stopping");
 
     applyLifecycle(store, {
-      eventType: "turn.stop_accepted", sessionId: "session-1", turnScopeId: "turn-1",
-      revision: 3, phase: "stop", state: "action_requesting", action: "stop", executionState: "stopping",
+      eventType: "turn.stop_accepted",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      revision: 3,
+      phase: "stop",
+      state: "action_requesting",
+      action: "stop",
+      executionState: "stopping",
     });
     await nextTick();
     expect(statusStepState.value).toBe("requesting");
@@ -183,7 +230,11 @@ describe("useMessageMeta status steps", () => {
       sessionId: "session-1",
       turnScopeId: "client-turn:main",
     });
-    settleTurn(store, { sessionId: "session-1", turnScopeId: "client-turn:main", state: "completed" });
+    settleTurn(store, {
+      sessionId: "session-1",
+      turnScopeId: "client-turn:main",
+      state: "completed",
+    });
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
     await nextTick();
     expect(statusStepState.value).toBe("completed");

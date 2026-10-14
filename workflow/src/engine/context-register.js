@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ModelBoxFactory from './bizinst/box/modelbox/model-box-factory.js';
-import ModelStateBoxFactory from './bizinst/box/modelstatebox/model-state-box-factory.js';
-import WorkFlowContext from './work-flow-context.js';
+import ModelBoxFactory from "./bizinst/box/modelbox/model-box-factory.js";
+import ModelStateBoxFactory from "./bizinst/box/modelstatebox/model-state-box-factory.js";
+import WorkFlowContext from "./work-flow-context.js";
 
 class ContextRegister {
   constructor() {}
@@ -20,6 +20,9 @@ class ContextRegister {
 }
 ContextRegister.instance = new ContextRegister();
 ContextRegister.instance.regist(WorkFlowContext.MODELBOXFACTORYNAME, ModelBoxFactory.getInstance());
-ContextRegister.instance.regist(WorkFlowContext.MODELSTATEBOXFACTORYNAME, ModelStateBoxFactory.getInstance());
+ContextRegister.instance.regist(
+  WorkFlowContext.MODELSTATEBOXFACTORYNAME,
+  ModelStateBoxFactory.getInstance(),
+);
 
-export default  ContextRegister;
+export default ContextRegister;

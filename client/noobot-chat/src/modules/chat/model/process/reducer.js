@@ -34,8 +34,10 @@ function ensureProcess(state, processId) {
       eventCount: 0,
     };
   }
-  if (!state.nodeIdsByProcessId[normalizedProcessId]) state.nodeIdsByProcessId[normalizedProcessId] = [];
-  if (!state.seenEventIdsByProcessId[normalizedProcessId]) state.seenEventIdsByProcessId[normalizedProcessId] = [];
+  if (!state.nodeIdsByProcessId[normalizedProcessId])
+    state.nodeIdsByProcessId[normalizedProcessId] = [];
+  if (!state.seenEventIdsByProcessId[normalizedProcessId])
+    state.seenEventIdsByProcessId[normalizedProcessId] = [];
   return state.processesById[normalizedProcessId];
 }
 
@@ -55,8 +57,10 @@ function isDuplicateEvent(state, processId, eventId) {
 function processStatusFromNodeStatus(nodeStatus, previousStatus) {
   if (nodeStatus === ProcessNodeStatus.FAILED) return ProcessStatus.FAILED;
   if (nodeStatus === ProcessNodeStatus.CANCELLED) return ProcessStatus.CANCELLED;
-  if (previousStatus === ProcessStatus.FAILED || previousStatus === ProcessStatus.CANCELLED) return previousStatus;
-  if (nodeStatus === ProcessNodeStatus.RUNNING || previousStatus === ProcessStatus.CREATED) return ProcessStatus.RUNNING;
+  if (previousStatus === ProcessStatus.FAILED || previousStatus === ProcessStatus.CANCELLED)
+    return previousStatus;
+  if (nodeStatus === ProcessNodeStatus.RUNNING || previousStatus === ProcessStatus.CREATED)
+    return ProcessStatus.RUNNING;
   return previousStatus || ProcessStatus.RUNNING;
 }
 
@@ -83,10 +87,9 @@ export function hydrateProcessSnapshot(state, snapshot = {}) {
     };
     nodeIds.push(nodeId);
   }
-  state.nodeIdsByProcessId[processId] = Array.from(new Set([
-    ...(state.nodeIdsByProcessId[processId] || []),
-    ...nodeIds,
-  ]));
+  state.nodeIdsByProcessId[processId] = Array.from(
+    new Set([...(state.nodeIdsByProcessId[processId] || []), ...nodeIds]),
+  );
   return state;
 }
 
@@ -103,7 +106,8 @@ export function applyProcessEvent(state, eventItem = {}) {
   if (node?.id) {
     const nodeId = normalizeProcessString(node.id);
     const previousNode = state.nodesById[nodeId] || {};
-    const nextStatus = normalizeProcessString(node.status) || previousNode.status || ProcessNodeStatus.RUNNING;
+    const nextStatus =
+      normalizeProcessString(node.status) || previousNode.status || ProcessNodeStatus.RUNNING;
     state.nodesById[nodeId] = {
       ...previousNode,
       ...node,
@@ -114,14 +118,21 @@ export function applyProcessEvent(state, eventItem = {}) {
       updatedAt: normalizeProcessString(eventItem.timestamp) || previousNode.updatedAt || "",
     };
     if (!(state.nodeIdsByProcessId[processId] || []).includes(nodeId)) {
-      state.nodeIdsByProcessId[processId] = [...(state.nodeIdsByProcessId[processId] || []), nodeId];
+      state.nodeIdsByProcessId[processId] = [
+        ...(state.nodeIdsByProcessId[processId] || []),
+        nodeId,
+      ];
     }
     processItem.status = processStatusFromNodeStatus(nextStatus, processItem.status);
   }
 
   if (eventType === ProcessEventType.PROCESS_FINISHED) {
-    processItem.status = normalizeProcessString(eventItem?.payload?.status) || ProcessStatus.SUCCEEDED;
-  } else if (eventType === ProcessEventType.PROCESS_STARTED && processItem.status === ProcessStatus.CREATED) {
+    processItem.status =
+      normalizeProcessString(eventItem?.payload?.status) || ProcessStatus.SUCCEEDED;
+  } else if (
+    eventType === ProcessEventType.PROCESS_STARTED &&
+    processItem.status === ProcessStatus.CREATED
+  ) {
     processItem.status = ProcessStatus.RUNNING;
   }
   processItem.lastSequence = Math.max(toProcessSequence(processItem.lastSequence, 0), sequence);
@@ -136,7 +147,9 @@ export function applyProcessEvents(state, events = []) {
     const leftSequence = toProcessSequence(left?.sequence ?? left?.meta?.sequence, 0);
     const rightSequence = toProcessSequence(right?.sequence ?? right?.meta?.sequence, 0);
     if (leftSequence !== rightSequence) return leftSequence - rightSequence;
-    return normalizeProcessString(left?.timestamp).localeCompare(normalizeProcessString(right?.timestamp));
+    return normalizeProcessString(left?.timestamp).localeCompare(
+      normalizeProcessString(right?.timestamp),
+    );
   });
   for (const eventItem of sortedEvents) applyProcessEvent(state, eventItem);
   return state;

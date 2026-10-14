@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IStartNode {
-}
+class IStartNode {}
 
-export default  IStartNode;
+export default IStartNode;

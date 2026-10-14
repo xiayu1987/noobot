@@ -5,13 +5,23 @@
  */
 
 export function buildSessionRuntimePluginResolvedEvent(runConfig = {}) {
-  const selectedPlugins = Array.isArray(runConfig?.selectedPlugins) ? runConfig.selectedPlugins : [];
-  const plugins = runConfig?.plugins && typeof runConfig.plugins === "object" ? runConfig.plugins : {};
+  const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
+    ? runConfig.selectedPlugins
+    : [];
+  const plugins =
+    runConfig?.plugins && typeof runConfig.plugins === "object" ? runConfig.plugins : {};
   return {
     selectedPlugins,
-    plugins: Object.fromEntries(selectedPlugins.map((pluginId) => [pluginId, {
-      enabled: plugins?.[pluginId]?.enabled === true,
-      mode: String(plugins?.[pluginId]?.mode || "").trim().toLowerCase(),
-    }])),
+    plugins: Object.fromEntries(
+      selectedPlugins.map((pluginId) => [
+        pluginId,
+        {
+          enabled: plugins?.[pluginId]?.enabled === true,
+          mode: String(plugins?.[pluginId]?.mode || "")
+            .trim()
+            .toLowerCase(),
+        },
+      ]),
+    ),
   };
 }

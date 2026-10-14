@@ -47,8 +47,5 @@ test("emitPlanMutationStageMismatchAutocoerced appends localized reason label", 
 
   assert.equal(logs.length, 1);
   assert.equal(logs[0]?.detail?.reason, "revision_contains_sub_plan_patch");
-  assert.match(
-    String(logs[0]?.detail?.reasonLabel || ""),
-    /auto-coerced to refinement flow/i,
-  );
+  assert.match(String(logs[0]?.detail?.reasonLabel || ""), /auto-coerced to refinement flow/i);
 });

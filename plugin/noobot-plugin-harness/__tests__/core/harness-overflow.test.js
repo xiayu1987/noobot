@@ -11,7 +11,10 @@ import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures
 
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 
-async function finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content = "SUMMARY_DONE" } = {}) {
+async function finishGuidanceSummaryRound(
+  guidanceHandler,
+  { messages, agentContext, content = "SUMMARY_DONE" } = {},
+) {
   await guidanceHandler({
     capability: "guidance",
     point: "agent.after_llm_call",
@@ -24,7 +27,10 @@ async function finishGuidanceSummaryRound(guidanceHandler, { messages, agentCont
   });
 }
 
-async function runGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content = "SUMMARY_DONE" } = {}) {
+async function runGuidanceSummaryRound(
+  guidanceHandler,
+  { messages, agentContext, content = "SUMMARY_DONE" } = {},
+) {
   await guidanceHandler({
     capability: "guidance",
     point: "agent.before_llm_call",
@@ -69,10 +75,7 @@ test("guidance summary capture leaves tool-call pair unchanged until checkpoint 
   await finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext });
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
-  assert.equal(
-    agentContext.payload.harness.state.flags.overflowForceAcceptancePending,
-    false,
-  );
+  assert.equal(agentContext.payload.harness.state.flags.overflowForceAcceptancePending, false);
 });
 
 test("overflow after harness summary schedules the harness summary flow again without marking messages", async () => {
@@ -114,7 +117,10 @@ test("overflow after harness summary schedules the harness summary flow again wi
   assert.equal(agentContext.payload.harness.state.flags.mainFlowFinalNoToolsPending, false);
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.flags.guidanceSummaryMarkPending, true);
-  assert.equal(agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(
+    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction,
+    undefined,
+  );
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, undefined);
 });

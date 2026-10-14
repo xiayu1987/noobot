@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import FlowException from './flow-exception.js';
+import FlowException from "./flow-exception.js";
 
 class CantFlowException extends FlowException {
-  constructor(msg = 'CantFlowException') {
+  constructor(msg = "CantFlowException") {
     super(msg);
-    this.name = 'CantFlowException';
+    this.name = "CantFlowException";
   }
 }
 
-export default  CantFlowException;
+export default CantFlowException;

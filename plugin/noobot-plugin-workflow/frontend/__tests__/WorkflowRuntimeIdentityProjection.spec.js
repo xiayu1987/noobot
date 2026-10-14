@@ -11,14 +11,17 @@ import { createStepStatusResolver } from "../runtime/workflowRuntimeStatus.js";
 
 describe("workflow runtime identity projection", () => {
   it("restores a missing persisted workflowRunId from the outer Turn envelope", () => {
-    const payload = projectWorkflowMessageIdentity({
-      execution: { completed: true },
-      nodeSessions: [{ sessionId: "child-session" }],
-    }, {
-      sessionId: "root-session",
-      dialogProcessId: "root-dialog",
-      turnScopeId: "client-turn:main",
-    });
+    const payload = projectWorkflowMessageIdentity(
+      {
+        execution: { completed: true },
+        nodeSessions: [{ sessionId: "child-session" }],
+      },
+      {
+        sessionId: "root-session",
+        dialogProcessId: "root-dialog",
+        turnScopeId: "client-turn:main",
+      },
+    );
 
     expect(payload).toMatchObject({
       workflowRunId: "client-turn:main",
@@ -37,12 +40,14 @@ describe("workflow runtime identity projection", () => {
     });
     const runtimeNodeSessions = createRuntimeNodeSessions({
       workflowPayload,
-      nodeSessions: ref([{
-        nodeId: "write-file",
-        sessionId: "child-session",
-        dialogProcessId: "wf_node_write_file_1",
-        stepId: "persisted-step",
-      }]),
+      nodeSessions: ref([
+        {
+          nodeId: "write-file",
+          sessionId: "child-session",
+          dialogProcessId: "wf_node_write_file_1",
+          stepId: "persisted-step",
+        },
+      ]),
       executionMeta: ref({ nodeAgentRuns: [] }),
       workflowNodeStateRegistry: ref({
         workflows: {
@@ -79,11 +84,13 @@ describe("workflow runtime identity projection", () => {
   it("preserves canonical status at the runtime input boundary", () => {
     const runtimeNodeSessions = createRuntimeNodeSessions({
       workflowPayload: ref({ workflowRunId: "client-turn:main" }),
-      nodeSessions: ref([{
-        nodeExecutionId: "node-execution-running",
-        dialogProcessId: "running-dialog",
-        status: "running",
-      }]),
+      nodeSessions: ref([
+        {
+          nodeExecutionId: "node-execution-running",
+          dialogProcessId: "running-dialog",
+          status: "running",
+        },
+      ]),
       executionMeta: ref({ nodeAgentRuns: [] }),
       workflowNodeStateRegistry: ref({ workflows: {} }),
     });
@@ -99,7 +106,11 @@ describe("workflow runtime identity projection", () => {
       nodeRunByDialogProcessId: ref(new Map()),
     });
 
-    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "running" })).toBe("running");
-    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "succeeded" })).toBe("success");
+    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "running" })).toBe(
+      "running",
+    );
+    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "succeeded" })).toBe(
+      "success",
+    );
   });
 });

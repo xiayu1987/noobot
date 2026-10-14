@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IModelState {
-}
+class IModelState {}
 
-export default  IModelState;
+export default IModelState;

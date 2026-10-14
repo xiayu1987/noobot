@@ -8,4 +8,4 @@ class IContextRegister {
   regist(id, contextBean) {}
 }
 
-export default  IContextRegister;
+export default IContextRegister;

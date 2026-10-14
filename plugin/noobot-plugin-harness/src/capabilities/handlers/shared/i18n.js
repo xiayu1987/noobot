@@ -15,8 +15,7 @@ export { HARNESS_I18N_KEYSET };
 
 export function resolveLocale(ctx = {}) {
   const runtime =
-    ctx?.agentContext?.bindings?.runtime &&
-    typeof ctx.agentContext.bindings.runtime === "object"
+    ctx?.agentContext?.bindings?.runtime && typeof ctx.agentContext.bindings.runtime === "object"
       ? ctx.agentContext.bindings.runtime
       : {};
   const localeCandidates = [

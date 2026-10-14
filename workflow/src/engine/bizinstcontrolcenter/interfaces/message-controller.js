@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IMessageControler {
-}
+class IMessageControler {}
 
-export default  IMessageControler;
+export default IMessageControler;

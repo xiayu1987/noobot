@@ -20,12 +20,9 @@ export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
     if (!targetAssistantMessage || !Array.isArray(attachments) || !attachments.length) {
       return;
     }
-    const normalizedAttachments =
-      makeViewMessage({ attachments })?.attachments || attachments;
+    const normalizedAttachments = makeViewMessage({ attachments })?.attachments || attachments;
     targetAssistantMessage.attachments = mergeAttachments(
-      Array.isArray(targetAssistantMessage.attachments)
-        ? targetAssistantMessage.attachments
-        : [],
+      Array.isArray(targetAssistantMessage.attachments) ? targetAssistantMessage.attachments : [],
       normalizedAttachments,
     );
   }

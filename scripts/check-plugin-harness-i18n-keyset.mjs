@@ -12,9 +12,7 @@ const TARGET_DIR = "plugin/noobot-plugin-harness/src";
 const FILE_EXT = new Set([".js"]);
 const DIRECT_KEY_CALL_RE = /translateI18nText\s*\(\s*[^,]+,\s*["'][A-Za-z0-9_]+["']/g;
 
-const DIRECT_KEY_ALLOWED_FILES = new Set([
-  "plugin/noobot-plugin-harness/src/i18n.js",
-]);
+const DIRECT_KEY_ALLOWED_FILES = new Set(["plugin/noobot-plugin-harness/src/i18n.js"]);
 
 function walkFiles(dir) {
   const result = [];

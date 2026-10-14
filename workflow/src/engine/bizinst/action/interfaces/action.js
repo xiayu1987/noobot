@@ -9,4 +9,4 @@ class IAction {
   getName() {}
 }
 
-export default  IAction;
+export default IAction;

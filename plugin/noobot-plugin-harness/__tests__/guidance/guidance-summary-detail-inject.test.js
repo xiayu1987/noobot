@@ -60,7 +60,10 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta: {} });
 
   const harnessBucket = ctx?.agentContext?.payload?.harness || {};
-  assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
+  assert.match(
+    String(harnessBucket.summaryText || ""),
+    /^1\. \[plan=2\]\[status=done\] 完成模块分析/m,
+  );
   assert.match(String(harnessBucket.summaryFullText || ""), /\[SUMMARY_DETAIL\]/);
   assert.equal(ingestCalled, 0);
   assert.equal(harnessBucket.summaryDetailAttachments, undefined);
@@ -74,7 +77,9 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
     true,
   );
   assert.equal(
-    ctx.modelContext.messages.some((item = {}) => String(item?.content || "").includes("DETAIL_PATH:")),
+    ctx.modelContext.messages.some((item = {}) =>
+      String(item?.content || "").includes("DETAIL_PATH:"),
+    ),
     false,
   );
 });
@@ -115,26 +120,39 @@ test("inject-mode summary persists and injects the same complete Harness summary
               async transferSemanticContent(payload = {}) {
                 persistedSummaryPayload = payload;
                 return {
-                  transferEnvelopes: [attachmentTransfer({
-                    transferId: "transfer-summary-detail-1",
-                    messageId: "message-summary-detail-1",
-                    identity: {
-                      sessionId: "s1",
-                      turnScopeId: "turn-summary-1",
-                      runId: "run-summary-1",
-                      producer: payload.producer,
-                    },
-                    direction: "output",
-                    attachments: [{
-                      identity: { attachmentId: "att-summary-detail-1", sessionId: "s1", attachmentSource: "model" },
-                      role: "primary",
-                      name: "summary-detail.md",
-                      mimeType: "text/markdown",
-                      size: 123,
-                    }],
-                    intent: { source: "plugin", reason: payload.reason, scenario: payload.scenario, strategy: payload.strategy },
-                    meta: { persisted: true },
-                  })],
+                  transferEnvelopes: [
+                    attachmentTransfer({
+                      transferId: "transfer-summary-detail-1",
+                      messageId: "message-summary-detail-1",
+                      identity: {
+                        sessionId: "s1",
+                        turnScopeId: "turn-summary-1",
+                        runId: "run-summary-1",
+                        producer: payload.producer,
+                      },
+                      direction: "output",
+                      attachments: [
+                        {
+                          identity: {
+                            attachmentId: "att-summary-detail-1",
+                            sessionId: "s1",
+                            attachmentSource: "model",
+                          },
+                          role: "primary",
+                          name: "summary-detail.md",
+                          mimeType: "text/markdown",
+                          size: 123,
+                        },
+                      ],
+                      intent: {
+                        source: "plugin",
+                        reason: payload.reason,
+                        scenario: payload.scenario,
+                        strategy: payload.strategy,
+                      },
+                      meta: { persisted: true },
+                    }),
+                  ],
                 };
               },
             },
@@ -159,7 +177,10 @@ test("inject-mode summary persists and injects the same complete Harness summary
   await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta });
 
   const harnessBucket = ctx?.agentContext?.payload?.harness || {};
-  assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
+  assert.match(
+    String(harnessBucket.summaryText || ""),
+    /^1\. \[plan=2\]\[status=done\] 完成模块分析/m,
+  );
   assert.doesNotMatch(String(harnessBucket.summaryText || ""), /SUMMARY_DETAIL/);
 
   const injectedSummaryMessage = [...ctx.modelContext.messages]
@@ -179,7 +200,11 @@ test("inject-mode summary persists and injects the same complete Harness summary
   assert.equal(persistedSummaryPayload?.detail, ctx.ai.content);
   assert.equal(Array.isArray(injectedSummaryMessage?.transferEnvelopes), true);
   assert.equal(injectedSummaryMessage?.transferEnvelopes?.[0]?.version, 2);
-  assert.equal(injectedSummaryMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "att-summary-detail-1");
+  assert.equal(
+    injectedSummaryMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity
+      ?.attachmentId,
+    "att-summary-detail-1",
+  );
   assert.equal(injectedSummaryMessage?.attachments, undefined);
 
   assert.doesNotMatch(

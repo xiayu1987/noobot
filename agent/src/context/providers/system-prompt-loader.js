@@ -25,11 +25,10 @@ function resolveDefaultSystemPromptPath({
 export async function loadSystemPrompt(options = {}) {
   const systemPromptPath = resolveDefaultSystemPromptPath(options);
   if (!systemPromptCachePromises.has(systemPromptPath)) {
-    const systemPromptCachePromise = readFile(systemPromptPath, "utf8")
-      .catch((error) => {
-        systemPromptCachePromises.delete(systemPromptPath);
-        throw error;
-      });
+    const systemPromptCachePromise = readFile(systemPromptPath, "utf8").catch((error) => {
+      systemPromptCachePromises.delete(systemPromptPath);
+      throw error;
+    });
     systemPromptCachePromises.set(systemPromptPath, systemPromptCachePromise);
   }
   return systemPromptCachePromises.get(systemPromptPath);

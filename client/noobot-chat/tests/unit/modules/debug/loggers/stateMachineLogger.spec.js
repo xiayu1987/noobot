@@ -20,7 +20,10 @@ describe("stateMachineLogger", () => {
     setStateMachineDebugLogSink(sink);
 
     logStateMachineDebug("stateMachine.reducer.decision", () => ({
-      sessionId: "s-1", turnScopeId: "t-1", applied: false, reason: "stale_revision",
+      sessionId: "s-1",
+      turnScopeId: "t-1",
+      applied: false,
+      reason: "stale_revision",
     }));
 
     expect(sink.debug).toHaveBeenCalledWith("state-machine", expect.any(Function));
@@ -34,18 +37,35 @@ describe("stateMachineLogger", () => {
 
   it("summarizes identity and state without serializing message or event bodies", () => {
     const event = summarizeStateMachineEvent({
-      type: "backend_turn_lifecycle", eventType: "turn.completed",
-      sessionId: "s-1", turnScopeId: "t-1", revision: 4, sequence: 7,
-      content: "private event body", raw: { message: "private raw body" },
+      type: "backend_turn_lifecycle",
+      eventType: "turn.completed",
+      sessionId: "s-1",
+      turnScopeId: "t-1",
+      revision: 4,
+      sequence: 7,
+      content: "private event body",
+      raw: { message: "private raw body" },
     });
-    const turn = summarizeStateMachineTurn({
-      sessionId: "s-1", turnScopeId: "t-1", state: "completed",
-      revision: 4, seq: 7, terminalResolved: true,
-      terminalMaterialization: { messages: [{ content: "private message body" }] },
-    }, { displayState: "completed", sending: false, canStop: false });
+    const turn = summarizeStateMachineTurn(
+      {
+        sessionId: "s-1",
+        turnScopeId: "t-1",
+        state: "completed",
+        revision: 4,
+        seq: 7,
+        terminalResolved: true,
+        terminalMaterialization: { messages: [{ content: "private message body" }] },
+      },
+      { displayState: "completed", sending: false, canStop: false },
+    );
 
     expect(event).toMatchObject({ lifecycleEventType: "turn.completed", revision: 4, sequence: 7 });
-    expect(turn).toMatchObject({ state: "completed", terminalResolved: true, revision: 4, sequence: 7 });
+    expect(turn).toMatchObject({
+      state: "completed",
+      terminalResolved: true,
+      revision: 4,
+      sequence: 7,
+    });
     expect(JSON.stringify({ event, turn })).not.toContain("private");
   });
 });

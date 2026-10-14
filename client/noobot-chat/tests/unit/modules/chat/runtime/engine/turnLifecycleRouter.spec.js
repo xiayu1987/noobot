@@ -21,16 +21,20 @@ describe("foreign Turn lifecycle routing", () => {
       sequence: 1,
     };
 
-    expect(routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
-      activeSession: { value: { id: "local-session", sessionId: "" } },
-      applyTurnLifecycleEnvelope,
-      logSessionEvent,
-      sessionId: "local-session",
-    })).toBe(false);
+    expect(
+      routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
+        activeSession: { value: { id: "local-session", sessionId: "" } },
+        applyTurnLifecycleEnvelope,
+        logSessionEvent,
+        sessionId: "local-session",
+      }),
+    ).toBe(false);
     expect(applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
-    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ route: "main" }),
-    }));
+    expect(logSessionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ route: "main" }),
+      }),
+    );
   });
 
   it("commits child Session authority envelopes into the canonical Turn registry", () => {
@@ -43,11 +47,13 @@ describe("foreign Turn lifecycle routing", () => {
       sequence: 2,
     };
 
-    expect(routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
-      activeSession: { value: { sessionId: "root-session" } },
-      applyTurnLifecycleEnvelope,
-      sessionId: "root-session",
-    })).toBe(true);
+    expect(
+      routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
+        activeSession: { value: { sessionId: "root-session" } },
+        applyTurnLifecycleEnvelope,
+        sessionId: "root-session",
+      }),
+    ).toBe(true);
     expect(applyTurnLifecycleEnvelope).toHaveBeenCalledWith(data);
   });
 
@@ -116,31 +122,36 @@ describe("committed user Turn routing", () => {
       name: "old.docx",
     };
 
-    expect(routeCurrentTurnLifecycleEvent("turn_committed", {
-      sessionId: "session-1",
-      aggregateVersion: 1,
-      dialogProcessId: "dialog-1",
-      turnScopeId: "client-turn:1",
-      userMessage: {
-        messageUid: "sm_1",
-        id: "frontend-user-1",
-        messageId: "frontend-user-1",
-        role: "user",
-        sessionId: "session-1",
-        dialogProcessId: "dialog-1",
-        turnScopeId: "client-turn:1",
-        content: "parse attachments",
-        attachments: [],
-      },
-    }, {
-      activeSession,
-      findCanonicalMessageById: (_sessionId, messageId) => (
-        messageId === draftMessage.messageId ? draftMessage : null
+    expect(
+      routeCurrentTurnLifecycleEvent(
+        "turn_committed",
+        {
+          sessionId: "session-1",
+          aggregateVersion: 1,
+          dialogProcessId: "dialog-1",
+          turnScopeId: "client-turn:1",
+          userMessage: {
+            messageUid: "sm_1",
+            id: "frontend-user-1",
+            messageId: "frontend-user-1",
+            role: "user",
+            sessionId: "session-1",
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:1",
+            content: "parse attachments",
+            attachments: [],
+          },
+        },
+        {
+          activeSession,
+          findCanonicalMessageById: (_sessionId, messageId) =>
+            messageId === draftMessage.messageId ? draftMessage : null,
+          makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
+          logSessionEvent,
+          sessionId: "session-1",
+        },
       ),
-      makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
-      logSessionEvent,
-      sessionId: "session-1",
-    })).toBe(true);
+    ).toBe(true);
 
     expect(activeSession.value.aggregateVersion).toBe(1);
     expect(draftMessage).toMatchObject({
@@ -149,34 +160,44 @@ describe("committed user Turn routing", () => {
       dialogProcessId: "dialog-1",
       attachments: [],
     });
-    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
-      event: "frontend.turnCommit.userMessageApplied",
-      data: expect.objectContaining({ applied: true, attachmentCount: 0 }),
-    }));
+    expect(logSessionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "frontend.turnCommit.userMessageApplied",
+        data: expect.objectContaining({ applied: true, attachmentCount: 0 }),
+      }),
+    );
 
-    expect(routeCurrentTurnLifecycleEvent("turn_attachments_bound", {
-      sessionId: "session-1",
-      aggregateVersion: 2,
-      dialogProcessId: "dialog-1",
-      turnScopeId: "client-turn:1",
-      userMessage: {
-        ...draftMessage,
-        attachments: [canonicalAttachment],
-      },
-    }, {
-      activeSession,
-      findCanonicalMessageById: () => draftMessage,
-      makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
-      logSessionEvent,
-      sessionId: "session-1",
-    })).toBe(true);
+    expect(
+      routeCurrentTurnLifecycleEvent(
+        "turn_attachments_bound",
+        {
+          sessionId: "session-1",
+          aggregateVersion: 2,
+          dialogProcessId: "dialog-1",
+          turnScopeId: "client-turn:1",
+          userMessage: {
+            ...draftMessage,
+            attachments: [canonicalAttachment],
+          },
+        },
+        {
+          activeSession,
+          findCanonicalMessageById: () => draftMessage,
+          makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
+          logSessionEvent,
+          sessionId: "session-1",
+        },
+      ),
+    ).toBe(true);
 
     expect(activeSession.value.aggregateVersion).toBe(2);
     expect(draftMessage.attachments).toEqual([canonicalAttachment]);
-    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
-      event: "frontend.turnAttachmentsBound.userMessageApplied",
-      data: expect.objectContaining({ applied: true, attachmentCount: 1 }),
-    }));
+    expect(logSessionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "frontend.turnAttachmentsBound.userMessageApplied",
+        data: expect.objectContaining({ applied: true, attachmentCount: 1 }),
+      }),
+    );
   });
 
   it("rejects a commit whose stable message id has no local target", () => {
@@ -185,31 +206,39 @@ describe("committed user Turn routing", () => {
       value: { id: "session-1", sessionId: "session-1", version: 0, messages: [] },
     };
 
-    expect(routeCurrentTurnLifecycleEvent("turn_committed", {
-      sessionId: "session-1",
-      aggregateVersion: 1,
-      dialogProcessId: "dialog-1",
-      turnScopeId: "client-turn:1",
-      userMessage: {
-        messageUid: "sm_1",
-        messageId: "missing-user",
-        role: "user",
-        sessionId: "session-1",
-        dialogProcessId: "dialog-1",
-        turnScopeId: "client-turn:1",
-        attachments: [],
-      },
-    }, {
-      activeSession,
-      findCanonicalMessageById: () => null,
-      logSessionEvent,
-      sessionId: "session-1",
-    })).toBe(true);
+    expect(
+      routeCurrentTurnLifecycleEvent(
+        "turn_committed",
+        {
+          sessionId: "session-1",
+          aggregateVersion: 1,
+          dialogProcessId: "dialog-1",
+          turnScopeId: "client-turn:1",
+          userMessage: {
+            messageUid: "sm_1",
+            messageId: "missing-user",
+            role: "user",
+            sessionId: "session-1",
+            dialogProcessId: "dialog-1",
+            turnScopeId: "client-turn:1",
+            attachments: [],
+          },
+        },
+        {
+          activeSession,
+          findCanonicalMessageById: () => null,
+          logSessionEvent,
+          sessionId: "session-1",
+        },
+      ),
+    ).toBe(true);
 
     expect(activeSession.value.aggregateVersion).toBe(1);
-    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
-      event: "frontend.turnCommit.userMessageRejected",
-      data: expect.objectContaining({ reason: "committed_user_target_missing" }),
-    }));
+    expect(logSessionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "frontend.turnCommit.userMessageRejected",
+        data: expect.objectContaining({ reason: "committed_user_target_missing" }),
+      }),
+    );
   });
 });

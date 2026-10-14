@@ -34,17 +34,18 @@ export function createDesktopDependencyManager({
     getDependencyProxyUrl,
   });
 
-  const { findAvailableCommand, isDependencyInstalled, waitForDependencyInstalled } = createDependencyDetector({
-    app,
-    backendRoot,
-    appendEarlyLog,
-    writeDependencyLog,
-    runProcess,
-    hasExistingFile,
-    getDarwinManagedKeyForSpec,
-    getMacManagedCommandPath,
-    prependManagedDependencyPath,
-  });
+  const { findAvailableCommand, isDependencyInstalled, waitForDependencyInstalled } =
+    createDependencyDetector({
+      app,
+      backendRoot,
+      appendEarlyLog,
+      writeDependencyLog,
+      runProcess,
+      hasExistingFile,
+      getDarwinManagedKeyForSpec,
+      getMacManagedCommandPath,
+      prependManagedDependencyPath,
+    });
 
   const { ensureSelectedDependencies } = createDependencyInstaller({
     appendEarlyLog,

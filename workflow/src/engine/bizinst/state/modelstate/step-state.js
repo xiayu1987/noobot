@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../../can-persistence-base.js';
+import CanPersistenceBase from "../../../../can-persistence-base.js";
 
 class StepState extends CanPersistenceBase {
   constructor() {
@@ -26,4 +26,4 @@ class StepState extends CanPersistenceBase {
   }
 }
 
-export default  StepState;
+export default StepState;

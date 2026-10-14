@@ -9,4 +9,3 @@ export function createDefaultWorkflowExtension() {
     return undefined;
   };
 }
-

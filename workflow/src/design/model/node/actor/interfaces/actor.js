@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IActor {
-}
+class IActor {}
 
-export default  IActor;
+export default IActor;

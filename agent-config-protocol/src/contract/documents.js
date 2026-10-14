@@ -5,8 +5,17 @@
  */
 import { isPlainObject } from "../utils.js";
 
-export function createConfigBuildResult({ rawConfig = {}, persistedConfig = rawConfig, resolvedConfig = {}, metadata = {} } = {}) {
-  if (!isPlainObject(rawConfig) || !isPlainObject(persistedConfig) || !isPlainObject(resolvedConfig)) {
+export function createConfigBuildResult({
+  rawConfig = {},
+  persistedConfig = rawConfig,
+  resolvedConfig = {},
+  metadata = {},
+} = {}) {
+  if (
+    !isPlainObject(rawConfig) ||
+    !isPlainObject(persistedConfig) ||
+    !isPlainObject(resolvedConfig)
+  ) {
     throw new TypeError("config build documents must be objects");
   }
   if (
@@ -14,7 +23,9 @@ export function createConfigBuildResult({ rawConfig = {}, persistedConfig = rawC
     Object.prototype.hasOwnProperty.call(persistedConfig, "configParams") ||
     Object.prototype.hasOwnProperty.call(resolvedConfig, "configParams")
   ) {
-    throw new TypeError("configParams must be supplied through resolution context, not config documents");
+    throw new TypeError(
+      "configParams must be supplied through resolution context, not config documents",
+    );
   }
   return {
     rawConfig,

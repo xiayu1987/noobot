@@ -32,7 +32,7 @@ describe("ChatMessageNavigator theme colors", () => {
   });
 
   it("keeps the current state restrained without markers or position shifts", () => {
-    expect(navigatorSource).toContain(":marker=\"false\"");
+    expect(navigatorSource).toContain(':marker="false"');
     expect(navigatorSource).toContain(
       "border-color: color-mix(in srgb, var(--noobot-accent) 42%, var(--noobot-panel-border));",
     );

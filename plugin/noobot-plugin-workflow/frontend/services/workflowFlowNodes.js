@@ -7,19 +7,33 @@ import { computed } from "vue";
 import { resolveActionRuntimeStatus } from "../runtime/workflowRuntimeStatus.js";
 import { firstRuntimeStep, stripRuntimeInternal } from "../runtime/workflowRuntimeSteps.js";
 
-function buildFlowNodeFromSemantic({ nodeItem = {}, index = 0, workflowPayload, executionMeta, actionRuntimeBySemanticKey, resolveStepStatus }) {
+function buildFlowNodeFromSemantic({
+  nodeItem = {},
+  index = 0,
+  workflowPayload,
+  executionMeta,
+  actionRuntimeBySemanticKey,
+  resolveStepStatus,
+}) {
   const nodeId = String(nodeItem?.id || "").trim();
   const nodeName = String(nodeItem?.name || nodeId || "").trim();
   const matchedRuntime =
     actionRuntimeBySemanticKey.value.get(`id:${nodeId}`) ||
     actionRuntimeBySemanticKey.value.get(`name:${nodeName}`) ||
     null;
-  const cleanRuntime = matchedRuntime ? stripRuntimeInternal(matchedRuntime) : { actionNodeStates: [] };
+  const cleanRuntime = matchedRuntime
+    ? stripRuntimeInternal(matchedRuntime)
+    : { actionNodeStates: [] };
   const firstStep = firstRuntimeStep(cleanRuntime.actionNodeStates) || {};
   const completed = executionMeta.value?.completed === true;
-  const nodeType = String(nodeItem?.type || "").trim().toLowerCase();
+  const nodeType = String(nodeItem?.type || "")
+    .trim()
+    .toLowerCase();
   const isAction = nodeType === "action";
-  const runtimeStatus = resolveActionRuntimeStatus(cleanRuntime.actionNodeStates, resolveStepStatus);
+  const runtimeStatus = resolveActionRuntimeStatus(
+    cleanRuntime.actionNodeStates,
+    resolveStepStatus,
+  );
   const restoredStatus = isAction
     ? runtimeStatus !== "pending"
       ? runtimeStatus
@@ -53,7 +67,12 @@ function buildFlowNodeFromSemantic({ nodeItem = {}, index = 0, workflowPayload, 
   };
 }
 
-export function createFlowNodes({ workflowPayload, executionMeta, actionRuntimeBySemanticKey, resolveStepStatus }) {
+export function createFlowNodes({
+  workflowPayload,
+  executionMeta,
+  actionRuntimeBySemanticKey,
+  resolveStepStatus,
+}) {
   return computed(() => {
     const semanticNodes = Array.isArray(workflowPayload.value?.semantic?.nodes)
       ? workflowPayload.value.semantic.nodes

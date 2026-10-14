@@ -8,8 +8,8 @@ export const SEARCH_MANUAL = {
   search: {
     summary: "搜索文件或给定文本，返回命中行与上下文。",
     usage: [
-      "search({ source: \"files\", query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
-      "search({ source: \"text\", query, text, isRegex, caseSensitive, contextLines, maxResults, riskLevel })",
+      'search({ source: "files", query, glob, path, isRegex, caseSensitive, contextLines, maxResults, riskLevel })',
+      'search({ source: "text", query, text, isRegex, caseSensitive, contextLines, maxResults, riskLevel })',
     ],
     params: {
       source: "搜索来源。files 搜工作区文件，text 搜 text 参数里给定的字符串。",

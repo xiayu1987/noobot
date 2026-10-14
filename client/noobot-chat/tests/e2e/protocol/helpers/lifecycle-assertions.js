@@ -24,6 +24,8 @@ export function assertLifecycleSequence(events = []) {
 }
 
 export function assertSingleTerminal(events = []) {
-  const terminal = events.filter((event) => ["turn.completed", "turn.stop_completed", "turn.failed"].includes(event.eventType));
+  const terminal = events.filter((event) =>
+    ["turn.completed", "turn.stop_completed", "turn.failed"].includes(event.eventType),
+  );
   expect(terminal).toHaveLength(1);
 }

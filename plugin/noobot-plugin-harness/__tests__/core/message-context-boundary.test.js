@@ -22,12 +22,14 @@ const allowedFiles = new Set([
 
 async function collectJsFiles(rootDir) {
   const entries = await fs.readdir(rootDir, { withFileTypes: true });
-  const files = await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(rootDir, entry.name);
-    if (entry.isDirectory()) return collectJsFiles(fullPath);
-    if (!entry.isFile()) return [];
-    return fullPath.endsWith(".js") ? [fullPath] : [];
-  }));
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const fullPath = path.join(rootDir, entry.name);
+      if (entry.isDirectory()) return collectJsFiles(fullPath);
+      if (!entry.isFile()) return [];
+      return fullPath.endsWith(".js") ? [fullPath] : [];
+    }),
+  );
   return files.flat();
 }
 

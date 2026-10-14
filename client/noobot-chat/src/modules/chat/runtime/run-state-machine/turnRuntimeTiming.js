@@ -87,8 +87,7 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
   }));
   if (
     timings.some(
-      (item) =>
-        !item.turnScopeId || (!item.startedAt && !item.finishedAt && !item.modelLoopRound),
+      (item) => !item.turnScopeId || (!item.startedAt && !item.finishedAt && !item.modelLoopRound),
     )
   ) {
     return { applied: false, reason: "invalid_timing_snapshot" };

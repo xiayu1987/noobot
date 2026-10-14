@@ -12,7 +12,8 @@ export const READ_FILE_MANUAL = {
       "read_file({ filePath, startLine, endLine, maxLines, includeLineNumbers, riskLevel })",
     ],
     params: {
-      filePath: "文件路径，也可直接使用上下文中的 attachmentRef。相对路径基于当前用户工作区根目录。",
+      filePath:
+        "文件路径，也可直接使用上下文中的 attachmentRef。相对路径基于当前用户工作区根目录。",
       startLine: "起始行，1-based，可选。省略时从第一行开始。",
       endLine: "结束行，1-based，可选。省略时读到 maxLines 上限。",
       maxLines: "最大返回行数，默认 1000。用于防止超大文件一次性灌入上下文。",

@@ -10,5 +10,5 @@ export async function createSessionThroughUi(page) {
   await expect(page.locator(".chat-input textarea")).toBeVisible();
   const activeSession = page.locator(".session-item.active");
   await expect(activeSession).toHaveAttribute("data-session-id", /.+/);
-  return String(await activeSession.getAttribute("data-session-id") || "").trim();
+  return String((await activeSession.getAttribute("data-session-id")) || "").trim();
 }

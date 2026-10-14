@@ -30,7 +30,8 @@ export function isSameWorkflowDrawerRoute(left = {}, right = {}) {
   const leftDialogProcessId = text(left?.dialogProcessId);
   const leftRootSessionId = text(left?.rootSessionId);
   return Boolean(
-    leftDialogProcessId && leftRootSessionId &&
+    leftDialogProcessId &&
+    leftRootSessionId &&
     leftDialogProcessId === text(right?.dialogProcessId) &&
     leftRootSessionId === text(right?.rootSessionId),
   );

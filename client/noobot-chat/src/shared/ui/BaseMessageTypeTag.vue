@@ -11,7 +11,9 @@ const props = defineProps({
 });
 
 const normalizedType = computed(() => String(props.type || "").trim());
-const visible = computed(() => Boolean(normalizedType.value) && normalizedType.value !== "tool_call");
+const visible = computed(
+  () => Boolean(normalizedType.value) && normalizedType.value !== "tool_call",
+);
 </script>
 
 <template>

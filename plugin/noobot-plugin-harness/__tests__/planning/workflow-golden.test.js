@@ -13,10 +13,7 @@ import {
   resolveWorkflowActionDecision,
 } from "../../src/capabilities/handlers/shared/workflow/scheduler.js";
 
-function createAgentContext({
-  pending = {},
-  flags = {},
-} = {}) {
+function createAgentContext({ pending = {}, flags = {} } = {}) {
   return {
     payload: {
       messages: { system: [], history: [] },
@@ -121,7 +118,10 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     "acceptance_semantic_validation",
     "analysis",
   ]);
-  assert.deepEqual(guidanceFirst.blockedActions, ["phase_acceptance", "acceptance_semantic_validation"]);
+  assert.deepEqual(guidanceFirst.blockedActions, [
+    "phase_acceptance",
+    "acceptance_semantic_validation",
+  ]);
   assert.deepEqual(guidanceFirst.blockedReasons, [
     "phase_acceptance_blocked_by_guidance",
     "acceptance_semantic_validation_deferred_by_phase_acceptance",
@@ -132,7 +132,10 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     pending: { ...baseState.pending, guidance: null },
   });
   assert.equal(revisionFirst.chosenAction, "plan_update_revision");
-  assert.deepEqual(revisionFirst.blockedActions, ["phase_acceptance", "acceptance_semantic_validation"]);
+  assert.deepEqual(revisionFirst.blockedActions, [
+    "phase_acceptance",
+    "acceptance_semantic_validation",
+  ]);
   assert.deepEqual(revisionFirst.blockedReasons, [
     "phase_acceptance_blocked_by_plan_update",
     "acceptance_semantic_validation_deferred_by_phase_acceptance",
@@ -148,7 +151,10 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     },
   });
   assert.equal(phaseFirst.chosenAction, "phase_acceptance");
-  assert.deepEqual(phaseFirst.blockedActions, ["summary_overflow", "acceptance_semantic_validation"]);
+  assert.deepEqual(phaseFirst.blockedActions, [
+    "summary_overflow",
+    "acceptance_semantic_validation",
+  ]);
   assert.deepEqual(phaseFirst.blockedReasons, [
     "summary_deferred_by_phase_acceptance",
     "acceptance_semantic_validation_deferred_by_phase_acceptance",
@@ -165,7 +171,10 @@ test("golden: simultaneous workflow candidates follow priority order", () => {
     },
   });
   assert.equal(summaryBeforeAnalysis.chosenAction, "summary_overflow");
-  assert.deepEqual(summaryBeforeAnalysis.deferredActions, ["acceptance_semantic_validation", "analysis"]);
+  assert.deepEqual(summaryBeforeAnalysis.deferredActions, [
+    "acceptance_semantic_validation",
+    "analysis",
+  ]);
   assert.deepEqual(summaryBeforeAnalysis.blockedActions, []);
 
   const semanticValidationBeforeAnalysis = resolveWorkflowActionDecision({
@@ -238,13 +247,12 @@ test("golden: phase_acceptance can run when only summary is pending", async () =
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "agent.before_llm_call",
+    (item = {}) =>
+      item?.event === "workflow_priority_decision" &&
+      item?.detail?.point === "agent.before_llm_call",
   );
   assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_pending");
-  assert.match(
-    String(decisionLog?.detail?.chosenReasonLabel || ""),
-    /阶段验收|Phase acceptance/i,
-  );
+  assert.match(String(decisionLog?.detail?.chosenReasonLabel || ""), /阶段验收|Phase acceptance/i);
 });
 
 test("golden: overflow force acceptance wins priority at before_llm_call", async () => {
@@ -260,7 +268,9 @@ test("golden: overflow force acceptance wins priority at before_llm_call", async
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "agent.before_llm_call",
+    (item = {}) =>
+      item?.event === "workflow_priority_decision" &&
+      item?.detail?.point === "agent.before_llm_call",
   );
   assert.equal(decisionLog?.detail?.chosenAction, "forced_acceptance");
   assert.equal(decisionLog?.detail?.chosenReason, "overflow_force_acceptance");
@@ -279,10 +289,14 @@ test("golden: planningCaptured=false blocks phase_acceptance execution", async (
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
   await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "agent.before_llm_call",
+    (item = {}) =>
+      item?.event === "workflow_priority_decision" &&
+      item?.detail?.point === "agent.before_llm_call",
   );
   const executionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_execution_result" && item?.detail?.point === "agent.before_llm_call",
+    (item = {}) =>
+      item?.event === "workflow_execution_result" &&
+      item?.detail?.point === "agent.before_llm_call",
   );
   assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_blocked");
   assert.equal(executionLog?.detail?.executedPrimary, false);

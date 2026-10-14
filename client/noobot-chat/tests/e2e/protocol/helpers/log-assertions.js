@@ -16,6 +16,8 @@ const FORBIDDEN = [
 ];
 
 export function assertNoForbiddenErrors(records = []) {
-  const violations = records.filter((record) => FORBIDDEN.some((pattern) => pattern.test(String(record.text || record.message || record))));
+  const violations = records.filter((record) =>
+    FORBIDDEN.some((pattern) => pattern.test(String(record.text || record.message || record))),
+  );
   expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
 }

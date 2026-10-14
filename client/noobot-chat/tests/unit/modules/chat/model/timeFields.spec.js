@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { formatDurationMs, resolveThinkingDurationMs } from "../../../../../src/modules/chat/model/timeFields.js";
+import {
+  formatDurationMs,
+  resolveThinkingDurationMs,
+} from "../../../../../src/modules/chat/model/timeFields.js";
 
 describe("timeFields thinking duration responsibilities", () => {
   it("formats milliseconds as mm:ss or hh:mm:ss", () => {
@@ -23,49 +26,59 @@ describe("timeFields thinking duration responsibilities", () => {
   });
 
   it("does not use channel, cache, or fallback timing as duration sources", () => {
-    expect(resolveThinkingDurationMs({
-      channelStartedAt: "2026-06-22T10:00:08.000Z",
-      channelFinishedAt: "2026-06-22T10:00:14.000Z",
-      cachedStartedAt: "2026-06-22T10:00:00.000Z",
-      cachedFinishedAt: "2026-06-22T10:00:20.000Z",
-      fallbackStartedAt: "2026-06-22T10:00:02.000Z",
-      fallbackFinishedAt: "2026-06-22T10:00:09.000Z",
-    })).toBeNull();
+    expect(
+      resolveThinkingDurationMs({
+        channelStartedAt: "2026-06-22T10:00:08.000Z",
+        channelFinishedAt: "2026-06-22T10:00:14.000Z",
+        cachedStartedAt: "2026-06-22T10:00:00.000Z",
+        cachedFinishedAt: "2026-06-22T10:00:20.000Z",
+        fallbackStartedAt: "2026-06-22T10:00:02.000Z",
+        fallbackFinishedAt: "2026-06-22T10:00:09.000Z",
+      }),
+    ).toBeNull();
   });
 
   it("freezes on message finish even when pending is true", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:30.000Z"));
 
-    expect(resolveThinkingDurationMs({
-      messageStartedAt: "2026-06-22T10:00:10.000Z",
-      messageFinishedAt: "2026-06-22T10:00:15.000Z",
-      now: "2026-06-22T10:00:30.000Z",
-      running: true,
-    })).toBe(5000);
+    expect(
+      resolveThinkingDurationMs({
+        messageStartedAt: "2026-06-22T10:00:10.000Z",
+        messageFinishedAt: "2026-06-22T10:00:15.000Z",
+        now: "2026-06-22T10:00:30.000Z",
+        running: true,
+      }),
+    ).toBe(5000);
 
     vi.useRealTimers();
   });
 
   it("uses now minus message start only while running without finish", () => {
-    expect(resolveThinkingDurationMs({
-      messageStartedAt: "2026-06-22T10:00:10.000Z",
-      now: "2026-06-22T10:00:30.000Z",
-      running: true,
-    })).toBe(20000);
+    expect(
+      resolveThinkingDurationMs({
+        messageStartedAt: "2026-06-22T10:00:10.000Z",
+        now: "2026-06-22T10:00:30.000Z",
+        running: true,
+      }),
+    ).toBe(20000);
 
-    expect(resolveThinkingDurationMs({
-      messageStartedAt: "2026-06-22T10:00:10.000Z",
-      now: "2026-06-22T10:00:30.000Z",
-      running: false,
-    })).toBeNull();
+    expect(
+      resolveThinkingDurationMs({
+        messageStartedAt: "2026-06-22T10:00:10.000Z",
+        now: "2026-06-22T10:00:30.000Z",
+        running: false,
+      }),
+    ).toBeNull();
   });
 
   it("returns unknown for missing or invalid persisted timing", () => {
     expect(resolveThinkingDurationMs()).toBeNull();
-    expect(resolveThinkingDurationMs({
-      messageStartedAt: "2026-06-22T10:00:20.000Z",
-      messageFinishedAt: "2026-06-22T10:00:10.000Z",
-    })).toBeNull();
+    expect(
+      resolveThinkingDurationMs({
+        messageStartedAt: "2026-06-22T10:00:20.000Z",
+        messageFinishedAt: "2026-06-22T10:00:10.000Z",
+      }),
+    ).toBeNull();
   });
 });

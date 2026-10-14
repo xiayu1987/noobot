@@ -25,7 +25,11 @@ function splitLines(text = "") {
 function ensurePlanDocumentShape(planDocument = null) {
   const doc = planDocument && typeof planDocument === "object" ? planDocument : {};
   if (!Array.isArray(doc.mainPlans)) doc.mainPlans = [];
-  if (!doc.subPlansByMainId || typeof doc.subPlansByMainId !== "object" || Array.isArray(doc.subPlansByMainId)) {
+  if (
+    !doc.subPlansByMainId ||
+    typeof doc.subPlansByMainId !== "object" ||
+    Array.isArray(doc.subPlansByMainId)
+  ) {
     doc.subPlansByMainId = {};
   }
   return doc;
@@ -70,7 +74,8 @@ function parseId(rawId = "") {
   const [mainPart, subPart] = parts;
   const mainId = Number(mainPart);
   if (!Number.isFinite(mainId)) return null;
-  if (subPart === undefined) return { raw: text, mainId, subIndex: null, isSub: false, depth: 1, segments: [mainId] };
+  if (subPart === undefined)
+    return { raw: text, mainId, subIndex: null, isSub: false, depth: 1, segments: [mainId] };
   const numericParts = parts.map((item) => Number(item));
   if (numericParts.some((item) => !Number.isFinite(item))) return null;
   const subIndex = Number(subPart);
@@ -122,7 +127,13 @@ function upsertSubPlan(
   { ensureMainPlaceholder = true } = {},
 ) {
   const normalizedContent = String(content || "").trim();
-  if (!Number.isFinite(mainId) || mainId <= 0 || !Number.isFinite(subIndex) || subIndex <= 0 || !normalizedContent) {
+  if (
+    !Number.isFinite(mainId) ||
+    mainId <= 0 ||
+    !Number.isFinite(subIndex) ||
+    subIndex <= 0 ||
+    !normalizedContent
+  ) {
     return false;
   }
   const current = ensurePlanDocumentShape(doc);
@@ -130,7 +141,9 @@ function upsertSubPlan(
     ensureMainPlanPlaceholder(current, mainId);
   }
   const key = String(mainId);
-  const currentList = Array.isArray(current.subPlansByMainId[key]) ? current.subPlansByMainId[key] : [];
+  const currentList = Array.isArray(current.subPlansByMainId[key])
+    ? current.subPlansByMainId[key]
+    : [];
   const index = currentList.findIndex((item = {}) => Number(item.subIndex) === Number(subIndex));
   const nextItem = {
     id: `${mainId}.${subIndex}`,
@@ -145,20 +158,26 @@ function upsertSubPlan(
 }
 
 function deleteSubPlan(doc = {}, mainId = 0, subIndex = 0) {
-  if (!Number.isFinite(mainId) || mainId <= 0 || !Number.isFinite(subIndex) || subIndex <= 0) return false;
+  if (!Number.isFinite(mainId) || mainId <= 0 || !Number.isFinite(subIndex) || subIndex <= 0)
+    return false;
   const current = ensurePlanDocumentShape(doc);
   const key = String(mainId);
-  const currentList = Array.isArray(current.subPlansByMainId[key]) ? current.subPlansByMainId[key] : [];
+  const currentList = Array.isArray(current.subPlansByMainId[key])
+    ? current.subPlansByMainId[key]
+    : [];
   const next = currentList.filter((item = {}) => Number(item.subIndex) !== Number(subIndex));
   current.subPlansByMainId[key] = normalizeSubPlans(next, Number(mainId));
   return next.length !== currentList.length;
 }
 
 function hasSubPlan(doc = {}, mainId = 0, subIndex = 0) {
-  if (!Number.isFinite(mainId) || !Number.isFinite(subIndex) || mainId <= 0 || subIndex <= 0) return false;
+  if (!Number.isFinite(mainId) || !Number.isFinite(subIndex) || mainId <= 0 || subIndex <= 0)
+    return false;
   const current = ensurePlanDocumentShape(doc);
   const key = String(mainId);
-  const currentList = Array.isArray(current.subPlansByMainId[key]) ? current.subPlansByMainId[key] : [];
+  const currentList = Array.isArray(current.subPlansByMainId[key])
+    ? current.subPlansByMainId[key]
+    : [];
   return currentList.some((item = {}) => Number(item.subIndex) === Number(subIndex));
 }
 
@@ -166,7 +185,9 @@ function allocateNextSubPlanIndex(doc = {}, mainId = 0) {
   if (!Number.isFinite(mainId) || mainId <= 0) return 1;
   const current = ensurePlanDocumentShape(doc);
   const key = String(mainId);
-  const currentList = Array.isArray(current.subPlansByMainId[key]) ? current.subPlansByMainId[key] : [];
+  const currentList = Array.isArray(current.subPlansByMainId[key])
+    ? current.subPlansByMainId[key]
+    : [];
   const used = new Set(
     currentList
       .map((item = {}) => Number(item.subIndex))
@@ -182,7 +203,9 @@ export function parsePlanDocumentFromText(text = "") {
   for (const line of splitLines(text)) {
     const addOrUpdate = line.match(PATCH_ADD_UPDATE);
     if (addOrUpdate) {
-      const action = String(addOrUpdate[1] || "").trim().toUpperCase();
+      const action = String(addOrUpdate[1] || "")
+        .trim()
+        .toUpperCase();
       const target = parseId(addOrUpdate[2]);
       const content = String(addOrUpdate[3] || "").trim();
       if (!target || !content) continue;
@@ -250,7 +273,9 @@ export function parsePatchCommands(text = "") {
   for (const line of splitLines(text)) {
     const addOrUpdate = line.match(PATCH_ADD_UPDATE);
     if (addOrUpdate) {
-      const action = String(addOrUpdate[1] || "").trim().toUpperCase();
+      const action = String(addOrUpdate[1] || "")
+        .trim()
+        .toUpperCase();
       const target = parseId(addOrUpdate[2]);
       const content = String(addOrUpdate[3] || "").trim();
       if (!target || !content) continue;
@@ -259,7 +284,9 @@ export function parsePatchCommands(text = "") {
     }
     const del = line.match(PATCH_DELETE);
     if (del) {
-      const action = String(del[1] || "").trim().toUpperCase();
+      const action = String(del[1] || "")
+        .trim()
+        .toUpperCase();
       const target = parseId(del[2]);
       if (!target) continue;
       commands.push({ action, target, content: "", raw: line });
@@ -268,7 +295,11 @@ export function parsePatchCommands(text = "") {
   return commands;
 }
 
-export function applyPatchCommandsToPlanDocument(planDocument = null, patchText = "", { stage = "revision" } = {}) {
+export function applyPatchCommandsToPlanDocument(
+  planDocument = null,
+  patchText = "",
+  { stage = "revision" } = {},
+) {
   const doc = ensurePlanDocumentShape(
     planDocument && typeof planDocument === "object" ? planDocument : {},
   );
@@ -276,9 +307,14 @@ export function applyPatchCommandsToPlanDocument(planDocument = null, patchText 
   if (!commands.length) return { changed: false, commands: [] };
 
   let changed = false;
-  const isRefinement = String(stage || "").trim().toLowerCase() === "refinement";
+  const isRefinement =
+    String(stage || "")
+      .trim()
+      .toLowerCase() === "refinement";
   for (const command of commands) {
-    const action = String(command.action || "").trim().toUpperCase();
+    const action = String(command.action || "")
+      .trim()
+      .toUpperCase();
     const target = command.target || {};
     const targetDepth = Number(target.depth || (target.isSub ? 2 : 1));
     const isDeepSubPlan = target.isSub === true && targetDepth > 2;

@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import Bizinst from '../../bizinst.js';
-import Process from '../../state/process.js';
-import ProcessChain from '../../state/process-chain.js';
-import State from '../../state/state.js';
-import SourceInfo from '../../state/currentstate/source-info.js';
-import ECurrentStateSourceType from '../../state/currentstate/enums/current-state-source-type.js';
-import EModelStateType from '../../state/modelstate/enums/model-state-type.js';
-import EActionNodeStateProcessHandleWay from '../../state/proc/fschange/enums/action-node-state-process-handle-way.js';
-import ECompositeNodeStateProcessHandleWay from '../../state/proc/fschange/enums/composite-node-state-process-handle-way.js';
-import EStateNodeStateProcessHandleWay from '../../state/proc/fschange/enums/state-node-state-process-handle-way.js';
+import Bizinst from "../../bizinst.js";
+import Process from "../../state/process.js";
+import ProcessChain from "../../state/process-chain.js";
+import State from "../../state/state.js";
+import SourceInfo from "../../state/currentstate/source-info.js";
+import ECurrentStateSourceType from "../../state/currentstate/enums/current-state-source-type.js";
+import EModelStateType from "../../state/modelstate/enums/model-state-type.js";
+import EActionNodeStateProcessHandleWay from "../../state/proc/fschange/enums/action-node-state-process-handle-way.js";
+import ECompositeNodeStateProcessHandleWay from "../../state/proc/fschange/enums/composite-node-state-process-handle-way.js";
+import EStateNodeStateProcessHandleWay from "../../state/proc/fschange/enums/state-node-state-process-handle-way.js";
 
 class BizinstBox {
   constructor() {
@@ -59,27 +59,36 @@ class BizinstBox {
   saveState(stateProcess) {
     if (!stateProcess) return;
 
-    if (typeof stateProcess.getStepState === 'function' && typeof stateProcess.getActionNodeStateProcessHandleWay === 'function') {
+    if (
+      typeof stateProcess.getStepState === "function" &&
+      typeof stateProcess.getActionNodeStateProcessHandleWay === "function"
+    ) {
       this._saveActionNodeState(stateProcess);
       return;
     }
-    if (typeof stateProcess.getCompositeNodeStateProcessHandleWay === 'function') {
+    if (typeof stateProcess.getCompositeNodeStateProcessHandleWay === "function") {
       this._saveCompositeNodeState(stateProcess);
       return;
     }
-    if (typeof stateProcess.getStateNodeStateProcessHandleWay === 'function') {
+    if (typeof stateProcess.getStateNodeStateProcessHandleWay === "function") {
       this._saveStateNodeState(stateProcess);
       return;
     }
-    if (typeof stateProcess.getModelStateType === 'function' && typeof stateProcess.getModelState === 'function') {
+    if (
+      typeof stateProcess.getModelStateType === "function" &&
+      typeof stateProcess.getModelState === "function"
+    ) {
       this._saveDiscoverModelState(stateProcess);
       return;
     }
-    if (typeof stateProcess.getPathState === 'function') {
+    if (typeof stateProcess.getPathState === "function") {
       this.bizinst.getState().getBizinstModel().getPathStates().push(stateProcess.getPathState());
       return;
     }
-    if (typeof stateProcess.getActionNodeState === 'function' && typeof stateProcess.getHandleStepState === 'function') {
+    if (
+      typeof stateProcess.getActionNodeState === "function" &&
+      typeof stateProcess.getHandleStepState === "function"
+    ) {
       this._saveAddStepState(stateProcess);
     }
   }
@@ -97,7 +106,10 @@ class BizinstBox {
       if (idx >= 0) arr.splice(idx, 1);
     }
     if (handleWay === EActionNodeStateProcessHandleWay.Stop) {
-      this.bizinst.getState().getCurrentState().setCurrentStateSourceType(ECurrentStateSourceType.currentBizinst);
+      this.bizinst
+        .getState()
+        .getCurrentState()
+        .setCurrentStateSourceType(ECurrentStateSourceType.currentBizinst);
 
       const sourceInfo = new SourceInfo();
       sourceInfo.setModelState(stepState);
@@ -124,8 +136,17 @@ class BizinstBox {
       this.bizinst.getState().getCurrentState().getStateNodeStates().push(stateNodeState);
     }
 
-    if ([EStateNodeStateProcessHandleWay.start, EStateNodeStateProcessHandleWay.end, EStateNodeStateProcessHandleWay.forwardStateChange].includes(handleWay)) {
-      this.bizinst.getState().getCurrentState().setCurrentStateSourceType(ECurrentStateSourceType.currentBizinst);
+    if (
+      [
+        EStateNodeStateProcessHandleWay.start,
+        EStateNodeStateProcessHandleWay.end,
+        EStateNodeStateProcessHandleWay.forwardStateChange,
+      ].includes(handleWay)
+    ) {
+      this.bizinst
+        .getState()
+        .getCurrentState()
+        .setCurrentStateSourceType(ECurrentStateSourceType.currentBizinst);
       const sourceInfo = new SourceInfo();
       sourceInfo.setModelState(stateNodeState);
       sourceInfo.setSourceHandleWay(handleWay);
@@ -133,8 +154,17 @@ class BizinstBox {
       this.bizinst.getState().getCurrentState().setSourceInfo(sourceInfo);
     }
 
-    if ([EStateNodeStateProcessHandleWay.open, EStateNodeStateProcessHandleWay.close, EStateNodeStateProcessHandleWay.backwardStateChange].includes(handleWay)) {
-      this.bizinst.getState().getCurrentState().setCurrentStateSourceType(ECurrentStateSourceType.currentBizinst);
+    if (
+      [
+        EStateNodeStateProcessHandleWay.open,
+        EStateNodeStateProcessHandleWay.close,
+        EStateNodeStateProcessHandleWay.backwardStateChange,
+      ].includes(handleWay)
+    ) {
+      this.bizinst
+        .getState()
+        .getCurrentState()
+        .setCurrentStateSourceType(ECurrentStateSourceType.currentBizinst);
       const sourceInfo = new SourceInfo();
       sourceInfo.setModelState(stateNodeState);
       sourceInfo.setSourceHandleWay(handleWay);
@@ -149,10 +179,14 @@ class BizinstBox {
     const modelState = process.getModelState();
     const bizinstModel = this.bizinst.getState().getBizinstModel();
 
-    if (modelStateType === EModelStateType.ActionNodeState) bizinstModel.getActionNodeStates().push(modelState);
-    if (modelStateType === EModelStateType.CompositeNodeState) bizinstModel.getCompositeNodeStates().push(modelState);
-    if (modelStateType === EModelStateType.StateNodeState) bizinstModel.getStateNodeStates().push(modelState);
-    if (modelStateType === EModelStateType.FlowtoState) bizinstModel.getFlowtoStates().push(modelState);
+    if (modelStateType === EModelStateType.ActionNodeState)
+      bizinstModel.getActionNodeStates().push(modelState);
+    if (modelStateType === EModelStateType.CompositeNodeState)
+      bizinstModel.getCompositeNodeStates().push(modelState);
+    if (modelStateType === EModelStateType.StateNodeState)
+      bizinstModel.getStateNodeStates().push(modelState);
+    if (modelStateType === EModelStateType.FlowtoState)
+      bizinstModel.getFlowtoStates().push(modelState);
   }
 
   _saveAddStepState(process) {
@@ -182,4 +216,4 @@ class BizinstBox {
   }
 }
 
-export default  BizinstBox;
+export default BizinstBox;

@@ -35,7 +35,11 @@ function ownsMessageOperation(messageOperationStore, operation = null) {
   return messageOperationStore.getActiveOperation(operation.sessionId)?.opId === operation.opId;
 }
 
-function finalizePendingResendOperationFor({ activeSession, activeSessionId, messageOperationStore }) {
+function finalizePendingResendOperationFor({
+  activeSession,
+  activeSessionId,
+  messageOperationStore,
+}) {
   const sessionId = resolveSessionId(activeSession, activeSessionId);
   const operation =
     messageOperationStore?.getActiveOperation(sessionId, "resend") ||

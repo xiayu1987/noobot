@@ -17,7 +17,12 @@ export const RESEND_COMMIT_OUTCOME = {
   ABORTED: "aborted",
 };
 
-function assertReplacementIdentity({ turnReplacement, expectedCommandId, expectedTurnScopeId, replacedTurnScopeId }) {
+function assertReplacementIdentity({
+  turnReplacement,
+  expectedCommandId,
+  expectedTurnScopeId,
+  replacedTurnScopeId,
+}) {
   if (turnReplacement.commandId !== expectedCommandId) {
     throw new TypeError("invalid turn replacement commit: command_id_mismatch");
   }
@@ -57,7 +62,8 @@ function tombstoneReplacedTurns({
 }
 
 function logCommitRejected(context, { result, payload, expectedAggregateVersion }) {
-  const { sessionId, resendTurnScopeId, anchor, operation, userTargetMessage, activeSession } = context;
+  const { sessionId, resendTurnScopeId, anchor, operation, userTargetMessage, activeSession } =
+    context;
   logResendDebug("resend.replaceTurn.failed", () => ({
     sessionId,
     turnScopeId: resendTurnScopeId,

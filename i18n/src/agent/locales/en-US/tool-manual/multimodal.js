@@ -32,8 +32,7 @@ export const MULTIMODAL_MANUAL = {
     ],
   },
   multimodal_parse: {
-    summary:
-      "Parse images, audio, video, and binary documents, returning structured content.",
+    summary: "Parse images, audio, video, and binary documents, returning structured content.",
     usage: ["multimodal_parse({ inputs, prompt, model_name })"],
     params: {
       inputs:

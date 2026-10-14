@@ -5,7 +5,10 @@
  */
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { buildLogWebSocketUrl, renameSessionApi } from "../../../../src/infrastructure/api/chat/chatApi.js";
+import {
+  buildLogWebSocketUrl,
+  renameSessionApi,
+} from "../../../../src/infrastructure/api/chat/chatApi.js";
 
 describe("renameSessionApi", () => {
   it("posts trimmed title to rename endpoint with provided fetcher", async () => {
@@ -18,14 +21,11 @@ describe("renameSessionApi", () => {
 
     expect(result).toEqual({ ok: true });
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher).toHaveBeenCalledWith(
-      "/api/internal/session/u%201/s%2F1/rename",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "New title" }),
-      },
-    );
+    expect(fetcher).toHaveBeenCalledWith("/api/internal/session/u%201/s%2F1/rename", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "New title" }),
+    });
   });
 });
 
@@ -37,7 +37,9 @@ describe("buildLogWebSocketUrl", () => {
   it("builds agent-proxy log websocket url with api key", () => {
     vi.stubGlobal("window", { location: { protocol: "http:", host: "localhost:5173" } });
 
-    expect(buildLogWebSocketUrl({ apiKey: "key 1" })).toBe("ws://localhost:5173/api/logs/ws?apikey=key%201");
+    expect(buildLogWebSocketUrl({ apiKey: "key 1" })).toBe(
+      "ws://localhost:5173/api/logs/ws?apikey=key%201",
+    );
   });
 
   it("uses wss when current page is https", () => {

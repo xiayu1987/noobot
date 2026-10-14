@@ -50,10 +50,7 @@ export async function ensureReconnectSessionActive({
     });
   }
 
-  const resolvedTargetSession = findSessionByAnyIdInList(
-    sessions?.value,
-    normalizedSessionId,
-  );
+  const resolvedTargetSession = findSessionByAnyIdInList(sessions?.value, normalizedSessionId);
   if (!resolvedTargetSession) return false;
 
   await chatList.selectSession(resolvedTargetSession.sessionId, {

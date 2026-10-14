@@ -5,7 +5,9 @@
  */
 
 function envBoolean(name, defaultValue = false) {
-  const value = String(import.meta.env?.[name] ?? "").trim().toLowerCase();
+  const value = String(import.meta.env?.[name] ?? "")
+    .trim()
+    .toLowerCase();
   if (!value) return Boolean(defaultValue);
   if (["1", "true", "yes", "on"].includes(value)) return true;
   if (["0", "false", "no", "off"].includes(value)) return false;

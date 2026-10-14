@@ -69,9 +69,9 @@ export function enqueueDockerContainerTask({
   const tailPromise = runPromise
     .catch(() => undefined)
     .finally(() => {
-    if (dockerContainerQueueMap.get(key) === tailPromise) {
-      dockerContainerQueueMap.delete(key);
-    }
+      if (dockerContainerQueueMap.get(key) === tailPromise) {
+        dockerContainerQueueMap.delete(key);
+      }
     });
   dockerContainerQueueMap.set(key, tailPromise);
   return runPromise;

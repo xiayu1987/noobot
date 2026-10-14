@@ -7,13 +7,9 @@
 import { runAgentTurn } from "../engine.js";
 
 export class AgentRuntimeFacade {
-  constructor({
-    contextFactory = null,
-    turnRunner = runAgentTurn,
-  } = {}) {
+  constructor({ contextFactory = null, turnRunner = runAgentTurn } = {}) {
     this.contextFactory = contextFactory;
-    this.turnRunner =
-      typeof turnRunner === "function" ? turnRunner : runAgentTurn;
+    this.turnRunner = typeof turnRunner === "function" ? turnRunner : runAgentTurn;
   }
 
   async buildContext({
@@ -72,10 +68,7 @@ export class AgentRuntimeFacade {
     return this.contextFactory.buildRunTurnAgentContext(agentContext, abortSignal);
   }
 
-  async prepareTurnExecution({
-    buildContextPayload = {},
-    abortSignal = null,
-  } = {}) {
+  async prepareTurnExecution({ buildContextPayload = {}, abortSignal = null } = {}) {
     const agentContext = await this.buildContext(buildContextPayload);
     const runtimeAgentContext = this.buildRunTurnContext(agentContext, abortSignal);
     return {

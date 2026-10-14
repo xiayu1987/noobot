@@ -44,4 +44,3 @@ export function createSerializedWindowIndex({ field, limit } = {}) {
 
   return Object.freeze({ append, has });
 }
-

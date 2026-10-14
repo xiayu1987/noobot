@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearExtensionRegistry, contributeExtension } from "../../../src/extensions/extension-registry.js";
+import {
+  clearExtensionRegistry,
+  contributeExtension,
+} from "../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { routeRuntimeStreamEvent } from "../../../src/extensions/runtime-stream-router.js";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
@@ -73,8 +76,9 @@ describe("runtime stream projector boundary", () => {
 
   it("records registered, matched, and executable projector counts", () => {
     const logRuntimeProjectionDiagnostics = vi.fn();
-    const predicate = vi.fn(({ envelope }) =>
-      envelope?.identity?.eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE);
+    const predicate = vi.fn(
+      ({ envelope }) => envelope?.identity?.eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+    );
     contributeExtension(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, {
       id: "matching-projector",
       pluginId: "plugin-a",
@@ -88,10 +92,12 @@ describe("runtime stream projector boundary", () => {
       provide: () => [() => true],
     });
 
-    expect(routeRuntimeStreamEvent(workflowNodeEvent(), {
-      source: "live",
-      logRuntimeProjectionDiagnostics,
-    })).toBe(true);
+    expect(
+      routeRuntimeStreamEvent(workflowNodeEvent(), {
+        source: "live",
+        logRuntimeProjectionDiagnostics,
+      }),
+    ).toBe(true);
     expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
       "frontend.pluginRuntime.gatewayEvaluated",
       expect.objectContaining({

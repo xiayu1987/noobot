@@ -10,10 +10,7 @@ import { readSessionFact } from "../helpers/persistence-audit.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 
-test("@core PBE-042 停止后不刷新立即编辑重发", async ({
-  noobot,
-  protocolCapture,
-}, testInfo) => {
+test("@core PBE-042 停止后不刷新立即编辑重发", async ({ noobot, protocolCapture }, testInfo) => {
   const { send } = await sendAndStop({
     page: noobot.page,
     capture: protocolCapture,
@@ -22,10 +19,9 @@ test("@core PBE-042 停止后不刷新立即编辑重发", async ({
   });
 
   await expect
-    .poll(
-      async () => (await readSessionFact(noobot.userId, noobot.sessionId)).aggregateVersion,
-      { timeout: 15000 },
-    )
+    .poll(async () => (await readSessionFact(noobot.userId, noobot.sessionId)).aggregateVersion, {
+      timeout: 15000,
+    })
     .toBeGreaterThan(send.concurrency.expectedAggregateVersion);
   const stoppedSession = await readSessionFact(noobot.userId, noobot.sessionId);
   const stoppedAggregateVersion = Number(stoppedSession.aggregateVersion);

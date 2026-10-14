@@ -71,12 +71,20 @@ export function createSkillTool({ agentContext }) {
         });
       } catch (error) {
         if (isMissingFileError(error)) {
-          return toToolJsonResult(TOOL_NAME.LIST_SKILLS, { ok: true, items: [], resources: [] }, true);
+          return toToolJsonResult(
+            TOOL_NAME.LIST_SKILLS,
+            { ok: true, items: [], resources: [] },
+            true,
+          );
         }
         throw error;
       }
       if (!(await workspaceIo.stat(root.executionPath)).isDirectory()) {
-        return toToolJsonResult(TOOL_NAME.LIST_SKILLS, { ok: true, items: [], resources: [] }, true);
+        return toToolJsonResult(
+          TOOL_NAME.LIST_SKILLS,
+          { ok: true, items: [], resources: [] },
+          true,
+        );
       }
 
       const items = [];

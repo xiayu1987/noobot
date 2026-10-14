@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-class IModelType {
-}
+class IModelType {}
 
-export default  IModelType;
+export default IModelType;

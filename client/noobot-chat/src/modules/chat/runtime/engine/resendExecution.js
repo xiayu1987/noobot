@@ -12,8 +12,14 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 
 function failResend(context, restoredInputValue) {
-  const { sessionId, resendTurnScopeId, operation, messageOperationStore, applyRunStateEvent, input } =
-    context;
+  const {
+    sessionId,
+    resendTurnScopeId,
+    operation,
+    messageOperationStore,
+    applyRunStateEvent,
+    input,
+  } = context;
   if (operation) messageOperationStore?.completeOperation(operation.opId);
   applyRunStateEvent?.({
     type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,

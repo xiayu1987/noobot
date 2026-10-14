@@ -49,8 +49,10 @@ export function selectLatestOrderedFacts(
   { limit = 0, compare, project = (fact) => fact } = {},
 ) {
   if (!Array.isArray(facts)) return [];
-  if (typeof compare !== "function") throw new TypeError("selectLatestOrderedFacts requires compare");
-  if (typeof project !== "function") throw new TypeError("selectLatestOrderedFacts requires project");
+  if (typeof compare !== "function")
+    throw new TypeError("selectLatestOrderedFacts requires compare");
+  if (typeof project !== "function")
+    throw new TypeError("selectLatestOrderedFacts requires project");
   const maximum = Math.max(0, Number(limit) || 0);
   if (!maximum) return [];
   const latest = [];

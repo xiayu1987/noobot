@@ -66,14 +66,10 @@ export const I18N_TOOL_COPY = Object.freeze({
       "Pending overflow summary exists; prioritize summary first",
     guidanceReasonPendingSummaryTurns:
       "Pending turn-based summary exists; prioritize summary first",
-    guidanceReasonPendingGuidance:
-      "Pending guidance exists; prioritize guidance first",
-    guidanceReasonPendingRevision:
-      "Pending plan revision exists; prioritize revision first",
-    guidanceReasonPendingRefinement:
-      "Pending plan refinement exists; prioritize refinement first",
-    guidanceReasonPendingAnalysis:
-      "Pending analysis exists; prioritize analysis first",
+    guidanceReasonPendingGuidance: "Pending guidance exists; prioritize guidance first",
+    guidanceReasonPendingRevision: "Pending plan revision exists; prioritize revision first",
+    guidanceReasonPendingRefinement: "Pending plan refinement exists; prioritize refinement first",
+    guidanceReasonPendingAnalysis: "Pending analysis exists; prioritize analysis first",
     guidanceReasonIdle: "No pending guidance action",
     guidanceBlockedPhaseAcceptanceDeferred:
       "Phase acceptance is deferred by guidance priority order",
@@ -88,17 +84,12 @@ export const I18N_TOOL_COPY = Object.freeze({
     acceptanceReasonPhaseAcceptanceBlocked:
       "Phase acceptance is blocked by higher-priority pending actions",
     acceptanceReasonPhaseAcceptancePending: "Pending phase acceptance exists",
-    acceptanceReasonSemanticValidationPending:
-      "Pending acceptance semantic validation exists",
+    acceptanceReasonSemanticValidationPending: "Pending acceptance semantic validation exists",
     acceptanceReasonToolGuard: "Run acceptance tool guard",
-    acceptanceReasonBeforeTurnSetup:
-      "Run acceptance guard setup at turn start",
-    acceptanceReasonFinalOutputOverflowFallback:
-      "Run final-output overflow fallback acceptance",
-    acceptanceReasonFinalOutputAcceptanceFallback:
-      "Run final-output acceptance fallback flow",
-    acceptanceReasonAfterLlmCapture:
-      "Capture acceptance result after LLM response",
+    acceptanceReasonBeforeTurnSetup: "Run acceptance guard setup at turn start",
+    acceptanceReasonFinalOutputOverflowFallback: "Run final-output overflow fallback acceptance",
+    acceptanceReasonFinalOutputAcceptanceFallback: "Run final-output acceptance fallback flow",
+    acceptanceReasonAfterLlmCapture: "Capture acceptance result after LLM response",
     acceptanceReasonIdle: "No pending acceptance action",
     acceptanceBlockedPhaseAcceptanceHigherPriority:
       "Phase acceptance is blocked by summary/guidance/plan-update blockers",

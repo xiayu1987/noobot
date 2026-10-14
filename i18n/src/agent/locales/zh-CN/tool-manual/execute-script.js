@@ -10,7 +10,8 @@ export const EXECUTE_SCRIPT_MANUAL = {
     usage: ["execute_script({ command, riskLevel, executionMode, includeLineNumbers })"],
     params: {
       command: "shell 命令。必须使用当前运行时声明的解释器语法。",
-      riskLevel: "脚本风险等级：low、medium、high 或 critical。具有破坏性的脚本必须标记为 critical。",
+      riskLevel:
+        "脚本风险等级：low、medium、high 或 critical。具有破坏性的脚本必须标记为 critical。",
       executionMode:
         "foreground 直接返回 stdout 与 stderr；background 同样等待命令结束，但输出落为附件并返回附件路径。",
       includeLineNumbers: "输出是否带行号，默认关闭。",

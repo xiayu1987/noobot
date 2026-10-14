@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import { LOCALE } from "./i18n/locale.js";
 import { I18N_TOOL_COPY } from "./i18n/tool-copy.js";
 import { I18N_RUNTIME_LABELS } from "./i18n/runtime-labels.js";

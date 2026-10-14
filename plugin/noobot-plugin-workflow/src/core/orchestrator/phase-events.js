@@ -6,10 +6,7 @@
 
 import { WORKFLOW_PHASE_STATUS } from "../constants.js";
 
-export async function startWorkflowPhase({
-  phaseTracker,
-  phase = "",
-} = {}) {
+export async function startWorkflowPhase({ phaseTracker, phase = "" } = {}) {
   phaseTracker.start(phase);
 }
 

@@ -22,22 +22,23 @@ function xorBytes(data = new Uint8Array(), key = new Uint8Array()) {
 
 function bytesToBase64(bytes = new Uint8Array()) {
   let binary = "";
-  for (let byteIndex = 0; byteIndex < bytes.length; byteIndex += 1) binary += String.fromCharCode(bytes[byteIndex]);
+  for (let byteIndex = 0; byteIndex < bytes.length; byteIndex += 1)
+    binary += String.fromCharCode(bytes[byteIndex]);
   return btoa(binary);
 }
 
 function base64ToBytes(base64 = "") {
   const binary = atob(String(base64 || ""));
   const out = new Uint8Array(binary.length);
-  for (let byteIndex = 0; byteIndex < binary.length; byteIndex += 1) out[byteIndex] = binary.charCodeAt(byteIndex);
+  for (let byteIndex = 0; byteIndex < binary.length; byteIndex += 1)
+    out[byteIndex] = binary.charCodeAt(byteIndex);
   return out;
 }
 
 export function encryptPayloadBySessionId(payload = {}, sessionId = "") {
   const sid = String(sessionId || "").trim();
   if (!sid) throw new Error("sessionId required for encryption");
-  const plainText =
-    typeof payload === "string" ? payload : JSON.stringify(payload || {});
+  const plainText = typeof payload === "string" ? payload : JSON.stringify(payload || {});
   const source = textToBytes(plainText);
   const key = textToBytes(sid);
   return bytesToBase64(xorBytes(source, key));

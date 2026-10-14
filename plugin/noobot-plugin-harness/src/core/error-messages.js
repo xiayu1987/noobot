@@ -10,7 +10,9 @@ export const HARNESS_CORE_ERROR = Object.freeze({
 });
 
 function normalizeLocale(input = "") {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   return value.startsWith("en") ? "en-US" : "zh-CN";
 }
 

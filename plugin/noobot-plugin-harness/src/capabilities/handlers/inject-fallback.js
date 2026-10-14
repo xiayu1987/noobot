@@ -3,9 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  CAPABILITY_DOMAIN,
-} from "./shared/constants.js";
+import { CAPABILITY_DOMAIN } from "./shared/constants.js";
 import { ensureHarnessBucket } from "./shared/bucket-utils.js";
 import { appendCapabilityLog } from "./shared/attachment-log-utils.js";
 import { extractRawTextContent } from "./shared/message/utils.js";
@@ -70,7 +68,10 @@ export async function captureInjectedResult(
     appendCapabilityLog(ctx, {
       domain,
       event: String(completedEvent || "").trim() || "inject_capture_completed",
-      detail: typeof buildCompletedDetail === "function" ? buildCompletedDetail({ result, captureMeta }) : {},
+      detail:
+        typeof buildCompletedDetail === "function"
+          ? buildCompletedDetail({ result, captureMeta })
+          : {},
     });
     return true;
   }

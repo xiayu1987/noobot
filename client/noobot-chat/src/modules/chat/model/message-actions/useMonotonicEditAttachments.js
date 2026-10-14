@@ -58,7 +58,9 @@ export function useMonotonicEditAttachments({ getMessageItem, operating }) {
         mimeType: attachmentMime(meta),
         size: Number(meta?.size || 0) || 0,
         meta,
-        previewUrl: isImageMime(attachmentMime(meta)) ? String(meta?.previewUrl || meta?.url || "") : "",
+        previewUrl: isImageMime(attachmentMime(meta))
+          ? String(meta?.previewUrl || meta?.url || "")
+          : "",
       });
     }
     resetEditAttachments(next);
@@ -91,7 +93,12 @@ export function useMonotonicEditAttachments({ getMessageItem, operating }) {
   function removeEditAttachment(index) {
     if (operating?.value) return;
     const targetIndex = Number(index);
-    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= editAttachments.value.length) return;
+    if (
+      !Number.isInteger(targetIndex) ||
+      targetIndex < 0 ||
+      targetIndex >= editAttachments.value.length
+    )
+      return;
     const next = [...editAttachments.value];
     const [removed] = next.splice(targetIndex, 1);
     if (removed?.kind === "history" && removed.key) {

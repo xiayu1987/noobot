@@ -21,10 +21,7 @@ export function buildChatMessageNavigatorOpenRoute({
   };
 }
 
-export function buildChatMessageNavigatorCloseRoute({
-  sessionId = "",
-  anchor = "",
-} = {}) {
+export function buildChatMessageNavigatorCloseRoute({ sessionId = "", anchor = "" } = {}) {
   return {
     sessionId,
     panel: "",
@@ -48,10 +45,12 @@ export function selectChatMessageNavigatorItem({
   if (isMobile.value) {
     mobileChatNavigatorVisible.value = false;
   }
-  pushPseudoRoute(buildChatMessageNavigatorCloseRoute({
-    sessionId: activeSessionId.value,
-    anchor,
-  }));
+  pushPseudoRoute(
+    buildChatMessageNavigatorCloseRoute({
+      sessionId: activeSessionId.value,
+      anchor,
+    }),
+  );
 }
 
 export function openChatMessageNavigator({
@@ -62,12 +61,14 @@ export function openChatMessageNavigator({
   pushPseudoRoute,
 } = {}) {
   mobileChatNavigatorVisible.value = true;
-  pushPseudoRoute(buildChatMessageNavigatorOpenRoute({
-    sessionId: activeSessionId.value,
-    panel: chatNavigatorPanel,
-    anchor: currentMessageAnchorId.value,
-    chatNavigatorPanel,
-  }));
+  pushPseudoRoute(
+    buildChatMessageNavigatorOpenRoute({
+      sessionId: activeSessionId.value,
+      panel: chatNavigatorPanel,
+      anchor: currentMessageAnchorId.value,
+      chatNavigatorPanel,
+    }),
+  );
 }
 
 export function closeChatMessageNavigator({
@@ -75,8 +76,10 @@ export function closeChatMessageNavigator({
   currentMessageAnchorId,
   replacePseudoRoute,
 } = {}) {
-  replacePseudoRoute(buildChatMessageNavigatorCloseRoute({
-    sessionId: activeSessionId.value,
-    anchor: currentMessageAnchorId.value,
-  }));
+  replacePseudoRoute(
+    buildChatMessageNavigatorCloseRoute({
+      sessionId: activeSessionId.value,
+      anchor: currentMessageAnchorId.value,
+    }),
+  );
 }

@@ -4,17 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 function normalizeStringArray(input = []) {
-  return Array.isArray(input)
-    ? input
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-    : [];
+  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
 }
 
-export function resolveAvailableMcpServers(
-  effectiveConfig = {},
-  { includeNames = [] } = {},
-) {
+export function resolveAvailableMcpServers(effectiveConfig = {}, { includeNames = [] } = {}) {
   const servers = effectiveConfig?.mcpServers || {};
   const normalizedNames = normalizeStringArray(includeNames);
   const hasWildcard = normalizedNames.includes("*");

@@ -27,7 +27,9 @@ const GUIDANCE_BLOCKED_REASON_LABEL_KEY = Object.freeze({
 });
 
 function resolveDecisionLocale(state = {}) {
-  const locale = String(state?.locale || "").trim().toLowerCase();
+  const locale = String(state?.locale || "")
+    .trim()
+    .toLowerCase();
   return locale.startsWith("en") ? LOCALE.EN_US : LOCALE.ZH_CN;
 }
 
@@ -57,27 +59,59 @@ export function resolvePendingPlanUpdate(state = {}) {
 function guidanceActionFromDecision(decision = {}) {
   const action = String(decision?.chosenAction || "").trim();
   if (resolveWorkflowActionExecutor(action) !== "guidance") {
-    return { action: GUIDANCE_DECISION.action.none, stage: "", reason: GUIDANCE_DECISION.reason.idle };
+    return {
+      action: GUIDANCE_DECISION.action.none,
+      stage: "",
+      reason: GUIDANCE_DECISION.reason.idle,
+    };
   }
   if (action === GUIDANCE_DECISION.label.guidance) {
-    return { action: GUIDANCE_DECISION.action.guidance, stage: "", reason: GUIDANCE_DECISION.reason.pendingGuidance };
+    return {
+      action: GUIDANCE_DECISION.action.guidance,
+      stage: "",
+      reason: GUIDANCE_DECISION.reason.pendingGuidance,
+    };
   }
   if (action === GUIDANCE_DECISION.label.planUpdateRevision) {
-    return { action: GUIDANCE_DECISION.action.planUpdate, stage: GUIDANCE_DECISION.stage.revision, reason: GUIDANCE_DECISION.reason.pendingRevision };
+    return {
+      action: GUIDANCE_DECISION.action.planUpdate,
+      stage: GUIDANCE_DECISION.stage.revision,
+      reason: GUIDANCE_DECISION.reason.pendingRevision,
+    };
   }
   if (action === GUIDANCE_DECISION.label.planUpdateRefinement) {
-    return { action: GUIDANCE_DECISION.action.planUpdate, stage: GUIDANCE_DECISION.stage.refinement, reason: GUIDANCE_DECISION.reason.pendingRefinement };
+    return {
+      action: GUIDANCE_DECISION.action.planUpdate,
+      stage: GUIDANCE_DECISION.stage.refinement,
+      reason: GUIDANCE_DECISION.reason.pendingRefinement,
+    };
   }
   if (action === GUIDANCE_DECISION.label.analysis) {
-    return { action: GUIDANCE_DECISION.action.analysis, stage: "", reason: GUIDANCE_DECISION.reason.pendingAnalysis };
+    return {
+      action: GUIDANCE_DECISION.action.analysis,
+      stage: "",
+      reason: GUIDANCE_DECISION.reason.pendingAnalysis,
+    };
   }
   if (action === GUIDANCE_DECISION.label.summaryOverflow) {
-    return { action: GUIDANCE_DECISION.action.summary, stage: "", reason: GUIDANCE_DECISION.reason.pendingSummaryOverflow };
+    return {
+      action: GUIDANCE_DECISION.action.summary,
+      stage: "",
+      reason: GUIDANCE_DECISION.reason.pendingSummaryOverflow,
+    };
   }
   if (action === GUIDANCE_DECISION.label.summaryTurns) {
-    return { action: GUIDANCE_DECISION.action.summary, stage: "", reason: GUIDANCE_DECISION.reason.pendingSummaryTurns };
+    return {
+      action: GUIDANCE_DECISION.action.summary,
+      stage: "",
+      reason: GUIDANCE_DECISION.reason.pendingSummaryTurns,
+    };
   }
-  return { action: GUIDANCE_DECISION.action.none, stage: "", reason: GUIDANCE_DECISION.reason.idle };
+  return {
+    action: GUIDANCE_DECISION.action.none,
+    stage: "",
+    reason: GUIDANCE_DECISION.reason.idle,
+  };
 }
 
 export function resolveNextGuidanceAction(state = {}) {
@@ -96,9 +130,12 @@ function toPendingSnapshot(state = {}) {
   return {
     summary: {
       active: pending.summary === true,
-      reason: pending.summary === true
-        ? (summaryByCharsPrompted ? GUIDANCE_DECISION.label.summaryOverflow : GUIDANCE_DECISION.label.summaryTurns)
-        : "",
+      reason:
+        pending.summary === true
+          ? summaryByCharsPrompted
+            ? GUIDANCE_DECISION.label.summaryOverflow
+            : GUIDANCE_DECISION.label.summaryTurns
+          : "",
     },
     guidance: {
       active: Boolean(pending.guidance),
@@ -111,7 +148,9 @@ function toPendingSnapshot(state = {}) {
       active: planUpdate.active === true,
       stage: planUpdate.stage || "",
       context: {
-        targetMainStepIndexes: Array.isArray(planUpdate.targetMainStepIndexes) ? planUpdate.targetMainStepIndexes : [],
+        targetMainStepIndexes: Array.isArray(planUpdate.targetMainStepIndexes)
+          ? planUpdate.targetMainStepIndexes
+          : [],
       },
     },
     phaseAcceptance: {
@@ -133,9 +172,10 @@ export function resolveGuidancePriorityDecision(state = {}) {
   const locale = resolveDecisionLocale(state);
   const unifiedDecision = resolveWorkflowActionDecision(state);
   const nextAction = guidanceActionFromDecision(unifiedDecision);
-  const chosenAction = resolveWorkflowActionExecutor(unifiedDecision.chosenAction) === "guidance"
-    ? unifiedDecision.chosenAction
-    : GUIDANCE_DECISION.label.none;
+  const chosenAction =
+    resolveWorkflowActionExecutor(unifiedDecision.chosenAction) === "guidance"
+      ? unifiedDecision.chosenAction
+      : GUIDANCE_DECISION.label.none;
   const chosenReason = nextAction.reason;
   return {
     chosenAction,
@@ -143,10 +183,14 @@ export function resolveGuidancePriorityDecision(state = {}) {
     chosenReasonLabel: resolveReasonLabel(locale, chosenReason),
     chosenStage: nextAction.stage || "",
     candidateActions: unifiedDecision.candidateActions || [],
-    deferredActions: (unifiedDecision.candidateActions || []).filter((label) => label !== chosenAction),
+    deferredActions: (unifiedDecision.candidateActions || []).filter(
+      (label) => label !== chosenAction,
+    ),
     blockedActions: unifiedDecision.blockedActions || [],
     blockedReasons: unifiedDecision.blockedReasons || [],
-    blockedReasonLabels: (unifiedDecision.blockedReasons || []).map((reason) => resolveBlockedReasonLabel(locale, reason)),
+    blockedReasonLabels: (unifiedDecision.blockedReasons || []).map((reason) =>
+      resolveBlockedReasonLabel(locale, reason),
+    ),
     pendingSnapshot: toPendingSnapshot(state),
   };
 }

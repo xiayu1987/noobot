@@ -29,11 +29,7 @@ function normalizeLine(line = "") {
     .trim();
 }
 
-async function analyzeFile({
-  filePath = "",
-  topN = 20,
-  useNormalize = true,
-} = {}) {
+async function analyzeFile({ filePath = "", topN = 20, useNormalize = true } = {}) {
   const absolutePath = path.resolve(filePath);
   if (!fs.existsSync(absolutePath)) {
     throw new Error(`File not found: ${absolutePath}`);
@@ -106,9 +102,7 @@ async function main() {
   console.log(`Total lines: ${result.totalLines}`);
   console.log(`Empty lines: ${result.emptyLines}`);
   console.log(`Unique lines: ${result.uniqueLines}`);
-  console.log(
-    `Duplicate lines: ${result.duplicateLines} (${result.duplicateRate.toFixed(2)}%)`,
-  );
+  console.log(`Duplicate lines: ${result.duplicateLines} (${result.duplicateRate.toFixed(2)}%)`);
   console.log(
     `Adjacent duplicates: ${result.adjacentDuplicateLines} (${result.adjacentDuplicateRate.toFixed(2)}%)`,
   );
@@ -126,4 +120,3 @@ main().catch((error) => {
   console.error(`[analyze-log-duplicates] ${error?.message || String(error)}`);
   process.exit(1);
 });
-

@@ -15,7 +15,10 @@ import {
   reconcileSessionObject,
   revokeMessagePreviewUrls,
 } from "./sessionRecords.js";
-import { removeSessionRuntime, sessionRuntimeId } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  removeSessionRuntime,
+  sessionRuntimeId,
+} from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { clearSessionTurnUiStates } from "../../../chat/runtime/engine/turnUiStore.js";
 
 export function createSessionListActions({
@@ -56,7 +59,8 @@ export function createSessionListActions({
     if (target.isUnavailable === true) {
       notify({
         type: "warning",
-        message: target.unavailableReason?.message || translate("common.sessionUnavailableLegacyProtocol"),
+        message:
+          target.unavailableReason?.message || translate("common.sessionUnavailableLegacyProtocol"),
       });
       return;
     }
@@ -98,7 +102,10 @@ export function createSessionListActions({
       }
       refreshSessionConnectorsAsync(targetPrimaryId);
     } catch (error) {
-      notify({ type: "error", message: error.message || translate("chat.loadSessionDetailFailed") });
+      notify({
+        type: "error",
+        message: error.message || translate("chat.loadSessionDetailFailed"),
+      });
     } finally {
       if (!silent) loadingSessionDetail.value = false;
     }
@@ -114,10 +121,7 @@ export function createSessionListActions({
     if (!silent) loadingSessions.value = true;
     try {
       const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
-      const res = await getSessionsApi(
-        { userId: userId.value },
-        { fetcher: authFetch },
-      );
+      const res = await getSessionsApi({ userId: userId.value }, { fetcher: authFetch });
       if (!res.ok) throw new Error(translate("chat.getSessionsHttpFailed", { status: res.status }));
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || translate("chat.getSessionsFailed"));
@@ -130,22 +134,23 @@ export function createSessionListActions({
         .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
         .sort(
           (leftSession, rightSession) =>
-            parseTimeMs(rightSession.updatedAt) -
-            parseTimeMs(leftSession.updatedAt),
+            parseTimeMs(rightSession.updatedAt) - parseTimeMs(leftSession.updatedAt),
         )
         .map((sessionItem) => {
-          const mappedSession = mapSummaryToSession(sessionItem, { sessionTitleFromMessages, createConnectorPanelState });
+          const mappedSession = mapSummaryToSession(sessionItem, {
+            sessionTitleFromMessages,
+            createConnectorPanelState,
+          });
           persistedSessionIds.add(mappedSession.sessionId);
           const existing = existingSessionsById.get(mappedSession.sessionId);
-          return reconcileSessionObject(
-            mappedSession,
-            existing,
-            { sessionTitleFromMessages },
-          );
+          return reconcileSessionObject(mappedSession, existing, { sessionTitleFromMessages });
         });
-      nextSessions.push(...sessions.value.filter((session) =>
-        session?.isLocal === true && !persistedSessionIds.has(String(session.sessionId || "")),
-      ));
+      nextSessions.push(
+        ...sessions.value.filter(
+          (session) =>
+            session?.isLocal === true && !persistedSessionIds.has(String(session.sessionId || "")),
+        ),
+      );
 
       sessions.value.splice(0, sessions.value.length, ...nextSessions);
 
@@ -163,19 +168,24 @@ export function createSessionListActions({
         });
       }
       if (requestedSessionDetail) {
-        const requestedSessionDoc = (Array.isArray(requestedSessionDetail?.sessions)
-          ? requestedSessionDetail.sessions
-          : []).find((doc) => String(doc?.sessionId || "").trim() === requestedSessionId)
-          || requestedSessionDetail?.sessions?.[0]
-          || {};
+        const requestedSessionDoc =
+          (Array.isArray(requestedSessionDetail?.sessions)
+            ? requestedSessionDetail.sessions
+            : []
+          ).find((doc) => String(doc?.sessionId || "").trim() === requestedSessionId) ||
+          requestedSessionDetail?.sessions?.[0] ||
+          {};
         const resolvedRequestedSessionId = String(
           requestedSessionDetail?.sessionId || requestedSessionId,
         ).trim();
-        const requestedSession = mapSummaryToSession({
-          ...requestedSessionDoc,
-          sessionId: resolvedRequestedSessionId,
-          caller: requestedSessionDoc.caller || RoleEnum.USER,
-        }, { sessionTitleFromMessages, createConnectorPanelState });
+        const requestedSession = mapSummaryToSession(
+          {
+            ...requestedSessionDoc,
+            sessionId: resolvedRequestedSessionId,
+            caller: requestedSessionDoc.caller || RoleEnum.USER,
+          },
+          { sessionTitleFromMessages, createConnectorPanelState },
+        );
         sessions.value.unshift(requestedSession);
         persistedSessionIds.add(resolvedRequestedSessionId);
       }
@@ -195,8 +205,12 @@ export function createSessionListActions({
         refreshSessionConnectorsAsync(resolvedRequestedSessionId);
         return true;
       }
-      const keepActive = Boolean(prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId));
-      const nextId = keepActive ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId) : sessions.value[0].sessionId;
+      const keepActive = Boolean(
+        prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId),
+      );
+      const nextId = keepActive
+        ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId)
+        : sessions.value[0].sessionId;
       await selectSession(nextId, {
         force: forceCurrentSessionRerender,
         silent,
@@ -253,7 +267,9 @@ export function createSessionListActions({
     const targetSessionId = String(sessionId || "").trim();
     if (!targetSessionId) return false;
 
-    const index = sessions.value.findIndex((sessionItem) => sessionItem.sessionId === targetSessionId);
+    const index = sessions.value.findIndex(
+      (sessionItem) => sessionItem.sessionId === targetSessionId,
+    );
     if (index < 0) return false;
     const targetSession = sessions.value[index];
     const runtimeSessionId = sessionRuntimeId(targetSession);

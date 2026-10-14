@@ -5,7 +5,9 @@
  */
 
 function normalizeStage(stage = "") {
-  const value = String(stage || "").trim().toLowerCase();
+  const value = String(stage || "")
+    .trim()
+    .toLowerCase();
   if (value === "planning_capture" || value === "capture" || value === "planning") {
     return "planning_capture";
   }

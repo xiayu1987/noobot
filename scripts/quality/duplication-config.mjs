@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function mergeDuplicationIgnoreGlobs(
-  configuredIgnoreGlobs = [],
-  sourceIgnoreGlobs = [],
-) {
+export function mergeDuplicationIgnoreGlobs(configuredIgnoreGlobs = [], sourceIgnoreGlobs = []) {
   const configured = Array.isArray(configuredIgnoreGlobs) ? configuredIgnoreGlobs : [];
   const source = Array.isArray(sourceIgnoreGlobs) ? sourceIgnoreGlobs : [];
   return [...new Set([...configured, ...source])];

@@ -11,4 +11,4 @@ class INodeStateProcess {
   getHandleWay() {}
 }
 
-export default  INodeStateProcess;
+export default INodeStateProcess;

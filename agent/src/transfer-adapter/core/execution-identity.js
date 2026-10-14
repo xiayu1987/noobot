@@ -30,10 +30,18 @@ export function resolveRuntimeTransferIdentity({
       currentAssistantMessageId(runtime),
   );
   const resolvedSessionId = safeStr(
-    sessionId || runConfig.sessionId || runtime?.systemRuntime?.sessionId || runtime?.sessionId || contextIdentity.sessionId,
+    sessionId ||
+      runConfig.sessionId ||
+      runtime?.systemRuntime?.sessionId ||
+      runtime?.sessionId ||
+      contextIdentity.sessionId,
   );
-  const turnScopeId = safeStr(runConfig.turnScopeId || runtime?.systemRuntime?.turnScopeId || contextIdentity.turnScopeId);
-  const runId = safeStr(runConfig.executionId || runtime?.systemRuntime?.executionId || contextIdentity.runId);
+  const turnScopeId = safeStr(
+    runConfig.turnScopeId || runtime?.systemRuntime?.turnScopeId || contextIdentity.turnScopeId,
+  );
+  const runId = safeStr(
+    runConfig.executionId || runtime?.systemRuntime?.executionId || contextIdentity.runId,
+  );
   if (!messageId || !resolvedSessionId || !turnScopeId || !runId || !producerType || !producerId) {
     throw new Error("semantic_transfer_execution_identity_incomplete");
   }
@@ -55,7 +63,9 @@ export function resolveRuntimeTransferIdentity({
       normalizedDirection,
       normalizedStrategy,
       normalizedTransferKey,
-    ].filter(Boolean).join(":"),
+    ]
+      .filter(Boolean)
+      .join(":"),
     messageId,
     sessionId: identity.sessionId,
     turnScopeId: identity.turnScopeId,

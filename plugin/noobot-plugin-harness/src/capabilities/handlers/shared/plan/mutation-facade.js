@@ -48,7 +48,9 @@ export function executePlanMutation({
       mutationResult,
     });
     if (
-      String(stage || "").trim().toLowerCase() === "revision" &&
+      String(stage || "")
+        .trim()
+        .toLowerCase() === "revision" &&
       mutationResult?.refinementPatchApplied?.changed === true
     ) {
       emitPlanMutationStageMismatchAutocoerced({

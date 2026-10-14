@@ -14,10 +14,9 @@ describe("parseJsonLines", () => {
   });
 
   it("keeps strict validation for malformed committed frames", () => {
-    expect(() => parseJsonLines(
-      '{"seq":1}\nnot-json\n{"seq":2}\n',
-      { committedFramesOnly: true },
-    )).toThrow(SyntaxError);
+    expect(() =>
+      parseJsonLines('{"seq":1}\nnot-json\n{"seq":2}\n', { committedFramesOnly: true }),
+    ).toThrow(SyntaxError);
   });
 
   it("parses a complete final frame when reading a closed JSONL artifact", () => {

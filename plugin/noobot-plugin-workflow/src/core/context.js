@@ -15,9 +15,8 @@ export function assertHookManager(hookManager = null) {
 
 export function createPluginRuntimeContext(api = {}, userOptions = {}) {
   const options = normalizeOptions(userOptions);
-  const hookManager = api?.hookManager && typeof api.hookManager === "object"
-    ? api.hookManager
-    : null;
+  const hookManager =
+    api?.hookManager && typeof api.hookManager === "object" ? api.hookManager : null;
   return {
     options,
     hookManager,

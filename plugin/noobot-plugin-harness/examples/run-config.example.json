@@ -23,10 +23,7 @@
         "default": "qwen3_6_plus"
       },
       "miniRunnerMaxTurns": 50,
-      "miniRunnerToolAllowlist": [
-        "read_context",
-        "search_memory"
-      ],
+      "miniRunnerToolAllowlist": ["read_context", "search_memory"],
       "acceptance": {
         "semanticValidation": true
       }

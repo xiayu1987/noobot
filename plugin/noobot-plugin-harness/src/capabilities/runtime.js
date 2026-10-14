@@ -37,7 +37,8 @@ function isMainPlanReady(bucket = null) {
   const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : {};
   if (state?.flags?.planningCaptured === true) return true;
   if (String(bucket?.planText || "").trim()) return true;
-  if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0) return true;
+  if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0)
+    return true;
   return Array.isArray(bucket?.taskChecklist) && bucket.taskChecklist.length > 0;
 }
 
@@ -45,7 +46,8 @@ function markPlanningCapturedIfPlanReady(bucket = null) {
   if (!bucket || !isMainPlanReady(bucket)) return;
   const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : null;
   if (!state || typeof state !== "object") return;
-  if (!state.flags || typeof state.flags !== "object" || Array.isArray(state.flags)) state.flags = {};
+  if (!state.flags || typeof state.flags !== "object" || Array.isArray(state.flags))
+    state.flags = {};
   state.flags.planningCaptured = true;
 }
 
@@ -60,10 +62,7 @@ function prepareMainPlanningState(point = "", ctx = {}, capabilities = []) {
 function resolveTakeoverDirectives(result = {}) {
   return {
     tool:
-      result?.toolTakeover ||
-      result?.takeover?.tool ||
-      result?.directives?.toolTakeover ||
-      null,
+      result?.toolTakeover || result?.takeover?.tool || result?.directives?.toolTakeover || null,
     message:
       result?.messageTakeover ||
       result?.systemMessageTakeover ||
@@ -100,8 +99,9 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
       return HARNESS_ENGINEERING_CAPABILITIES;
     },
     resolveByHook(point = "") {
-      return resolveCapabilitiesForHook(point)
-        .filter((capability) => resolvedProfile?.[capability]?.enabled !== false);
+      return resolveCapabilitiesForHook(point).filter(
+        (capability) => resolvedProfile?.[capability]?.enabled !== false,
+      );
     },
     async runHook(point = "", ctx = {}, meta = {}) {
       markHarnessTurnLifecycle(point, ctx);

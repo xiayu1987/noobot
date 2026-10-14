@@ -38,10 +38,7 @@ export {
   removeTurnRuntime,
 } from "./turnRuntimeRetention.js";
 
-export {
-  applyTurnTimingSnapshot,
-  applyTurnTimingUpdate,
-} from "./turnRuntimeTiming.js";
+export { applyTurnTimingSnapshot, applyTurnTimingUpdate } from "./turnRuntimeTiming.js";
 
 export {
   applyTurnLifecycleEnvelope,

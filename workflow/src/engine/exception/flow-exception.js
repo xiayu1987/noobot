@@ -5,10 +5,10 @@
  */
 
 class FlowException extends Error {
-  constructor(msg = 'FlowException') {
+  constructor(msg = "FlowException") {
     super(msg);
-    this.name = 'FlowException';
+    this.name = "FlowException";
   }
 }
 
-export default  FlowException;
+export default FlowException;

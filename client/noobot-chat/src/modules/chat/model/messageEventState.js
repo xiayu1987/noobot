@@ -2,7 +2,7 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
-*/
+ */
 
 import { createSerializedWindowIndex } from "@noobot/timeline-runtime";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
@@ -51,7 +51,10 @@ export function resolveMessageEventLaneState(message = {}, envelope = {}) {
   const sourceMessageId = text(envelope?.identity?.messageId);
   const presentationMessageId = text(envelope?.payload?.presentationMessageId);
   const aggregateProjection = Boolean(
-    sequenceScopeId && sourceMessageId && presentationMessageId && sourceMessageId !== presentationMessageId,
+    sequenceScopeId &&
+    sourceMessageId &&
+    presentationMessageId &&
+    sourceMessageId !== presentationMessageId,
   );
   if (!aggregateProjection) return root;
   if (!root.sequenceLanesByScopeId || typeof root.sequenceLanesByScopeId !== "object") {
@@ -76,9 +79,13 @@ export function syncMessageEventAggregateState(message = {}, eventId = "") {
   );
   if (eventId) appendConsumedMessageEvent(root, eventId);
   else {
-    root.consumedEventIds = [...new Set(lanes.flatMap(
-      (lane) => Array.isArray(lane?.consumedEventIds) ? lane.consumedEventIds : [],
-    ))].slice(-CONSUMED_EVENT_LIMIT);
+    root.consumedEventIds = [
+      ...new Set(
+        lanes.flatMap((lane) =>
+          Array.isArray(lane?.consumedEventIds) ? lane.consumedEventIds : [],
+        ),
+      ),
+    ].slice(-CONSUMED_EVENT_LIMIT);
   }
   return root;
 }

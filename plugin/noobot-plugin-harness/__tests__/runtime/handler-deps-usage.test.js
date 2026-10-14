@@ -58,10 +58,6 @@ for (const domain of ["planning", "guidance", "acceptance", "review"]) {
       return !pattern.test(joined);
     });
 
-    assert.deepEqual(
-      unused,
-      [],
-      `${domain}/deps.js has unused exports: ${unused.join(", ")}`,
-    );
+    assert.deepEqual(unused, [], `${domain}/deps.js has unused exports: ${unused.join(", ")}`);
   });
 }

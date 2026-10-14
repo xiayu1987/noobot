@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 function cloneAttachmentList(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -18,7 +17,9 @@ export function resolveRuntimeUserMessageAttachments(runtime = {}) {
 }
 
 export function runtimeHasExplicitUserMessageAttachments(runtime = {}) {
-  return Boolean(runtime && typeof runtime === "object" && Array.isArray(runtime.userMessageAttachments));
+  return Boolean(
+    runtime && typeof runtime === "object" && Array.isArray(runtime.userMessageAttachments),
+  );
 }
 
 export function applyRuntimeUserMessageAttachments(runtime = {}, attachments = []) {
