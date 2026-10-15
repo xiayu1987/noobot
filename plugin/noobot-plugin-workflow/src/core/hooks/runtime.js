@@ -70,18 +70,6 @@ export function hasOwnObjectKey(source = {}, key = "") {
   );
 }
 
-export function firstText(...values) {
-  for (const value of values) {
-    const candidate = text(value);
-    if (candidate) return candidate;
-  }
-  return "";
-}
-
-export function normalizeString(value) {
-  return text(value);
-}
-
 export function withTimeout(promise, timeoutMs, message = "", { signal = null } = {}) {
   const ms = Number(timeoutMs);
   if (signal?.aborted) {

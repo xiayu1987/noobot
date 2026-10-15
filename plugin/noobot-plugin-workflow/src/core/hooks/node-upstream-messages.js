@@ -9,13 +9,13 @@ import {
   getWorkflowTransferPayloadFromResult,
   resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
-import { firstText, resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 import {
   formatAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { text } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 
 export function buildWorkflowInputAttachmentSystemMessage({
   ctx = {},

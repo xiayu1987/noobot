@@ -10,12 +10,8 @@ import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { projectAttachmentMetaForModel } from "../../artifacts/meta-ops.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
-function normalizeString(value = "") {
-  return text(value);
-}
-
 function isCanonicalBase64(value = "") {
-  const normalized = normalizeString(value);
+  const normalized = text(value);
   if (normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return false;
   return Buffer.from(normalized, "base64").toString("base64") === normalized;
 }
@@ -53,13 +49,13 @@ export function parseToolOutputArtifacts(value = null) {
       if (!OUTPUT_ARTIFACT_FIELDS.has(key))
         throw new Error(`unknown_tool_output_artifact_field:${key}`);
     }
-    const name = normalizeString(artifact.name);
-    const type = normalizeString(artifact.type);
-    const mimeType = normalizeString(artifact.mimeType);
+    const name = text(artifact.name);
+    const type = text(artifact.type);
+    const mimeType = text(artifact.mimeType);
     const hasContent = typeof artifact.content === "string";
     const hasContentBase64 = typeof artifact.contentBase64 === "string";
     const content = hasContent ? artifact.content : "";
-    const contentBase64 = hasContentBase64 ? normalizeString(artifact.contentBase64) : "";
+    const contentBase64 = hasContentBase64 ? text(artifact.contentBase64) : "";
     if (!["text", "attachment_url", "attachment_bytes"].includes(type))
       throw new Error(`invalid_tool_output_artifact_type:${index}`);
     if (!name) throw new Error(`invalid_tool_output_artifact_name:${index}`);
@@ -104,7 +100,7 @@ function projectCanonicalAttachmentFields(value) {
   const fields = [attachmentId, sessionId, attachmentSource];
   const hasAttachmentIdentityField = attachmentId !== undefined || attachmentSource !== undefined;
   if (!hasAttachmentIdentityField) return null;
-  if (fields.some((field) => !normalizeString(field))) {
+  if (fields.some((field) => !text(field))) {
     throw new Error("incomplete_attachment_identity");
   }
   if (Object.hasOwn(value, "attachmentRef")) {
@@ -179,12 +175,12 @@ function normalizeCommonFieldValue(key, value) {
     key === "parentDialogProcessId" ||
     key === "dialogProcessId"
   ) {
-    const normalized = normalizeString(value);
+    const normalized = text(value);
     return normalized || undefined;
   }
   if (key === "tools") {
     if (!Array.isArray(value)) return undefined;
-    const list = Array.from(new Set(value.map((item) => normalizeString(item)).filter(Boolean)));
+    const list = Array.from(new Set(value.map((item) => text(item)).filter(Boolean)));
     return list.length ? list : undefined;
   }
   if (key === "summary") {
@@ -208,7 +204,7 @@ export function buildToolResultPayload(payload = {}) {
   if (out.ok === false) {
     if (out.status === undefined) out.status = "failed";
     if (out.error === undefined) {
-      out.error = out.message || normalizeString(out.stderr) || "tool execution failed";
+      out.error = out.message || text(out.stderr) || "tool execution failed";
     }
     if (out.code === undefined) out.code = ERROR_CODE.RECOVERABLE_TOOL_ERROR;
   }

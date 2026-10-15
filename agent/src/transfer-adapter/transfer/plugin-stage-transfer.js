@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { firstText, isPlainObject, text } from "@noobot/shared/value";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   resolveTransferIntent,
@@ -13,7 +13,6 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
-import { firstNormalizedString, normalizeString } from "../core/compact.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 export async function transferAgentPluginStageMessage({
@@ -66,8 +65,8 @@ export async function transferAgentPluginStageMessage({
     runtime,
     agentContext,
     content: normalizedDetail,
-    name: firstNormalizedString(name, "agent-plugin-stage-detail.md"),
-    mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
+    name: firstText(name, "agent-plugin-stage-detail.md"),
+    mimeType: firstText(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
     userId,
     identity,
@@ -118,10 +117,10 @@ export function composeAgentPluginFinalMessage({
     .flatMap((envelope = {}) =>
       Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : [],
     )
-    .map((item = {}) => `- ${firstNormalizedString(item.name, item.identity?.attachmentId)}`);
+    .map((item = {}) => `- ${firstText(item.name, item.identity?.attachmentId)}`);
 
   return [
-    normalizeString(header),
+    text(header),
     resultText,
     detailLines.length ? tSystem("transfer.pluginDetailAttachments", locale) : "",
     ...detailLines,

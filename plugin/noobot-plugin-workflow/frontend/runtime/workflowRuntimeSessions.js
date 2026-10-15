@@ -9,7 +9,7 @@ import {
   pickTransferEnvelopeList,
 } from "@noobot/semantic-transfer-protocol";
 import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessId.js";
-import { text } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 
 function normalizeRuntimeStatusInput(item = {}) {
   const canonical = item && typeof item === "object" ? item : {};
@@ -18,10 +18,6 @@ function normalizeRuntimeStatusInput(item = {}) {
 
 function objectOr(value, fallback) {
   return value && typeof value === "object" ? value : fallback;
-}
-
-function firstText(...values) {
-  return text(values.find(Boolean));
 }
 
 function finiteNumberOrUndefined(primary, fallback) {

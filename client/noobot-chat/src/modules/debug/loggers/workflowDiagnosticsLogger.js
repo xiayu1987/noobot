@@ -4,16 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { firstText } from "@noobot/shared/value";
 import { createDiagnosticsLogger } from "./createDiagnosticsLogger.js";
 
 const logger = createDiagnosticsLogger("workflow-diagnostics");
 export const setWorkflowDiagnosticsLogSink = logger.setSink;
 export const isWorkflowDiagnosticsEnabled = logger.isEnabled;
 export const logWorkflowDiagnostics = logger.log;
-
-function firstText(...values) {
-  return String(values.find(Boolean) || "");
-}
 
 function summarizeTagKeys(tags) {
   return Array.isArray(tags) ? tags.map((item) => String(item || "")) : Object.keys(tags || {});

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { firstText, isPlainObject, text } from "@noobot/shared/value";
 import {
   decideTransfer,
   DEFAULT_TRANSFER_MIME_TYPE,
@@ -16,7 +16,6 @@ import {
   getToolInputPolicy,
 } from "@noobot/semantic-transfer-protocol";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { firstNormalizedString, normalizeString } from "../core/compact.js";
 import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
@@ -35,21 +34,20 @@ function toSafePositiveInt(value, fallback = 0, min = 0) {
 }
 
 function resolveToolInputOverflowFromCall(call = {}, runtime = {}) {
-  const toolName = normalizeString(call?.name);
+  const toolName = text(call?.name);
   const args = isPlainObject(call?.args) ? call.args : {};
   const policy = getToolInputPolicy(toolName, args);
   if (!policy) return null;
-  const text = normalizeRawString(args?.[policy.field]);
+  const inputText = normalizeRawString(args?.[policy.field]);
   const maxChars = Number(policy.maxChars || 0);
-  const exceeded = text.length > maxChars;
+  const exceeded = inputText.length > maxChars;
   const forceAttachment = policy.forceAttachment === true;
   if (!exceeded && !forceAttachment) return null;
-  const policyMeta =
-    toolName === "write_file" ? { targetPath: normalizeString(args?.filePath) } : {};
+  const policyMeta = toolName === "write_file" ? { targetPath: text(args?.filePath) } : {};
   return {
     toolName,
     field: policy.field,
-    text,
+    text: inputText,
     maxChars,
     exceeded,
     forceAttachment,
@@ -254,8 +252,8 @@ export async function transferToolInput({
     runtime,
     agentContext,
     content: normalizedText,
-    name: firstNormalizedString(resolvedName, "tool-input.txt"),
-    mimeType: firstNormalizedString(resolvedMimeType, DEFAULT_TRANSFER_MIME_TYPE),
+    name: firstText(resolvedName, "tool-input.txt"),
+    mimeType: firstText(resolvedMimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
     generationSource,
     source: intent.source,

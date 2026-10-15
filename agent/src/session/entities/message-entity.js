@@ -14,13 +14,13 @@ import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { normalizeTurnCommitMetadata } from "@noobot/session-protocol";
-import { copyPresentFields, firstTextField, normalizeTextField } from "./entity-primitives.js";
+import { copyPresentFields } from "./entity-primitives.js";
 import {
   dedupeAttachmentsByIdentity,
   parseAttachmentRelations,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { text } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   return normalizeTransferEnvelopes(compactTransferEnvelopes(message?.transferEnvelopes || []));
@@ -59,7 +59,7 @@ function normalizeAttachmentOwner(owner = null) {
 }
 
 function resolveRuntimeMessageId(message = {}, messageUid = "") {
-  return firstTextField([
+  return firstText(
     message?.messageId,
     message?.additional_kwargs?.noobotMessageId,
     message?.additional_kwargs?.messageId,
@@ -68,26 +68,26 @@ function resolveRuntimeMessageId(message = {}, messageUid = "") {
     message?.lc_kwargs?.additional_kwargs?.noobotMessageId,
     message?.lc_kwargs?.additional_kwargs?.messageId,
     messageUid,
-  ]);
+  );
 }
 
 function createBaseMessageEntity(message, now) {
   return {
-    role: normalizeTextField(message?.role),
+    role: text(message?.role),
     content: message?.content || "",
-    type: normalizeTextField(message?.type),
-    userName: normalizeTextField(message?.userName),
-    sessionId: normalizeTextField(message?.sessionId),
-    parentSessionId: normalizeTextField(message?.parentSessionId),
+    type: text(message?.type),
+    userName: text(message?.userName),
+    sessionId: text(message?.sessionId),
+    parentSessionId: text(message?.parentSessionId),
     dialogProcessId: resolveContextMessageDialogProcessId(message),
-    parentDialogProcessId: normalizeTextField(message?.parentDialogProcessId),
-    turnScopeId: normalizeTextField(message?.turnScopeId),
-    taskId: normalizeTextField(message?.taskId),
-    taskStatus: normalizeTextField(message?.taskStatus),
-    modelAlias: normalizeTextField(message?.modelAlias),
-    modelName: normalizeTextField(message?.modelName),
+    parentDialogProcessId: text(message?.parentDialogProcessId),
+    turnScopeId: text(message?.turnScopeId),
+    taskId: text(message?.taskId),
+    taskStatus: text(message?.taskStatus),
+    modelAlias: text(message?.modelAlias),
+    modelName: text(message?.modelName),
     summarized: message?.summarized === true,
-    ts: normalizeTextField(message?.ts) || now(),
+    ts: text(message?.ts) || now(),
   };
 }
 
@@ -238,7 +238,7 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
       )
     : [];
 
-  const messageUid = normalizeTextField(message?.messageUid);
+  const messageUid = text(message?.messageUid);
   const runtimeMessageId = resolveRuntimeMessageId(message, messageUid);
   const normalizedMessage = createBaseMessageEntity(message, now);
   if (messageUid) normalizedMessage.messageUid = messageUid;
@@ -272,7 +272,7 @@ export function normalizeMessagesEntity(
 export function assertSessionMessageIdentityInvariants(messages = []) {
   const seen = new Set();
   for (const [index, message] of (Array.isArray(messages) ? messages : []).entries()) {
-    const messageUid = normalizeTextField(message?.messageUid);
+    const messageUid = text(message?.messageUid);
     if (!messageUid) {
       const error = new Error(`session message is missing messageUid at index ${index}`);
       error.code = "SESSION_MESSAGE_UID_MISSING";

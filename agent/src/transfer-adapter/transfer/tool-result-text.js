@@ -12,7 +12,7 @@ import {
   TRANSFER_REASON,
   TRANSFER_SOURCE,
 } from "@noobot/semantic-transfer-protocol";
-import { firstNormalizedString } from "../core/compact.js";
+import { firstText } from "@noobot/shared/value";
 import {
   createDirectTransferEnvelope,
   persistTransferFile,
@@ -111,8 +111,8 @@ export async function materializeTextForToolResult({
       runtime,
       agentContext,
       content: normalizedText,
-      name: firstNormalizedString(name, "tool-result.txt"),
-      mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
+      name: firstText(name, "tool-result.txt"),
+      mimeType: firstText(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
       attachmentSource,
       generationSource,
       source: intent.source,

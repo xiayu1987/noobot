@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isPlainObject, text } from "../value.js";
+import { firstText, isPlainObject, text } from "../value.js";
 
 test("isPlainObject accepts non-null non-array objects", () => {
   assert.equal(isPlainObject({}), true);
@@ -32,4 +32,12 @@ test("text maps only nullish and blank values to an empty string", () => {
   }
   assert.equal(text(0), "0");
   assert.equal(text(false), "false");
+});
+
+test("firstText returns the first non-blank trimmed value", () => {
+  assert.equal(firstText(undefined, null, "", "   ", "  a  ", "b"), "a");
+  assert.equal(firstText(0, "b"), "0");
+  assert.equal(firstText(false, "b"), "false");
+  assert.equal(firstText(), "");
+  assert.equal(firstText(undefined, "  "), "");
 });

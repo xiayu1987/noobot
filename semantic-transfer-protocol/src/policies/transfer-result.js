@@ -14,10 +14,6 @@ export const TRANSFER_RESULT_STATUS = Object.freeze({
   FAILED: "failed",
 });
 
-function normalizeString(value = "") {
-  return text(value);
-}
-
 function cleanObject(value = {}) {
   if (!isPlainObject(value)) return {};
   const out = {};
@@ -36,7 +32,7 @@ export function createTransferResult({
   error = null,
   meta = {},
 } = {}) {
-  const normalizedStatus = normalizeString(status) || TRANSFER_RESULT_STATUS.DIRECT;
+  const normalizedStatus = text(status) || TRANSFER_RESULT_STATUS.DIRECT;
   const result = {
     ok: ok === true,
     status: normalizedStatus,
@@ -45,11 +41,11 @@ export function createTransferResult({
   if (error) {
     result.error = isPlainObject(error)
       ? cleanObject({
-          code: normalizeString(error.code) || "TRANSFER_ERROR",
-          message: normalizeString(error.message || error.error) || "transfer error",
+          code: text(error.code) || "TRANSFER_ERROR",
+          message: text(error.message || error.error) || "transfer error",
           details: error.details,
         })
-      : { code: "TRANSFER_ERROR", message: normalizeString(error) || "transfer error" };
+      : { code: "TRANSFER_ERROR", message: text(error) || "transfer error" };
   }
   const normalizedMeta = cleanObject(meta);
   if (Object.keys(normalizedMeta).length) result.meta = normalizedMeta;

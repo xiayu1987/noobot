@@ -11,9 +11,9 @@ import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
-import { firstTextField, normalizeTextField, objectRecord } from "./entity-primitives.js";
+import { objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
-import { text } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 
 function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   const events = [];
@@ -22,11 +22,11 @@ function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
     ? session.sessionArtifactEvents
     : []) {
     const validation = validateProtocolEvent(envelope);
-    const eventId = normalizeTextField(envelope?.identity?.eventId);
+    const eventId = text(envelope?.identity?.eventId);
     if (
       !validation.valid ||
       !validation.descriptor?.sessionArtifact ||
-      (sessionId && normalizeTextField(envelope?.identity?.sessionId) !== sessionId) ||
+      (sessionId && text(envelope?.identity?.sessionId) !== sessionId) ||
       !eventId ||
       eventIds.has(eventId)
     ) {
@@ -138,9 +138,9 @@ function resolveSessionNormalizationContext(session, { now, sessionId, parentSes
   const shortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
   return {
     nowValue,
-    sessionId: firstTextField([session?.sessionId, sessionId]),
-    parentSessionId: firstTextField([session?.parentSessionId, parentSessionId]),
-    customTitle: normalizeTextField(session?.customTitle),
+    sessionId: firstText(session?.sessionId, sessionId),
+    parentSessionId: firstText(session?.parentSessionId, parentSessionId),
+    customTitle: text(session?.customTitle),
     shortMemoryCheckpoint: Number.isFinite(shortMemoryCheckpoint) ? shortMemoryCheckpoint : 0,
   };
 }
@@ -154,9 +154,9 @@ function createNormalizedSessionEntity(session, context, messages) {
     sessionId: context.sessionId,
     parentSessionId: context.parentSessionId,
     aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
-    caller: firstTextField([session?.caller, "user"]),
+    caller: firstText(session?.caller, "user"),
     modelAlias: String(session?.modelAlias || ""),
-    currentTaskId: normalizeTextField(session?.currentTaskId),
+    currentTaskId: text(session?.currentTaskId),
     shortMemoryCheckpoint: context.shortMemoryCheckpoint,
     messages,
     dialogOrder: normalizeDialogOrderEntity(session?.dialogOrder || [], messages),
@@ -164,8 +164,8 @@ function createNormalizedSessionEntity(session, context, messages) {
     turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     sessionArtifactEvents: normalizeSessionArtifactEvents(session, context.sessionId),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
-    createdAt: firstTextField([session?.createdAt, context.nowValue]),
-    updatedAt: firstTextField([session?.updatedAt, context.nowValue]),
+    createdAt: firstText(session?.createdAt, context.nowValue),
+    updatedAt: firstText(session?.updatedAt, context.nowValue),
   };
 }
 

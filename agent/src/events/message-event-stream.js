@@ -21,7 +21,7 @@ import {
   isTransientMessageEventType,
 } from "@noobot/event-protocol/message-event";
 import { AGENT_RUN_EVENT } from "./run-event.js";
-import { text } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 
 export { assertMessageEventPayload };
 
@@ -35,10 +35,6 @@ function runtimeState(runtime = {}) {
     systemRuntime.messageEventStream = { activeMessageId: "" };
   }
   return systemRuntime;
-}
-
-function firstText(...values) {
-  return text(values.find(Boolean));
 }
 
 function resolveRequestedStreamIdentity(runConfig, state, requested) {

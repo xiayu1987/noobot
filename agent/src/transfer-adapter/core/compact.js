@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject } from "@noobot/shared/value";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 function compactObject(value = {}) {
@@ -14,18 +14,6 @@ function compactObject(value = {}) {
       return item !== undefined && item !== null && item !== "";
     }),
   );
-}
-
-export function firstNormalizedString(...values) {
-  for (const value of values) {
-    const normalized = text(value);
-    if (normalized) return normalized;
-  }
-  return "";
-}
-
-export function normalizeString(value = "") {
-  return text(value);
 }
 
 function validateAndDedupeEnvelopes(value) {

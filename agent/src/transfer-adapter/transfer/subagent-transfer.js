@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { firstText, isPlainObject, text } from "@noobot/shared/value";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   directTransfer,
@@ -14,13 +14,12 @@ import {
 } from "@noobot/semantic-transfer-protocol";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { firstNormalizedString, normalizeString } from "../core/compact.js";
 
 function normalizeNextSteps(nextSteps = []) {
   return (Array.isArray(nextSteps) ? nextSteps : [])
     .map((item = {}) => ({
-      nodeId: firstNormalizedString(item?.nodeId, item?.id, item),
-      nodeName: firstNormalizedString(item?.nodeName, item?.name),
+      nodeId: firstText(item?.nodeId, item?.id, item),
+      nodeName: firstText(item?.nodeName, item?.name),
     }))
     .filter((item) => item.nodeId);
 }
@@ -38,14 +37,14 @@ function normalizeSubAgentMessages(messages = []) {
         };
       }
       return {
-        id: firstNormalizedString(item?.id, item?.stepId, item?.nodeId),
-        nodeId: firstNormalizedString(item?.nodeId),
-        nodeName: firstNormalizedString(item?.nodeName, item?.name),
+        id: firstText(item?.id, item?.stepId, item?.nodeId),
+        nodeId: firstText(item?.nodeId),
+        nodeName: firstText(item?.nodeName, item?.name),
         content: String(item?.content || item?.output || item?.text || ""),
         meta: isPlainObject(item?.meta) ? item.meta : {},
       };
     })
-    .filter((item) => normalizeString(item.content));
+    .filter((item) => text(item.content));
 }
 
 export async function transferBotPluginSubagentResult({
@@ -76,8 +75,8 @@ export async function transferBotPluginSubagentResult({
   const persistedItems = [];
 
   for (const [index, item] of normalizedMessages.entries()) {
-    const text = String(item?.content || "");
-    if (!text) continue;
+    const itemContent = String(item?.content || "");
+    if (!itemContent) continue;
     if (!item.id) throw new Error("semantic_transfer_subagent_message_identity_required");
     const itemIdentity = {
       ...identity,
@@ -90,7 +89,7 @@ export async function transferBotPluginSubagentResult({
         messageId: itemIdentity.messageId,
         identity: itemIdentity,
         direction: "output",
-        content: text,
+        content: itemContent,
         intent: {
           source: intent.source,
           reason: intent.reason,
@@ -109,7 +108,7 @@ export async function transferBotPluginSubagentResult({
 
     const name = [
       "bot-plugin-node",
-      firstNormalizedString(item?.nodeName, item?.nodeId, item?.id, String(index + 1))
+      firstText(item?.nodeName, item?.nodeId, item?.id, String(index + 1))
         .replace(/\s+/g, "-")
         .toLowerCase(),
       "result.md",
@@ -119,7 +118,7 @@ export async function transferBotPluginSubagentResult({
     const persisted = await persistTransferFile({
       runtime,
       agentContext,
-      content: text,
+      content: itemContent,
       name,
       mimeType,
       attachmentSource,

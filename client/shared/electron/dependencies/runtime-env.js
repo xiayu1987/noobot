@@ -14,15 +14,11 @@ import {
 } from "../../path-resolver.js";
 import { text } from "@noobot/shared/value";
 
-function normalizeString(value = "") {
-  return text(value);
-}
-
 function uniqueTruthyStrings(values = []) {
   const seen = new Set();
   const output = [];
   for (const value of values) {
-    const normalized = normalizeString(value);
+    const normalized = text(value);
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     output.push(normalized);
@@ -40,14 +36,11 @@ function pathExists(filePath = "", exists = fs.existsSync) {
 }
 
 function splitPathEnv(pathValue = "", platform = process.platform) {
-  return normalizeString(pathValue)
-    .split(clientPathDelimiter(platform))
-    .map(normalizeString)
-    .filter(Boolean);
+  return text(pathValue).split(clientPathDelimiter(platform)).map(text).filter(Boolean);
 }
 
 function resolveExecutableName(command = "", platform = process.platform) {
-  const normalized = normalizeString(command);
+  const normalized = text(command);
   if (!normalized) return "";
   if (platform !== "win32" || normalized.toLowerCase().endsWith(".exe")) return normalized;
   return `${normalized}.exe`;
@@ -104,9 +97,7 @@ function resolvePlaywrightChromiumExecutable({
   if (configured) return configured;
   try {
     const requireFromBackend = createRequire(joinClientPath(backendRoot, "package.json"));
-    const executablePath = normalizeString(
-      requireFromBackend("playwright").chromium.executablePath(),
-    );
+    const executablePath = text(requireFromBackend("playwright").chromium.executablePath());
     return pathExists(executablePath, exists) ? executablePath : "";
   } catch {
     return "";
@@ -185,8 +176,8 @@ function resolveBinaryPath(
   command = "",
   { app = null, env = process.env, platform = process.platform, exists = fs.existsSync } = {},
 ) {
-  const envKey = `NOOBOT_${normalizeString(command).toUpperCase()}_PATH`;
-  const configuredPath = normalizeString(env[envKey]);
+  const envKey = `NOOBOT_${text(command).toUpperCase()}_PATH`;
+  const configuredPath = text(env[envKey]);
   if (configuredPath) return configuredPath;
   return (
     resolveManagedBinaryPath(command, { app, platform, exists }) ||
@@ -250,7 +241,7 @@ export function buildDependencyRuntimeEnv({
 }
 
 function hasCustomDependencySource(env = {}, key = "") {
-  return Boolean(normalizeString(env[key]));
+  return Boolean(text(env[key]));
 }
 
 function buildDependencySourceItem({
@@ -262,16 +253,16 @@ function buildDependencySourceItem({
   customEnvKeys = [],
   configKeys = [],
 } = {}) {
-  const normalizedSourceType = normalizeString(sourceType);
+  const normalizedSourceType = text(sourceType);
   return {
-    key: normalizeString(key),
-    name: normalizeString(name),
+    key: text(key),
+    name: text(name),
     available: Boolean(available),
-    installMode: normalizeString(installMode),
+    installMode: text(installMode),
     sourceType: normalizedSourceType,
     hasCustomSource: normalizedSourceType === "self-hosted",
-    customSourceEnvKeys: customEnvKeys.map(normalizeString).filter(Boolean),
-    configKeys: configKeys.map(normalizeString).filter(Boolean),
+    customSourceEnvKeys: customEnvKeys.map(text).filter(Boolean),
+    configKeys: configKeys.map(text).filter(Boolean),
   };
 }
 
@@ -395,7 +386,7 @@ export function summarizeDependencySources({
   app = null,
   exists = fs.existsSync,
 } = {}) {
-  const normalizedPlatform = normalizeString(platform) || process.platform;
+  const normalizedPlatform = text(platform) || process.platform;
   if (normalizedPlatform === "darwin") {
     return {
       platform: normalizedPlatform,

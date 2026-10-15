@@ -4,20 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
-
-export function normalizeTextField(value = "") {
-  return text(value);
-}
-
-export function firstTextField(values = []) {
-  for (const value of values) {
-    const normalized = normalizeTextField(value);
-    if (normalized) return normalized;
-  }
-  return "";
-}
-
 export function objectRecord(value) {
   return value && typeof value === "object" ? value : {};
 }

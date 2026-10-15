@@ -10,12 +10,8 @@ import { text } from "@noobot/shared/value";
 const KNOWN_SOURCES = new Set(Object.values(TRANSFER_SOURCE));
 const KNOWN_REASONS = new Set(Object.values(TRANSFER_REASON));
 
-function normalizeString(value = "") {
-  return text(value);
-}
-
 export function normalizeTransferSource(value = "", { fallback = TRANSFER_SOURCE.SERVICE } = {}) {
-  const normalized = normalizeString(value).toLowerCase();
+  const normalized = text(value).toLowerCase();
   if (!normalized) return fallback;
   if (KNOWN_SOURCES.has(normalized)) return normalized;
   throw new Error(`unknown_transfer_source:${normalized}`);
@@ -25,7 +21,7 @@ export function normalizeTransferReason(
   value = "",
   { fallback = TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT } = {},
 ) {
-  const normalized = normalizeString(value).toLowerCase();
+  const normalized = text(value).toLowerCase();
   if (!normalized) return fallback;
   if (KNOWN_REASONS.has(normalized)) return normalized;
   if (TRANSFER_REASON_ALIAS[normalized]) return TRANSFER_REASON_ALIAS[normalized];
@@ -45,8 +41,8 @@ export function resolveTransferIntent({
 }
 
 export function assertTransferIntentVocabulary({ source, reason } = {}) {
-  if (!KNOWN_SOURCES.has(normalizeString(source).toLowerCase()))
-    throw new Error(`unknown_transfer_source:${normalizeString(source)}`);
-  if (!KNOWN_REASONS.has(normalizeString(reason).toLowerCase()))
-    throw new Error(`unknown_transfer_reason:${normalizeString(reason)}`);
+  if (!KNOWN_SOURCES.has(text(source).toLowerCase()))
+    throw new Error(`unknown_transfer_source:${text(source)}`);
+  if (!KNOWN_REASONS.has(text(reason).toLowerCase()))
+    throw new Error(`unknown_transfer_reason:${text(reason)}`);
 }

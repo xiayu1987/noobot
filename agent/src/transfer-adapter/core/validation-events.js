@@ -6,7 +6,7 @@
 import { emitEvent } from "../../events/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { normalizeString } from "./compact.js";
+import { text } from "@noobot/shared/value";
 
 export async function emitSemanticTransferValidation({
   runtime = {},
@@ -17,7 +17,7 @@ export async function emitSemanticTransferValidation({
 } = {}) {
   const listener = eventListener || runtime?.eventListener || null;
   const payload = {
-    scenario: normalizeString(scenario) || "unknown",
+    scenario: text(scenario) || "unknown",
     inputCount: Number(stats?.inputCount || transferValidation?.inputCount || 0),
     outputCount: Number(stats?.outputCount || transferValidation?.outputCount || 0),
     filteredCount: Number(stats?.filteredCount || transferValidation?.filteredCount || 0),

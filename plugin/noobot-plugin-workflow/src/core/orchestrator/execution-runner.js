@@ -12,7 +12,7 @@ import {
   releaseWorkflowInstance,
   resolveWorkflowUpstreamActionSteps,
 } from "../../workflow/adapter.js";
-import { isWorkflowAbortError, normalizeString, throwIfWorkflowAborted } from "../hooks/runtime.js";
+import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { getWorkflowTransferPayloadFromResult } from "../hooks/attachments.js";
 import {
   resolveSemanticNodeForPendingStep,
@@ -105,15 +105,15 @@ function resolveStepItemRefs(item = {}) {
   return {
     step,
     subSession,
-    workflowRunId: normalizeString(nodeIdentity.workflowRunId),
-    nodeExecutionId: normalizeString(nodeIdentity.nodeExecutionId),
-    commandId: normalizeString(nodeIdentity.commandId),
-    turnScopeId: normalizeString(nodeIdentity.turnScopeId),
+    workflowRunId: text(nodeIdentity.workflowRunId),
+    nodeExecutionId: text(nodeIdentity.nodeExecutionId),
+    commandId: text(nodeIdentity.commandId),
+    turnScopeId: text(nodeIdentity.turnScopeId),
     nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-    agentDialogProcessId: normalizeString(subSession.dialogProcessId),
-    nodeSessionId: normalizeString(subSession.sessionId),
-    actionNodeStateId: normalizeString(step.actionNodeStateId),
-    stepId: normalizeString(step.stepId),
+    agentDialogProcessId: text(subSession.dialogProcessId),
+    nodeSessionId: text(subSession.sessionId),
+    actionNodeStateId: text(step.actionNodeStateId),
+    stepId: text(step.stepId),
     stepIndex: Number.isFinite(Number(step.stepIndex)) ? Number(step.stepIndex) : -1,
     transferEnvelopes: getWorkflowTransferPayloadFromResult(subSession.result || {})
       .transferEnvelopes,
@@ -149,7 +149,7 @@ function buildNodeAgentRunRecord({
     nodeDialogProcessId: refs.nodeDialogProcessId,
     agentDialogProcessId: refs.agentDialogProcessId,
     nodeSessionId: refs.nodeSessionId,
-    nodeSessionPersistedPath: normalizeString(refs.subSession.persisted?.outputDir),
+    nodeSessionPersistedPath: text(refs.subSession.persisted?.outputDir),
     actionNodeStateId: refs.actionNodeStateId,
     stepId: refs.stepId,
     stepIndex: refs.stepIndex,
@@ -166,9 +166,7 @@ function buildNodeAgentRunRecord({
 
 function resolveCompletedNodeTask(step = {}, semanticNode = null) {
   const node = semanticNode || {};
-  return normalizeString(
-    step.nodeTask || node.task || node.taskText || node.instruction || node.mission,
-  );
+  return text(step.nodeTask || node.task || node.taskText || node.instruction || node.mission);
 }
 
 function rememberCompletedStepResult({
@@ -181,11 +179,11 @@ function rememberCompletedStepResult({
   const refs = resolveStepItemRefs(item);
   if (!refs.stepId) return;
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep: refs.step });
-  const nodeId = normalizeString(refs.step.nodeId || semanticNode?.id);
+  const nodeId = text(refs.step.nodeId || semanticNode?.id);
   completedStepResults.set(refs.stepId, {
     transition: transitions,
     nodeId,
-    nodeName: normalizeString(refs.step.nodeName || semanticNode?.name || nodeId),
+    nodeName: text(refs.step.nodeName || semanticNode?.name || nodeId),
     nodeTask: resolveCompletedNodeTask(refs.step, semanticNode),
     actionNodeStateId: refs.actionNodeStateId,
     stepId: refs.stepId,

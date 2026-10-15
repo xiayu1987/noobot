@@ -9,9 +9,6 @@ import {
 } from "@noobot/plugin-protocol";
 import { text } from "@noobot/shared/value";
 
-function normalizeString(value = "") {
-  return text(value);
-}
 const REGISTRY_SNAPSHOT = Symbol("plugin-runtime.extension-registry-snapshot");
 
 function declaredFrontendComponents(manifest = {}) {
@@ -75,8 +72,8 @@ export function createExtensionRegistry({
   const reportedConflicts = new Set();
   const knownPoints = new Set(Object.keys(pointDefinitions));
   const warn = (message) => {
-    const text = normalizeString(message);
-    if (text && typeof onWarning === "function") onWarning(text);
+    const warning = text(message);
+    if (warning && typeof onWarning === "function") onWarning(warning);
   };
   const createEntry = ({ contribution = {}, id, pluginId, point }) => ({
     ...contribution,
@@ -88,7 +85,7 @@ export function createExtensionRegistry({
       typeof contribution?.enabled === "function"
         ? contribution.enabled
         : contribution?.enabled !== false,
-    exclusiveGroup: normalizeString(contribution?.exclusiveGroup),
+    exclusiveGroup: text(contribution?.exclusiveGroup),
     when: typeof contribution?.when === "function" ? contribution.when : () => true,
     resolveProps:
       typeof contribution?.resolveProps === "function" ? contribution.resolveProps : () => ({}),
@@ -98,7 +95,7 @@ export function createExtensionRegistry({
         : () => ({}),
   });
   const list = (point = "") => {
-    const normalized = normalizeString(point);
+    const normalized = text(point);
     const entries = normalized
       ? contributionsByPoint.get(normalized) || []
       : [...contributionsByPoint.values()].flat();
@@ -112,13 +109,13 @@ export function createExtensionRegistry({
     }));
   };
   const replacePlugin = (pluginId = "", contributions = []) => {
-    const normalizedPluginId = normalizeString(pluginId);
+    const normalizedPluginId = text(pluginId);
     if (!normalizedPluginId) throw new Error("plugin id is required");
     const staged = Array.isArray(contributions) ? contributions : [];
     const seen = new Set();
     for (const item of staged) {
-      const point = normalizeString(item?.point);
-      const id = normalizeString(item?.contribution?.id);
+      const point = text(item?.point);
+      const id = text(item?.contribution?.id);
       if (!knownPoints.has(point)) throw new Error(`unknown extension point "${point}"`);
       if (!id) throw new Error(`extension contribution id is required for "${point}"`);
       const key = `${point}:${id}`;
@@ -131,10 +128,10 @@ export function createExtensionRegistry({
       if (retained.length) next.set(point, retained);
     }
     for (const item of staged) {
-      const point = normalizeString(item.point);
+      const point = text(item.point);
       const contribution = item.contribution || {};
       const entries = next.get(point) || [];
-      const id = normalizeString(contribution.id);
+      const id = text(contribution.id);
       if (entries.some((entry) => entry.id === id))
         throw new Error(`extension contribution "${id}" duplicated at "${point}"`);
       entries.push(createEntry({ contribution, id, pluginId: normalizedPluginId, point }));
@@ -144,7 +141,7 @@ export function createExtensionRegistry({
     return list().filter((entry) => entry.pluginId === normalizedPluginId);
   };
   const removePlugin = (pluginId = "") => {
-    const normalized = normalizeString(pluginId);
+    const normalized = text(pluginId);
     if (!normalized) return;
     for (const [point, entries] of contributionsByPoint) {
       const remaining = entries.filter((entry) => entry.pluginId !== normalized);
@@ -153,9 +150,9 @@ export function createExtensionRegistry({
     }
   };
   const contribute = (point = "", contribution = {}) => {
-    const normalizedPoint = normalizeString(point);
-    const id = normalizeString(contribution?.id);
-    const pluginId = normalizeString(contribution?.pluginId);
+    const normalizedPoint = text(point);
+    const id = text(contribution?.id);
+    const pluginId = text(contribution?.pluginId);
     if (!knownPoints.has(normalizedPoint))
       throw new Error(`unknown extension point "${normalizedPoint}"`);
     const existing = contributionsByPoint.get(normalizedPoint) || [];
@@ -169,7 +166,7 @@ export function createExtensionRegistry({
     return true;
   };
   const resolve = (point = "", context = {}) => {
-    const normalizedPoint = normalizeString(point);
+    const normalizedPoint = text(point);
     const matches = (contributionsByPoint.get(normalizedPoint) || [])
       .filter((entry) => {
         try {

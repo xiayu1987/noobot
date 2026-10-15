@@ -5,7 +5,6 @@
  */
 
 import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
-import { normalizeString } from "./runtime.js";
 import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../constants.js";
 import { text } from "@noobot/shared/value";
 
@@ -54,9 +53,9 @@ function buildWorkflowPlanningDialogPayload({
   return {
     scope: "workflow_planning",
     userId,
-    sessionId: normalizeString(ctx?.sessionId),
-    dialogProcessId: normalizeString(ctx?.dialogProcessId),
-    workflowRunId: normalizeString(workflowRunId),
+    sessionId: text(ctx?.sessionId),
+    dialogProcessId: text(ctx?.dialogProcessId),
+    workflowRunId: text(workflowRunId),
     revision: 1,
     sequence: 1,
     timestamp: new Date().toISOString(),
@@ -64,8 +63,8 @@ function buildWorkflowPlanningDialogPayload({
     semanticText,
     semantic,
     nodeSessions: Array.isArray(planningNodeSessions) ? planningNodeSessions : [],
-    semanticModel: normalizeString(options?.semanticModel),
-    semanticPrompt: normalizeString(options?.semanticPrompt),
+    semanticModel: text(options?.semanticModel),
+    semanticPrompt: text(options?.semanticPrompt),
     semanticResolution: projectPlanningSemanticResolution(semanticResolution),
   };
 }
@@ -81,11 +80,11 @@ export async function persistWorkflowPlanningDialog({
   planningNodeSessions = [],
 } = {}) {
   if (typeof options?.workflowDialogPersister !== "function") return null;
-  const userId = normalizeString(ctx?.userId);
+  const userId = text(ctx?.userId);
   if (!userId) return null;
   const relativeDir = buildWorkflowDialogRelativeDir({
     ctx,
-    dialogProcessId: normalizeString(ctx?.dialogProcessId),
+    dialogProcessId: text(ctx?.dialogProcessId),
     scope: "planning",
   });
   if (!relativeDir) return null;

@@ -18,10 +18,6 @@ import {
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
-function normalizeString(value = "") {
-  return text(value);
-}
-
 export function normalizeTransferPayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
   const transferEnvelopes = normalizeTransferEnvelopes(source.transferEnvelopes || []);
@@ -191,8 +187,8 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         businessPoint: purpose,
         summary: "",
         detail: normalizedText,
-        name: normalizeString(name) || buildCapabilityArtifactName({ purpose }),
-        mimeType: normalizeString(mimeType) || "text/markdown",
+        name: text(name) || buildCapabilityArtifactName({ purpose }),
+        mimeType: text(mimeType) || "text/markdown",
         attachmentSource: ATTACHMENT_SOURCE.MODEL,
         generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
         source: TRANSFER_SOURCE.PLUGIN,

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { firstText, isPlainObject, text } from "@noobot/shared/value";
 import {
   SEMANTIC_TRANSFER_REGISTRATION,
   TRANSFER_REASON,
@@ -11,7 +11,6 @@ import {
   assertSemanticTransferRegistration,
   resolveTransferIntent,
 } from "@noobot/semantic-transfer-protocol";
-import { firstNormalizedString, normalizeString } from "../core/compact.js";
 import { createDirectTransferEnvelope } from "../storage/attachment-adapter.js";
 import { transferToolInput, transferToolOutput } from "./tool-transfer.js";
 import { normalizeToolResultOverflow } from "./tool-result-overflow.js";
@@ -28,11 +27,11 @@ const WORKFLOW_STRATEGY = SEMANTIC_TRANSFER_REGISTRATION.WORKFLOW_STRATEGIES;
 const HARNESS_STRATEGY = SEMANTIC_TRANSFER_REGISTRATION.HARNESS_STRATEGIES;
 
 function normalizeScenario(value = "") {
-  return normalizeString(value).toLowerCase();
+  return text(value).toLowerCase();
 }
 
 function normalizeStrategy(value = "") {
-  return normalizeString(value).toLowerCase();
+  return text(value).toLowerCase();
 }
 
 function normalizePayloadAndOptions(options = {}) {
@@ -116,26 +115,25 @@ async function transferAgentPluginSummaryInjection({
   ...options
 } = {}) {
   const injectMode =
-    normalizeString(options?.injectMode || options?.summaryInjectMode || "full").toLowerCase() ===
-    "summary"
+    text(options?.injectMode || options?.summaryInjectMode || "full").toLowerCase() === "summary"
       ? "summary"
       : "full";
-  const fullText = firstNormalizedString(
+  const fullText = firstText(
     options?.fullText,
     options?.rawSummaryText,
     options?.summaryFullText,
     options?.content,
     options?.text,
   );
-  const summaryText = firstNormalizedString(
+  const summaryText = firstText(
     options?.summary,
     options?.summaryText,
     options?.overviewText,
     fullText,
   );
-  const detailText = firstNormalizedString(options?.detail, options?.detailText);
+  const detailText = firstText(options?.detail, options?.detailText);
   const injectionMessage =
-    injectMode === "summary" ? summaryText : firstNormalizedString(fullText, summaryText);
+    injectMode === "summary" ? summaryText : firstText(fullText, summaryText);
   let detailTransfer = null;
   if (detailText && options?.saveDetailToAttachment === true) {
     detailTransfer = await transferAgentPluginStageMessage({

@@ -26,7 +26,6 @@ import {
   buildWorkflowUpstreamAttachmentSystemMessage,
 } from "./node-upstream-messages.js";
 import {
-  firstText,
   hasOwnObjectKey,
   isWorkflowAbortError,
   resolveWorkflowAbortSignal,
@@ -34,7 +33,7 @@ import {
   throwIfWorkflowAborted,
   withTimeout,
 } from "./runtime.js";
-import { text } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 
 function buildWorkflowNodeInstruction(step = {}) {
   const locale = text(step?.locale);

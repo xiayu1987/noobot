@@ -11,3 +11,11 @@ export function isPlainObject(value) {
 export function text(value) {
   return String(value ?? "").trim();
 }
+
+export function firstText(...values) {
+  for (const value of values) {
+    const candidate = text(value);
+    if (candidate) return candidate;
+  }
+  return "";
+}
