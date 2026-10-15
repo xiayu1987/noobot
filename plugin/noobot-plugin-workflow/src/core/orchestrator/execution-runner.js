@@ -60,6 +60,8 @@ function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = 
   const requiredFields = [
     "workflowRunId",
     "nodeExecutionId",
+    "nodeId",
+    "nodeName",
     "commandId",
     "dialogProcessId",
     "turnScopeId",
@@ -398,7 +400,7 @@ async function runWaveStep({
     action: action?.action || null,
     subSession: action?.subSession || null,
     nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(action),
-    nodeIdentity: action?.nodeIdentity || nodeIdentity || null,
+    nodeIdentity: action.nodeIdentity,
     upstreamNodeResults,
     order: idx,
   };

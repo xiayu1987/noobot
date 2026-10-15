@@ -226,7 +226,7 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
       const type = String(attrs.type || DSL_TYPES.NODE_STATE)
         .trim()
         .toLowerCase();
-      const name = String(attrs.name || id).trim();
+      const name = text(attrs.name) || id;
       if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.NODE_ID_REQUIRED, { locale }));
       if (nodeSet.has(id)) {
         failWithLocale(
@@ -245,7 +245,7 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
       const attachments = parseNodeAttachmentRefs(attrs.attachments || "");
       semantic.nodes.push({
         id,
-        name: name || id,
+        name,
         type,
         stateType: toStateType(attrs.stateType || attrs.state || ""),
         ...(task ? { task } : {}),

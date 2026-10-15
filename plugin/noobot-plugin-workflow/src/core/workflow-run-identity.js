@@ -33,13 +33,9 @@ export function resolveWorkflowRunId(ctx = {}) {
   return generated;
 }
 
-export function createWorkflowNodeIdentity({
-  workflowRunId = "",
-  node = {},
-  index = 0,
-  attempt = 1,
-} = {}) {
-  const nodeId = String(node?.id || node?.nodeId || node?.stepId || `node_${index}`).trim();
+export function createWorkflowNodeIdentity({ workflowRunId = "", node = {}, attempt = 1 } = {}) {
+  const nodeId = text(node?.id);
+  if (!nodeId) throw new TypeError("workflow node id is required");
   const nodeExecutionId = `${safeId(workflowRunId || "workflow")}_${safeId(nodeId)}_${Math.max(1, Number(attempt) || 1)}`;
   const dialogProcessId = createWorkflowNodeDialogProcessId(nodeExecutionId);
   const turnScopeId = createWorkflowNodeTurnScopeId(nodeExecutionId);
@@ -61,7 +57,7 @@ export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic
   const nodeById = new Map(nodes.map((node = {}) => [text(node?.id), node]));
   const now = new Date().toISOString();
   return nodes.map((node = {}, index) => {
-    const identity = createWorkflowNodeIdentity({ workflowRunId, node, index });
+    const identity = createWorkflowNodeIdentity({ workflowRunId, node });
     const nodeType = text(node?.type).toLowerCase();
     const executable = nodeType === "action";
     const dependencies = flowtos
@@ -70,7 +66,7 @@ export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic
       .filter((dependencyId) => nodeById.get(dependencyId)?.type === "action");
     return {
       ...identity,
-      nodeName: String(node?.name || identity.nodeId).trim(),
+      nodeName: text(node?.name),
       nodeType: node?.type ?? "",
       dependencies,
       status: executable ? (dependencies.length ? "pending" : "ready") : "pending",

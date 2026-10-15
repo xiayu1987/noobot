@@ -114,18 +114,13 @@ function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
   return payload;
 }
 
-function trimText(value) {
-  return text(value);
-}
-
-function resolveNodeResultIdentity({ nodeIdentity, pendingStep, transition }) {
-  const identity = nodeIdentity && typeof nodeIdentity === "object" ? nodeIdentity : {};
-  const step = pendingStep || {};
+function resolveNodeResultIdentity({ nodeIdentity, transition }) {
+  const identity = nodeIdentity;
   const numericTransition = Number(transition);
   return {
     identity,
-    nodeName: String(identity.nodeName || step.nodeName || step.nodeId || "workflow-node").trim(),
-    nodeId: trimText(identity.nodeId || step.nodeId),
+    nodeName: text(identity.nodeName),
+    nodeId: text(identity.nodeId),
     normalizedTransition: Number.isFinite(numericTransition) ? Math.floor(numericTransition) : 0,
   };
 }
@@ -136,11 +131,11 @@ function buildNodeResultBody({ locale, nodeName, nodeId, subSession, cleanOutput
     tWorkflow(locale, keys.NODE_RESULT_TITLE),
     "",
     tWorkflow(locale, keys.NODE_LINE, {
-      name: nodeName || tWorkflow(locale, keys.NODE_UNNAMED_FALLBACK),
+      name: nodeName,
     }),
-    tWorkflow(locale, keys.NODE_ID_LINE, { id: nodeId || "-" }),
-    tWorkflow(locale, keys.SUB_SESSION_LINE, { id: trimText(subSession.sessionId) || "-" }),
-    tWorkflow(locale, keys.DIALOG_LINE, { id: trimText(subSession.dialogProcessId) || "-" }),
+    tWorkflow(locale, keys.NODE_ID_LINE, { id: nodeId }),
+    tWorkflow(locale, keys.SUB_SESSION_LINE, { id: text(subSession.sessionId) || "-" }),
+    tWorkflow(locale, keys.DIALOG_LINE, { id: text(subSession.dialogProcessId) || "-" }),
     "",
     tWorkflow(locale, keys.FINAL_OUTPUT_TITLE),
     "",
@@ -152,12 +147,12 @@ function buildNodeResultBody({ locale, nodeName, nodeId, subSession, cleanOutput
 function buildNodeResultTransferMeta({ identity, subSession, normalizedTransition }) {
   return {
     transition: normalizedTransition,
-    workflowRunId: trimText(identity.workflowRunId),
-    nodeExecutionId: trimText(identity.nodeExecutionId),
-    commandId: trimText(identity.commandId),
-    dialogProcessId: trimText(identity.dialogProcessId || subSession.dialogProcessId),
-    turnScopeId: trimText(identity.turnScopeId),
-    nodeSessionId: trimText(subSession.sessionId),
+    workflowRunId: text(identity.workflowRunId),
+    nodeExecutionId: text(identity.nodeExecutionId),
+    commandId: text(identity.commandId),
+    dialogProcessId: text(identity.dialogProcessId),
+    turnScopeId: text(identity.turnScopeId),
+    nodeSessionId: text(subSession.sessionId),
   };
 }
 
@@ -186,7 +181,6 @@ export async function persistWorkflowNodeResultAttachment({
   options = {},
   ctx = {},
   subSession = null,
-  pendingStep = {},
   transition = 0,
   nodeIdentity = null,
 } = {}) {
@@ -196,7 +190,6 @@ export async function persistWorkflowNodeResultAttachment({
   if (!cleanOutput) return normalizeWorkflowTransferPayload();
   const { identity, nodeName, nodeId, normalizedTransition } = resolveNodeResultIdentity({
     nodeIdentity,
-    pendingStep,
     transition,
   });
   const body = buildNodeResultBody({ locale, nodeName, nodeId, subSession, cleanOutput });

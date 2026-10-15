@@ -100,7 +100,6 @@ export async function runNodeAgent({
   const resolvedNodeIdentity = resolveNodeAgentIdentity({
     nodeIdentity,
     instanceId,
-    pendingStep,
     ctx,
   });
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
@@ -153,7 +152,7 @@ export async function runNodeAgent({
   });
 }
 
-function resolveNodeAgentIdentity({ nodeIdentity, instanceId, pendingStep, ctx }) {
+function resolveNodeAgentIdentity({ nodeIdentity, instanceId, ctx }) {
   if (!nodeIdentity || typeof nodeIdentity !== "object") {
     throw new TypeError("workflow node identity is required");
   }
@@ -183,8 +182,6 @@ function resolveNodeAgentIdentity({ nodeIdentity, instanceId, pendingStep, ctx }
     turnScopeId,
     activeChildExecutionId,
     sessionId: firstText(nodeIdentity.sessionId),
-    nodeId: firstText(nodeIdentity.nodeId, pendingStep?.nodeId),
-    nodeName: firstText(nodeIdentity.nodeName, pendingStep?.nodeName),
   };
 }
 
@@ -399,7 +396,6 @@ async function persistWorkflowNodeSubSession(params, subSession) {
     options: params.options,
     ctx: params.ctx,
     subSession,
-    pendingStep: params.pendingStep,
     transition: params.transition,
     nodeIdentity: {
       ...params.resolvedNodeIdentity,

@@ -53,3 +53,11 @@ test("planning projection follows parsed flowtos and only action dependencies", 
   assert.ok(a.nodeExecutionId);
   assert.ok(a.turnScopeId);
 });
+
+test("node identity requires the semantic node id and does not read aliases", () => {
+  assert.throws(
+    () =>
+      createWorkflowNodeIdentity({ workflowRunId: "run-1", node: { nodeId: "a", stepId: "a" } }),
+    /workflow node id is required/,
+  );
+});

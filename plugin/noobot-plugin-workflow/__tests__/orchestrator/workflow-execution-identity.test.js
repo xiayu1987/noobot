@@ -219,3 +219,24 @@ test("runWorkflowExecution rejects missing workflow and planning identities", as
     /workflowRunId is required/,
   );
 });
+
+test("runWorkflowExecution rejects planning identity without nodeName", async () => {
+  const semantic = buildSemantic();
+  const workflowRunId = "wf_run_d1";
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+  const broken = planningNodeSessions.map((item) =>
+    item.nodeId === "a" ? { ...item, nodeName: "" } : item,
+  );
+  const { ctx } = buildCtx();
+  await assert.rejects(
+    runWorkflowExecution({
+      hookManager: { emit: async () => ({ outcomes: [] }) },
+      options: buildOptions(),
+      ctx,
+      semantic,
+      workflowRunId,
+      planningNodeSessions: broken,
+    }),
+    /incomplete workflow node identity for a attempt 1: nodeName/,
+  );
+});

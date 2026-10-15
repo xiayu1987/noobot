@@ -70,7 +70,6 @@ export const WORKFLOW_I18N_KEYSET = Object.freeze({
   PERSISTENCE: Object.freeze({
     NODE_RESULT_ATTACHMENT_TITLE: "workflowNodeResultAttachmentTitle",
     NODE_RESULT_TITLE: "workflowNodeResultTitle",
-    NODE_UNNAMED_FALLBACK: "workflowNodeUnnamedFallback",
     NODE_LINE: "workflowNodeLine",
     NODE_ID_LINE: "workflowNodeIdLine",
     SUB_SESSION_LINE: "workflowSubSessionLine",
@@ -121,7 +120,6 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowUpstreamFailureTitle: "## 上游失败节点",
     workflowUpstreamResultTitle: "## 上游结果附件",
     workflowNodeResultTitle: "# 工作流节点执行结果",
-    workflowNodeUnnamedFallback: "未命名节点",
     workflowNodeLine: "- 节点: {name}",
     workflowNodeIdLine: "- 节点ID: {id}",
     workflowSubSessionLine: "- 子会话: {id}",
@@ -185,7 +183,6 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowUpstreamFailureTitle: "## Upstream failed nodes",
     workflowUpstreamResultTitle: "## Upstream result attachments",
     workflowNodeResultTitle: "# Workflow node execution result",
-    workflowNodeUnnamedFallback: "Unnamed node",
     workflowNodeLine: "- Node: {name}",
     workflowNodeIdLine: "- Node ID: {id}",
     workflowSubSessionLine: "- Sub-session: {id}",
