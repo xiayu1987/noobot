@@ -70,7 +70,6 @@ async function transferToolStrategy({
       runtime,
       agentContext,
       identity: options.identity,
-      toolResultText: options.toolResultText ?? options.text ?? options.content ?? "",
     });
   }
   if (strategy === TOOL_STRATEGY.INPUT) {

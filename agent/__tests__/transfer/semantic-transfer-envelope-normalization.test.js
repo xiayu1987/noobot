@@ -82,3 +82,24 @@ test("semantic transfer emits validated V2 envelopes for direct tool output", as
   assert.equal(result.transferEnvelopes[0].payload.content, "validation");
   assert.equal(getTransferAttachments(result).length, 0);
 });
+
+test("tool transfer strategies read only their declared text field", async () => {
+  await assert.rejects(
+    transferSemanticContent({
+      scenario: "tool",
+      strategy: "tool_output",
+      content: "alias",
+      identity: identity(),
+      inlineMaxChars: 1024,
+    }),
+    /direct_content_required/,
+  );
+
+  const resultText = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_result_text",
+    text: "alias",
+    identity: identity(),
+  });
+  assert.equal(resultText.toolResultText, "");
+});
