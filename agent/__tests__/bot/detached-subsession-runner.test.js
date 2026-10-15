@@ -661,33 +661,47 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   );
 });
 
-test("detached terminal receipt adapts persisted Agent success and failure states", () => {
-  const completed = createDetachedTerminalReceipt({
-    executionId: "agent:child-1",
-    lifecycle: { state: "completed", executionId: "agent:child-1", revision: 5, sequence: 5 },
-  });
-  assert.deepEqual(completed, {
-    state: "completed",
-    executionId: "agent:child-1",
-    executionKind: "agent",
-    revision: 5,
-    sequence: 5,
-    failure: null,
-  });
-
-  const failed = createDetachedTerminalReceipt({
-    executionId: "agent:child-1",
-    failed: true,
-    lifecycle: {
-      state: "failed",
-      executionId: "agent:child-1",
-      revision: 4,
-      sequence: 4,
-      error: "model failed",
+test("detached sub-session failure receipt carries the committed turn failure", async () => {
+  const failureError = Object.assign(new Error("model failed"), { code: "model_failed" });
+  const { deps } = createDeps({
+    sessionRunner: {
+      async runSession() {
+        throw failureError;
+      },
     },
   });
-  assert.equal(failed.state, "processing_failed");
-  assert.deepEqual(failed.failure, { code: "CHILD_EXECUTION_FAILED", message: "model failed" });
+  const runner = createDetachedSubSessionRunner(deps);
+  await assert.rejects(
+    () =>
+      runner({
+        parentExecutionScope: createParentExecutionScope(),
+        parentContext: createParentContext(),
+        strategy: createCompleteStrategy(),
+      }),
+    (error) => {
+      assert.equal(error.lifecycle.state, "processing_failed");
+      assert.deepEqual(error.lifecycle.failure, {
+        phase: "processing",
+        code: "model_failed",
+        message: "model failed",
+        retryable: false,
+      });
+      return true;
+    },
+  );
+});
+
+test("detached terminal receipt projects the committed turn unchanged", () => {
+  const failure = { phase: "processing", code: "model_failed", message: "model failed" };
+  const turn = {
+    state: "processing_failed",
+    executionId: "agent:child-1",
+    revision: 4,
+    sequence: 4,
+    failure,
+  };
+  assert.deepEqual(createDetachedTerminalReceipt(turn), { ...turn, executionKind: "agent" });
+  assert.throws(() => createDetachedTerminalReceipt(undefined), /requires the committed turn/);
 });
 
 test("createDetachedSubSessionRunner requires userId and parentSessionId", async () => {

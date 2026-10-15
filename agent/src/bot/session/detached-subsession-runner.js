@@ -449,11 +449,7 @@ async function commitDetachedError(error, dependencies, request, runtime, identi
   const terminalLifecycle = stopped
     ? await commitDetachedStop(dependencies, lifecycle)
     : await commitDetachedFailure(error, lifecycle);
-  const receipt = createDetachedTerminalReceipt({
-    lifecycle: terminalLifecycle?.turn || error?.lifecycle,
-    executionId: identity.executionId,
-    failed: !stopped,
-  });
+  const receipt = createDetachedTerminalReceipt(terminalLifecycle.turn);
   const executionFailure = createExecutionFailure(error, receipt);
   emitDetachedTerminalEvent(
     lifecycle.factListener,
@@ -547,10 +543,7 @@ function projectDetachedResult(result, identity, prepared, terminalLifecycle) {
     sessionId: identity.subSessionId,
     parentSessionId: identity.parentSessionId,
     dialogProcessId,
-    lifecycle: createDetachedTerminalReceipt({
-      lifecycle: terminalLifecycle?.turn || result?.lifecycle,
-      executionId: prepared.mergedRunConfig.executionId,
-    }),
+    lifecycle: createDetachedTerminalReceipt(terminalLifecycle.turn),
     result: {
       sessionId: identity.subSessionId,
       parentSessionId: identity.parentSessionId,
