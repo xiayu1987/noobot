@@ -8,6 +8,7 @@ import vue from "@vitejs/plugin-vue";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { createChunkBudgetPlugin } from "./build/chunk-budget.js";
+import { text } from "@noobot/shared/value";
 
 const runtimeTopology = resolveRuntimeTopology(process.env);
 const devServerPort = Number(addressPort(runtimeTopology.clientAddr));
@@ -29,9 +30,7 @@ function resolveVendorChunk(moduleId = "") {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const connectToken = String(
-    env.VITE_PROXY_CONNECT_TOKEN || "5fd50423-d915-49d7-8e9a-62d93f33777b",
-  ).trim();
+  const connectToken = text(env.VITE_PROXY_CONNECT_TOKEN) || "5fd50423-d915-49d7-8e9a-62d93f33777b";
 
   return {
     plugins: [vue(), createChunkBudgetPlugin()],

@@ -61,9 +61,7 @@ function dedupeExists(messages = [], target = {}) {
 }
 
 function resolveHarnessMainFlowRole({ role = "system" } = {}) {
-  const requestedRole = String(role || "system")
-    .trim()
-    .toLowerCase();
+  const requestedRole = (text(role) || "system").toLowerCase();
   if (requestedRole === "user") return "user";
   return requestedRole || "system";
 }
@@ -111,9 +109,7 @@ export function injectMessageWithPolicy(
     return { injected: false, target: "ctx_messages", deduped: true };
   }
 
-  const normalizedInjectAt = String(injectAt || "append")
-    .trim()
-    .toLowerCase();
+  const normalizedInjectAt = (text(injectAt) || "append").toLowerCase();
   const shouldProtectContinuity =
     avoidBreakToolCallContinuity === true &&
     isSystemLikeMessageRole(resolvedRole) &&

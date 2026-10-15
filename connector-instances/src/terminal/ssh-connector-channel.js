@@ -133,21 +133,21 @@ function buildCommandEnvelope(command = "", token = "") {
 }
 
 export function parseSshCommandOutput(raw = "", token = "") {
-  const text = String(raw || "");
+  const inputText = String(raw || "");
   const beginMarker = `__NOOBOT_BEGIN_${token}__`;
   const doneMarker = `__NOOBOT_DONE_${token}__`;
-  const doneIndex = text.indexOf(doneMarker);
+  const doneIndex = inputText.indexOf(doneMarker);
   if (doneIndex < 0) return null;
-  const suffix = text.slice(doneIndex + doneMarker.length);
+  const suffix = inputText.slice(doneIndex + doneMarker.length);
   const lineEnd = suffix.search(/\r?\n/);
   if (lineEnd < 0) return null;
   const code = Number.parseInt(suffix.slice(0, lineEnd).trim(), 10);
-  const beginIndex = text.lastIndexOf(beginMarker, doneIndex);
+  const beginIndex = inputText.lastIndexOf(beginMarker, doneIndex);
   const bodyStart = beginIndex < 0 ? 0 : beginIndex + beginMarker.length;
   return {
     ok: code === 0,
     code: Number.isFinite(code) ? code : 1,
-    stdout: text
+    stdout: inputText
       .slice(bodyStart, doneIndex)
       .replace(ANSI_ESCAPE_PATTERN, "")
       .replace(/\r/g, "")

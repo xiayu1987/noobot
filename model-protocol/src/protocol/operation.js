@@ -71,9 +71,7 @@ export function normalizeModelOperation(input = {}) {
     "model operation",
   );
   rejectUnknownKeys(source, ["kind", "input", "options"], "model operation");
-  const kind = String(source.kind || MODEL_OPERATION_KIND.CHAT)
-    .trim()
-    .toLowerCase();
+  const kind = (text(source.kind) || MODEL_OPERATION_KIND.CHAT).toLowerCase();
   if (!OPERATION_KINDS.has(kind)) {
     throw new TypeError(`unsupported model operation: ${kind || "missing"}`);
   }

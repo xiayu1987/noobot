@@ -6,14 +6,10 @@
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { replaceMessageProjection } from "./message-store.js";
 import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { text } from "@noobot/shared/value";
 
 export function applyAgentResolvedModelMessages(point = "", ctx = {}, options = {}) {
-  if (
-    String(point || "")
-      .trim()
-      .toLowerCase() !== HOOK_POINT.AGENT.BEFORE_LLM_CALL
-  )
-    return false;
+  if (text(point).toLowerCase() !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return false;
   const modelContext = resolveAuthoritativeModelContext(ctx);
   if (!modelContext || !Array.isArray(modelContext.messages)) return false;
   const resolver = options.resolveModelMessages;

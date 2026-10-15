@@ -5,9 +5,10 @@
  */
 import { joinClientPath } from "@noobot/client-shared/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol/layout";
+import { text } from "@noobot/shared/value";
 
 export function e2eRunId() {
-  const runId = String(process.env.NOOBOT_E2E_RUN_ID || "").trim();
+  const runId = text(process.env.NOOBOT_E2E_RUN_ID);
   if (!runId) throw new Error("NOOBOT_E2E_RUN_ID is required");
   return runId;
 }

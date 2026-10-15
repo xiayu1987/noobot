@@ -77,7 +77,7 @@ async function searchTextSource({
   agentContext,
   runtime,
   query,
-  text,
+  text: inputText,
   isRegex,
   caseSensitive,
   contextLines,
@@ -100,7 +100,7 @@ async function searchTextSource({
     reason: "The model-declared risk and server-classified risk are combined at the highest level.",
   });
   const result = searchInText({
-    text: String(text || ""),
+    text: String(inputText || ""),
     query,
     isRegex,
     caseSensitive,
@@ -303,12 +303,12 @@ async function runSearch({ agentContext, runtime, workspaceIo, args }) {
     caseSensitive = false,
     path: inputPath = ".",
     glob = "",
-    text = "",
+    text: inputText = "",
     contextLines = DEFAULT_SEARCH_CONTEXT_LINES,
     maxResults = DEFAULT_SEARCH_MAX_RESULTS,
     riskLevel,
   } = args;
-  const normalizedSource = String(source || "files").trim() === "text" ? "text" : "files";
+  const normalizedSource = (text(source) || "files") === "text" ? "text" : "files";
   const normalizedQuery = String(query || "");
   if (!normalizedQuery) {
     return toToolJsonResult(TOOL_NAME.SEARCH, {
@@ -317,7 +317,7 @@ async function runSearch({ agentContext, runtime, workspaceIo, args }) {
     });
   }
   if (normalizedSource === "text") {
-    if (!String(text || "")) {
+    if (!String(inputText || "")) {
       return toToolJsonResult(TOOL_NAME.SEARCH, {
         ok: false,
         message: tTool(agentContext, "tools.search.textRequired"),
@@ -327,7 +327,7 @@ async function runSearch({ agentContext, runtime, workspaceIo, args }) {
       agentContext,
       runtime,
       query: normalizedQuery,
-      text,
+      text: inputText,
       isRegex,
       caseSensitive,
       contextLines,

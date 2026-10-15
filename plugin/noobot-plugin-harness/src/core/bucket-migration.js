@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HARNESS_BUCKET_VERSION } from "../capabilities/handlers/shared/constants.js";
+import { text } from "@noobot/shared/value";
 
 function objectField(target = {}, key = "") {
   const value = target?.[key];
@@ -45,11 +46,7 @@ function migratePlanUpdateState(state = {}) {
       pending.planUpdateContext && typeof pending.planUpdateContext === "object"
         ? pending.planUpdateContext
         : null;
-    if (
-      String(pending.planUpdateStage || "")
-        .trim()
-        .toLowerCase() === "refinement"
-    ) {
+    if (text(pending.planUpdateStage).toLowerCase() === "refinement") {
       pending.planRefinement = true;
       pending.planRefinementContext = context;
     } else {

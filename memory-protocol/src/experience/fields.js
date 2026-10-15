@@ -64,8 +64,8 @@ function createExperienceFields(definition = {}) {
   return Object.freeze(out);
 }
 
-export function parseExperienceFieldsText(text = "") {
-  const body = readMemoryDocumentBody(MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS, text);
+export function parseExperienceFieldsText(inputText = "") {
+  const body = readMemoryDocumentBody(MEMORY_DOCUMENT_KIND.EXPERIENCE_FIELDS, inputText);
   const definition = {};
   let stage = "";
   for (const [index, rawLine] of body.split("\n").entries()) {

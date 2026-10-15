@@ -73,10 +73,10 @@ function isAbsoluteDiffPath(value = "") {
 }
 
 function normalizePatchText(patch = "") {
-  const text = String(patch || "").replace(/\r\n/g, "\n");
-  const trimmed = text.trim();
+  const inputText = String(patch || "").replace(/\r\n/g, "\n");
+  const trimmed = inputText.trim();
   const fenced = /^```(?:diff|patch)?\n([\s\S]*?)\n```$/.exec(trimmed);
-  return fenced ? fenced[1] : text;
+  return fenced ? fenced[1] : inputText;
 }
 
 export function parseUnifiedDiff(patch = "", strip = 1) {

@@ -461,9 +461,7 @@ export async function runWorkflowExecution({
           pendingStep: item?.step || {},
         });
         const effectiveAction = {
-          type: String(item?.action?.type || WORKFLOW_ACTION.SUBMIT)
-            .trim()
-            .toLowerCase(),
+          type: (text(item?.action?.type) || WORKFLOW_ACTION.SUBMIT).toLowerCase(),
           stepIndex: resolvedStepIndex,
           ...(item?.action?.stepFailure && typeof item.action.stepFailure === "object"
             ? { stepFailure: item.action.stepFailure }

@@ -104,7 +104,7 @@ export function parseRequestPathname(request = null) {
 }
 
 export function buildClientPermissions(role = CLIENT_ROLE.USER) {
-  const normalizedRole = String(role || CLIENT_ROLE.USER).trim() || CLIENT_ROLE.USER;
+  const normalizedRole = text(role) || CLIENT_ROLE.USER || CLIENT_ROLE.USER;
   const isSuperAdmin = normalizedRole === CLIENT_ROLE.SUPER_ADMIN;
   return {
     role: normalizedRole,

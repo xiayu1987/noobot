@@ -132,10 +132,9 @@ function buildUpstreamFailureLine(result, nodeLabel, locale) {
     (result?.stepFailure && typeof result.stepFailure === "object");
   if (!failed) return "";
   const task = text(result?.nodeTask);
-  const message = String(
-    result?.stepFailure?.message ||
-      tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK),
-  ).trim();
+  const message =
+    text(result?.stepFailure?.message) ||
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK);
   const key = task
     ? WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITH_TASK
     : WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITHOUT_TASK;
@@ -148,10 +147,9 @@ function appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale) {
     ctx,
   );
   for (const [index, file] of transferFiles.entries()) {
-    const label = String(
-      file?.name ||
-        tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
-    ).trim();
+    const label =
+      text(file?.name) ||
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 });
     lines.push(`- ${nodeLabel} / ${label}: ${formatAttachmentIdentityRef(file?.identity)}`);
   }
 }

@@ -32,24 +32,21 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { materializeTurnTerminalMessages } from "@noobot/session-protocol";
 import { createChatRunService } from "../../services/chat-run-service.js";
+import { text } from "@noobot/shared/value";
 
 export function createProtocolTestCommand(payload = {}) {
   if (Number(payload?.protocolVersion) === 1) return payload;
-  const action = String(payload?.action || "")
-    .trim()
-    .toLowerCase();
-  const commandType = String(payload?.commandType || "")
-    .trim()
-    .toLowerCase();
+  const action = text(payload?.action).toLowerCase();
+  const commandType = text(payload?.commandType).toLowerCase();
   const config = payload?.config && typeof payload.config === "object" ? payload.config : {};
   const turnScopeId = String(payload?.turnScopeId || config?.turnScopeId || "test-turn").trim();
   const identity = {
-    sessionId: String(payload?.sessionId || "s1").trim(),
-    parentSessionId: String(payload?.parentSessionId || "").trim(),
+    sessionId: text(payload?.sessionId) || "s1",
+    parentSessionId: text(payload?.parentSessionId),
     dialogProcessId: String(
       payload?.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "",
     ).trim(),
-    parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
+    parentDialogProcessId: text(payload?.parentDialogProcessId),
     turnScopeId: String(turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim(),
   };
   const resolvedCommandId = String(payload?.commandId || turnScopeId).trim();
@@ -147,11 +144,11 @@ export function withTestBotAuthorities(suppliedBot = {}) {
     resolveExecutionIntent:
       suppliedBot.resolveExecutionIntent ||
       (async ({ turnScopeId = "", runConfig = {} } = {}) => {
-        const executionId = String(runConfig?.executionId || `agent:${turnScopeId}`).trim();
+        const executionId = text(runConfig?.executionId) || `agent:${turnScopeId}`;
         return {
           executionId,
-          executionKind: String(runConfig?.executionKind || "agent").trim(),
-          parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+          executionKind: text(runConfig?.executionKind) || "agent",
+          parentExecutionId: text(runConfig?.parentExecutionId),
           rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
           origin: {},
           stage: "",

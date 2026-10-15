@@ -29,7 +29,7 @@ export async function importGlbAsset({ blob, name, assetId, canonicalRotation = 
     return saveImportedAsset(
       {
         assetId: resolvedAssetId,
-        name: String(name || "character.glb").trim() || "character.glb",
+        name: text(name) || "character.glb" || "character.glb",
         format: "glb",
         size: blob.size,
         animations: (gltf.animations || []).map((clip) => ({

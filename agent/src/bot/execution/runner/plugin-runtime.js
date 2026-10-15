@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 export function buildSessionRuntimePluginResolvedEvent(runConfig = {}) {
   const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
     ? runConfig.selectedPlugins
@@ -17,9 +18,7 @@ export function buildSessionRuntimePluginResolvedEvent(runConfig = {}) {
         pluginId,
         {
           enabled: plugins?.[pluginId]?.enabled === true,
-          mode: String(plugins?.[pluginId]?.mode || "")
-            .trim()
-            .toLowerCase(),
+          mode: text(plugins?.[pluginId]?.mode).toLowerCase(),
         },
       ]),
     ),

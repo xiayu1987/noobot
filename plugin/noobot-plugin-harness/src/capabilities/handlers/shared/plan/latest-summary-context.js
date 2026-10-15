@@ -47,8 +47,10 @@ export function resolveLatestSummaryRelayText(ctx = {}) {
   for (let index = candidates.length - 1; index >= 0; index -= 1) {
     const message = candidates[index] || {};
     if (!isSummaryRelayMessage(message)) continue;
-    const text = stripSummaryRelayPrefix(message?.content ?? message?.lc_kwargs?.content ?? "");
-    if (text) return text;
+    const inputText = stripSummaryRelayPrefix(
+      message?.content ?? message?.lc_kwargs?.content ?? "",
+    );
+    if (inputText) return inputText;
   }
   return "";
 }

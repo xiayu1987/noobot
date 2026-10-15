@@ -48,7 +48,7 @@ async function transferCanonicalAttachment({
   assertParentAttachmentOwnership(attachmentSessionId, parentSessionId);
   assertCanonicalAttachmentService(attachmentService);
   const attachmentSource =
-    String(attachment?.attachmentSource || ATTACHMENT_SOURCE.USER).trim() || ATTACHMENT_SOURCE.USER;
+    text(attachment?.attachmentSource) || ATTACHMENT_SOURCE.USER || ATTACHMENT_SOURCE.USER;
   const parentRecord = await attachmentService.getAttachmentById({
     userId,
     attachmentId,
@@ -102,9 +102,7 @@ function assertCanonicalAttachmentService(attachmentService) {
 
 function createTransferredAttachment(attachment, parentRecord, sourceContent, attachmentId) {
   return {
-    clientAttachmentId: String(
-      attachment?.clientAttachmentId || `session-transfer:${attachmentId}`,
-    ).trim(),
+    clientAttachmentId: text(attachment?.clientAttachmentId) || `session-transfer:${attachmentId}`,
     name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
     mimeType: String(
       parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream",

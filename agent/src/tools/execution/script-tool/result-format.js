@@ -14,10 +14,10 @@ import { readFile } from "node:fs/promises";
 import { text } from "@noobot/shared/value";
 
 function formatCommandOutputWithLineNumbers(value = "") {
-  const text = String(value || "");
-  if (!text) return "";
-  const lines = splitLines(text);
-  if (text.endsWith("\n")) lines.pop();
+  const inputText = String(value || "");
+  if (!inputText) return "";
+  const lines = splitLines(inputText);
+  if (inputText.endsWith("\n")) lines.pop();
   return formatLinesWithNumbers(lines, 1);
 }
 

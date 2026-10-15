@@ -129,8 +129,8 @@ function toStateType(value = "") {
   return 0;
 }
 
-export function parseWorkflowDslText(text = "", options = {}) {
-  return parseWorkflowDslTextWithOptions(text, options);
+export function parseWorkflowDslText(inputText = "", options = {}) {
+  return parseWorkflowDslTextWithOptions(inputText, options);
 }
 
 function resolveDslDefaultNodeNames(locale = "zh-CN") {
@@ -145,11 +145,7 @@ function promoteBranchAndMergeStateTypes(semantic) {
     incomingCount.set(edge.to, Number(incomingCount.get(edge.to) || 0) + 1);
   }
   for (const node of semantic.nodes) {
-    if (
-      String(node?.type || DSL_TYPES.NODE_STATE)
-        .trim()
-        .toLowerCase() !== DSL_TYPES.NODE_STATE
-    ) {
+    if ((text(node?.type) || DSL_TYPES.NODE_STATE).toLowerCase() !== DSL_TYPES.NODE_STATE) {
       continue;
     }
     const id = text(node?.id);
@@ -170,9 +166,7 @@ const DSL_AUTO_TYPES = Object.freeze([
 ]);
 
 function parseAutoAction(attrs, { lineNo, locale, fail }) {
-  const type = String(attrs.type || DSL_TYPES.AUTO_SUBMIT)
-    .trim()
-    .toLowerCase();
+  const type = (text(attrs.type) || DSL_TYPES.AUTO_SUBMIT).toLowerCase();
   if (!DSL_AUTO_TYPES.includes(type)) {
     fail(lineNo, dslMessage(DSL_ERROR_MESSAGE.AUTO_TYPE_INVALID, { locale, params: { type } }));
   }
@@ -223,9 +217,7 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
     if (head === DSL_PROTOCOL.CMD_NODE) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const id = text(attrs.id);
-      const type = String(attrs.type || DSL_TYPES.NODE_STATE)
-        .trim()
-        .toLowerCase();
+      const type = (text(attrs.type) || DSL_TYPES.NODE_STATE).toLowerCase();
       const name = text(attrs.name) || id;
       if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.NODE_ID_REQUIRED, { locale }));
       if (nodeSet.has(id)) {
@@ -271,7 +263,7 @@ function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
       semantic.flowtos.push({
         from,
         to,
-        name: String(attrs.name || `${from}->${to}#${edgeIndex}`).trim(),
+        name: text(attrs.name) || `${from}->${to}#${edgeIndex}`,
       });
       continue;
     }

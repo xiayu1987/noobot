@@ -120,7 +120,7 @@ function resolveDetachedRuntime(request) {
     return getRuntimeFromAgentContext(parentExecutionScope);
   } catch (error) {
     emitEvent(eventListener, "detached_sub_session_scope_rejected", {
-      scopeId: String(metadata.scope || "detached_sub_session").trim(),
+      scopeId: text(metadata.scope) || "detached_sub_session",
       reason: "bindings.runtime_missing",
       error: error?.message || String(error),
     });
@@ -346,7 +346,7 @@ function createLifecycleIdentity(request, identity, config, persistenceContext, 
     parentExecutionId: config.parentExecutionId,
     rootExecutionId: config.rootExecutionId,
     origin: request.metadata?.origin || {},
-    stage: String(request.metadata?.scope || "detached_sub_session").trim(),
+    stage: text(request.metadata?.scope) || "detached_sub_session",
   };
 }
 
@@ -497,7 +497,7 @@ function commitDetachedFailure(error, lifecycle) {
     phase: TURN_PHASE.PROCESSING,
     failure: {
       phase: TURN_PHASE.PROCESSING,
-      code: String(error?.code || "detached_sub_session_failed").trim(),
+      code: text(error?.code) || "detached_sub_session_failed",
       message: String(error?.message || "detached sub-session failed"),
       retryable: false,
     },
@@ -512,7 +512,7 @@ function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, er
       executionId: identity.executionId,
       ...(stopped
         ? { reason: "user_stop" }
-        : { errorCode: String(error?.code || "detached_sub_session_failed").trim() }),
+        : { errorCode: text(error?.code) || "detached_sub_session_failed" }),
       state: text(terminalLifecycle?.turn?.state),
       revision: Number(terminalLifecycle?.turn?.revision || 0),
       sequence: Number(terminalLifecycle?.turn?.sequence || 0),

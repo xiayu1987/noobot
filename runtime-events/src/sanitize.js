@@ -4,14 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { sanitizeSensitiveFields } from "@noobot/sanitize";
+import { text } from "@noobot/shared/value";
 
 export function safeSegment(value = "unknown") {
-  return (
-    String(value || "unknown")
-      .trim()
-      .replace(/[^a-zA-Z0-9_.-]/g, "_")
-      .slice(0, 120) || "unknown"
-  );
+  return (text(value) || "unknown").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 120) || "unknown";
 }
 
 export function sanitizeValue(value, depth = 0) {

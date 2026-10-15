@@ -82,9 +82,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         ? toolCtx.harnessCapabilityLogs.length
         : 0;
       const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
-      const requestedMode = String(args?.mode || ACCEPTANCE_MODE.ACTIVE)
-        .trim()
-        .toLowerCase();
+      const requestedMode = (text(args?.mode) || ACCEPTANCE_MODE.ACTIVE).toLowerCase();
       const mode =
         requestedMode === ACCEPTANCE_MODE.FORCED ? ACCEPTANCE_MODE.FORCED : ACCEPTANCE_MODE.ACTIVE;
       if (state.flags.acceptanceRequested === true) {

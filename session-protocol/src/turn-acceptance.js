@@ -22,9 +22,7 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
     if (!text(input.content)) errors.push("accepted_user_message_content_required");
     if (!text(event.turnScopeId)) errors.push("accepted_user_message_turn_scope_required");
     if (!text(event.dialogProcessId)) errors.push("accepted_user_message_dialog_required");
-    const messageOrigin = String(input.messageOrigin || "")
-      .trim()
-      .toLowerCase();
+    const messageOrigin = text(input.messageOrigin).toLowerCase();
     if (!["natural", "internal"].includes(messageOrigin)) {
       errors.push("accepted_message_origin_required");
     }
@@ -38,9 +36,7 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
             content: text(input.content),
             messageId: text(input.messageId),
             parentDialogProcessId: text(input.parentDialogProcessId),
-            messageOrigin: String(input.messageOrigin || "")
-              .trim()
-              .toLowerCase(),
+            messageOrigin: text(input.messageOrigin).toLowerCase(),
             userMetaMaterialized: input.userMetaMaterialized === true,
           }
         : null,

@@ -17,9 +17,7 @@ const WORKFLOW_INSTANCE_STORE = new Map();
 let WORKFLOW_RUNTIME_ID_COUNTER = 0;
 
 function createActionByType(type = "") {
-  const key = String(type || "submit")
-    .trim()
-    .toLowerCase();
+  const key = (text(type) || "submit").toLowerCase();
   if (key === "audit") return new AuditAction();
   if (key === "back") return new BackAction();
   if (key === "stop") return new StopAction();
@@ -129,9 +127,9 @@ function markStepStateFailure(stepState = null, failure = {}) {
   return setStepStateWorkflowRuntime(stepState, {
     status: "failed",
     failure: {
-      source: String(normalizedFailure?.source || "workflow_node_agent").trim(),
-      code: String(normalizedFailure?.code || "WORKFLOW_NODE_AGENT_FAILED").trim(),
-      message: String(normalizedFailure?.message || "workflow node agent failed").trim(),
+      source: text(normalizedFailure?.source) || "workflow_node_agent",
+      code: text(normalizedFailure?.code) || "WORKFLOW_NODE_AGENT_FAILED",
+      message: text(normalizedFailure?.message) || "workflow node agent failed",
       ...(normalizedFailure?.detail && typeof normalizedFailure.detail === "object"
         ? { detail: normalizedFailure.detail }
         : {}),
@@ -190,9 +188,7 @@ export function advanceWorkflowInstance({
     controlCenter.execAction(action, bizinst, steps[safeIndex], treeRecord);
     transitions += 1;
     executedActions.push({
-      type: String(directive?.type || "submit")
-        .trim()
-        .toLowerCase(),
+      type: (text(directive?.type) || "submit").toLowerCase(),
       stepIndex: safeIndex,
       remainingSteps: snapshotCurrentSteps(bizinst).length,
     });

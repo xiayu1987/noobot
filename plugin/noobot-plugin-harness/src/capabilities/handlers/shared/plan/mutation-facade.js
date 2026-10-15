@@ -10,6 +10,7 @@ import {
   emitPlanMutationRejected,
   emitPlanMutationStageMismatchAutocoerced,
 } from "./mutation-observability.js";
+import { text } from "@noobot/shared/value";
 
 export function executePlanMutation({
   appendCapabilityLog,
@@ -48,9 +49,7 @@ export function executePlanMutation({
       mutationResult,
     });
     if (
-      String(stage || "")
-        .trim()
-        .toLowerCase() === "revision" &&
+      text(stage).toLowerCase() === "revision" &&
       mutationResult?.refinementPatchApplied?.changed === true
     ) {
       emitPlanMutationStageMismatchAutocoerced({

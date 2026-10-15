@@ -84,14 +84,14 @@ function isSensitiveField(field = {}) {
     /(密码|口令|密钥|私钥|公钥|连接串|连接字符串|凭证|令牌)/,
   ];
   if (sensitivePatterns.some((pattern) => pattern.test(merged))) return true;
-  return texts.some((text, index) =>
+  return texts.some((inputText, index) =>
     SENSITIVE_FIELD_KEYWORDS.some((keyword) => {
       const normalizedKeyword = normalizeSensitiveFieldText(keyword);
       const canonicalKeyword = canonicalSensitiveFieldText(keyword);
       return (
-        text.includes(normalizedKeyword) ||
+        inputText.includes(normalizedKeyword) ||
         canonicalTexts[index].includes(canonicalKeyword) ||
-        containsRelation(text, normalizedKeyword) ||
+        containsRelation(inputText, normalizedKeyword) ||
         containsRelation(canonicalTexts[index], canonicalKeyword)
       );
     }),
@@ -102,16 +102,16 @@ function isJsonStringTerminator(nextChar = "") {
   return nextChar === ":" || nextChar === "," || nextChar === "}" || nextChar === "]";
 }
 
-function findNextNonWhitespaceChar(text = "", startIndex = 0) {
-  for (let index = startIndex; index < text.length; index += 1) {
-    const char = text[index];
+function findNextNonWhitespaceChar(inputText = "", startIndex = 0) {
+  for (let index = startIndex; index < inputText.length; index += 1) {
+    const char = inputText[index];
     if (!/\s/.test(char)) return char;
   }
   return "";
 }
 
-function repairUnescapedQuotesInJsonStrings(text = "") {
-  const source = String(text || "");
+function repairUnescapedQuotesInJsonStrings(inputText = "") {
+  const source = String(inputText || "");
   let repaired = "";
   let inString = false;
   let escaping = false;

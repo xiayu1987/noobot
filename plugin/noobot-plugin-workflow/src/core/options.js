@@ -45,9 +45,7 @@ function normalizeWorkflowExtensions(input = null) {
 
 export function normalizeOptions(input = {}) {
   const source = input && typeof input === "object" ? input : {};
-  const mode = String(source?.mode ?? WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF)
-    .trim()
-    .toLowerCase();
+  const mode = (text(source?.mode) || WORKFLOW_PLUGIN_DEFAULTS.MODE_OFF).toLowerCase();
   const locale = normalizeWorkflowLocale(source?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE);
   const maxAutoTransitions = Number(source?.maxAutoTransitions);
   const maxParallelNodeAgents = Number(source?.maxParallelNodeAgents);

@@ -5,10 +5,11 @@
  */
 import { expect } from "@playwright/test";
 import { ADMISSION_RETRY_BUDGET_MS } from "../helpers/http-admission.js";
+import { text } from "@noobot/shared/value";
 
 export function readE2eCredentials(env = process.env) {
-  const userId = String(env.NOOBOT_E2E_USER_ID || "").trim();
-  const connectCode = String(env.NOOBOT_E2E_CONNECT_CODE || "").trim();
+  const userId = text(env.NOOBOT_E2E_USER_ID);
+  const connectCode = text(env.NOOBOT_E2E_CONNECT_CODE);
   if (!userId || !connectCode) {
     throw new Error("NOOBOT_E2E_USER_ID and NOOBOT_E2E_CONNECT_CODE are required");
   }

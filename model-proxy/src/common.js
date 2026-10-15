@@ -17,9 +17,9 @@ function sha256Text(value = "") {
     .digest("hex");
 }
 
-function tryParseJson(text = "") {
+function tryParseJson(inputText = "") {
   try {
-    return JSON.parse(String(text || ""));
+    return JSON.parse(String(inputText || ""));
   } catch {
     return null;
   }

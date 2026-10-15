@@ -130,7 +130,7 @@ export function registerAttachmentResource({
     logical: { view: "attachment", path: logicalPath },
     attachment: identity,
     size: attachment?.size,
-    mimeType: String(attachment?.mimeType || DEFAULT_MIME_TYPE).trim() || DEFAULT_MIME_TYPE,
+    mimeType: text(attachment?.mimeType) || DEFAULT_MIME_TYPE || DEFAULT_MIME_TYPE,
     capabilities,
     runtime,
     owner,

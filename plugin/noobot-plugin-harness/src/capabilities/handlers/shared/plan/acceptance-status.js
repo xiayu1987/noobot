@@ -97,8 +97,8 @@ export function parseAcceptanceItemsFromText(
   return items;
 }
 
-export function parsePlanAcceptanceItemsFromText(text = "") {
-  return parseAcceptanceItemsFromText(text);
+export function parsePlanAcceptanceItemsFromText(inputText = "") {
+  return parseAcceptanceItemsFromText(inputText);
 }
 
 function flattenPlanDocument(planDocument = {}) {
@@ -221,8 +221,8 @@ export function resetPlanAcceptanceStatusForPlanChange(
       taskStatus: TASK_ACCEPTANCE_STATUS.PENDING,
       source: "plan_change_reset",
       resetAt,
-      resetReason: String(reason || "plan_changed").trim() || "plan_changed",
-      resetStage: String(stage || "revision").trim() || "revision",
+      resetReason: text(reason) || "plan_changed" || "plan_changed",
+      resetStage: text(stage) || "revision" || "revision",
       planContent: nextContent,
     };
     resetCount += 1;

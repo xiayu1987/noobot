@@ -12,11 +12,10 @@ import {
   MARKDOWN_MIMES,
   NON_IMAGE_PREVIEW_MAX_BYTES,
 } from "./constants.js";
+import { text } from "@noobot/shared/value";
 
 function getFileExtension(fileName = "") {
-  const normalized = String(fileName || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(fileName).toLowerCase();
   const idx = normalized.lastIndexOf(".");
   return idx < 0 ? "" : normalized.slice(idx + 1);
 }
@@ -30,9 +29,7 @@ export function isImageFile(fileName = "") {
 }
 
 export function isTextPreviewFile(fileName = "") {
-  const normalized = String(fileName || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(fileName).toLowerCase();
   if (!normalized) return false;
   if (isMarkdownFile(normalized)) return true;
   if (["dockerfile", "makefile", "license", "readme", "changelog"].includes(normalized))
@@ -45,12 +42,8 @@ export function isOfficeFile(fileName = "") {
 }
 
 export function isMarkdownMime(mimeType = "", fileName = "") {
-  const mime = String(mimeType || "")
-    .trim()
-    .toLowerCase();
-  const name = String(fileName || "")
-    .trim()
-    .toLowerCase();
+  const mime = text(mimeType).toLowerCase();
+  const name = text(fileName).toLowerCase();
   return (
     MARKDOWN_MIMES.has(mime) ||
     name.endsWith(".md") ||
@@ -60,9 +53,7 @@ export function isMarkdownMime(mimeType = "", fileName = "") {
 }
 
 export function isTextPreviewMime(mimeType = "") {
-  const mime = String(mimeType || "")
-    .trim()
-    .toLowerCase();
+  const mime = text(mimeType).toLowerCase();
   if (!mime) return false;
   return (
     mime.startsWith("text/") ||
@@ -86,9 +77,7 @@ export function isTextPreviewMime(mimeType = "") {
 }
 
 export function isImagePreviewType(mimeType = "", fileName = "", isImageMimeChecker = () => false) {
-  const mime = String(mimeType || "")
-    .trim()
-    .toLowerCase();
+  const mime = text(mimeType).toLowerCase();
   return Boolean(isImageMimeChecker(mime)) || mime.startsWith("image/") || isImageFile(fileName);
 }
 
@@ -118,16 +107,12 @@ export function isNonImagePreviewOverSizeLimit({
 }
 
 export function isAudioPreviewMime(mimeType = "") {
-  const mime = String(mimeType || "")
-    .trim()
-    .toLowerCase();
+  const mime = text(mimeType).toLowerCase();
   return mime.startsWith("audio/");
 }
 
 export function isOfficeMime(mimeType = "") {
-  const mime = String(mimeType || "")
-    .trim()
-    .toLowerCase();
+  const mime = text(mimeType).toLowerCase();
   return (
     mime.includes("msword") ||
     mime.includes("officedocument") ||

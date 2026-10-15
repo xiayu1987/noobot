@@ -15,6 +15,7 @@ import {
   isCaseInsensitivePlatform,
   normalizePlatform,
 } from "@noobot/platform-compatibility/platform";
+import { text } from "@noobot/shared/value";
 
 export { PLATFORM as PATH_PLATFORMS } from "@noobot/platform-compatibility/platform";
 
@@ -62,7 +63,5 @@ export function joinPathForPlatform(basePath = "", ...segments) {
 }
 
 export function normalizeSlashPath(value = "") {
-  return String(value || "")
-    .trim()
-    .replaceAll("\\", "/");
+  return text(value).replaceAll("\\", "/");
 }

@@ -5,8 +5,8 @@
  */
 import { text } from "@noobot/shared/value";
 
-function textToBytes(text = "") {
-  return new TextEncoder().encode(String(text || ""));
+function textToBytes(inputText = "") {
+  return new TextEncoder().encode(String(inputText || ""));
 }
 
 function bytesToText(bytes = new Uint8Array()) {

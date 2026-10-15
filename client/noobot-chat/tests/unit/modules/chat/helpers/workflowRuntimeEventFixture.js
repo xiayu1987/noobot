@@ -9,6 +9,7 @@ import {
   workflowSequenceDomainForEvent,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 const ENVELOPE_FIELDS = new Set([
   "aggregateVersion",
@@ -55,7 +56,7 @@ export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
   return createEventEnvelope({
     family: EVENT_FAMILY.WORKFLOW_RUNTIME,
     identity: {
-      eventId: String(data.eventId || `${workflowRunId}:${eventType}:${sequence}`).trim(),
+      eventId: text(data.eventId) || `${workflowRunId}:${eventType}:${sequence}`,
       eventType,
       sessionId: authoritySessionId,
       turnScopeId: String(

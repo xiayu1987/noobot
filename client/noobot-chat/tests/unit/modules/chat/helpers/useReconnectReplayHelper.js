@@ -36,6 +36,7 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { workflowSequenceDomainForEvent } from "@noobot/event-protocol/workflow-runtime-event";
 import { classifyRealtimeLog } from "../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
+import { text } from "@noobot/shared/value";
 
 function createSession(id) {
   return {
@@ -268,9 +269,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     const lifecycleTerminal =
       event?.type === "backend_turn_lifecycle" &&
       ["turn.completed", "turn.stop_completed", "turn.failed"].includes(
-        String(event?.eventType || "")
-          .trim()
-          .toLowerCase(),
+        text(event?.eventType).toLowerCase(),
       );
     if (lifecycleTerminal) {
       return resolveTurnTerminalState(event?.sessionId, event?.turnScopeId, {
@@ -341,12 +340,12 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
   });
 
   const findCanonicalMessageById = vi.fn((sessionId, messageId) => {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedSessionId = text(sessionId);
+    const normalizedMessageId = text(messageId);
     if (!normalizedSessionId || !normalizedMessageId) return null;
     const targetSession = sessions.value.find((sessionItem) =>
       [sessionItem?.id, sessionItem?.sessionId, sessionItem?.sessionId].some(
-        (candidate) => String(candidate || "").trim() === normalizedSessionId,
+        (candidate) => text(candidate) === normalizedSessionId,
       ),
     );
     if (!targetSession) return null;
@@ -358,7 +357,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
   });
 
   const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
-    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedMessageId = text(messageId);
     if (!normalizedMessageId || !activeSession.value) return null;
     const existing = activeSession.value.messages.find(
       (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,

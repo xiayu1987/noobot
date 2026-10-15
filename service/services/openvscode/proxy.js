@@ -36,9 +36,9 @@ function normalizeProxyPath(url = "", queryKeyToStrip = "") {
     if (queryKeyToStrip) parsed.searchParams.delete(queryKeyToStrip);
     return `${parsed.pathname}${parsed.search}`;
   } catch {
-    const text = String(url || "/");
+    const inputText = String(url || "/");
     const parsed = new URL(
-      text.startsWith("/") ? `http://localhost${text}` : `http://localhost/${text}`,
+      inputText.startsWith("/") ? `http://localhost${inputText}` : `http://localhost/${inputText}`,
     );
     if (queryKeyToStrip) parsed.searchParams.delete(queryKeyToStrip);
     return `${parsed.pathname}${parsed.search}`;

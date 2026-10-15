@@ -44,7 +44,7 @@ function projectUserPresentationMessage({
     parentDialogProcessId,
     turnScopeId,
     role: "user",
-    type: String(currentUserMessage?.type || "message").trim(),
+    type: text(currentUserMessage?.type) || "message",
     content: String(currentUserMessage?.content || ""),
     attachments: projectPresentationAttachments(currentUserMessage?.attachments),
     messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),

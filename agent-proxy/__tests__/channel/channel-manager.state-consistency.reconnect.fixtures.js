@@ -13,6 +13,7 @@ import {
   createTurnSnapshotEnvelope,
   EVENT_FAMILY,
 } from "@noobot/event-protocol";
+import { text } from "@noobot/shared/value";
 
 export function authoritativeSnapshot(fields = {}) {
   return createTurnSnapshotEnvelope(
@@ -30,7 +31,7 @@ export function authoritativeSnapshot(fields = {}) {
 }
 
 export function authoritativeLifecycle(fields = {}) {
-  const eventType = String(fields.eventType || "").trim();
+  const eventType = text(fields.eventType);
   const stateByEvent = {
     [TURN_EVENT.ACTION_ACCEPTED]: "action_requesting",
     [TURN_EVENT.PROCESSING_STARTED]: "processing",

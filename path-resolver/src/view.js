@@ -11,11 +11,10 @@ import {
   normalizeSlashPath,
 } from "./platform.js";
 import { resolveSandboxPathMappings } from "./sandbox-mapping.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeView(view = "") {
-  const value = String(view || "")
-    .trim()
-    .toLowerCase();
+  const value = text(view).toLowerCase();
   return Object.values(PATH_VIEWS).includes(value) ? value : "";
 }
 

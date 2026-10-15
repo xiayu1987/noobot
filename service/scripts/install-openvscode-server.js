@@ -23,7 +23,7 @@ const installDir = path.resolve(
   serviceRoot,
   process.env.OPENVSCODE_SERVER_INSTALL_DIR || "vendor/openvscode-server",
 );
-const version = String(process.env.OPENVSCODE_SERVER_VERSION || "latest").trim() || "latest";
+const version = text(process.env.OPENVSCODE_SERVER_VERSION) || "latest" || "latest";
 const force = ["1", "true", "yes", "on"].includes(
   text(process.env.OPENVSCODE_SERVER_INSTALL_FORCE).toLowerCase(),
 );

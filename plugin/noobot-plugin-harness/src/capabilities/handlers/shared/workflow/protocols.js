@@ -6,6 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { HARNESS_SCENARIO, resolveHarnessScenarioFromOptions } from "./matrix-resolver.js";
+import { text } from "@noobot/shared/value";
 
 function resolveLocale(locale = LOCALE.ZH_CN) {
   return locale === LOCALE.EN_US ? LOCALE.EN_US : LOCALE.ZH_CN;
@@ -16,11 +17,7 @@ function normalizePatchActions(actions = []) {
   const picked = [
     ...new Set(
       (Array.isArray(actions) ? actions : [])
-        .map((item) =>
-          String(item || "")
-            .trim()
-            .toUpperCase(),
-        )
+        .map((item) => text(item).toUpperCase())
         .filter((item) => allowed.includes(item)),
     ),
   ];
@@ -227,12 +224,7 @@ export function buildSummaryPatchProtocolText(options = LOCALE.ZH_CN) {
 
 export function buildAcceptancePatchProtocolText({ locale = LOCALE.ZH_CN, mode = "final" } = {}) {
   const normalizedLocale = resolveLocale(locale);
-  const normalizedMode =
-    String(mode || "final")
-      .trim()
-      .toLowerCase() === "phase"
-      ? "phase"
-      : "final";
+  const normalizedMode = (text(mode) || "final").toLowerCase() === "phase" ? "phase" : "final";
   const title =
     normalizedMode === "phase"
       ? translateI18nText(

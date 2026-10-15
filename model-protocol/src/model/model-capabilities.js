@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 export const MODEL_MULTIMODAL_MODALITY = Object.freeze({
   IMAGE: "image",
   DOCUMENT: "document",
@@ -18,9 +19,9 @@ export const MODEL_IMAGE_GENERATION_API_TYPE = Object.freeze({
 const IMAGE_GENERATION_API_TYPES = new Set(Object.values(MODEL_IMAGE_GENERATION_API_TYPE));
 
 export function resolveModelImageGenerationApiType(modelSpec = {}) {
-  const apiType = String(modelSpec?.multimodal_generation?.support_generation?.api_type || "")
-    .trim()
-    .toLowerCase();
+  const apiType = text(
+    modelSpec?.multimodal_generation?.support_generation?.api_type,
+  ).toLowerCase();
   return IMAGE_GENERATION_API_TYPES.has(apiType)
     ? apiType
     : MODEL_IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES;
@@ -33,11 +34,7 @@ function normalizeModalities(value) {
     Array.from(
       new Set(
         (Array.isArray(value) ? value : [])
-          .map((item) =>
-            String(item || "")
-              .trim()
-              .toLowerCase(),
-          )
+          .map((item) => text(item).toLowerCase())
           .filter((item) => MULTIMODAL_MODALITIES.has(item)),
       ),
     ),
@@ -47,13 +44,7 @@ function normalizeModalities(value) {
 function normalizeRequiredModalities(value) {
   return Array.from(
     new Set(
-      (Array.isArray(value) ? value : [])
-        .map((item) =>
-          String(item || "")
-            .trim()
-            .toLowerCase(),
-        )
-        .filter(Boolean),
+      (Array.isArray(value) ? value : []).map((item) => text(item).toLowerCase()).filter(Boolean),
     ),
   );
 }

@@ -16,11 +16,12 @@ import {
 } from "./public-runtime-fixtures.js";
 import { registerHarnessCore as registerHarnessCoreImpl } from "../../src/index.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+import { text } from "@noobot/shared/value";
 
 function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
-  const roles = messages.map((item = {}) => String(item?.role || "").trim());
+  const roles = messages.map((item = {}) => text(item?.role));
   assert.equal(
     roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
     true,

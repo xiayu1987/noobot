@@ -244,7 +244,8 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     ...merged,
     ...safe,
     planningGuidanceMode:
-      String(safe.planningGuidanceMode || DEFAULT_OPTIONS.planningGuidanceMode).trim() ||
+      text(safe.planningGuidanceMode) ||
+      DEFAULT_OPTIONS.planningGuidanceMode ||
       DEFAULT_OPTIONS.planningGuidanceMode,
     summaryOnToolBurstThreshold:
       safe.enableToolBurstSummary === true || safe.summaryOnToolBurstThreshold === true,

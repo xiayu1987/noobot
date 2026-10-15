@@ -324,11 +324,7 @@ export function createPlanRevisionHelpers({
 
   function buildNextPhaseRelayContent(bucket = {}, locale = LOCALE?.ZH_CN, stage = "revision") {
     const normalizedStage =
-      String(stage || "revision")
-        .trim()
-        .toLowerCase() === "refinement"
-        ? "refinement"
-        : "revision";
+      (text(stage) || "revision").toLowerCase() === "refinement" ? "refinement" : "revision";
     const title =
       normalizedStage === "refinement"
         ? locale === LOCALE?.EN_US

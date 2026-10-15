@@ -78,7 +78,7 @@ export function compactOperationDirectoryForPrompt(operationDirectory = {}) {
   const source =
     operationDirectory && typeof operationDirectory === "object" ? operationDirectory : {};
   return {
-    relativePath: String(source.relativePath || DEFAULT_OPERATION_RELATIVE_PATH).trim(),
+    relativePath: text(source.relativePath) || DEFAULT_OPERATION_RELATIVE_PATH,
     absolutePath: text(source.absolutePath),
     view: text(source.view) === "sandbox" ? "sandbox" : "non_sandbox",
   };

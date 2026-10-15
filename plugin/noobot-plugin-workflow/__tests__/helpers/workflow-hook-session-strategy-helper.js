@@ -23,6 +23,7 @@ import {
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
 } from "../../frontend/utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 export function createMockBotHookManager() {
   const listeners = new Map();
@@ -31,12 +32,12 @@ export function createMockBotHookManager() {
     listeners,
     emits,
     on(point, handler, options = {}) {
-      listeners.set(String(point || "").trim(), { handler, options });
-      return () => listeners.delete(String(point || "").trim());
+      listeners.set(text(point), { handler, options });
+      return () => listeners.delete(text(point));
     },
     async emit(point, payload) {
-      emits.push({ point: String(point || "").trim(), payload });
-      if (String(point || "").trim() === HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE) {
+      emits.push({ point: text(point), payload });
+      if (text(point) === HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE) {
         return {
           outcomes: [
             {
@@ -46,7 +47,7 @@ export function createMockBotHookManager() {
           ],
         };
       }
-      const record = listeners.get(String(point || "").trim());
+      const record = listeners.get(text(point));
       if (!record || typeof record.handler !== "function") {
         return { outcomes: [], failures: [] };
       }
@@ -181,7 +182,7 @@ export function createSemanticTransferTool({
       ) {
         return { transferEnvelopes: [] };
       }
-      const strategyKey = String(strategy || "").trim();
+      const strategyKey = text(strategy);
       const counters =
         counterRef.byStrategy instanceof Map
           ? counterRef.byStrategy
@@ -189,7 +190,7 @@ export function createSemanticTransferTool({
       const scopedCount = Number(counters.get(strategyKey) || 0) + 1;
       counters.set(strategyKey, scopedCount);
       counterRef.value += 1;
-      const nodeName = String(messages?.[0]?.nodeName || `节点${counterRef.value}`).trim();
+      const nodeName = text(messages?.[0]?.nodeName) || `节点${counterRef.value}`;
       const fileName = `workflow-node-${scopedCount}-${nodeName}-result.md`;
       const attachmentId = `${prefix}-${scopedCount}`;
       const effectiveSessionId = String(
@@ -232,8 +233,7 @@ export function createSemanticTransferTool({
       });
       return {
         transferEnvelopes: [envelope],
-        ...(String(payload?.strategy || "") === "workflow_subagent" &&
-        String(payload?.content || "").trim()
+        ...(String(payload?.strategy || "") === "workflow_subagent" && text(payload?.content)
           ? { injectionMessage: String(payload.content).trim() }
           : {}),
       };
@@ -280,24 +280,24 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
     target.runConfig && typeof target.runConfig === "object"
       ? target.runConfig
       : (target.runConfig = {});
-  const sessionId = String(target.sessionId || "test-session").trim();
-  const dialogProcessId = String(target.dialogProcessId || "test-dialog").trim();
-  if (!String(runConfig.turnScopeId || "").trim()) {
+  const sessionId = text(target.sessionId) || "test-session";
+  const dialogProcessId = text(target.dialogProcessId) || "test-dialog";
+  if (!text(runConfig.turnScopeId)) {
     runConfig.turnScopeId = `test-turn:${sessionId}:${dialogProcessId}`;
   }
-  if (!String(runConfig.commandId || "").trim()) {
+  if (!text(runConfig.commandId)) {
     runConfig.commandId = runConfig.turnScopeId;
   }
-  if (!String(runConfig.executionId || "").trim()) {
+  if (!text(runConfig.executionId)) {
     runConfig.executionId = deriveAgentExecutionId({ turnScopeId: runConfig.turnScopeId });
   }
-  if (!String(runConfig.rootExecutionId || "").trim()) {
+  if (!text(runConfig.rootExecutionId)) {
     runConfig.rootExecutionId = runConfig.executionId;
   }
-  if (!String(runConfig.messageId || "").trim()) {
+  if (!text(runConfig.messageId)) {
     runConfig.messageId = `test-message:${sessionId}:${dialogProcessId}`;
   }
-  if (!String(runConfig.presentationMessageId || "").trim()) {
+  if (!text(runConfig.presentationMessageId)) {
     runConfig.presentationMessageId = `test-presentation:${sessionId}:${dialogProcessId}`;
   }
   const existingAgentContext =
@@ -338,7 +338,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
           identity: {
             ...identity,
             eventId: `test-event:${stream}:${sequence}`,
-            sessionId: String(authoritySessionId || "").trim(),
+            sessionId: text(authoritySessionId),
           },
           causality,
           ordering: { ...ordering, sequence, aggregateVersion: sequence },
@@ -370,7 +370,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   }
   if (typeof runtime.materializePendingCurrentTurnMessageEvents !== "function") {
     runtime.materializePendingCurrentTurnMessageEvents = ({ messageId } = {}) => {
-      assert.ok(String(messageId || "").trim(), "materializer requires messageId");
+      assert.ok(text(messageId), "materializer requires messageId");
       return { activityTimeline: [], toolTimeline: [] };
     };
   }
@@ -400,7 +400,7 @@ export async function runWorkflowHook({ options = {}, context = {} } = {}) {
 }
 
 export function callsByNodeName(calls = []) {
-  return new Map(calls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]));
+  return new Map(calls.map((call) => [text(call?.metadata?.nodeName), call]));
 }
 
 export function workflowTurn(agentResult) {

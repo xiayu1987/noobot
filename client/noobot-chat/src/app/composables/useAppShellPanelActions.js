@@ -5,6 +5,7 @@
  */
 import { PSEUDO_PANEL } from "./useAppShellPseudoRoute.js";
 import { updateDrawerModelVisibility } from "../runtime/appShellEventHandlers.js";
+import { text } from "@noobot/shared/value";
 
 export function useAppShellPanelActions({
   userId,
@@ -55,7 +56,7 @@ export function useAppShellPanelActions({
   async function openUserSettings() {
     if (!ensureConnected?.()) return;
     if (!isSuperAdmin?.value) {
-      const currentRole = String(apiRole?.value || "user").trim() || "user";
+      const currentRole = text(apiRole?.value) || "user" || "user";
       notify?.({
         type: "warning",
         message: `${translate("common.superAdminOnly")} (role=${currentRole})`,

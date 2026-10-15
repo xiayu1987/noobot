@@ -12,6 +12,7 @@ import { readE2eCredentials } from "./fixtures/auth.fixture.js";
 import { admissionRetryDelayMs } from "./helpers/http-admission.js";
 import { workspaceRoot } from "./helpers/persistence-audit.js";
 import { e2eRunId, runOpsWorkdir, runOpsWorkdirPath } from "./helpers/run-ops-workdir.js";
+import { text } from "@noobot/shared/value";
 
 const REGISTRY_FILE = "suite-sessions.json";
 
@@ -58,8 +59,8 @@ async function readRegistry() {
 }
 
 export async function registerSuiteSession(record) {
-  const userId = String(record?.userId || "").trim();
-  const sessionId = String(record?.sessionId || "").trim();
+  const userId = text(record?.userId);
+  const sessionId = text(record?.sessionId);
   if (!userId || !sessionId) {
     throw new Error("E2E cleanup registration requires userId and sessionId");
   }
@@ -129,7 +130,7 @@ async function assertUnfilteredFullSuite(config, suite) {
 
 export default class SuiteSessionCleanupReporter {
   constructor({ failureEvidenceRoot } = {}) {
-    this.failureEvidenceRoot = String(failureEvidenceRoot || "").trim();
+    this.failureEvidenceRoot = text(failureEvidenceRoot);
     if (!path.isAbsolute(this.failureEvidenceRoot)) {
       throw new Error("Suite Session cleanup requires an absolute failureEvidenceRoot");
     }

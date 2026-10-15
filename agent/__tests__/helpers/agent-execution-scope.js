@@ -6,6 +6,7 @@
 
 import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
+import { text } from "@noobot/shared/value";
 
 export function createTestAgentExecutionScope(
   runtime = {},
@@ -37,14 +38,14 @@ export function createTestAgentExecutionScope(
         systemRuntime?.config?.turnScopeId ||
         "t-1",
     ).trim(),
-    runId: String(identity.runId || "r-1").trim(),
+    runId: text(identity.runId) || "r-1",
     messageId: String(identity.messageId || systemRuntime?.messageId || "m-1").trim(),
   };
   const context = createAgentContextBuildEnvelope({
     identity: resolvedIdentity,
     environment: {
       os: { platform: process.platform, arch: process.arch },
-      workspace: { basePath: String(runtime?.basePath || "").trim() },
+      workspace: { basePath: text(runtime?.basePath) },
       permissions: { isSuperUser: runtime?.systemRuntime?.isSuperUser === true },
       ...environment,
     },

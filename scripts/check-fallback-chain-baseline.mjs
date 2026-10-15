@@ -6,9 +6,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { Linter } from "eslint";
 import * as espree from "espree";
 import * as prettier from "prettier";
-import { parse as parseVue } from "vue-eslint-parser";
+import vueParser, { parse as parseVue } from "vue-eslint-parser";
 import {
   getFirstPartyCodeFiles,
   isFirstPartyProductionPath,
@@ -94,28 +95,56 @@ export function findFallbackChains(source, filename = "source.js") {
   return chains;
 }
 
-function isStringCall(node) {
+function isSingleArgumentCall(node, name) {
   return (
     node.type === "CallExpression" &&
     node.callee.type === "Identifier" &&
-    node.callee.name === "String" &&
+    node.callee.name === name &&
     node.arguments.length === 1
   );
+}
+
+function isFallbackExpression(node) {
+  return node.type === "LogicalExpression" && FALLBACK_OPERATORS.has(node.operator);
 }
 
 export function findInlineTrimFallbacks(source, filename = "source.js") {
   const hits = [];
   walk(parseSource(source, filename), null, (node) => {
+    if (isSingleArgumentCall(node, "text")) {
+      if (isFallbackExpression(node.arguments[0])) hits.push(snippet(source, node));
+      return;
+    }
     if (node.type !== "CallExpression" || node.arguments.length) return;
     const callee = unwrapMember(node.callee);
     if (callee.type !== "MemberExpression" || callee.computed) return;
-    if (callee.property.name !== "trim" || !isStringCall(callee.object)) return;
-    const argument = callee.object.arguments[0];
-    if (argument.type === "LogicalExpression" && FALLBACK_OPERATORS.has(argument.operator)) {
-      hits.push(snippet(source, node));
-    }
+    if (callee.property.name !== "trim" || !isSingleArgumentCall(callee.object, "String")) return;
+    if (isFallbackExpression(callee.object.arguments[0])) hits.push(snippet(source, node));
   });
   return hits;
+}
+
+const TEXT_IMPORT = /import\s*\{[^}]*\btext\b[^}]*\}\s*from/;
+const shadowLinter = new Linter({ configType: "flat" });
+const SHADOW_CONFIG = [
+  {
+    files: ["**/*.{js,mjs,cjs,jsx}"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module" },
+    rules: { "no-shadow": "error" },
+  },
+  {
+    files: ["**/*.vue"],
+    languageOptions: { parser: vueParser, ecmaVersion: "latest", sourceType: "module" },
+    rules: { "no-shadow": "error" },
+  },
+];
+
+export function findTextShadowing(source, filename = "source.js") {
+  if (!TEXT_IMPORT.test(source)) return [];
+  return shadowLinter
+    .verify(source, SHADOW_CONFIG, { filename })
+    .filter((message) => message.ruleId === "no-shadow" && message.message.startsWith("'text' "))
+    .map((message) => ({ line: message.line, code: message.message }));
 }
 
 export const RULES = Object.freeze({
@@ -130,6 +159,12 @@ export const RULES = Object.freeze({
     find: findInlineTrimFallbacks,
     includeFile: (file) => !isTestFilePath(file),
     hint: 'use text(x) from "@noobot/shared/value" instead of String(x || d).trim()',
+  },
+  textShadow: {
+    title: "遮蔽 text()",
+    find: findTextShadowing,
+    includeFile: () => true,
+    hint: "rename the local binding; files importing text() must not rebind text",
   },
 });
 

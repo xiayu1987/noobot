@@ -82,9 +82,7 @@ export function useMessageMeta({ getMessageItem = () => ({}), getRuntimeView = n
 
   const statusStepState = computed(() => {
     const messageItem = getMessageItem() || {};
-    const turnScopeId = String(
-      messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem),
-    ).trim();
+    const turnScopeId = text(messageItem?.statusTurnScopeId) || getMessageTurnScopeId(messageItem);
     const turnRuntime = resolveTurnRuntimeByScope(turnRuntimeRegistry.value, turnScopeId, {
       sessionId: text(messageItem?.sessionId),
     });

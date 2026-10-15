@@ -20,7 +20,7 @@ const defaultBaseUrl = `http://${clientTopology.loopbackHost}:${addressPort(clie
 const baseUrl = String(process.env.NOOBOT_E2E_BASE_URL || defaultBaseUrl).replace(/\/$/, "");
 const userId = text(process.env.NOOBOT_E2E_USER_ID);
 const connectCode = text(process.env.NOOBOT_E2E_CONNECT_CODE);
-const modelAlias = String(process.env.NOOBOT_E2E_MODEL_ALIAS || "gpt_5_4").trim();
+const modelAlias = text(process.env.NOOBOT_E2E_MODEL_ALIAS) || "gpt_5_4";
 if (!userId || !connectCode) {
   throw new Error("NOOBOT_E2E_USER_ID and NOOBOT_E2E_CONNECT_CODE are required");
 }

@@ -95,33 +95,31 @@ function normalizeCssModifier(value = "") {
 
 function parseMarkerAttributes(input = "") {
   const attrs = {};
-  const text = String(input || "");
+  const inputText = String(input || "");
   const attrRe = /([A-Za-z0-9_-]+)="([^"]*)"/g;
-  let match = attrRe.exec(text);
+  let match = attrRe.exec(inputText);
   while (match) {
     attrs[match[1]] = match[2]
       .replace(/&quot;/g, '"')
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&amp;/g, "&");
-    match = attrRe.exec(text);
+    match = attrRe.exec(inputText);
   }
   return attrs;
 }
 
-function renderMarkdownSegment(text = "", renderEnv = {}) {
-  const content = String(text || "");
+function renderMarkdownSegment(inputText = "", renderEnv = {}) {
+  const content = String(inputText || "");
   if (!content.trim()) return "";
   return md.render(normalizeMermaidMarkdown(content), renderEnv);
 }
 
 function buildCollapseHtml({ attrs = {}, innerMarkdown = "", renderEnv = {} } = {}) {
-  const kind = String(attrs.kind || "unknown").trim() || "unknown";
+  const kind = text(attrs.kind) || "unknown" || "unknown";
   const kindClass = normalizeCssModifier(kind);
   const title = String(attrs.title || kind).trim() || kind;
-  const defaultState = String(attrs.default || "closed")
-    .trim()
-    .toLowerCase();
+  const defaultState = (text(attrs.default) || "closed").toLowerCase();
   const openAttr = defaultState === "open" ? " open" : "";
   const renderedInner = renderMarkdownSegment(innerMarkdown, renderEnv);
   return [
@@ -207,8 +205,11 @@ function renderCollapsibleMarkdown(rawText = "", renderEnv = {}) {
 }
 
 export function useMarkdownRenderer() {
-  function renderMarkdown(text, { attachmentRefIndex = null, workspaceFileLinks = false } = {}) {
-    return renderCollapsibleMarkdown(text || "", { attachmentRefIndex, workspaceFileLinks });
+  function renderMarkdown(
+    inputText,
+    { attachmentRefIndex = null, workspaceFileLinks = false } = {},
+  ) {
+    return renderCollapsibleMarkdown(inputText || "", { attachmentRefIndex, workspaceFileLinks });
   }
 
   return {

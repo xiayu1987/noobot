@@ -140,20 +140,16 @@ function sanitizeForHookClient(value, depth = 0, seen = new WeakSet()) {
 }
 
 function truncateHookProgressText(value) {
-  const text = String(value ?? "");
-  return text.length > HOOK_PROGRESS_TEXT_LIMIT
-    ? `${text.slice(0, HOOK_PROGRESS_TEXT_LIMIT)}...`
-    : text;
+  const inputText = String(value ?? "");
+  return inputText.length > HOOK_PROGRESS_TEXT_LIMIT
+    ? `${inputText.slice(0, HOOK_PROGRESS_TEXT_LIMIT)}...`
+    : inputText;
 }
 
 function isHookPluginProgressTraceEnabled(runtime = {}) {
   const raw = runtime?.systemRuntime?.hookPluginProgressTrace ?? runtime?.hookPluginProgressTrace;
   if (raw === true) return true;
-  return HOOK_PROGRESS_VERBOSE_ENABLED_VALUES.has(
-    String(raw ?? "")
-      .trim()
-      .toLowerCase(),
-  );
+  return HOOK_PROGRESS_VERBOSE_ENABLED_VALUES.has(text(raw).toLowerCase());
 }
 
 function isImportantHookPluginProgress(event = "", data = {}) {

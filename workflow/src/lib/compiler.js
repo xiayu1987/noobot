@@ -49,14 +49,8 @@ export function compileWorkflowSemantic(semantic = {}) {
   const nodeMap = new Map();
 
   for (const nodeDef of nodeDefs) {
-    const isAction =
-      String(nodeDef?.type || "state")
-        .trim()
-        .toLowerCase() === "action";
-    const isComposite =
-      String(nodeDef?.type || "state")
-        .trim()
-        .toLowerCase() === "composite";
+    const isAction = (text(nodeDef?.type) || "state").toLowerCase() === "action";
+    const isComposite = (text(nodeDef?.type) || "state").toLowerCase() === "composite";
     const node = isAction ? new ActionNode() : isComposite ? new CompositeNode() : new StateNode();
     node.workflowNodeId = text(nodeDef?.id);
     node.setName(String(nodeDef?.name || nodeDef?.id || "node").trim());
@@ -78,7 +72,7 @@ export function compileWorkflowSemantic(semantic = {}) {
     if (!startNode || !endNode) continue;
 
     const flowto = new Flowto();
-    flowto.setName(String(flowDef?.name || `flowto_${index + 1}`).trim());
+    flowto.setName(text(flowDef?.name) || `flowto_${index + 1}`);
     if (typeof flowDef?.condition === "string" && flowDef.condition.trim()) {
       flowto.setCondition(flowDef.condition.trim());
     }

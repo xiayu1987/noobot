@@ -6,8 +6,8 @@
 import { dedupeTextList, stripMarkdownFence } from "../text.js";
 import { text } from "@noobot/shared/value";
 
-function normalizeText(text = "") {
-  return stripMarkdownFence(String(text || ""))
+function normalizeText(inputText = "") {
+  return stripMarkdownFence(String(inputText || ""))
     .replace(/\r\n?/g, "\n")
     .trim();
 }

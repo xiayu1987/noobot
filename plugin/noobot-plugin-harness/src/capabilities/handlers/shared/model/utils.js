@@ -6,9 +6,7 @@
 import { text } from "@noobot/shared/value";
 
 export function resolvePlanningGuidanceMode(meta = {}) {
-  return String(meta?.harness?.planningGuidanceMode || "separate_model")
-    .trim()
-    .toLowerCase();
+  return (text(meta?.harness?.planningGuidanceMode) || "separate_model").toLowerCase();
 }
 
 export function shouldUseSeparateModel(meta = {}) {

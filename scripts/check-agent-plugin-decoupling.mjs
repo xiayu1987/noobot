@@ -65,9 +65,9 @@ const violations = [];
 
 for (const file of walk(TARGET_ROOT)) {
   const relPath = toPosix(path.relative(ROOT, file));
-  const text = readFileSync(file, "utf8");
+  const inputText = readFileSync(file, "utf8");
   const matches = collectImportMatches(
-    text,
+    inputText,
     (specifier) =>
       /(?:^|[/@])noobot-plugin-(?:harness|workflow)(?:[/]|$)/i.test(specifier) ||
       /(?:^|\/)plugin\/noobot-plugin-(?:harness|workflow)(?:\/|$)/i.test(specifier),
@@ -80,8 +80,8 @@ for (const file of walk(TARGET_ROOT)) {
 if (statExists(PLUGIN_ROOT)) {
   for (const file of walk(PLUGIN_ROOT)) {
     const relPath = toPosix(path.relative(ROOT, file));
-    const text = readFileSync(file, "utf8");
-    const matches = collectImportMatches(text, (specifier) =>
+    const inputText = readFileSync(file, "utf8");
+    const matches = collectImportMatches(inputText, (specifier) =>
       /(?:^|\/)agent\/src\//.test(specifier),
     );
     if (matches.length) violations.push({ relPath, count: matches.length, matches });

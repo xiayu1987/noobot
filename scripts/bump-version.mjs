@@ -10,6 +10,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { format, resolveConfig } from "prettier";
+import { text } from "@noobot/shared/value";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
@@ -29,9 +30,7 @@ const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 export function normalizeVersion(input = "") {
-  return String(input || "")
-    .trim()
-    .replace(/^v/, "");
+  return text(input).replace(/^v/, "");
 }
 
 export function assertVersion(version = "") {

@@ -5,6 +5,7 @@
  */
 import { expect } from "@playwright/test";
 import { assertFileMutationResult } from "@noobot/file-mutation-protocol";
+import { text } from "@noobot/shared/value";
 
 export function assertCanonicalAttachment(actual, expected) {
   const identity = actual?.identity || actual;
@@ -96,7 +97,7 @@ export async function assertAttachmentHttpAccess(
     expectedName = "",
   } = {},
 ) {
-  const authenticatedApiKey = String(apiKey || "").trim();
+  const authenticatedApiKey = text(apiKey);
   expect(authenticatedApiKey).toBeTruthy();
   const url =
     `/api/internal/attachment/${encodeURIComponent(userId)}/${encodeURIComponent(attachmentId)}` +
@@ -122,7 +123,7 @@ export async function readRenderedFileNames(
     ? `${cardSelector}${sourceSelector}:has(.attachment-owner-badge.${badgeClass}) .file-name`
     : `${cardSelector}${sourceSelector} .file-name`;
   return (await page.locator(selector).allTextContents())
-    .map((name) => String(name || "").trim())
+    .map((name) => text(name))
     .filter(Boolean)
     .sort();
 }

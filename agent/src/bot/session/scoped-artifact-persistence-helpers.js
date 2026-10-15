@@ -60,7 +60,7 @@ export class ScopedArtifactPersistenceHelpers {
       absoluteDir,
     });
     if (!outputDir) throw new Error(outputDirError);
-    const normalizedFileName = String(fileName || "payload.json").trim() || "payload.json";
+    const normalizedFileName = text(fileName) || "payload.json" || "payload.json";
     if (normalizedFileName.includes("/") || normalizedFileName.includes("\\")) {
       throw new Error(fileNameError);
     }
@@ -155,12 +155,12 @@ export class ScopedArtifactPersistenceHelpers {
       if (!normalizedUserId || !normalizedSessionId) return [];
       const artifactList = Array.isArray(artifacts) ? artifacts : [];
       if (!artifactList.length) return [];
-      const normalizedGenerationSource = String(generationSource || "generated_artifact").trim();
+      const normalizedGenerationSource = text(generationSource) || "generated_artifact";
       const records = await attachmentService.ingestGeneratedArtifacts({
         userId: normalizedUserId,
         sessionId: normalizedSessionId,
         attachmentSource:
-          String(attachmentSource || ATTACHMENT_SOURCE.MODEL).trim() || ATTACHMENT_SOURCE.MODEL,
+          text(attachmentSource) || ATTACHMENT_SOURCE.MODEL || ATTACHMENT_SOURCE.MODEL,
         generationSource: normalizedGenerationSource,
         artifacts: artifactList,
       });

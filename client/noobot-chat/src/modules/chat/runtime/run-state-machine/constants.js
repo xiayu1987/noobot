@@ -5,6 +5,7 @@
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_TERMINAL_STATES } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 export const USER_STOP_REQUEST_STORAGE_KEY =
   "noobot:session-run-state-machine:user-stop-requests:v1";
@@ -56,19 +57,11 @@ const AUTHORITATIVE_TERMINAL_STATE_SET = new Set(AUTHORITATIVE_TERMINAL_STATES);
 const LEGACY_TERMINAL_DISCOVERY_STATE_SET = new Set(LEGACY_TERMINAL_DISCOVERY_STATES);
 
 export function isAuthoritativeTerminalState(value = "") {
-  return AUTHORITATIVE_TERMINAL_STATE_SET.has(
-    String(value || "")
-      .trim()
-      .toLowerCase(),
-  );
+  return AUTHORITATIVE_TERMINAL_STATE_SET.has(text(value).toLowerCase());
 }
 
 export function isLegacyTerminalDiscoveryState(value = "") {
-  return LEGACY_TERMINAL_DISCOVERY_STATE_SET.has(
-    String(value || "")
-      .trim()
-      .toLowerCase(),
-  );
+  return LEGACY_TERMINAL_DISCOVERY_STATE_SET.has(text(value).toLowerCase());
 }
 
 export const FrontendRunState = Object.freeze({

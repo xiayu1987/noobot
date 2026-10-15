@@ -58,9 +58,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
     meta,
   );
 
-  const requestedAction = String(action || "auto")
-    .trim()
-    .toLowerCase();
+  const requestedAction = (text(action) || "auto").toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === "summary";
   const allowGuidance = requestedAction === "auto" || requestedAction === "guidance";
 

@@ -99,7 +99,7 @@ function applyMemoryTakeoverForModelContext(ctx = {}, takeover = {}) {
 
   const memoryNote = text(takeover?.memoryNote || takeover?.injectSystemNote);
   if (memoryNote) {
-    const marker = String(takeover?.id || "harness-memory-takeover").trim();
+    const marker = text(takeover?.id) || "harness-memory-takeover";
     const content = `<!-- ${marker} -->\n${memoryNote}`;
     if (!isMessageInjected(resolveModelMessageBlocks(ctx).system, marker, content)) {
       appendMessage(

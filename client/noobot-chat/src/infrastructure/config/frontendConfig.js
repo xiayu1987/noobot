@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 function envBoolean(name, defaultValue = false) {
-  const value = String(import.meta.env?.[name] ?? "")
-    .trim()
-    .toLowerCase();
+  const value = text(import.meta.env?.[name]).toLowerCase();
   if (!value) return Boolean(defaultValue);
   if (["1", "true", "yes", "on"].includes(value)) return true;
   if (["0", "false", "no", "off"].includes(value)) return false;

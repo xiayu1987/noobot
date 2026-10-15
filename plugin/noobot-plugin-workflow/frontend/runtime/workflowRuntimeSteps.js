@@ -57,9 +57,7 @@ export function stripRuntimeInternal(runtime = {}) {
     nodeName: text(runtime?.nodeName),
     actionNodeStates: Array.isArray(runtime?.actionNodeStates)
       ? runtime.actionNodeStates.map((stateBox = {}, stateIndex) => ({
-          actionNodeStateId: String(
-            stateBox?.actionNodeStateId || `node_box_${stateIndex + 1}`,
-          ).trim(),
+          actionNodeStateId: text(stateBox?.actionNodeStateId) || `node_box_${stateIndex + 1}`,
           nodeId: text(stateBox?.nodeId || runtime?.nodeId),
           nodeName: text(stateBox?.nodeName || runtime?.nodeName),
           steps: Array.isArray(stateBox?.steps) ? stateBox.steps : [],

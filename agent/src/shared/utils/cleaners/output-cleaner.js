@@ -45,22 +45,22 @@ export function compactStdout(input = "") {
 }
 
 function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars) {
-  const text = String(input || "");
+  const inputText = String(input || "");
   const limit = Math.max(256, Number(maxChars || LENGTH_THRESHOLDS.toolIO.connectorOutputChars));
-  if (text.length <= limit) {
+  if (inputText.length <= limit) {
     return {
-      text,
+      text: inputText,
       truncated: false,
-      originalLength: text.length,
+      originalLength: inputText.length,
       truncatedChars: 0,
       truncateLimitChars: limit,
     };
   }
-  const truncatedChars = text.length - limit;
+  const truncatedChars = inputText.length - limit;
   return {
-    text: `...[truncated head ${truncatedChars} chars]\n${text.slice(-limit)}`,
+    text: `...[truncated head ${truncatedChars} chars]\n${inputText.slice(-limit)}`,
     truncated: true,
-    originalLength: text.length,
+    originalLength: inputText.length,
     truncatedChars,
     truncateLimitChars: limit,
   };

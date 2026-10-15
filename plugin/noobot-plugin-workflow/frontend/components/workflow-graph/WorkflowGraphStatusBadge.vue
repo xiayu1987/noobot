@@ -6,17 +6,14 @@
 <script setup>
 import { computed } from "vue";
 import { useWorkflowLocale } from "../../i18n/index.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   status: { type: String, default: "pending" },
 });
 const { translate } = useWorkflowLocale();
 
-const normalizedStatus = computed(() =>
-  String(props.status || "")
-    .trim()
-    .toLowerCase(),
-);
+const normalizedStatus = computed(() => text(props.status).toLowerCase());
 
 const statusLabel = computed(() => {
   if (normalizedStatus.value === "success") return translate("workflow.statusSuccess");

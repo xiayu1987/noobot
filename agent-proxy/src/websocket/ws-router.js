@@ -32,10 +32,10 @@ import {
 import { text } from "@noobot/shared/value";
 
 function resolveRawMessageInfo(rawData) {
-  const text = String(rawData || "");
+  const inputText = String(rawData || "");
   return {
     rawDataType: Buffer.isBuffer(rawData) ? "buffer" : typeof rawData,
-    rawDataLength: text.length,
+    rawDataLength: inputText.length,
   };
 }
 

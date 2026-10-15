@@ -48,7 +48,7 @@ function buildClientModelCatalog(globalConfig = {}, userConfig = {}) {
 }
 
 function buildClientPermissions(role = "user", { canUseIDE = false } = {}) {
-  const normalizedRole = String(role || "user").trim() || "user";
+  const normalizedRole = text(role) || "user" || "user";
   const isSuperAdmin = isSuperAdminRole(normalizedRole);
   return {
     role: normalizedRole,

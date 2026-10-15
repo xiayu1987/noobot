@@ -334,9 +334,7 @@ function selectAnalysisRequest(ctx, state, locale) {
 }
 
 function selectGuidanceRequest({ ctx, state, action, policy }) {
-  const requestedAction = String(action || "auto")
-    .trim()
-    .toLowerCase();
+  const requestedAction = (text(action) || "auto").toLowerCase();
   if (
     isActionAllowed(requestedAction, GUIDANCE_DECISION.action.summary) &&
     state.pending.summary === true

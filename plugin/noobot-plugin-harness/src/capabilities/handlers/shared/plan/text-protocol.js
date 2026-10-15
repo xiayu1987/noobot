@@ -11,8 +11,8 @@ const SUB_PLAN_LINE = /^\s*(\d+)\.(\d+)\.?\s+(.+?)\s*$/;
 const PATCH_ADD_UPDATE = /^\s*(ADD|UPDATE)\s+([[\]\d.\s]+)\s+(.+?)\s*$/i;
 const PATCH_DELETE = /^\s*(DELETE)\s+([[\]\d.\s]+)\s*$/i;
 
-function normalizeText(text = "") {
-  return String(text || "")
+function normalizeText(inputText = "") {
+  return String(inputText || "")
     .replace(/\r\n?/g, "\n")
     .trim();
 }
@@ -264,12 +264,12 @@ export function renderPlanDocument(planDocument = null) {
   return lines.join("\n").trim();
 }
 
-export function parseMainPlansFromPlanText(text = "") {
-  return parsePlanDocumentFromText(text).mainPlans;
+export function parseMainPlansFromPlanText(inputText = "") {
+  return parsePlanDocumentFromText(inputText).mainPlans;
 }
 
-export function parseSubPlansFromPlanText(text = "", mainId = 0) {
-  const doc = parsePlanDocumentFromText(text);
+export function parseSubPlansFromPlanText(inputText = "", mainId = 0) {
+  const doc = parsePlanDocumentFromText(inputText);
   return normalizeSubPlans(doc.subPlansByMainId[String(mainId)], Number(mainId));
 }
 

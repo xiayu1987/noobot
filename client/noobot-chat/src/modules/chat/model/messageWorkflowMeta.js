@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 function normalizeWorkflowMeta(messageItem = {}) {
   return messageItem?.pluginMeta &&
     typeof messageItem.pluginMeta === "object" &&
@@ -13,19 +14,11 @@ function normalizeWorkflowMeta(messageItem = {}) {
 }
 
 function isWorkflowMessageLike(messageItem = {}) {
-  const type = String(messageItem?.type || "")
-    .trim()
-    .toLowerCase();
+  const type = text(messageItem?.type).toLowerCase();
   const workflowMeta = normalizeWorkflowMeta(messageItem);
-  const source = String(workflowMeta?.source || "")
-    .trim()
-    .toLowerCase();
-  const kind = String(workflowMeta?.kind || "")
-    .trim()
-    .toLowerCase();
-  const phase = String(workflowMeta?.phase || "")
-    .trim()
-    .toLowerCase();
+  const source = text(workflowMeta?.source).toLowerCase();
+  const kind = text(workflowMeta?.kind).toLowerCase();
+  const phase = text(workflowMeta?.phase).toLowerCase();
   return (
     type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase)
   );

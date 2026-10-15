@@ -342,7 +342,7 @@ function resolveNodeAgentTimeout(options) {
 function createWorkflowNodeFailure(error) {
   return {
     source: "workflow_node_agent",
-    code: String(error?.code || "WORKFLOW_NODE_SUBSESSION_FAILED").trim(),
+    code: text(error?.code) || "WORKFLOW_NODE_SUBSESSION_FAILED",
     message: String(error?.message || error || "workflow node sub-session failed").trim(),
   };
 }

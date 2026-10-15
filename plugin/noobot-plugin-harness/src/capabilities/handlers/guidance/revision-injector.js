@@ -55,11 +55,7 @@ export function schedulePlanUpdateByInject(
   if (!holder) return false;
   const { bucket, state } = holder;
   const normalizedStage =
-    String(stage || "revision")
-      .trim()
-      .toLowerCase() === "revision"
-      ? "revision"
-      : "refinement";
+    (text(stage) || "revision").toLowerCase() === "revision" ? "revision" : "refinement";
   const normalizedPreferredTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes
         .map((item) => Number(item))

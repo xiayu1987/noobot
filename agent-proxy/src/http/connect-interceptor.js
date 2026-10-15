@@ -29,10 +29,7 @@ function isConnectTokenAuthorized(request = null) {
 
 export async function interceptConnectRequest(request, response, channelManager) {
   const locale = resolveLocaleFromRequest(request);
-  const method =
-    String(request?.method || "POST")
-      .trim()
-      .toUpperCase() || "POST";
+  const method = (text(request?.method) || "POST").toUpperCase() || "POST";
   if (!isConnectTokenAuthorized(request)) {
     response.writeHead(
       401,

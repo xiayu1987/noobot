@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 export const MODEL_FAMILY_ID = Object.freeze({
   GPT: "gpt",
   CLAUDE: "claude",
@@ -18,9 +19,7 @@ export const MODEL_FAMILY_ID = Object.freeze({
 const MODEL_FAMILY_IDS = new Set(Object.values(MODEL_FAMILY_ID));
 
 export function requireModelFamilyId(value, field = "model spec.modelFamily") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(value).toLowerCase();
   if (!normalized) throw new TypeError(`${field} is required`);
   if (!MODEL_FAMILY_IDS.has(normalized)) {
     throw new TypeError(`unsupported ${field}: ${normalized}`);

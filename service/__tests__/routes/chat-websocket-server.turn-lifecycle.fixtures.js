@@ -23,6 +23,7 @@ import {
   TURN_STATE,
 } from "@noobot/session-protocol";
 import { createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
+import { text } from "@noobot/shared/value";
 
 const TEST_EVENT_FACTS = Object.freeze({
   [TURN_EVENT.ACTION_ACCEPTED]: Object.freeze({
@@ -112,21 +113,21 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
   const userMessages = new Map();
   const bot = {
     async resolveExecutionIntent({ turnScopeId = "", runConfig = {} } = {}) {
-      const executionId = String(runConfig?.executionId || `agent:${turnScopeId}`).trim();
+      const executionId = text(runConfig?.executionId) || `agent:${turnScopeId}`;
       return {
         executionId,
-        executionKind: String(runConfig?.executionKind || "agent").trim(),
-        parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+        executionKind: text(runConfig?.executionKind) || "agent",
+        parentExecutionId: text(runConfig?.parentExecutionId),
         rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
         origin: runConfig?.origin && typeof runConfig.origin === "object" ? runConfig.origin : {},
-        stage: String(runConfig?.stage || "").trim(),
+        stage: text(runConfig?.stage),
       };
     },
     async applyTurnLifecycleEvent(input) {
       if (
         input.eventType === TURN_EVENT.ACTION_ACCEPTED &&
         input.action !== "resend" &&
-        !String(input.dialogProcessId || "").trim()
+        !text(input.dialogProcessId)
       ) {
         input.dialogProcessId = `dialog:${input.turnScopeId}`;
       }

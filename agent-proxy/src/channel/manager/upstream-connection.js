@@ -52,7 +52,7 @@ class UpstreamConnectionMethods {
         event: "agentProxy.channel.terminal.rejected",
         data: {
           channelKey: channel.key,
-          status: String(terminalStatus || CHANNEL_STATUS.DONE).trim(),
+          status: text(terminalStatus) || CHANNEL_STATUS.DONE,
           reason: "pending_interaction",
           pendingRequestIds: Array.from(channel.pendingInteractionRequests.keys()),
         },
@@ -61,7 +61,7 @@ class UpstreamConnectionMethods {
     }
     channel.activity.phase = CHANNEL_STATUS.IDLE;
     channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
-    channel.retention.terminalStatus = String(terminalStatus || CHANNEL_STATUS.DONE).trim();
+    channel.retention.terminalStatus = text(terminalStatus) || CHANNEL_STATUS.DONE;
     channel.updatedAtMs = nowMs();
     channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
     this.logChannelEvent(channel, {
@@ -274,7 +274,7 @@ class UpstreamConnectionMethods {
           });
         },
       },
-      { purpose: String(options?.purpose || "run").trim() || "run" },
+      { purpose: text(options?.purpose) || "run" || "run" },
     );
     if (!connection?.socket) {
       channel.transport.phase = CHANNEL_STATUS.IDLE;

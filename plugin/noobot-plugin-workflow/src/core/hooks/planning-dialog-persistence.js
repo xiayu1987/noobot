@@ -16,9 +16,7 @@ export function buildWorkflowDialogRelativeDir({
   const sessionId = text(ctx?.sessionId);
   const resolvedDialogProcessId = text(dialogProcessId || ctx?.dialogProcessId);
   if (!sessionId || !resolvedDialogProcessId) return "";
-  const normalizedScope = String(scope || "auto")
-    .trim()
-    .toLowerCase();
+  const normalizedScope = (text(scope) || "auto").toLowerCase();
   const isNodeDialog =
     normalizedScope === "node" ||
     (normalizedScope !== "planning" && isWorkflowNodeDialogProcessId(resolvedDialogProcessId));

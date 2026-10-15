@@ -33,7 +33,7 @@ function limitRelayText(locale, rawText) {
   return `${rawText.slice(0, maxChars)}\n${notice}`;
 }
 
-function buildRelayContent(locale, purposeLabel, text) {
+function buildRelayContent(locale, purposeLabel, inputText) {
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: purposeLabel,
   });
@@ -41,10 +41,10 @@ function buildRelayContent(locale, purposeLabel, text) {
     locale,
     HARNESS_I18N_KEYSET.RELAY.CAPABILITY_BOUNDARY_NOTICE,
   );
-  const riskNotice = containsExecutableScriptText(text)
+  const riskNotice = containsExecutableScriptText(inputText)
     ? ` ${translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SCRIPT_CONTENT_RISK_NOTICE)}`
     : "";
-  return `${prefix}${riskNotice}\n${capabilityBoundaryNotice}\n${text}`;
+  return `${prefix}${riskNotice}\n${capabilityBoundaryNotice}\n${inputText}`;
 }
 
 function buildTurnEndedDetail(ctx, purposeLabel) {
@@ -107,7 +107,7 @@ export function relaySeparateModelOutputAsUserMessage(
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: relayContent,
-    injectedMessageType: `separate_model_relay:${String(purpose || "unknown").trim() || "unknown"}`,
+    injectedMessageType: `separate_model_relay:${text(purpose) || "unknown" || "unknown"}`,
     purpose: optionalText(purpose),
     pluginFlow: optionalText(pluginFlow),
     chain: optionalText(chain),

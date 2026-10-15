@@ -61,10 +61,9 @@ function buildWorkflowTransferReferenceBlock(workflowPayload = null, ctx = {}) {
   );
   const lines = references
     .map((item = {}, index) => {
-      const label = String(
-        item?.name ||
-          tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
-      ).trim();
+      const label =
+        text(item?.name) ||
+        tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 });
       const attachmentId = text(item?.identity?.attachmentId);
       if (!attachmentId) return "";
       return `- ${label}: attachmentId=${attachmentId}`;

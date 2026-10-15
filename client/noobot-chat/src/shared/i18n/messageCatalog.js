@@ -36,8 +36,8 @@ function lookupKey(source = {}, key = "") {
     .reduce((acc, part) => (acc && typeof acc === "object" ? acc[part] : undefined), source);
 }
 
-function applyParams(text = "", params = {}) {
-  let output = String(text || "");
+function applyParams(inputText = "", params = {}) {
+  let output = String(inputText || "");
   for (const [key, value] of Object.entries(params || {})) {
     output = output.replaceAll(`{${key}}`, String(value ?? ""));
   }

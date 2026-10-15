@@ -21,9 +21,7 @@ const PLAN_UPDATE_POLICY = Object.freeze({
 });
 
 export function buildPostPlanUserFollowupPrompt(locale = LOCALE.ZH_CN, stage = "planning") {
-  const normalizedStage = String(stage || "planning")
-    .trim()
-    .toLowerCase();
+  const normalizedStage = (text(stage) || "planning").toLowerCase();
   const stageKey = normalizedStage.includes("refinement")
     ? "refinement"
     : normalizedStage.includes("revision")

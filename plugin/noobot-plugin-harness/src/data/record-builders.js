@@ -17,10 +17,10 @@ function stableStringify(value) {
   }
 }
 
-export function sha256Text(text = "") {
+export function sha256Text(inputText = "") {
   return crypto
     .createHash("sha256")
-    .update(String(text || ""))
+    .update(String(inputText || ""))
     .digest("hex");
 }
 
@@ -44,8 +44,8 @@ export function safeError(error) {
 
 export function preview(value, maxChars = LENGTH_THRESHOLDS.display.harnessPreviewChars) {
   if (value == null) return "";
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  return String(text || "").slice(0, Math.max(0, Number(maxChars) || 0));
+  const inputText = typeof value === "string" ? value : JSON.stringify(value);
+  return String(inputText || "").slice(0, Math.max(0, Number(maxChars) || 0));
 }
 
 function buildPayloadPreview(point, ctx = {}, options = {}) {

@@ -5,6 +5,7 @@
  */
 import { expect } from "@playwright/test";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   expect(record.event).toBe("model_context_trace");
@@ -119,9 +120,7 @@ export function auditModelPrefixStability(records = []) {
     let stableComparisons = 0;
     let checkpointRewrites = 0;
     const policies = new Set(
-      entries.map(({ record }) =>
-        String(record.data?.invocation?.contextSequencePolicy || "").trim(),
-      ),
+      entries.map(({ record }) => text(record.data?.invocation?.contextSequencePolicy)),
     );
     const contextSequencePolicy = [...policies][0] || "";
     if (

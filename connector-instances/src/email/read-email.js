@@ -32,9 +32,7 @@ async function saveEmailAttachments({ attachmentHandler = null, parsedEmail = nu
     if (!contentBuffer || !contentBuffer.length) continue;
     attachmentIndex += 1;
     const fileName = text(attachmentItem?.filename) || `email_attachment_${attachmentIndex}`;
-    const mimeType = String(attachmentItem?.contentType || BINARY_MIME_TYPE)
-      .trim()
-      .toLowerCase();
+    const mimeType = (text(attachmentItem?.contentType) || BINARY_MIME_TYPE).toLowerCase();
     const contentDisposition = text(attachmentItem?.contentDisposition).toLowerCase();
     const isInline = contentDisposition === "inline" || Boolean(attachmentItem?.cid);
     const contentId = text(attachmentItem?.cid);
@@ -135,9 +133,9 @@ async function fetchEmailMessage(imapClient, resolvedUid) {
 function describeInlineAttachment(attachmentItem, attachmentIndex) {
   return {
     label: `${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}`,
-    name: String(attachmentItem?.name || "unknown").trim(),
-    contentId: String(attachmentItem?.email_content_id || "none").trim(),
-    mimeType: String(attachmentItem?.mimeType || BINARY_MIME_TYPE).trim(),
+    name: text(attachmentItem?.name) || "unknown",
+    contentId: text(attachmentItem?.email_content_id) || "none",
+    mimeType: text(attachmentItem?.mimeType) || BINARY_MIME_TYPE,
   };
 }
 
@@ -218,7 +216,7 @@ export async function executeReadEmail({
   const { ImapFlow } = await import("imapflow");
   const { simpleParser } = await import("mailparser");
   const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
-  const folder = String(payload?.folder || "INBOX").trim() || "INBOX";
+  const folder = text(payload?.folder) || "INBOX" || "INBOX";
   const uid = Number(payload?.uid || 0);
   const imapClient = createImapClient(ImapFlow, normalizedConnectionInfo);
   await imapClient.connect();

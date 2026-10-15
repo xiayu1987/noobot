@@ -42,10 +42,10 @@ function resolveRunMeta(ctx = {}, options = {}) {
 }
 
 function previewText(
-  text = "",
+  inputText = "",
   maxChars = LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars,
 ) {
-  const raw = String(text || "");
+  const raw = String(inputText || "");
   if (raw.length <= maxChars) return raw;
   return `${raw.slice(0, maxChars)}...(truncated)`;
 }

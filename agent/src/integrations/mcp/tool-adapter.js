@@ -68,7 +68,7 @@ export function normalizeMcpToolCallArgs(args = {}) {
 
 export function normalizeMcpToolResult(result = {}) {
   const contentItems = Array.isArray(result?.content) ? result.content : [];
-  const text = contentItems
+  const inputText = contentItems
     .map((item) => {
       if (!item || typeof item !== "object") return "";
       if (item.type === "text") return String(item.text || "");
@@ -76,7 +76,7 @@ export function normalizeMcpToolResult(result = {}) {
     })
     .filter(Boolean)
     .join("\n");
-  if (text) return text;
+  if (inputText) return inputText;
   return JSON.stringify(result || {});
 }
 

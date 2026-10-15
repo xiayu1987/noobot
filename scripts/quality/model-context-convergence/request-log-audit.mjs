@@ -7,11 +7,11 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { text } from "@noobot/shared/value";
 
-function sliceJsonObject(text = "", start = 0) {
+function sliceJsonObject(inputText = "", start = 0) {
   let depth = 0;
   let quote = "";
-  for (let index = start; index < text.length; index += 1) {
-    const char = text[index];
+  for (let index = start; index < inputText.length; index += 1) {
+    const char = inputText[index];
     if (quote) {
       if (char === "\\") index += 1;
       else if (char === quote) quote = "";
@@ -19,14 +19,14 @@ function sliceJsonObject(text = "", start = 0) {
     }
     if (char === '"') quote = char;
     else if (char === "{") depth += 1;
-    else if (char === "}" && --depth === 0) return text.slice(start, index + 1);
+    else if (char === "}" && --depth === 0) return inputText.slice(start, index + 1);
   }
-  return text.slice(start);
+  return inputText.slice(start);
 }
 
-function extractRequestBodies(text = "") {
+function extractRequestBodies(inputText = "") {
   const bodies = [];
-  for (const entry of text.split(/^(?=\[(?:Request|Terminal)\]\s*$)/m)) {
+  for (const entry of inputText.split(/^(?=\[(?:Request|Terminal)\]\s*$)/m)) {
     if (!entry.startsWith("[Request]")) continue;
     const bodyIndex = entry.search(/^Body:/m);
     if (bodyIndex < 0) continue;
@@ -41,9 +41,7 @@ function extractRequestBodies(text = "") {
 
 function requestOperationKind(headerText = "") {
   const match = headerText.match(/"x-model-operation"\s*:\s*"([^"]*)"/i);
-  return String(match?.[1] || "chat")
-    .trim()
-    .toLowerCase();
+  return (text(match?.[1]) || "chat").toLowerCase();
 }
 
 function requestMessages(body = {}) {

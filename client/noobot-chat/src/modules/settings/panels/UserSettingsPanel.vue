@@ -96,10 +96,10 @@ function buildUsersJsonText(list = users.value) {
   return `${JSON.stringify({ users: normalizeUsers(list) }, null, 2)}\n`;
 }
 
-function parseUsersFromJsonText(text = "") {
+function parseUsersFromJsonText(inputText = "") {
   let parsed = {};
   try {
-    parsed = JSON.parse(String(text || "{}"));
+    parsed = JSON.parse(String(inputText || "{}"));
   } catch (error) {
     throw new Error(`JSON parse error: ${error.message || String(error)}`);
   }

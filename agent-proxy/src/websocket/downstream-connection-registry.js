@@ -43,7 +43,7 @@ export class DownstreamConnectionRegistry {
     const record = this.resolve(socketOrId);
     if (!record || record.finalized) return false;
     record.finalized = true;
-    record.finalizeReason = String(reason || "closed").trim();
+    record.finalizeReason = text(reason) || "closed";
     this.connections.delete(record.connectionId);
     record.onFinalize?.(record);
     return true;

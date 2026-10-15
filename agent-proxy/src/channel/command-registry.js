@@ -32,7 +32,7 @@ export class CommandRegistry {
     const record = {
       commandId: id,
       channelKey: text(channelKey),
-      commandType: String(commandType || "command").trim(),
+      commandType: text(commandType) || "command",
       requester,
       createdAtMs,
       expiresAtMs: Number(ttlMs || 0) > 0 ? createdAtMs + Number(ttlMs) : 0,
@@ -62,7 +62,7 @@ export class CommandRegistry {
       commandId: id,
       channelKey: record.channelKey,
       commandType: record.commandType,
-      reason: String(reason || "deleted").trim(),
+      reason: text(reason) || "deleted",
       registeredForMs: Math.max(0, this.now() - record.createdAtMs),
       removedAtMs: this.now(),
     };

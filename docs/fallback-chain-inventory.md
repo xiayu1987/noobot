@@ -17,13 +17,21 @@
 
 ### 1.2 内联 trim 兜底（`inlineTrim`）
 
-`String(x || d).trim()`、`String(x ?? d).trim()`：重复实现了 `@noobot/shared/value` 的 `text()`。改写为 `text(x)` 或 `text(x) || d`。
+`String(x || d).trim()`、`String(x ?? d).trim()`：重复实现了 `@noobot/shared/value` 的 `text()`。改写为 `text(x)` 或 `text(x) || d`。`text(x || d)`、`text(a ?? b)` 同样计数：兜底不能藏进 `text()` 参数里。
 
 - 范围：除测试文件（`isTestFilePath`）外的全部第一方代码，包含 `__tests__/helpers` 等夹具，因为夹具按同一协议构造数据。
 - 改写不是机械替换：`String(x || "").trim()` → `text(x)` 时，`0`/`false` 会从 `""` 变为 `"0"`/`"false"`；`String(x || "d").trim()` → `text(x) || "d"` 时，纯空白会从 `""` 变为 `"d"`。逐处确认写入方类型后再改。
 - 依赖边界：`shared` 内部用本地 `text`；`workspace-protocol` 零依赖；`scripts`、`user-template` 无 `package.json`。这些位置照常计数，清零时按各自边界处理。
 
-两条规则都只统计 `.vue` 的 `<script>`，模板表达式不在统计内。
+### 1.3 遮蔽 `text()`（`textShadow`）
+
+导入了 `text` 的文件，不允许在局部作用域重新绑定 `text`（参数、解构、`const`/`let`）。被遮蔽后，作用域内的 `text(x)` 会在运行时报 `text is not a function`。改名为 `inputText` 等；对外字段名用 `text: inputText` 保持不变。
+
+- 判定：对导入了 `text` 的文件跑 ESLint `no-shadow`，只取 `'text'` 的命中。
+- 基线为 0，任何命中都会失败。
+- 其他名字的遮蔽（51 处）不在本规则内，仅作信息记录。
+
+三条规则都只统计 `.vue` 的 `<script>`，模板表达式不在统计内。
 
 ## 2. 收敛流程
 
@@ -42,44 +50,43 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1103 处 / 382 个文件；内联 trim 兜底 460 处 / 212 个文件。
+总计：回退链 1103 处 / 382 个文件；内联 trim 兜底 620 处 / 268 个文件；遮蔽 text() 0 处 / 0 个文件。
 
-| 模块                             | 回退链 | 内联 trim 兜底 |
-| -------------------------------- | ------ | -------------- |
-| `client/noobot-chat`             | 386    | 110            |
-| `agent`                          | 200    | 81             |
-| `plugin/noobot-plugin-workflow`  | 115    | 50             |
-| `plugin/noobot-plugin-harness`   | 90     | 74             |
-| `service`                        | 81     | 31             |
-| `agent-proxy`                    | 23     | 23             |
-| `model-runtime`                  | 31     | 7              |
-| `client/shared`                  | 31     | 1              |
-| `authoritative-state`            | 31     | 0              |
-| `shared`                         | 11     | 17             |
-| `context-protocol`               | 20     | 2              |
-| `path-resolver`                  | 15     | 3              |
-| `user-template`                  | 4      | 12             |
-| `workflow`                       | 2      | 11             |
-| `scripts`                        | 8      | 4              |
-| `connector-instances`            | 4      | 7              |
-| `event-protocol`                 | 10     | 1              |
-| `model-protocol`                 | 3      | 7              |
-| `session-protocol`               | 7      | 2              |
-| `plugin/noobot-plugin-character` | 6      | 1              |
-| `session-repair`                 | 5      | 0              |
-| `agent-config-protocol`          | 3      | 1              |
-| `client/startup`                 | 4      | 0              |
-| `i18n`                           | 3      | 1              |
-| `memory-protocol`                | 2      | 2              |
-| `model-proxy`                    | 2      | 2              |
-| `connector-protocol`             | 1      | 2              |
-| `runtime-events`                 | 1      | 2              |
-| `workspace-protocol`             | 0      | 3              |
-| `platform-compatibility`         | 1      | 1              |
-| `sanitize`                       | 1      | 1              |
-| `execution-isolation-protocol`   | 0      | 1              |
-| `plugin-protocol`                | 1      | 0              |
-| `semantic-transfer-protocol`     | 1      | 0              |
+| 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
+| -------------------------------- | ------ | -------------- | ----------- |
+| `client/noobot-chat`             | 386    | 178            | 0           |
+| `agent`                          | 200    | 132            | 0           |
+| `plugin/noobot-plugin-workflow`  | 115    | 89             | 0           |
+| `plugin/noobot-plugin-harness`   | 90     | 67             | 0           |
+| `service`                        | 81     | 39             | 0           |
+| `authoritative-state`            | 31     | 11             | 0           |
+| `model-runtime`                  | 31     | 10             | 0           |
+| `client/shared`                  | 31     | 5              | 0           |
+| `context-protocol`               | 20     | 12             | 0           |
+| `agent-proxy`                    | 23     | 8              | 0           |
+| `path-resolver`                  | 15     | 7              | 0           |
+| `shared`                         | 11     | 9              | 0           |
+| `user-template`                  | 4      | 12             | 0           |
+| `event-protocol`                 | 10     | 4              | 0           |
+| `scripts`                        | 8      | 3              | 0           |
+| `session-repair`                 | 5      | 4              | 0           |
+| `plugin/noobot-plugin-character` | 6      | 2              | 0           |
+| `connector-instances`            | 4      | 3              | 0           |
+| `session-protocol`               | 7      | 0              | 0           |
+| `workflow`                       | 2      | 4              | 0           |
+| `agent-config-protocol`          | 3      | 2              | 0           |
+| `i18n`                           | 3      | 2              | 0           |
+| `client/startup`                 | 4      | 0              | 0           |
+| `connector-protocol`             | 1      | 3              | 0           |
+| `memory-protocol`                | 2      | 2              | 0           |
+| `model-protocol`                 | 3      | 1              | 0           |
+| `model-proxy`                    | 2      | 2              | 0           |
+| `semantic-transfer-protocol`     | 1      | 2              | 0           |
+| `workspace-protocol`             | 0      | 3              | 0           |
+| `platform-compatibility`         | 1      | 1              | 0           |
+| `plugin-protocol`                | 1      | 1              | 0           |
+| `runtime-events`                 | 1      | 1              | 0           |
+| `sanitize`                       | 1      | 1              | 0           |
 
 <!-- fallback-chain-modules:end -->
 
@@ -101,4 +108,5 @@
 | `74c3842c1` | workflow        | abort 判定改用 session-protocol 执行中止协议                                                                                |
 | `08148dccd` | scripts         | 回退链守卫与本清单                                                                                                          |
 | `b62dfd769` | agent、workflow | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed` |
-| 守卫分组    | scripts         | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                           |
+| `5e8207f13` | scripts         | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                           |
+| 待回填      | 全仓            | 单字段 `String(x \|\| d).trim()` 301 处改为 `text(x)`/`(text(x) \|\| d)`；82 处 `text` 遮蔽改名；守卫增加 `textShadow` 规则 |

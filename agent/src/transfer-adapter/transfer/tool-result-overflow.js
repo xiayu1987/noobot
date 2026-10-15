@@ -14,9 +14,9 @@ import { sourceReferenceTransfer, TRANSFER_REASON } from "@noobot/semantic-trans
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { tTool } from "../../tools/core/tool-i18n.js";
 
-function parseJsonObject(text = "") {
+function parseJsonObject(inputText = "") {
   try {
-    const value = JSON.parse(String(text || ""));
+    const value = JSON.parse(String(inputText || ""));
     return isPlainObject(value) ? value : null;
   } catch {
     return null;
@@ -41,7 +41,7 @@ function transferIdentityRequired(identity) {
 }
 
 function overflowArtifactName(call = {}) {
-  const toolName = String(call?.name || "tool").trim() || "tool";
+  const toolName = text(call?.name) || "tool" || "tool";
   return `${toolName}.result.txt`;
 }
 

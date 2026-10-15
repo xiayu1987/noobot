@@ -9,6 +9,7 @@ import {
   normalizeModelReasoningConfiguration,
   resolveModelMinimumReasoningEffort,
 } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
   const { tool_reasoning_effort: effort } = normalizeModelReasoningConfiguration(modelSpec);
@@ -32,9 +33,7 @@ export function isRequiredToolChoiceUnsupportedError(error = null) {
 }
 
 export function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", modelSpec = {}) {
-  const normalizedToolChoice = String(toolChoice || "")
-    .trim()
-    .toLowerCase();
+  const normalizedToolChoice = text(toolChoice).toLowerCase();
   if (normalizedToolChoice === "required") return suppressedReasoningOverrides(modelSpec);
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) return {};

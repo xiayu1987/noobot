@@ -121,7 +121,7 @@ export function buildDynamicInfo({
     sessionId: text(sessionId),
     parentSessionId: normalizeParentSessionId(parentSessionId),
     rootSessionId: text(rootSessionId),
-    caller: String(caller || "user").trim(),
+    caller: text(caller) || "user",
     dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     turnScopeId: normalizedTurnScopeId,
     now,

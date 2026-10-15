@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { text } from "@noobot/shared/value";
 
 export function assertSessionIdentity(session, expected) {
   expect(session.sessionId).toBe(expected.sessionId);
@@ -47,8 +48,8 @@ export function assertResendReplacementIdentityChain(commands = [], session = {}
   const turnOrder = Array.isArray(session?.turnOrder) ? session.turnOrder : [];
   const replacements = Object.values(session?.turnLifecycle?.replacedTurns || {});
   for (const command of resendCommands) {
-    const dialogProcessId = String(command?.identity?.dialogProcessId || "").trim();
-    const turnScopeId = String(command?.identity?.turnScopeId || "").trim();
+    const dialogProcessId = text(command?.identity?.dialogProcessId);
+    const turnScopeId = text(command?.identity?.turnScopeId);
     expect(dialogProcessId).toBeTruthy();
     expect(turnScopeId).toBeTruthy();
     const materializedTurn = turnOrder.find((turn = {}) => turn.turnScopeId === turnScopeId);

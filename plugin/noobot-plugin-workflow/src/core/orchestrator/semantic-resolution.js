@@ -68,7 +68,7 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
     };
   }
   const userMessage = text(ctx?.userMessage);
-  const locale = String(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE).trim();
+  const locale = text(ctx?.runConfig?.locale) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE;
   const userAttachments = resolveWorkflowInputAttachments(ctx);
   const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachments, ctx);
   const availableToolNames = resolveWorkflowAvailableToolNames(ctx);

@@ -5,6 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { text } from "./value.js";
 
 export const CONFIG_FILE_ERROR_CODE = Object.freeze({
   CORRUPTED: "CONFIG_FILE_CORRUPTED",
@@ -20,7 +21,7 @@ function configFileError(code, filePath, cause) {
 }
 
 export function readOptionalJsonObjectConfigSync({ filePath, defaultValue = {} } = {}) {
-  const normalizedPath = path.resolve(String(filePath || "").trim());
+  const normalizedPath = path.resolve(text(filePath));
   let raw;
   try {
     raw = readFileSync(normalizedPath, "utf8");

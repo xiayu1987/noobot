@@ -68,8 +68,8 @@ function spawnCommandProcess(command, cwd) {
 async function normalizeCommandOutputFile(filePath) {
   const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
   if (!bytes.length) return;
-  const text = decodeCommandOutput(bytes);
-  const normalized = Buffer.from(text, "utf8");
+  const inputText = decodeCommandOutput(bytes);
+  const normalized = Buffer.from(inputText, "utf8");
   if (!normalized.equals(bytes)) await writeFile(filePath, normalized);
 }
 

@@ -27,19 +27,19 @@ async function decodeBodyByEncoding(buffer, encoding) {
   }
 }
 
-function normalizeBodyText(text, contentType = "") {
+function normalizeBodyText(inputText, contentType = "") {
   const ct = String(contentType).toLowerCase();
 
   if (ct.includes("application/json")) {
     try {
-      const obj = JSON.parse(text);
+      const obj = JSON.parse(inputText);
       return JSON.stringify(obj, null, 2);
     } catch {
-      return text;
+      return inputText;
     }
   }
 
-  return text;
+  return inputText;
 }
 
 function normalizeToolCallItem(toolCallItem = {}) {

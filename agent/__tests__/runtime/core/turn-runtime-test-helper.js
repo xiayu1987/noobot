@@ -12,6 +12,7 @@ import { initializeCurrentTurnMessageEventProjection } from "../../../src/events
 import { createModelContext } from "@noobot/context-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
+import { text } from "@noobot/shared/value";
 
 export function createTestTurnMessagesStore(messages = []) {
   return createCurrentTurnMessagesStore(messages);
@@ -120,7 +121,7 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
   runtime.sessionManager =
     runtime.sessionManager || createCanonicalMessageEventSessionManager({ producerId: identity });
   bindTestTurnMessageEventDomain(runtime, identity);
-  if (!String(loopState.modelContext?.activeTurnIdentity?.turnScopeId || "").trim()) {
+  if (!text(loopState.modelContext?.activeTurnIdentity?.turnScopeId)) {
     loopState.modelContext.activeTurnIdentity = {
       dialogProcessId: String(loopState.dialogProcessId || runtime.systemRuntime.dialogProcessId),
       turnScopeId: String(runtime.systemRuntime.turnScopeId),

@@ -59,7 +59,7 @@ function appendReasoningAttemptsToBucket(ctx = {}, { purpose = "", response = nu
   for (const attempt of reasoningAttempts) {
     holder.bucket.modelReasoningTraces.push({
       capturedAt: new Date().toISOString(),
-      purpose: String(purpose || "unknown").trim() || "unknown",
+      purpose: text(purpose) || "unknown" || "unknown",
       attempt: Number(attempt.attempt) || 1,
       content: String(attempt.output.reasoning),
     });

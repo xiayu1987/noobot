@@ -15,6 +15,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
+import { text } from "@noobot/shared/value";
 
 export const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
 
@@ -43,7 +44,7 @@ function canonicalMessageIdForTest(message = {}, activeAssistantMessageId = "") 
 }
 
 export function createCanonicalHandledResult(context = {}, output = "") {
-  const messageId = String(context?.runConfig?.messageId || "").trim();
+  const messageId = text(context?.runConfig?.messageId);
   if (!messageId) throw new Error("handled test result requires the bound canonical messageId");
   return {
     output,
@@ -163,9 +164,7 @@ export function createRunner({
     const result = await agentRunner(payload);
     if (!result || typeof result !== "object" || !String(result.output || "")) return result;
     const runtime = payload?.agentContext?.bindings?.runtime;
-    const messageId = String(
-      runtime?.systemRuntime?.messageEventStream?.activeMessageId || "",
-    ).trim();
+    const messageId = text(runtime?.systemRuntime?.messageEventStream?.activeMessageId);
     if (!messageId) throw new Error("test Agent result requires the bound canonical messageId");
     const store = runtime.currentTurnMessages;
     for (const [index, message] of store.toArray().entries()) {
@@ -180,7 +179,7 @@ export function createRunner({
       const canonicalMessage = { ...message, messageId: canonicalMessageId };
       const updatedCount = store.updateWhere(
         canonicalMessage,
-        (current) => String(current?.messageId || "").trim() === canonicalMessageId,
+        (current) => text(current?.messageId) === canonicalMessageId,
       );
       if (updatedCount === 0) store.push(canonicalMessage);
     }
@@ -204,7 +203,7 @@ export function createRunner({
     const result = (await commitSessionTurn(payload)) || {};
     const turnIdentity = String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_");
     const sourceUserMessage = result.userMessage || {};
-    const messageUid = String(sourceUserMessage.messageUid || `sm_test_${turnIdentity}`).trim();
+    const messageUid = text(sourceUserMessage.messageUid) || `sm_test_${turnIdentity}`;
     const messageId = String(
       sourceUserMessage.messageId ||
         sourceUserMessage.id ||
@@ -278,7 +277,7 @@ export function createRunner({
   return new SessionExecutionRunner({
     agentRunner: runCanonicalAgent,
     errorLogger: { async log() {} },
-    normalizeRunMessage: (message = "") => String(message || "").trim(),
+    normalizeRunMessage: (message = "") => text(message),
     validateRunInput() {},
     ensureParentAsyncResultContainer: ({ parentAsyncResultContainer = null } = {}) =>
       parentAsyncResultContainer,

@@ -6,6 +6,7 @@
 
 import { parseArgs } from "node:util";
 import { HELP_COMMAND_NAMES, HELP_COMMAND_OPTIONS, HELP_OPTION } from "./help-command-contract.js";
+import { text } from "@noobot/shared/value";
 
 const ALL_OPTION_NAMES = Object.freeze(Object.values(HELP_OPTION));
 
@@ -24,10 +25,7 @@ export const HELP_PARSE_ERROR = Object.freeze({
 });
 
 function tokenize(command = "") {
-  return String(command || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  return text(command).split(/\s+/).filter(Boolean);
 }
 
 function failure(reason, details = {}) {

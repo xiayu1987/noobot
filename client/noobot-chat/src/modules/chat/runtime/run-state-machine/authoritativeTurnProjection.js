@@ -6,6 +6,7 @@
 import { TURN_STATE } from "@noobot/session-protocol";
 import { FrontendRunState } from "./constants.js";
 import { resolveTurnRuntimeTerminal } from "./turnTerminal.js";
+import { text } from "@noobot/shared/value";
 
 const AUTHORITY_TERMINAL_TO_FRONTEND_STATE = Object.freeze({
   [TURN_STATE.COMPLETED]: FrontendRunState.FRONTEND_COMPLETED,
@@ -25,9 +26,7 @@ const AUTHORITY_TO_FRONTEND_STATE = Object.freeze({
 });
 
 function normalizeAuthoritativeTurnState(state = "") {
-  return String(state || "")
-    .trim()
-    .toLowerCase();
+  return text(state).toLowerCase();
 }
 
 export function projectAuthoritativeTurnState(state = "") {

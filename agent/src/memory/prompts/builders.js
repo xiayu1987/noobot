@@ -5,6 +5,7 @@
  */
 import { BUILTIN_EXPERIENCE_FIELDS } from "@noobot/memory-protocol/experience/fields";
 import { renderExperiencePatchProtocol } from "@noobot/memory-protocol/experience/schema";
+import { text } from "@noobot/shared/value";
 
 function resolvePatchMeta(promptI18n = {}, stage = "", fields = BUILTIN_EXPERIENCE_FIELDS) {
   return renderExperiencePatchProtocol(stage, {
@@ -18,14 +19,14 @@ function buildPrompt({ promptI18n, stage, fields, builderName, payload }) {
   if (typeof builder !== "function")
     throw new Error(`memory prompt builder is missing: ${builderName}`);
   const patchMeta = resolvePatchMeta(promptI18n, stage, fields);
-  return String(
+  return text(
     builder({
       ...payload,
       patchProtocol: patchMeta.protocol,
       patchExample: patchMeta.example,
       fieldGuide: patchMeta.fieldGuide,
-    }) || "",
-  ).trim();
+    }),
+  );
 }
 
 export function buildDailyExperiencePrompt({

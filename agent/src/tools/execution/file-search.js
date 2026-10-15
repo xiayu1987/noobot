@@ -43,7 +43,7 @@ function buildSearchMatcher({ query = "", isRegex = false, caseSensitive = false
 }
 
 export function searchInText({
-  text = "",
+  text: inputText = "",
   query = "",
   isRegex = false,
   caseSensitive = false,
@@ -52,8 +52,8 @@ export function searchInText({
   filePath = "",
 } = {}) {
   const matcher = buildSearchMatcher({ query, isRegex, caseSensitive });
-  const lines = splitLines(text);
-  if (String(text || "").endsWith("\n")) lines.pop();
+  const lines = splitLines(inputText);
+  if (String(inputText || "").endsWith("\n")) lines.pop();
   const matches = [];
   const contextCount = toPositiveInt(contextLines, DEFAULT_SEARCH_CONTEXT_LINES, 0, 20);
   const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);

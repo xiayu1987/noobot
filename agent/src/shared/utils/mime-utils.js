@@ -40,9 +40,7 @@ export function parseDataUrl(dataUrl = "") {
   const matchResult = normalizedDataUrl.match(/^data:([^;,]+)?;base64,([\s\S]+)$/i);
   if (!matchResult) return null;
   return {
-    mimeType: String(matchResult[1] || DEFAULT_MIME_TYPE)
-      .trim()
-      .toLowerCase(),
+    mimeType: (text(matchResult[1]) || DEFAULT_MIME_TYPE).toLowerCase(),
     contentBase64: text(matchResult[2]),
   };
 }

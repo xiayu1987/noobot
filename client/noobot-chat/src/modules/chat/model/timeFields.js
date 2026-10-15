@@ -27,11 +27,11 @@ export function parseTimeMs(value) {
   if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number")
     return Number.isFinite(value) && value > 0 ? normalizeEpochMs(value) : 0;
-  const text = trim(value);
-  if (!text) return 0;
-  const asNumber = Number(text);
+  const inputText = trim(value);
+  if (!inputText) return 0;
+  const asNumber = Number(inputText);
   if (Number.isFinite(asNumber) && asNumber > 0) return normalizeEpochMs(asNumber);
-  const parsed = new Date(text).getTime();
+  const parsed = new Date(inputText).getTime();
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
@@ -47,8 +47,8 @@ function firstTimeValue(...values) {
       if (Number.isFinite(value) && value > 0) return value;
       continue;
     }
-    const text = trim(value);
-    if (text) return text;
+    const inputText = trim(value);
+    if (inputText) return inputText;
   }
   return "";
 }
@@ -63,9 +63,9 @@ export function resolveTimeMs(...values) {
 
 function resolveTimeIso(...values) {
   for (const value of values) {
-    const text = trim(value);
-    if (text && !Number.isFinite(Number(text))) {
-      const ms = parseTimeMs(text);
+    const inputText = trim(value);
+    if (inputText && !Number.isFinite(Number(inputText))) {
+      const ms = parseTimeMs(inputText);
       if (ms > 0) return new Date(ms).toISOString();
     }
     const ms = parseTimeMs(value);

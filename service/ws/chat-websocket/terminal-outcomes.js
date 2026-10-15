@@ -87,9 +87,8 @@ export function createTurnFinalizer({
       result,
       fallbackMessage: stoppedMessage,
     });
-    const stopCommandId = String(
-      stopPayload?.commandId || `stop:${stoppedPartialAssistant.turnScopeId}`,
-    ).trim();
+    const stopCommandId =
+      text(stopPayload?.commandId) || `stop:${stoppedPartialAssistant.turnScopeId}`;
     const processed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
       sessionId: stoppedPartialAssistant.sessionId || state.runMeta?.sessionId || "",

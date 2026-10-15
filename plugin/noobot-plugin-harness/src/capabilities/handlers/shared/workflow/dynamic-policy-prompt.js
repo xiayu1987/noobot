@@ -17,22 +17,26 @@ function normalizeText(value = "") {
 }
 
 function normalizeScenario(value = "") {
-  const text = normalizeText(value).toLowerCase();
-  if (VALID_SCENARIOS.has(text)) return text;
-  if (text.includes("program") || text.includes("coding") || text.includes("\u7f16\u7a0b"))
+  const inputText = normalizeText(value).toLowerCase();
+  if (VALID_SCENARIOS.has(inputText)) return inputText;
+  if (
+    inputText.includes("program") ||
+    inputText.includes("coding") ||
+    inputText.includes("\u7f16\u7a0b")
+  )
     return "programming";
-  if (text.includes("text") || text.includes("\u6587\u672c")) return "text";
+  if (inputText.includes("text") || inputText.includes("\u6587\u672c")) return "text";
   return "general";
 }
 
-function clipPrompt(text = "") {
-  const normalized = normalizeText(text);
+function clipPrompt(inputText = "") {
+  const normalized = normalizeText(inputText);
   if (normalized.length <= MAX_DYNAMIC_POLICY_PROMPT_CHARS) return normalized;
   return normalized.slice(0, MAX_DYNAMIC_POLICY_PROMPT_CHARS).trim();
 }
 
-function extractProtocolBody(text = "") {
-  const raw = String(text || "");
+function extractProtocolBody(inputText = "") {
+  const raw = String(inputText || "");
   const pattern = new RegExp(
     `\\[${DYNAMIC_POLICY_PROMPT_BLOCK}\\]([\\s\\S]*?)\\[\\/${DYNAMIC_POLICY_PROMPT_BLOCK}\\]`,
     "i",
@@ -63,8 +67,8 @@ function extractPromptFromBody(body = "") {
   return clipPrompt(body.slice(start));
 }
 
-function parseDynamicPolicyPromptProtocol(text = "") {
-  const body = extractProtocolBody(text);
+function parseDynamicPolicyPromptProtocol(inputText = "") {
+  const body = extractProtocolBody(inputText);
   if (!body) return null;
   const lines = body.split(/\r?\n/);
   const prompt = extractPromptFromBody(body);
@@ -84,8 +88,8 @@ export function buildDynamicPolicyPromptSignature(record = null) {
   });
 }
 
-export function applyDynamicPolicyPromptFromText(ctx = {}, text = "", meta = {}) {
-  const parsed = parseDynamicPolicyPromptProtocol(text);
+export function applyDynamicPolicyPromptFromText(ctx = {}, inputText = "", meta = {}) {
+  const parsed = parseDynamicPolicyPromptProtocol(inputText);
   if (!parsed) return null;
   const bucket =
     ctx?.agentContext?.bindings?.extensions?.harness &&

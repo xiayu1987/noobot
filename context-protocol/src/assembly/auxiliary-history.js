@@ -87,7 +87,7 @@ function formatToolCallForObserver(toolCalls = []) {
   return toolCalls
     .map((call = {}) => {
       const fn = call.function && typeof call.function === "object" ? call.function : call;
-      const name = String(fn.name || "tool").trim();
+      const name = text(fn.name) || "tool";
       const args =
         typeof fn.arguments === "string"
           ? fn.arguments

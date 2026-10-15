@@ -44,5 +44,5 @@ export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
 }
 
 export function emitContextIdentityDebug(eventListener, event, data = {}) {
-  emitEvent(eventListener, `agent.contextIdentity.${String(event || "observed").trim()}`, data);
+  emitEvent(eventListener, `agent.contextIdentity.${text(event) || "observed"}`, data);
 }

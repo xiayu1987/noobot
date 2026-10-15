@@ -182,7 +182,7 @@ export function useStartupBridge() {
       return;
     }
     if (status.phase === "dependency-missing") {
-      const text = status.message || messages.value.status.dependencyMissing;
+      const inputText = status.message || messages.value.status.dependencyMissing;
       const canRetry = status.retryable === true;
       const failureKind = status.failureKind
         ? formatStartupMessage(messages.value.status.failureKind, { kind: status.failureKind })
@@ -190,8 +190,8 @@ export function useStartupBridge() {
       const manualHint = canRetry
         ? messages.value.status.networkRetry
         : formatStartupMessage(messages.value.status.manualDependency, { failureKind });
-      setMessage("", text);
-      appendLogLine(text);
+      setMessage("", inputText);
+      appendLogLine(inputText);
       appendLogLine(manualHint);
       if (currentStep.value !== "dependencies") setStep("dependency");
       lastDependencyRetryable.value = canRetry;
@@ -235,9 +235,9 @@ export function useStartupBridge() {
       hideForms();
       setMessage("setupSaved");
     } catch (error) {
-      const text = error?.message || String(error);
-      setMessage("", text);
-      appendLogLine(text);
+      const inputText = error?.message || String(error);
+      setMessage("", inputText);
+      appendLogLine(inputText);
       if (currentStep.value === "dependency") {
         showRetry.value = lastDependencyRetryable.value;
         if (!lastDependencyRetryable.value) {
@@ -246,7 +246,7 @@ export function useStartupBridge() {
       } else {
         currentStep.value = "super-admin";
         superAdminCompleted.value = false;
-        superAdminError.value = text;
+        superAdminError.value = inputText;
       }
     } finally {
       savingSuperAdmin.value = false;

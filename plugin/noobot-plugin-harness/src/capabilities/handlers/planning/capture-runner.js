@@ -48,8 +48,8 @@ const PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS =
   WORKFLOW_PARAMS.planning.capture.rawOutputPreviewMaxChars;
 const PLANNING_CONTEXT_GOAL_MAX_CHARS = WORKFLOW_PARAMS.planning.capture.contextGoalMaxChars;
 
-function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
-  const raw = String(text || "")
+function compactText(inputText = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
+  const raw = String(inputText || "")
     .replace(/\s+/g, " ")
     .trim();
   if (!raw) return "";
@@ -66,7 +66,7 @@ function recordPlanningRawOutput(
   const { bucket } = holder;
   const rawText = String(content || "");
   const entry = {
-    source: String(source || "unknown").trim() || "unknown",
+    source: text(source) || "unknown" || "unknown",
     capturedAt: new Date().toISOString(),
     content: rawText,
     parsedCount: Number.isFinite(Number(parsedCount)) ? Number(parsedCount) : 0,

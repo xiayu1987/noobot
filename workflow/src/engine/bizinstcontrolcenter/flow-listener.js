@@ -13,11 +13,10 @@ import ECompositeNodeStateProcessHandleWay from "../bizinst/state/proc/fschange/
 import EStateNodeStateProcessHandleWay from "../bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js";
 import PathStateProcess from "../bizinst/state/proc/fschange/path-state-process.js";
 import StateNodeStateProcess from "../bizinst/state/proc/fschange/state-node-state-process.js";
+import { text } from "@noobot/shared/value";
 
 function isWorkflowVerboseLogEnabled() {
-  const raw = String(process?.env?.NOOBOT_WORKFLOW_VERBOSE_LOG || "")
-    .trim()
-    .toLowerCase();
+  const raw = text(process?.env?.NOOBOT_WORKFLOW_VERBOSE_LOG).toLowerCase();
   return raw === "1" || raw === "true" || raw === "on" || raw === "yes";
 }
 

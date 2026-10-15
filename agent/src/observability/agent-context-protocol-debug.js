@@ -5,9 +5,10 @@
  */
 
 import { emitEvent } from "../events/index.js";
+import { text } from "@noobot/shared/value";
 
 export function emitAgentContextProtocolDebug(eventListener, event, data = {}) {
-  return emitEvent(eventListener, `agent.contextProtocol.${String(event || "observed").trim()}`, {
+  return emitEvent(eventListener, `agent.contextProtocol.${text(event) || "observed"}`, {
     protocolVersion: 2,
     ...data,
   });

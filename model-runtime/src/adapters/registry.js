@@ -6,6 +6,7 @@ import { requireProviderAdapter, resolveModelAdapterId } from "@noobot/model-pro
 
 import { openAiCompatibleAdapter } from "./openai-compatible-adapter.js";
 import { anthropicMessagesAdapter } from "./anthropic-messages-adapter.js";
+import { text } from "@noobot/shared/value";
 
 export function createProviderAdapterRegistry(
   adapters = [openAiCompatibleAdapter, anthropicMessagesAdapter],
@@ -18,12 +19,8 @@ export function createProviderAdapterRegistry(
   }
   return Object.freeze({
     resolve(spec = {}) {
-      const explicitAdapterId = String(spec.adapterId || "")
-        .trim()
-        .toLowerCase();
-      const modelFamily = String(spec.modelFamily || "")
-        .trim()
-        .toLowerCase();
+      const explicitAdapterId = text(spec.adapterId).toLowerCase();
+      const modelFamily = text(spec.modelFamily).toLowerCase();
       if (!explicitAdapterId && !modelFamily) {
         throw new TypeError("model spec.adapterId is required");
       }

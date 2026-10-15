@@ -39,7 +39,7 @@ export function streamingProviderCacheKey({ model = {}, operation = {}, tools = 
     text(model.adapterId),
     text(model.base_url),
     text(model.model),
-    String(operation?.kind || "chat").trim(),
+    text(operation?.kind) || "chat",
     Array.isArray(tools) && tools.length > 0,
   ]);
 }
@@ -52,7 +52,7 @@ function isExplicitModelError(error = {}) {
   const code = text(error?.code || error?.kind || error?.cause?.code).toLowerCase();
   if (EXPLICIT_ERROR_CODES.has(code)) return true;
   const message = String(error?.message || error || "").toLowerCase();
-  return EXPLICIT_ERROR_TEXT.some((text) => message.includes(text));
+  return EXPLICIT_ERROR_TEXT.some((inputText) => message.includes(inputText));
 }
 
 export function mayRetryWithAlternateStreaming(

@@ -84,7 +84,7 @@ export function createFixedWindowRateLimiter({ windowMs = 60000, maxRequests = 1
   return {
     check(key = "anonymous") {
       const now = Date.now();
-      const normalizedKey = String(key || "anonymous").trim() || "anonymous";
+      const normalizedKey = text(key) || "anonymous" || "anonymous";
       const bucket = buckets.get(normalizedKey);
       if (!bucket || now - bucket.windowStart > windowMs) {
         buckets.set(normalizedKey, { windowStart: now, count: 1 });

@@ -45,8 +45,8 @@ function resolveUnsummarizedMessageChars(messages = []) {
     if (!message || typeof message !== "object") return total;
     if (resolveContextMessageSummarized(message)) return total;
     if (hasInternalMessageMarker(message)) return total;
-    const text = resolveContextMessageContent(message);
-    return total + String(text || "").length;
+    const inputText = resolveContextMessageContent(message);
+    return total + String(inputText || "").length;
   }, 0);
 }
 

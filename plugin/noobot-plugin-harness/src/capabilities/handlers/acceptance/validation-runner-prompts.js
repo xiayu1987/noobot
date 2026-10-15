@@ -221,9 +221,7 @@ export function buildFinalOutputFallbackPhaseAcceptanceText(
 export function pushRoleMessage(ctx = {}, messages = [], role = "system", content = "") {
   const normalizedContent = text(content);
   if (!Array.isArray(messages) || !normalizedContent) return false;
-  const requestedRole = String(role || "system")
-    .trim()
-    .toLowerCase();
+  const requestedRole = (text(role) || "system").toLowerCase();
   const normalizedRole = requestedRole === "user" ? "user" : requestedRole || "system";
   appendMessage(
     ctx,

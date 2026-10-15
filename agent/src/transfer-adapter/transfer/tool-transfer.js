@@ -106,7 +106,7 @@ async function buildTransferResponse({ transferEnvelopes = [] } = {}) {
 export async function transferToolOutput({
   runtime = {},
   agentContext = null,
-  text = "",
+  text: inputText = "",
   name = "tool-result.txt",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
   attachmentSource = "model",
@@ -122,7 +122,7 @@ export async function transferToolOutput({
   forcePreview = false,
   identity = null,
 } = {}) {
-  const normalizedText = String(text);
+  const normalizedText = String(inputText);
   const intent = resolveTransferIntent({
     source,
     reason,
@@ -169,7 +169,7 @@ export async function transferToolInput({
   runtime = {},
   agentContext = null,
   call = null,
-  text = "",
+  text: inputText = "",
   name = "tool-input.txt",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
   attachmentSource = "model",
@@ -183,7 +183,7 @@ export async function transferToolInput({
   inlineMaxChars = null,
   identity = null,
 } = {}) {
-  const hasExplicitText = text !== "";
+  const hasExplicitText = inputText !== "";
   const callOverflow =
     !hasExplicitText && call ? resolveToolInputOverflowFromCall(call, runtime) : null;
   if (!hasExplicitText && call && !callOverflow) {
@@ -191,7 +191,7 @@ export async function transferToolInput({
       transferEnvelopes: [],
     };
   }
-  const normalizedText = callOverflow ? callOverflow.text : String(text);
+  const normalizedText = callOverflow ? callOverflow.text : String(inputText);
   const resolvedName = callOverflow?.name || name;
   const resolvedMimeType = callOverflow?.mimeType || mimeType;
   const resolvedSource = callOverflow?.source || source;

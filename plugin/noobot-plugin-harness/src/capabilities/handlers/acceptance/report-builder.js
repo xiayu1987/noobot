@@ -44,8 +44,8 @@ const ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS = resolveKeywordSet(
   "acceptanceSignalAttachmentKeywords",
 );
 
-function includesAnyKeyword(text = "", keywords = []) {
-  const source = String(text || "").toLowerCase();
+function includesAnyKeyword(inputText = "", keywords = []) {
+  const source = String(inputText || "").toLowerCase();
   return keywords.some((token) => source.includes(token));
 }
 
@@ -56,8 +56,8 @@ function parseModelAcceptanceItemsFromText(sourceText = "") {
   });
 }
 
-function parseSemanticAcceptanceItemsFromText(text = "") {
-  return parsePlanAcceptanceItemsFromText(text);
+function parseSemanticAcceptanceItemsFromText(inputText = "") {
+  return parsePlanAcceptanceItemsFromText(inputText);
 }
 
 function mapModelAcceptanceStatusToTaskStatus(status = "") {
@@ -112,19 +112,19 @@ function resolveLatestModelAcceptance(bucket = {}) {
 
 const ACCEPTANCE_TASK_STATUS_RULES = Object.freeze([
   {
-    matches: ({ text = "" } = {}) =>
-      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS),
+    matches: ({ text: inputText = "" } = {}) =>
+      includesAnyKeyword(inputText, ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS),
     resolve: ({ signals = {} } = {}) =>
       signals.parsedAttachment ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
   },
 ]);
 
 function evaluateTaskStatus(task = {}, state = {}) {
-  const text = String(task?.task || "").toLowerCase();
+  const inputText = String(task?.task || "").toLowerCase();
   const signals = state?.signals || {};
   return resolveFirstMatchedRuleResult(
     ACCEPTANCE_TASK_STATUS_RULES,
-    { signals, task, state, text },
+    { signals, task, state, text: inputText },
     signals.successfulToolCount > 0 ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.PENDING,
   );
 }
@@ -316,8 +316,7 @@ function buildFallbackMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
       nextPhase: bucket?.nextPhase,
       taskChecklist: bucket.taskChecklist,
     }),
-    taskOwner:
-      String(bucket.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
+    taskOwner: text(bucket.taskOwner) || getDefaultTaskOwner(locale) || getDefaultTaskOwner(locale),
     mainPlanVersion: resolveCurrentMainPlanVersion(bucket),
     stage: "main_plan",
   };
@@ -343,7 +342,7 @@ function normalizeMainPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) 
     mainPlanVersion: Number.isFinite(Number(plan?.mainPlanVersion))
       ? Number(plan.mainPlanVersion)
       : resolveCurrentMainPlanVersion(bucket),
-    stage: String(plan?.stage || "main_plan").trim() || "main_plan",
+    stage: text(plan?.stage) || "main_plan" || "main_plan",
   };
 }
 

@@ -69,8 +69,7 @@ export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
   return {
     totalGoal: text(source.totalGoal),
     planText: text(source.planText),
-    taskOwner:
-      String(source.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
+    taskOwner: text(source.taskOwner) || getDefaultTaskOwner(locale) || getDefaultTaskOwner(locale),
     nextPhase: source.nextPhase && typeof source.nextPhase === "object" ? source.nextPhase : null,
     checklistSource: text(source.taskChecklistSource),
     revisionCount: Array.isArray(source.planRevisions) ? source.planRevisions.length : 0,

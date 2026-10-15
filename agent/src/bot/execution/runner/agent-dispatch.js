@@ -96,11 +96,8 @@ function buildDispatchModelContext({
 function normalizeDispatchOwner({ owner, source, executionKind, origin, stage }) {
   return {
     owner: text(owner),
-    source: String(source || "agent_dispatch").trim() || "agent_dispatch",
-    executionKind:
-      String(executionKind || "agent")
-        .trim()
-        .toLowerCase() || "agent",
+    source: text(source) || "agent_dispatch" || "agent_dispatch",
+    executionKind: (text(executionKind) || "agent").toLowerCase() || "agent",
     origin: origin && typeof origin === "object" && !Array.isArray(origin) ? { ...origin } : {},
     stage: text(stage),
   };
@@ -188,7 +185,7 @@ function emitDispatchRouted(runtimeEventListener, dispatchOutcome, claimState) {
 function resolveHandledDispatchResult(dispatchOutcome) {
   if (dispatchOutcome.failure) {
     const error = new Error(String(dispatchOutcome.failure.message || "owned dispatch failed"));
-    error.code = String(dispatchOutcome.failure.code || "BOT_DISPATCH_FAILED").trim();
+    error.code = text(dispatchOutcome.failure.code) || "BOT_DISPATCH_FAILED";
     error.dispatchOwner = dispatchOutcome.owner;
     error.dispatchOutcome = dispatchOutcome;
     throw error;

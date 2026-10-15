@@ -23,8 +23,8 @@ export const WORKFLOW_ACTION_META = Object.freeze(
       flow: text(item?.flow),
       subflow: text(item?.subflow),
       action,
-      executor: String(item?.executor || "none").trim() || "none",
-      kind: String(item?.kind || "workflow").trim() || "workflow",
+      executor: text(item?.executor) || "none" || "none",
+      kind: text(item?.kind) || "workflow" || "workflow",
       hardOverride: item?.hardOverride === true,
       order: index,
     });

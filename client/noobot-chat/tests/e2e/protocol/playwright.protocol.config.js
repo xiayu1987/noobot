@@ -11,14 +11,15 @@ import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-pr
 import { requireWorkspaceRootEnv } from "@noobot/runtime-topology-protocol/workspace-root";
 import { validateModelObservationPolicyCoverage } from "./helpers/model-observation-policy.js";
 import { PROTOCOL_TIMEOUTS } from "./helpers/protocol-timeouts.js";
+import { text } from "@noobot/shared/value";
 
 const protocolRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(protocolRoot, "../../../../..");
 const failureEvidenceRoot = path.join(repositoryRoot, "test-results/e2e-evidence");
-process.env.NOOBOT_E2E_RUN_ID = String(process.env.NOOBOT_E2E_RUN_ID || "").trim() || randomUUID();
+process.env.NOOBOT_E2E_RUN_ID = text(process.env.NOOBOT_E2E_RUN_ID) || randomUUID();
 
 function resolveBaseUrl(value) {
-  const raw = String(value || "").trim();
+  const raw = text(value);
   const topology = resolveRuntimeTopology(process.env);
   const candidate = raw || `http://${topology.loopbackHost}:${addressPort(topology.clientAddr)}`;
   let parsed;

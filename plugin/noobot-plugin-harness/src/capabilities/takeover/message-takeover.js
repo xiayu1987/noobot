@@ -113,7 +113,7 @@ function applyCtxMessagesTakeover(ctx = {}, directive = {}) {
     if (removed) writeMessageBlocks(ctx, blocks);
     return removed > 0;
   }
-  const mode = String(directive?.mode || "prepend").trim();
+  const mode = text(directive?.mode) || "prepend";
   const dedupe = directive?.dedupe !== false;
   const { id, messageContent, message: nextMessage } = takeoverMessage;
   if (dedupe && isMessageInjected(currentMessages, id, messageContent)) {
@@ -153,7 +153,7 @@ function applyAgentSystemTakeover(ctx = {}, directive = {}) {
     if (removed) writeMessageBlocks(ctx, blocks);
     return removed > 0;
   }
-  const mode = String(directive?.mode || "prepend").trim();
+  const mode = text(directive?.mode) || "prepend";
   const dedupe = directive?.dedupe !== false;
   const { id, messageContent, message: nextMessage } = takeoverMessage;
   if (dedupe && isMessageInjected(blocks.system, id, messageContent)) {
@@ -170,7 +170,7 @@ function applyAgentSystemTakeover(ctx = {}, directive = {}) {
 export function applyMessageTakeover(_point = "", ctx = {}, takeover = {}) {
   if (!takeover || typeof takeover !== "object") return false;
   if (takeover.enabled === false) return false;
-  const target = String(takeover?.target || "auto").trim();
+  const target = text(takeover?.target) || "auto";
   if (target === "ctx_messages") return applyCtxMessagesTakeover(ctx, takeover);
   if (target === "agent_system") return applyAgentSystemTakeover(ctx, takeover);
   if (target !== "auto") return false;

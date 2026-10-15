@@ -13,15 +13,14 @@ import {
   STATUS_STEP_TERMINAL,
   TURN_TERMINAL_STATUS_STEP,
 } from "./constants.js";
+import { text } from "@noobot/shared/value";
 
 const STAGE_STATES = new Set(Object.values(STATUS_STEP_STAGE));
 const TERMINAL_STATES = new Set(Object.values(STATUS_STEP_TERMINAL));
 const SEND_BLOCKING_STATES = new Set(STATUS_STEP_STAGE_BLOCKING_SEND);
 
 function normalize(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+  return text(value).toLowerCase();
 }
 
 export function normalizeStatusStepState(value = "") {

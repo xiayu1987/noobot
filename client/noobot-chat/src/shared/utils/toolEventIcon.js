@@ -24,6 +24,7 @@ import {
   Switch,
   Tools,
 } from "@element-plus/icons-vue";
+import { text } from "@noobot/shared/value";
 
 const TOOL_CALL_ICONS = Object.freeze({
   read_file: Document,
@@ -47,9 +48,7 @@ const TOOL_CALL_ICONS = Object.freeze({
 });
 
 function normalize(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+  return text(value).toLowerCase();
 }
 
 export function resolveToolEventVisual({ event = "", toolName = "", tone = "" } = {}) {

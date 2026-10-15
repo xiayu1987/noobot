@@ -5,6 +5,7 @@
  */
 
 import { deepFreeze } from "./deep-freeze.js";
+import { text } from "./value.js";
 
 export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
   runtimeEvents: {
@@ -253,9 +254,7 @@ const EXECUTION_CATEGORY_DEBUG_TYPES = Object.freeze(
 );
 
 export function resolveExecutionCategoryDebugType(category = "") {
-  const normalized = String(category || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(category).toLowerCase();
   return EXECUTION_CATEGORY_DEBUG_TYPES[normalized] || "";
 }
 
@@ -335,12 +334,8 @@ export function resolveRuntimeEventsExecutionLogControls(env = process.env) {
 
 export function shouldRecordRuntimeExecutionLog(event = {}, { env = process.env } = {}) {
   if (event && typeof event === "object") {
-    const level = String(event?.level || "")
-      .trim()
-      .toLowerCase();
-    const category = String(event?.category || "")
-      .trim()
-      .toLowerCase();
+    const level = text(event?.level).toLowerCase();
+    const category = text(event?.category).toLowerCase();
     const status = String(event?.status || event?.data?.status || "")
       .trim()
       .toLowerCase();
@@ -372,12 +367,10 @@ export function shouldRecordRuntimeExecutionLog(event = {}, { env = process.env 
 }
 
 export function resolveHookRuntimeEventsMode(env = process.env) {
-  return String(
-    env?.[RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode] ??
-      RUNTIME_EVENTS_CONFIG_DEFAULTS.hookRuntimeEvents.mode,
-  )
-    .trim()
-    .toLowerCase();
+  return (
+    text(env?.[RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode]) ||
+    RUNTIME_EVENTS_CONFIG_DEFAULTS.hookRuntimeEvents.mode
+  ).toLowerCase();
 }
 
 export function isHookRuntimeEventVerboseEnabled(env = process.env) {

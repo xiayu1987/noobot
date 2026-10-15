@@ -137,9 +137,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     "/internal/session/:userId/:sessionId",
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
-      const mode = String(req.query?.mode || "summary")
-        .trim()
-        .toLowerCase();
+      const mode = (text(req.query?.mode) || "summary").toLowerCase();
       const readSessionData =
         mode === "full"
           ? bot.session.getSessionData.bind(bot.session)

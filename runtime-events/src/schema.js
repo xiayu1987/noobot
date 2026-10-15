@@ -12,6 +12,7 @@ import {
 } from "./constants.js";
 import { safeSegment, sanitizeValue, serializeError } from "./sanitize.js";
 import { normalizeOptionalSessionId } from "./session-id.js";
+import { text } from "@noobot/shared/value";
 
 const scopes = new Set(Object.values(RUNTIME_EVENT_SCOPES));
 const levels = new Set(Object.values(RUNTIME_EVENT_LEVELS));
@@ -28,9 +29,7 @@ function buildProcessInfo() {
 }
 
 function normalizeIdentity(value) {
-  return String(value ?? "")
-    .trim()
-    .slice(0, 256);
+  return text(value).slice(0, 256);
 }
 
 function resolveRecordDebugType({ category, level, debugType }) {

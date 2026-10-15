@@ -266,7 +266,7 @@ function stateFailureDetails(state, error = {}, message = "") {
 
 function toGenerationFailure(error, state, runtime) {
   const errorStatusCode = Number(error?.status || error?.statusCode || 0);
-  const errorMessage = String(error?.message || String(error || "")).trim();
+  const errorMessage = text(error?.message) || String(error || "");
   if (errorStatusCode === 403 && errorMessage.toLowerCase().includes("images api is not enabled")) {
     const hintMessage = appendCapabilityHint(
       tMultimodal(runtime, "imagesApiNotEnabledError"),

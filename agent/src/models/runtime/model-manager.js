@@ -63,9 +63,9 @@ export function createStreamingCallbacks(eventListener = null, runtime = {}) {
   if (!eventListener?.onEvent) return undefined;
   const visibilityFilter = createLlmDeltaVisibilityFilter();
   const emitVisibleDelta = (value = "") => {
-    const text = String(value || "");
-    if (!text) return null;
-    return emitMessageEvent(eventListener, runtime, "llm_delta", { text });
+    const inputText = String(value || "");
+    if (!inputText) return null;
+    return emitMessageEvent(eventListener, runtime, "llm_delta", { text: inputText });
   };
   return [
     {
@@ -102,12 +102,12 @@ export function createModelActivity(
   }
   const visibilityFilter = createLlmDeltaVisibilityFilter();
   const emitVisibleDelta = (value = "") => {
-    const text = String(value || "");
-    if (!text) return null;
+    const inputText = String(value || "");
+    if (!inputText) return null;
     return emitMessageEvent(eventListener, runtime, MESSAGE_EVENT_TYPE.ACTIVITY_DELTA, {
       ...activity,
       activityEventType,
-      text,
+      text: inputText,
     });
   };
   return {

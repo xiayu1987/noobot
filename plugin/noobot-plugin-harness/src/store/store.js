@@ -295,8 +295,8 @@ function scheduleJsonlRetry(filePath = "", strategy = DEFAULT_JSONL_FLUSH_STRATE
   );
 }
 
-function estimateUtf8Bytes(text = "") {
-  return Buffer.byteLength(String(text || ""), "utf8");
+function estimateUtf8Bytes(inputText = "") {
+  return Buffer.byteLength(String(inputText || ""), "utf8");
 }
 
 function calculateJsonlBufferBytes(buffer = []) {

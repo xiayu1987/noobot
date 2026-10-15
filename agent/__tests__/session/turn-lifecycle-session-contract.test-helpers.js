@@ -16,6 +16,7 @@ import {
   authorityOutboxJournalPath,
   readAuthorityOutbox,
 } from "../../src/session/authority-outbox-store/outbox-journal.js";
+import { text } from "@noobot/shared/value";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
@@ -130,7 +131,7 @@ function newSessionHarness() {
 }
 
 const event = (eventType, commandId, expectedRevision, extra = {}) => {
-  const action = String(extra.action || "").trim();
+  const action = text(extra.action);
   return {
     userId: "u1",
     sessionId: "s1",

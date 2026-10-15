@@ -18,6 +18,7 @@ import {
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
+import { text } from "@noobot/shared/value";
 
 const terminalResolutionFromUrl = (
   url,
@@ -229,7 +230,7 @@ export const createHarness = ({
   });
 
   const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
-    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedMessageId = text(messageId);
     if (!normalizedMessageId) return null;
     const existing = activeSession.value.messages.find(
       (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
@@ -248,12 +249,12 @@ export const createHarness = ({
   });
 
   const findCanonicalMessageById = vi.fn((targetSessionId, messageId) => {
-    const normalizedSessionId = String(targetSessionId || "").trim();
-    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedSessionId = text(targetSessionId);
+    const normalizedMessageId = text(messageId);
     if (!normalizedSessionId || !normalizedMessageId) return null;
     const targetSession = sessions.value.find((sessionItem) =>
       [sessionItem?.id, sessionItem?.sessionId, sessionItem?.sessionId].some(
-        (candidate) => String(candidate || "").trim() === normalizedSessionId,
+        (candidate) => text(candidate) === normalizedSessionId,
       ),
     );
     return (
@@ -304,7 +305,7 @@ export const createHarness = ({
     chatWebSocketClient: {
       stream: stream
         ? vi.fn(async (payload, onEvent) => {
-            currentStreamTurnScopeId = String(payload?.identity?.turnScopeId || "").trim();
+            currentStreamTurnScopeId = text(payload?.identity?.turnScopeId);
             const wrappedOnEvent = (envelope = {}) => {
               const data =
                 envelope?.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
@@ -314,7 +315,7 @@ export const createHarness = ({
                 autoPatchStreamTurnScopeId &&
                 data &&
                 data.turnScopeId === undefined &&
-                String(data?.dialogProcessId || "").trim()
+                text(data?.dialogProcessId)
               ) {
                 onEvent({ ...envelope, data: { ...data, turnScopeId: currentStreamTurnScopeId } });
                 return;
@@ -439,7 +440,7 @@ export const assistantMessage = (activeSession) =>
   activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT);
 
 export const emitChannelState = (onEvent, sessionId, dialogProcessId, state, data = {}) => {
-  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  const normalizedDialogProcessId = text(dialogProcessId);
   const turnScopePatch =
     data?.turnScopeId !== undefined || !normalizedDialogProcessId
       ? {}

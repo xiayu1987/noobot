@@ -6,6 +6,7 @@
 import { expect } from "@playwright/test";
 import { waitForTurnTerminal } from "./scenario-assertions.js";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
+import { text } from "@noobot/shared/value";
 
 async function withComposerOptionsPanel(page, callback) {
   const overlay = page.locator(".more-panel-overlay");
@@ -146,9 +147,7 @@ export async function selectScenario(page, scenarioKey) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
   if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
-  const scenario = String(scenarioKey || "")
-    .trim()
-    .toLowerCase();
+  const scenario = text(scenarioKey).toLowerCase();
   const target = panel
     .locator(".scenario-option-button")
     .filter({

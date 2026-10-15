@@ -8,6 +8,7 @@ import { resolveModelHistoryMessages } from "../policy/window.js";
 import { projectTerminalHistoryMessages } from "../policy/terminal-history.js";
 import { excludeActiveContextScopeItems } from "./scope.js";
 import { projectTurnTerminalStatuses } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 function stableValue(value) {
   if (Array.isArray(value)) return `[${value.map(stableValue).join(",")}]`;
@@ -40,7 +41,7 @@ export function createContextSourceSnapshot({
   };
   return Object.freeze({
     ...source,
-    revision: String(revision || revisionOf(source)).trim(),
+    revision: text(revision) || revisionOf(source),
   });
 }
 

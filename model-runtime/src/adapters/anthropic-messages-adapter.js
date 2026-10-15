@@ -259,7 +259,7 @@ function createClient({
           payload,
           signal: invokeOptions.signal,
           fetch: transportFetch,
-          onText: (text) => notify("handleLLMNewToken", text),
+          onText: (inputText) => notify("handleLLMNewToken", inputText),
         });
         const result = responseFromAnthropic(raw);
         await notify("handleLLMEnd", {

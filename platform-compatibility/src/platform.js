@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 export const PLATFORM = Object.freeze({
   WINDOWS: "windows",
   MACOS: "macos",
@@ -17,9 +18,7 @@ export const SHELL = Object.freeze({
 });
 
 export function normalizePlatform(platform = "") {
-  const value = String(platform || "")
-    .trim()
-    .toLowerCase();
+  const value = text(platform).toLowerCase();
   if (["win", "win32", "windows"].includes(value)) return PLATFORM.WINDOWS;
   if (["mac", "macos", "darwin", "osx"].includes(value)) return PLATFORM.MACOS;
   if (["linux", "posix"].includes(value)) return PLATFORM.LINUX;

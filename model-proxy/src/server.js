@@ -193,14 +193,14 @@ function createProxyServer({
       try {
         const raw = Buffer.concat(chunks);
         const decoded = await decodeBodyByEncoding(raw, proxyRes.headers["content-encoding"]);
-        const text = decoded.toString("utf8");
-        const finalText = resolveFinalResponseBodyText(text, proxyRes.headers["content-type"]);
+        const inputText = decoded.toString("utf8");
+        const finalText = resolveFinalResponseBodyText(inputText, proxyRes.headers["content-type"]);
         lifecycle?.settle({
           outcome: "response",
           status: proxyRes.statusCode,
           headers: proxyRes.headers,
           bodyText: finalText,
-          rawBodyText: text,
+          rawBodyText: inputText,
         });
       } catch (error) {
         lifecycle?.settle({

@@ -38,9 +38,8 @@ function createArtifactSink(runtime = {}) {
   if (!userId || !sessionId || !attachmentService) return null;
   return async (artifacts = [], options = {}) => {
     if (!Array.isArray(artifacts) || !artifacts.length) return [];
-    const generationSource = String(
-      options.generationSource || ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ,
-    ).trim();
+    const generationSource =
+      text(options.generationSource) || ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ;
     const records = await attachmentService.ingestGeneratedArtifacts({
       userId,
       sessionId,

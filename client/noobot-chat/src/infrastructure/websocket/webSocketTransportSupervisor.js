@@ -58,7 +58,7 @@ export function createWebSocketTransportSupervisor({
       return text(resolveWebSocketUrl());
     } catch (error) {
       reconnectAttempt += 1;
-      lastFailureReason = String(error?.name || "websocket_url_resolution_failed").trim();
+      lastFailureReason = text(error?.name) || "websocket_url_resolution_failed";
       return "";
     }
   }
@@ -79,7 +79,7 @@ export function createWebSocketTransportSupervisor({
       nextSocket = createWebSocket(url);
     } catch (error) {
       reconnectAttempt += 1;
-      lastFailureReason = String(error?.name || "websocket_constructor_failed").trim();
+      lastFailureReason = text(error?.name) || "websocket_constructor_failed";
       return null;
     }
     if (!nextSocket) {

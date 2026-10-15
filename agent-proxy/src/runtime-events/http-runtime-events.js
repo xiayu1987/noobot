@@ -8,14 +8,12 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 function resolveRequestUrlInfo({ requestUrl = "", method = "" } = {}) {
   const rawUrl = String(requestUrl || "");
   return {
-    method:
-      String(method || "")
-        .trim()
-        .toUpperCase() || "GET",
+    method: text(method).toUpperCase() || "GET",
     requestUrlLength: rawUrl.length,
   };
 }
@@ -55,10 +53,7 @@ export function writeAgentProxyUpstreamRequestFailedEvent({
       ? "agentProxy.http.upstreamRequest.timeout"
       : "agentProxy.http.upstreamRequest.failed",
     data: {
-      method:
-        String(method || "")
-          .trim()
-          .toUpperCase() || "GET",
+      method: text(method).toUpperCase() || "GET",
       pathname: String(pathname || "").slice(0, 200),
       statusCode: Number(statusCode || 502),
       timeoutMs: Number(timeoutMs || 0),
@@ -89,10 +84,7 @@ export function writeAgentProxyHttpTraceEvent({
     data: {
       traceEvent: String(event || ""),
       traceIdLength: String(traceId || "").length,
-      method:
-        String(method || "")
-          .trim()
-          .toUpperCase() || "GET",
+      method: text(method).toUpperCase() || "GET",
       pathname: String(pathname || "").slice(0, 200),
       status: Number(status || 0),
       contentType: String(contentType || "").slice(0, 120),

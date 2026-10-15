@@ -354,9 +354,7 @@ class ChannelStoreMethods {
     if (normalizedEventName === INTERACTION_EVENT_TYPE.REQUEST) {
       const validation = validateProtocolEvent(data);
       const requestId = text(data?.payload?.requestId);
-      const lifecycle = String(data?.payload?.lifecycle || "pending")
-        .trim()
-        .toLowerCase();
+      const lifecycle = (text(data?.payload?.lifecycle) || "pending").toLowerCase();
       const isTerminal = validation.valid && isTerminalInteractionLifecycle(lifecycle);
       if (
         !validation.valid ||
@@ -413,9 +411,7 @@ class ChannelStoreMethods {
       const protocolEnvelope = envelope.data;
       const interaction = protocolEnvelope.payload;
       const requestId = text(interaction.requestId);
-      const lifecycle = String(interaction.lifecycle || "pending")
-        .trim()
-        .toLowerCase();
+      const lifecycle = (text(interaction.lifecycle) || "pending").toLowerCase();
       if (isTerminalInteractionLifecycle(lifecycle)) {
         channel.pendingInteractionRequests.delete(requestId);
         this.requestChannelMap.delete(requestId);

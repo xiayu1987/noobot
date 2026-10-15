@@ -6,6 +6,7 @@
 import { CAPABILITY_DOMAIN } from "../shared/constants.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const PLAN_UPDATE_POLICY = Object.freeze({
@@ -14,11 +15,7 @@ const PLAN_UPDATE_POLICY = Object.freeze({
 });
 
 export function normalizePlanUpdateStage(stage = "") {
-  return String(stage || "")
-    .trim()
-    .toLowerCase() === "revision"
-    ? "revision"
-    : "refinement";
+  return text(stage).toLowerCase() === "revision" ? "revision" : "refinement";
 }
 
 function resolveStageAttemptCounterKey(stage = "revision") {
@@ -96,9 +93,7 @@ export function setPendingPlanUpdate(
   if (!state.pending || typeof state.pending !== "object") state.pending = {};
   const pending = state.pending;
   if (active !== true) {
-    const stageText = String(stage || "")
-      .trim()
-      .toLowerCase();
+    const stageText = text(stage).toLowerCase();
     if (stageText === "revision") {
       pending.planRevision = false;
       pending.planRevisionContext = null;

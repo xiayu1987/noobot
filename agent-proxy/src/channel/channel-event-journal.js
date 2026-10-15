@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
 export class ChannelEventJournal {
   constructor({ maxEvents = 0 } = {}) {
     this.maxEvents = Math.max(0, Number(maxEvents || 0));
@@ -14,7 +15,7 @@ export class ChannelEventJournal {
   append(event = "message", data = {}) {
     const envelope = {
       sequence: ++this.sequence,
-      event: String(event || "message").trim() || "message",
+      event: text(event) || "message" || "message",
       data: data && typeof data === "object" ? data : {},
     };
     this.events.push(envelope);
@@ -27,7 +28,7 @@ export class ChannelEventJournal {
   transient(event = "message", data = {}) {
     return {
       sequence: this.sequence,
-      event: String(event || "message").trim() || "message",
+      event: text(event) || "message" || "message",
       data: data && typeof data === "object" ? data : {},
     };
   }

@@ -129,9 +129,7 @@ export class RunConfigPluginPreparer {
     const declaration = declarations[0];
     if (!declaration) return createAgentExecutionIntent({ runConfig, turnScopeId });
     const scopeId = text(turnScopeId || runConfig?.turnScopeId);
-    const executionId = String(
-      runConfig?.executionId || `${declaration.idPrefix}:${scopeId}`,
-    ).trim();
+    const executionId = text(runConfig?.executionId) || `${declaration.idPrefix}:${scopeId}`;
     return Object.freeze({
       executionId,
       executionKind: declaration.kind,

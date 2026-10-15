@@ -35,13 +35,13 @@ function normalizeStrategy(value = "") {
 }
 
 function createDirectTextTransfer({
-  text = "",
+  text: inputText = "",
   scenario = "",
   strategy = "",
   identity,
   meta = {},
 } = {}) {
-  const normalizedText = String(text || "");
+  const normalizedText = String(inputText || "");
   const envelope = createDirectTransferEnvelope({
     identity,
     content: normalizedText,

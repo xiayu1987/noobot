@@ -8,6 +8,7 @@ import { WORKFLOW_PHASE_STATUS, WORKFLOW_PHASES, WORKFLOW_TRACE } from "../const
 import { appendWorkflowTrace } from "../hooks/phase.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
+import { text } from "@noobot/shared/value";
 
 function resolveWorkflowErrorMessage(error = null) {
   return String(error?.message || error || "");
@@ -62,7 +63,7 @@ export async function handleWorkflowFailure({
   return createBotDispatchHandled({
     owner: "workflow",
     failure: {
-      code: String(error?.code || "WORKFLOW_EXECUTION_FAILED").trim(),
+      code: text(error?.code) || "WORKFLOW_EXECUTION_FAILED",
       message,
     },
   });

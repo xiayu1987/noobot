@@ -5,6 +5,7 @@
  */
 import { TURN_SNAPSHOT_WIRE_EVENT, validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { createEventEnvelope } from "./envelope.js";
+import { text } from "@noobot/shared/value";
 
 export const TURN_SNAPSHOT_EVENT_FAMILY = "turn.snapshot";
 const TURN_SNAPSHOT_SEQUENCE_DOMAIN = "session";
@@ -21,7 +22,7 @@ export function createTurnSnapshotEnvelope(
   return createEventEnvelope({
     family: TURN_SNAPSHOT_EVENT_FAMILY,
     identity: {
-      eventId: String(eventId || `${snapshot.commandId}:snapshot:${sequence}`).trim(),
+      eventId: text(eventId) || `${snapshot.commandId}:snapshot:${sequence}`,
       eventType: TURN_SNAPSHOT_WIRE_EVENT,
       sessionId: snapshot.sessionId,
       turnScopeId: snapshot.activeTurnScopeId || undefined,

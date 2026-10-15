@@ -79,7 +79,7 @@ export function normalizeProxyPathname(
   pathname = "/",
   stripPrefix = config.upstreamHttpStripPrefix,
 ) {
-  const normalizedPathname = String(pathname || "/").trim() || "/";
+  const normalizedPathname = text(pathname) || "/" || "/";
   const normalizedStripPrefix = text(stripPrefix);
   if (!normalizedStripPrefix || normalizedStripPrefix === "/") return normalizedPathname;
   if (normalizedPathname === normalizedStripPrefix) return "/";
@@ -92,10 +92,7 @@ export function normalizeProxyPathname(
 export function proxyHttpRequest(request, response) {
   const startedAt = Date.now();
   const locale = resolveLocaleFromRequest(request);
-  const method =
-    String(request?.method || "GET")
-      .trim()
-      .toUpperCase() || "GET";
+  const method = (text(request?.method) || "GET").toUpperCase() || "GET";
   const traceId = text(request?.headers?.[FILE_TRACE_ID_HEADER]);
   let targetUrl = null;
   try {

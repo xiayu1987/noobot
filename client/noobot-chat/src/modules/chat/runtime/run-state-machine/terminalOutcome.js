@@ -9,11 +9,10 @@ import {
   MESSAGE_TERMINAL_STATE_OUTCOME,
 } from "./constants.js";
 import { normalizeState } from "./normalize.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizeTerminalOutcome(outcome = "") {
-  const normalizedOutcome = String(outcome || "")
-    .trim()
-    .toLowerCase();
+  const normalizedOutcome = text(outcome).toLowerCase();
   return MESSAGE_TERMINAL_OUTCOME_PRECEDENCE[normalizedOutcome] ? normalizedOutcome : "";
 }
 

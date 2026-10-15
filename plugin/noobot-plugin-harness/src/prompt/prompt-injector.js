@@ -72,9 +72,7 @@ function normalizePromptEntries(prompts = []) {
       id: text(item?.id),
       content: String(item?.content || ""),
       priority: Number.isFinite(Number(item?.priority)) ? Number(item.priority) : 50,
-      mode: String(item?.mode || "prepend")
-        .trim()
-        .toLowerCase(),
+      mode: (text(item?.mode) || "prepend").toLowerCase(),
       messageBlockPolicy: isPlainObject(item?.messageBlockPolicy)
         ? { ...item.messageBlockPolicy }
         : null,

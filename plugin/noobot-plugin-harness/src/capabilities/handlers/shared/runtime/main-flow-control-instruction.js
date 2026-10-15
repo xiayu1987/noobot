@@ -53,7 +53,7 @@ export function requestSummaryCheckpointMainFlowInstruction(
   if (!canonicalMessageIds.length) return null;
   const instruction = {
     action: HARNESS_MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
-    source: String(source || "plugin.summary").trim(),
+    source: text(source) || "plugin.summary",
     summarizedMessageIds: canonicalMessageIds,
   };
   const pending = Array.isArray(runtime.systemRuntime.mainFlowControlInstructions)

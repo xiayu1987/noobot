@@ -31,7 +31,7 @@ export function normalizeTaskPathRelative(
   const normalized = segments.filter((segment) => segment && segment !== ".").join("/");
   if (isAbsolute || hasParentTraversal || (!normalized && !allowRoot)) {
     throw new Error(
-      `${String(label || "task path").trim()} must be a safe relative path without parent traversal`,
+      `${text(label) || "task path"} must be a safe relative path without parent traversal`,
     );
   }
   return normalized;
@@ -87,7 +87,7 @@ export function resolveTaskPath({ token = "", roots = {}, kind = "", allowRoot =
 }
 
 export function projectTaskPathText(value = "", mappings = []) {
-  let text = String(value ?? "");
+  let inputText = String(value ?? "");
   const normalizedMappings = (Array.isArray(mappings) ? mappings : [])
     .map((item = {}) => {
       const sourceRoot = String(item.hostRoot || "");
@@ -103,17 +103,19 @@ export function projectTaskPathText(value = "", mappings = []) {
     .filter((item) => item.hostRoot && item.taskRoot)
     .sort((a, b) => b.hostRoot.length - a.hostRoot.length);
   for (const { hostRoot, taskRoot } of normalizedMappings) {
-    text = text.replaceAll(`${hostRoot}/`, taskRoot).replaceAll(`${hostRoot}\\`, taskRoot);
+    inputText = inputText
+      .replaceAll(`${hostRoot}/`, taskRoot)
+      .replaceAll(`${hostRoot}\\`, taskRoot);
     let cursor = 0;
-    while ((cursor = text.indexOf(hostRoot, cursor)) >= 0) {
-      const next = text[cursor + hostRoot.length];
+    while ((cursor = inputText.indexOf(hostRoot, cursor)) >= 0) {
+      const next = inputText[cursor + hostRoot.length];
       if (next === undefined || /[\s"'`\][),;]/.test(next)) {
-        text = `${text.slice(0, cursor)}${taskRoot}${text.slice(cursor + hostRoot.length)}`;
+        inputText = `${inputText.slice(0, cursor)}${taskRoot}${inputText.slice(cursor + hostRoot.length)}`;
         cursor += taskRoot.length;
       } else {
         cursor += hostRoot.length;
       }
     }
   }
-  return text;
+  return inputText;
 }

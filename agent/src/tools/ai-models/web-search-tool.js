@@ -75,11 +75,11 @@ function parseQueryStringFormat(format = "") {
   const raw = text(format);
   if (!raw) return { key: "q", value: "" };
   const [key, ...rest] = raw.split("=");
-  return { key: String(key || "q").trim() || "q", value: rest.join("=") };
+  return { key: text(key) || "q" || "q", value: rest.join("=") };
 }
 
 function parseBodyFormat(bodyFormat = "{}") {
-  const raw = String(bodyFormat || "{}").trim();
+  const raw = text(bodyFormat) || "{}";
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw);
@@ -231,7 +231,7 @@ export function createWebSearchTool({ agentContext }) {
           );
         } catch (error) {
           if (error?.isRecoverable || error?.recoverable) throw error;
-          const errorMessage = String(error?.message || String(error || "")).trim();
+          const errorMessage = text(error?.message) || String(error || "");
           throw recoverableToolError(errorMessage || tWebSearch(runtime, "searchFailed"), {
             code: String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_ERROR),
             details: {

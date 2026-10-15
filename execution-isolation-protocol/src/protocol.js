@@ -227,9 +227,7 @@ export function normalizeSandboxMounts(input = []) {
 
 export function resolveExecutionIsolation(globalConfig = {}) {
   const configured = objectOrEmpty(globalConfig?.security?.executionIsolation);
-  const mode = String(configured.mode || EXECUTION_ISOLATION_DEFAULTS.mode)
-    .trim()
-    .toLowerCase();
+  const mode = (text(configured.mode) || EXECUTION_ISOLATION_DEFAULTS.mode).toLowerCase();
   if (!Object.values(EXECUTION_ISOLATION_MODE).includes(mode)) {
     throw new Error(`invalid execution isolation mode: ${mode}`);
   }

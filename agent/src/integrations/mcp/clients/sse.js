@@ -106,15 +106,15 @@ export class SseMcpClient extends BaseMcpClient {
       signal: this._streamAbortController.signal,
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const inputText = await response.text().catch(() => "");
       throw recoverableToolError(
-        `${tSystem("mcp.sseConnectError")}: ${response.status} ${response.statusText} ${text}`.trim(),
+        `${tSystem("mcp.sseConnectError")}: ${response.status} ${response.statusText} ${inputText}`.trim(),
         {
           code: ERROR_CODE.RECOVERABLE_MCP_SSE_CONNECT_ERROR,
           details: {
             status: Number(response.status || 0),
             statusText: String(response.statusText || ""),
-            body: String(text || ""),
+            body: String(inputText || ""),
             baseUrl: this.baseUrl,
           },
         },
@@ -192,21 +192,21 @@ export class SseMcpClient extends BaseMcpClient {
       signal: this.signal || undefined,
     });
     if (!(postResponse.ok || postResponse.status === 202)) {
-      const text = await postResponse.text().catch(() => "");
+      const inputText = await postResponse.text().catch(() => "");
       const pending = this._pending.get(requestId);
       if (pending) {
         clearTimeout(pending.timer);
         this._pending.delete(requestId);
       }
       throw recoverableToolError(
-        `${tSystem("mcp.ssePostError")}(${method}): ${postResponse.status} ${postResponse.statusText} ${text}`.trim(),
+        `${tSystem("mcp.ssePostError")}(${method}): ${postResponse.status} ${postResponse.statusText} ${inputText}`.trim(),
         {
           code: ERROR_CODE.RECOVERABLE_MCP_SSE_POST_ERROR,
           details: {
             method,
             status: Number(postResponse.status || 0),
             statusText: String(postResponse.statusText || ""),
-            body: String(text || ""),
+            body: String(inputText || ""),
             messageUrl: this.messageUrl,
           },
         },

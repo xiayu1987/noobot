@@ -25,12 +25,10 @@ import {
 } from "../helpers/persistence-audit.js";
 import { registerSuiteSession } from "../suite-session-cleanup.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
+import { text } from "@noobot/shared/value";
 
-const E2E_MODEL_ALIAS = String(process.env.NOOBOT_E2E_MODEL_ALIAS || "GLM_5_3").trim();
-const E2E_STREAM_OUTPUT =
-  String(process.env.NOOBOT_E2E_STREAM_OUTPUT || "")
-    .trim()
-    .toLowerCase() === "true";
+const E2E_MODEL_ALIAS = text(process.env.NOOBOT_E2E_MODEL_ALIAS) || "GLM_5_3";
+const E2E_STREAM_OUTPUT = text(process.env.NOOBOT_E2E_STREAM_OUTPUT).toLowerCase() === "true";
 
 export async function installE2eModelPreferences(pageOrContext) {
   const e2eUserId = readE2eCredentials().userId;

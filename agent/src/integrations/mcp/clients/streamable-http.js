@@ -32,12 +32,12 @@ export class StreamableHttpMcpClient extends BaseMcpClient {
     const responseSessionId = text(response.headers?.get?.("mcp-session-id"));
     if (responseSessionId) this.sessionId = responseSessionId;
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const inputText = await response.text().catch(() => "");
       const reqId = String(
         response.headers?.get?.("x-request-id") || response.headers?.get?.("request-id") || "",
       ).trim();
       throw recoverableToolError(
-        `${tSystem("mcp.httpError")}(${method}): ${response.status} ${response.statusText} ${text}`.trim(),
+        `${tSystem("mcp.httpError")}(${method}): ${response.status} ${response.statusText} ${inputText}`.trim(),
         {
           code: ERROR_CODE.RECOVERABLE_MCP_HTTP_ERROR,
           details: {
@@ -45,7 +45,7 @@ export class StreamableHttpMcpClient extends BaseMcpClient {
             status: Number(response.status || 0),
             statusText: String(response.statusText || ""),
             requestId: reqId,
-            body: String(text || ""),
+            body: String(inputText || ""),
             baseUrl: this.baseUrl,
           },
         },

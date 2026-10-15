@@ -9,6 +9,7 @@ import {
   compareWithBaseline,
   findFallbackChains,
   findInlineTrimFallbacks,
+  findTextShadowing,
   RULES,
   renderModuleSection,
   replaceModuleSection,
@@ -47,10 +48,13 @@ test("detects String(x || d).trim() and String(x ?? d).trim() re-implementations
   assert.equal(findInlineTrimFallbacks('const v = String(a ?? "").trim();').length, 1);
   assert.equal(findInlineTrimFallbacks('const v = String(a || "message").trim();').length, 1);
   assert.equal(findInlineTrimFallbacks('const v = String(a?.b || "").trim?.();').length, 1);
+  assert.equal(findInlineTrimFallbacks('const v = text(a || "d");').length, 1);
+  assert.equal(findInlineTrimFallbacks("const v = text(a.x ?? b.x);").length, 1);
 });
 
 test("ignores text(), plain String().trim() and non-fallback arguments", () => {
   assert.equal(findInlineTrimFallbacks('const v = text(a) || "d";').length, 0);
+  assert.equal(findInlineTrimFallbacks('const v = (text(a) || "d") === "d";').length, 0);
   assert.equal(findInlineTrimFallbacks("const v = String(a).trim();").length, 0);
   assert.equal(findInlineTrimFallbacks("const v = String(a && b).trim();").length, 0);
   assert.equal(findInlineTrimFallbacks('const v = String(a || "").toLowerCase();').length, 0);
@@ -78,11 +82,35 @@ test("module table is generated from the grouped baseline", () => {
     inlineTrim: { "agent/src/a.js": 4 },
   };
   const section = renderModuleSection(baseline);
-  assert.match(section, /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件。/);
-  assert.match(section, /\| `agent` \| 2 \| 4 \|/);
-  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \|/);
+  assert.match(
+    section,
+    /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件；遮蔽 text\(\) 0 处 \/ 0 个文件。/,
+  );
+  assert.match(section, /\| `agent` \| 2 \| 4 \| 0 \|/);
+  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \| 0 \|/);
   const doc =
     "head\n<!-- fallback-chain-modules:start -->\nold\n<!-- fallback-chain-modules:end -->\ntail";
   assert.equal(replaceModuleSection(doc, baseline), `head\n${section}\ntail`);
   assert.throws(() => replaceModuleSection("no markers", baseline), /missing module markers/);
+});
+
+test("files importing text() must not rebind text in a local scope", () => {
+  const imported = 'import { text } from "@noobot/shared/value";\n';
+  assert.equal(
+    findTextShadowing(`${imported}function f({ text = "" }) { return text; }`).length,
+    1,
+  );
+  assert.equal(findTextShadowing(`${imported}function f(text) { return text; }`).length, 1);
+  assert.equal(
+    findTextShadowing(`${imported}const f = () => { const text = 1; return text; };`).length,
+    1,
+  );
+  assert.equal(
+    findTextShadowing(`${imported}function f({ text: inputText = "" }) { return text(inputText); }`)
+      .length,
+    0,
+  );
+  assert.equal(findTextShadowing("function f(text) { return text; }").length, 0);
+  const vue = `<template><div /></template>\n<script setup>\n${imported}function f(text) { return text; }\n</script>\n`;
+  assert.equal(findTextShadowing(vue, "Component.vue").length, 1);
 });

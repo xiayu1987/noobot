@@ -11,6 +11,7 @@ import {
   serializeContextMessage,
 } from "@noobot/context-protocol/policy/snapshot";
 import { fingerprintDiagnosticMessages } from "@noobot/shared/message-diagnostics";
+import { text } from "@noobot/shared/value";
 
 function isPlainObject(value) {
   if (!value || Object.prototype.toString.call(value) !== "[object Object]") return false;
@@ -32,9 +33,9 @@ export function assertModelMessageSnapshot(snapshot) {
   const backwriteRelations = new Set();
   for (const backwrite of snapshot.userMetaBackwrites) {
     expect(isPlainObject(backwrite)).toBe(true);
-    expect(String(backwrite.backwriteId || "").trim()).toBeTruthy();
-    expect(String(backwrite.userMetaMessageUid || "").trim()).toBeTruthy();
-    expect(String(backwrite.attachmentRef || "").trim()).toBeTruthy();
+    expect(text(backwrite.backwriteId)).toBeTruthy();
+    expect(text(backwrite.userMetaMessageUid)).toBeTruthy();
+    expect(text(backwrite.attachmentRef)).toBeTruthy();
     expect(backwriteIds.has(backwrite.backwriteId)).toBe(false);
     backwriteIds.add(backwrite.backwriteId);
     const relation = `${backwrite.userMetaMessageUid}::${backwrite.attachmentRef}`;
@@ -91,7 +92,7 @@ export function assertSerializedModelMessageSnapshot(snapshot) {
       }
     }
     if (message.type !== "tool") continue;
-    const callId = String(message.tool_call_id || "").trim();
+    const callId = text(message.tool_call_id);
     expect(callId).toBeTruthy();
     expect(declaredToolCallIds.has(callId), `orphan snapshot tool result ${callId}`).toBe(true);
     expect(completedToolCallIds.has(callId), `duplicate snapshot tool result ${callId}`).toBe(
@@ -111,8 +112,8 @@ export function assertSnapshotRecoveryInModelInput({ snapshot, continuation, tra
     dialogProcessId: snapshot.dialogProcessId,
     turnScopeId: snapshot.turnScopeId,
   };
-  expect(String(trace.dialogProcessId || "").trim()).toBeTruthy();
-  expect(String(trace.turnScopeId || "").trim()).toBe(continuation.identity.turnScopeId);
+  expect(text(trace.dialogProcessId)).toBeTruthy();
+  expect(text(trace.turnScopeId)).toBe(continuation.identity.turnScopeId);
   const hydrated = hydrateModelContextSnapshot(snapshot, previousIdentity);
   const recoveredBlocks = {
     system: hydrated.messageBlocks.system,
@@ -122,8 +123,8 @@ export function assertSnapshotRecoveryInModelInput({ snapshot, continuation, tra
       sessionId: snapshot.sessionId,
       parentSessionId: snapshot.parentSessionId,
       parentDialogProcessId: "",
-      dialogProcessId: String(trace.dialogProcessId || "").trim(),
-      turnScopeId: String(trace.turnScopeId || "").trim(),
+      dialogProcessId: text(trace.dialogProcessId),
+      turnScopeId: text(trace.turnScopeId),
     }),
   };
   expect(recoveredBlocks.history).toEqual(hydrated.messageBlocks.history);

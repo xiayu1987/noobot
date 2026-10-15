@@ -5,6 +5,7 @@
  */
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { appendCapabilityLog } from "../attachment-log-utils.js";
+import { text } from "@noobot/shared/value";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 
@@ -108,7 +109,7 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
 
   if (!changed) return false;
   appendCapabilityLog(ctx, {
-    domain: String(domain || "guidance").trim() || "guidance",
+    domain: text(domain) || "guidance" || "guidance",
     event: SHARED_EVENTS.workflowInvariantViolation,
     detail: { violations },
   });

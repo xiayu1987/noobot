@@ -527,7 +527,7 @@ class SubscriberBroadcastMethods {
     } catch (error) {
       return {
         result: "failed",
-        reason: String(error?.name || "send_error").trim() || "send_error",
+        reason: text(error?.name) || "send_error" || "send_error",
       };
     }
   }
@@ -540,9 +540,8 @@ class SubscriberBroadcastMethods {
     this.sendSocketEvent(targetSocket, {
       event: AGENT_TRANSPORT_EVENT.ERROR,
       data: createAgentTransportError({
-        code: String(options.code || "AGENT_PROXY_ERROR").trim(),
-        message:
-          String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() || AGENT_PROXY_ERROR.DEFAULT,
+        code: text(options.code) || "AGENT_PROXY_ERROR",
+        message: text(localizedError) || AGENT_PROXY_ERROR.DEFAULT || AGENT_PROXY_ERROR.DEFAULT,
         identity: options.identity || {
           sessionId: targetSocket?.__agentProxySessionId,
           turnScopeId: targetSocket?.__agentProxyTurnScopeId,

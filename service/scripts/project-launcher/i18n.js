@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const CONFIG_TEXT_BILINGUAL_PAIRS = [
   {
@@ -140,9 +140,7 @@ export function t(locale = "zh", key = "", params = {}) {
 }
 
 export function normalizeSetupLocale(input = "", fallback = "zh") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   if (!value) return fallback;
   if (["zh", "zh-cn", "zh_cn"].includes(value)) return "zh";
   if (["en", "en-us", "en_us"].includes(value)) return "en";
@@ -154,12 +152,7 @@ export function resolveConfigLanguage(setupLocale = "zh") {
 }
 
 export function resolveTextLocaleFromConfigLanguage(configLanguage = "") {
-  return String(configLanguage || "")
-    .trim()
-    .toLowerCase()
-    .startsWith("en")
-    ? "en"
-    : "zh";
+  return text(configLanguage).toLowerCase().startsWith("en") ? "en" : "zh";
 }
 
 function localizeConfigTextValue(value, targetLocale = "zh") {

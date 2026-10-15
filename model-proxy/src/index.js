@@ -14,12 +14,12 @@ import {
 import { createRequestCacheDiagnosticsTracker } from "./cache-diagnostics.js";
 import { createLogger } from "./logger.js";
 import { createHeaderExtractors, createProxyServer } from "./server.js";
+import { text } from "@noobot/shared/value";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const config = loadConfig();
-const proxyHost =
-  String(config.proxyHost || DEFAULT_CONFIG.proxyHost).trim() || DEFAULT_CONFIG.proxyHost;
+const proxyHost = text(config.proxyHost) || DEFAULT_CONFIG.proxyHost || DEFAULT_CONFIG.proxyHost;
 const proxyEntries = normalizeProxyEntries(config.proxies);
 const unknownModelName = String(config.unknownModelName || DEFAULT_CONFIG.unknownModelName);
 const unknownFlowName = String(config.unknownFlowName || DEFAULT_CONFIG.unknownFlowName);

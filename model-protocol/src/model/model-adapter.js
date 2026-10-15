@@ -4,6 +4,7 @@
  */
 
 import { MODEL_FAMILY_ID } from "./model-family.js";
+import { text } from "@noobot/shared/value";
 
 export const MODEL_ADAPTER_ID = Object.freeze({
   OPENAI_COMPATIBLE: "openai-compatible",
@@ -23,10 +24,7 @@ export const MODEL_FAMILY_ADAPTER_FACTS = Object.freeze({
 });
 
 export function resolveModelAdapterId({ modelFamily = "" } = {}) {
-  const family =
-    String(modelFamily || "")
-      .trim()
-      .toLowerCase() || MODEL_FAMILY_ID.GENERIC;
+  const family = text(modelFamily).toLowerCase() || MODEL_FAMILY_ID.GENERIC;
   if (!Object.prototype.hasOwnProperty.call(MODEL_FAMILY_ADAPTER_FACTS, family)) {
     throw new TypeError(`unsupported model family for adapter resolution: ${family}`);
   }

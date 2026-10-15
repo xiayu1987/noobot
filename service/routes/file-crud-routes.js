@@ -98,9 +98,7 @@ export function registerFileCrudRoutes(
           content,
         });
   const maskWorkspacePath = (pathValue = "") => {
-    const normalized = String(pathValue ?? "")
-      .trim()
-      .replaceAll("\\", "/");
+    const normalized = text(pathValue).replaceAll("\\", "/");
     const parts = normalized.match(/[^/]+/g) || [];
     return parts.length > 2
       ? `${parts.slice(0, 2).join("/")}/.../${parts[parts.length - 1]}`

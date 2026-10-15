@@ -80,8 +80,8 @@ export function createDependencyInstaller({
 
   function classifyInstallFailure({ result, label }) {
     const detail = compactProcessOutput(result);
-    const text = `${detail}\n${result?.error || ""}`.toLowerCase();
-    if (result?.code === -1 && text.includes("timed out")) {
+    const inputText = `${detail}\n${result?.error || ""}`.toLowerCase();
+    if (result?.code === -1 && inputText.includes("timed out")) {
       return {
         detail,
         failureKind: "timeout",
@@ -91,9 +91,9 @@ export function createDependencyInstaller({
     }
     if (
       result?.code === 1602 ||
-      text.includes("你已取消安装") ||
-      text.includes("cancelled") ||
-      text.includes("canceled")
+      inputText.includes("你已取消安装") ||
+      inputText.includes("cancelled") ||
+      inputText.includes("canceled")
     ) {
       return {
         detail,
@@ -103,10 +103,10 @@ export function createDependencyInstaller({
       };
     }
     if (
-      text.includes("msstore") ||
-      text.includes("source agreement") ||
-      text.includes("source agreements") ||
-      text.includes("协议")
+      inputText.includes("msstore") ||
+      inputText.includes("source agreement") ||
+      inputText.includes("source agreements") ||
+      inputText.includes("协议")
     ) {
       return {
         detail,
@@ -116,10 +116,10 @@ export function createDependencyInstaller({
       };
     }
     if (
-      text.includes("downloading") ||
-      text.includes("download failed") ||
-      text.includes("正在下载") ||
-      text.includes("下载失败") ||
+      inputText.includes("downloading") ||
+      inputText.includes("download failed") ||
+      inputText.includes("正在下载") ||
+      inputText.includes("下载失败") ||
       containsDocumentFoundationDownloadOrigin(detail)
     ) {
       return {

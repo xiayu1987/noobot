@@ -22,7 +22,7 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
   return {
     sessionId,
     parentSessionId: text(session?.parentSessionId),
-    caller: String(session?.caller || "user").trim() || "user",
+    caller: text(session?.caller) || "user" || "user",
     currentTaskId: text(session?.currentTaskId),
     createdAt: text(session?.createdAt),
     updatedAt: text(session?.updatedAt),
@@ -54,7 +54,7 @@ export function buildUnavailableSessionSummary({
   return {
     sessionId: normalizedSessionId,
     parentSessionId: text(parentSessionId),
-    caller: String(caller || "user").trim() || "user",
+    caller: text(caller) || "user" || "user",
     currentTaskId: "",
     createdAt: text(createdAt),
     updatedAt: text(updatedAt),
@@ -66,8 +66,8 @@ export function buildUnavailableSessionSummary({
     lastMessage: null,
     availability: "unavailable",
     unavailableReason: {
-      code: String(errorCode || "SESSION_PROTOCOL_INVALID").trim() || "SESSION_PROTOCOL_INVALID",
-      message: String(reason || "Session uses an unsupported protocol").trim(),
+      code: text(errorCode) || "SESSION_PROTOCOL_INVALID" || "SESSION_PROTOCOL_INVALID",
+      message: text(reason) || "Session uses an unsupported protocol",
     },
   };
 }
@@ -82,7 +82,7 @@ export function normalizeSessionsSummaryPayload(
     .map((item) => ({
       sessionId: text(item?.sessionId),
       parentSessionId: text(item?.parentSessionId),
-      caller: String(item?.caller || "user").trim() || "user",
+      caller: text(item?.caller) || "user" || "user",
       currentTaskId: text(item?.currentTaskId),
       createdAt: text(item?.createdAt),
       updatedAt: text(item?.updatedAt),
@@ -101,10 +101,9 @@ export function normalizeSessionsSummaryPayload(
       ...(item?.availability === "unavailable"
         ? {
             unavailableReason: {
-              code: String(item?.unavailableReason?.code || "SESSION_PROTOCOL_INVALID").trim(),
-              message: String(
-                item?.unavailableReason?.message || "Session uses an unsupported protocol",
-              ).trim(),
+              code: text(item?.unavailableReason?.code) || "SESSION_PROTOCOL_INVALID",
+              message:
+                text(item?.unavailableReason?.message) || "Session uses an unsupported protocol",
             },
           }
         : {}),

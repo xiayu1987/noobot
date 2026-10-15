@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "./value.js";
 export function resolveToolCallName(toolCall = {}) {
   if (!toolCall || typeof toolCall !== "object") return "";
-  if (toolCall.name) return String(toolCall.name || "").trim();
+  if (toolCall.name) return text(toolCall.name);
   const fn = toolCall.function && typeof toolCall.function === "object" ? toolCall.function : {};
-  return String(fn.name || "").trim();
+  return text(fn.name);
 }

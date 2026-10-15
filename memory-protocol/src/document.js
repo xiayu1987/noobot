@@ -38,13 +38,13 @@ function headerFor(kind) {
   return header;
 }
 
-function normalizeNewlines(text) {
-  return String(text ?? "").replace(/\r\n?/g, "\n");
+function normalizeNewlines(inputText) {
+  return String(inputText ?? "").replace(/\r\n?/g, "\n");
 }
 
-export function hasMemoryDocumentHeader(kind, text = "") {
+export function hasMemoryDocumentHeader(kind, inputText = "") {
   const header = headerFor(kind);
-  return normalizeNewlines(text).split("\n", 1)[0].trim() === header;
+  return normalizeNewlines(inputText).split("\n", 1)[0].trim() === header;
 }
 
 function splitHeader(header) {
@@ -56,22 +56,22 @@ export function currentMemoryDocumentVersion(kind) {
   return splitHeader(headerFor(kind)).version;
 }
 
-export function readMemoryDocumentVersion(kind, text = "") {
+export function readMemoryDocumentVersion(kind, inputText = "") {
   const { name } = splitHeader(headerFor(kind));
-  const firstLine = normalizeNewlines(text).split("\n", 1)[0].trim();
+  const firstLine = normalizeNewlines(inputText).split("\n", 1)[0].trim();
   const matched = /^(.+)\/([1-9]\d*)$/.exec(firstLine);
   return matched && matched[1] === name ? Number(matched[2]) : null;
 }
 
-export function readMemoryDocumentBody(kind, text = "") {
+export function readMemoryDocumentBody(kind, inputText = "") {
   const header = headerFor(kind);
-  if (!hasMemoryDocumentHeader(kind, text)) {
+  if (!hasMemoryDocumentHeader(kind, inputText)) {
     const error = new Error(`memory document must start with ${header}`);
     error.code = MEMORY_DOCUMENT_ERROR_CODE;
     error.kind = kind;
     throw error;
   }
-  const normalized = normalizeNewlines(text);
+  const normalized = normalizeNewlines(inputText);
   const newlineIndex = normalized.indexOf("\n");
   return newlineIndex < 0 ? "" : normalized.slice(newlineIndex + 1).trim();
 }

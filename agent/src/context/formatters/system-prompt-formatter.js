@@ -120,7 +120,7 @@ function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
       : {};
   return {
     now: text(dynamicInfo.now),
-    caller: String(dynamicInfo.caller || "user").trim() || "user",
+    caller: text(dynamicInfo.caller) || "user" || "user",
     config: {
       allowUserInteraction: config.allowUserInteraction !== false,
     },
@@ -154,7 +154,7 @@ function resolveContextPromptSettings(locale) {
     sections: contextPromptI18n?.sections || {},
     workspaceDirectoryDescriptions: asObject(contextPromptI18n?.workspaceDirectoryDescriptions),
     defaultWorkspaceDescription: text(contextPromptI18n?.defaultWorkspaceDescription),
-    emptyValueText: String(contextPromptI18n?.emptyValueText || "(none)").trim(),
+    emptyValueText: text(contextPromptI18n?.emptyValueText) || "(none)",
   };
 }
 

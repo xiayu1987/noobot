@@ -5,6 +5,7 @@
  */
 
 import { normalizeStringList } from "../utils.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizePluginIds(input = []) {
   return normalizeStringList(input, { dedupe: true });
@@ -16,10 +17,7 @@ export function resolvePluginSelection({
   mode = "",
 } = {}) {
   const disabled = normalizePluginIds(disabledPlugins);
-  const pluginsDisabled =
-    String(mode || "")
-      .trim()
-      .toLowerCase() === "none";
+  const pluginsDisabled = text(mode).toLowerCase() === "none";
   if (pluginsDisabled) {
     return {
       selectedPlugins: [],

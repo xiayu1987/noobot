@@ -199,7 +199,7 @@ async function executeImagesAsync({
   const baseUrl = normalizeBaseUrl(modelSpec.base_url);
   const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
   const requestHeaders = { ...headers, Authorization: `Bearer ${credential}` };
-  const size = String(options.size || "1:1").trim() || "1:1";
+  const size = text(options.size) || "1:1" || "1:1";
   const resolution = text(options.resolution) || (RATIO_SIZE.test(size) ? "1K" : "");
   const created = await requestJson({
     fetchImpl,
@@ -360,7 +360,7 @@ export async function executeOpenAiOperation({
         tools: [
           {
             type: "image_generation",
-            size: String(operation.options.size || "1024x1024").trim(),
+            size: text(operation.options.size) || "1024x1024",
           },
         ],
         tool_choice: "required",
@@ -377,7 +377,7 @@ export async function executeOpenAiOperation({
 }
 
 function mapOpenAiMultimodalAttachment(attachment = {}) {
-  const mimeType = String(attachment.mimeType || "application/octet-stream").trim();
+  const mimeType = text(attachment.mimeType) || "application/octet-stream";
   const data = text(attachment.data);
   const normalizedMimeType = mimeType.toLowerCase();
   if (normalizedMimeType.startsWith("image/")) return { type: "input_image", image_url: data };

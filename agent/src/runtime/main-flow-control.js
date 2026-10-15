@@ -42,7 +42,7 @@ function normalizeFinalNoToolsInstruction(instruction = null) {
   if (action !== MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN) return null;
   return {
     action,
-    reason: String(value.reason || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY).trim(),
+    reason: text(value.reason) || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
     source: text(value.source),
     requestedAt: text(value.requestedAt),
     detail: asObject(value.detail) || {},
@@ -126,7 +126,7 @@ export function requestMainFlowFinalNoToolsTurn(
   if (!systemRuntime) return null;
   const instruction = {
     action: MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN,
-    reason: String(reason || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY).trim(),
+    reason: text(reason) || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
     source: text(source),
     requestedAt: new Date().toISOString(),
     detail: asObject(detail) || {},

@@ -65,9 +65,7 @@ export function buildWorkflowResponsibilityConstraintUserPrompt(
   stage = "planning",
   options = {},
 ) {
-  const normalizedStage = String(stage || "planning")
-    .trim()
-    .toLowerCase();
+  const normalizedStage = (text(stage) || "planning").toLowerCase();
   let stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_PLANNING;
   if (normalizedStage.includes("revision"))
     stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_REVISION;

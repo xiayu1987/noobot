@@ -146,14 +146,14 @@ export function useThinkingTimeline(
   }
 
   function summarizeRealtimeLog(logItem = {}) {
-    const text = String(logItem?.text || "");
+    const inputText = String(logItem?.text || "");
     return {
       event: String(logItem?.event || ""),
       type: String(logItem?.type || ""),
       category: String(logItem?.category || ""),
       sequence: logItem?.sequence ?? logItem?.seq ?? null,
-      textLength: text.length,
-      textPreview: text.slice(0, 240),
+      textLength: inputText.length,
+      textPreview: inputText.slice(0, 240),
     };
   }
 

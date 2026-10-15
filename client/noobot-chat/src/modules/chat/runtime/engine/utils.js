@@ -100,14 +100,14 @@ function toolResultStatusKey(logItem = {}) {
   return "message.executionStatusCompleted";
 }
 
-function isToolLifecycleResult(logItem = {}, text = "") {
+function isToolLifecycleResult(logItem = {}, inputText = "") {
   const eventType = normalizeTrimmedString(logItem?.eventType || logItem?.rawEvent).toLowerCase();
-  return eventType === "tool_call_end" || /^[\w.-]+\s+completed(?:\s|$)/i.test(text);
+  return eventType === "tool_call_end" || /^[\w.-]+\s+completed(?:\s|$)/i.test(inputText);
 }
 
-function buildToolResultDisplay(logItem = {}, commandText = "", text = "") {
-  if (!isToolLifecycleResult(logItem, text)) return { text: commandText, statusKey: "" };
-  const compactToolName = text.match(/^([\w.-]+)\s+completed(?:\s|$)/i)?.[1] || "";
+function buildToolResultDisplay(logItem = {}, commandText = "", inputText = "") {
+  if (!isToolLifecycleResult(logItem, inputText)) return { text: commandText, statusKey: "" };
+  const compactToolName = inputText.match(/^([\w.-]+)\s+completed(?:\s|$)/i)?.[1] || "";
   const command = pickExecutionToolName(logItem) || commandText || compactToolName;
   return { text: normalizeTrimmedString(command), statusKey: toolResultStatusKey(logItem) };
 }
@@ -128,31 +128,31 @@ function pickExecutionCommandText(logItem = {}) {
   );
   if (explicitCommand) return explicitCommand;
 
-  const text = sanitizeExecutionLogText(logItem?.text);
-  if (text && !/^[\w.-]+\s+(started|completed)$/i.test(text)) return text;
+  const inputText = sanitizeExecutionLogText(logItem?.text);
+  if (inputText && !/^[\w.-]+\s+(started|completed)$/i.test(inputText)) return inputText;
 
   const toolName = pickExecutionToolName(logItem);
   const toolArgs = pickExecutionToolArgs(logItem);
   const commandFromToolFields = [toolName, toolArgs].filter(Boolean).join(" ").trim();
   if (commandFromToolFields) return commandFromToolFields;
 
-  return text;
+  return inputText;
 }
 
 function buildExecutionLogDisplay(logItem = {}) {
   const eventName = normalizeTrimmedString(logItem?.event).toLowerCase();
   const typeName = normalizeTrimmedString(logItem?.type).toLowerCase();
-  const text = sanitizeExecutionLogText(logItem?.text);
+  const inputText = sanitizeExecutionLogText(logItem?.text);
   const isToolCall = eventName === "tool_call" || typeName === "tool_call";
   const isToolResult = eventName === "tool_result" || typeName === "tool_result";
   if (isToolCall) return { text: pickExecutionCommandText(logItem), statusKey: "" };
   if (isToolResult) {
     const commandText = pickExecutionCommandText(logItem) || pickExecutionToolResult(logItem);
     return commandText
-      ? buildToolResultDisplay(logItem, commandText, text)
-      : { text, statusKey: "" };
+      ? buildToolResultDisplay(logItem, commandText, inputText)
+      : { text: inputText, statusKey: "" };
   }
-  return { text, statusKey: "" };
+  return { text: inputText, statusKey: "" };
 }
 
 function isInternalExecutionLog(logItem = {}) {
@@ -164,9 +164,9 @@ function isInternalExecutionLog(logItem = {}) {
 }
 
 export function sanitizeExecutionLogForDisplay(logItem = {}) {
-  const { text, statusKey } = buildExecutionLogDisplay(logItem);
-  if (!text || isInternalExecutionLog(logItem)) return null;
-  return statusKey ? { ...logItem, text, statusKey } : { ...logItem, text };
+  const { text: inputText, statusKey } = buildExecutionLogDisplay(logItem);
+  if (!inputText || isInternalExecutionLog(logItem)) return null;
+  return statusKey ? { ...logItem, text: inputText, statusKey } : { ...logItem, text: inputText };
 }
 
 export function isBlankCompatibleSameId(left, right) {
@@ -178,7 +178,7 @@ export function isBlankCompatibleSameId(left, right) {
 export function normalizeExecutionLogForRealtime(logItem = {}) {
   const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
   const rawEvent = normalizeTrimmedString(logItem?.event);
-  const text = sanitizeExecutionLogText(
+  const inputText = sanitizeExecutionLogText(
     data?.text ||
       logItem?.text ||
       data?.displayText ||
@@ -197,6 +197,6 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
       normalizeTrimmedString(data?.category || logItem?.category || "execution") || "execution",
     dialogProcessId: normalizeTrimmedString(data?.dialogProcessId || logItem?.dialogProcessId),
     ts: normalizeTrimmedString(data?.ts || logItem?.ts) || nowIso(),
-    text,
+    text: inputText,
   };
 }
