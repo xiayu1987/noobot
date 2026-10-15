@@ -195,8 +195,8 @@ export function applySubSessionMessageOrdering({
   targetMessage.sequenceDomain = sequenceDomain;
   targetMessage.sequenceScopeId = text(ordering.scopeId);
   targetMessage.firstSequence = Number(targetMessage.firstSequence || ordering.sequence);
-  targetMessage.workflowRunId = text(payload.workflowRunId || targetMessage.workflowRunId);
-  targetMessage.nodeExecutionId = text(payload.nodeExecutionId || targetMessage.nodeExecutionId);
+  targetMessage.workflowRunId = text(payload.workflowRunId);
+  targetMessage.nodeExecutionId = text(payload.nodeExecutionId);
 }
 
 export function buildNextSubSessionState({
@@ -219,11 +219,11 @@ export function buildNextSubSessionState({
   return {
     ...currentSession,
     sessionId,
-    parentSessionId: text(payload.parentSessionId || currentSession.parentSessionId),
+    parentSessionId: text(payload.parentSessionId),
     dialogProcessId: text(payload.dialogProcessId || currentSession.dialogProcessId),
     turnScopeId: text(identity.turnScopeId || currentSession.turnScopeId),
-    workflowRunId: text(payload.workflowRunId || currentSession.workflowRunId),
-    nodeExecutionId: text(payload.nodeExecutionId || currentSession.nodeExecutionId),
+    workflowRunId: text(payload.workflowRunId),
+    nodeExecutionId: text(payload.nodeExecutionId),
     messages,
     eventsById: {
       ...(currentSession.eventsById || {}),

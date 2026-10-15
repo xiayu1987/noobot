@@ -569,4 +569,62 @@ describe("sub-session realtime message projection", () => {
     expect(store.workflowNodeStateRegistry.workflows["workflow:new-turn"]).toBeTruthy();
     expect(store.selectSubSessionMessages("new-child")).toBeTruthy();
   });
+
+  it("rejects events without complete workflow identity before projection", () => {
+    const store = useChatStore();
+    const identity = { sessionId: "child-session", turnScopeId: "workflow-node:execution-1" };
+    const missingNode = messageEvent("turn_presentation_committed", {
+      ...identity,
+      nodeExecutionId: undefined,
+    });
+    delete missingNode.payload.nodeExecutionId;
+    expect(applyMessageEvent(store, "", missingNode)).toMatchObject({
+      applied: false,
+      reason: "invalid_authoritative_message_event",
+    });
+    const missingParent = messageEvent("turn_presentation_committed", identity);
+    delete missingParent.payload.parentSessionId;
+    expect(applyMessageEvent(store, "", missingParent)).toMatchObject({
+      applied: false,
+      reason: "invalid_authoritative_message_event",
+    });
+    expect(store.selectSubSessionMessages("child-session")).toBeNull();
+  });
+
+  it("projects workflow identity from the latest event payload", () => {
+    const store = useChatStore();
+    const identity = {
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:execution-1",
+      parentSessionId: "parent-a",
+      workflowRunId: "workflow-a",
+      nodeExecutionId: "node-a",
+      messageId: "msg-assistant-1",
+    };
+    commitPresentation(store, identity);
+    applyMessageEvent(
+      store,
+      "thinking_delta",
+      messageEvent("thinking", {
+        ...identity,
+        parentSessionId: "parent-b",
+        workflowRunId: "workflow-b",
+        nodeExecutionId: "node-b",
+        eventId: "thinking-1",
+        sequence: 2,
+        role: "assistant",
+        text: "step",
+      }),
+    );
+    const session = store.selectSubSessionMessages("child-session");
+    expect(session).toMatchObject({
+      parentSessionId: "parent-b",
+      workflowRunId: "workflow-b",
+      nodeExecutionId: "node-b",
+    });
+    expect(session.messages[1]).toMatchObject({
+      workflowRunId: "workflow-b",
+      nodeExecutionId: "node-b",
+    });
+  });
 });
