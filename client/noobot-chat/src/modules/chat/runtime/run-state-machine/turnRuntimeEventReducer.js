@@ -65,17 +65,16 @@ function createObservation({ registry, event, rawEvent, route, turnScopeId }) {
 }
 
 function resolveProjectedStart(current, currentValue, event, rawEvent) {
-  const observed = rawEvent.thinkingStartedAt || rawEvent.startedAt;
+  const observed = rawEvent.startedAt;
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return observed || currentValue.startedAt;
   }
-  if (rawEvent.canonicalTimingObserved === true) return observed || currentValue.startedAt;
   return currentValue.startedAt || observed;
 }
 
 function resolveProjectedFinish(currentValue, event, rawEvent, terminal) {
   if (!terminal) return currentValue.finishedAt;
-  const observed = rawEvent.thinkingFinishedAt || rawEvent.finishedAt;
+  const observed = rawEvent.finishedAt;
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return observed || currentValue.finishedAt || event.updatedAt;
   }

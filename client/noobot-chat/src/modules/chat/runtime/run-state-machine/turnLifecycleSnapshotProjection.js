@@ -71,7 +71,7 @@ function projectSnapshotCompletion(source, current, revision, sourceIsTerminal) 
 }
 
 function projectSnapshotTiming(source, current, sourceIsTerminal) {
-  const startedAt = text(source.startedAt || source.thinkingStartedAt || current.startedAt);
+  const startedAt = text(source.startedAt || current.startedAt);
   const updatedAt = text(source.updatedAt || current.updatedAt);
   return {
     startedAt,

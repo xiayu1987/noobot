@@ -147,12 +147,12 @@ export function createChatEngineSender({
       uploadCount: explicitAttachmentFiles?.length ?? uploadFiles.value.length,
     });
     const turnStartedAtMs = Date.now();
-    const thinkingStartedAt = new Date(turnStartedAtMs).toISOString();
+    const startedAt = new Date(turnStartedAtMs).toISOString();
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId,
       turnScopeId,
-      thinkingStartedAt,
+      startedAt,
       source: "send_flow",
     });
     const {

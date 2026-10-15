@@ -163,8 +163,8 @@ describe("useChatEngine.send-stream", () => {
       terminalResolutionRevision: 3,
       terminalResolutionSequence: 3,
       terminalResolutionTurnTiming: {
-        thinkingStartedAt,
-        thinkingFinishedAt,
+        startedAt: thinkingStartedAt,
+        finishedAt: thinkingFinishedAt,
       },
     });
 
@@ -202,7 +202,7 @@ describe("useChatEngine.send-stream", () => {
         sessionId: "s-late-completed",
         turnScopeId: payload.identity.turnScopeId,
         dialogProcessId: "dp-late-completed",
-        thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+        startedAt: "2026-07-15T10:00:00.000Z",
       });
       emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "completed", {
         turnScopeId: payload.identity.turnScopeId,

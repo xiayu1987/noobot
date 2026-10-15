@@ -19,8 +19,8 @@ export function applyTurnTimingUpdate(registry, update = {}) {
   const sessionId = runtimeText(update?.sessionId);
   const turnScopeId = canonicalTurnScopeId(update?.turnScopeId);
   const dialogProcessId = runtimeText(update?.dialogProcessId);
-  const startedAt = runtimeText(update?.thinkingStartedAt || update?.startedAt);
-  const finishedAt = runtimeText(update?.thinkingFinishedAt || update?.finishedAt);
+  const startedAt = runtimeText(update?.startedAt);
+  const finishedAt = runtimeText(update?.finishedAt);
   const modelLoopRound = normalizeModelLoopRound(update?.modelLoopRound);
   if (!sessionId || !turnScopeId) return { applied: false, reason: "missing_timing_identity" };
   if (!startedAt && !finishedAt && !modelLoopRound) {
@@ -81,8 +81,8 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
   const timings = sourceTimings.map((item = {}) => ({
     turnScopeId: canonicalTurnScopeId(item?.turnScopeId),
     dialogProcessId: runtimeText(item?.dialogProcessId),
-    startedAt: runtimeText(item?.thinkingStartedAt || item?.startedAt),
-    finishedAt: runtimeText(item?.thinkingFinishedAt || item?.finishedAt),
+    startedAt: runtimeText(item?.thinkingStartedAt),
+    finishedAt: runtimeText(item?.thinkingFinishedAt),
     modelLoopRound: normalizeModelLoopRound(item?.modelLoopRound),
   }));
   if (

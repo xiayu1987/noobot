@@ -77,8 +77,8 @@ describe("sessionRunStateMachine message runtime", () => {
         turnScopeId: "client-turn:stopped-history",
       },
       turnTiming: {
-        thinkingStartedAt: "2026-09-10T13:51:21.730Z",
-        thinkingFinishedAt: "",
+        startedAt: "2026-09-10T13:51:21.730Z",
+        finishedAt: "",
       },
     });
 
@@ -328,7 +328,7 @@ describe("sessionRunStateMachine message runtime", () => {
     });
     expect(
       resolveSessionRunMessageRuntimeView(sendingMessage, {
-        thinkingStartedAt: "2026-01-01T00:00:00.000Z",
+        startedAt: "2026-01-01T00:00:00.000Z",
       }),
     ).toMatchObject({
       state: BackendChannelState.SENDING,

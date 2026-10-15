@@ -165,8 +165,8 @@ export function selectTurnMessageRuntime(
           BackendChannelState.RECONNECTING,
           BackendChannelState.INTERACTION_PENDING,
         ].includes(turn.state)),
-    startedAt: turn.startedAt || turn.thinkingStartedAt || "",
-    finishedAt: turn.finishedAt || turn.thinkingFinishedAt || "",
+    startedAt: turn.startedAt || "",
+    finishedAt: turn.finishedAt || "",
     modelLoopRound: Number(turn.modelLoopRound || 0),
   };
 }

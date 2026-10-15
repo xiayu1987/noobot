@@ -139,8 +139,8 @@ export function resolveTurnRuntimeView({
     terminal,
     inFlightAssistant,
     canStopTarget,
-    startedAt: turnTiming?.thinkingStartedAt || "",
-    finishedAt: turnTiming?.thinkingFinishedAt || "",
+    startedAt: turnTiming?.startedAt || "",
+    finishedAt: turnTiming?.finishedAt || "",
     modelLoopRound: Number(turnTiming?.modelLoopRound || 0),
     source: isTerminalRunState(persistedStatus)
       ? "persisted"

@@ -66,7 +66,7 @@ describe("useChatStore turn runtime actions", () => {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
-      thinkingStartedAt: "2026-07-21T10:00:00.000Z",
+      startedAt: "2026-07-21T10:00:00.000Z",
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
     await nextTick();
@@ -126,7 +126,7 @@ describe("useChatStore turn runtime actions", () => {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
-      thinkingStartedAt: "2026-07-21T10:00:00.000Z",
+      startedAt: "2026-07-21T10:00:00.000Z",
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
     const afterSending = store.turnRuntimeRegistry;

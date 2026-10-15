@@ -263,8 +263,8 @@ const messageRuntime = computed(() => {
     messageItem: props.messageItem,
     turnTiming: realtimeRuntime
       ? {
-          thinkingStartedAt: realtimeRuntime.startedAt,
-          thinkingFinishedAt: realtimeRuntime.finishedAt,
+          startedAt: realtimeRuntime.startedAt,
+          finishedAt: realtimeRuntime.finishedAt,
           modelLoopRound: realtimeRuntime.modelLoopRound,
         }
       : null,
@@ -306,8 +306,8 @@ const workflowChildRenderDiagnosticsSignature = computed(() => {
     thinkingPanelVisible: thinkingPanelVisible.value,
     breathing: unifiedRuntimePanelsRunning.value,
     runtimeState: String(runtime?.state || ""),
-    runtimeStartedAt: String(runtime?.startedAt || runtime?.thinkingStartedAt || ""),
-    runtimeFinishedAt: String(runtime?.finishedAt || runtime?.thinkingFinishedAt || ""),
+    runtimeStartedAt: String(runtime?.startedAt || ""),
+    runtimeFinishedAt: String(runtime?.finishedAt || ""),
   });
 });
 watch(
