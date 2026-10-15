@@ -44,7 +44,6 @@ export function buildSubSessionSnapshotRegistryEntry({
   return {
     ...current,
     ...messageSnapshot,
-    id: sessionId,
     sessionId,
     messages,
     sequence: num(current.sequence),

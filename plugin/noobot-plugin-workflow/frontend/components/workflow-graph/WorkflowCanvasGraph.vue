@@ -92,13 +92,13 @@ const normalizedNodes = computed(() => {
   if (!baseNodes.length) return [];
 
   const hasStartBoundary = baseNodes.some((item) => {
-    const nodeId = String(item?.nodeId || item?.id || "")
+    const nodeId = String(item?.nodeId || "")
       .trim()
       .toLowerCase();
     return Number(item?.stateType) === 0 && nodeId === "start";
   });
   const hasEndBoundary = baseNodes.some((item) => {
-    const nodeId = String(item?.nodeId || item?.id || "")
+    const nodeId = String(item?.nodeId || "")
       .trim()
       .toLowerCase();
     return Number(item?.stateType) === 1 && nodeId === "end";
@@ -154,7 +154,7 @@ const normalizedNodes = computed(() => {
 });
 
 function resolveSemanticNodeId(nodeItem = {}) {
-  return String(nodeItem?.nodeId || nodeItem?.id || "").trim();
+  return String(nodeItem?.nodeId || "").trim();
 }
 
 function buildTopologyRows(nodes = [], flowtos = []) {
@@ -474,7 +474,7 @@ const edgeSegments = computed(() => {
   if (flowtos.length) {
     const nodeBySemanticId = new Map();
     for (const nodeItem of positionedNodes.value) {
-      const semanticId = String(nodeItem?.nodeId || nodeItem?.id || "").trim();
+      const semanticId = String(nodeItem?.nodeId || "").trim();
       if (!semanticId) continue;
       nodeBySemanticId.set(semanticId, nodeItem);
     }

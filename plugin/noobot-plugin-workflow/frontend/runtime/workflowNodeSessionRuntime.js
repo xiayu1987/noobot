@@ -6,12 +6,7 @@
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { text } from "@noobot/shared/value";
 export function resolveWorkflowDetailSessionId(detail = {}) {
-  return text(
-    detail?.sessionId ||
-      detail?.sessionSummary?.sessionId ||
-      detail?.session?.sessionId ||
-      detail?.session?.id,
-  );
+  return text(detail?.sessionId || detail?.sessionSummary?.sessionId || detail?.session?.sessionId);
 }
 
 function resolveWorkflowRootSessionId(nodeItem = {}, workflowPayload = {}) {

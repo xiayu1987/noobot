@@ -66,7 +66,6 @@ export function createSubSessionStore({
     const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
     registry.sessions = registry.sessions || {};
     const currentSession = registry.sessions[sessionId] || {
-      id: sessionId,
       sessionId,
       messages: [],
       eventsById: {},
@@ -74,7 +73,6 @@ export function createSubSessionStore({
     };
     const nextSession = {
       ...currentSession,
-      id: sessionId,
       sessionId,
       ...buildSubSessionContainerIdentity(eventData, currentSession),
     };

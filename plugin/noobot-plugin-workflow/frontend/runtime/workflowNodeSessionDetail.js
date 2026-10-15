@@ -164,7 +164,7 @@ function projectExecutionSessionDetail(payload, requestedChildSessionId) {
   return {
     state: messages.length ? "ready" : "empty",
     sessionId: String(
-      sessionSummary.sessionId || session.sessionId || session.id || requestedChildSessionId,
+      sessionSummary.sessionId || session.sessionId || requestedChildSessionId,
     ).trim(),
     aggregateVersion,
     snapshotEnvelope,

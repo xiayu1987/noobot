@@ -76,7 +76,7 @@ watch(
       previousVersion: Number(previousVersion || 0),
       subSessionMessageRegistryVersion: Number(version || 0),
       subSessions: Object.values(sessions).map((session = {}) => ({
-        sessionId: String(session?.sessionId || session?.id || ""),
+        sessionId: String(session?.sessionId || ""),
         messages: (Array.isArray(session?.messages) ? session.messages : []).map(
           (message = {}) => ({
             id: String(message?.messageId || ""),

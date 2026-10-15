@@ -46,12 +46,7 @@ function createExecutionController({ props, refs, nodeViewTransaction }) {
         : null;
     return {
       detail,
-      sessionId: text(
-        detail?.execution?.sessionId ||
-          detail?.session?.sessionId ||
-          detail?.session?.id ||
-          sessionIdHint,
-      ),
+      sessionId: text(detail?.execution?.sessionId || detail?.session?.sessionId || sessionIdHint),
     };
   }
 
@@ -65,7 +60,7 @@ function createExecutionController({ props, refs, nodeViewTransaction }) {
     const messages = Array.isArray(detail.messages) ? detail.messages : [];
     refs.selectedExecutionId.value = id;
     nodeViewTransaction.replace(nodeViewTransaction.ticket(), {
-      sessionId: text(execution.sessionId || session.sessionId || session.id),
+      sessionId: text(execution.sessionId || session.sessionId),
       messages,
       rawMessages: messages,
       sessionSummary: { ...session, executionId: id, messages },

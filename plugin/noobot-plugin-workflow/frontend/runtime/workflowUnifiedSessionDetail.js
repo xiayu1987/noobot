@@ -180,15 +180,13 @@ function selectExecutionSessionProjection({
   selectSessionMessages,
 }) {
   const executionSessionDoc = contentOnly(executionDetail.session || {});
-  const executionSessionId = text(
-    execution.sessionId || executionSessionDoc.sessionId || executionSessionDoc.id,
-  );
+  const executionSessionId = text(execution.sessionId || executionSessionDoc.sessionId);
   const isolatedSessionDoc = selectIsolatedSessionDocument(
     isolatedNodeSessionId,
     selectSessionMessages,
   );
   const hasIsolatedSessionProjection = Boolean(
-    isolatedNodeSessionId && text(isolatedSessionDoc.sessionId || isolatedSessionDoc.id),
+    isolatedNodeSessionId && text(isolatedSessionDoc.sessionId),
   );
   const executionOwnsIsolatedSession = Boolean(
     !isolatedNodeSessionId || !executionSessionId || executionSessionId === isolatedNodeSessionId,

@@ -50,10 +50,10 @@ function isStateNode(nodeItem = {}, boundaryType = "") {
 function resolveStateTypeKey(nodeItem = {}, boundaryType = "") {
   if (boundaryType === "start") return "start";
   if (boundaryType === "end") return "end";
-  const nodeId = String(nodeItem?.nodeId || nodeItem?.id || "")
+  const nodeId = String(nodeItem?.nodeId || "")
     .trim()
     .toLowerCase();
-  const nodeName = String(nodeItem?.nodeName || nodeItem?.name || "");
+  const nodeName = String(nodeItem?.nodeName || "");
   const stateType = Number(nodeItem?.stateType);
   if (stateType === 1 || nodeId === "end" || isEndName(nodeName)) return "end";
   if (stateType === 2) return "branch";

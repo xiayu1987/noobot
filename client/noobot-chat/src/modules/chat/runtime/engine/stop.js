@@ -46,7 +46,6 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
         ? active
         : {
             sessionId,
-            id: sessionId,
             parentSessionId: execution.parentSessionId || "",
             parentDialogProcessId: execution.parentDialogProcessId || "",
             messages: [],

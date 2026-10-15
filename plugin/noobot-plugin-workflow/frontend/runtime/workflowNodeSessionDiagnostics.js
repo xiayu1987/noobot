@@ -35,9 +35,7 @@ export function logWorkflowNodeDetailProjection(
   detail = {},
 ) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
-  const executionSessionId = text(
-    detail?.execution?.sessionId || detail?.session?.sessionId || detail?.session?.id,
-  );
+  const executionSessionId = text(detail?.execution?.sessionId || detail?.session?.sessionId);
   const messages = Array.isArray(detail?.messages) ? detail.messages : [];
   const identity = {
     sessionId: text(detail?.sessionId),

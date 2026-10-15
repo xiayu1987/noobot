@@ -215,12 +215,10 @@ export function buildNextSubSessionState({
 }) {
   const scopeKey = sequenceIdentity.sequenceKey;
 
-  if (transient)
-    return { ...currentSession, sessionId, id: sessionId, messages, updatedAt: occurredAt };
+  if (transient) return { ...currentSession, sessionId, messages, updatedAt: occurredAt };
   return {
     ...currentSession,
     sessionId,
-    id: sessionId,
     parentSessionId: text(payload.parentSessionId || currentSession.parentSessionId),
     dialogProcessId: text(payload.dialogProcessId || currentSession.dialogProcessId),
     turnScopeId: text(identity.turnScopeId || currentSession.turnScopeId),

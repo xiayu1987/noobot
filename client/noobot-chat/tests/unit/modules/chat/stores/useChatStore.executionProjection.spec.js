@@ -35,6 +35,7 @@ describe("useChatStore execution projection", () => {
       workflowRunId: "workflow-1",
       nodeExecutionId: "node-1",
     });
+    expect(store.selectSubSessionMessages("sub-session-1")).not.toHaveProperty("id");
   });
 
   it("selects sub session messages by id and returns null for unknown sessions", () => {
