@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { firstText, isPlainObject, text } from "@noobot/shared/value";
+import { firstText, text } from "@noobot/shared/value";
 import {
   SEMANTIC_TRANSFER_REGISTRATION,
   TRANSFER_REASON,
@@ -32,16 +32,6 @@ function normalizeScenario(value = "") {
 
 function normalizeStrategy(value = "") {
   return text(value).toLowerCase();
-}
-
-function normalizePayloadAndOptions(options = {}) {
-  const payload = isPlainObject(options?.payload) ? options.payload : {};
-  const context = isPlainObject(options?.context) ? options.context : {};
-  return {
-    ...options,
-    ...payload,
-    ...(isPlainObject(context) ? { context } : {}),
-  };
 }
 
 function createDirectTextTransfer({
@@ -233,7 +223,6 @@ export async function transferSemanticContent({
   agentContext = null,
   ...options
 } = {}) {
-  const merged = normalizePayloadAndOptions(options);
   const normalizedScenario = normalizeScenario(scenario);
   const normalizedStrategy = normalizeStrategy(strategy);
   assertSemanticTransferRegistration({
@@ -243,7 +232,7 @@ export async function transferSemanticContent({
 
   if (normalizedScenario === SEMANTIC_TRANSFER_SCENARIO.TOOL) {
     return transferToolStrategy({
-      ...merged,
+      ...options,
       strategy: normalizedStrategy,
       runtime,
       agentContext,
@@ -251,7 +240,7 @@ export async function transferSemanticContent({
   }
   if (normalizedScenario === SEMANTIC_TRANSFER_SCENARIO.WORKFLOW) {
     return transferBotPluginStrategy({
-      ...merged,
+      ...options,
       strategy: normalizedStrategy,
       runtime,
       agentContext,
@@ -259,7 +248,7 @@ export async function transferSemanticContent({
   }
   if (normalizedScenario === SEMANTIC_TRANSFER_SCENARIO.HARNESS) {
     return transferAgentPluginStrategy({
-      ...merged,
+      ...options,
       strategy: normalizedStrategy,
       runtime,
       agentContext,

@@ -128,9 +128,11 @@ test("workflow hook injects upstream node result attachments into downstream sub
   assert.match(nodeESystem, /节点B/);
   assert.match(nodeESystem, /节点C/);
   assert.doesNotMatch(nodeESystem, /节点A \/ workflow-node-1-节点A-result\.md/);
-  assert.equal(
-    semanticTransferCalls.some((item = {}) => String(item?.strategy || "") === "workflow_subagent"),
-    true,
+  assert.deepEqual(
+    semanticTransferCalls.filter((item = {}) =>
+      String(item?.producer?.id ?? "").startsWith("workflow-upstream:"),
+    ),
+    [],
   );
 });
 

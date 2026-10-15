@@ -9,7 +9,6 @@ import {
   getWorkflowTransferPayloadFromResult,
   resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
-import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 import {
   formatAttachmentIdentityRef,
@@ -118,17 +117,9 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
       pendingStep?.nodeId ||
       tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
-  const message =
-    customUpstreamMessage || buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines);
-  return transferUpstreamSemanticContent({
-    ctx,
-    pendingStep,
-    pendingName,
-    normalizedResults,
-    lines,
-    failureLines,
-    message,
-  });
+  return (
+    customUpstreamMessage || buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines)
+  );
 }
 
 function collectUpstreamEvidence(results, ctx, locale) {
@@ -214,37 +205,4 @@ function buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines) {
     lines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_RESULT_TITLE) : "",
     ...lines,
   ].join("\n");
-}
-
-async function transferUpstreamSemanticContent({
-  ctx,
-  pendingStep,
-  pendingName,
-  normalizedResults,
-  lines,
-  failureLines,
-  message,
-}) {
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  if (typeof transferSemanticContent !== "function") return message;
-  try {
-    const transferred = await transferSemanticContent({
-      scenario: "workflow",
-      strategy: "workflow_subagent",
-      content: message,
-      producer: { type: "plugin", id: `workflow-upstream:${pendingName}` },
-      meta: {
-        pendingNodeId: text(pendingStep?.nodeId),
-        pendingNodeName: pendingName,
-        upstreamResultCount: normalizedResults.length,
-        upstreamAttachmentLineCount: lines.length,
-        failureCount: failureLines.length,
-      },
-    });
-    return String(transferred?.injectionMessage || message).trim() || message;
-  } catch (error) {
-    console.warn("[workflow] upstream semantic transfer failed:", error);
-    return message;
-  }
 }
