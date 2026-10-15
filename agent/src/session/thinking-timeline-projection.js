@@ -107,7 +107,7 @@ export function projectThinkingTimeline(messages = [], rootMessage = {}, filters
   const toolTimeline = mergeTimeline(
     roundMessages,
     "toolTimeline",
-    (item) => item?.key || item?.toolCallId || item?.tool_call_id,
+    (item) => item?.key || item?.toolCallId,
   );
   const activityTimeline = mergeCanonicalActivityTimelines(
     ...roundMessages.map((message) => message?.activityTimeline || []),

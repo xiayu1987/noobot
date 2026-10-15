@@ -22,7 +22,7 @@ function resolveMessageTurnScopeMergeKey(messageItem = {}) {
 
 function buildModelRunLabel(messageItem = {}) {
   const modelAlias = String(messageItem?.modelAlias || "").trim();
-  const modelName = String(messageItem?.modelName || messageItem?.model || "").trim();
+  const modelName = String(messageItem?.modelName || "").trim();
   if (modelAlias && modelName) return `${modelAlias} (${modelName})`;
   return modelAlias || modelName || "";
 }

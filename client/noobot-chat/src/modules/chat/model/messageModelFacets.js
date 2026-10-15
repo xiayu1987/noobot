@@ -38,7 +38,7 @@ function buildMessageContentFacet(canonicalMessage = {}) {
 function buildMessageModelRunFacet(canonicalMessage = {}) {
   return {
     modelAlias: canonicalMessage.modelAlias || "",
-    modelName: canonicalMessage.modelName || canonicalMessage.model || "",
+    modelName: canonicalMessage.modelName || "",
     modelRuns: normalizeArray(canonicalMessage.modelRuns),
   };
 }

@@ -43,8 +43,8 @@ export function compactThinkingTimeline(items = []) {
     ...(summary ? { summary } : {}),
   });
   return (Array.isArray(items) ? items : []).map((item = {}) => ({
-    key: String(item.key || item.toolCallId || item.tool_call_id || "").trim(),
-    toolCallId: String(item.toolCallId || item.tool_call_id || "").trim(),
+    key: String(item.key || item.toolCallId || "").trim(),
+    toolCallId: String(item.toolCallId || "").trim(),
     tool: String(item.tool || "").trim(),
     status: String(item.status || "").trim(),
     ...(String(item.riskLevel || "").trim() ? { riskLevel: String(item.riskLevel).trim() } : {}),
@@ -134,11 +134,10 @@ export function buildThinkingDetailCountByMessage(messages = []) {
     );
     for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      const key = String(item?.key || item?.toolCallId || item?.tool_call_id || "").trim();
+      const key = String(item?.key || item?.toolCallId || "").trim();
       const existingIndex = key
         ? facts.toolTimeline.findIndex(
-            (entry) =>
-              String(entry?.key || entry?.toolCallId || entry?.tool_call_id || "").trim() === key,
+            (entry) => String(entry?.key || entry?.toolCallId || "").trim() === key,
           )
         : -1;
       if (existingIndex >= 0) {
