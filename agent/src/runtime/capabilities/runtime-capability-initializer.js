@@ -87,37 +87,11 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
   };
 }
 
-function resolveSharedToolRuntime(runtimeContext = {}, payloadRuntime = null) {
-  if (!isPlainObject(payloadRuntime)) return runtimeContext;
-  return {
-    ...runtimeContext,
-    ...payloadRuntime,
-    systemRuntime: {
-      ...(isPlainObject(runtimeContext?.systemRuntime) ? runtimeContext.systemRuntime : {}),
-      ...(isPlainObject(payloadRuntime?.systemRuntime) ? payloadRuntime.systemRuntime : {}),
-    },
-  };
-}
-
-function resolveSharedToolAgentContext(runtimeContext = {}, payload = {}) {
-  return (
-    payload?.agentContext ||
-    payload?.runtime?.systemRuntime?.agentContext ||
-    runtimeContext?.systemRuntime?.agentContext ||
-    null
-  );
-}
-
 function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
   sharedTools.semanticTransfer = {
-    resolveIdentity: (payload = {}) => {
-      const runtime = resolveSharedToolRuntime(runtimeContext, payload?.runtime);
-      return resolveRuntimeTransferIdentity({ ...payload, runtime });
-    },
     transferSemanticContent: (payload = {}) => {
-      const runtime = resolveSharedToolRuntime(runtimeContext, payload?.runtime);
       const identity = resolveRuntimeTransferIdentity({
-        runtime,
+        runtime: runtimeContext,
         sessionId: payload?.sessionId,
         producer: payload?.producer,
         direction: payload?.direction,
@@ -127,8 +101,8 @@ function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
       return transferSemanticContent({
         ...(payload && typeof payload === "object" ? payload : {}),
         identity,
-        runtime,
-        agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
+        runtime: runtimeContext,
+        agentContext: null,
       });
     },
   };

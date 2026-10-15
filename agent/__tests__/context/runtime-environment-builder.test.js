@@ -152,7 +152,7 @@ test("initializeRuntimeEnvironment provides fetch independently of the Node glob
   }
 });
 
-test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePath when caller passes partial runtime", async () => {
+test("initializeRuntimeEnvironment shared semantic-transfer ignores caller runtime identity", async () => {
   const overflowContent = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1);
   const runtime = createRuntimeContext({
     userId: "primary-user",
@@ -202,7 +202,10 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
   const transferred = await runtime.sharedTools.semanticTransfer.transferSemanticContent({
     scenario: "tool",
     strategy: "tool_input",
-    runtime: {},
+    runtime: {
+      basePath: "/tmp/spoofed-workspace",
+      systemRuntime: { userId: "spoofed-user", sessionId: "spoofed-session" },
+    },
     producer: { type: "tool", id: "tool-call-runtime-context-basepath" },
     call: {
       name: "write_file",

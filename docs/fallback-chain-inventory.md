@@ -50,12 +50,12 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1042 处 / 376 个文件；内联 trim 兜底 551 处 / 258 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 1041 处 / 375 个文件；内联 trim 兜底 551 处 / 258 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ----------- |
 | `client/noobot-chat`             | 365    | 158            | 0           |
-| `agent`                          | 176    | 109            | 0           |
+| `agent`                          | 175    | 109            | 0           |
 | `plugin/noobot-plugin-workflow`  | 112    | 86             | 0           |
 | `plugin/noobot-plugin-harness`   | 89     | 47             | 0           |
 | `service`                        | 81     | 39             | 0           |
@@ -94,11 +94,10 @@
 
 本轮逐项处理，处理完即从表中删除并写入批次记录。
 
-| 项                                         | 现状                                                                                                                                                                                                                | 需要的决定                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| 工具身份 `payloadRuntime` 覆盖             | `resolveSharedToolRuntime` 让 `payload.runtime.systemRuntime` 覆盖已绑定 runtime，可改写 `userId` 等身份字段（同 `systemRuntimePatch` 类）；`semanticTransfer` 在 src 无字面调用方，插件可能经 sharedTools 动态调用 | 核实调用方后按缺陷切片修正：身份字段只取绑定 runtime                          |
-| `agentContext.identity` 回退层             | `resource-broker`、`workspace-meta`、`native-script-tool` 等在 `systemRuntime.userId` 之后仍回退 `context.identity.userId` / `agentContext.userId`                                                                  | 确认 identity 与 `systemRuntime` 恒等后，择一为事实源删除另一层               |
-| 子会话投影 `turnScopeId`/`dialogProcessId` | 后端 `message-event-stream` 已只读 `systemRuntime.dialogProcessId`/`turnScopeId`；`validateMessageEnvelope` 仍不强制 `identity.turnScopeId`                                                                         | 在协议中强制后，再删 `subSessionEventProjection` 中的 `\|\| currentSession.X` |
+| 项                                         | 现状                                                                                                                                               | 需要的决定                                                                    |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `agentContext.identity` 回退层             | `resource-broker`、`workspace-meta`、`native-script-tool` 等在 `systemRuntime.userId` 之后仍回退 `context.identity.userId` / `agentContext.userId` | 确认 identity 与 `systemRuntime` 恒等后，择一为事实源删除另一层               |
+| 子会话投影 `turnScopeId`/`dialogProcessId` | 后端 `message-event-stream` 已只读 `systemRuntime.dialogProcessId`/`turnScopeId`；`validateMessageEnvelope` 仍不强制 `identity.turnScopeId`        | 在协议中强制后，再删 `subSessionEventProjection` 中的 `\|\| currentSession.X` |
 
 ## 5. 挂起项
 
@@ -146,4 +145,5 @@
 | `28aa2a82c` | workflow                          | 删除引擎 `action.stepFailure` 入参分支与 `markStepStateFailure`（无发送方），以及快照 `describePendingSteps`/`describeActionStepState` 中恒空的 `stepStatus`/`stepFailure` 投影；补反向用例断言 advance 忽略 `stepFailure` 且快照不带这两个键                                                                                                                                                                                                                                                       |
 | `19c707b89` | client                            | 删除无构造方的 `SESSION_RUN_EVENT.LOCAL_FAILURE`（不在协议内）：常量、`eventNormalization` 的 `failureState` 解析分支、`turnReducer` 本地失败集合中的该项；保留有发送方的 `LOCAL_FRONTEND_COMPLETION_FAILED`、`LOCAL_RESEND_FAILED`；补反向用例断言 `local_failure` 不再按 `failureState` 解析                                                                                                                                                                                                      |
 | `0accede36` | client                            | 删除 registry `canonicalTimingObserved`：`applyTurnTimingUpdate` 的标志计算、去重比较与写入，及 `applyTurnTimingSnapshot` 无读取方的 `canonical: true` 传参；补反向用例断言计时值未变的快照重放返回 `timing_snapshot_unchanged`（旧代码返回 `applied: true`）；store 导出的 `applyTurnTimingUpdate` 在 src 无调用方，本批不处理                                                                                                                                                                     |
-| 待回填      | authoritative-state/agent/service | lifecycle 输入事件强制必带 `causationId`（`validateRequestIdentity` 缺字段即拒绝）；12 处生产方（detached 8、recovery-policy 2、message-run-handler 1、terminal-outcomes 1）显式写入原回退值；信封 `commandId`/`turnScopeId`/`dialogProcessId`/执行身份/`origin`/`stage` 只读已提交 turn，`correlationId` 取 `turn.turnScopeId`，删除死层 `turn.parentSessionId`；删除 `turn-state.js:177` 的 `causationId \|\| commandId`；补反向用例（缺 `causationId` 被拒、信封从 turn 投影身份），旧代码均失败 |
+| `1c86c563a` | authoritative-state/agent/service | lifecycle 输入事件强制必带 `causationId`（`validateRequestIdentity` 缺字段即拒绝）；12 处生产方（detached 8、recovery-policy 2、message-run-handler 1、terminal-outcomes 1）显式写入原回退值；信封 `commandId`/`turnScopeId`/`dialogProcessId`/执行身份/`origin`/`stage` 只读已提交 turn，`correlationId` 取 `turn.turnScopeId`，删除死层 `turn.parentSessionId`；删除 `turn-state.js:177` 的 `causationId \|\| commandId`；补反向用例（缺 `causationId` 被拒、信封从 turn 投影身份），旧代码均失败 |
+| 待回填      | agent                             | 缺陷修正：`sharedTools.semanticTransfer` 只取绑定 runtime，删除 `resolveSharedToolRuntime` 合并（调用方 `payload.runtime.systemRuntime` 可改写 `userId`/`sessionId`）、无调用方的 `resolveIdentity` 与 agentContext 两层死回退；生产 4 处调用均不传 `runtime`；反向用例旧代码附件 `sessionId` 为 `spoofed-session`                                                                                                                                                                                  |

@@ -42,7 +42,6 @@
     "agent/src/observability/context-identity-debug.js": 3,
     "agent/src/observability/error-log/system-error-logger.js": 4,
     "agent/src/observability/execution-log/execution-report-metrics.js": 1,
-    "agent/src/runtime/capabilities/runtime-capability-initializer.js": 1,
     "agent/src/runtime/engine.js": 1,
     "agent/src/runtime/errors/error-classifier.js": 2,
     "agent/src/runtime/errors/error-handler.js": 5,
