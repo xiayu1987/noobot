@@ -14,16 +14,31 @@
 - 常量表默认值：根对象为全大写标识符，例如 `error?.message || AGENT_PROXY_ERROR.X`。
 - 单字段默认值：`value || ""`、`options.limit ?? 20`。
 - 非生产路径：以 `source-inventory.mjs` 的 `isFirstPartyProductionPath` 为准（排除测试文件、`__tests__`/`__mocks__`/`tests`、vendor、workspace 等）。
+- 合理兼容（守卫 `EXEMPTIONS`，每条带理由，新增豁免须改脚本并经评审）：
+  - 外部字段：任一操作数读取 LangChain 或模型厂商的线上字段，例如 `lc_kwargs`、`additional_kwargs`、`tool_call_id`、`call_id`。
+  - 异常对象：所有操作数都读同一类 catch 对象（`error`/`err`/`cause`），例如 `error?.stack || error?.message`。
+  - 边界文件：`model-runtime/src/adapters/`、`context-protocol/src/message/`、`shared/value.js`。
 
 ### 1.2 内联 trim 兜底（`inlineTrim`）
 
 `String(x || d).trim()`、`String(x ?? d).trim()`：重复实现了 `@noobot/shared/value` 的 `text()`。改写为 `text(x)` 或 `text(x) || d`。`text(x || d)`、`text(a ?? b)` 同样计数：兜底不能藏进 `text()` 参数里。
 
 - 范围：除测试文件（`isTestFilePath`）外的全部第一方代码，包含 `__tests__/helpers` 等夹具，因为夹具按同一协议构造数据。
+- 去重：生产路径上参数本身是回退链的（如 `text(a.x || b.x)`）只计入 `fallbackChain`，不重复计数。非生产路径照常计入本规则。
+- 边界文件同 1.1，不计入。
 - 改写不是机械替换：`String(x || "").trim()` → `text(x)` 时，`0`/`false` 会从 `""` 变为 `"0"`/`"false"`；`String(x || "d").trim()` → `text(x) || "d"` 时，纯空白会从 `""` 变为 `"d"`。逐处确认写入方类型后再改。
 - 依赖边界：`shared` 内部用本地 `text`；`workspace-protocol` 零依赖；`scripts`、`user-template` 无 `package.json`。这些位置照常计数，清零时按各自边界处理。
 
-### 1.3 遮蔽 `text()`（`textShadow`）
+### 1.3 内联类型判断（`typeCheck`）
+
+重复实现了 `@noobot/shared/value` 的 `isPlainObject`：
+
+- `&&` 链里同时出现 `typeof x === "object"` 和 `!Array.isArray(x)`。
+- 本地定义 `isPlainObject`/`isObject`/`isRecord`/`isObjectLike` 函数。
+
+改为导入 `isPlainObject`。范围同 1.2，`shared/value.js` 除外。零依赖包（如 `workspace-protocol`）和无 `package.json` 的目录照常计数，清零时先确认依赖边界。
+
+### 1.4 遮蔽 `text()`（`textShadow`）
 
 导入了 `text` 的文件，不允许在局部作用域重新绑定 `text`（参数、解构、`const`/`let`）。被遮蔽后，作用域内的 `text(x)` 会在运行时报 `text is not a function`。改名为 `inputText` 等；对外字段名用 `text: inputText` 保持不变。
 
@@ -31,7 +46,7 @@
 - 基线为 0，任何命中都会失败。
 - 其他名字的遮蔽（51 处）不在本规则内，仅作信息记录。
 
-三条规则都只统计 `.vue` 的 `<script>`，模板表达式不在统计内。
+所有规则都只统计 `.vue` 的 `<script>`，模板表达式不在统计内。
 
 ## 2. 收敛流程
 
@@ -46,47 +61,56 @@
 
 守卫规则：任何文件的计数上升直接失败；计数下降但未 `--update` 也失败，保证基线和文档始终等于现状。
 
+硬性指标（`TARGETS`，写在守卫脚本中）：
+
+- 起点：`fallbackChain` 920、`inlineTrim` 148、`typeCheck` 175，合计 1243，作为总量上限。
+- 目标：减半到 460 / 74 / 88，合计 622。
+- 每批：`--update` 时三条规则合计至少下降 120，不足直接拒绝，约 6 批达标；达标后恢复为只降不升。
+- `--rebase`：只在判定口径变更时使用，不检查每批降幅，但已有规则的总数不允许上升。
+
 ## 3. 模块现状
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1041 处 / 375 个文件；内联 trim 兜底 551 处 / 258 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 920 处 / 332 个文件；内联 trim 兜底 148 处 / 89 个文件；内联类型判断 175 处 / 119 个文件；遮蔽 text() 0 处 / 0 个文件。
 
-| 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
-| -------------------------------- | ------ | -------------- | ----------- |
-| `client/noobot-chat`             | 365    | 158            | 0           |
-| `agent`                          | 175    | 109            | 0           |
-| `plugin/noobot-plugin-workflow`  | 112    | 86             | 0           |
-| `plugin/noobot-plugin-harness`   | 89     | 47             | 0           |
-| `service`                        | 81     | 39             | 0           |
-| `model-runtime`                  | 31     | 10             | 0           |
-| `client/shared`                  | 31     | 5              | 0           |
-| `context-protocol`               | 20     | 12             | 0           |
-| `agent-proxy`                    | 23     | 8              | 0           |
-| `authoritative-state`            | 19     | 11             | 0           |
-| `path-resolver`                  | 15     | 7              | 0           |
-| `shared`                         | 11     | 6              | 0           |
-| `user-template`                  | 4      | 12             | 0           |
-| `event-protocol`                 | 10     | 4              | 0           |
-| `scripts`                        | 8      | 3              | 0           |
-| `session-repair`                 | 5      | 4              | 0           |
-| `plugin/noobot-plugin-character` | 6      | 2              | 0           |
-| `connector-instances`            | 4      | 3              | 0           |
-| `session-protocol`               | 7      | 0              | 0           |
-| `workflow`                       | 2      | 4              | 0           |
-| `agent-config-protocol`          | 3      | 2              | 0           |
-| `i18n`                           | 3      | 2              | 0           |
-| `client/startup`                 | 4      | 0              | 0           |
-| `connector-protocol`             | 1      | 3              | 0           |
-| `memory-protocol`                | 2      | 2              | 0           |
-| `model-protocol`                 | 3      | 1              | 0           |
-| `model-proxy`                    | 2      | 2              | 0           |
-| `semantic-transfer-protocol`     | 1      | 2              | 0           |
-| `workspace-protocol`             | 0      | 3              | 0           |
-| `platform-compatibility`         | 1      | 1              | 0           |
-| `plugin-protocol`                | 1      | 1              | 0           |
-| `runtime-events`                 | 1      | 1              | 0           |
-| `sanitize`                       | 1      | 1              | 0           |
+| 模块                             | 回退链 | 内联 trim 兜底 | 内联类型判断 | 遮蔽 text() |
+| -------------------------------- | ------ | -------------- | ------------ | ----------- |
+| `client/noobot-chat`             | 356    | 37             | 22           | 0           |
+| `agent`                          | 141    | 39             | 56           | 0           |
+| `plugin/noobot-plugin-workflow`  | 112    | 11             | 9            | 0           |
+| `plugin/noobot-plugin-harness`   | 75     | 14             | 13           | 0           |
+| `service`                        | 77     | 14             | 5            | 0           |
+| `client/shared`                  | 24     | 0              | 3            | 0           |
+| `agent-proxy`                    | 23     | 2              | 0            | 0           |
+| `authoritative-state`            | 18     | 0              | 7            | 0           |
+| `event-protocol`                 | 10     | 0              | 11           | 0           |
+| `path-resolver`                  | 15     | 2              | 4            | 0           |
+| `context-protocol`               | 5      | 1              | 7            | 0           |
+| `user-template`                  | 4      | 9              | 0            | 0           |
+| `session-repair`                 | 5      | 2              | 5            | 0           |
+| `model-runtime`                  | 8      | 1              | 2            | 0           |
+| `agent-config-protocol`          | 3      | 0              | 7            | 0           |
+| `session-protocol`               | 6      | 0              | 3            | 0           |
+| `agent-transport-protocol`       | 0      | 0              | 8            | 0           |
+| `plugin/noobot-plugin-character` | 5      | 1              | 1            | 0           |
+| `shared`                         | 6      | 0              | 1            | 0           |
+| `connector-protocol`             | 1      | 3              | 2            | 0           |
+| `connector-instances`            | 4      | 0              | 1            | 0           |
+| `model-protocol`                 | 3      | 0              | 2            | 0           |
+| `scripts`                        | 4      | 1              | 0            | 0           |
+| `workflow`                       | 2      | 2              | 1            | 0           |
+| `client/startup`                 | 4      | 0              | 0            | 0           |
+| `i18n`                           | 3      | 1              | 0            | 0           |
+| `memory-protocol`                | 2      | 2              | 0            | 0           |
+| `semantic-transfer-protocol`     | 0      | 1              | 3            | 0           |
+| `workspace-protocol`             | 0      | 3              | 0            | 0           |
+| `runtime-events`                 | 1      | 1              | 0            | 0           |
+| `sanitize`                       | 1      | 1              | 0            | 0           |
+| `attachment-protocol`            | 0      | 0              | 1            | 0           |
+| `execution-isolation-protocol`   | 0      | 0              | 1            | 0           |
+| `platform-compatibility`         | 1      | 0              | 0            | 0           |
+| `plugin-protocol`                | 1      | 0              | 0            | 0           |
 
 <!-- fallback-chain-modules:end -->
 
@@ -146,4 +170,5 @@
 | `19c707b89` | client                            | 删除无构造方的 `SESSION_RUN_EVENT.LOCAL_FAILURE`（不在协议内）：常量、`eventNormalization` 的 `failureState` 解析分支、`turnReducer` 本地失败集合中的该项；保留有发送方的 `LOCAL_FRONTEND_COMPLETION_FAILED`、`LOCAL_RESEND_FAILED`；补反向用例断言 `local_failure` 不再按 `failureState` 解析                                                                                                                                                                                                      |
 | `0accede36` | client                            | 删除 registry `canonicalTimingObserved`：`applyTurnTimingUpdate` 的标志计算、去重比较与写入，及 `applyTurnTimingSnapshot` 无读取方的 `canonical: true` 传参；补反向用例断言计时值未变的快照重放返回 `timing_snapshot_unchanged`（旧代码返回 `applied: true`）；store 导出的 `applyTurnTimingUpdate` 在 src 无调用方，本批不处理                                                                                                                                                                     |
 | `1c86c563a` | authoritative-state/agent/service | lifecycle 输入事件强制必带 `causationId`（`validateRequestIdentity` 缺字段即拒绝）；12 处生产方（detached 8、recovery-policy 2、message-run-handler 1、terminal-outcomes 1）显式写入原回退值；信封 `commandId`/`turnScopeId`/`dialogProcessId`/执行身份/`origin`/`stage` 只读已提交 turn，`correlationId` 取 `turn.turnScopeId`，删除死层 `turn.parentSessionId`；删除 `turn-state.js:177` 的 `causationId \|\| commandId`；补反向用例（缺 `causationId` 被拒、信封从 turn 投影身份），旧代码均失败 |
-| 待回填      | agent                             | 缺陷修正：`sharedTools.semanticTransfer` 只取绑定 runtime，删除 `resolveSharedToolRuntime` 合并（调用方 `payload.runtime.systemRuntime` 可改写 `userId`/`sessionId`）、无调用方的 `resolveIdentity` 与 agentContext 两层死回退；生产 4 处调用均不传 `runtime`；反向用例旧代码附件 `sessionId` 为 `spoofed-session`                                                                                                                                                                                  |
+| `e3a1f9b4c` | agent                             | 缺陷修正：`sharedTools.semanticTransfer` 只取绑定 runtime，删除 `resolveSharedToolRuntime` 合并（调用方 `payload.runtime.systemRuntime` 可改写 `userId`/`sessionId`）、无调用方的 `resolveIdentity` 与 agentContext 两层死回退；生产 4 处调用均不传 `runtime`；反向用例旧代码附件 `sessionId` 为 `spoofed-session`                                                                                                                                                                                  |
+| 待回填      | scripts                           | 守卫口径与硬性指标：外部字段、catch 异常对象、边界文件按规则豁免；生产路径 trim 不重复计数回退链参数；新增 `typeCheck`（本地 `isPlainObject` 重实现）；`TARGETS` 起点 1243、目标 622、`--update` 每批合计至少降 120；`--rebase` 仅用于口径变更且已有规则总数不得上升                                                                                                                                                                                                                                |

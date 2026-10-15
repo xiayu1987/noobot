@@ -29,6 +29,57 @@ const CONDITION_PARENTS = new Set([
 const CONSTANT_TABLE_NAME = /^[A-Z][A-Z0-9_]*$/;
 const SKIPPED_KEYS = new Set(["parent", "loc", "range", "tokens", "comments", "templateBody"]);
 
+export const EXEMPTIONS = Object.freeze({
+  externalFields: Object.freeze({
+    reason: "wire fields owned by LangChain or model vendors; aliases cannot be converged locally",
+    names: Object.freeze([
+      "lc_kwargs",
+      "lc_name",
+      "additional_kwargs",
+      "response_metadata",
+      "usage_metadata",
+      "tool_calls",
+      "tool_call_id",
+      "tool_use_id",
+      "call_id",
+      "tool_name",
+      "tool_choice",
+      "input_schema",
+      "image_url",
+      "b64_json",
+    ]),
+  }),
+  errorObjects: Object.freeze({
+    reason: "caught errors have no fixed shape; every operand reads the same error object",
+    roots: Object.freeze(["error", "err", "cause"]),
+  }),
+  boundaryFiles: Object.freeze([
+    Object.freeze({ prefix: "model-runtime/src/adapters/", reason: "vendor wire format adapters" }),
+    Object.freeze({ prefix: "context-protocol/src/message/", reason: "LangChain message codec" }),
+    Object.freeze({ prefix: "shared/value.js", reason: "implementation of text() itself" }),
+  ]),
+});
+
+export const TARGETS = Object.freeze({
+  start: Object.freeze({ fallbackChain: 920, inlineTrim: 148, typeCheck: 175 }),
+  goal: Object.freeze({ fallbackChain: 460, inlineTrim: 74, typeCheck: 88 }),
+  minBatchDrop: 120,
+});
+
+const PLAIN_OBJECT_HELPER_NAMES = new Set([
+  "isPlainObject",
+  "isObject",
+  "isRecord",
+  "isObjectLike",
+]);
+
+const EXTERNAL_FIELD_SET = new Set(EXEMPTIONS.externalFields.names);
+const ERROR_ROOT_SET = new Set(EXEMPTIONS.errorObjects.roots);
+
+export function isBoundaryFile(file) {
+  return EXEMPTIONS.boundaryFiles.some(({ prefix }) => file.startsWith(prefix));
+}
+
 function flattenChain(node, operator, output = []) {
   if (node.type === "LogicalExpression" && node.operator === operator) {
     flattenChain(node.left, operator, output);
@@ -51,6 +102,36 @@ function isFieldOperand(node) {
   if (unwrapMember(node).type !== "MemberExpression") return false;
   const base = rootObject(node);
   return !(base.type === "Identifier" && CONSTANT_TABLE_NAME.test(base.name));
+}
+
+function memberPropertyNames(node) {
+  const names = [];
+  let current = unwrapMember(node);
+  while (current.type === "MemberExpression") {
+    const { property } = current;
+    if (!current.computed && property.type === "Identifier") names.push(property.name);
+    else if (property.type === "Literal" && typeof property.value === "string")
+      names.push(property.value);
+    current = unwrapMember(current.object);
+  }
+  return names;
+}
+
+function isExemptChain(fields) {
+  if (
+    fields.some((field) => memberPropertyNames(field).some((name) => EXTERNAL_FIELD_SET.has(name)))
+  )
+    return true;
+  return fields.every((field) => {
+    const base = rootObject(field);
+    return base.type === "Identifier" && ERROR_ROOT_SET.has(base.name);
+  });
+}
+
+function classifyChain(node) {
+  const fields = flattenChain(node, node.operator).filter(isFieldOperand);
+  if (fields.length < 2) return null;
+  return isExemptChain(fields) ? "exempt" : "counted";
 }
 
 function isConditionPosition(node, parent) {
@@ -89,8 +170,7 @@ export function findFallbackChains(source, filename = "source.js") {
       FALLBACK_OPERATORS.has(node.operator) &&
       !(parent?.type === "LogicalExpression" && parent.operator === node.operator);
     if (!isChainHead || isConditionPosition(node, parent)) return;
-    const operands = flattenChain(node, node.operator);
-    if (operands.filter(isFieldOperand).length >= 2) chains.push(snippet(source, node));
+    if (classifyChain(node) === "counted") chains.push(snippet(source, node));
   });
   return chains;
 }
@@ -108,18 +188,24 @@ function isFallbackExpression(node) {
   return node.type === "LogicalExpression" && FALLBACK_OPERATORS.has(node.operator);
 }
 
-export function findInlineTrimFallbacks(source, filename = "source.js") {
+export function findInlineTrimFallbacks(
+  source,
+  filename = "source.js",
+  { skipFieldChains = false } = {},
+) {
+  const isTrimFallback = (node) =>
+    isFallbackExpression(node) && !(skipFieldChains && classifyChain(node));
   const hits = [];
   walk(parseSource(source, filename), null, (node) => {
     if (isSingleArgumentCall(node, "text")) {
-      if (isFallbackExpression(node.arguments[0])) hits.push(snippet(source, node));
+      if (isTrimFallback(node.arguments[0])) hits.push(snippet(source, node));
       return;
     }
     if (node.type !== "CallExpression" || node.arguments.length) return;
     const callee = unwrapMember(node.callee);
     if (callee.type !== "MemberExpression" || callee.computed) return;
     if (callee.property.name !== "trim" || !isSingleArgumentCall(callee.object, "String")) return;
-    if (isFallbackExpression(callee.object.arguments[0])) hits.push(snippet(source, node));
+    if (isTrimFallback(callee.object.arguments[0])) hits.push(snippet(source, node));
   });
   return hits;
 }
@@ -147,18 +233,77 @@ export function findTextShadowing(source, filename = "source.js") {
     .map((message) => ({ line: message.line, code: message.message }));
 }
 
+function isTypeofObjectTest(node) {
+  if (node.type !== "BinaryExpression" || !["===", "=="].includes(node.operator)) return false;
+  const [unary, literal] =
+    node.left.type === "UnaryExpression" ? [node.left, node.right] : [node.right, node.left];
+  return (
+    unary.type === "UnaryExpression" && unary.operator === "typeof" && literal.value === "object"
+  );
+}
+
+function isNotArrayTest(node) {
+  return (
+    node.type === "UnaryExpression" &&
+    node.operator === "!" &&
+    node.argument.type === "CallExpression" &&
+    unwrapMember(node.argument.callee).type === "MemberExpression" &&
+    node.argument.callee.object?.name === "Array" &&
+    node.argument.callee.property?.name === "isArray"
+  );
+}
+
+function isLocalPlainObjectHelper(node) {
+  const name =
+    node.type === "FunctionDeclaration"
+      ? node.id?.name
+      : node.type === "VariableDeclarator" &&
+          ["ArrowFunctionExpression", "FunctionExpression"].includes(node.init?.type)
+        ? node.id?.name
+        : "";
+  return PLAIN_OBJECT_HELPER_NAMES.has(name);
+}
+
+export function findInlineTypeChecks(source, filename = "source.js") {
+  const hits = [];
+  walk(parseSource(source, filename), null, (node, parent) => {
+    if (isLocalPlainObjectHelper(node)) {
+      hits.push(snippet(source, node.type === "VariableDeclarator" ? node.id : node.id));
+      return;
+    }
+    const isAndHead =
+      node.type === "LogicalExpression" &&
+      node.operator === "&&" &&
+      !(parent?.type === "LogicalExpression" && parent.operator === "&&");
+    if (!isAndHead) return;
+    const operands = flattenChain(node, "&&");
+    if (operands.some(isTypeofObjectTest) && operands.some(isNotArrayTest))
+      hits.push(snippet(source, node));
+  });
+  return hits;
+}
+
+const isSharedValueModule = (file) => file === "shared/value.js";
+
 export const RULES = Object.freeze({
   fallbackChain: {
     title: "回退链",
     find: findFallbackChains,
-    includeFile: isFirstPartyProductionPath,
+    includeFile: (file) => isFirstPartyProductionPath(file) && !isBoundaryFile(file),
     hint: "read the single writer field instead",
   },
   inlineTrim: {
     title: "内联 trim 兜底",
-    find: findInlineTrimFallbacks,
-    includeFile: (file) => !isTestFilePath(file),
+    find: (source, file) =>
+      findInlineTrimFallbacks(source, file, { skipFieldChains: isFirstPartyProductionPath(file) }),
+    includeFile: (file) => !isTestFilePath(file) && !isBoundaryFile(file),
     hint: 'use text(x) from "@noobot/shared/value" instead of String(x || d).trim()',
+  },
+  typeCheck: {
+    title: "内联类型判断",
+    find: findInlineTypeChecks,
+    includeFile: (file) => !isTestFilePath(file) && !isSharedValueModule(file),
+    hint: 'use isPlainObject from "@noobot/shared/value" instead of local object type checks',
   },
   textShadow: {
     title: "遮蔽 text()",
@@ -279,9 +424,65 @@ function describeTotals(counts) {
     .join(", ");
 }
 
+function targetTotal(counts, names) {
+  return names.reduce((total, name) => total + sumCounts(counts[name] ?? {}), 0);
+}
+
+const sumValues = (table) => Object.values(table).reduce((total, value) => total + value, 0);
+
+export function evaluateTargets({ previous, next, mode, targets = TARGETS }) {
+  const start = sumValues(targets.start);
+  const goal = sumValues(targets.goal);
+  const names = Object.keys(targets.goal);
+  const nextTotal = targetTotal(next, names);
+  const violations = [];
+  if (nextTotal > start)
+    violations.push(`target total ${nextTotal} exceeds start ceiling ${start}`);
+  if (mode === "update" && nextTotal > goal) {
+    const dropped = targetTotal(previous, names) - nextTotal;
+    if (dropped < targets.minBatchDrop)
+      violations.push(
+        `batch dropped ${dropped}, at least ${targets.minBatchDrop} required until goal ${goal}`,
+      );
+  }
+  const progress = `${nextTotal}/${start} → goal ${goal}, ${Math.max(nextTotal - goal, 0)} left`;
+  return { violations, progress };
+}
+
+export function findRebaseIncreases(previous, next) {
+  return Object.keys(RULES)
+    .filter((name) => previous[name])
+    .map((name) => [name, sumCounts(previous[name]), sumCounts(next[name] ?? {})])
+    .filter(([, before, after]) => after > before)
+    .map(([name, before, after]) => `rebase raises ${name} from ${before} to ${after}`);
+}
+
+async function writeBaseline(markdown, measured) {
+  const lowered = Object.fromEntries(
+    Object.keys(RULES).map((name) => [name, sortCounts(measured[name])]),
+  );
+  await writeFile(BASELINE_PATH, `${JSON.stringify(lowered, null, 2)}\n`);
+  await writeFile(INVENTORY_DOC_PATH, await renderInventoryDoc(markdown, lowered));
+  return lowered;
+}
+
+function fail(lines) {
+  console.error(lines.join("\n"));
+  process.exitCode = 1;
+}
+
 async function main(argv) {
   const measured = await measureRules();
   const baseline = JSON.parse(await readFile(BASELINE_PATH, "utf8"));
+  const markdown = await readFile(INVENTORY_DOC_PATH, "utf8");
+  if (argv.includes("--rebase")) {
+    const { violations, progress } = evaluateTargets({ previous: baseline, next: measured });
+    violations.push(...findRebaseIncreases(baseline, measured));
+    if (violations.length) return fail(violations);
+    const lowered = await writeBaseline(markdown, measured);
+    console.log(`Fallback baseline rebased to ${describeTotals(lowered)} (${progress})`);
+    return;
+  }
   const increases = [];
   const decreases = [];
   for (const [name, rule] of Object.entries(RULES)) {
@@ -291,31 +492,26 @@ async function main(argv) {
     }
     decreases.push(...result.decreases.map((line) => `[${name}] ${line}`));
   }
-  if (increases.length) {
-    console.error(`New fallback patterns are not allowed:\n${increases.join("\n")}`);
-    process.exitCode = 1;
-    return;
-  }
-  const markdown = await readFile(INVENTORY_DOC_PATH, "utf8");
+  if (increases.length) return fail(["New fallback patterns are not allowed:", ...increases]);
   if (argv.includes("--update")) {
-    const lowered = Object.fromEntries(
-      Object.keys(RULES).map((name) => [name, sortCounts(measured[name])]),
-    );
-    await writeFile(BASELINE_PATH, `${JSON.stringify(lowered, null, 2)}\n`);
-    await writeFile(INVENTORY_DOC_PATH, await renderInventoryDoc(markdown, lowered));
-    console.log(`Fallback baseline lowered to ${describeTotals(lowered)}`);
+    const { violations, progress } = evaluateTargets({
+      previous: baseline,
+      next: measured,
+      mode: "update",
+    });
+    if (violations.length) return fail(violations);
+    const lowered = await writeBaseline(markdown, measured);
+    console.log(`Fallback baseline lowered to ${describeTotals(lowered)} (${progress})`);
     return;
   }
   const violations = decreases.map((line) => `stale baseline, run with --update: ${line}`);
   if ((await renderInventoryDoc(markdown, baseline)) !== markdown) {
     violations.push("docs/fallback-chain-inventory.md module table is stale, run with --update");
   }
-  if (violations.length) {
-    console.error(violations.join("\n"));
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`Fallback baseline passed (${describeTotals(measured)})`);
+  const target = evaluateTargets({ previous: baseline, next: baseline });
+  violations.push(...target.violations);
+  if (violations.length) return fail(violations);
+  console.log(`Fallback baseline passed (${describeTotals(measured)}; ${target.progress})`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href)

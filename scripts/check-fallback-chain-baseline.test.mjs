@@ -7,7 +7,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   compareWithBaseline,
+  evaluateTargets,
+  findRebaseIncreases,
   findFallbackChains,
+  findInlineTypeChecks,
   findInlineTrimFallbacks,
   findTextShadowing,
   RULES,
@@ -32,6 +35,59 @@ test("ignores single-field defaults, constant tables and condition positions", (
   assert.equal(findFallbackChains("const v = a.x || b.x ? 1 : 2;").length, 0);
   assert.equal(findFallbackChains("const v = !(a.x || b.x);").length, 0);
   assert.equal(findFallbackChains("const v = ready && (a.x || b.x);").length, 0);
+});
+
+test("exempts vendor wire fields and caught error objects", () => {
+  assert.equal(findFallbackChains("const id = call.id || call.tool_call_id;").length, 0);
+  assert.equal(findFallbackChains("const r = m?.role || m?.lc_kwargs?.role;").length, 0);
+  assert.equal(findFallbackChains("const v = error?.stack || error?.message;").length, 0);
+  assert.equal(findFallbackChains("const v = error?.code || input.code;").length, 1);
+  assert.equal(RULES.fallbackChain.includeFile("model-runtime/src/adapters/a.js"), false);
+  assert.equal(RULES.inlineTrim.includeFile("shared/value.js"), false);
+});
+
+test("inline trim does not recount field chains already counted as fallback chains", () => {
+  const source = "const v = text(a.x || b.x); const w = text(name || alias);";
+  assert.equal(RULES.inlineTrim.find(source, "agent/src/a.js").length, 1);
+  assert.equal(RULES.inlineTrim.find(source, "agent/__tests__/helpers/fixture.js").length, 2);
+});
+
+test("detects local object type checks that duplicate shared isPlainObject", () => {
+  assert.equal(
+    findInlineTypeChecks('const ok = v && typeof v === "object" && !Array.isArray(v);').length,
+    1,
+  );
+  assert.equal(findInlineTypeChecks("function isPlainObject(v) { return isObj(v); }").length, 1);
+  assert.equal(findInlineTypeChecks("const isRecord = (v) => isObj(v);").length, 1);
+  assert.equal(findInlineTypeChecks('const ok = typeof v === "object";').length, 0);
+  assert.equal(findInlineTypeChecks("const ok = isPlainObject(v);").length, 0);
+  assert.equal(RULES.typeCheck.includeFile("shared/value.js"), false);
+});
+
+test("targets cap the total and require a minimum drop per batch until the goal", () => {
+  const targets = { start: { a: 10 }, goal: { a: 4 }, minBatchDrop: 3 };
+  const counts = (n) => ({ a: { "x.js": n } });
+  const run = (previous, next, mode) =>
+    evaluateTargets({ previous: counts(previous), next: counts(next), mode, targets }).violations;
+  assert.deepEqual(run(10, 10), []);
+  assert.match(run(10, 11)[0], /exceeds start ceiling 10/);
+  assert.match(run(10, 8, "update")[0], /batch dropped 2, at least 3 required/);
+  assert.deepEqual(run(10, 7, "update"), []);
+  assert.deepEqual(run(5, 4, "update"), []);
+});
+
+test("rebase may add new rules but never raises an existing rule total", () => {
+  const previous = { fallbackChain: { "a.js": 3 } };
+  assert.deepEqual(
+    findRebaseIncreases(previous, {
+      fallbackChain: { "a.js": 1, "b.js": 2 },
+      typeCheck: { "c.js": 9 },
+    }),
+    [],
+  );
+  assert.deepEqual(findRebaseIncreases(previous, { fallbackChain: { "a.js": 4 } }), [
+    "rebase raises fallbackChain from 3 to 4",
+  ]);
 });
 
 test("scans vue script blocks", () => {
@@ -84,10 +140,10 @@ test("module table is generated from the grouped baseline", () => {
   const section = renderModuleSection(baseline);
   assert.match(
     section,
-    /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件；遮蔽 text\(\) 0 处 \/ 0 个文件。/,
+    /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件；内联类型判断 0 处 \/ 0 个文件；遮蔽 text\(\) 0 处 \/ 0 个文件。/,
   );
-  assert.match(section, /\| `agent` \| 2 \| 4 \| 0 \|/);
-  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \| 0 \|/);
+  assert.match(section, /\| `agent` \| 2 \| 4 \| 0 \| 0 \|/);
+  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \| 0 \| 0 \|/);
   const doc =
     "head\n<!-- fallback-chain-modules:start -->\nold\n<!-- fallback-chain-modules:end -->\ntail";
   assert.equal(replaceModuleSection(doc, baseline), `head\n${section}\ntail`);
