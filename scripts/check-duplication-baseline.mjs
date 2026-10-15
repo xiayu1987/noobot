@@ -12,11 +12,12 @@ import {
   getFirstPartySourceRoots,
 } from "./quality/source-inventory.mjs";
 import { mergeDuplicationIgnoreGlobs } from "./quality/duplication-config.mjs";
+import { collectRatchet, ratchetViolations } from "./quality/baseline-ratchet.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  clones: 70,
-  duplicatedLines: 801,
+  clones: 60,
+  duplicatedLines: 703,
 });
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-duplication-"));
@@ -58,15 +59,13 @@ try {
     percentage: Number(Number(total.percentage || 0).toFixed(8)),
     sources: Number(total.sources || 0),
   };
-  const violations = [];
-  if (actual.clones > baseline.clones) {
-    violations.push(`clones ${actual.clones} exceeds baseline ${baseline.clones}`);
-  }
-  if (actual.duplicatedLines > baseline.duplicatedLines) {
-    violations.push(
-      `duplicated lines ${actual.duplicatedLines} exceeds baseline ${baseline.duplicatedLines}`,
-    );
-  }
+  const violations = ratchetViolations(
+    collectRatchet([
+      ["clones", actual.clones, baseline.clones],
+      ["duplicated lines", actual.duplicatedLines, baseline.duplicatedLines],
+    ]),
+    "lower the baseline in scripts/check-duplication-baseline.mjs",
+  );
   if (violations.length) {
     console.error(
       `Duplication baseline failed (${actual.sources} sources):\n${violations.join("\n")}`,

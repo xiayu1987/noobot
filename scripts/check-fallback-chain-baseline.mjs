@@ -10,6 +10,7 @@ import { Linter } from "eslint";
 import * as espree from "espree";
 import * as prettier from "prettier";
 import vueParser, { parse as parseVue } from "vue-eslint-parser";
+import { collectRatchet } from "./quality/baseline-ratchet.mjs";
 import {
   getFirstPartyCodeFiles,
   isFirstPartyProductionPath,
@@ -328,15 +329,8 @@ export async function measureRules({ repositoryRoot = root } = {}) {
 }
 
 export function compareWithBaseline(measured, baseline) {
-  const increases = [];
-  const decreases = [];
-  for (const file of new Set([...Object.keys(measured), ...Object.keys(baseline)])) {
-    const actual = measured[file] ?? 0;
-    const allowed = baseline[file] ?? 0;
-    if (actual > allowed) increases.push(`${file}: ${actual} exceeds baseline ${allowed}`);
-    if (actual < allowed) decreases.push(`${file}: ${actual} below baseline ${allowed}`);
-  }
-  return { increases, decreases };
+  const files = new Set([...Object.keys(measured), ...Object.keys(baseline)]);
+  return collectRatchet([...files].map((file) => [file, measured[file] ?? 0, baseline[file] ?? 0]));
 }
 
 export function sumCounts(counts) {

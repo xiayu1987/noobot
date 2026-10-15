@@ -6,10 +6,11 @@
 import path from "node:path";
 import { ESLint } from "eslint";
 import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
+import { collectRatchet, ratchetViolations } from "./quality/baseline-ratchet.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 441,
+  complexityCount: 353,
   longFunctionCount: 68,
   maxComplexity: 54,
   hotspots: Object.freeze({
@@ -92,10 +93,6 @@ function summarize(messages = []) {
   return { complexityCount, maxComplexity, longFunctionCount };
 }
 
-function assertAtMost(violations, label, actual, allowed) {
-  if (actual > allowed) violations.push(`${label}: ${actual} exceeds baseline ${allowed}`);
-}
-
 const lint = new ESLint({
   cwd: root,
   overrideConfig: [
@@ -111,34 +108,30 @@ const lint = new ESLint({
 const productionFiles = await getFirstPartyProductionFiles({ repositoryRoot: root });
 const results = await lint.lintFiles(productionFiles);
 const totals = summarize(results.flatMap(({ messages }) => messages));
-const violations = [];
-assertAtMost(violations, "complexity violations", totals.complexityCount, baseline.complexityCount);
-assertAtMost(
-  violations,
-  "long-function violations",
-  totals.longFunctionCount,
-  baseline.longFunctionCount,
-);
-assertAtMost(violations, "maximum complexity", totals.maxComplexity, baseline.maxComplexity);
-
 const byRelativePath = new Map(
   results.map((result) => [path.relative(root, result.filePath), summarize(result.messages)]),
 );
+const entries = [
+  ["complexity violations", totals.complexityCount, baseline.complexityCount],
+  ["long-function violations", totals.longFunctionCount, baseline.longFunctionCount],
+  ["maximum complexity", totals.maxComplexity, baseline.maxComplexity],
+];
 for (const [relativePath, limits] of Object.entries(baseline.hotspots)) {
   const measured = byRelativePath.get(relativePath) || {
     complexityCount: 0,
     maxComplexity: 0,
     longFunctionCount: 0,
   };
-  assertAtMost(violations, `${relativePath} complexity count`, measured.complexityCount, limits[0]);
-  assertAtMost(violations, `${relativePath} maximum complexity`, measured.maxComplexity, limits[1]);
-  assertAtMost(
-    violations,
-    `${relativePath} long-function count`,
-    measured.longFunctionCount,
-    limits[2],
+  entries.push(
+    [`${relativePath} complexity count`, measured.complexityCount, limits[0]],
+    [`${relativePath} maximum complexity`, measured.maxComplexity, limits[1]],
+    [`${relativePath} long-function count`, measured.longFunctionCount, limits[2]],
   );
 }
+const violations = ratchetViolations(
+  collectRatchet(entries),
+  "lower the baseline in scripts/check-complexity-baseline.mjs",
+);
 
 if (violations.length) {
   console.error(violations.join("\n"));
