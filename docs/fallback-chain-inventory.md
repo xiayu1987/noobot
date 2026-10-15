@@ -50,11 +50,11 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1090 处 / 380 个文件；内联 trim 兜底 575 处 / 263 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 1084 处 / 380 个文件；内联 trim 兜底 570 处 / 263 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ----------- |
-| `client/noobot-chat`             | 381    | 163            | 0           |
+| `client/noobot-chat`             | 375    | 158            | 0           |
 | `agent`                          | 194    | 127            | 0           |
 | `plugin/noobot-plugin-workflow`  | 113    | 87             | 0           |
 | `plugin/noobot-plugin-harness`   | 90     | 47             | 0           |
@@ -102,18 +102,19 @@
 
 ## 5. 批次记录
 
-| 提交        | 模块                          | 内容                                                                                                                                                                                                                                         |
-| ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `3d9f986d3` | workflow                      | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写                                                                                                                                                                                           |
-| `716593609` | workflow                      | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                                                                                                                                       |
-| `74c3842c1` | workflow                      | abort 判定改用 session-protocol 执行中止协议                                                                                                                                                                                                 |
-| `08148dccd` | scripts                       | 回退链守卫与本清单                                                                                                                                                                                                                           |
-| `b62dfd769` | agent、workflow               | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed`                                                                                                                  |
-| `5e8207f13` | scripts                       | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                                                                                                                                            |
-| `acec6da42` | 全仓                          | 单字段 `String(x \|\| d).trim()` 301 处改为 `text(x)`/`(text(x) \|\| d)`；82 处 `text` 遮蔽改名；守卫增加 `textShadow` 规则                                                                                                                  |
-| `38885d5be` | shared、model-runtime         | `message-diagnostics` 单字段 trim 改用 `text()`；`response-normalizer` 本地内容提取器改名 `extractContentText`，消除与 `text()` 同名                                                                                                         |
-| `6734c9dbe` | agent、workflow               | detached 子会话投影只读 finalizer 的 `answer`/`messages`（缺陷修正：`messages` 与 `transferEnvelopes` 此前恒为空）；删除恒空的 `persisted`/`nodeSessionPersistedPath`；workflow agent 结果只读 `output`、session 结果只读 `answer`           |
-| `94aad6f80` | agent                         | detached 终态回执直接投影已提交的 turn（applied/deduplicated/provision 三路必带 `turn`）；删除 `result/error.lifecycle`、`state \|\| branchState`、外部 `executionId`、`code/error` 回退与死状态映射；失败回执 `failure` 为完整 turn failure |
-| `179238e65` | authoritative-state、workflow | FAILED 转移在 transition 层强制 `failure.code`/`message`（`turn_failure_incomplete`，唯一守卫入口）；workflow 子会话失败直接透传已提交 turn 的 failure，删除默认文案/默认 code 与 `executionKind \|\| "agent"` 回退                          |
-| `5c5887b71` | 测试夹具                      | 测试 helper/fixture 单字段 `String(x \|\| d).trim()` 28 处改为 `text()`；`raw`/`outputText` 改名消除 `text` 遮蔽；`inlineTrim` 保留 helper 计数口径（不放宽）                                                                                |
-| 待回填      | client                        | 子会话投影 `parentSessionId`/`workflowRunId`/`nodeExecutionId` 只读事件 payload（gate 与协议已强制三元组）；删除 `buildNextSubSessionState`、`applySubSessionMessageOrdering` 5 处回退；新增前提用例固定行为等价依据                         |
+| 提交        | 模块                          | 内容                                                                                                                                                                                                                                                                     |
+| ----------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `3d9f986d3` | workflow                      | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写                                                                                                                                                                                                                       |
+| `716593609` | workflow                      | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                                                                                                                                                                   |
+| `74c3842c1` | workflow                      | abort 判定改用 session-protocol 执行中止协议                                                                                                                                                                                                                             |
+| `08148dccd` | scripts                       | 回退链守卫与本清单                                                                                                                                                                                                                                                       |
+| `b62dfd769` | agent、workflow               | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed`                                                                                                                                              |
+| `5e8207f13` | scripts                       | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                                                                                                                                                                        |
+| `acec6da42` | 全仓                          | 单字段 `String(x \|\| d).trim()` 301 处改为 `text(x)`/`(text(x) \|\| d)`；82 处 `text` 遮蔽改名；守卫增加 `textShadow` 规则                                                                                                                                              |
+| `38885d5be` | shared、model-runtime         | `message-diagnostics` 单字段 trim 改用 `text()`；`response-normalizer` 本地内容提取器改名 `extractContentText`，消除与 `text()` 同名                                                                                                                                     |
+| `6734c9dbe` | agent、workflow               | detached 子会话投影只读 finalizer 的 `answer`/`messages`（缺陷修正：`messages` 与 `transferEnvelopes` 此前恒为空）；删除恒空的 `persisted`/`nodeSessionPersistedPath`；workflow agent 结果只读 `output`、session 结果只读 `answer`                                       |
+| `94aad6f80` | agent                         | detached 终态回执直接投影已提交的 turn（applied/deduplicated/provision 三路必带 `turn`）；删除 `result/error.lifecycle`、`state \|\| branchState`、外部 `executionId`、`code/error` 回退与死状态映射；失败回执 `failure` 为完整 turn failure                             |
+| `179238e65` | authoritative-state、workflow | FAILED 转移在 transition 层强制 `failure.code`/`message`（`turn_failure_incomplete`，唯一守卫入口）；workflow 子会话失败直接透传已提交 turn 的 failure，删除默认文案/默认 code 与 `executionKind \|\| "agent"` 回退                                                      |
+| `5c5887b71` | 测试夹具                      | 测试 helper/fixture 单字段 `String(x \|\| d).trim()` 28 处改为 `text()`；`raw`/`outputText` 改名消除 `text` 遮蔽；`inlineTrim` 保留 helper 计数口径（不放宽）                                                                                                            |
+| `dad7809e9` | client                        | 子会话投影 `parentSessionId`/`workflowRunId`/`nodeExecutionId` 只读事件 payload（gate 与协议已强制三元组）；删除 `buildNextSubSessionState`、`applySubSessionMessageOrdering` 5 处回退；新增前提用例固定行为等价依据                                                     |
+| 待回填      | client、i18n                  | 终态失败以 `failure` 为唯一事实源（缺陷修正：`turn.error` 此前被投影成 `"[object Object]"`）；删除终态提示中无写入方的 `reason`/`terminalReason`/`description`/`error` 死链路及 `turnTerminalReason`、`turnTerminalErrorDetail` 两个键；删除 `source`/`authority` 死回退 |

@@ -430,8 +430,6 @@ export const enUSMessages = {
     thinkingModelLoopRound: "Round: {round}",
     turnTerminalUserStopped: "This turn was stopped by the user",
     turnTerminalError: "This turn stopped unexpectedly",
-    turnTerminalReason: "Reason: {reason}",
-    turnTerminalErrorDetail: "Error: {error}",
     executionStatusCompleted: "Completed",
     executionStatusFailed: "Failed",
     executionStatusCancelled: "Cancelled",

@@ -32,7 +32,8 @@ export const AUTHORITATIVE_EVENT_TYPES = new Set([
 ]);
 
 function resolveRuntimeAuthority(type, rawEvent = {}) {
-  if (rawEvent?.authority) return trim(rawEvent.authority);
+  const explicitAuthority = trim(rawEvent?.authority);
+  if (explicitAuthority) return explicitAuthority;
   if (type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED;
   }

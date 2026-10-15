@@ -57,8 +57,8 @@ function createObservation({ registry, event, rawEvent, route, turnScopeId }) {
       turnKey: executionTurnKey(canonicalId, turnScopeId),
       eventId: text(rawEvent.eventId),
       sequence: event.seq,
-      source: text(event.source || rawEvent.source),
-      authority: text(event.authority || rawEvent.authority || "none"),
+      source: event.source,
+      authority: event.authority,
       ...values,
     };
   };
@@ -80,12 +80,6 @@ function resolveProjectedFinish(currentValue, event, rawEvent, terminal) {
     return observed || currentValue.finishedAt || event.updatedAt;
   }
   return currentValue.finishedAt || observed || event.updatedAt;
-}
-
-function resolveProjectedError(terminal, rawEvent) {
-  if (terminal !== "error") return null;
-  const rawError = rawEvent.error || {};
-  return text(rawError.message || rawError || rawEvent.reason);
 }
 
 function projectTurn({ current, transition, event, rawEvent, sessionId, turnScopeId }) {
@@ -110,11 +104,10 @@ function projectTurn({ current, transition, event, rawEvent, sessionId, turnScop
     updatedAt: text(event.updatedAt || currentValue.updatedAt),
     source: text(event.source || currentValue.source),
     sourceEvent: text(event.sourceEvent || event.type || currentValue.sourceEvent),
-    authority: text(event.authority || currentValue.authority || "none"),
+    authority: event.authority,
     finishedAtMs: terminal ? Number(currentValue.finishedAtMs || nowMs) : 0,
     startedAt: text(startedAt),
     finishedAt: text(finishedAt),
-    error: resolveProjectedError(terminal, rawEvent),
     continuationSource: event.continuationSource || currentValue.continuationSource || null,
     continuedByTurnScopeId: text(
       event.continuedByTurnScopeId || currentValue.continuedByTurnScopeId,

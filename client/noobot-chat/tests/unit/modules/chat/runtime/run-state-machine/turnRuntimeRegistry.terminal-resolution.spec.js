@@ -375,8 +375,10 @@ it.each([
     expect(failed.turn).toMatchObject({
       state: failedState,
       terminal: "error",
+      failure: { phase: failedPhase, message: "retryable" },
       finalizeIntent: { retryable: true },
     });
+    expect(failed.turn).not.toHaveProperty("error");
     const authoritativeSuccess = applyTurnRuntimeEvent(registry, {
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: successEvent,

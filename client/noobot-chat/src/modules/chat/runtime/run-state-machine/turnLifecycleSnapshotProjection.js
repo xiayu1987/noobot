@@ -116,7 +116,6 @@ function projectSnapshotIdentity(source, current, sessionId, turnScopeId) {
 
 function projectSnapshotControl() {
   return {
-    error: null,
     commandPending: false,
     pendingCommandId: "",
     pendingCommandType: "",

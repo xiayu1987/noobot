@@ -427,8 +427,6 @@ export const zhCNMessages = {
     thinkingModelLoopRound: "轮次：{round}",
     turnTerminalUserStopped: "本轮已由用户停止",
     turnTerminalError: "本轮异常停止",
-    turnTerminalReason: "原因：{reason}",
-    turnTerminalErrorDetail: "异常：{error}",
     executionStatusCompleted: "已完成",
     executionStatusFailed: "失败",
     executionStatusCancelled: "已取消",

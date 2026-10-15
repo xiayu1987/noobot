@@ -98,8 +98,6 @@ function terminalStatusesFromRuntime(turnRuntimeRegistry = {}, sessionId = "") {
       turnScopeId: text(turn?.turnScopeId),
       dialogProcessId: text(turn?.dialogProcessId),
       status: text(turn?.terminal).toLowerCase(),
-      reason: text(turn?.reason || turn?.terminalReason),
-      description: text(turn?.description),
       updatedAt: text(turn?.finishedAt || turn?.updatedAt),
     }))
     .filter((status) => Boolean(status.turnScopeId));
@@ -113,28 +111,9 @@ function authoritativeTurnSequence(turnRuntimeRegistry = {}, sessionId = "", tur
   return Number(turn?.lifecycleSeq || 0);
 }
 
-function terminalErrorText(status = {}) {
-  return text(
-    typeof status?.error === "string"
-      ? status.error
-      : status?.error?.message || status?.error?.reason,
-  );
-}
-
 function formatTerminalStatusContent(status = {}) {
   const state = text(status?.status).toLowerCase();
-  const title = translateStoredLocaleMessageKey(resolveTurnTerminalNoticeLabelKey(state));
-  const description = text(status?.description);
-  const reason = text(status?.reason);
-  const error = terminalErrorText(status);
-  return [
-    title,
-    description,
-    reason && translateStoredLocaleMessageKey("message.turnTerminalReason", { reason }),
-    error && translateStoredLocaleMessageKey("message.turnTerminalErrorDetail", { error }),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return translateStoredLocaleMessageKey(resolveTurnTerminalNoticeLabelKey(state));
 }
 
 function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
@@ -154,9 +133,6 @@ function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
     turnStatus: { ...status },
     status: status?.status,
     state: status?.status,
-    statusReason: status?.reason,
-    statusDescription: status?.description,
-    error: terminalErrorText(status),
     turnScopeId,
     dialogProcessId,
     ts: timestamp,
