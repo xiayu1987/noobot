@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { isExecutionAbortError, resolveExecutionAbortMessage } from "@noobot/session-protocol";
 
 export function resolveWorkflowAgentContext(ctx = {}) {
@@ -43,12 +43,7 @@ export function throwIfWorkflowAborted(ctx = {}) {
 }
 
 export function hasOwnObjectKey(source = {}, key = "") {
-  return Boolean(
-    source &&
-    typeof source === "object" &&
-    !Array.isArray(source) &&
-    Object.prototype.hasOwnProperty.call(source, text(key)),
-  );
+  return Boolean(isPlainObject(source) && Object.prototype.hasOwnProperty.call(source, text(key)));
 }
 
 export function withTimeout(promise, timeoutMs, message = "", { signal = null } = {}) {

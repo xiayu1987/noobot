@@ -14,7 +14,7 @@ import {
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 let testScopeSequence = 0;
 let testTransferSequence = 0;
 let testModelResponseSequence = 0;
@@ -40,14 +40,10 @@ export function createTestModelResponse(
     reasoning: String(reasoning ?? ""),
     toolCalls: Array.isArray(toolCalls) ? toolCalls : [],
     finishReason: String(finishReason ?? ""),
-    usage: usage && typeof usage === "object" && !Array.isArray(usage) ? usage : {},
+    usage: isPlainObject(usage) ? usage : {},
     ...(typeof content === "string" || Array.isArray(content) ? { content } : {}),
     ...(Array.isArray(responseOutput) ? { responseOutput } : {}),
-    ...(responseReasoning &&
-    typeof responseReasoning === "object" &&
-    !Array.isArray(responseReasoning)
-      ? { responseReasoning }
-      : {}),
+    ...(isPlainObject(responseReasoning) ? { responseReasoning } : {}),
   };
   const normalizedAttempts =
     Array.isArray(attempts) && attempts.length

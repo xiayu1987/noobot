@@ -6,7 +6,7 @@
 
 import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const AGENT_LIFECYCLE_STATE = Object.freeze({
   INITIALIZING: "initializing",
@@ -32,7 +32,7 @@ function isBranchState(state = "") {
 }
 
 function normalizeStoppedSnapshotPersistence(value = null) {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
+  if (isPlainObject(value)) {
     const status = normalizeText(value.status);
     return {
       ...value,

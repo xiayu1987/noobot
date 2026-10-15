@@ -4,18 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const AGENT_TRANSPORT_DEBUG_TYPE = "agent-transport";
 
 const clean = (value) => text(value);
-const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
 function resolveCommand(command) {
-  if (isObject(command)) return command;
+  if (isPlainObject(command)) return command;
   try {
     const parsed = JSON.parse(String(command ?? ""));
-    return isObject(parsed) ? parsed : {};
+    return isPlainObject(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -23,8 +21,8 @@ function resolveCommand(command) {
 
 export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
   const command = resolveCommand(rawCommand);
-  const identity = isObject(command.identity) ? command.identity : {};
-  const concurrency = isObject(command.concurrency) ? command.concurrency : {};
+  const identity = isPlainObject(command.identity) ? command.identity : {};
+  const concurrency = isPlainObject(command.concurrency) ? command.concurrency : {};
   return {
     protocolVersion: Number(command.protocolVersion) || null,
     commandType: clean(command.commandType).toLowerCase(),
@@ -50,6 +48,6 @@ export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
       : null,
     createSessionIfAbsent: command.session?.createIfAbsent === true,
     hasUserIdField: Object.hasOwn(command, "userId") || Object.hasOwn(identity, "userId"),
-    ...(isObject(extra) ? extra : {}),
+    ...(isPlainObject(extra) ? extra : {}),
   };
 }

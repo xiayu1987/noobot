@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const HARNESS_MAIN_FLOW_CONTROL_ACTION = Object.freeze({
   FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
@@ -12,7 +12,7 @@ const HARNESS_MAIN_FLOW_CONTROL_ACTION = Object.freeze({
 });
 
 function asObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  return isPlainObject(value) ? value : null;
 }
 
 function resolveAgentRuntimeFromHookContext(ctx = {}) {

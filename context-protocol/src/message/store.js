@@ -17,7 +17,7 @@ import {
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "./codec.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];
@@ -242,12 +242,7 @@ function syncBlockIds(blocks = null) {
 export function canonicalizeMessageStore(holder = {}) {
   if (!holder || typeof holder !== "object") return null;
   const store = resolveStore(holder);
-  const blocks =
-    holder.messageBlocks &&
-    typeof holder.messageBlocks === "object" &&
-    !Array.isArray(holder.messageBlocks)
-      ? holder.messageBlocks
-      : null;
+  const blocks = isPlainObject(holder.messageBlocks) ? holder.messageBlocks : null;
   reserveExplicitMessageIds(store, [
     holder.messages,
     blocks?.system,
@@ -393,12 +388,7 @@ export function pruneSummarizedIncrementalMessages(holder = {}) {
   if (!holder || typeof holder !== "object") return 0;
   const keepActive = (message = {}) => !resolveContextMessageSummarized(message);
   const messages = Array.isArray(holder.messages) ? holder.messages : [];
-  const blocks =
-    holder.messageBlocks &&
-    typeof holder.messageBlocks === "object" &&
-    !Array.isArray(holder.messageBlocks)
-      ? holder.messageBlocks
-      : null;
+  const blocks = isPlainObject(holder.messageBlocks) ? holder.messageBlocks : null;
   const incremental = blocks && Array.isArray(blocks.incremental) ? blocks.incremental : [];
   const retainedMessages = messages.filter(keepActive);
   const retainedIncremental = incremental.filter(keepActive);
@@ -417,12 +407,7 @@ export function pruneSummarizedIncrementalMessages(holder = {}) {
 
 export function writeMessageBlocks(holder = {}, blocks = {}) {
   if (!holder || typeof holder !== "object") return null;
-  const existing =
-    holder.messageBlocks &&
-    typeof holder.messageBlocks === "object" &&
-    !Array.isArray(holder.messageBlocks)
-      ? holder.messageBlocks
-      : {};
+  const existing = isPlainObject(holder.messageBlocks) ? holder.messageBlocks : {};
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const prepared = prepareNewCanonicalEntities(holder, store, [
     ...normalizeList(blocks.system),
@@ -470,12 +455,9 @@ export function appendMessage(holder = {}, message = {}, { block = "" } = {}) {
   if (!holder.messages.includes(canonicalMessage)) holder.messages.push(canonicalMessage);
   const blockName = text(block);
   if (["system", "history", "incremental"].includes(blockName)) {
-    const currentBlocks =
-      holder.messageBlocks &&
-      typeof holder.messageBlocks === "object" &&
-      !Array.isArray(holder.messageBlocks)
-        ? holder.messageBlocks
-        : { system: [], history: [], incremental: [] };
+    const currentBlocks = isPlainObject(holder.messageBlocks)
+      ? holder.messageBlocks
+      : { system: [], history: [], incremental: [] };
     const nextBlocks = {
       system: normalizeList(currentBlocks.system),
       history: normalizeList(currentBlocks.history),

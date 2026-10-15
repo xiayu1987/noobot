@@ -23,7 +23,7 @@ import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
 } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
@@ -100,18 +100,8 @@ export function createStateCommitter({
           typeof rawModelContent === "string" || Array.isArray(rawModelContent)
             ? rawModelContent
             : null,
-        modelAdditionalKwargs:
-          modelAdditionalKwargs &&
-          typeof modelAdditionalKwargs === "object" &&
-          !Array.isArray(modelAdditionalKwargs)
-            ? modelAdditionalKwargs
-            : null,
-        modelResponseMetadata:
-          modelResponseMetadata &&
-          typeof modelResponseMetadata === "object" &&
-          !Array.isArray(modelResponseMetadata)
-            ? modelResponseMetadata
-            : null,
+        modelAdditionalKwargs: isPlainObject(modelAdditionalKwargs) ? modelAdditionalKwargs : null,
+        modelResponseMetadata: isPlainObject(modelResponseMetadata) ? modelResponseMetadata : null,
       };
       assistantMessage = applyAuthoritativeMessageId(assistantMessage, messageId);
       if (

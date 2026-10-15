@@ -7,7 +7,7 @@ import { normalizeLocale } from "noobot-i18n/shared";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
 import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
 import { projectAttachmentMetaForModel } from "../../artifacts/index.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
@@ -112,12 +112,7 @@ function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
   if (!dynamicInfo || typeof dynamicInfo !== "object" || Array.isArray(dynamicInfo)) {
     return {};
   }
-  const config =
-    dynamicInfo.config &&
-    typeof dynamicInfo.config === "object" &&
-    !Array.isArray(dynamicInfo.config)
-      ? dynamicInfo.config
-      : {};
+  const config = isPlainObject(dynamicInfo.config) ? dynamicInfo.config : {};
   return {
     now: text(dynamicInfo.now),
     caller: text(dynamicInfo.caller) || "user",

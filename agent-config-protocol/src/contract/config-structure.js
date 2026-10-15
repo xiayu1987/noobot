@@ -9,6 +9,7 @@ import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
   MODEL_PROVIDER_DECLARATION_VISIBILITY,
 } from "@noobot/model-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_ITEM_TYPE,
@@ -397,7 +398,7 @@ export function projectUserVisibleConfigDeclarations(document = {}) {
   const projectedProviders = Object.fromEntries(
     Object.entries(providers).map(([providerId, provider]) => {
       const declaration = {};
-      if (provider && typeof provider === "object" && !Array.isArray(provider)) {
+      if (isPlainObject(provider)) {
         for (const [field, contract] of Object.entries(
           MODEL_PROVIDER_AGENT_CONFIG_CONTRACT.properties,
         )) {

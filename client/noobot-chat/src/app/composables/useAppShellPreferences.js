@@ -31,7 +31,7 @@ import {
   applyPluginPreferenceDefaults,
 } from "../storage/uiPreferencesStorage.js";
 import { resolvePluginPreferenceDefaults } from "../../plugins/plugin-preference-defaults.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function resolveModelValue(value) {
   return text(value);
@@ -176,8 +176,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   }
 
   function onSummaryPolicyUpdate(value = {}) {
-    summaryPolicy.value =
-      value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
+    summaryPolicy.value = isPlainObject(value) ? { ...value } : {};
   }
 
   function onFrontendThresholdsEnabledUpdate(value = false) {

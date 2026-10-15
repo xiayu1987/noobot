@@ -9,6 +9,7 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 
 function normalizeSelectedPluginKeys(selectedPlugins) {
   const source = Array.isArray(selectedPlugins?.value)
@@ -23,7 +24,7 @@ const unwrap = (source) => source?.value ?? source;
 const trueUnlessFalse = (source) => unwrap(source) !== false;
 const plainObjectOrNull = (source) => {
   const value = unwrap(source);
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  return isPlainObject(value) ? value : null;
 };
 
 function resolveCommandType({ continueFromStopped, reuseExistingUserTurn }) {

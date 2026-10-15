@@ -19,7 +19,7 @@ import {
   terminateProcessTree,
   usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
@@ -35,7 +35,7 @@ function resolveOutputDir(sessionDir, kind) {
 }
 
 function resolveProcessCommand(command) {
-  if (command && typeof command === "object" && !Array.isArray(command)) {
+  if (isPlainObject(command)) {
     const executable = text(command.command);
     if (!executable) throw new TypeError("process command executable is required");
     return {

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import {
   createSessionPersistenceScope,
   createSessionScope,
@@ -16,7 +16,7 @@ import {
 const INTERACTION_AUTHORITY_FIELDS = Object.freeze(["session", "turn", "persistenceScope"]);
 const TURN_IDENTITY_FIELDS = Object.freeze(["dialogProcessId", "turnScopeId"]);
 export function createInteractionAuthority(source = {}) {
-  const input = source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  const input = isPlainObject(source) ? source : {};
   return Object.freeze({
     session: createSessionScope(input.session),
     turn: createTurnIdentity(input.turn),
@@ -37,9 +37,7 @@ export function validateInteractionAuthority(source = {}) {
     errors.push("unknown_interaction_authority_field");
   }
   if (
-    source.turn &&
-    typeof source.turn === "object" &&
-    !Array.isArray(source.turn) &&
+    isPlainObject(source.turn) &&
     Object.keys(source.turn).some((key) => !TURN_IDENTITY_FIELDS.includes(key))
   ) {
     errors.push("unknown_turn_identity_field");

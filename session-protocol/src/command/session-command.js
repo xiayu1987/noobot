@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
+import { isPlainObject, text as clean } from "@noobot/shared/value";
 import { createSessionScope, validateSessionScope } from "../identity.js";
 import { SESSION_PROTOCOL_VERSION } from "../version.js";
 
@@ -37,10 +37,7 @@ export function createSessionCommand({
     type: clean(type),
     scope: createSessionScope(scope),
     expectedAggregateVersion: Number(expectedAggregateVersion),
-    payload:
-      payload && typeof payload === "object" && !Array.isArray(payload)
-        ? Object.freeze({ ...payload })
-        : payload,
+    payload: isPlainObject(payload) ? Object.freeze({ ...payload }) : payload,
   });
 }
 

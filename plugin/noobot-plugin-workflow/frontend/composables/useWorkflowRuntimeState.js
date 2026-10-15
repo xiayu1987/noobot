@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
+import { isPlainObject } from "@noobot/shared/value";
 import { createActionRuntimeBySemanticKey } from "../runtime/workflowActionRuntimeMap.js";
 import { createFlowNodes } from "../services/workflowFlowNodes.js";
 import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
@@ -19,11 +20,7 @@ export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {})
   });
 
   const executionMeta = computed(() =>
-    workflowPayload.value?.execution &&
-    typeof workflowPayload.value.execution === "object" &&
-    !Array.isArray(workflowPayload.value.execution)
-      ? workflowPayload.value.execution
-      : {},
+    isPlainObject(workflowPayload.value?.execution) ? workflowPayload.value.execution : {},
   );
 
   const runtimeNodeSessions = createRuntimeNodeSessions({

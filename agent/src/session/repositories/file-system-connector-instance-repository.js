@@ -8,7 +8,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { normalizeConnectorSecretEnvelope } from "@noobot/connector-protocol";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../../shared/storage/atomic-file-write.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const REGISTRY_FILE_NAME = "connector-instances.json";
 const REGISTRY_VERSION = 3;
@@ -83,12 +83,9 @@ export class FileSystemConnectorInstanceRepository {
         ownerUserId: requiredText(record?.ownerUserId, "legacy connector ownerUserId"),
         name: requiredText(record?.name, "legacy connector name"),
         instanceType: requiredText(record?.instanceType, "legacy connector instanceType"),
-        parameters:
-          record?.parameters &&
-          typeof record.parameters === "object" &&
-          !Array.isArray(record.parameters)
-            ? Object.freeze({ ...record.parameters })
-            : Object.freeze({}),
+        parameters: isPlainObject(record?.parameters)
+          ? Object.freeze({ ...record.parameters })
+          : Object.freeze({}),
         createdAt: text(record?.createdAt),
         updatedAt: text(record?.updatedAt),
       })),

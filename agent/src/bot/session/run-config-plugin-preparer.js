@@ -39,14 +39,14 @@ import { normalizeTrimmedStringList, selectHookManager } from "./session-executi
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { commitPluginArtifact, getPluginArtifact } from "./plugin-artifact-committer.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS =
   TIME_THRESHOLDS.capability.harnessHookMinTimeoutMs;
 
 function plainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {

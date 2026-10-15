@@ -30,7 +30,7 @@ import {
   createSemanticTransferMigration,
   migrateSemanticTransfers,
 } from "./semantic-transfer-migrations.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { stableId } from "./repair-primitives.js";
 
 function validateTransferCollections(value) {
@@ -108,9 +108,7 @@ function migrateMessage(
   }
   if (
     migrateArtifactProtocol &&
-    next.turnCommit &&
-    typeof next.turnCommit === "object" &&
-    !Array.isArray(next.turnCommit) &&
+    isPlainObject(next.turnCommit) &&
     next.turnCommit.idempotencyKey !== undefined
   ) {
     next.turnCommit = {
@@ -259,12 +257,7 @@ export function reconcileUncommittedAggregateConflictContinuations(document = {}
     });
   }
   const next = structuredClone(document);
-  const turns =
-    next.turnLifecycle?.turns &&
-    typeof next.turnLifecycle.turns === "object" &&
-    !Array.isArray(next.turnLifecycle.turns)
-      ? next.turnLifecycle.turns
-      : {};
+  const turns = isPlainObject(next.turnLifecycle?.turns) ? next.turnLifecycle.turns : {};
   const messages = Array.isArray(next.messages) ? next.messages : [];
   const repaired = Object.values(turns)
     .filter((turn) => isUncommittedAggregateConflictContinuation(turn, turns, messages))
@@ -291,12 +284,8 @@ export function reconcileUncommittedAggregateConflictContinuations(document = {}
   return { document: next, changed: true, repaired };
 }
 
-function isRecord(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function ensureRecordField(owner, key) {
-  if (!isRecord(owner[key])) owner[key] = {};
+  if (!isPlainObject(owner[key])) owner[key] = {};
   return owner[key];
 }
 
@@ -340,7 +329,7 @@ function migrateEventTypedReceipt(context, receipt, eventType, commandIdMap) {
 
 function remapLifecycleCommandIds(context, commandIdMap) {
   for (const turn of Object.values(context.turns)) {
-    if (!isRecord(turn)) continue;
+    if (!isPlainObject(turn)) continue;
     const commandId = commandIdMap.get(text(turn.commandId));
     if (commandId) turn.commandId = commandId;
     const completionCommitId = commandIdMap.get(text(turn.completionCommitId));
@@ -363,7 +352,7 @@ function migrateLifecycleCommandReceipts(context) {
   const commandIdMap = new Map();
   let normalizedCommandReceipts = false;
   lifecycle.commandReceipts = commandReceipts.map((receipt) => {
-    if (!isRecord(receipt)) return receipt;
+    if (!isPlainObject(receipt)) return receipt;
     const eventType = text(receipt.eventType);
     if (eventType) return migrateEventTypedReceipt(context, receipt, eventType, commandIdMap);
     if (!context.migrateArtifactProtocol) return receipt;
@@ -468,7 +457,7 @@ function migrateMutationReceipt(lifecycle, receipt) {
     type,
     requestHash: text(receipt.requestHash),
     aggregateVersion: Number(receipt.aggregateVersion || 0),
-    result: isRecord(receipt.result) ? structuredClone(receipt.result) : {},
+    result: isPlainObject(receipt.result) ? structuredClone(receipt.result) : {},
     committedAt: text(receipt.committedAt),
   });
 }
@@ -528,7 +517,7 @@ function migrateDocumentMessages(context) {
     reconcileCompletedTurnSummaryMarks(next),
     "completed-turn-summary-marks",
   );
-  if (isRecord(next.message)) next.message = migrateDocumentMessage(context, next.message, 0);
+  if (isPlainObject(next.message)) next.message = migrateDocumentMessage(context, next.message, 0);
   context.migrations.push(...completedSemanticTransferMigrationNames(context.transferMigration));
 }
 
@@ -554,7 +543,7 @@ function resolveReplacementDialogProcessId(context, replacement) {
 }
 
 function migrateReplacement(context, replacement) {
-  if (!isRecord(replacement)) return;
+  if (!isPlainObject(replacement)) return;
   if (
     replacement.committedVersion === undefined &&
     replacement.replacementDialogProcessId !== undefined
@@ -595,7 +584,7 @@ function extractLegacyAuthorityEventOutbox(context) {
 }
 
 function createDocumentMigrationContext(document, suppliedSessionId) {
-  if (!isRecord(document)) {
+  if (!isPlainObject(document)) {
     throw migrationError(
       "Session repair source must be an object",
       "SESSION_REPAIR_SOURCE_INVALID",

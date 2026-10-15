@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function messageRole(item = {}) {
   return text(item?.role || item?.messageRole).toLowerCase();
@@ -35,7 +35,7 @@ function mergeListByIdentity(previous = [], incoming = []) {
 }
 
 function object(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function entityKey(item = {}, index = 0, kind = "entity") {

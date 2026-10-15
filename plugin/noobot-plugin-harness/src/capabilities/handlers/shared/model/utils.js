@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function resolvePlanningGuidanceMode(meta = {}) {
   return (text(meta?.harness?.planningGuidanceMode) || "separate_model").toLowerCase();
@@ -25,9 +25,7 @@ function normalizeCapabilityModelMap(source = {}) {
     Object.entries(source)
       .map(([key, value]) => [
         text(key),
-        String(
-          value && typeof value === "object" && !Array.isArray(value) ? value.model : value || "",
-        ).trim(),
+        String(isPlainObject(value) ? value.model : value || "").trim(),
       ])
       .filter(([key, value]) => key && value),
   );

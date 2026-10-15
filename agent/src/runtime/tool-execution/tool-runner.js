@@ -46,7 +46,7 @@ import {
   getToolRiskLevel,
   runWithToolRiskAssessment,
 } from "../../tools/execution/tool-risk.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function shouldTransferToolInput(call = {}) {
   const toolName = text(call?.name);
@@ -60,10 +60,7 @@ function toolProducer(call = {}) {
 }
 
 function mergeToolInputTransferPayload(toolResultText = "", transferPayload = {}) {
-  const normalizedTransferPayload =
-    transferPayload && typeof transferPayload === "object" && !Array.isArray(transferPayload)
-      ? transferPayload
-      : {};
+  const normalizedTransferPayload = isPlainObject(transferPayload) ? transferPayload : {};
   if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
   const parsed = parseJsonObjectSafely(toolResultText);
   if (!parsed) return String(toolResultText || "");
@@ -74,10 +71,7 @@ function mergeToolInputTransferPayload(toolResultText = "", transferPayload = {}
 }
 
 function mergeTaskSummaryTransferPayload(toolResultText = "", transferPayload = {}) {
-  const normalizedTransferPayload =
-    transferPayload && typeof transferPayload === "object" && !Array.isArray(transferPayload)
-      ? transferPayload
-      : {};
+  const normalizedTransferPayload = isPlainObject(transferPayload) ? transferPayload : {};
   if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
   const parsed = parseJsonObjectSafely(toolResultText);
   if (!parsed) return String(toolResultText || "");
@@ -192,17 +186,14 @@ function deriveToolInputTransferMeta(inputTransfer = {}) {
     : [];
   const metas = transferEnvelopes
     .flatMap((envelope = {}) => [envelope?.meta, envelope?.meta?.attributes])
-    .filter((meta = null) => meta && typeof meta === "object" && !Array.isArray(meta));
+    .filter((meta = null) => isPlainObject(meta));
   const overflowMeta = metas.find((meta = {}) => meta?.toolInputOverflow);
   const exceededMeta = metas.find((meta = {}) => meta?.exceeded === true);
   const messageMeta = metas.find((meta = {}) => text(meta?.message));
   const sourceMeta = overflowMeta || exceededMeta || messageMeta || metas[0] || {};
-  const toolInputOverflow =
-    sourceMeta?.toolInputOverflow &&
-    typeof sourceMeta.toolInputOverflow === "object" &&
-    !Array.isArray(sourceMeta.toolInputOverflow)
-      ? sourceMeta.toolInputOverflow
-      : null;
+  const toolInputOverflow = isPlainObject(sourceMeta?.toolInputOverflow)
+    ? sourceMeta.toolInputOverflow
+    : null;
   return {
     exceeded: sourceMeta?.exceeded === true || toolInputOverflow?.exceeded === true,
     message: text(sourceMeta?.message || toolInputOverflow?.message),
@@ -222,7 +213,7 @@ function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = n
   if (invokeError) {
     return { success: false, reason: "invoke_error" };
   }
-  if (rawResult && typeof rawResult === "object" && !Array.isArray(rawResult)) {
+  if (isPlainObject(rawResult)) {
     if (rawResult.ok === false) return { success: false, reason: "result_ok_false" };
     return { success: true, reason: "" };
   }
@@ -628,7 +619,7 @@ export async function executeToolCall(options = {}) {
 }
 
 function recordOrEmpty(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function createTurnToolExecutionContext(options = {}) {

@@ -11,10 +11,10 @@ import {
   getTaskTemplate,
   translateI18nText,
 } from "./i18n.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeFilePlan(files = null) {
-  const source = files && typeof files === "object" && !Array.isArray(files) ? files : {};
+  const source = isPlainObject(files) ? files : {};
   const readArray = (...keys) => {
     for (const key of keys) {
       if (Array.isArray(source[key])) return source[key].map((item) => text(item)).filter(Boolean);

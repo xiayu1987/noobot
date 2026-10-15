@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 function normalizeToolNameSet(input) {
   if (!Array.isArray(input)) return new Set();
   return new Set(input.map((item) => text(item)).filter(Boolean));
@@ -17,7 +17,7 @@ function normalizeCallShape(call = null) {
   return {
     ...call,
     name,
-    args: call?.args && typeof call.args === "object" && !Array.isArray(call.args) ? call.args : {},
+    args: isPlainObject(call?.args) ? call.args : {},
   };
 }
 

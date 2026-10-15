@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function parseJson(value) {
   try {
@@ -55,11 +55,7 @@ export function findVersionedEnvelopes(records = []) {
 
 export function findAgentCommands(records = []) {
   const commands = findVersionedEnvelopes(records).filter(
-    (item) =>
-      typeof item.commandType === "string" &&
-      item.identity &&
-      typeof item.identity === "object" &&
-      !Array.isArray(item.identity),
+    (item) => typeof item.commandType === "string" && isPlainObject(item.identity),
   );
   const seen = new Set();
   return commands.filter((command) => {

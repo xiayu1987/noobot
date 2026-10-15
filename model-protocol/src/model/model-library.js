@@ -8,11 +8,7 @@ import {
   normalizeModelPromptCacheSelection,
   normalizeModelReasoningConfiguration,
 } from "./provider-spec.js";
-import { text } from "@noobot/shared/value";
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));

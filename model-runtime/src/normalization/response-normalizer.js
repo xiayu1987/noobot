@@ -2,6 +2,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+
+import { isPlainObject } from "@noobot/shared/value";
+
 const THINK_OPEN = "<think>";
 const THINK_CLOSE = "</think>";
 
@@ -97,12 +100,9 @@ export function normalizeModelOutput(response = {}) {
   const responseOutput = Array.isArray(response?.response_metadata?.output)
     ? response.response_metadata.output
     : null;
-  const responseReasoning =
-    response?.additional_kwargs?.reasoning &&
-    typeof response.additional_kwargs.reasoning === "object" &&
-    !Array.isArray(response.additional_kwargs.reasoning)
-      ? response.additional_kwargs.reasoning
-      : null;
+  const responseReasoning = isPlainObject(response?.additional_kwargs?.reasoning)
+    ? response.additional_kwargs.reasoning
+    : null;
   return Object.freeze({
     ...(typeof response.content === "string" || Array.isArray(response.content)
       ? { content: response.content }

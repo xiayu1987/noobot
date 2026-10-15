@@ -20,7 +20,7 @@ import {
   projectLifecycleTransition,
   resolveLifecycleTransitionRequest,
 } from "./turn-lifecycle-transition.js";
-import { text as clean } from "@noobot/shared/value";
+import { isPlainObject, text as clean } from "@noobot/shared/value";
 
 const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
@@ -33,10 +33,7 @@ function normalizeFinalizeIntent(value) {
     retryable: value.retryable !== false,
     createdAt: clean(value.createdAt),
     updatedAt: clean(value.updatedAt),
-    payload:
-      value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)
-        ? { ...value.payload }
-        : {},
+    payload: isPlainObject(value.payload) ? { ...value.payload } : {},
   };
 }
 
@@ -53,10 +50,7 @@ function normalizeTurn(value, key) {
     rootExecutionId:
       clean(value.rootExecutionId) ||
       deriveAgentExecutionId({ executionId: value.executionId, turnScopeId }),
-    origin:
-      value.origin && typeof value.origin === "object" && !Array.isArray(value.origin)
-        ? { ...value.origin }
-        : {},
+    origin: isPlainObject(value.origin) ? { ...value.origin } : {},
     stage: clean(value.stage),
     dialogProcessId: clean(value.dialogProcessId),
     commandId: clean(value.commandId),
@@ -68,16 +62,10 @@ function normalizeTurn(value, key) {
     sequence: integer(value.sequence),
     summaryVersion: integer(value.summaryVersion),
     completionCommitId: clean(value.completionCommitId),
-    terminalStatus:
-      value.terminalStatus &&
-      typeof value.terminalStatus === "object" &&
-      !Array.isArray(value.terminalStatus)
-        ? { ...value.terminalStatus }
-        : null,
-    failure:
-      value.failure && typeof value.failure === "object" && !Array.isArray(value.failure)
-        ? { ...value.failure, phase: clean(value.failure.phase || value.phase) }
-        : null,
+    terminalStatus: isPlainObject(value.terminalStatus) ? { ...value.terminalStatus } : null,
+    failure: isPlainObject(value.failure)
+      ? { ...value.failure, phase: clean(value.failure.phase || value.phase) }
+      : null,
     finalizeIntent: normalizeFinalizeIntent(value.finalizeIntent),
     continuationSource: normalizeTurnContinuationSource(value.continuationSource),
     continuedByTurnScopeId: clean(value.continuedByTurnScopeId),
@@ -115,10 +103,7 @@ function normalizeReplacedTurn(value, key) {
 
 function normalizeCommandReceipt(item) {
   const eventId = clean(item.eventId);
-  const envelope =
-    item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
-      ? item.envelope
-      : null;
+  const envelope = isPlainObject(item.envelope) ? item.envelope : null;
   const validation = validateProtocolEvent(envelope || {});
   return {
     ...item,
@@ -127,10 +112,7 @@ function normalizeCommandReceipt(item) {
     turnScopeId: clean(item.turnScopeId),
     requestHash: clean(item.requestHash),
     aggregateVersion: integer(item.aggregateVersion),
-    result:
-      item.result && typeof item.result === "object" && !Array.isArray(item.result)
-        ? structuredClone(item.result)
-        : {},
+    result: isPlainObject(item.result) ? structuredClone(item.result) : {},
     revision: integer(item.revision),
     sequence: integer(item.sequence),
     committedAt: clean(item.committedAt),

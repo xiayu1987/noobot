@@ -5,13 +5,14 @@
  */
 
 import { collapsedText as text } from "./normalize.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 function structuredDetail(value) {
-  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (isPlainObject(value)) return value;
   if (typeof value !== "string") return {};
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    return isPlainObject(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -97,14 +98,13 @@ function nativeScriptSummary(value, result) {
 
   const inputs = Array.isArray(value.inputs) ? value.inputs : [];
   const inputSummary = `${inputs.length} input${inputs.length === 1 ? "" : "s"}`;
-  const args =
-    value.arguments && typeof value.arguments === "object" && !Array.isArray(value.arguments)
-      ? Object.entries(value.arguments)
-          .slice(0, 3)
-          .map(([key, item]) => `${key}=${argumentDisplay(item)}`)
-          .filter((item) => !item.endsWith("="))
-          .join(", ")
-      : "";
+  const args = isPlainObject(value.arguments)
+    ? Object.entries(value.arguments)
+        .slice(0, 3)
+        .map(([key, item]) => `${key}=${argumentDisplay(item)}`)
+        .filter((item) => !item.endsWith("="))
+        .join(", ")
+    : "";
   return [inputSummary, args].filter(Boolean).join(" · ");
 }
 

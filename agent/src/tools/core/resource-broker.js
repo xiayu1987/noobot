@@ -17,12 +17,12 @@ import {
   getRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const registries = new WeakMap();
 
 function resolveRuntime(agentContext = null, runtime = null) {
-  if (runtime && typeof runtime === "object" && !Array.isArray(runtime)) return runtime;
+  if (isPlainObject(runtime)) return runtime;
   return getRuntimeFromAgentContext(agentContext);
 }
 

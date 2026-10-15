@@ -101,9 +101,7 @@ export function normalizeCommandReceipt(receipt = {}) {
     ...(Number.isInteger(Number(receipt.revision)) ? { revision: Number(receipt.revision) } : {}),
     ...(Number.isInteger(Number(receipt.sequence)) ? { sequence: Number(receipt.sequence) } : {}),
     ...(clean(receipt.eventId) ? { eventId: clean(receipt.eventId) } : {}),
-    ...(receipt.envelope && typeof receipt.envelope === "object" && !Array.isArray(receipt.envelope)
-      ? { envelope: structuredClone(receipt.envelope) }
-      : {}),
+    ...(isPlainObject(receipt.envelope) ? { envelope: structuredClone(receipt.envelope) } : {}),
   };
 }
 export function normalizeCommandReceipts(receipts = []) {

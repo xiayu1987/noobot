@@ -29,7 +29,7 @@ import { randomUUID } from "node:crypto";
 import { isWorkspaceRuntimeRelativePath } from "@noobot/workspace-protocol";
 import { AttachmentService } from "../artifacts/index.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
@@ -41,15 +41,10 @@ function createNow(now = null) {
 }
 
 function normalizeContextServicePayload(payload = {}) {
-  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const source = isPlainObject(payload) ? payload : {};
   return {
     ...source,
-    userConfig:
-      source.userConfig &&
-      typeof source.userConfig === "object" &&
-      !Array.isArray(source.userConfig)
-        ? source.userConfig
-        : {},
+    userConfig: isPlainObject(source.userConfig) ? source.userConfig : {},
     currentDialogProcessId: text(source.currentDialogProcessId),
     currentTurnScopeId: text(source.currentTurnScopeId),
   };

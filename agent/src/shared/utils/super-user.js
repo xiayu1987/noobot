@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const SUPER_ADMIN_ROLE = "super_admin";
 
 function asObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  return isPlainObject(value) ? value : null;
 }
 
 function resolveRuntimeFromAgentContext(agentContext = {}) {

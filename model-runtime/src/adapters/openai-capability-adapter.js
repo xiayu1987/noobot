@@ -13,7 +13,7 @@ import {
   MODEL_WEB_SEARCH_INSTRUCTION,
   resolveModelImageGenerationApiType,
 } from "@noobot/model-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
 const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
@@ -90,8 +90,7 @@ function unwrapPayload(payload = {}) {
   const source = payload && typeof payload === "object" ? payload : {};
   for (const key of ["data", "payload", "result"]) {
     const nested = source[key];
-    if (nested && typeof nested === "object" && !Array.isArray(nested))
-      Object.assign(source, nested);
+    if (isPlainObject(nested)) Object.assign(source, nested);
   }
   return source;
 }

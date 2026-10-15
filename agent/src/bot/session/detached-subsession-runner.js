@@ -21,7 +21,7 @@ import {
 } from "./detached-subsession-events.js";
 import { createExecutionFailure } from "../../shared/errors/index.js";
 import { transferCanonicalAttachmentsToSubSession } from "./detached-subsession-attachments.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
 
@@ -585,7 +585,7 @@ function collectTransferEnvelopes(turnMessages) {
 }
 
 function isObjectRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  return Boolean(isPlainObject(value));
 }
 
 function clearParentTurnTransactionIdentity(runConfig = {}) {

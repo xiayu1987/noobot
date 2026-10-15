@@ -18,7 +18,7 @@ import {
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const terminalResolutionFromUrl = (
   url,
@@ -307,10 +307,7 @@ export const createHarness = ({
         ? vi.fn(async (payload, onEvent) => {
             currentStreamTurnScopeId = text(payload?.identity?.turnScopeId);
             const wrappedOnEvent = (envelope = {}) => {
-              const data =
-                envelope?.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
-                  ? envelope.data
-                  : null;
+              const data = isPlainObject(envelope?.data) ? envelope.data : null;
               if (
                 autoPatchStreamTurnScopeId &&
                 data &&

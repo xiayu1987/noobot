@@ -15,7 +15,7 @@ import { DEFAULT_OPTIONS } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
@@ -188,7 +188,7 @@ async function withRunWriteLock(targetPath = "", operation = async () => undefin
 }
 
 function normalizeFlushStrategy(batchSize, flushIntervalMs) {
-  if (batchSize && typeof batchSize === "object" && !Array.isArray(batchSize)) {
+  if (isPlainObject(batchSize)) {
     const input = batchSize;
     const maxSize = Number(input?.maxSize);
     const maxTime = Number(input?.maxTime);

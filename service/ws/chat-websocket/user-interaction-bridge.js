@@ -19,7 +19,7 @@ import {
   rejectPendingInteractionsForTurn,
   unregisterPendingInteraction,
 } from "./pending-interaction-registry.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const USER_INTERACTION_TIMEOUT_MS = resolveUserInteractionTimeoutMs();
 
@@ -134,12 +134,7 @@ function createInteractionPayload(input, authority, requestId, effectiveTimeoutM
     lifecycle: text(input.lifecycle).toLowerCase() || "pending",
     ackMode: text(input.ackMode).toLowerCase() || "manual",
     resolvedBy: text(input.resolvedBy).toLowerCase(),
-    notification:
-      input.notification &&
-      typeof input.notification === "object" &&
-      !Array.isArray(input.notification)
-        ? input.notification
-        : {},
+    notification: isPlainObject(input.notification) ? input.notification : {},
     timeoutMs: effectiveTimeoutMs,
     interactionData:
       input.interactionData && typeof input.interactionData === "object"

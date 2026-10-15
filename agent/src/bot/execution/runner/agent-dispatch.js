@@ -19,7 +19,7 @@ import {
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
   const messageId = text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
@@ -98,7 +98,7 @@ function normalizeDispatchOwner({ owner, source, executionKind, origin, stage })
     owner: text(owner),
     source: text(source) || "agent_dispatch",
     executionKind: (text(executionKind) || "agent").toLowerCase(),
-    origin: origin && typeof origin === "object" && !Array.isArray(origin) ? { ...origin } : {},
+    origin: isPlainObject(origin) ? { ...origin } : {},
     stage: text(stage),
   };
 }

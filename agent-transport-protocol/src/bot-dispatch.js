@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text as clean } from "@noobot/shared/value";
+import { isPlainObject, text as clean } from "@noobot/shared/value";
 
 const BOT_DISPATCH_OUTCOME_KIND = "noobot.bot_dispatch_outcome";
 const BOT_DISPATCH_OUTCOME_VERSION = 1;
@@ -22,8 +22,7 @@ export function createBotDispatchPass({ owner = "" } = {}) {
 export function createBotDispatchHandled({ owner = "", result = {}, failure = null } = {}) {
   const normalizedOwner = clean(owner);
   if (!normalizedOwner) throw new Error("handled bot dispatch outcome requires owner");
-  const normalizedFailure =
-    failure && typeof failure === "object" && !Array.isArray(failure) ? failure : null;
+  const normalizedFailure = isPlainObject(failure) ? failure : null;
   if (normalizedFailure) {
     return Object.freeze({
       kind: BOT_DISPATCH_OUTCOME_KIND,
@@ -41,16 +40,14 @@ export function createBotDispatchHandled({ owner = "", result = {}, failure = nu
     version: BOT_DISPATCH_OUTCOME_VERSION,
     disposition: BOT_DISPATCH_DISPOSITION.HANDLED,
     owner: normalizedOwner,
-    result: result && typeof result === "object" && !Array.isArray(result) ? result : {},
+    result: isPlainObject(result) ? result : {},
     failure: null,
   });
 }
 
 export function isBotDispatchOutcome(value = null) {
   return Boolean(
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
+    isPlainObject(value) &&
     value.kind === BOT_DISPATCH_OUTCOME_KIND &&
     Number(value.version) === BOT_DISPATCH_OUTCOME_VERSION &&
     Object.values(BOT_DISPATCH_DISPOSITION).includes(clean(value.disposition)),

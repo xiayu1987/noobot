@@ -369,10 +369,7 @@ export function projectMessageEventToolFacets(event = {}) {
       ? {
           id: toolCallId,
           name: text(event.tool),
-          args:
-            event?.args && typeof event.args === "object" && !Array.isArray(event.args)
-              ? event.args
-              : {},
+          args: isPlainObject(event?.args) ? event.args : {},
           ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
         }
       : undefined;

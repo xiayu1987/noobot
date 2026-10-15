@@ -10,7 +10,7 @@ import {
   normalizeSlashPath,
 } from "./platform.js";
 import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const PATH_REF_VIEWS = Object.freeze({
   WORKSPACE: "workspace",
@@ -60,10 +60,6 @@ function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const item of Object.values(value)) deepFreeze(item);
   return Object.freeze(value);
-}
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function mergePolicy(base, override) {
@@ -183,7 +179,7 @@ export const TOOL_PATH_CONTRACTS = Object.freeze({
 });
 
 export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = {}) {
-  if (input && typeof input === "object" && !Array.isArray(input)) {
+  if (isPlainObject(input)) {
     const view = text(input.view);
     if (!Object.values(PATH_REF_VIEWS).includes(view))
       throw new Error(`invalid logical path view: ${view || "missing"}`);

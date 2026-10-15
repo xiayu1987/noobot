@@ -18,7 +18,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
 const MIN_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.minRunTimeoutMs;
@@ -33,7 +33,7 @@ function resolveRunTimeoutMs(rawValue) {
 }
 
 function resolveConfigRunTimeoutMs(config = {}) {
-  const source = config && typeof config === "object" && !Array.isArray(config) ? config : {};
+  const source = isPlainObject(config) ? config : {};
   const hasCanonical = Object.prototype.hasOwnProperty.call(source, "runTimeoutMs");
   if (!hasCanonical) return undefined;
   return resolveTimeMs(source, {
@@ -57,8 +57,7 @@ export async function resolveEffectiveRunTimeoutMs({
 }
 
 export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runConfig = {} } = {}) {
-  const runConfigSource =
-    runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
+  const runConfigSource = isPlainObject(runConfig) ? runConfig : {};
   if (hasOwnConfigKey(runConfigSource, "streaming")) {
     return resolveRunConfigValue({
       runConfig: runConfigSource,

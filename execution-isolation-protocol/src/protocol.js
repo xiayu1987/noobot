@@ -12,7 +12,7 @@ import {
   isRestrictedHostExecutionView,
   isSandboxExecutionView,
 } from "./execution-views.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export {
   TOOL_EXECUTION_VIEW,
@@ -108,7 +108,7 @@ export const TOOL_EXECUTION_REGISTRY = Object.freeze({
 });
 
 function objectOrEmpty(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function requiredString(value, field) {

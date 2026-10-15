@@ -14,7 +14,7 @@ import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS, WEB_SEARCH_MODE } from "../constants/index.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const WEB_SEARCH_FLOW_NAME = "agent.do_search_web";
 const WEB_SEARCH_PURPOSE_NAME = "do_search_web";
@@ -83,7 +83,7 @@ function parseBodyFormat(bodyFormat = "{}") {
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : undefined;
+    return isPlainObject(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }

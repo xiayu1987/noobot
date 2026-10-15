@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
-  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const source = isPlainObject(payload) ? payload : {};
   const workflowRunId = text(
     source?.workflowRunId ||
       source?.execution?.workflowRunId ||
@@ -47,20 +47,13 @@ export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
 
 export function useWorkflowMeta(props) {
   const workflowMeta = computed(() =>
-    props.messageItem?.pluginMeta &&
-    typeof props.messageItem.pluginMeta === "object" &&
-    !Array.isArray(props.messageItem.pluginMeta)
-      ? props.messageItem.pluginMeta
-      : {},
+    isPlainObject(props.messageItem?.pluginMeta) ? props.messageItem.pluginMeta : {},
   );
 
   const workflowPayload = computed(() => {
-    const metaPayload =
-      workflowMeta.value?.payload &&
-      typeof workflowMeta.value.payload === "object" &&
-      !Array.isArray(workflowMeta.value.payload)
-        ? workflowMeta.value.payload
-        : {};
+    const metaPayload = isPlainObject(workflowMeta.value?.payload)
+      ? workflowMeta.value.payload
+      : {};
     return projectWorkflowMessageIdentity(metaPayload, props.messageItem);
   });
 

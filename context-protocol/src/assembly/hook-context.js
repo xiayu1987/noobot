@@ -9,10 +9,10 @@ import { attachModelContextRuntime } from "./model-runtime.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function asObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  return isPlainObject(value) ? value : null;
 }
 
 function normalizeBlocks(value) {

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text as clean } from "@noobot/shared/value";
+import { isPlainObject, text as clean } from "@noobot/shared/value";
 import { isSettledTurn, TURN_STATE } from "./turn-state.js";
 import { positiveInteger } from "../normalize.js";
 
@@ -123,12 +123,7 @@ export function materializeTurnTerminalMessages({
       clean(message?.turnScopeId) === turnScopeId &&
       clean(message?.role).toLowerCase() === "assistant",
   );
-  if (
-    !hasAssistant &&
-    assistantMessage &&
-    typeof assistantMessage === "object" &&
-    !Array.isArray(assistantMessage)
-  ) {
+  if (!hasAssistant && isPlainObject(assistantMessage)) {
     const content = String(assistantMessage.content || "");
     const messageUid = clean(assistantMessage.messageUid);
     if (content && !messageUid) {

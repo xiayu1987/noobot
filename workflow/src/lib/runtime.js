@@ -12,7 +12,7 @@ import BackAction from "../engine/bizinst/action/back-action.js";
 import StopAction from "../engine/bizinst/action/stop-action.js";
 import { compileWorkflowSemantic } from "./compiler.js";
 import { randomUUID } from "node:crypto";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 const WORKFLOW_INSTANCE_STORE = new Map();
 let WORKFLOW_RUNTIME_ID_COUNTER = 0;
 
@@ -44,7 +44,7 @@ function summarizeActionRecords(treeRecord = null) {
 }
 
 function normalizeWorkflowStepRuntime(input = null) {
-  return input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  return isPlainObject(input) ? input : {};
 }
 
 function getStepStateWorkflowRuntime(stepState = null) {

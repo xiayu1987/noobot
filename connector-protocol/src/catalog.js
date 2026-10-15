@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const CONNECTOR_FIELD_KINDS = new Set(["text", "number", "boolean", "workspace_path"]);
 const CONNECTOR_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
@@ -95,8 +95,7 @@ export function createConnectorInstanceDefinition(input = {}) {
 
 export function normalizeConnectorParameters(definition, parameters = {}) {
   if (!definition) throw new TypeError("connector definition is required");
-  const source =
-    parameters && typeof parameters === "object" && !Array.isArray(parameters) ? parameters : {};
+  const source = isPlainObject(parameters) ? parameters : {};
   const normalized = {};
   for (const definitionField of definition.fields) {
     const rawValue = source[definitionField.name] ?? definitionField.defaultValue;

@@ -14,6 +14,7 @@ import {
   isAbsolutePathAnyPlatform,
   isPathWithinRoot,
 } from "@noobot/path-resolver";
+import { isPlainObject } from "@noobot/shared/value";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
 import { attachScopeRoot } from "./attachment-storage-layout.js";
@@ -79,9 +80,7 @@ export function toPersistedAttachmentRecord(basePath, record, scope) {
         : {}),
       name: safeStr(record?.name),
       mimeType: safeStr(record?.mimeType, DEFAULT_MIME_TYPE),
-      ...(record?.owner && typeof record.owner === "object" && !Array.isArray(record.owner)
-        ? { owner: record.owner }
-        : {}),
+      ...(isPlainObject(record?.owner) ? { owner: record.owner } : {}),
       ...(Number.isSafeInteger(Number(record?.size)) ? { size: Number(record.size) } : {}),
       ...(safeStr(record?.contentSha256) ? { contentSha256: safeStr(record.contentSha256) } : {}),
       ...(safeStr(record?.generationSource)

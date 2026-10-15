@@ -14,7 +14,7 @@ import {
   createEmptyHookResult,
   requireHookPointDescriptor,
 } from "@noobot/hook-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const HOOK_PROGRESS_TEXT_LIMIT = LENGTH_THRESHOLDS.display.hookProgressTextChars;
 const HOOK_PROGRESS_VERBOSE_ENABLED_VALUES = new Set([
@@ -167,7 +167,7 @@ function normalizeHookPluginProgressData(data = {}) {
     if (!HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS.has(normalizedKey)) continue;
     if (normalizedKey === "error") {
       const safeError = sanitizeForHookClient(value);
-      if (safeError && typeof safeError === "object" && !Array.isArray(safeError)) {
+      if (isPlainObject(safeError)) {
         output.error = {
           name: truncateHookProgressText(safeError?.name || "Error"),
           message: truncateHookProgressText(safeError?.message || ""),

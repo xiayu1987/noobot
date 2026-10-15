@@ -17,7 +17,7 @@ import {
 } from "../core/sensitive-field-patterns.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function tUserInteraction(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.user_interaction.${text(key)}`, params);
@@ -264,12 +264,7 @@ export function createUserInteractionTool({ agentContext }) {
         resolvedBy: "",
       });
 
-      if (
-        result &&
-        typeof result === "object" &&
-        !Array.isArray(result) &&
-        result.confirmed === false
-      ) {
+      if (isPlainObject(result) && result.confirmed === false) {
         throw recoverableToolError(tUserInteraction(runtime, "cancelled"), {
           code: ERROR_CODE.RECOVERABLE_USER_CANCELLED,
           details: {

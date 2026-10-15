@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const CONNECTOR_SECRET_ENVELOPE_VERSION = 1;
 export const CONNECTOR_SECRET_ALGORITHM = "aes-256-gcm";
@@ -27,7 +27,7 @@ export function createConnectorSecretAad({ userId, connectorId, instanceType } =
 }
 
 export function normalizeConnectorSecretEnvelope(input = {}) {
-  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const source = isPlainObject(input) ? input : {};
   const envelope = {
     version: Number(source.version),
     algorithm: text(source.algorithm),

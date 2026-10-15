@@ -10,7 +10,7 @@ import {
 } from "@noobot/event-protocol/outbox";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";
@@ -152,8 +152,8 @@ export async function readAuthorityOutbox(sessionDir = "") {
 }
 
 export async function appendAuthorityOutboxRecords(sessionDir = "", records = []) {
-  const normalized = (Array.isArray(records) ? records : []).filter(
-    (record) => record && typeof record === "object" && !Array.isArray(record),
+  const normalized = (Array.isArray(records) ? records : []).filter((record) =>
+    isPlainObject(record),
   );
   if (!normalized.length) return 0;
   return withAuthorityOutboxMutation(sessionDir, async () => {

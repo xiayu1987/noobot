@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function parseJsonObjectSafely(input = "") {
   const normalizedText = text(input);
   if (!normalizedText) return null;
   try {
     const parsed = JSON.parse(normalizedText);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    if (isPlainObject(parsed)) {
       return parsed;
     }
   } catch (error) {

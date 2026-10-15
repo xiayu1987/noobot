@@ -8,7 +8,7 @@ import {
   buildSessionDetailProjection,
   buildViewMessage,
 } from "noobot-chat/plugin-api/session-domain";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function useWorkflowNodeMessages({
   props,
@@ -38,12 +38,9 @@ export function useWorkflowNodeMessages({
   }
 
   const selectedNodeSessionDocs = computed(() => {
-    const summary =
-      selectedNodeSessionSummary.value &&
-      typeof selectedNodeSessionSummary.value === "object" &&
-      !Array.isArray(selectedNodeSessionSummary.value)
-        ? selectedNodeSessionSummary.value
-        : {};
+    const summary = isPlainObject(selectedNodeSessionSummary.value)
+      ? selectedNodeSessionSummary.value
+      : {};
     const sessionId = text(
       selectedNodeSessionId.value || summary?.sessionId || selectedNode.value?.sessionId,
     );

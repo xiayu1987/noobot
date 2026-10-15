@@ -8,7 +8,7 @@ import {
   createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const ROUTE_IDENTITY_FIELDS = Object.freeze([
   "userId",
@@ -19,7 +19,7 @@ const ROUTE_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 export function omitExecutionRouteIdentity(data = {}) {
-  const eventData = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const eventData = isPlainObject(data) ? data : {};
   const payload = { ...eventData };
   for (const field of ROUTE_IDENTITY_FIELDS) delete payload[field];
   return payload;
@@ -37,7 +37,7 @@ export function projectExecutionRouteIdentity(data = {}, route = {}) {
 }
 
 export function projectExecutionTransportPayload({ event = "", data = {}, route = {} } = {}) {
-  const eventData = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const eventData = isPlainObject(data) ? data : {};
   if (event === ATTACHMENT_LIFECYCLE_WIRE_EVENT) return createAttachmentLifecycleEvent(eventData);
   return projectExecutionRouteIdentity(eventData, route);
 }

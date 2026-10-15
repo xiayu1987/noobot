@@ -17,7 +17,7 @@ import {
   isTerminalTurnState,
   normalizeTurnContinuationSource,
 } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
@@ -303,12 +303,9 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     sequence,
     summaryVersion: integer(input.summaryVersion, integer(currentValue.summaryVersion)),
     completionCommitId: text(input.completionCommitId || currentValue.completionCommitId),
-    terminalStatus:
-      input.terminalStatus &&
-      typeof input.terminalStatus === "object" &&
-      !Array.isArray(input.terminalStatus)
-        ? { ...input.terminalStatus }
-        : currentValue.terminalStatus || null,
+    terminalStatus: isPlainObject(input.terminalStatus)
+      ? { ...input.terminalStatus }
+      : currentValue.terminalStatus || null,
     failure: eventType === TURN_EVENT.FAILED ? { ...(input.failure || {}), phase } : null,
     finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, commandId, nowValue }),
     continuationSource: request.continuationSource,

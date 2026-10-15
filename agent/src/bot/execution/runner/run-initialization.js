@@ -13,7 +13,7 @@ import {
 } from "../../../runtime/lifecycle/state-machine.js";
 import { resolveRunTurnScopeId } from "../turn-command.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function applyCanonicalRunMessageIdentity(runConfig = {}) {
   const turnScopeId = text(runConfig?.turnScopeId);
@@ -106,7 +106,7 @@ export async function initializeSessionRun({
     runtimeEventListener,
   } = initialized;
   const requestRunConfig = {
-    ...(runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {}),
+    ...(isPlainObject(runConfig) ? runConfig : {}),
     ...(normalizedRequestTurnScopeId ? { turnScopeId: normalizedRequestTurnScopeId } : {}),
     sessionId: usedSessionId,
     dialogProcessId,

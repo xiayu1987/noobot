@@ -7,7 +7,7 @@ import { appendSystemErrorLog } from "./system-error-log.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { logError } from "../console/logger.js";
 import { resolveErrorHeaderValue } from "../../shared/utils/error-header.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function resolveErrorStatus(error = {}) {
   const rawStatus =
@@ -88,8 +88,7 @@ export class SystemErrorLogger {
   } = {}) {
     try {
       const normalizedUserId = text(userId);
-      const normalizedExtra =
-        extra && typeof extra === "object" && !Array.isArray(extra) ? extra : {};
+      const normalizedExtra = isPlainObject(extra) ? extra : {};
       const defaultErrorExtra = buildDefaultErrorExtra(error);
       const mergedExtra = {
         ...defaultErrorExtra,

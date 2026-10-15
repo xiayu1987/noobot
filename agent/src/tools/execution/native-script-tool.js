@@ -66,7 +66,7 @@ import {
 } from "./native-script-ipc.js";
 import { acquireBrowserSession, closeBrowserSession } from "./browser-session-registry.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const FORBIDDEN_IDENTIFIERS = new Set(NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS);
 const FORBIDDEN_PROPERTIES = new Set(NATIVE_SCRIPT_FORBIDDEN_PROPERTIES);
@@ -319,7 +319,7 @@ function createNativeScriptIpcHandlers({
         ackMode: "manual",
         resolvedBy: "",
       });
-      if (result && typeof result === "object" && !Array.isArray(result)) {
+      if (isPlainObject(result)) {
         if (result.confirmed === false) throw new Error("native script user interaction cancelled");
         return result;
       }

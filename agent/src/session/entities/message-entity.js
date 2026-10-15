@@ -20,7 +20,7 @@ import {
   parseAttachmentRelations,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { firstText, text } from "@noobot/shared/value";
+import { firstText, isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   return normalizeTransferEnvelopes(compactTransferEnvelopes(message?.transferEnvelopes || []));
@@ -164,11 +164,7 @@ function applyMessageThinkingTiming(target, message) {
 
 function applyMessagePluginFields(target, message) {
   if (message?.pluginMessage === true) target.pluginMessage = true;
-  if (
-    message?.pluginMeta &&
-    typeof message.pluginMeta === "object" &&
-    !Array.isArray(message.pluginMeta)
-  ) {
+  if (isPlainObject(message?.pluginMeta)) {
     target.pluginMeta = message.pluginMeta;
   }
 }
@@ -184,9 +180,7 @@ function applyAnthropicMessageContent(target, message) {
 function applyOpenAiMessageMetadata(target, message) {
   if (
     target.role === "assistant" &&
-    message?.modelAdditionalKwargs?.reasoning &&
-    typeof message.modelAdditionalKwargs.reasoning === "object" &&
-    !Array.isArray(message.modelAdditionalKwargs.reasoning) &&
+    isPlainObject(message?.modelAdditionalKwargs?.reasoning) &&
     message.modelAdditionalKwargs.reasoning.type === "reasoning"
   ) {
     target.modelAdditionalKwargs = {

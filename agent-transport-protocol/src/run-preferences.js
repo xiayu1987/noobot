@@ -8,7 +8,7 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 const SUMMARY_POLICY_KEYS = Object.freeze(["phaseSummaryLoopTurns", "taskCheckLoopTurns"]);
 const PREFERENCE_KEYS = new Set([
   "allowUserInteraction",
@@ -35,9 +35,7 @@ function stringList(value) {
 
 function pluginModelConfig(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const entries = Object.entries(value).filter(
-    ([key, item]) => clean(key) && item && typeof item === "object" && !Array.isArray(item),
-  );
+  const entries = Object.entries(value).filter(([key, item]) => clean(key) && isPlainObject(item));
   return entries.length
     ? Object.fromEntries(entries.map(([key, item]) => [clean(key), { ...item }]))
     : undefined;

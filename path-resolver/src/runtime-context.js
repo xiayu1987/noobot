@@ -12,7 +12,7 @@ import {
   isSandboxExecutionView,
   resolveWorkspaceSandboxLayout,
 } from "@noobot/execution-isolation-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function resolveRuntimeHostRoot({
   runtime = {},
@@ -41,7 +41,7 @@ function uniqueNormalizedPaths(paths = []) {
 }
 
 function objectOrEmpty(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function resolveStaticPathDirectories({ runtime = {}, agentContext = null } = {}) {

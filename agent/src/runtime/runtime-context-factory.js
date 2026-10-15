@@ -8,7 +8,7 @@ import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
 } from "./turn/current-turn-ledger.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function createRuntimeContext({
   basePath = "",
@@ -28,8 +28,7 @@ export function createRuntimeContext({
   userMessageAttachments = [],
   sharedTools = null,
 } = {}) {
-  const normalizedRunConfig =
-    runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
+  const normalizedRunConfig = isPlainObject(runConfig) ? runConfig : {};
   const normalizedAbortSignal = abortSignal || null;
   return {
     basePath: text(basePath),

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { EVENT_FAMILY, validateProtocolEvent } from "./event-registry.js";
 import {
   ACTIVITY_EVENT_TYPES,
@@ -150,9 +150,7 @@ export function reduceCanonicalActivityTimeline(timeline = [], envelope = {}) {
 
 export function isCanonicalActivityTimelineFact(value = {}) {
   return Boolean(
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
+    isPlainObject(value) &&
     text(value.eventId) &&
     ACTIVITY_EVENT_TYPES.has(text(value.eventType)) &&
     typeof value.text === "string" &&

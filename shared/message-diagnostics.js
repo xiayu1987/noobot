@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 
 import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
 import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
-import { text } from "./value.js";
+import { isPlainObject, text } from "./value.js";
 
 const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
 const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
@@ -215,7 +215,7 @@ export function summarizeDiagnosticMessages(
 }
 
 export function summarizeDiagnosticBlocks(blocks = null, { limit = DEFAULT_PREVIEW_LIMIT } = {}) {
-  const safeBlocks = blocks && typeof blocks === "object" && !Array.isArray(blocks) ? blocks : {};
+  const safeBlocks = isPlainObject(blocks) ? blocks : {};
   return {
     system: summarizeDiagnosticMessages(safeBlocks.system, { limit, block: "system" }),
     history: summarizeDiagnosticMessages(safeBlocks.history, { limit, block: "history" }),

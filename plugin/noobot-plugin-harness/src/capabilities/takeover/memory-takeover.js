@@ -11,7 +11,7 @@ import {
   resolveModelMessageBlocks,
   writeMessageBlocks,
 } from "../../core/message-store.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeStringArray(input) {
   if (!Array.isArray(input)) return [];
@@ -30,12 +30,9 @@ function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
   let changed = false;
   const payload = ctx.payload;
 
-  const overridePayload =
-    takeover?.overridePayload &&
-    typeof takeover.overridePayload === "object" &&
-    !Array.isArray(takeover.overridePayload)
-      ? takeover.overridePayload
-      : null;
+  const overridePayload = isPlainObject(takeover?.overridePayload)
+    ? takeover.overridePayload
+    : null;
   if (overridePayload) {
     Object.assign(payload, overridePayload);
     changed = true;

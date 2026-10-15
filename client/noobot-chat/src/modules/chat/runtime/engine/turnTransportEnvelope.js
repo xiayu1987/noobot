@@ -8,7 +8,7 @@ import {
   readProtocolEventReducerInput,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
 
@@ -18,7 +18,7 @@ export function normalizeTurnTransportEnvelope({
   channelSessionId = "",
   source = "unknown",
 } = {}) {
-  const payload = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const payload = isPlainObject(data) ? data : {};
   const validation = validateProtocolEvent(payload);
   const protocolEnvelope = validation.valid ? payload : null;
   const reducerInput = validation.valid ? readProtocolEventReducerInput(payload).input : null;

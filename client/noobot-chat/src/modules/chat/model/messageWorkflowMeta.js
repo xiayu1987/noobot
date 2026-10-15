@@ -4,13 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 function normalizeWorkflowMeta(messageItem = {}) {
-  return messageItem?.pluginMeta &&
-    typeof messageItem.pluginMeta === "object" &&
-    !Array.isArray(messageItem.pluginMeta)
-    ? messageItem.pluginMeta
-    : null;
+  return isPlainObject(messageItem?.pluginMeta) ? messageItem.pluginMeta : null;
 }
 
 function isWorkflowMessageLike(messageItem = {}) {

@@ -11,6 +11,7 @@ import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 export function applyRunStateMessagePatch(message, patch = {}) {
   if (!message || !patch || typeof patch !== "object") return;
@@ -22,13 +23,9 @@ export function applyRunStateMessagePatch(message, patch = {}) {
       message.terminalOutcome = resolveTerminalOutcome(message.terminalOutcome, value);
       return;
     }
-    if (key === "channelState" && value && typeof value === "object" && !Array.isArray(value)) {
+    if (key === "channelState" && isPlainObject(value)) {
       message.channelState = {
-        ...(message.channelState &&
-        typeof message.channelState === "object" &&
-        !Array.isArray(message.channelState)
-          ? message.channelState
-          : {}),
+        ...(isPlainObject(message.channelState) ? message.channelState : {}),
         ...value,
       };
       return;

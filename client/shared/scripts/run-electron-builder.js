@@ -12,7 +12,7 @@ import {
   maskDependencyProxyUrl,
   normalizeDependencyProxyUrl,
 } from "../electron/dependencies/proxy.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../../..");
@@ -29,7 +29,7 @@ async function readJson(filePath = "") {
   if (!text(filePath)) return null;
   try {
     const value = JSON.parse(await readFile(filePath, "utf8"));
-    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+    return isPlainObject(value) ? value : null;
   } catch {
     return null;
   }

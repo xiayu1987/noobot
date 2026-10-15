@@ -13,9 +13,10 @@ import { normalizeAgentContextIdentity } from "./identity.js";
 import { assertValidAgentContextEnvelope } from "./validation.js";
 import { createContextBuildReceipt } from "../assembly/build-receipt.js";
 import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
+import { isPlainObject } from "@noobot/shared/value";
 
 function plainObject(value, fallback = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+  return isPlainObject(value) ? value : fallback;
 }
 
 export function createAgentContextEnvelope({

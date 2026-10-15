@@ -9,7 +9,7 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
 import { createSessionDeletedError, normalizeParentSessionId } from "@noobot/session-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function requireLifecycleSessionKey(sessionId = "") {
   const normalizedSessionId = text(sessionId);
@@ -144,7 +144,7 @@ class SessionLifecycleMethods {
           parentSessionId: scope.resolvedParentSessionId,
           scope,
         });
-        if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+        if (isPlainObject(metadata)) {
           await this.storageService.writeJsonAtomic(scope.metadataFile, metadata);
         }
       }

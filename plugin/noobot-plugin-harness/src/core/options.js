@@ -11,7 +11,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { z } from "zod";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function resolveHarnessDenyToolNames(input = null) {
   if (!Array.isArray(input)) return [];
@@ -174,8 +174,7 @@ function normalizeModelByPurpose(...items) {
     for (const [key, value] of Object.entries(item)) {
       const normalizedKey = text(key);
       if (!normalizedKey) continue;
-      const rawValue =
-        value && typeof value === "object" && !Array.isArray(value) ? value.model : value;
+      const rawValue = isPlainObject(value) ? value.model : value;
       const normalizedValue = text(rawValue);
       if (normalizedValue) out[normalizedKey] = normalizedValue;
     }
@@ -225,17 +224,14 @@ export function normalizeOptions(userOptions = {}, api = {}) {
   const capabilityToolAllowlist = Array.isArray(safe.capabilityToolAllowlist)
     ? safe.capabilityToolAllowlist.map((item) => text(item)).filter(Boolean)
     : DEFAULT_OPTIONS.capabilityToolAllowlist;
-  const capabilityToolAllowlistByPurpose =
-    safe.capabilityToolAllowlistByPurpose &&
-    typeof safe.capabilityToolAllowlistByPurpose === "object" &&
-    !Array.isArray(safe.capabilityToolAllowlistByPurpose)
-      ? Object.fromEntries(
-          Object.entries(safe.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
-            text(purpose),
-            Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [],
-          ]),
-        )
-      : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose;
+  const capabilityToolAllowlistByPurpose = isPlainObject(safe.capabilityToolAllowlistByPurpose)
+    ? Object.fromEntries(
+        Object.entries(safe.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
+          text(purpose),
+          Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [],
+        ]),
+      )
+    : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose;
   const capabilityModelByPurpose = normalizeModelByPurpose(
     safe.capabilityModelByPurpose,
     safe.stepModels,

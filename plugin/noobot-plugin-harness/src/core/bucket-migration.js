@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { HARNESS_BUCKET_VERSION } from "../capabilities/handlers/shared/constants.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function objectField(target = {}, key = "") {
   const value = target?.[key];
-  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (isPlainObject(value)) return value;
   target[key] = {};
   return target[key];
 }

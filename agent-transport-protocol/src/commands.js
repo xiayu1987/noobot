@@ -12,7 +12,7 @@ import {
 } from "./constants.js";
 import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 import { createRunPreferences, validateRunPreferences } from "./run-preferences.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const COMMAND_TYPE_SET = new Set(AGENT_COMMAND_TYPES);
 const RUN_COMMAND_SET = new Set(RUN_COMMAND_TYPES);
@@ -63,8 +63,6 @@ const FINALIZE_OPTION_KEYS = new Set(["terminalLimit"]);
 const INTERJECTION_KEYS = new Set(["message"]);
 
 const clean = (value) => text(value);
-const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
 function compactObject(source = {}) {
   return Object.fromEntries(
     Object.entries(source).filter(([, value]) => value !== undefined && value !== ""),
@@ -135,7 +133,7 @@ export function createTurnStopCommand(input = {}) {
     concurrency: { expectedTurnRevision },
     stop: compactObject({
       executionId: clean(input.stop?.executionId),
-      partialAssistant: isObject(input.stop?.partialAssistant)
+      partialAssistant: isPlainObject(input.stop?.partialAssistant)
         ? { ...input.stop.partialAssistant }
         : undefined,
     }),
@@ -192,7 +190,7 @@ export function createTurnFinalizeCommand(input = {}) {
 }
 
 function validateIdentity(command, errors) {
-  if (!isObject(command.identity)) {
+  if (!isPlainObject(command.identity)) {
     errors.push("identity_not_object");
     return;
   }
@@ -201,7 +199,7 @@ function validateIdentity(command, errors) {
 }
 
 function rejectUnknownFields(value, allowedKeys, path, errors) {
-  if (!isObject(value)) return;
+  if (!isPlainObject(value)) return;
   for (const key of Object.keys(value)) {
     if (!allowedKeys.has(key)) errors.push(`unknown_${path}_field:${key}`);
   }
@@ -251,7 +249,7 @@ function validateCommandHeader(command, errors) {
 }
 
 function validateNestedObject(value, allowedKeys, path, errors) {
-  if (!isObject(value)) {
+  if (!isPlainObject(value)) {
     errors.push(`${path}_not_object`);
     return false;
   }
@@ -381,7 +379,7 @@ function validateCommandBody(command, commandType, errors) {
 
 export function validateAgentCommand(command) {
   const errors = [];
-  if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
+  if (!isPlainObject(command)) return { valid: false, errors: ["command_not_object"] };
   const commandType = validateCommandHeader(command, errors);
   validateTopLevelFields(command, commandType, errors);
   validateIdentity(command, errors);
@@ -391,7 +389,7 @@ export function validateAgentCommand(command) {
 
 function validateAgentCommandEnvelope(command) {
   const errors = [];
-  if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
+  if (!isPlainObject(command)) return { valid: false, errors: ["command_not_object"] };
   validateCommandHeader(command, errors);
   validateIdentity(command, errors);
   return { valid: errors.length === 0, errors };

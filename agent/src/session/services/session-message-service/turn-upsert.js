@@ -15,7 +15,7 @@ import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizedString(value) {
   return text(value);
@@ -31,7 +31,7 @@ function optionalArrayField(name, value) {
 }
 
 function resolvePluginMeta(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  return isPlainObject(value) ? value : null;
 }
 
 function resolveTaskFields(session, input) {

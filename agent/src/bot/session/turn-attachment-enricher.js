@@ -6,7 +6,7 @@
 import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { readAttachIndex } from "../../artifacts/index.js";
 import { ATTACHMENT_SOURCE, findAttachmentByIdentity } from "@noobot/attachment-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export async function resolveExistingUserMessageAttachments(
   engine,
@@ -48,8 +48,8 @@ export async function enrichUserInputAttachmentsFromIndex(
       attachmentSource: ATTACHMENT_SOURCE.USER,
     });
   }
-  const indexedAttachments = Object.values(index?.attachments || {}).filter(
-    (item) => item && typeof item === "object" && !Array.isArray(item),
+  const indexedAttachments = Object.values(index?.attachments || {}).filter((item) =>
+    isPlainObject(item),
   );
   const sessionAttachments = Array.isArray(existingAttachments) ? existingAttachments : [];
   return sourceAttachments.map((attachmentItem) => {

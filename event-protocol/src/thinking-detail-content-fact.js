@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const THINKING_DETAIL_CONTENT_FIELDS = Object.freeze(
   new Set([
@@ -34,9 +34,7 @@ export const THINKING_DETAIL_CONTENT_KIND = Object.freeze({
 export function isThinkingDetailContentFact(value = {}) {
   const contentKind = text(value?.contentKind);
   return Boolean(
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
+    isPlainObject(value) &&
     text(value.contentId) &&
     Object.values(THINKING_DETAIL_CONTENT_KIND).includes(contentKind) &&
     (contentKind !== THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY || text(value.activityKind)) &&

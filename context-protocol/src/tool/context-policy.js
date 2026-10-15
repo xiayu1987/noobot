@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const TOOL_SEMANTIC_CLASS = Object.freeze({
   FLOW_CONTROL: "flow_control",
@@ -29,7 +29,7 @@ export function createFlowControlContextPolicy(flowControlRole) {
 }
 
 function normalizeToolContextPolicy(value = null) {
-  const candidate = value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  const candidate = isPlainObject(value) ? value : null;
   if (!candidate) return null;
   const semanticClass = text(candidate.semanticClass);
   const flowControlRole = text(candidate.flowControlRole);

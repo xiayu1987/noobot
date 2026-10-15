@@ -75,7 +75,7 @@ function buildToolInputTransferMeta({
   const textLength = String(normalizedText || "").length;
   const isExceeded = exceeded === true || callOverflow?.exceeded === true;
   return {
-    ...(baseMeta && typeof baseMeta === "object" && !Array.isArray(baseMeta) ? baseMeta : {}),
+    ...(isPlainObject(baseMeta) ? baseMeta : {}),
     source: intent.source,
     reason: intent.reason,
     mimeType: resolvedMimeType,
@@ -197,7 +197,7 @@ export async function transferToolInput({
   const resolvedSource = callOverflow?.source || source;
   const resolvedReason = callOverflow?.reason || reason;
   const resolvedMeta = {
-    ...(meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {}),
+    ...(isPlainObject(meta) ? meta : {}),
     ...(callOverflow?.meta || {}),
   };
   const intent = resolveTransferIntent({

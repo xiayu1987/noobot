@@ -13,7 +13,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function getServices(agentContext) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -155,8 +155,7 @@ export function createServiceTool({ agentContext }) {
         queryString,
         body,
       });
-      const normalizedResult =
-        result && typeof result === "object" && !Array.isArray(result) ? result : { data: result };
+      const normalizedResult = isPlainObject(result) ? result : { data: result };
       return toToolJsonResult(
         TOOL_NAME.CALL_SERVICE,
         {

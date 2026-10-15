@@ -5,7 +5,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const STARTUP_CONTEXT_ARG = "--startup-context";
 const SCHEMA_VERSION = 1;
@@ -16,7 +16,7 @@ function normalizePath(value = "") {
 }
 
 function normalizeEnvMap(value = {}) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const source = isPlainObject(value) ? value : {};
   const output = {};
   for (const [key, rawValue] of Object.entries(source)) {
     const normalizedKey = text(key);
@@ -29,7 +29,7 @@ function normalizeEnvMap(value = {}) {
 }
 
 function normalizeDependencySourceSummary(value = {}) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const source = isPlainObject(value) ? value : {};
   const dependencies = Array.isArray(source.dependencies) ? source.dependencies : [];
   return {
     platform: String(source.platform || ""),

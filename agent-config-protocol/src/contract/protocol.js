@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isPlainObject } from "@noobot/shared/value";
+
 export const AGENT_CONFIG_PROTOCOL_NAME = "noobot.agent-config";
 export const AGENT_CONFIG_PROTOCOL_VERSION = 1;
 
@@ -13,8 +15,7 @@ export function createConfigSnapshot({
   scope = {},
   metadata = {},
 } = {}) {
-  const sourceMetadata =
-    metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {};
+  const sourceMetadata = isPlainObject(metadata) ? metadata : {};
   const normalizedMetadata = {
     ...sourceMetadata,
     migrations: Object.freeze([

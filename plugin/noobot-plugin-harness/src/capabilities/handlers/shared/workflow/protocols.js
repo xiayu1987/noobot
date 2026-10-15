@@ -6,7 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { HARNESS_SCENARIO, resolveHarnessScenarioFromOptions } from "./matrix-resolver.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function resolveLocale(locale = LOCALE.ZH_CN) {
   return locale === LOCALE.EN_US ? LOCALE.EN_US : LOCALE.ZH_CN;
@@ -25,7 +25,7 @@ function normalizePatchActions(actions = []) {
 }
 
 function resolvePlanningMainPatchOptions(input = LOCALE.ZH_CN) {
-  if (input && typeof input === "object" && !Array.isArray(input)) {
+  if (isPlainObject(input)) {
     return {
       locale: resolveLocale(input.locale),
       actions: normalizePatchActions(input.actions),
@@ -130,7 +130,7 @@ export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) 
 }
 
 function resolveSummaryPatchProtocolOptions(input = LOCALE.ZH_CN) {
-  if (input && typeof input === "object" && !Array.isArray(input)) {
+  if (isPlainObject(input)) {
     return {
       locale: resolveLocale(input.locale),
       programmingMode: input.programmingMode === true || input.isProgrammingMode === true,

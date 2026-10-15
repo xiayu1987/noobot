@@ -6,7 +6,7 @@
 import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRoute.js";
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function routeWorkflowRuntimeEvent({ envelope, descriptor, context = {} } = {}) {
   if (descriptor?.family !== EVENT_FAMILY.WORKFLOW_RUNTIME) return false;
@@ -93,12 +93,7 @@ function createWorkflowSessionService(authenticatedRequest) {
 
 function isWorkflowMessageLike(messageItem = {}) {
   const type = text(messageItem?.type).toLowerCase();
-  const pluginMeta =
-    messageItem?.pluginMeta &&
-    typeof messageItem.pluginMeta === "object" &&
-    !Array.isArray(messageItem.pluginMeta)
-      ? messageItem.pluginMeta
-      : null;
+  const pluginMeta = isPlainObject(messageItem?.pluginMeta) ? messageItem.pluginMeta : null;
   const source = text(pluginMeta?.source).toLowerCase();
   const kind = text(pluginMeta?.kind).toLowerCase();
   const phase = text(pluginMeta?.phase).toLowerCase();

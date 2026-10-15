@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildMessageSummary } from "./message-summary-projection.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const SESSIONS_SUMMARY_SCHEMA_VERSION = 2;
 
@@ -78,7 +78,7 @@ export function normalizeSessionsSummaryPayload(
 ) {
   const source = Array.isArray(payload?.sessions) ? payload.sessions : [];
   const sessions = source
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .filter((item) => isPlainObject(item))
     .map((item) => ({
       sessionId: text(item?.sessionId),
       parentSessionId: text(item?.parentSessionId),
@@ -90,12 +90,7 @@ export function normalizeSessionsSummaryPayload(
       aggregateVersion: Math.max(0, Number(item?.aggregateVersion) || 0),
       title: text(item?.title) || text(item?.sessionId).slice(0, 8),
       messageCount: Number.isFinite(Number(item?.messageCount)) ? Number(item.messageCount) : 0,
-      lastMessage:
-        item?.lastMessage &&
-        typeof item.lastMessage === "object" &&
-        !Array.isArray(item.lastMessage)
-          ? item.lastMessage
-          : null,
+      lastMessage: isPlainObject(item?.lastMessage) ? item.lastMessage : null,
       ...(item?.availability === "unavailable" ? { messages: [] } : {}),
       availability: item?.availability === "unavailable" ? "unavailable" : "available",
       ...(item?.availability === "unavailable"

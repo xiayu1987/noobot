@@ -21,7 +21,7 @@ import {
   getMessageTransferEnvelopes,
   mergeTransferEnvelopes,
 } from "../../model/transferEnvelopes.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function sessionIdFromSession(session = {}) {
   return text(session?.sessionId);
@@ -152,12 +152,9 @@ function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId =
   const sessionId = text(workflow?.sessionId || fallbackSessionId);
   const turnScopeId = text(workflow?.turnScopeId);
   const presentationMessageId = text(workflow?.presentationMessageId);
-  const workflowPayload =
-    workflow?.workflowPayload &&
-    typeof workflow.workflowPayload === "object" &&
-    !Array.isArray(workflow.workflowPayload)
-      ? workflow.workflowPayload
-      : null;
+  const workflowPayload = isPlainObject(workflow?.workflowPayload)
+    ? workflow.workflowPayload
+    : null;
   if (!workflowRunId || !sessionId || !turnScopeId || !presentationMessageId || !workflowPayload)
     return null;
   return {

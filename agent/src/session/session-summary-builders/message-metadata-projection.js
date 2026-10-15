@@ -9,6 +9,7 @@ import {
   TRANSFER_FIRST_FIELDS,
   pickTransferEnvelopeList,
 } from "@noobot/semantic-transfer-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 import {
   compactSessionAttachmentRef,
   compactTransferEnvelopes,
@@ -86,7 +87,7 @@ function pickTransferEnvelope(envelope = {}) {
 
 function pickLightPayloadTransferEnvelopes(value = []) {
   return (Array.isArray(value) ? value : [])
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .filter((item) => isPlainObject(item))
     .slice(0, 50)
     .map((item) => pickTransferEnvelope(item))
     .filter(Boolean);
@@ -199,11 +200,7 @@ function pickPluginPayloadSnapshot(payload = {}) {
     }) || {};
   const semantic = pickPayloadSemantic(payload?.semantic);
   if (semantic) picked.semantic = semantic;
-  if (
-    payload?.execution &&
-    typeof payload.execution === "object" &&
-    !Array.isArray(payload.execution)
-  ) {
+  if (isPlainObject(payload?.execution)) {
     const execution =
       pickPlainFields(
         payload.execution,
@@ -245,7 +242,7 @@ function pickPluginPayloadSnapshot(payload = {}) {
 
 function hasPluginPayloadSnapshot(message = {}) {
   const payload = message?.pluginMeta?.payload;
-  return Boolean(payload && typeof payload === "object" && !Array.isArray(payload));
+  return Boolean(isPlainObject(payload));
 }
 
 export function pickLightPluginMeta(message = {}) {
@@ -277,7 +274,7 @@ export function pickLightPluginMeta(message = {}) {
 export function pickLightTransferEnvelopes(message = {}) {
   const seen = new Set();
   return (Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [])
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .filter((item) => isPlainObject(item))
     .map((envelope) => pickTransferEnvelope(envelope))
     .filter(Boolean)
     .filter((item) => {

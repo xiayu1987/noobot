@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const PROVIDER_FORMAT = {
   OPENAI_COMPATIBLE: "openai_compatible",
@@ -140,17 +140,11 @@ export function normalizeContextSectionSelection(input = []) {
 }
 
 export function normalizeContextPolicy(contextPolicy = {}) {
-  const source =
-    contextPolicy && typeof contextPolicy === "object" && !Array.isArray(contextPolicy)
-      ? contextPolicy
-      : {};
+  const source = isPlainObject(contextPolicy) ? contextPolicy : {};
   const promptSections = Array.isArray(source.promptSections) ? source.promptSections : [];
-  const runtimeCapabilities =
-    source.runtimeCapabilities &&
-    typeof source.runtimeCapabilities === "object" &&
-    !Array.isArray(source.runtimeCapabilities)
-      ? source.runtimeCapabilities
-      : {};
+  const runtimeCapabilities = isPlainObject(source.runtimeCapabilities)
+    ? source.runtimeCapabilities
+    : {};
   return Object.freeze({
     promptSections: Object.freeze(
       promptSections.some((value) => text(value) === "*")

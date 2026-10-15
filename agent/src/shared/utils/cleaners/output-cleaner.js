@@ -5,7 +5,7 @@
  */
 import { safeNum } from "../shared-utils.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 
@@ -85,7 +85,7 @@ function buildClippedStreamsResult(source, stdout, stderr) {
 }
 
 function toOutputSource(output) {
-  return output && typeof output === "object" && !Array.isArray(output) ? output : {};
+  return isPlainObject(output) ? output : {};
 }
 
 export function cleanTerminalOutputForLLM(

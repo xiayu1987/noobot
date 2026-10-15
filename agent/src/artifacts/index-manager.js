@@ -10,6 +10,7 @@ import {
   assertAttachmentBelongsToScope,
   parsePersistedAttachmentRecord,
 } from "@noobot/attachment-protocol";
+import { isPlainObject } from "@noobot/shared/value";
 import {
   fromPersistedAttachmentRecord,
   toPersistedAttachmentRecord,
@@ -61,7 +62,7 @@ export async function readAttachIndex(basePath, scope) {
     }
     const attachments = {};
     for (const [key, value] of Object.entries(
-      isObject(parsed.attachments) ? parsed.attachments : {},
+      isPlainObject(parsed.attachments) ? parsed.attachments : {},
     )) {
       const persisted = parsePersistedAttachmentRecord(value);
       assertAttachmentBelongsToScope(persisted.identity, scope);
@@ -83,7 +84,7 @@ export async function writeAttachIndex(basePath, indexData, scope) {
     await fsMkdir(path.dirname(indexFile), { recursive: true });
     const attachments = {};
     for (const [key, value] of Object.entries(
-      isObject(indexData?.attachments) ? indexData.attachments : {},
+      isPlainObject(indexData?.attachments) ? indexData.attachments : {},
     )) {
       const persisted = toPersistedAttachmentRecord(basePath, value, scope);
       if (!persisted) throw new Error("invalid_persisted_attachment_record");
@@ -124,8 +125,4 @@ function emptyIndex(scope) {
 
 function resolveIndexFile(basePath, scope) {
   return attachmentScopeIndexPath(basePath, scope);
-}
-
-function isObject(val) {
-  return val && typeof val === "object" && !Array.isArray(val);
 }

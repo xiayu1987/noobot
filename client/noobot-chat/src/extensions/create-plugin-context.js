@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function createPluginContext({ pluginId = "", getConfig, updateConfig } = {}) {
   const namespace = text(pluginId);
@@ -15,7 +15,7 @@ export function createPluginContext({ pluginId = "", getConfig, updateConfig } =
       get() {
         const root = typeof getConfig === "function" ? getConfig() : {};
         const value = root?.[namespace];
-        return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+        return isPlainObject(value) ? value : {};
       },
       patch(patch = {}) {
         if (typeof updateConfig !== "function") return;

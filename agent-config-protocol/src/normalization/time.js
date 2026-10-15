@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function normalizeBoundary(rawValue, fallback) {
   if (rawValue === undefined || rawValue === null || rawValue === "") return fallback;
@@ -30,8 +30,7 @@ export function resolveTimeMs(
   source = {},
   { key = "", fallback = 0, min = 0, max = Number.POSITIVE_INFINITY, allowZero = false } = {},
 ) {
-  const normalizedSource =
-    source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  const normalizedSource = isPlainObject(source) ? source : {};
   const canonicalKey = text(key);
   const rawValue = canonicalKey ? normalizedSource[canonicalKey] : undefined;
 

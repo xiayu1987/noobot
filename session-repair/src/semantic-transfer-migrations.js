@@ -12,7 +12,7 @@ import {
   TRANSFER_VERSION,
   transferIdentityKey,
 } from "@noobot/semantic-transfer-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const HISTORICAL_MULTIMODAL_PARSE_REASON = "multimodal_parse_tool";
 const MULTIMODAL_PARSE_TOOL_NAME = "multimodal_parse";
@@ -79,11 +79,7 @@ function verifiedMultimodalParseTransferIdentities(messages = []) {
 export function createSemanticTransferMigration(document) {
   const messages = [
     ...(Array.isArray(document?.messages) ? document.messages : []),
-    ...(document?.message &&
-    typeof document.message === "object" &&
-    !Array.isArray(document.message)
-      ? [document.message]
-      : []),
+    ...(isPlainObject(document?.message) ? [document.message] : []),
   ];
   return {
     verifiedIdentities: verifiedMultimodalParseTransferIdentities(messages),

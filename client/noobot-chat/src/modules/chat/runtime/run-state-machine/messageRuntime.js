@@ -20,6 +20,8 @@ import {
 import { createInitialSessionRunState, isInFlightSessionRunState } from "./core.js";
 import { normalizeState, trim } from "./normalize.js";
 import { isTerminalRunState, resolveStateTerminalOutcome } from "./terminalOutcome.js";
+import { isPlainObject } from "@noobot/shared/value";
+
 const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
@@ -98,7 +100,7 @@ function buildSessionRunMessageRuntimeKey(stateItem = {}) {
 
 function getMessageChannelState(messageItem = {}) {
   const channelState = messageItem?.channelState;
-  if (channelState && typeof channelState === "object" && !Array.isArray(channelState)) {
+  if (isPlainObject(channelState)) {
     return { ...channelState, state: normalizeState(channelState.state || channelState.status) };
   }
   const state = normalizeState(

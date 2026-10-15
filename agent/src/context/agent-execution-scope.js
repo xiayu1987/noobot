@@ -5,9 +5,10 @@
  */
 
 import { assertValidAgentContextEnvelope } from "@noobot/context-protocol/agent-context/validation";
+import { isPlainObject } from "@noobot/shared/value";
 
 function asObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  return isPlainObject(value) ? value : null;
 }
 
 export function createAgentExecutionScope({ context, bindings = {} } = {}) {

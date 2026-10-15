@@ -16,7 +16,7 @@ import {
 } from "@noobot/context-protocol/assembly/hook-context";
 import { emitAgentContextProtocolDebug } from "../../observability/agent-context-protocol-debug.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const STATE_COMMIT_HOOK_POINTS = new Set([
   HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
@@ -24,7 +24,7 @@ const STATE_COMMIT_HOOK_POINTS = new Set([
 ]);
 
 function asObject(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function resolveCalls(raw = {}) {
