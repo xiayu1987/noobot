@@ -7,6 +7,7 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
+import { text } from "@noobot/shared/value";
 
 const V4_RECORD_FIELDS = Object.freeze(["schemaVersion", "sessionId", "repair", "updatedAt"]);
 
@@ -98,7 +99,7 @@ export async function upgradeSessionLifecycle({ base, backupBase }) {
     const relativePath = path.join(WORKSPACE_LAYOUT.SESSION_LIFECYCLE_RECORDS_DIR, name);
     const record = await readJson(path.join(base, relativePath), { optional: false });
     if (isV4Record(record)) continue;
-    const sessionId = String(record.sessionId ?? "").trim();
+    const sessionId = text(record.sessionId);
     if (!sessionId) {
       throw upgradeError(`lifecycle record has no sessionId: ${relativePath}`, {
         path: relativePath,

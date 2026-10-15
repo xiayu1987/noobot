@@ -8,6 +8,7 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
+import { text } from "@noobot/shared/value";
 const SUMMARY_POLICY_KEYS = Object.freeze(["phaseSummaryLoopTurns", "taskCheckLoopTurns"]);
 const PREFERENCE_KEYS = new Set([
   "allowUserInteraction",
@@ -25,7 +26,7 @@ const PREFERENCE_KEYS = new Set([
   "selectedPlugins",
 ]);
 
-const clean = (value) => String(value ?? "").trim();
+const clean = (value) => text(value);
 
 function stringList(value) {
   if (!Array.isArray(value)) return [];

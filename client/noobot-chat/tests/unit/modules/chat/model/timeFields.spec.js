@@ -6,8 +6,19 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   formatDurationMs,
+  getMessageTimestamp,
   resolveThinkingDurationMs,
 } from "../../../../../src/modules/chat/model/timeFields.js";
+
+describe("timeFields message timestamp", () => {
+  it("skips non-positive numeric timestamps instead of stringifying them", () => {
+    expect(getMessageTimestamp({ ts: 0 })).toBe("");
+    expect(getMessageTimestamp({ ts: Number.NaN, createdAt: "2026-06-22T10:00:05.000Z" })).toBe(
+      "2026-06-22T10:00:05.000Z",
+    );
+    expect(getMessageTimestamp({ ts: 0, timestamp: 1750000000000 })).toBe(1750000000000);
+  });
+});
 
 describe("timeFields thinking duration responsibilities", () => {
   it("formats milliseconds as mm:ss or hh:mm:ss", () => {

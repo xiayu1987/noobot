@@ -14,7 +14,7 @@ export function toBilingualDict(zhMap = {}, enMap = {}) {
     const enValue = enMap?.[key];
     output[key] = {
       "zh-CN": typeof zhValue === "function" ? zhValue : text(zhValue),
-      "en-US": typeof enValue === "function" ? enValue : String(enValue ?? zhValue ?? "").trim(),
+      "en-US": typeof enValue === "function" ? enValue : text(enValue ?? zhValue),
     };
   }
   return output;

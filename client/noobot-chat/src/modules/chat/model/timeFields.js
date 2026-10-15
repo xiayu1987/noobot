@@ -43,8 +43,10 @@ function normalizeEpochMs(value = 0) {
 
 function firstTimeValue(...values) {
   for (const value of values) {
-    if (value === null || value === undefined || value === "") continue;
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+    if (typeof value === "number") {
+      if (Number.isFinite(value) && value > 0) return value;
+      continue;
+    }
     const text = trim(value);
     if (text) return text;
   }

@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
+import { text } from "@noobot/shared/value";
 
-const clean = (value = "") => String(value ?? "").trim();
+const clean = (value = "") => text(value);
 const stringList = (value = []) => (Array.isArray(value) ? value.map(clean).filter(Boolean) : []);
 
 const countOf = (value) => (Array.isArray(value) ? value.length : 0);

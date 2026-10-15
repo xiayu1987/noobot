@@ -38,7 +38,7 @@ function isSummaryRelayMessage(message = {}) {
       message?.lc_kwargs?.injected_message_type,
   );
   if (injectedType === "separate_model_relay:summary") return true;
-  const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
+  const content = text(message?.content ?? message?.lc_kwargs?.content);
   return new RegExp(`^${resolveSummaryRelayPrefixPattern()}`, "i").test(content);
 }
 

@@ -67,11 +67,11 @@ function mapModelAcceptanceStatusToTaskStatus(status = "") {
 
 function resolveAcceptanceStatusForChecklistItem(item = {}, byPlan = {}) {
   const map = byPlan && typeof byPlan === "object" ? byPlan : {};
-  const exactKey = String(item?.index ?? "").trim();
+  const exactKey = text(item?.index);
   if (exactKey && map[exactKey]) return map[exactKey];
   const isMainStep = item?.isMainStep !== false;
   if (isMainStep) return null;
-  const parentKey = String(item?.mainStepIndex ?? "").trim();
+  const parentKey = text(item?.mainStepIndex);
   if (parentKey && map[parentKey]) return map[parentKey];
   return null;
 }
@@ -79,11 +79,11 @@ function resolveAcceptanceStatusForChecklistItem(item = {}, byPlan = {}) {
 function resolveModelAcceptanceForChecklistItem(normalized = {}, modelAcceptanceByPlan = {}) {
   const byPlan =
     modelAcceptanceByPlan && typeof modelAcceptanceByPlan === "object" ? modelAcceptanceByPlan : {};
-  const exactKey = String(normalized?.index ?? "").trim();
+  const exactKey = text(normalized?.index);
   if (exactKey && byPlan[exactKey]) return byPlan[exactKey];
   const isMainStep = normalized?.isMainStep !== false;
   if (isMainStep) return null;
-  const parentKey = String(normalized?.mainStepIndex ?? "").trim();
+  const parentKey = text(normalized?.mainStepIndex);
   if (parentKey && byPlan[parentKey]) return byPlan[parentKey];
   return null;
 }

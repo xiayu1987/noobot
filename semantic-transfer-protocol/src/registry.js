@@ -8,6 +8,7 @@ import { HARNESS_SCENARIO, HARNESS_STRATEGIES } from "./strategies/harness-strat
 import { WORKFLOW_SCENARIO, WORKFLOW_STRATEGIES } from "./strategies/workflow-strategies.js";
 import { registerToolInputPolicies } from "./policies/tool-input-policies.js";
 import { registerToolOutputPolicies } from "./policies/tool-output-policies.js";
+import { text } from "@noobot/shared/value";
 
 export const SEMANTIC_TRANSFER_REGISTRATION = Object.freeze({
   SCENARIOS: Object.freeze({
@@ -23,10 +24,6 @@ export const SEMANTIC_TRANSFER_REGISTRATION = Object.freeze({
 const inputPolicies = new Map();
 const outputPolicies = new Map();
 const scenarios = new Map();
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function requireText(value, code) {
   const normalized = text(value);

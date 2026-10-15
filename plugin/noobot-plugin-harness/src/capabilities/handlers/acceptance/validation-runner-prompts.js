@@ -52,7 +52,7 @@ function isSummaryRelayMessage(message = {}) {
       message?.lc_kwargs?.injected_message_type,
   );
   if (injectedType === "separate_model_relay:summary") return true;
-  const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
+  const content = text(message?.content ?? message?.lc_kwargs?.content);
   const relayPrefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
     .map((locale) =>
       translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {

@@ -6,13 +6,12 @@
 
 import { isPlainObject } from "../utils.js";
 import { AgentConfigProtocolError, CONFIG_ERROR_CODE } from "../contract/errors.js";
+import { text } from "@noobot/shared/value";
 
 const CONFIG_PARAM_KEY_PATTERN = /^[A-Z0-9_]+$/;
 
 export function normalizeConfigParamKey(value = "") {
-  return String(value || "")
-    .trim()
-    .toUpperCase();
+  return text(value).toUpperCase();
 }
 
 function normalizeConfigParamMap(input, { field, omitEmptyValues }) {
@@ -26,7 +25,7 @@ function normalizeConfigParamMap(input, { field, omitEmptyValues }) {
   const sourceKeys = new Map();
   for (const [rawKey, rawValue] of Object.entries(input)) {
     const key = normalizeConfigParamKey(rawKey);
-    const value = String(rawValue ?? "").trim();
+    const value = text(rawValue);
     if (!CONFIG_PARAM_KEY_PATTERN.test(key)) {
       throw new AgentConfigProtocolError(`invalid config param key: ${rawKey}`, {
         code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,

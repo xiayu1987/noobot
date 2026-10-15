@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const PROCESS_EVENT_VERSION = 1;
 
 export const ProcessStatus = Object.freeze({
@@ -35,7 +37,7 @@ export const ProcessEventType = Object.freeze({
 });
 
 export function normalizeProcessString(value = "") {
-  return String(value ?? "").trim();
+  return text(value);
 }
 
 export function toProcessSequence(value, fallback = 0) {

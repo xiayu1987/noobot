@@ -18,7 +18,7 @@ function compactObject(value = {}) {
 
 export function firstNormalizedString(...values) {
   for (const value of values) {
-    const normalized = String(value ?? "").trim();
+    const normalized = text(value);
     if (normalized) return normalized;
   }
   return "";

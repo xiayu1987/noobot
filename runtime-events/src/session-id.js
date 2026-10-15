@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const INVALID_OPTIONAL_SESSION_IDS = new Set(["undefined", "null"]);
 
 export function normalizeOptionalSessionId(value, { maxLength = 160 } = {}) {
-  const sessionId = String(value ?? "").trim();
+  const sessionId = text(value);
   if (!sessionId || INVALID_OPTIONAL_SESSION_IDS.has(sessionId.toLowerCase())) return "";
   return maxLength > 0 ? sessionId.slice(0, maxLength) : sessionId;
 }

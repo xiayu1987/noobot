@@ -11,9 +11,10 @@ import {
   resolveSessionDirSegments,
   resolveSessionTreeChain,
 } from "@noobot/workspace-protocol/session-tree";
+import { text } from "@noobot/shared/value";
 
 function normalizeId(value) {
-  return String(value ?? "").trim();
+  return text(value);
 }
 
 function userRootOf({ workspaceRoot, userId } = {}) {

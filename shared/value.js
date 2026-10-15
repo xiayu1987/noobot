@@ -9,5 +9,5 @@ export function isPlainObject(value) {
 }
 
 export function text(value) {
-  return String(value || "").trim();
+  return String(value ?? "").trim();
 }

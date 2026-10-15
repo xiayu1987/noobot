@@ -31,7 +31,7 @@ function hasRecognitionFailure(report = {}) {
 
   const checklist = Array.isArray(report.finalPlanChecklist) ? report.finalPlanChecklist : [];
   for (const item of checklist) {
-    const index = String(item?.index ?? "").trim();
+    const index = text(item?.index);
     const task = text(item?.task);
     const status = text(item?.status) || "pending";
     if (!index || !task || !ALLOWED_STATUS.has(status)) return true;
@@ -116,7 +116,7 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
     planText ? `${planTextField}:\n${planText}` : "",
     checklistHeader,
     ...checklist.map((item = {}) => {
-      const index = String(item?.index ?? "").trim();
+      const index = text(item?.index);
       const task = text(item?.task);
       const status = text(item?.status) || "pending";
       return `${index}. [${status}] ${task}`;
@@ -189,7 +189,7 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
     `## ${checklistLabel}`,
     ...(checklist.length
       ? checklist.map((item = {}) => {
-          const index = String(item?.index ?? "").trim();
+          const index = text(item?.index);
           const task = text(item?.task);
           const status = text(item?.status) || "pending";
           return `- ${index}. [${status}] ${task}`;

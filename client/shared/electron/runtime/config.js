@@ -73,7 +73,7 @@ export function createDesktopConfigManager({
   function getNestedString(root, segments) {
     let node = root;
     for (const segment of segments) node = isPlainObject(node) ? node[segment] : undefined;
-    return String(node ?? "").trim();
+    return text(node);
   }
 
   function normalizeProxyUrl(proxyUrl = "") {
@@ -164,7 +164,7 @@ export function createDesktopConfigManager({
     const values = payload.values;
     const modelParams = collectSelectedModelConfigParams(globalConfigPath);
     return Object.entries(values)
-      .filter(([, value]) => String(value ?? "").trim() === "")
+      .filter(([, value]) => text(value) === "")
       .map(([key]) => {
         const modelParam = modelParams.get(key);
         return {
@@ -205,7 +205,7 @@ export function createDesktopConfigManager({
   }
 
   function normalizeDesktopLanguage(language) {
-    const value = String(language ?? "").trim();
+    const value = text(language);
     if (["zh-CN", "en-US"].includes(value)) return value;
     if (value.toLowerCase().startsWith("en")) return "en-US";
     return "zh-CN";
@@ -219,10 +219,10 @@ export function createDesktopConfigManager({
     model,
     dependencyProxyUrl,
   } = {}) {
-    const normalizedUserId = String(userId ?? "").trim();
-    const normalizedConnectCode = String(connectCode ?? "").trim();
+    const normalizedUserId = text(userId);
+    const normalizedConnectCode = text(connectCode);
     const normalizedLanguage = normalizeDesktopLanguage(language);
-    const normalizedModel = String(model ?? "").trim();
+    const normalizedModel = text(model);
     const normalizedDependencyProxyUrl = normalizeProxyUrl(dependencyProxyUrl);
     if (!normalizedUserId) throw new Error("Super admin username is required.");
     if (!normalizedConnectCode) throw new Error("Super admin connect code is required.");

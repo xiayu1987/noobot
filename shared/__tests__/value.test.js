@@ -26,8 +26,10 @@ test("text trims strings and stringifies truthy values", () => {
   assert.equal(text(true), "true");
 });
 
-test("text maps every falsy value to an empty string", () => {
-  for (const value of [undefined, null, "", 0, false, Number.NaN]) {
+test("text maps only nullish and blank values to an empty string", () => {
+  for (const value of [undefined, null, "", "   "]) {
     assert.equal(text(value), "");
   }
+  assert.equal(text(0), "0");
+  assert.equal(text(false), "false");
 });

@@ -5,14 +5,11 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 const RESOURCE_REF_VERSION = 1;
 const RESOURCE_KINDS = Object.freeze(["file"]);
 const RESOURCE_SOURCES = Object.freeze(["workspace", "attachment", "host"]);
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function clone(value) {
   return value && typeof value === "object" ? structuredClone(value) : value;

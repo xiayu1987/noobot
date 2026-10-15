@@ -5,10 +5,9 @@
  */
 
 import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
+import { text } from "@noobot/shared/value";
 
 let sessionLogSink = null;
-
-const text = (value) => String(value ?? "").trim();
 
 const isPresent = (value) => value !== undefined && value !== null;
 

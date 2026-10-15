@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const nullishText = (value) => String(value ?? "").trim();
+import { text } from "@noobot/shared/value";
+
+export const nullishText = (value) => text(value);
 
 export const collapsedText = (value) =>
   String(value ?? "")

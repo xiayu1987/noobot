@@ -58,7 +58,7 @@ function collectPatchItems({
 }
 
 function resolveMappedField(kv = {}, descriptor = {}) {
-  const rawValue = String(kv?.[descriptor.key] ?? "").trim();
+  const rawValue = text(kv?.[descriptor.key]);
   const type = descriptor.type;
   if (type === "list") return dedupeTextList(parseListField(rawValue));
   if (type === "boolean") return rawValue.toLowerCase() === "true";

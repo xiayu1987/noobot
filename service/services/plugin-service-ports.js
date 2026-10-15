@@ -205,7 +205,7 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
     try {
       relativeDir = resolvePluginDataRelativePath(
         normalizedPluginId,
-        ...(Array.isArray(segments) ? segments : []).map((item) => String(item ?? "").trim()),
+        ...(Array.isArray(segments) ? segments : []).map((item) => text(item)),
       );
     } catch {
       throw notFound();

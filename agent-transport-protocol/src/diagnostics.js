@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const AGENT_TRANSPORT_DEBUG_TYPE = "agent-transport";
 
-const clean = (value) => String(value ?? "").trim();
+const clean = (value) => text(value);
 const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 function resolveCommand(command) {

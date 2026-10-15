@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { createInterface } from "node:readline/promises";
+import { text } from "@noobot/shared/value";
 
-const clean = (value) => String(value ?? "").trim();
+const clean = (value) => text(value);
 
 export const INTERACTION_UNAVAILABLE = Object.freeze({
   DISABLED: "interaction_disabled",

@@ -196,7 +196,7 @@ export async function ensureWorkspaceConfigParamsCatalog({
   for (const [key, value] of Object.entries(explicitEntries || {})) {
     const normalizedKey = text(key);
     if (!normalizedKey) continue;
-    entries[normalizedKey] = String(value ?? "").trim();
+    entries[normalizedKey] = text(value);
   }
   await upsertConfigParams({
     workspaceRootAbsolutePath,

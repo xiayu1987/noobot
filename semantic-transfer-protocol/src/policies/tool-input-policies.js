@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { text } from "@noobot/shared/value";
 
 const MAX_CHARS = LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars;
-const text = (value = "") => String(value ?? "").trim();
 
 export function registerToolInputPolicies(register) {
   register({

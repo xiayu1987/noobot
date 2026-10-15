@@ -9,10 +9,11 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { isValidSessionId } from "../utils/session-utils.js";
 import { CALLER_ROLE, VALID_CALLER_ROLES } from "./constants.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
+import { text } from "@noobot/shared/value";
 
 export class BotManageValidator {
   normalizeRunMessage(message = "") {
-    const normalizedMessage = String(message ?? "").trim();
+    const normalizedMessage = text(message);
     if (!normalizedMessage) {
       throw recoverableToolError(tSystem("common.userSessionMessageRequired"), {
         code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,

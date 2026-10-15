@@ -103,7 +103,7 @@ function parseParamsFromJsonText(sourceText = "") {
   return normalizeConfigParamList(
     Object.entries(values).map(([key, value]) => ({
       key: text(key),
-      value: String(value ?? "").trim(),
+      value: text(value),
     })),
   );
 }

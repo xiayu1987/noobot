@@ -11,8 +11,9 @@ import {
   MESSAGE_EVENT_WIRE_EVENT,
   projectMessageEventContent,
 } from "@noobot/event-protocol/message-event";
+import { text } from "@noobot/shared/value";
 
-const clean = (value) => String(value ?? "").trim();
+const clean = (value) => text(value);
 
 export function createTurnTracker({ sessionId, turnScopeId }) {
   const state = {

@@ -7,9 +7,10 @@ import { createSessionDeletedError } from "@noobot/session-protocol";
 import { fatalSystemError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
+import { text } from "@noobot/shared/value";
 
 function requireIdentity(value, message, code) {
-  const normalized = String(value ?? "").trim();
+  const normalized = text(value);
   if (!normalized) throw fatalSystemError(tSystem(message), { code });
   return normalized;
 }

@@ -35,7 +35,7 @@ const MEMORY_PROMPT_I18N = Object.freeze({
 });
 
 function normalizeMemoryModelSelection(userConfig = {}) {
-  return String(userConfig?.memoryModel ?? userConfig?.config?.memoryModel ?? "").trim();
+  return text(userConfig?.memoryModel ?? userConfig?.config?.memoryModel);
 }
 
 function resolveMemoryModelSpec({ globalConfig, userConfig } = {}) {

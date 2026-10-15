@@ -14,13 +14,12 @@ import {
   requireModelFamilyId,
   resolveModelPromptCacheValue,
 } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 const PROVIDER_IDS = new Set(Object.values(MODEL_PROVIDER_ID));
 
 function operatorId(spec = {}) {
-  const value = String(spec.operatorId || "")
-    .trim()
-    .toLowerCase();
+  const value = text(spec.operatorId).toLowerCase();
   if (!value) throw new TypeError("model spec.operatorId is required");
   if (!PROVIDER_IDS.has(value)) throw new TypeError(`unsupported model operatorId: ${value}`);
   return value;
@@ -35,8 +34,7 @@ function selectedCacheFields(spec = {}) {
 }
 
 function segment(value) {
-  const normalized = String(value || "")
-    .trim()
+  const normalized = text(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-");
   let start = 0;
@@ -162,7 +160,7 @@ export function compileProviderModelKwargs(
     vendor === MODEL_PROVIDER_ID.GOOGLE ||
     vendor === MODEL_PROVIDER_ID.GEMINI
   ) {
-    const value = String(spec.cached_content ?? "").trim();
+    const value = text(spec.cached_content);
     if (value) out.cached_content = value;
   }
 

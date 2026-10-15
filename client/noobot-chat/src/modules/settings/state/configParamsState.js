@@ -12,7 +12,7 @@ export function normalizeConfigParamList(input = []) {
   for (const item of source) {
     const key = text(item?.key);
     if (!key) continue;
-    values.set(key, String(item?.value ?? "").trim());
+    values.set(key, text(item?.value));
   }
   return Array.from(values.entries())
     .map(([key, value]) => ({ key, value }))
@@ -23,7 +23,7 @@ export function configParamsFromCatalog({ catalog = [], values = {} } = {}) {
   return normalizeConfigParamList(
     (Array.isArray(catalog) ? catalog : []).map((item) => ({
       key: text(item?.key),
-      value: String(values?.[item?.key] ?? "").trim(),
+      value: text(values?.[item?.key]),
     })),
   );
 }

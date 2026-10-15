@@ -320,13 +320,11 @@ const reasoningEffortParameterField = Object.freeze({
 });
 
 function identityText(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return text(value).toLowerCase();
 }
 
 function literalText(value) {
-  return String(value ?? "").trim();
+  return text(value);
 }
 
 export function normalizeModelReasoningConfiguration(provider = {}, fallback = {}) {

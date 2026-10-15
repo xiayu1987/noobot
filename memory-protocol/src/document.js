@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const MEMORY_DOCUMENT_KIND = Object.freeze({
   LONG_MEMORY: "long_memory",
   LONG_MEMORY_MODEL: "long_memory_model",
@@ -76,13 +78,13 @@ export function readMemoryDocumentBody(kind, text = "") {
 
 export function renderMemoryDocument(kind, body = "") {
   const header = headerFor(kind);
-  const trimmed = String(body ?? "").trim();
+  const trimmed = text(body);
   return trimmed ? `${header}\n\n${trimmed}\n` : `${header}\n`;
 }
 
 export function appendMemoryDocumentBlock(kind, existingText = "", block = "") {
   const existing = String(existingText ?? "");
   const body = existing ? readMemoryDocumentBody(kind, existing) : "";
-  const nextBlock = String(block ?? "").trim();
+  const nextBlock = text(block);
   return renderMemoryDocument(kind, body ? `${body}\n\n${nextBlock}` : nextBlock);
 }

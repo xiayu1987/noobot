@@ -12,6 +12,7 @@ import {
 } from "./constants.js";
 import { EXECUTION_QUERY_CONTRACT } from "@noobot/session-protocol/execution-lifecycle";
 import { createRunPreferences, validateRunPreferences } from "./run-preferences.js";
+import { text } from "@noobot/shared/value";
 
 const COMMAND_TYPE_SET = new Set(AGENT_COMMAND_TYPES);
 const RUN_COMMAND_SET = new Set(RUN_COMMAND_TYPES);
@@ -61,7 +62,7 @@ const SNAPSHOT_OPTION_KEYS = new Set(["knownSequence", "terminalLimit"]);
 const FINALIZE_OPTION_KEYS = new Set(["terminalLimit"]);
 const INTERJECTION_KEYS = new Set(["message"]);
 
-const clean = (value) => String(value ?? "").trim();
+const clean = (value) => text(value);
 const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 function compactObject(source = {}) {

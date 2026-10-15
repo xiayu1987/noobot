@@ -14,7 +14,7 @@ import {
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { text } from "@noobot/shared/value";
-const normalizeRouteText = (value) => String(value ?? "").trim();
+const normalizeRouteText = (value) => text(value);
 
 function mergeSessionSnapshotBody(session, sessionSummary) {
   const {

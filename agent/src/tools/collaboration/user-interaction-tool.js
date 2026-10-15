@@ -291,7 +291,7 @@ export function createUserInteractionTool({ agentContext }) {
           .map((item) => text(item?.name))
           .filter(Boolean);
         for (const key of requiredFields) {
-          if (!String(result?.[key] ?? "").trim()) {
+          if (!text(result?.[key])) {
             throw recoverableToolError(tUserInteraction(runtime, "missingRequiredField", { key }), {
               code: ERROR_CODE.RECOVERABLE_MISSING_REQUIRED_FIELD,
               details: { key },

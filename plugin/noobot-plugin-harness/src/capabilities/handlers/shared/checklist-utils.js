@@ -51,15 +51,15 @@ export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_
     index: normalizedIndex,
     mainStepIndex: Number(resolvedMainStepIndex),
     isMainStep,
-    task: String(source.task ?? source.name ?? source.todo ?? "").trim() || fallbackTaskName,
+    task: text(source.task ?? source.name ?? source.todo) || fallbackTaskName,
     owner:
       String(source.owner ?? source.assignee ?? getDefaultTaskOwner(locale)).trim() ||
       getDefaultTaskOwner(locale),
     subOwners: Array.isArray(source.subOwners ?? source.subTaskOwners)
       ? (source.subOwners ?? source.subTaskOwners).map((name) => text(name)).filter(Boolean)
       : [],
-    input: String(source.input ?? source.inputs ?? source.requiredInput ?? "").trim(),
-    output: String(source.output ?? source.outputs ?? source.expectedOutput ?? "").trim(),
+    input: text(source.input ?? source.inputs ?? source.requiredInput),
+    output: text(source.output ?? source.outputs ?? source.expectedOutput),
     files: normalizeFilePlan(source.files ?? source.fileChanges ?? source.filePlan),
   };
 }

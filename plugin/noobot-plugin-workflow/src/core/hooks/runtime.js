@@ -72,8 +72,8 @@ export function hasOwnObjectKey(source = {}, key = "") {
 
 export function firstText(...values) {
   for (const value of values) {
-    const text = String(value ?? "").trim();
-    if (text) return text;
+    const candidate = text(value);
+    if (candidate) return candidate;
   }
   return "";
 }

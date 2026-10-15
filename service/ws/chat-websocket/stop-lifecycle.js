@@ -10,6 +10,7 @@ import {
   resolveExecutionAbortMessage,
   resolveExecutionAbortType,
 } from "@noobot/session-protocol/execution-abort";
+import { text } from "@noobot/shared/value";
 
 export function buildStoppedPartialAssistant({
   stopPayload = {},
@@ -35,7 +36,7 @@ export function buildStoppedPartialAssistant({
     normalizeRunIdentityPart(stopPayload?.sessionId) ||
     normalizeRunIdentityPart(runMeta?.sessionId) ||
     normalizeRunIdentityPart(result?.sessionId);
-  const content = String(sourcePartial.content ?? fallbackMessage ?? "").trim();
+  const content = text(sourcePartial.content ?? fallbackMessage);
   return {
     ...sourcePartial,
     content,

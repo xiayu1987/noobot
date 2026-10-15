@@ -39,7 +39,7 @@ function hasRenderablePlanDocument(planDocument = null) {
 }
 
 function normalizePlanIdText(value = "") {
-  const raw = String(value ?? "").trim();
+  const raw = text(value);
   if (!raw) return "";
   if (!/^\d+(?:\.\d+)?$/.test(raw)) return "";
   const parts = raw.split(".").map((item) => Number(item));

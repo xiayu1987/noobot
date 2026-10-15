@@ -3,10 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { requireModelContextSequencePolicy } from "../policy/context-policy.js";
+import { text } from "@noobot/shared/value";
 
-function text(value) {
-  return String(value ?? "").trim();
-}
 function normalizeInvocationIdentity(input = {}) {
   return Object.freeze({
     requestId: text(input.requestId),

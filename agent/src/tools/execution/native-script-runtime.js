@@ -401,7 +401,7 @@ export async function createNativeScriptRuntime({
   const capabilityTimeoutMs = Math.max(1, Number(timeoutMs || 0) - 5000);
   await Promise.all([mkdir(outputRoot, { recursive: true }), mkdir(tempRoot, { recursive: true })]);
   const inputRelative = (reference) => {
-    const key = String(reference ?? "").trim();
+    const key = text(reference);
     if (isTaskPath(key, { kind: TASK_PATH_KINDS.INPUT })) {
       const { relative: index } = parseTaskPath(key, { kind: TASK_PATH_KINDS.INPUT });
       if (!Object.hasOwn(inputMap, index)) throw new Error(`input is not declared: ${index}`);
@@ -413,7 +413,7 @@ export async function createNativeScriptRuntime({
   };
   const resolveInput = async (reference) => {
     const index = inputRelative(reference);
-    const mapped = inputMap[index] || inputMap[String(reference ?? "").trim()];
+    const mapped = inputMap[index] || inputMap[text(reference)];
     const candidate = await resolveChild(inputRoot, mapped, "input path");
     const info = await stat(candidate);
     if (!info.isFile()) throw new Error("input path must be a file");

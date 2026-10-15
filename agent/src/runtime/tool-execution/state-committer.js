@@ -42,10 +42,9 @@ export function createStateCommitter({
   agentContext = null,
 } = {}) {
   const resolveCallId = (call = {}) =>
-    String(call?.id ?? call?.tool_call_id ?? call?.toolCallId ?? call?.call_id ?? "").trim();
+    text(call?.id ?? call?.tool_call_id ?? call?.toolCallId ?? call?.call_id);
 
-  const resolveCallName = (call = {}) =>
-    String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim();
+  const resolveCallName = (call = {}) => text(call?.name ?? call?.tool_name ?? call?.toolName);
 
   const ownership = resolveTurnOwnership(runtime, dialogProcessId);
 

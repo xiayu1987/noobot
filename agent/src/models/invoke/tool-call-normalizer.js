@@ -55,13 +55,11 @@ export function normalizeToolCalls(ai = {}) {
   const calls = rawCalls
     .map((call = {}) => {
       const fn = isPlainObject(call?.function) ? call.function : {};
-      const name = String(call?.name ?? call?.tool_name ?? call?.toolName ?? fn?.name ?? "").trim();
+      const name = text(call?.name ?? call?.tool_name ?? call?.toolName ?? fn?.name);
       if (!name) return null;
       return {
         ...call,
-        id: String(
-          call?.id ?? call?.tool_call_id ?? call?.toolCallId ?? call?.call_id ?? "",
-        ).trim(),
+        id: text(call?.id ?? call?.tool_call_id ?? call?.toolCallId ?? call?.call_id),
         name,
         args: normalizeToolCallArgs(call?.args ?? call?.arguments ?? fn?.arguments ?? {}),
       };

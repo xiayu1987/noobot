@@ -11,7 +11,7 @@ import { ERROR_CODE } from "../shared/errors/constants.js";
 import { text } from "@noobot/shared/value";
 
 function requireBasePath(basePath) {
-  const normalizedBasePath = String(basePath ?? "").trim();
+  const normalizedBasePath = text(basePath);
   if (!normalizedBasePath) {
     throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
       code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,

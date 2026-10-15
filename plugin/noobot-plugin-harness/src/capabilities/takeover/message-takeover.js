@@ -62,7 +62,7 @@ function filterInternalForcedMessages(messages = [], directive = {}) {
 
 function buildTakeoverMessage(directive = {}) {
   const id = text(directive?.id);
-  const content = String(directive?.content ?? directive?.text ?? directive?.message ?? "").trim();
+  const content = text(directive?.content ?? directive?.text ?? directive?.message);
   if (!content) return null;
   const messageContent = id ? `<!-- ${id} -->\n${content}` : content;
   return {

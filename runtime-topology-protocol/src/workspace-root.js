@@ -38,7 +38,7 @@ export function resolveConfiguredWorkspaceRoot({ globalConfigPath, serviceDir } 
 }
 
 export function requireWorkspaceRootEnv(env = process.env) {
-  const value = String(env?.[WORKSPACE_ROOT_ENV] ?? "").trim();
+  const value = text(env?.[WORKSPACE_ROOT_ENV]);
   if (!value) throw new Error(`${WORKSPACE_ROOT_ENV} is required`);
   if (!path.isAbsolute(value)) throw new Error(`${WORKSPACE_ROOT_ENV} must be an absolute path`);
   return value;
