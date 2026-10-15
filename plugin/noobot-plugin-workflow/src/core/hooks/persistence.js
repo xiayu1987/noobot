@@ -9,7 +9,8 @@ import {
   normalizeWorkflowTransferPayload,
   resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
-import { resolveWorkflowParentRunConfig, resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
@@ -282,25 +283,14 @@ function mergeWorkflowTransferEnvelopes(baseTransferPayload, composedTransferPay
   });
 }
 
-function resolveWorkflowMessageId(ctx = {}) {
-  const messageId = text(
-    ctx?.messageId || ctx?.runConfig?.messageId || resolveWorkflowParentRunConfig(ctx)?.messageId,
-  );
-  if (!messageId) {
-    throw new Error("Workflow final message requires canonical messageId");
-  }
-  return messageId;
-}
-
-function buildSessionWorkflowPayload(baseWorkflowPayload, authoritativeWorkflowRunId) {
+function buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId) {
   const sessionWorkflowPayload =
     sanitizeWorkflowPayloadForSessionMessage(baseWorkflowPayload) || {};
-  if (!authoritativeWorkflowRunId) return sessionWorkflowPayload;
-  sessionWorkflowPayload.workflowRunId = authoritativeWorkflowRunId;
+  sessionWorkflowPayload.workflowRunId = workflowRunId;
   sessionWorkflowPayload.execution = {
     ...(sessionWorkflowPayload.execution || {}),
-    workflowRunId: authoritativeWorkflowRunId,
-    instanceId: authoritativeWorkflowRunId,
+    workflowRunId,
+    instanceId: workflowRunId,
   };
   return sessionWorkflowPayload;
 }
@@ -346,16 +336,6 @@ async function resolveWorkflowTransferParts({
   return { mergedTransferPayload, attachmentReferenceBlock };
 }
 
-function resolveAuthoritativeWorkflowRunId(workflowRunId, baseWorkflowPayload = {}, ctx = {}) {
-  return text(
-    workflowRunId ||
-      baseWorkflowPayload?.workflowRunId ||
-      baseWorkflowPayload?.execution?.workflowRunId ||
-      baseWorkflowPayload?.execution?.instanceId ||
-      ctx?.workflowRunId,
-  );
-}
-
 function pickNonEmptyTimelines(messageEventProjection = {}) {
   const timelines = {};
   for (const key of ["activityTimeline", "toolTimeline"]) {
@@ -397,7 +377,6 @@ async function upsertWorkflowMessage({
   semanticText = "",
   semanticResolution = {},
   semantic = null,
-  workflowRunId = "",
   planningNodeSessions = [],
   workflowPayload = null,
   nodeAgentRuns = [],
@@ -422,25 +401,14 @@ async function upsertWorkflowMessage({
     semanticText,
     attachmentPathBlock: attachmentReferenceBlock,
   });
-  const presentationMessageId = text(
-    ctx?.presentationMessageId || resolveWorkflowParentRunConfig(ctx)?.presentationMessageId,
-  );
-  const messageId = resolveWorkflowMessageId(ctx);
+  const { presentationMessageId, messageId, workflowRunId } = resolveWorkflowRunIdentity(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
     throw new Error("Turn message event materializer is required");
   }
   const messageEventProjection = runtime.materializePendingCurrentTurnMessageEvents({ messageId });
   applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
-  const authoritativeWorkflowRunId = resolveAuthoritativeWorkflowRunId(
-    workflowRunId,
-    baseWorkflowPayload,
-    ctx,
-  );
-  const sessionWorkflowPayload = buildSessionWorkflowPayload(
-    baseWorkflowPayload,
-    authoritativeWorkflowRunId,
-  );
+  const sessionWorkflowPayload = buildSessionWorkflowPayload(baseWorkflowPayload, workflowRunId);
   const workflowMessage = {
     role: "assistant",
     id: messageId,

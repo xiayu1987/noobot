@@ -29,10 +29,10 @@ import {
   hasOwnObjectKey,
   isWorkflowAbortError,
   resolveWorkflowAbortSignal,
-  resolveWorkflowParentRunConfig,
   throwIfWorkflowAborted,
   withTimeout,
 } from "./runtime.js";
+import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
 import { firstText, text } from "@noobot/shared/value";
 
 function buildWorkflowNodeInstruction(step = {}) {
@@ -63,11 +63,7 @@ export async function runNodeAgent({
   upstreamNodeResults = [],
 } = {}) {
   throwIfWorkflowAborted(ctx);
-  const resolvedNodeIdentity = resolveNodeAgentIdentity({
-    nodeIdentity,
-    instanceId,
-    ctx,
-  });
+  const resolvedNodeIdentity = resolveNodeAgentIdentity({ nodeIdentity, ctx });
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
   const nodeInputAttachments = resolveNodeInputAttachments({
     ctx,
@@ -118,7 +114,7 @@ export async function runNodeAgent({
   });
 }
 
-function resolveNodeAgentIdentity({ nodeIdentity, instanceId, ctx }) {
+function resolveNodeAgentIdentity({ nodeIdentity, ctx }) {
   if (!nodeIdentity || typeof nodeIdentity !== "object") {
     throw new TypeError("workflow node identity is required");
   }
@@ -130,18 +126,13 @@ function resolveNodeAgentIdentity({ nodeIdentity, instanceId, ctx }) {
       "workflow node identity requires dialogProcessId, turnScopeId and activeChildExecutionId",
     );
   }
-  const workflowRunId = firstText(nodeIdentity.workflowRunId, instanceId);
-  const workflowExecutionId = firstText(
-    nodeIdentity.workflowExecutionId,
-    ctx?.workflowExecutionId,
-    ctx?.executionId,
-    ctx?.runConfig?.executionId,
-    `workflow:${workflowRunId}`,
-  );
+  const workflowRunId = text(nodeIdentity.workflowRunId);
+  const { executionId: workflowExecutionId, rootExecutionId } = resolveWorkflowRunIdentity(ctx);
   return {
     ...nodeIdentity,
     workflowRunId,
     workflowExecutionId,
+    rootExecutionId,
     nodeExecutionId: firstText(nodeIdentity.nodeExecutionId),
     commandId: firstText(nodeIdentity.commandId),
     dialogProcessId,
@@ -268,7 +259,7 @@ function createWorkflowNodeSubSessionRequest(params) {
 }
 
 function buildWorkflowNodeRunConfigPatch(ctx, identity) {
-  const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
+  const parentRunConfig = ctx.runConfig;
   const selectedPlugins = Array.isArray(parentRunConfig.selectedPlugins)
     ? parentRunConfig.selectedPlugins.map((item) => text(item)).filter(Boolean)
     : [];
@@ -307,7 +298,7 @@ function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
     commandId: identity.commandId,
     executionId: identity.activeChildExecutionId,
     parentExecutionId: identity.workflowExecutionId,
-    rootExecutionId: String(ctx?.rootExecutionId || identity.workflowExecutionId).trim(),
+    rootExecutionId: identity.rootExecutionId,
     disabledPlugins: [PLUGIN_ID],
     relativeDir,
     allowedRoot: resolveWorkflowDataRelativePath(WORKFLOW_DATA_SCOPE.SESSION),
@@ -322,7 +313,7 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     workflowRunId: identity.workflowRunId,
     executionId: identity.activeChildExecutionId,
     parentExecutionId: identity.workflowExecutionId,
-    rootExecutionId: String(ctx?.rootExecutionId || identity.workflowExecutionId).trim(),
+    rootExecutionId: identity.rootExecutionId,
     origin: {
       type: "workflow_node",
       workflowRunId: identity.workflowRunId,

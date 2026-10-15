@@ -11,7 +11,7 @@ import {
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol/workflow-runtime-event";
-import { resolveWorkflowParentRunConfig } from "../hooks/runtime.js";
+import { resolveWorkflowRunIdentity } from "../workflow-run-identity.js";
 import { text } from "@noobot/shared/value";
 
 function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
@@ -36,17 +36,6 @@ function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = nu
     storageFile: text(planningPersistResult?.outputFile),
   };
   return payload;
-}
-
-function resolvePlanningIdentity(ctx = {}, workflowMessage = null) {
-  const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
-  return {
-    turnScopeId: text(ctx?.turnScopeId || parentRunConfig?.turnScopeId),
-    messageId: text(ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId),
-    presentationMessageId: text(
-      workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId,
-    ),
-  };
 }
 
 function countArray(value) {
@@ -126,8 +115,8 @@ export async function prepareWorkflowPlanningMessage({
     workflowPayload: planningWorkflowPayload,
     attachments: [],
   });
-  const identity = resolvePlanningIdentity(ctx, workflowMessage);
-  const { turnScopeId, messageId, presentationMessageId } = identity;
+  const identity = resolveWorkflowRunIdentity(ctx);
+  const { turnScopeId, messageId, presentationMessageId, executionId } = identity;
   const runtimeData = {
     sessionId: text(ctx?.sessionId),
     dialogProcessId: text(ctx?.dialogProcessId),
@@ -148,6 +137,6 @@ export async function prepareWorkflowPlanningMessage({
     orderingScopeId: workflowRunId,
     revision: 1,
     messageId,
-    executionId: ctx?.workflowExecutionId,
+    executionId,
   });
 }

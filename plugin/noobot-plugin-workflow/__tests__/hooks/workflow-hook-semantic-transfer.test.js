@@ -94,45 +94,43 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       presentationMessageId: "assistant-presentation-1",
     },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            materializePendingCurrentTurnMessageEvents({ messageId } = {}) {
-              assert.equal(messageId, "assistant-message-1");
-              return {
-                activityTimeline: [
-                  {
-                    eventId: "workflow_semantic:test",
-                    event: "workflow_semantic_response",
-                    type: "workflow_semantic",
-                    text: "canonical workflow analysis",
-                    output: "canonical workflow analysis",
-                    sequence: 1,
-                    sequenceDomain: "message-event",
-                    sequenceScopeId: "assistant-presentation-1",
-                    authority: "authoritative",
-                  },
-                ],
-                toolTimeline: [],
-              };
+      bindings: {
+        runtime: {
+          materializePendingCurrentTurnMessageEvents({ messageId } = {}) {
+            assert.equal(messageId, "assistant-message-1");
+            return {
+              activityTimeline: [
+                {
+                  eventId: "workflow_semantic:test",
+                  event: "workflow_semantic_response",
+                  type: "workflow_semantic",
+                  text: "canonical workflow analysis",
+                  output: "canonical workflow analysis",
+                  sequence: 1,
+                  sequenceDomain: "message-event",
+                  sequenceScopeId: "assistant-presentation-1",
+                  authority: "authoritative",
+                },
+              ],
+              toolTimeline: [],
+            };
+          },
+          sharedTools: {
+            resolveAttachmentDisplayPath({ meta = {} } = {}) {
+              const normalized = String(meta?.path || "").trim();
+              if (!normalized) return "";
+              return `/injected${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
             },
-            sharedTools: {
-              resolveAttachmentDisplayPath({ meta = {} } = {}) {
-                const normalized = String(meta?.path || "").trim();
-                if (!normalized) return "";
-                return `/injected${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
-              },
-              resolveSandboxPath({ hostPath = "" } = {}) {
-                const normalized = String(hostPath || "").trim();
-                if (!normalized) return "";
-                return `/workspace${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
-              },
-              semanticTransfer: createSemanticTransferTool({
-                calls: semanticTransferCalls,
-                prefix: "wf-node-result",
-                sessionId: "s1",
-              }),
+            resolveSandboxPath({ hostPath = "" } = {}) {
+              const normalized = String(hostPath || "").trim();
+              if (!normalized) return "";
+              return `/workspace${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
             },
+            semanticTransfer: createSemanticTransferTool({
+              calls: semanticTransferCalls,
+              prefix: "wf-node-result",
+              sessionId: "s1",
+            }),
           },
         },
       },
@@ -166,7 +164,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
   assert.equal(String(subCall?.message || "").trim(), "请输出：节点A执行完成");
   assert.equal(subCall?.runConfigPatch?.streaming, false);
-  assert.match(String(subCall?.runConfigPatch?.turnScopeId || ""), /^workflow-node:root-turn-1_/);
+  assert.match(
+    String(subCall?.runConfigPatch?.turnScopeId || ""),
+    /^workflow-node:agent_root-turn-1_/,
+  );
   assert.equal(subCall?.strategy?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
   assert.equal(subCall?.metadata?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
   assert.equal(typeof subCall?.eventListener?.onEvent, "function");
@@ -297,35 +298,33 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
     userMessage: "请给我一个语义传递工作流",
     runConfig: { locale: "zh-CN", streaming: false },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            sharedTools: {
-              semanticTransfer: {
-                async transferSemanticContent({ scenario = "", strategy = "" } = {}) {
-                  if (String(scenario || "") !== "workflow") {
-                    return { transferEnvelopes: [] };
-                  }
-                  const isFinal = String(strategy || "") === "workflow_final_plan";
-                  return {
-                    transferEnvelopes: [
-                      isFinal
-                        ? createV2AttachmentTransferEnvelope({
-                            attachmentId: "wf-semantic-final-1",
-                            sessionId: "s1",
-                            producerType: "plugin",
-                            producerId: "workflow-final-summary",
-                            transferId: "transfer-wf-semantic-final-1",
-                            messageId: "message-wf-semantic-final-1",
-                            name: "final-summary.md",
-                            scenario: "workflow",
-                            strategy: "workflow_final_plan",
-                            reason: TRANSFER_REASON.WORKFLOW_FINAL_ATTACHMENT_SUMMARY,
-                          })
-                        : envelope,
-                    ],
-                  };
-                },
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: {
+              async transferSemanticContent({ scenario = "", strategy = "" } = {}) {
+                if (String(scenario || "") !== "workflow") {
+                  return { transferEnvelopes: [] };
+                }
+                const isFinal = String(strategy || "") === "workflow_final_plan";
+                return {
+                  transferEnvelopes: [
+                    isFinal
+                      ? createV2AttachmentTransferEnvelope({
+                          attachmentId: "wf-semantic-final-1",
+                          sessionId: "s1",
+                          producerType: "plugin",
+                          producerId: "workflow-final-summary",
+                          transferId: "transfer-wf-semantic-final-1",
+                          messageId: "message-wf-semantic-final-1",
+                          name: "final-summary.md",
+                          scenario: "workflow",
+                          strategy: "workflow_final_plan",
+                          reason: TRANSFER_REASON.WORKFLOW_FINAL_ATTACHMENT_SUMMARY,
+                        })
+                      : envelope,
+                  ],
+                };
               },
             },
           },
@@ -407,32 +406,30 @@ test("workflow hook routes final attachment summary composition through semantic
     userMessage: "请给我一个语义传递工作流",
     runConfig: { locale: "zh-CN", streaming: false },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            sharedTools: {
-              semanticTransfer: {
-                async transferSemanticContent(payload = {}) {
-                  semanticTransferCalls.push(payload);
-                  const generationSource = String(payload?.generationSource || "").trim();
-                  const suffix =
-                    generationSource === "workflow_completed_attachment_summary" ? "final" : "node";
-                  const envelope = createV2AttachmentTransferEnvelope({
-                    attachmentId: `wf-semantic-${suffix}-1`,
-                    sessionId: "s1",
-                    producerType: "plugin",
-                    producerId: `workflow-${suffix}-summary`,
-                    transferId: `transfer-wf-semantic-${suffix}-1`,
-                    messageId: `message-wf-semantic-${suffix}-1`,
-                    name: `${suffix}-summary.md`,
-                    scenario: String(payload?.scenario || "").trim(),
-                    strategy: String(payload?.strategy || "").trim(),
-                    reason: TRANSFER_REASON.WORKFLOW_FINAL_ATTACHMENT_SUMMARY,
-                  });
-                  return {
-                    transferEnvelopes: [envelope],
-                  };
-                },
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: {
+              async transferSemanticContent(payload = {}) {
+                semanticTransferCalls.push(payload);
+                const generationSource = String(payload?.generationSource || "").trim();
+                const suffix =
+                  generationSource === "workflow_completed_attachment_summary" ? "final" : "node";
+                const envelope = createV2AttachmentTransferEnvelope({
+                  attachmentId: `wf-semantic-${suffix}-1`,
+                  sessionId: "s1",
+                  producerType: "plugin",
+                  producerId: `workflow-${suffix}-summary`,
+                  transferId: `transfer-wf-semantic-${suffix}-1`,
+                  messageId: `message-wf-semantic-${suffix}-1`,
+                  name: `${suffix}-summary.md`,
+                  scenario: String(payload?.scenario || "").trim(),
+                  strategy: String(payload?.strategy || "").trim(),
+                  reason: TRANSFER_REASON.WORKFLOW_FINAL_ATTACHMENT_SUMMARY,
+                });
+                return {
+                  transferEnvelopes: [envelope],
+                };
               },
             },
           },

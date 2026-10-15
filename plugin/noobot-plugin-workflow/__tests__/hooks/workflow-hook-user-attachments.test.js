@@ -82,13 +82,11 @@ test("workflow hook passes planned user attachments to node sub-session", async 
     ],
     runConfig: { locale: "zh-CN" },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            sharedTools: {
-              resolveSandboxPath({ hostPath = "" } = {}) {
-                return `/workspace${String(hostPath || "")}`;
-              },
+      bindings: {
+        runtime: {
+          sharedTools: {
+            resolveSandboxPath({ hostPath = "" } = {}) {
+              return `/workspace${String(hostPath || "")}`;
             },
           },
         },

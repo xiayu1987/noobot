@@ -35,7 +35,6 @@ function buildCtx() {
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
-    turnScopeId: "turn-workflow-test",
     runConfig: { streaming: false, turnScopeId: "turn-workflow-test" },
     eventListener: {
       onEvent(event) {

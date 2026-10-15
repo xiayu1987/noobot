@@ -12,7 +12,7 @@ function resolveWorkflowCommitScope({ ctx, runtime, payload }) {
   return {
     userId: text(runtime?.userId || ctx?.userId),
     sessionId: text(ctx?.sessionId),
-    turnScopeId: text(payload?.turnScopeId || ctx?.turnScopeId || runtime?.runConfig?.turnScopeId),
+    turnScopeId: text(payload?.turnScopeId),
   };
 }
 
@@ -20,26 +20,19 @@ function resolveWorkflowPersistenceScope(runtime) {
   return runtime?.systemRuntime?.persistenceScope || null;
 }
 
-function projectWorkflowEventIdentity({
-  eventType,
-  messageId,
-  executionId,
-  turnScopeId,
-  payload,
-  ctx,
-}) {
+function projectWorkflowEventIdentity({ eventType, messageId, executionId, turnScopeId }) {
   return {
     eventType: text(eventType),
     turnScopeId,
-    messageId: text(messageId || payload?.messageId),
-    executionId: text(executionId || payload?.nodeExecutionId || ctx?.workflowExecutionId),
+    messageId: text(messageId),
+    executionId: text(executionId),
   };
 }
 
-function projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision, payload }) {
+function projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision }) {
   return {
     domain: text(orderingDomain),
-    scopeId: text(orderingScopeId || payload?.workflowRunId),
+    scopeId: text(orderingScopeId),
     revision: Number(revision),
   };
 }
@@ -98,21 +91,9 @@ export async function commitWorkflowRuntimeEvent({
     userId,
     sessionId,
     family: WORKFLOW_RUNTIME_FAMILY,
-    identity: projectWorkflowEventIdentity({
-      eventType,
-      messageId,
-      executionId,
-      turnScopeId,
-      payload,
-      ctx,
-    }),
+    identity: projectWorkflowEventIdentity({ eventType, messageId, executionId, turnScopeId }),
     causality: projectWorkflowEventCausality({ payload, runtime }),
-    ordering: projectWorkflowEventOrdering({
-      orderingDomain,
-      orderingScopeId,
-      revision,
-      payload,
-    }),
+    ordering: projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision }),
     producer: { type: "plugin", id: PLUGIN_ID },
     payload,
     persistenceScope,

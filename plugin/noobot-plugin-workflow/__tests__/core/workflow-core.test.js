@@ -478,11 +478,9 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
   assert.equal(dispatchOutcome?.failure, null);
   assert.equal(dispatchClaims[0].owner, "workflow");
   assert.equal(dispatchClaims[0].source, "workflow_before_agent_dispatch");
-  assert.equal(
-    dispatchClaims[0].executionId,
-    `workflow:${dispatchClaims[0].origin?.workflowRunId}`,
-  );
-  assert.equal(dispatchClaims[0].rootExecutionId, dispatchClaims[0].executionId);
+  assert.equal(dispatchClaims[0].executionId, beforeContext.runConfig.executionId);
+  assert.equal(dispatchClaims[0].origin?.workflowRunId, beforeContext.runConfig.executionId);
+  assert.equal(dispatchClaims[0].rootExecutionId, beforeContext.runConfig.rootExecutionId);
   assert.equal(childRunPayload?.strategy?.parentExecutionId, dispatchClaims[0].executionId);
   assert.equal(childRunPayload?.strategy?.rootExecutionId, dispatchClaims[0].rootExecutionId);
   assert.equal(dispatchClaims[0].executionKind, "workflow");

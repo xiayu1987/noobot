@@ -8,14 +8,32 @@ import assert from "node:assert/strict";
 
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import {
-  resolveWorkflowRunId,
+  resolveWorkflowRunIdentity,
   createWorkflowNodeIdentity,
   buildWorkflowPlanningNodeSessions,
 } from "../../src/core/workflow-run-identity.js";
 
 test("workflow run and node identities are stable and attempt-scoped", () => {
-  const ctx = { sessionId: "s1", dialogProcessId: "d1", workflowRunId: "run-explicit" };
-  assert.equal(resolveWorkflowRunId(ctx), "run-explicit");
+  const runConfig = {
+    turnScopeId: "turn-1",
+    executionId: "run-explicit",
+    rootExecutionId: "root-1",
+    messageId: "msg-1",
+    presentationMessageId: "pres-1",
+  };
+  const ctx = { sessionId: "s1", dialogProcessId: "d1", runConfig };
+  const keysBefore = Object.keys(ctx);
+  assert.deepEqual(resolveWorkflowRunIdentity(ctx), {
+    ...runConfig,
+    workflowRunId: "run-explicit",
+  });
+  assert.deepEqual(Object.keys(ctx), keysBefore);
+  for (const field of Object.keys(runConfig)) {
+    assert.throws(
+      () => resolveWorkflowRunIdentity({ ...ctx, runConfig: { ...runConfig, [field]: "" } }),
+      new RegExp(`runConfig\\.${field} is required`),
+    );
+  }
   const first = createWorkflowNodeIdentity({ workflowRunId: "run-explicit", node: { id: "a" } });
   const again = createWorkflowNodeIdentity({ workflowRunId: "run-explicit", node: { id: "a" } });
   const retry = createWorkflowNodeIdentity({

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
+import { deriveAgentExecutionId } from "@noobot/session-protocol";
 import {
   createTransferEnvelope,
   createTransferIdentity,
@@ -281,12 +282,15 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
       : (target.runConfig = {});
   const sessionId = String(target.sessionId || "test-session").trim();
   const dialogProcessId = String(target.dialogProcessId || "test-dialog").trim();
-  if (!String(target.turnScopeId || "").trim()) {
-    target.turnScopeId = String(
-      runConfig.turnScopeId || `test-turn:${sessionId}:${dialogProcessId}`,
-    ).trim();
+  if (!String(runConfig.turnScopeId || "").trim()) {
+    runConfig.turnScopeId = `test-turn:${sessionId}:${dialogProcessId}`;
   }
-  if (!String(runConfig.turnScopeId || "").trim()) runConfig.turnScopeId = target.turnScopeId;
+  if (!String(runConfig.executionId || "").trim()) {
+    runConfig.executionId = deriveAgentExecutionId({ turnScopeId: runConfig.turnScopeId });
+  }
+  if (!String(runConfig.rootExecutionId || "").trim()) {
+    runConfig.rootExecutionId = runConfig.executionId;
+  }
   if (!String(runConfig.messageId || "").trim()) {
     runConfig.messageId = `test-message:${sessionId}:${dialogProcessId}`;
   }
@@ -300,12 +304,10 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
     agentContext.bindings && typeof agentContext.bindings === "object"
       ? agentContext.bindings
       : (agentContext.bindings = {});
-  const legacyRuntime = agentContext?.execution?.controllers?.runtime;
   const runtime =
     bindings.runtime && typeof bindings.runtime === "object"
       ? bindings.runtime
-      : (bindings.runtime =
-          legacyRuntime && typeof legacyRuntime === "object" ? legacyRuntime : {});
+      : (bindings.runtime = {});
   const runtimeSharedTools =
     runtime.sharedTools && typeof runtime.sharedTools === "object" ? runtime.sharedTools : {};
   if (!runtimeSharedTools.semanticTransfer) {
@@ -357,6 +359,9 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   }
 
   if (!existingAgentContext) target.agentContext = agentContext;
+  if (typeof target.claimAgentDispatch !== "function") {
+    target.claimAgentDispatch = () => {};
+  }
   if (typeof target?.eventListener?.onEvent !== "function") {
     target.eventListener = { async onEvent() {} };
   }

@@ -12,7 +12,7 @@ import { persistWorkflowPlanningDialog } from "../hooks/planning-dialog-persiste
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
 import {
   buildWorkflowPlanningNodeSessions,
-  resolveWorkflowRunId,
+  resolveWorkflowRunIdentity,
 } from "../workflow-run-identity.js";
 import { handleWorkflowFailure } from "./failure-handler.js";
 import { publishWorkflowResult } from "./result-publisher.js";
@@ -51,19 +51,11 @@ export async function handleBeforeAgentDispatch({
   });
   if (skipped) return createBotDispatchPass({ owner: "workflow" });
 
-  const workflowRunId = resolveWorkflowRunId(ctx);
-  const workflowExecutionId = String(
-    ctx?.executionId || ctx?.runConfig?.executionId || `workflow:${workflowRunId}`,
-  ).trim();
-  const rootExecutionId = String(
-    ctx?.rootExecutionId || ctx?.runConfig?.rootExecutionId || workflowExecutionId,
-  ).trim();
-  ctx.workflowExecutionId = workflowExecutionId;
-  ctx.rootExecutionId = rootExecutionId;
-  ctx?.claimAgentDispatch?.({
+  const { workflowRunId, executionId, rootExecutionId } = resolveWorkflowRunIdentity(ctx);
+  ctx.claimAgentDispatch({
     owner: "workflow",
     source: "workflow_before_agent_dispatch",
-    executionId: workflowExecutionId,
+    executionId,
     executionKind: "workflow",
     rootExecutionId,
     origin: { type: "workflow", workflowRunId },

@@ -71,14 +71,16 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
   const beforeDispatch = getBeforeDispatch(hookManager);
   await assert.rejects(
     () =>
-      beforeDispatch.handler({
-        userId: "u1",
-        sessionId: "s1",
-        dialogProcessId: "d1",
-        userMessage: "请执行一个工作流",
-        runConfig: { locale: "zh-CN" },
-        abortSignal: abortController.signal,
-      }),
+      beforeDispatch.handler(
+        installTurnMessageEventRuntimeFixture({
+          userId: "u1",
+          sessionId: "s1",
+          dialogProcessId: "d1",
+          userMessage: "请执行一个工作流",
+          runConfig: { locale: "zh-CN" },
+          abortSignal: abortController.signal,
+        }),
+      ),
     (error) => {
       assert.equal(error?.name, "AbortError");
       return true;

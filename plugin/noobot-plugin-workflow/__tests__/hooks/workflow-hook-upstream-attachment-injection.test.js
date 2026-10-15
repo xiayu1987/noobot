@@ -92,16 +92,14 @@ test("workflow hook injects upstream node result attachments into downstream sub
     userMessage: "请运行带并发和汇聚的流程",
     runConfig: { locale: "zh-CN" },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            sharedTools: {
-              semanticTransfer: createSemanticTransferTool({
-                prefix: "att",
-                sessionId: "s-upstream",
-                calls: semanticTransferCalls,
-              }),
-            },
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: createSemanticTransferTool({
+              prefix: "att",
+              sessionId: "s-upstream",
+              calls: semanticTransferCalls,
+            }),
           },
         },
       },
@@ -201,15 +199,13 @@ test("workflow hook injects one upstream action attachments into multiple direct
     userMessage: "请运行直接多下游流程",
     runConfig: { locale: "zh-CN" },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            sharedTools: {
-              semanticTransfer: createSemanticTransferTool({
-                prefix: "fanout-att",
-                sessionId: "s-fanout",
-              }),
-            },
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: createSemanticTransferTool({
+              prefix: "fanout-att",
+              sessionId: "s-fanout",
+            }),
           },
         },
       },

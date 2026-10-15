@@ -17,8 +17,7 @@ export function resolveWorkflowRuntimeFromContext(ctx = {}) {
 }
 
 export function resolveWorkflowAbortSignal(ctx = {}) {
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  return ctx?.abortSignal || runtime?.abortSignal || null;
+  return ctx?.abortSignal || null;
 }
 
 function createWorkflowAbortError(ctx = {}) {
@@ -53,12 +52,6 @@ export function isWorkflowAbortError(error = null, ctx = {}) {
 export function throwIfWorkflowAborted(ctx = {}) {
   if (!resolveWorkflowAbortSignal(ctx)?.aborted) return;
   throw createWorkflowAbortError(ctx);
-}
-
-export function resolveWorkflowParentRunConfig(ctx = {}) {
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const runConfig = runtime?.runConfig;
-  return runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
 }
 
 export function hasOwnObjectKey(source = {}, key = "") {

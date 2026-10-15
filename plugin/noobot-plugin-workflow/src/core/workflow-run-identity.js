@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomUUID } from "node:crypto";
 import {
   createWorkflowNodeDialogProcessId,
   createWorkflowNodeTurnScopeId,
@@ -15,22 +14,23 @@ function safeId(value = "") {
   return text(value).replaceAll(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-export function resolveWorkflowRunId(ctx = {}) {
-  const provided = text(
-    ctx?.workflowRunId ||
-      ctx?.workflowInstanceId ||
-      ctx?.runConfig?.workflowRunId ||
-      ctx?.runConfig?.workflowInstanceId ||
-      ctx?.executionId ||
-      ctx?.turnScopeId ||
-      ctx?.runConfig?.executionId ||
-      ctx?.runConfig?.turnScopeId,
-  );
-  if (provided) return provided;
-  const dialog = safeId(ctx?.dialogProcessId || ctx?.turnScopeId || ctx?.sessionId || "session");
-  const generated = `wf_run_${dialog}_${randomUUID()}`;
-  if (ctx && typeof ctx === "object") ctx.workflowRunId = generated;
-  return generated;
+const WORKFLOW_RUN_IDENTITY_FIELDS = Object.freeze([
+  "turnScopeId",
+  "executionId",
+  "rootExecutionId",
+  "messageId",
+  "presentationMessageId",
+]);
+
+export function resolveWorkflowRunIdentity(ctx = {}) {
+  const runConfig = ctx?.runConfig;
+  const identity = {};
+  for (const field of WORKFLOW_RUN_IDENTITY_FIELDS) {
+    const value = text(runConfig?.[field]);
+    if (!value) throw new TypeError(`workflow runConfig.${field} is required`);
+    identity[field] = value;
+  }
+  return { ...identity, workflowRunId: identity.executionId };
 }
 
 export function createWorkflowNodeIdentity({ workflowRunId = "", node = {}, attempt = 1 } = {}) {
