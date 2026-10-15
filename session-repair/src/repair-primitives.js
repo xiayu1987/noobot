@@ -6,10 +6,6 @@
 import { createHash } from "node:crypto";
 import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 
-export function text(value) {
-  return String(value || "").trim();
-}
-
 export function stableId(prefix, parts) {
   return `${prefix}_${createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 32)}`;
 }

@@ -10,7 +10,8 @@ import {
   SESSION_ARTIFACT_SCHEMA_VERSION,
   resolveSessionArtifactSchemaVersion,
 } from "@noobot/session-protocol";
-import { resolveRepairArtifactPath, text } from "./repair-primitives.js";
+import { text } from "@noobot/shared/value";
+import { resolveRepairArtifactPath } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
 
 function materializeRepairRecords(records, order, baseMessages = []) {

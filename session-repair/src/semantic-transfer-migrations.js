@@ -12,14 +12,11 @@ import {
   TRANSFER_VERSION,
   transferIdentityKey,
 } from "@noobot/semantic-transfer-protocol";
+import { text } from "@noobot/shared/value";
 
 const HISTORICAL_MULTIMODAL_PARSE_REASON = "multimodal_parse_tool";
 const MULTIMODAL_PARSE_TOOL_NAME = "multimodal_parse";
 const MULTIMODAL_PARSE_REASON_MIGRATION = "semantic-transfer-multimodal-parse-reason-v1";
-
-function text(value) {
-  return String(value || "").trim();
-}
 
 function isHistoricalMultimodalParseEnvelope(envelope) {
   const candidate = Object(envelope);

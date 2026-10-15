@@ -5,15 +5,12 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 import {
   readSessionArtifact,
   writeSessionArtifact,
 } from "../agent/src/session/session-artifact-store.js";
 import { projectWrittenFileFromToolResult } from "../agent/src/artifacts/runtime/tool-result-artifact-projection.js";
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function parseArgs(argv = []) {
   const sessionDirs = [];

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isRestrictedHostExecutionView } from "@noobot/execution-isolation-protocol/execution-views";
+import { text } from "@noobot/shared/value";
 
 export const SECURITY_ASSESSMENT_PROTOCOL_NAME = "noobot.security-assessment";
 export const SECURITY_ASSESSMENT_PROTOCOL_VERSION = 1;
@@ -81,8 +82,6 @@ const RESOURCE_RISK_PROFILES = Object.freeze({
     [RESOURCE_OPERATION.DELETE]: SECURITY_RISK_LEVEL.CRITICAL,
   }),
 });
-
-const text = (value) => String(value || "").trim();
 
 export function normalizeSecurityRiskLevel(value, fallback = "") {
   const normalized = text(value).toLowerCase();

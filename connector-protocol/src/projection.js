@@ -3,8 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-const text = (value) => String(value || "").trim();
+import { text } from "@noobot/shared/value";
 
 export function projectPublicConnector(record = {}, runtimeStatus = {}, definition = {}) {
   return Object.freeze({

@@ -5,7 +5,8 @@
  */
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { checkpointContentHash, resolveRepairArtifactPath, text } from "./repair-primitives.js";
+import { text } from "@noobot/shared/value";
+import { checkpointContentHash, resolveRepairArtifactPath } from "./repair-primitives.js";
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
 
 function messageTimestamp(record, turnId) {

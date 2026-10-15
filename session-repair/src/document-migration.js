@@ -30,7 +30,8 @@ import {
   createSemanticTransferMigration,
   migrateSemanticTransfers,
 } from "./semantic-transfer-migrations.js";
-import { stableId, text } from "./repair-primitives.js";
+import { text } from "@noobot/shared/value";
+import { stableId } from "./repair-primitives.js";
 
 function validateTransferCollections(value) {
   if (!value || typeof value !== "object") return false;

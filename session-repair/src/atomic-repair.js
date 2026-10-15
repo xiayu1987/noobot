@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { cp, rename, rm } from "node:fs/promises";
-import { text } from "./repair-primitives.js";
+import { text } from "@noobot/shared/value";
 
 export async function runAtomicSessionRepair({ sessionDir = "", repair, validate } = {}) {
   if (!text(sessionDir) || typeof repair !== "function" || typeof validate !== "function") {
