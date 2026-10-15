@@ -546,3 +546,37 @@ test("other enums: provide readable name and description", () => {
   assert.equal(EStopReason.getName(EStopReason.actionStop), "actionStop");
   assert.ok(EStopReason.getDescription(EStopReason.childStop)?.includes("child process"));
 });
+
+test("runtime advance ignores action.stepFailure and snapshots carry no step failure fields", () => {
+  const semantic = {
+    nodes: [
+      { id: "start", type: "state", stateType: 0, name: "开始" },
+      { id: "a", type: "action", name: "节点A" },
+      { id: "b", type: "action", name: "节点B" },
+      { id: "end", type: "state", stateType: 1, name: "结束" },
+    ],
+    flowtos: [
+      { from: "start", to: "a" },
+      { from: "a", to: "b" },
+      { from: "b", to: "end" },
+    ],
+  };
+  const instanceId = `test_runtime_step_failure_${Date.now()}`;
+  try {
+    let snapshot = startWorkflowInstanceById({ instanceId, semantic });
+    snapshot = advanceWorkflowInstanceById({
+      instanceId,
+      action: { type: "submit", stepIndex: 0, stepFailure: { message: "boom" } },
+    });
+    const bStep = snapshot.pendingSteps.find((step) => step.nodeId === "b");
+    assert.ok(bStep);
+    assert.equal(Object.hasOwn(bStep, "stepFailure"), false);
+    assert.equal(Object.hasOwn(bStep, "stepStatus"), false);
+    const [aStep] = resolveWorkflowUpstreamActionSteps({ instanceId, pendingStep: bStep });
+    assert.equal(aStep?.nodeId, "a");
+    assert.equal(Object.hasOwn(aStep, "stepFailure"), false);
+    assert.equal(Object.hasOwn(aStep, "stepStatus"), false);
+  } finally {
+    releaseWorkflowInstance({ instanceId });
+  }
+});

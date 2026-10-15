@@ -122,21 +122,6 @@ function ensureStepStateRuntimeId(stepState = null) {
   return id;
 }
 
-function markStepStateFailure(stepState = null, failure = {}) {
-  const normalizedFailure = failure && typeof failure === "object" ? failure : {};
-  return setStepStateWorkflowRuntime(stepState, {
-    status: "failed",
-    failure: {
-      source: text(normalizedFailure?.source) || "workflow_node_agent",
-      code: text(normalizedFailure?.code) || "WORKFLOW_NODE_AGENT_FAILED",
-      message: text(normalizedFailure?.message) || "workflow node agent failed",
-      ...(normalizedFailure?.detail && typeof normalizedFailure.detail === "object"
-        ? { detail: normalizedFailure.detail }
-        : {}),
-    },
-  });
-}
-
 export function startWorkflowInstance({ model = null, conditionContext = null } = {}) {
   const business = new Business();
   if (conditionContext && typeof conditionContext === "object") {
@@ -236,7 +221,6 @@ function describePendingSteps(bizinst = null) {
     const stepStates = Array.isArray(actionNodeState?.getStepStates?.())
       ? actionNodeState.getStepStates()
       : [];
-    const workflowRuntime = getStepStateWorkflowRuntime(stepState);
     const stepId = ensureStepStateRuntimeId(stepState);
     const actionNodeStateId = ensureActionNodeStateRuntimeId(actionNodeState);
     return {
@@ -247,11 +231,6 @@ function describePendingSteps(bizinst = null) {
       actionNodeStateId,
       stepId,
       stepIndex: stepStates.indexOf(stepState),
-      stepStatus: text(workflowRuntime?.status),
-      stepFailure:
-        workflowRuntime?.failure && typeof workflowRuntime.failure === "object"
-          ? workflowRuntime.failure
-          : null,
     };
   });
 }
@@ -262,7 +241,6 @@ function describeActionStepState(stepState = null) {
   const stepStates = Array.isArray(actionNodeState?.getStepStates?.())
     ? actionNodeState.getStepStates()
     : [];
-  const workflowRuntime = getStepStateWorkflowRuntime(stepState);
   return {
     nodeId: text(node?.workflowNodeId),
     nodeName: text(node?.getName?.()),
@@ -270,11 +248,6 @@ function describeActionStepState(stepState = null) {
     actionNodeStateId: ensureActionNodeStateRuntimeId(actionNodeState),
     stepId: ensureStepStateRuntimeId(stepState),
     stepIndex: stepStates.indexOf(stepState),
-    stepStatus: text(workflowRuntime?.status),
-    stepFailure:
-      workflowRuntime?.failure && typeof workflowRuntime.failure === "object"
-        ? workflowRuntime.failure
-        : null,
   };
 }
 
@@ -565,9 +538,6 @@ export function advanceWorkflowInstanceById({
   const rawStepIndex = Number(action?.stepIndex);
   const stepIndex = Number.isFinite(rawStepIndex) ? Math.max(0, Math.floor(rawStepIndex)) : 0;
   const safeIndex = Math.min(stepIndex, steps.length - 1);
-  if (action?.stepFailure && typeof action.stepFailure === "object") {
-    markStepStateFailure(steps[safeIndex], action.stepFailure);
-  }
   const runtimeAction = createActionByType(action?.type);
   record.controlCenter.execAction(
     runtimeAction,
