@@ -34,11 +34,7 @@ export function buildWorkflowInputAttachmentSystemMessage({
     })
     .filter(Boolean);
   if (!lines.length) return "";
-  const nodeName = String(
-    semanticNode?.name ||
-      semanticNode?.id ||
-      tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
-  ).trim();
+  const nodeName = text(semanticNode?.name);
   return [
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.USER_RAW_TITLE),
     "",
@@ -72,8 +68,8 @@ function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults =
   const stepIndex = Number(completed.stepIndex ?? upstreamStep.stepIndex);
   return {
     nodeId,
-    nodeName: firstText(completed.nodeName, upstreamStep.nodeName, nodeId),
-    nodeTask: firstText(completed.nodeTask, upstreamStep.nodeTask, upstreamStep.task),
+    nodeName: text(upstreamStep.nodeName),
+    nodeTask: text(completed.nodeTask),
     actionNodeStateId: firstText(completed.actionNodeStateId, upstreamStep.actionNodeStateId),
     stepId,
     stepIndex: Number.isFinite(stepIndex) ? stepIndex : -1,
@@ -112,11 +108,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     pendingStep,
     normalizedResults,
   );
-  const pendingName = String(
-    pendingStep?.nodeName ||
-      pendingStep?.nodeId ||
-      tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
-  ).trim();
+  const pendingName = text(pendingStep?.nodeName);
   return (
     customUpstreamMessage || buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines)
   );
@@ -126,7 +118,7 @@ function collectUpstreamEvidence(results, ctx, locale) {
   const lines = [];
   const failureLines = [];
   for (const result of results) {
-    const nodeLabel = resolveUpstreamNodeLabel(result, locale);
+    const nodeLabel = text(result?.nodeName);
     const failureLine = buildUpstreamFailureLine(result, nodeLabel, locale);
     if (failureLine) failureLines.push(failureLine);
     appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale);
@@ -134,20 +126,12 @@ function collectUpstreamEvidence(results, ctx, locale) {
   return { lines, failureLines };
 }
 
-function resolveUpstreamNodeLabel(result, locale) {
-  return String(
-    result?.nodeName ||
-      result?.nodeId ||
-      tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_NODE_FALLBACK),
-  ).trim();
-}
-
 function buildUpstreamFailureLine(result, nodeLabel, locale) {
   const failed =
     text(result?.status) === "failed" ||
     (result?.stepFailure && typeof result.stepFailure === "object");
   if (!failed) return "";
-  const task = text(result?.nodeTask || result?.task);
+  const task = text(result?.nodeTask);
   const message = String(
     result?.stepFailure?.message ||
       tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK),

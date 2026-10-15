@@ -143,6 +143,57 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(nodeEnvelopes[1].identity.executionId, identity.nodeExecutionId);
 });
 
+test("runWorkflowExecution resolves each node task by nodeId even when node names collide", async () => {
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="Start"',
+      'NODE id=a type=action name="Same" task="task of a"',
+      'NODE id=b type=action name="Same" task="task of b"',
+      'NODE id=end type=state stateType=end name="End"',
+      "EDGE from=start to=a",
+      "EDGE from=a to=b",
+      "EDGE from=b to=end",
+      "END",
+    ].join("\n"),
+  );
+  const workflowRunId = "wf_run_same_name";
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+  const { ctx } = buildCtx();
+  const messagesByDialog = new Map();
+  const options = buildOptions({
+    subSessionRunner: async (call) => {
+      messagesByDialog.set(call.strategy.dialogProcessId, call.message);
+      return {
+        lifecycle: {
+          executionId: call?.strategy?.executionId || call?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
+        sessionId: `child-${call.strategy.dialogProcessId}`,
+        dialogProcessId: call.strategy.dialogProcessId,
+        persisted: { outputDir: "runtime/plugin-data/workflow/session/s1/child" },
+        result: { messages: [{ role: "assistant", content: "done" }] },
+      };
+    },
+  });
+  await runWorkflowExecution({
+    hookManager: { emit: async () => ({ outcomes: [] }) },
+    options,
+    ctx,
+    semantic,
+    workflowRunId,
+    planningNodeSessions,
+  });
+
+  const identityA = planningNodeSessions.find((item) => item.nodeId === "a");
+  const identityB = planningNodeSessions.find((item) => item.nodeId === "b");
+  assert.equal(messagesByDialog.get(identityA.dialogProcessId), "task of a");
+  assert.equal(messagesByDialog.get(identityB.dialogProcessId), "task of b");
+});
+
 test("runWorkflowExecution rejects duplicate planning identities for the same node attempt", async () => {
   const semantic = buildSemantic();
   const workflowRunId = "wf_run_d1";

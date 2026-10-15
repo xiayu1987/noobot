@@ -166,11 +166,6 @@ function buildNodeAgentRunRecord({
   };
 }
 
-function resolveCompletedNodeTask(step = {}, semanticNode = null) {
-  const node = semanticNode || {};
-  return text(step.nodeTask || node.task || node.taskText || node.instruction || node.mission);
-}
-
 function rememberCompletedStepResult({
   completedStepResults,
   item = {},
@@ -181,12 +176,12 @@ function rememberCompletedStepResult({
   const refs = resolveStepItemRefs(item);
   if (!refs.stepId) return;
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep: refs.step });
-  const nodeId = text(refs.step.nodeId || semanticNode?.id);
+  const nodeId = text(refs.step.nodeId);
   completedStepResults.set(refs.stepId, {
     transition: transitions,
     nodeId,
-    nodeName: text(refs.step.nodeName || semanticNode?.name || nodeId),
-    nodeTask: resolveCompletedNodeTask(refs.step, semanticNode),
+    nodeName: text(refs.step.nodeName),
+    nodeTask: text(semanticNode?.task),
     actionNodeStateId: refs.actionNodeStateId,
     stepId: refs.stepId,
     stepIndex: refs.stepIndex,

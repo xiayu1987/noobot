@@ -37,52 +37,18 @@ import { firstText, text } from "@noobot/shared/value";
 
 function buildWorkflowNodeInstruction(step = {}) {
   const locale = text(step?.locale);
-  const taskText = text(step?.nodeTask || step?.task || step?.instruction || step?.mission);
+  const taskText = text(step?.nodeTask);
   if (taskText) return taskText;
-  const nodeName = text(step?.nodeName);
-  if (nodeName) {
-    return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_NAME, {
-      name: nodeName,
-    });
-  }
-  const nodeId = text(step?.nodeId);
-  if (nodeId)
-    return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_ID, {
-      id: nodeId,
-    });
-  return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_DEFAULT);
-}
-
-function resolveNodeTaskForPendingStep({ semantic = {}, pendingStep = {} } = {}) {
-  const pendingNodeId = text(pendingStep?.nodeId);
-  const pendingNodeName = text(pendingStep?.nodeName);
-  const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
-  const matchedNode = nodes.find((node = {}) => {
-    const nodeId = text(node?.id);
-    const nodeName = text(node?.name);
-    if (pendingNodeId && nodeId && pendingNodeId === nodeId) return true;
-    if (pendingNodeName && nodeName && pendingNodeName === nodeName) return true;
-    return false;
+  return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_NAME, {
+    name: text(step?.nodeName),
   });
-  if (!matchedNode) return "";
-  return text(
-    matchedNode?.task || matchedNode?.taskText || matchedNode?.instruction || matchedNode?.mission,
-  );
 }
 
 export function resolveSemanticNodeForPendingStep({ semantic = {}, pendingStep = {} } = {}) {
   const pendingNodeId = text(pendingStep?.nodeId);
-  const pendingNodeName = text(pendingStep?.nodeName);
   const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
-  return (
-    nodes.find((node = {}) => {
-      const nodeId = text(node?.id);
-      const nodeName = text(node?.name);
-      if (pendingNodeId && nodeId && pendingNodeId === nodeId) return true;
-      if (pendingNodeName && nodeName && pendingNodeName === nodeName) return true;
-      return false;
-    }) || null
-  );
+  if (!pendingNodeId) return null;
+  return nodes.find((node = {}) => text(node?.id) === pendingNodeId) || null;
 }
 
 export async function runNodeAgent({
@@ -215,7 +181,7 @@ function buildNodeAgentHookPayload({
     agentInstruction: buildWorkflowNodeInstruction({
       ...pendingStep,
       locale: resolveWorkflowLocaleFromContext(ctx),
-      nodeTask: resolveNodeTaskForPendingStep({ semantic, pendingStep }),
+      nodeTask: text(semanticNode?.task),
     }),
     proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
   };

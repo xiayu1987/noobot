@@ -14,7 +14,6 @@ const WORKFLOW_LOCALE = Object.freeze({
 
 export const WORKFLOW_I18N_KEYSET = Object.freeze({
   COMMON: Object.freeze({
-    CURRENT_NODE_FALLBACK: "workflowCurrentNodeFallback",
     CURRENT_NODE_LINE: "workflowCurrentNodeLine",
   }),
   SEMANTIC: Object.freeze({
@@ -55,7 +54,6 @@ export const WORKFLOW_I18N_KEYSET = Object.freeze({
     PLAN_HINT_4: "workflowInputAttachmentsPlanHint4",
   }),
   NODE_AGENT: Object.freeze({
-    UPSTREAM_NODE_FALLBACK: "workflowUpstreamNodeFallback",
     SUB_AGENT_FAILURE_FALLBACK: "workflowSubAgentFailureFallback",
     FAILURE_LINE_WITH_TASK: "workflowFailureLineWithTask",
     FAILURE_LINE_WITHOUT_TASK: "workflowFailureLineWithoutTask",
@@ -64,8 +62,6 @@ export const WORKFLOW_I18N_KEYSET = Object.freeze({
     UPSTREAM_FAILURE_TITLE: "workflowUpstreamFailureTitle",
     UPSTREAM_RESULT_TITLE: "workflowUpstreamResultTitle",
     NODE_INSTRUCTION_BY_NAME: "workflowNodeInstructionByName",
-    NODE_INSTRUCTION_BY_ID: "workflowNodeInstructionById",
-    NODE_INSTRUCTION_DEFAULT: "workflowNodeInstructionDefault",
   }),
   PERSISTENCE: Object.freeze({
     NODE_RESULT_ATTACHMENT_TITLE: "workflowNodeResultAttachmentTitle",
@@ -105,12 +101,10 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
       'attachments="user:*" 表示使用全部用户附件；attachments="identityRef1,identityRef2" 表示使用指定附件。',
     workflowInputAttachmentsPlanHint4:
       "不要把附件路径写入 task 或 DSL；路径只能由附件服务根据 canonical identityRef 解析。",
-    workflowCurrentNodeFallback: "当前节点",
     workflowUserRawAttachmentsTitle: "# 用户原始附件",
     workflowCurrentNodeLine: "当前节点：{name}",
     workflowInputAttachmentsSystemHint:
       "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。每项都提供文件工具唯一接受的完整 canonical identityRef 字符串；必须原样作为工具参数传入，不得传 JSON、路径或根据名称和 ID 构造。",
-    workflowUpstreamNodeFallback: "上游节点",
     workflowSubAgentFailureFallback: "子 agent 执行失败",
     workflowFailureLineWithTask: "- {nodeLabel}（任务：{task}）: {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
@@ -126,8 +120,6 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowDialogLine: "- 对话: {id}",
     workflowFinalOutputTitle: "## 最终输出",
     workflowNodeInstructionByName: "请处理任务：{name}",
-    workflowNodeInstructionById: "请处理节点任务：{id}",
-    workflowNodeInstructionDefault: "请处理当前任务。",
     workflowDslErrorPrefix: "工作流 DSL 解析错误",
     workflowDslErrorEmptyText: "文本为空",
     workflowDslErrorJsonNotAllowed: "不支持 JSON 输入",
@@ -168,12 +160,10 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
       'attachments="user:*" means all user attachments; attachments="identityRef1,identityRef2" means specific attachments.',
     workflowInputAttachmentsPlanHint4:
       "Do not put attachment paths in task or DSL; paths are resolved by the attachment service from canonical identityRef.",
-    workflowCurrentNodeFallback: "Current node",
     workflowUserRawAttachmentsTitle: "# Original user attachments",
     workflowCurrentNodeLine: "Current node: {name}",
     workflowInputAttachmentsSystemHint:
       "The following attachments are bound to the current node by workflow planning and come from this turn's user input. Each item is the complete canonical identityRef string accepted by file tools. Pass it verbatim as the tool argument; never pass JSON or a path, or construct one from a name or ID.",
-    workflowUpstreamNodeFallback: "Upstream node",
     workflowSubAgentFailureFallback: "Sub-agent execution failed",
     workflowFailureLineWithTask: "- {nodeLabel} (task: {task}): {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
@@ -189,8 +179,6 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowDialogLine: "- Dialog: {id}",
     workflowFinalOutputTitle: "## Final output",
     workflowNodeInstructionByName: "Please process task: {name}",
-    workflowNodeInstructionById: "Please process node task: {id}",
-    workflowNodeInstructionDefault: "Please process the current task.",
     workflowDslErrorPrefix: "workflow dsl parse error",
     workflowDslErrorEmptyText: "empty text",
     workflowDslErrorJsonNotAllowed: "JSON is not allowed",
