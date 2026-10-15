@@ -117,16 +117,12 @@ function isInteractionEvent(kind) {
 }
 
 function interactionRejection(current, event, kind) {
-  const currentSessionId = lowerToken(current.sessionId);
-  const currentTurnScopeId = lowerToken(current.turnScopeId);
-  if (currentSessionId && event.sessionId && currentSessionId !== lowerToken(event.sessionId)) {
+  const currentSessionId = text(current.sessionId);
+  const currentTurnScopeId = text(current.turnScopeId);
+  if (currentSessionId && event.sessionId && currentSessionId !== text(event.sessionId)) {
     return TURN_TRANSITION_REASON.ILLEGAL_TRANSITION;
   }
-  if (
-    currentTurnScopeId &&
-    event.turnScopeId &&
-    currentTurnScopeId !== lowerToken(event.turnScopeId)
-  ) {
+  if (currentTurnScopeId && event.turnScopeId && currentTurnScopeId !== text(event.turnScopeId)) {
     return TURN_TRANSITION_REASON.ILLEGAL_TRANSITION;
   }
   if (!current.state && current.commandPending !== true && !kind.actionStart) {
@@ -170,7 +166,7 @@ function projectInteraction(current, event, kind) {
   return {
     ...current,
     commandPending,
-    pendingCommandId: commandPending ? lowerToken(event.commandId || current.pendingCommandId) : "",
+    pendingCommandId: commandPending ? text(event.commandId || current.pendingCommandId) : "",
     pendingCommandType: resolvePendingCommandType(current, kind, commandPending),
     transportState,
     transportSeq: resolveTransportSequence(current, kind, incomingSeq),
@@ -178,9 +174,9 @@ function projectInteraction(current, event, kind) {
     lastTransportError:
       kind.transport && TRANSPORT_FAILURE_STATES.has(transportState)
         ? transportState
-        : lowerToken(current.lastTransportError),
+        : text(current.lastTransportError),
     action: kind.stopStart ? "stop" : lowerToken(current.action || event.action || "send"),
-    commandId: lowerToken(event.commandId || current.commandId),
+    commandId: text(event.commandId || current.commandId),
   };
 }
 
@@ -329,7 +325,7 @@ function resolveProjectionFacts(current, event, eventRevision) {
     authoritativeCommit:
       event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
         ? {
-            completionCommitId: lowerToken(event.completionCommitId),
+            completionCommitId: text(event.completionCommitId),
             summaryVersion: Number(event.summaryVersion || 0),
             revision: eventRevision,
           }

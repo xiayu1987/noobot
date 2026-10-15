@@ -150,6 +150,54 @@ describe("sessionRunStateMachine scope separation", () => {
     expect(started.state).toBeUndefined();
   });
 
+  it("compares Turn identity case-sensitively and keeps command identity verbatim", () => {
+    const mixedIdentity = { sessionId: "S1", dialogProcessId: "dialog-1", turnScopeId: "Turn-A" };
+    const started = reduceTurnRuntimeEvent(null, {
+      ...mixedIdentity,
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      commandId: "Cmd-A",
+    }).next;
+    expect(started).toMatchObject({ commandId: "Cmd-A", pendingCommandId: "Cmd-A" });
+    expect(
+      reduceTurnRuntimeEvent(
+        { ...started, ...mixedIdentity },
+        {
+          ...mixedIdentity,
+          type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+          turnScopeId: "turn-a",
+        },
+      ),
+    ).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION });
+    expect(
+      reduceTurnRuntimeEvent(
+        { ...started, ...mixedIdentity },
+        {
+          ...mixedIdentity,
+          type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
+          sessionId: "s1",
+        },
+      ),
+    ).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION });
+  });
+
+  it("keeps the completion commit identity verbatim", () => {
+    let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    processing = apply(processing, actionAccepted);
+    processing = apply(processing, processingStarted);
+    let completion = apply(processing, processingCompleted);
+    completion = apply(completion, {
+      type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
+      state: TURN_STATE.COMPLETED,
+      revision: 10,
+      seq: 10,
+      completionCommitId: "Cmd-A:completed",
+      summaryVersion: 1,
+    });
+    expect(completion.authoritativeCompletionCommit).toMatchObject({
+      completionCommitId: "Cmd-A:completed",
+    });
+  });
+
   it("settles summaries into explicit terminal states rather than identity-free idle", () => {
     let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
     processing = apply(processing, actionAccepted);
