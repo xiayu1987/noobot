@@ -23,8 +23,8 @@ export async function waitForFile(file, retries = 200, delayMs = 20) {
 }
 
 export async function readJsonl(file) {
-  const text = await fs.readFile(file, "utf8");
-  return String(text || "")
+  const raw = await fs.readFile(file, "utf8");
+  return raw
     .trim()
     .split("\n")
     .filter(Boolean)

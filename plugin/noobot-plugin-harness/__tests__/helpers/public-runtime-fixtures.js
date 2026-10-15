@@ -14,12 +14,13 @@ import {
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 
+import { text } from "@noobot/shared/value";
 let testScopeSequence = 0;
 let testTransferSequence = 0;
 let testModelResponseSequence = 0;
 
 export function createTestModelResponse(
-  text,
+  outputText,
   {
     reasoning = "",
     toolCalls = [],
@@ -35,7 +36,7 @@ export function createTestModelResponse(
   testModelResponseSequence += 1;
   const sequence = testModelResponseSequence;
   const output = {
-    text: String(text ?? ""),
+    text: String(outputText ?? ""),
     reasoning: String(reasoning ?? ""),
     toolCalls: Array.isArray(toolCalls) ? toolCalls : [],
     finishReason: String(finishReason ?? ""),
@@ -94,7 +95,7 @@ function initializeTestSemanticTransfer(agentContext = {}) {
     async transferSemanticContent(payload = {}) {
       testTransferSequence += 1;
       const identitySource = agentContext?.context?.identity || {};
-      const sessionId = String(identitySource.sessionId || "").trim();
+      const sessionId = text(identitySource.sessionId);
       const producer =
         payload?.producer && typeof payload.producer === "object"
           ? payload.producer
@@ -104,23 +105,23 @@ function initializeTestSemanticTransfer(agentContext = {}) {
         messageId: `test-transfer-message-${testTransferSequence}`,
         identity: {
           sessionId,
-          turnScopeId: String(identitySource.turnScopeId || "").trim(),
-          runId: String(identitySource.runId || "").trim(),
+          turnScopeId: text(identitySource.turnScopeId),
+          runId: text(identitySource.runId),
           producer,
         },
         direction: payload.direction || TRANSFER_DIRECTION.OUTPUT,
         intent: {
           source: String(payload.source || producer.type || "plugin").trim(),
           reason: String(payload.reason || payload.strategy || "harness_test_transfer").trim(),
-          scenario: String(payload.scenario || "harness").trim(),
-          strategy: String(payload.strategy || "harness_summary").trim(),
+          scenario: text(payload.scenario) || "harness",
+          strategy: text(payload.strategy) || "harness_summary",
         },
       };
       if (
         payload.strategy === "harness_summary" &&
         (payload.fullText !== undefined || payload.summaryText !== undefined)
       ) {
-        const injectMode = String(payload.injectMode || "full").trim();
+        const injectMode = text(payload.injectMode) || "full";
         const content =
           injectMode === "summary"
             ? String(payload.summaryText || "")
@@ -128,7 +129,7 @@ function initializeTestSemanticTransfer(agentContext = {}) {
         return { transferEnvelopes: [directTransfer({ ...common, content })] };
       }
       const content = String(payload.detail || payload.content || payload.text || "");
-      const name = String(payload.name || `harness-test-${testTransferSequence}.md`).trim();
+      const name = text(payload.name) || `harness-test-${testTransferSequence}.md`;
       return {
         transferEnvelopes: [
           attachmentTransfer({
@@ -138,11 +139,11 @@ function initializeTestSemanticTransfer(agentContext = {}) {
                 identity: {
                   attachmentId: `test-attachment-${testTransferSequence}`,
                   sessionId,
-                  attachmentSource: String(payload.attachmentSource || "model").trim(),
+                  attachmentSource: text(payload.attachmentSource) || "model",
                 },
                 role: "primary",
                 name,
-                mimeType: String(payload.mimeType || "text/plain").trim(),
+                mimeType: text(payload.mimeType) || "text/plain",
                 size: Buffer.byteLength(content, "utf8"),
               },
             ],
@@ -185,20 +186,20 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
   if (!agentContext.context || typeof agentContext.context !== "object") {
     testScopeSequence += 1;
     const scopeSuffix = String(testScopeSequence);
-    const dialogProcessId = String(ctx.dialogProcessId || `test-dialog-${scopeSuffix}`).trim();
-    const turnScopeId = String(ctx.turnScopeId || `test-turn:${dialogProcessId}`).trim();
-    const sessionId = String(ctx.sessionId || `test-session-${scopeSuffix}`).trim();
+    const dialogProcessId = text(ctx.dialogProcessId) || `test-dialog-${scopeSuffix}`;
+    const turnScopeId = text(ctx.turnScopeId) || `test-turn:${dialogProcessId}`;
+    const sessionId = text(ctx.sessionId) || `test-session-${scopeSuffix}`;
     agentContext.context = {
       kind: "noobot.agent-context",
       protocolVersion: 1,
       identity: {
-        userId: String(ctx.userId || `test-user-${scopeSuffix}`).trim(),
+        userId: text(ctx.userId) || `test-user-${scopeSuffix}`,
         sessionId,
         rootSessionId: String(ctx.rootSessionId || sessionId).trim(),
-        parentSessionId: String(ctx.parentSessionId || "").trim(),
+        parentSessionId: text(ctx.parentSessionId),
         dialogProcessId,
         turnScopeId,
-        runId: String(ctx.runId || `test-run-${scopeSuffix}`).trim(),
+        runId: text(ctx.runId) || `test-run-${scopeSuffix}`,
       },
       environment: {},
       execution: {},
@@ -217,11 +218,11 @@ export function ensureTestHookContext(ctx = {}) {
       ? ctx.activeTurnIdentity
       : null;
   const dialogProcessId =
-    resolveDialogProcessId(ctx) ||
-    String(explicitIdentity?.dialogProcessId || "test-dialog").trim();
+    resolveDialogProcessId(ctx) || text(explicitIdentity?.dialogProcessId) || "test-dialog";
   const turnScopeId =
     resolveTurnScopeId(ctx) ||
-    String(explicitIdentity?.turnScopeId || `test-turn:${dialogProcessId}`).trim();
+    text(explicitIdentity?.turnScopeId) ||
+    `test-turn:${dialogProcessId}`;
   const activeTurnIdentity = { dialogProcessId, turnScopeId };
   const stampRoundIdentity = (messages = []) => {
     for (const message of Array.isArray(messages) ? messages : []) {
@@ -230,8 +231,8 @@ export function ensureTestHookContext(ctx = {}) {
         .trim()
         .toLowerCase();
       if (role === "system" || role === "developer") continue;
-      if (!String(message.dialogProcessId || "").trim()) message.dialogProcessId = dialogProcessId;
-      if (!String(message.turnScopeId || "").trim()) message.turnScopeId = turnScopeId;
+      if (!text(message.dialogProcessId)) message.dialogProcessId = dialogProcessId;
+      if (!text(message.turnScopeId)) message.turnScopeId = turnScopeId;
     }
   };
   stampRoundIdentity(ctx.messages);

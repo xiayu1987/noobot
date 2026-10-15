@@ -16,6 +16,7 @@ import {
 import { readSessionArtifact } from "noobot-agent/session";
 import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
+import { text } from "@noobot/shared/value";
 export function workspaceRoot() {
   return requireWorkspaceRootEnv();
 }
@@ -40,7 +41,7 @@ async function persistedSessionRoot(userId, sessionId) {
 async function readParentSessionId(sessionDir) {
   try {
     const fact = await readJson(path.join(sessionDir, "session.json"));
-    return String(fact?.parentSessionId || "").trim();
+    return text(fact?.parentSessionId);
   } catch (error) {
     if (error?.code === "ENOENT") return "";
     throw error;
@@ -137,7 +138,7 @@ export async function auditSessionSummaryArtifacts(
   }
   const indexedSession =
     (Array.isArray(sessionsIndex?.sessions) ? sessionsIndex.sessions : []).find(
-      (item) => String(item?.sessionId || "").trim() === sessionId,
+      (item) => text(item?.sessionId) === sessionId,
     ) || null;
   const report = {
     protocolVersion: 1,
@@ -171,8 +172,8 @@ export async function auditSessionSummaryArtifacts(
       indexedSession.messages.length ||
       Number(indexedSession?.messageCount) !== 0 ||
       indexedSession?.lastMessage !== null ||
-      !String(reason?.code || "").trim() ||
-      !String(reason?.message || "").trim()
+      !text(reason?.code) ||
+      !text(reason?.message)
     ) {
       failSummaryAudit(`invalid unavailable sessions index projection: ${sessionId}`, report);
     }
@@ -296,16 +297,16 @@ export async function readSnapshots(userId, sessionId) {
   return Promise.all(names.map((name) => readJson(path.join(directory, name))));
 }
 
-export function parseJsonLines(text, { committedFramesOnly = false } = {}) {
-  const source = String(text || "");
+export function parseJsonLines(raw, { committedFramesOnly = false } = {}) {
+  const source = String(raw || "");
   const lines = source.split(/\r?\n/);
   if (committedFramesOnly && source && !source.endsWith("\n")) lines.pop();
   return lines.filter(Boolean).map((line) => JSON.parse(line));
 }
 
 export async function readJsonLines(filePath, options = {}) {
-  const text = await fs.readFile(filePath, "utf8");
-  return parseJsonLines(text, options);
+  const raw = await fs.readFile(filePath, "utf8");
+  return parseJsonLines(raw, options);
 }
 
 async function readJsonLinesIfPresent(filePath, options = {}) {
@@ -393,8 +394,8 @@ export async function readSessionExecutionEventTree(
   sessionId,
   { rootSessionId = "" } = {},
 ) {
-  const normalizedSessionId = String(sessionId || "").trim();
-  const hasExplicitRoot = Boolean(String(rootSessionId || "").trim());
+  const normalizedSessionId = text(sessionId);
+  const hasExplicitRoot = Boolean(text(rootSessionId));
   const normalizedRootSessionId = String(rootSessionId || normalizedSessionId).trim();
   if (!normalizedSessionId || !normalizedRootSessionId) return [];
 
@@ -407,7 +408,7 @@ export async function readSessionExecutionEventTree(
   ).flat();
   const records = await readExecutionEventSegmentFiles(segments);
   return hasExplicitRoot
-    ? records.filter((record) => String(record?.sessionId || "").trim() === normalizedSessionId)
+    ? records.filter((record) => text(record?.sessionId) === normalizedSessionId)
     : records;
 }
 

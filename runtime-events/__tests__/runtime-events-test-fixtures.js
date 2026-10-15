@@ -30,8 +30,8 @@ export function useRuntimeEventsEnv(declaration = {}) {
 }
 
 export async function readJsonl(file) {
-  const text = await fs.readFile(file, "utf8");
-  return text
+  const raw = await fs.readFile(file, "utf8");
+  return raw
     .trim()
     .split("\n")
     .filter(Boolean)

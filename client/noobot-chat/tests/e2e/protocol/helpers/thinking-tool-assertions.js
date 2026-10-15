@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { text } from "@noobot/shared/value";
 import { waitForSessionExecutionEventTree } from "./persistence-audit.js";
-
-const text = (value) => String(value ?? "").trim();
 
 export function elapsedLabelSeconds(value = "") {
   const match = text(value).match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
@@ -38,7 +37,7 @@ export async function installRunningThinkingElapsedCapture(page) {
       for (const node of document.querySelectorAll(
         ".thinking-realtime-shell.is-running .thinking-elapsed",
       )) {
-        const value = String(node.textContent || "").trim();
+        const value = text(node.textContent);
         if (value && samples.at(-1) !== value) samples.push(value);
       }
     };

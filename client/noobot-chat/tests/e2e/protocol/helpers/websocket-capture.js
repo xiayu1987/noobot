@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
 
 function parseJson(value) {
   try {
@@ -15,8 +16,8 @@ function parseJson(value) {
 export function decodeWebSocketPayload(payload) {
   const direct = parseJson(payload);
   if (direct) return direct;
-  const text = String(payload || "");
-  const socketIoArray = text.match(/^\d*\s*(\[.*\])$/s)?.[1];
+  const raw = String(payload || "");
+  const socketIoArray = raw.match(/^\d*\s*(\[.*\])$/s)?.[1];
   return socketIoArray ? parseJson(socketIoArray) : null;
 }
 
@@ -62,7 +63,7 @@ export function findAgentCommands(records = []) {
   );
   const seen = new Set();
   return commands.filter((command) => {
-    const commandId = String(command?.commandId || "").trim();
+    const commandId = text(command?.commandId);
     if (!commandId) return true;
     if (seen.has(commandId)) return false;
     seen.add(commandId);
