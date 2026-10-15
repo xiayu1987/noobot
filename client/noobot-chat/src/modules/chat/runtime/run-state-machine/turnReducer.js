@@ -15,6 +15,7 @@ import {
   projectAuthoritativeTurnState,
 } from "./authoritativeTurnProjection.js";
 import { resolveTurnRuntimeTerminal, TURN_RUNTIME_TERMINAL } from "./turnTerminal.js";
+import { text } from "@noobot/shared/value";
 
 export const TURN_TRANSITION_REASON = Object.freeze({
   APPLIED: "applied",
@@ -67,18 +68,16 @@ const TRANSPORT_FAILURE_STATES = new Set([
   BackendChannelState.NO_CONVERSATION,
 ]);
 
-function text(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+function lowerToken(value) {
+  return text(value).toLowerCase();
 }
 
 export function isFinalTurnState(state = "", turn = {}) {
-  return FINAL_STATES.has(text(state || turn.state));
+  return FINAL_STATES.has(lowerToken(state || turn.state));
 }
 
 export function deriveTurnCapabilities(state = "", { canStop = false } = {}) {
-  const normalized = text(state);
+  const normalized = lowerToken(state);
   const actionLocked = Boolean(normalized) && !isFinalTurnState(normalized);
   return {
     actionLocked,
@@ -91,13 +90,14 @@ export function deriveTurnCapabilities(state = "", { canStop = false } = {}) {
 function targetState(current, event) {
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return (
-      projectAuthoritativeTerminalTurnState(event.authoritativeTurnState) || text(current.state)
+      projectAuthoritativeTerminalTurnState(event.authoritativeTurnState) ||
+      lowerToken(current.state)
     );
   }
   if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
     return projectAuthoritativeTurnState(event.state);
   }
-  return text(current.state);
+  return lowerToken(current.state);
 }
 
 function classifyInteraction(event) {
@@ -117,12 +117,16 @@ function isInteractionEvent(kind) {
 }
 
 function interactionRejection(current, event, kind) {
-  const currentSessionId = text(current.sessionId);
-  const currentTurnScopeId = text(current.turnScopeId);
-  if (currentSessionId && event.sessionId && currentSessionId !== text(event.sessionId)) {
+  const currentSessionId = lowerToken(current.sessionId);
+  const currentTurnScopeId = lowerToken(current.turnScopeId);
+  if (currentSessionId && event.sessionId && currentSessionId !== lowerToken(event.sessionId)) {
     return TURN_TRANSITION_REASON.ILLEGAL_TRANSITION;
   }
-  if (currentTurnScopeId && event.turnScopeId && currentTurnScopeId !== text(event.turnScopeId)) {
+  if (
+    currentTurnScopeId &&
+    event.turnScopeId &&
+    currentTurnScopeId !== lowerToken(event.turnScopeId)
+  ) {
     return TURN_TRANSITION_REASON.ILLEGAL_TRANSITION;
   }
   if (!current.state && current.commandPending !== true && !kind.actionStart) {
@@ -143,7 +147,7 @@ function resolvePendingCommandType(current, kind, commandPending) {
   if (!commandPending) return "";
   if (kind.stopStart) return "stop";
   if (kind.completionStart) return "completion";
-  return text(current.pendingCommandType || "action");
+  return lowerToken(current.pendingCommandType || "action");
 }
 
 function resolveCommandPending(current, kind) {
@@ -160,13 +164,13 @@ function resolveTransportSequence(current, kind, incomingSeq) {
 function projectInteraction(current, event, kind) {
   const incomingSeq = event.transportSeq;
   const transportState = kind.transport
-    ? text(event.backendState || event.state)
-    : text(current.transportState);
+    ? lowerToken(event.backendState || event.state)
+    : lowerToken(current.transportState);
   const commandPending = resolveCommandPending(current, kind);
   return {
     ...current,
     commandPending,
-    pendingCommandId: commandPending ? text(event.commandId || current.pendingCommandId) : "",
+    pendingCommandId: commandPending ? lowerToken(event.commandId || current.pendingCommandId) : "",
     pendingCommandType: resolvePendingCommandType(current, kind, commandPending),
     transportState,
     transportSeq: resolveTransportSequence(current, kind, incomingSeq),
@@ -174,9 +178,9 @@ function projectInteraction(current, event, kind) {
     lastTransportError:
       kind.transport && TRANSPORT_FAILURE_STATES.has(transportState)
         ? transportState
-        : text(current.lastTransportError),
-    action: kind.stopStart ? "stop" : text(current.action || event.action || "send"),
-    commandId: text(event.commandId || current.commandId),
+        : lowerToken(current.lastTransportError),
+    action: kind.stopStart ? "stop" : lowerToken(current.action || event.action || "send"),
+    commandId: lowerToken(event.commandId || current.commandId),
   };
 }
 
@@ -205,18 +209,21 @@ function allowsActionRequesting(currentState, current, event) {
   if (STOP_REQUEST_EVENTS.has(event.type)) return true;
   return (
     event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
-    text(event.eventType) === TURN_EVENT.STOP_ACCEPTED
+    lowerToken(event.eventType) === TURN_EVENT.STOP_ACCEPTED
   );
 }
 
 function allowsUserStopping(currentState, current, event) {
-  if (currentState === FrontendRunState.ACTION_REQUESTING && text(current.action) === "stop") {
+  if (
+    currentState === FrontendRunState.ACTION_REQUESTING &&
+    lowerToken(current.action) === "stop"
+  ) {
     return true;
   }
   return (
     currentState === FrontendRunState.PROCESSING &&
     new Set([BackendChannelState.STOPPING, BackendChannelState.USER_STOPPED]).has(
-      text(event.backendState || event.raw?.state),
+      lowerToken(event.backendState || event.raw?.state),
     )
   );
 }
@@ -225,16 +232,18 @@ function allowsUserStopCompleted(currentState, current, event) {
   if (!AUTHORITATIVE_EVENT_TYPES.has(event.type)) return false;
   if (currentState === FrontendRunState.USER_STOPPING) return true;
   if (currentState === FrontendRunState.PROCESSING) return true;
-  return currentState === FrontendRunState.ACTION_REQUESTING && text(current.action) === "stop";
+  return (
+    currentState === FrontendRunState.ACTION_REQUESTING && lowerToken(current.action) === "stop"
+  );
 }
 
 function isAllowed(current, event, nextState) {
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) return FINAL_STATES.has(nextState);
   if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) return Boolean(nextState);
-  const currentState = text(current.state);
+  const currentState = lowerToken(current.state);
   if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) {
     return (
-      text(current.action) === "stop" &&
+      lowerToken(current.action) === "stop" &&
       currentState === FrontendRunState.ACTION_REQUESTING &&
       nextState === FrontendRunState.IDLE
     );
@@ -248,7 +257,9 @@ function isAllowed(current, event, nextState) {
   if (nextState === FrontendRunState.ACTION_REQUESTING)
     return allowsActionRequesting(currentState, current, event);
   if (nextState === FrontendRunState.PROCESSING)
-    return currentState === FrontendRunState.ACTION_REQUESTING && text(current.action) !== "stop";
+    return (
+      currentState === FrontendRunState.ACTION_REQUESTING && lowerToken(current.action) !== "stop"
+    );
   if (nextState === FrontendRunState.FRONTEND_COMPLETION_REQUESTING)
     return currentState === FrontendRunState.PROCESSING;
   if (nextState === FrontendRunState.FRONTEND_COMPLETED)
@@ -304,21 +315,21 @@ function resolveProjectionFacts(current, event, eventRevision) {
         : String(event.action || currentValue.action || "send").trim();
   const lifecycleEventType =
     event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE
-      ? String(event.eventType || "").trim()
+      ? text(event.eventType)
       : event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
         ? deriveTurnEventType(event.authoritativeTurnState, { action })
-        : String(currentValue.lifecycleEventType || "").trim();
+        : text(currentValue.lifecycleEventType);
   return {
     action,
     lifecycleEventType,
     commandId:
       event.type === SESSION_RUN_EVENT.LOCAL_RESET
         ? ""
-        : String(event.commandId || currentValue.commandId || "").trim(),
+        : text(event.commandId || currentValue.commandId),
     authoritativeCommit:
       event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
         ? {
-            completionCommitId: text(event.completionCommitId),
+            completionCommitId: lowerToken(event.completionCommitId),
             summaryVersion: Number(event.summaryVersion || 0),
             revision: eventRevision,
           }
@@ -360,7 +371,7 @@ function projectNextTurn(current, event, facts, state, sequences) {
     lifecycleEventType: facts.lifecycleEventType,
     terminal: resolveTerminal(state, event, capabilities),
     canStop: capabilities.canStop,
-    backendState: text(event.backendState || currentValue.backendState),
+    backendState: lowerToken(event.backendState || currentValue.backendState),
     transportSeq: Math.max(Number(currentValue.transportSeq || 0), sequences.transportSeq),
     lifecycleSeq: authoritative
       ? Math.max(Number(currentValue.lifecycleSeq || 0), event.lifecycleSeq)

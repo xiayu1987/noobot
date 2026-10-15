@@ -17,6 +17,7 @@ import {
   TURN_COMMITTED_WIRE_EVENT,
   validateTurnCommittedEventData,
 } from "@noobot/session-protocol/turn-commit";
+import { text } from "@noobot/shared/value";
 
 const SESSION_RECEIPT_VALIDATORS = new Map([
   [TURN_COMMITTED_WIRE_EVENT, validateTurnCommittedEventData],
@@ -24,7 +25,7 @@ const SESSION_RECEIPT_VALIDATORS = new Map([
 ]);
 
 export function validateDataPlaneEvent(eventName, data) {
-  const normalizedEventName = String(eventName || "").trim();
+  const normalizedEventName = text(eventName);
   if (normalizedEventName === AGENT_TRANSPORT_EVENT.ERROR) {
     return validateAgentTransportError(data);
   }
@@ -38,25 +39,25 @@ export function validateDataPlaneEvent(eventName, data) {
   }
   const validation = validateProtocolEvent(data);
   if (!validation.valid) return validation;
-  if (String(data?.identity?.eventType || "").trim() !== normalizedEventName) {
+  if (text(data?.identity?.eventType) !== normalizedEventName) {
     return { valid: false, errors: ["wire_event_identity_mismatch"] };
   }
   return validation;
 }
 
-function text(value) {
+function wireString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function locateDataPlaneFrame(eventName, data) {
-  const eventId = text(data?.identity?.eventId);
-  const commandId = text(data?.commandId) || text(data?.causality?.commandId);
+  const eventId = wireString(data?.identity?.eventId);
+  const commandId = wireString(data?.commandId) || wireString(data?.causality?.commandId);
   if (!eventId && !commandId) return null;
   return {
-    eventName: text(eventName),
+    eventName: wireString(eventName),
     eventId,
     commandId,
-    runId: text(data?.identity?.runId),
+    runId: wireString(data?.identity?.runId),
   };
 }
 
