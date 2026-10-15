@@ -106,7 +106,6 @@ function projectTurn({ current, transition, event, rawEvent, sessionId, turnScop
     state: transition.next.state,
     terminal,
     canStop: transition.next.canStop === true,
-    seq: transition.next.seq,
     updatedAtMs: nowMs,
     updatedAt: text(event.updatedAt || currentValue.updatedAt),
     source: text(event.source || currentValue.source),

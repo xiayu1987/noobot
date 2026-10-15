@@ -74,14 +74,14 @@ export function createComposerActions({
       sessionId: resumeSessionId,
       selectedTurnScopeId: resumeTurnScopeId,
       selectedDialogProcessId: resumeDialogProcessId,
-      selectedSequence: Number(stoppedTurn?.lifecycleSeq || stoppedTurn?.seq || 0),
+      selectedSequence: Number(stoppedTurn?.lifecycleSeq || 0),
       selectedContinuedByTurnScopeId: String(stoppedTurn?.continuedByTurnScopeId || "").trim(),
       candidates: Object.values(turnRuntimeRegistry.value?.sessions?.[resumeSessionId]?.turns || {})
         .filter((turn) => turn?.terminal === "user_stopped")
         .map((turn) => ({
           turnScopeId: String(turn?.turnScopeId || "").trim(),
           dialogProcessId: String(turn?.dialogProcessId || "").trim(),
-          sequence: Number(turn?.lifecycleSeq || turn?.seq || 0),
+          sequence: Number(turn?.lifecycleSeq || 0),
           continuedByTurnScopeId: String(turn?.continuedByTurnScopeId || "").trim(),
           continuationSourceTurnScopeId: String(turn?.continuationSource?.turnScopeId || "").trim(),
         })),

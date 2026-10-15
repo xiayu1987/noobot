@@ -127,7 +127,7 @@ export function useChatEngine({
           turnScopeId,
           reason: result?.reason || "unknown",
           currentRevision: Number(current?.revision || 0),
-          currentSequence: Number(current?.seq || 0),
+          currentSequence: Number(current?.lifecycleSeq || 0),
           terminalResolved: current?.terminalResolved === true,
           responseRevision: Number(response?.turn?.revision || response?.revision || 0),
           responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),

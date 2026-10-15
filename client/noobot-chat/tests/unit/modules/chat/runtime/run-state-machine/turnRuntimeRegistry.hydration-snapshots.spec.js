@@ -586,7 +586,7 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     );
     expect(completed).toMatchObject({
       applied: true,
-      turn: { state: "frontend_completion_requesting", seq: 3 },
+      turn: { state: "frontend_completion_requesting", lifecycleSeq: 3 },
     });
   });
 });

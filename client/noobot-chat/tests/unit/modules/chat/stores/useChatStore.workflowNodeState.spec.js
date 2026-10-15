@@ -124,7 +124,6 @@ describe("useChatStore workflow node state registry", () => {
       state: "",
       running: false,
       terminal: null,
-      seq: 0,
     });
 
     applyNodeEvent(
@@ -140,7 +139,6 @@ describe("useChatStore workflow node state registry", () => {
       state: "",
       running: false,
       terminal: null,
-      seq: 0,
     });
   });
 

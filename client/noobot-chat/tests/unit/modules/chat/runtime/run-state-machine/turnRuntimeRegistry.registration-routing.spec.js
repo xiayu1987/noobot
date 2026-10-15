@@ -498,7 +498,6 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       dialogProcessId: "dp1",
       state: "",
       backendState: BackendChannelState.SENDING,
-      seq: 0,
     });
     expect(
       selectTurnMessageRuntime(registry, { sessionId: "s1", dialogProcessId: "dp1" }),

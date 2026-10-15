@@ -45,8 +45,7 @@ export function resolveSessionTurnRuntime(registry, sessionId, turnScopeId = "")
           .filter((turn) => Boolean(turn?.state || turn?.terminal || turn?.commandPending))
           .sort((left, right) => {
             const sequenceDelta =
-              Number(right?.lifecycleSeq || right?.seq || 0) -
-              Number(left?.lifecycleSeq || left?.seq || 0);
+              Number(right?.lifecycleSeq || 0) - Number(left?.lifecycleSeq || 0);
             if (sequenceDelta) return sequenceDelta;
             return (
               Number(right?.updatedAtMs || right?.finishedAtMs || 0) -
@@ -109,7 +108,6 @@ export function selectTurnMessageRuntime(
     source: "",
     sourceEvent: "",
     lifecycleObserved: false,
-    seq: 0,
     updatedAt: "",
     updatedAtMs: 0,
     terminal: null,
@@ -151,7 +149,6 @@ export function selectTurnMessageRuntime(
     sourceEvent: turn.sourceEvent || "",
     lifecycleObserved: turn.lifecycleObserved === true,
     authority: turn.authority || "none",
-    seq: Number(turn.seq || 0),
     updatedAt: turn.updatedAt || "",
     updatedAtMs: Number(turn.updatedAtMs || 0),
     terminal: turn.terminal || null,
@@ -205,8 +202,7 @@ export function resolveLatestContinuableStoppedTurn(registry, sessionId) {
           !consumedScopes.has(canonicalTurnScopeId(turn.turnScopeId)),
       )
       .sort((left, right) => {
-        const sequenceDelta =
-          Number(right.lifecycleSeq || right.seq || 0) - Number(left.lifecycleSeq || left.seq || 0);
+        const sequenceDelta = Number(right.lifecycleSeq || 0) - Number(left.lifecycleSeq || 0);
         if (sequenceDelta) return sequenceDelta;
         return (
           Number(right.finishedAtMs || right.updatedAtMs || 0) -

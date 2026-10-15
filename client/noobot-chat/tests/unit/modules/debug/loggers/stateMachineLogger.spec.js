@@ -52,7 +52,7 @@ describe("stateMachineLogger", () => {
         turnScopeId: "t-1",
         state: "completed",
         revision: 4,
-        seq: 7,
+        lifecycleSeq: 7,
         terminalResolved: true,
         terminalMaterialization: { messages: [{ content: "private message body" }] },
       },

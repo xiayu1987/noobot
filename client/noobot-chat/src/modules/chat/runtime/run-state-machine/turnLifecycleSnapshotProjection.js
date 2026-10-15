@@ -89,7 +89,6 @@ function projectSnapshotLifecycle(source, current, decision) {
     state: decision.state,
     phase: text(source.phase || source.failure?.phase),
     revision: decision.revision,
-    seq: Number(source.sequence || 0),
     lifecycleSeq: Number(source.sequence || 0),
     backendState: text(source.executionState),
     canStop: source.capabilities?.canStop === true,

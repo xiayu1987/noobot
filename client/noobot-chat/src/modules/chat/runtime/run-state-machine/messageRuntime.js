@@ -175,7 +175,6 @@ function buildInFlightMessageRuntimePatch(stateItem = {}) {
     dialogProcessId: trim(stateItem?.dialogProcessId),
     turnScopeId: trim(stateItem?.turnScopeId),
     sourceEvent: trim(stateItem?.sourceEvent),
-    seq: Number(stateItem?.seq || 0),
   };
   return {
     [SESSION_RUN_MESSAGE_RUNTIME_MARK]: buildSessionRunMessageRuntimeKey(stateItem),
@@ -228,7 +227,6 @@ function buildStoppedMessageRuntimePatch({
       turnScopeId: getMessageTurnScopeId(messageItem) || trim(channelState?.turnScopeId),
       sourceEvent:
         trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
-      seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
     },
     terminalOutcome: MESSAGE_TERMINAL_OUTCOME.STOPPED,
   };

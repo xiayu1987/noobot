@@ -267,15 +267,18 @@ function initialTerminalRejection(current, event) {
   return enrichesTerminal ? "" : TURN_TRANSITION_REASON.TERMINAL_LOCKED;
 }
 
-function orderingRejection(current, event, eventSeq, eventRevision) {
+function orderingRejection(current, event, eventRevision) {
   if (!current) return "";
   if (current.terminalResolved === true && event.type !== SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return TURN_TRANSITION_REASON.TERMINAL_LOCKED;
   }
-  const currentSeq = AUTHORITATIVE_EVENT_TYPES.has(event.type)
-    ? Number(current.lifecycleSeq || 0)
-    : Number(current.seq || 0);
-  if (eventSeq > 0 && currentSeq > eventSeq) return TURN_TRANSITION_REASON.STALE_SEQUENCE;
+  if (
+    AUTHORITATIVE_EVENT_TYPES.has(event.type) &&
+    event.lifecycleSeq > 0 &&
+    Number(current.lifecycleSeq || 0) > event.lifecycleSeq
+  ) {
+    return TURN_TRANSITION_REASON.STALE_SEQUENCE;
+  }
   const firstSameRevisionResolution =
     event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED &&
     current.terminalResolved !== true &&
@@ -358,7 +361,6 @@ function projectNextTurn(current, event, facts, state, sequences) {
     terminal: resolveTerminal(state, event, capabilities),
     canStop: capabilities.canStop,
     backendState: text(event.backendState || currentValue.backendState),
-    seq: Math.max(Number(currentValue.seq || 0), sequences.eventSeq),
     transportSeq: Math.max(Number(currentValue.transportSeq || 0), sequences.transportSeq),
     lifecycleSeq: authoritative
       ? Math.max(Number(currentValue.lifecycleSeq || 0), event.lifecycleSeq)
@@ -381,19 +383,13 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const event = normalizeSessionRunEvent(rawEvent);
   const sequences = {
     transportSeq: event.transportSeq,
-    eventSeq: event.seq,
     eventRevision: Number(event.revision || 0),
   };
   const terminalReason = initialTerminalRejection(current, event);
   if (terminalReason) return { applied: false, reason: terminalReason, current, event };
   const interaction = reduceInteractionProjection(current || {}, event);
   if (interaction) return interaction;
-  const orderingReason = orderingRejection(
-    current,
-    event,
-    sequences.eventSeq,
-    sequences.eventRevision,
-  );
+  const orderingReason = orderingRejection(current, event, sequences.eventRevision);
   if (orderingReason) return { applied: false, reason: orderingReason, current, event };
   const facts = resolveProjectionFacts(current, event, sequences.eventRevision);
   const state = targetState(current || {}, event);

@@ -75,7 +75,7 @@ export function summarizeStateMachineTurn(turn = {}, projection = null) {
     terminalResolved: turn.terminalResolved === true,
     lifecycleObserved: turn.lifecycleObserved === true,
     revision: Number(turn.revision || 0),
-    sequence: Number(turn.seq || turn.sequence || 0),
+    sequence: Number(turn.lifecycleSeq || 0),
     commandPending: turn.commandPending === true,
   };
 }

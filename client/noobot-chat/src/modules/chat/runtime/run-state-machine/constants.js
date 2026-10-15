@@ -98,7 +98,6 @@ export const SESSION_RUN_EVENT = Object.freeze({
   LOCAL_RESEND_STARTED: "local_resend_started",
   LOCAL_RESEND_REPLACING_TURN: "local_resend_replacing_turn",
   LOCAL_RESEND_STREAMING: "local_resend_streaming",
-  LOCAL_RESEND_COMPLETED: "local_resend_completed",
   LOCAL_RESEND_FAILED: "local_resend_failed",
   LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED: "local_frontend_completion_request_started",
   LOCAL_FRONTEND_COMPLETION_FAILED: "local_frontend_completion_failed",
