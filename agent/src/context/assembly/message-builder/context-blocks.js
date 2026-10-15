@@ -26,7 +26,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   const runtimeParentSessionId = context.identity.parentSessionId;
   const currentUserMessageAttachments = resolveRuntimeUserMessageAttachments(runtime);
   const fallbackUserMeta = {
-    userName: text(runtime?.userId),
+    userName: text(runtime?.systemRuntime?.userId),
     sessionId: context.identity.sessionId,
     parentSessionId: runtimeParentSessionId,
     dialogProcessId: "",

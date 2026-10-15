@@ -158,7 +158,7 @@ test("executeToolCall extracts strict V2 transfer envelopes from JSON tool resul
 test("executeToolCall materializes outputArtifacts through the single transfer outlet", async () => {
   const call = { id: "call_output_artifact", name: "write_file", args: {} };
   const runtime = {
-    userId: "test-user",
+    systemRuntime: { userId: "test-user" },
     attachmentService: {
       async ingestGeneratedArtifacts(payload = {}) {
         return payload.artifacts.map((artifact, index) => ({
@@ -207,7 +207,7 @@ test("executeToolCall rejects output artifact types that differ from the registe
   const result = await executeToolCall({
     call: { id: "call_output_type_mismatch", name: "write_file", args: {} },
     runtime: {
-      userId: "test-user",
+      systemRuntime: { userId: "test-user" },
       attachmentService: {
         async ingestGeneratedArtifacts() {
           persisted = true;
@@ -239,8 +239,8 @@ test("executeToolCall rejects output artifact types that differ from the registe
 test("executeToolCall does not publish writtenFiles outside semantic transfer", async () => {
   const events = [];
   const runtime = {
-    userId: "test-user",
     systemRuntime: {
+      userId: "test-user",
       sessionId: "child-session",
       dialogProcessId: "child-dialog",
       turnScopeId: "workflow-node:turn-1",
@@ -520,8 +520,8 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
     invoke: async () => ({ ok: true }),
   };
   const runtime = {
-    userId: "runtime_user",
     systemRuntime: {
+      userId: "runtime_user",
       sessionId: "session_1",
       parentSessionId: "parent_1",
       dialogProcessId: "dp_1",

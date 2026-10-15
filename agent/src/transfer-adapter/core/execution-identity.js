@@ -34,7 +34,6 @@ export function resolveRuntimeTransferIdentity({
     sessionId ||
       runConfig.sessionId ||
       runtime?.systemRuntime?.sessionId ||
-      runtime?.sessionId ||
       contextIdentity.sessionId,
   );
   const turnScopeId = safeStr(

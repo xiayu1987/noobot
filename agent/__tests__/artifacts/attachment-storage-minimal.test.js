@@ -352,7 +352,6 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
       ],
     });
     const runtime = {
-      userId: "u1",
       basePath: workspaceRoot,
       attachmentService: service,
       userMessageAttachments: [],
@@ -366,6 +365,7 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
       },
       userConfig: {},
       systemRuntime: {
+        userId: "u1",
         sessionId: "s1",
         config: {},
       },

@@ -35,6 +35,10 @@ export function resolveRuntimeTurnScopeId(runtime = {}) {
   return text(getSystemRuntimeFromRuntime(runtime).turnScopeId);
 }
 
+export function resolveRuntimeUserId(runtime = {}) {
+  return text(getSystemRuntimeFromRuntime(runtime).userId);
+}
+
 export function getSystemRuntimeFromAgentContext(scope = {}) {
   return getSystemRuntimeFromRuntime(getRuntimeFromAgentContext(scope));
 }

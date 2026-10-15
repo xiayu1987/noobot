@@ -29,8 +29,7 @@ test("switch_model: 应能通过 alias 切换模型", async () => {
       openai: { model: "gpt-4o" },
       anthropic: { model: "claude-3-7-sonnet" },
     },
-    userId: "u1",
-    systemRuntime: { sessionId: "s-1" },
+    systemRuntime: { userId: "u1", sessionId: "s-1" },
     sessionManager: {
       async setSessionModelAlias(payload = {}) {
         persistedPayload = payload;
@@ -94,8 +93,7 @@ test("switch_model: persistence failure does not publish a new runtime model", a
       openai: { model: "gpt-4o" },
       gemini: { model: "gemini-2.5-pro" },
     },
-    userId: "u1",
-    systemRuntime: { sessionId: "s-persistence-failure" },
+    systemRuntime: { userId: "u1", sessionId: "s-persistence-failure" },
     sessionManager: {
       async setSessionModelAlias() {
         throw new Error("session model persistence failed");

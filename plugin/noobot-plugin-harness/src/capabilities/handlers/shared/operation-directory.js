@@ -47,7 +47,7 @@ export function resolveOperationDirectoryContext(ctx = {}) {
     runtime,
     agentContext: ctx?.agentContext || null,
     runtimeBasePath: hostBasePath,
-    userId: runtime?.userId || runtime?.systemRuntime?.userId || "",
+    userId: text(runtime?.systemRuntime?.userId),
     globalConfig: runtime.globalConfig || {},
     executionPolicy: resolveToolExecutionPolicy({
       toolName: "execute_script",

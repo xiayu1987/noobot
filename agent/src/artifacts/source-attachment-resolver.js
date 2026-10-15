@@ -14,7 +14,7 @@ export async function resolveCanonicalSourceAttachment({
   const identity = parseAttachmentIdentity(attachmentIdentity);
   const runtime = getRuntimeFromAgentContext(agentContext);
   const attachmentService = runtime?.attachmentService || null;
-  const userId = text(runtime?.userId);
+  const userId = text(runtime?.systemRuntime?.userId);
   if (!attachmentService?.getAttachmentById || !userId) return null;
 
   return attachmentService.getAttachmentById({

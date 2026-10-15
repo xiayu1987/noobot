@@ -14,7 +14,6 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 test("createRuntimeContext keeps sharedTools passthrough and creates turn stores", () => {
   const hookManager = { emit() {} };
   const runtime = createRuntimeContext({
-    userId: "u1",
     basePath: " /workspace/u1 ",
     runConfig: {
       streaming: false,
@@ -29,7 +28,6 @@ test("createRuntimeContext keeps sharedTools passthrough and creates turn stores
     userMessageAttachments: [{ attachmentId: "att_1" }],
   });
 
-  assert.equal(runtime.userId, "u1");
   assert.equal(runtime.basePath, "/workspace/u1");
   assert.equal(runtime.sharedTools.customFetch, true);
   assert.equal(runtime.hookManager, hookManager);
@@ -84,7 +82,6 @@ test("buildStaticInfo exposes only the sandbox workspace view when isolation is 
 
 test("initializeRuntimeEnvironment wires shared tools without connector implementation state", async () => {
   const runtime = createRuntimeContext({
-    userId: "u1",
     basePath: "/host/users/u1",
     globalConfig: {
       security: {
@@ -142,7 +139,6 @@ test("initializeRuntimeEnvironment provides fetch independently of the Node glob
   try {
     globalThis.fetch = undefined;
     const runtime = createRuntimeContext({
-      userId: "u1",
       basePath: "/host/users/u1",
       runConfig: {},
       systemRuntime: { sessionId: "s1", rootSessionId: "s1" },
@@ -234,7 +230,6 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
 
 test("initializeRuntimeEnvironment passes semantic-transfer strict envelope validation config", async () => {
   const runtime = createRuntimeContext({
-    userId: "u1",
     globalConfig: {
       semanticTransfer: {
         strictEnvelopeValidation: true,
@@ -256,7 +251,6 @@ test("initializeRuntimeEnvironment passes semantic-transfer strict envelope vali
 
 test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encrypted response", async () => {
   const runtime = createRuntimeContext({
-    userId: "u1",
     userInteractionBridge: {
       async requestUserInteraction() {
         return {
@@ -283,7 +277,6 @@ test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encr
 
 test("initializeRuntimeEnvironment encrypted response invalid should throw", async () => {
   const runtime = createRuntimeContext({
-    userId: "u1",
     userInteractionBridge: {
       async requestUserInteraction() {
         return {

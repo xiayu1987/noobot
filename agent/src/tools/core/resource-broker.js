@@ -40,7 +40,6 @@ function ownerOf(agentContext = null, runtime = null, explicitOwner = "") {
   const resolvedRuntime = resolveRuntime(agentContext, runtime);
   return text(
     explicitOwner ||
-      resolvedRuntime?.userId ||
       resolvedRuntime?.systemRuntime?.userId ||
       agentContext?.context?.identity?.userId ||
       agentContext?.userId,

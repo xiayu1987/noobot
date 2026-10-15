@@ -163,7 +163,7 @@ async function materializeToolOutputArtifacts({
   const persisted = await persistTransferArtifacts({
     runtime,
     agentContext,
-    userId: text(runtime?.userId || runtime?.systemRuntime?.userId),
+    userId: text(runtime?.systemRuntime?.userId),
     artifacts,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: `${toolName}_output`,

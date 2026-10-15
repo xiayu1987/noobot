@@ -37,7 +37,6 @@ export async function buildAgentExecutionContext({
   contextBuild = {},
 } = {}) {
   const runtime = createRuntimeContext({
-    userId: identity.userId,
     basePath: runtimeBasePath,
     globalConfig,
     userConfig,

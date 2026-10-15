@@ -273,7 +273,7 @@ async function collectOutputFiles(root, relative = "") {
 }
 
 function resolveNativeScriptOwner(runtime, agentContext) {
-  return text(runtime?.userId || runtime?.systemRuntime?.userId || agentContext?.userId);
+  return text(runtime?.systemRuntime?.userId || agentContext?.userId);
 }
 
 function createNativeScriptIpcHandlers({
@@ -468,7 +468,7 @@ export function createNativeScriptTool({ agentContext }) {
           const persisted = await persistTransferArtifacts({
             runtime,
             agentContext,
-            userId: String(runtime?.userId || ""),
+            userId: text(runtime?.systemRuntime?.userId),
             artifacts,
             attachmentSource: ATTACHMENT_SOURCE.MODEL,
             generationSource: "execute_native_script",

@@ -32,7 +32,7 @@ function assertSelectedConnector(selectedConnectorIds = [], connectorId = "") {
 }
 
 function createArtifactSink(runtime = {}) {
-  const userId = text(runtime?.userId);
+  const userId = text(runtime?.systemRuntime?.userId);
   const sessionId = text(runtime?.systemRuntime?.sessionId);
   const attachmentService = runtime?.attachmentService || null;
   if (!userId || !sessionId || !attachmentService) return null;
@@ -61,7 +61,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   if (effectiveConfig?.tools?.[TOOL_NAME.ACCESS_CONNECTOR]?.enabled === false) return [];
-  const userId = text(runtime?.userId || agentContext?.userId);
+  const userId = text(runtime?.systemRuntime?.userId || agentContext?.userId);
   const selectedConnectorIds = normalizeSelectedConnectorIds(
     runtime?.systemRuntime?.config?.selectedConnectorIds,
   );

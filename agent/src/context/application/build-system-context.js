@@ -70,7 +70,7 @@ export function buildSystemRuntime({
       : {}),
     isSuperUser: isConfiguredSuperUser({
       globalConfig,
-      userId: dynamicInfo?.userId || userId,
+      userId: dynamicInfo.userId,
     }),
     parentSessionId: normalizeParentSessionId(runtimeWithStartup?.parentSessionId),
   };

@@ -335,7 +335,7 @@ test("harness planning operation directory uses sandbox view without losing host
         controllers: {
           runtime: {
             basePath: hostBasePath,
-            userId: "user-a",
+            systemRuntime: { userId: "user-a" },
             globalConfig: {
               security: {
                 executionIsolation: {

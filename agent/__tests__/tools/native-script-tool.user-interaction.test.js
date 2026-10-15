@@ -71,8 +71,8 @@ async function runInteractionScript({ scriptBody, bridge, userId }) {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-ui-"));
   const runtime = createRuntime(basePath, {
     userInteractionBridge: bridge,
-    ...(userId === undefined ? {} : { userId }),
   });
+  if (userId !== undefined) runtime.systemRuntime = { ...runtime.systemRuntime, userId };
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
   try {
     return JSON.parse(

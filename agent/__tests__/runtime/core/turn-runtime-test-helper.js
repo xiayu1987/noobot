@@ -126,7 +126,7 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
   }
   modelState.agentContext = createTestAgentExecutionScope(runtime, {
     identity: {
-      userId: runtime.userId,
+      userId: runtime.systemRuntime.userId,
       sessionId: runtime.systemRuntime.sessionId,
       rootSessionId: runtime.systemRuntime.rootSessionId,
       parentSessionId: runtime.systemRuntime.parentSessionId,

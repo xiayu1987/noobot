@@ -163,3 +163,9 @@ test("withHookRuntimeMeta projects the canonical runtime identity", () => {
     phase: "turn",
   });
 });
+
+test("withHookRuntimeMeta reads identity only from systemRuntime", () => {
+  const context = withHookRuntimeMeta({ userId: "stale-user", sessionId: "stale-session" });
+  assert.equal(context.userId, "");
+  assert.equal(context.sessionId, "");
+});

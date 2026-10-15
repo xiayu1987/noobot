@@ -64,7 +64,7 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     const persisted = await persistTransferArtifacts({
       runtime,
       agentContext,
-      userId: text(runtime?.userId || runtime?.systemRuntime?.userId),
+      userId: text(runtime?.systemRuntime?.userId),
       artifacts,
       attachmentSource: ATTACHMENT_SOURCE.MODEL,
       generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,

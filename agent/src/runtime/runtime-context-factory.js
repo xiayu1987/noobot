@@ -11,7 +11,6 @@ import {
 import { text } from "@noobot/shared/value";
 
 export function createRuntimeContext({
-  userId = "",
   basePath = "",
   globalConfig = {},
   userConfig = {},
@@ -33,7 +32,6 @@ export function createRuntimeContext({
     runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
   const normalizedAbortSignal = abortSignal || null;
   return {
-    userId: text(userId),
     basePath: text(basePath),
     globalConfig,
     userConfig,

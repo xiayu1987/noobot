@@ -15,7 +15,7 @@ export async function commitPluginArtifact({
 } = {}) {
   const runtime = getRuntimeFromAgentContext(toolContext?.agentContext);
   const system = runtime?.systemRuntime || {};
-  const userId = text(runtime?.userId || system.userId);
+  const userId = text(system.userId);
   const sessionId = text(system.sessionId);
   if (!userId) {
     throw new TypeError("plugin artifact commit requires execution identity");
@@ -70,7 +70,7 @@ export async function getPluginArtifact({ pluginId = "", artifact = {}, toolCont
   if (typeof runtime?.sessionManager?.getPluginArtifact !== "function")
     throw new Error("plugin artifact query port is unavailable");
   return runtime.sessionManager.getPluginArtifact({
-    userId: text(runtime?.userId || system.userId),
+    userId: text(system.userId),
     sessionId: text(system.sessionId),
     parentSessionId: text(system.parentSessionId),
     persistenceScope: system.persistenceScope || null,

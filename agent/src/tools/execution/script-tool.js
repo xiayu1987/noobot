@@ -58,7 +58,7 @@ export function createScriptTool({ agentContext }) {
 
   const workspace = basePath;
   const userRoot = basePath;
-  const userId = text(runtime?.userId);
+  const userId = text(runtime?.systemRuntime?.userId);
   const executionPolicy = resolveToolExecutionPolicy({
     toolName: EXECUTE_SCRIPT_TOOL_NAME,
     globalConfig,

@@ -14,12 +14,7 @@ import {
 import { text } from "@noobot/shared/value";
 
 export function resolveRuntimeUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
-  return text(
-    userId ||
-      runtime?.systemRuntime?.userId ||
-      runtime?.userId ||
-      agentContext?.context?.identity?.userId,
-  );
+  return text(userId || runtime?.systemRuntime?.userId || agentContext?.context?.identity?.userId);
 }
 
 function resolveConfiguredMountMappings(runtime = {}) {

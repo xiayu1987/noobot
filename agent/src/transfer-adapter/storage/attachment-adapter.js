@@ -63,9 +63,7 @@ function serviceFrom(runtime, attachmentService) {
 }
 
 function resolveAttachmentUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
-  const resolved = safeStr(
-    runtime?.userId || runtime?.systemRuntime?.userId || agentContext?.userId || userId,
-  );
+  const resolved = safeStr(runtime?.systemRuntime?.userId || agentContext?.userId || userId);
   if (!resolved) throw new Error("semantic_transfer_user_id_required");
   return resolved;
 }

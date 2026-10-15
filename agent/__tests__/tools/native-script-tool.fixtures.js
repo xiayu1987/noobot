@@ -22,10 +22,10 @@ export const IDENTITY = Object.freeze({
 export function createRuntime(basePath, patch = {}) {
   return {
     basePath,
-    userId: "admin",
     globalConfig: { tools: { execute_native_script: { enabled: true } } },
     userConfig: {},
     systemRuntime: {
+      userId: "admin",
       sessionId: "session-1",
       rootSessionId: "session-1",
       config: { safeConfirm: false },

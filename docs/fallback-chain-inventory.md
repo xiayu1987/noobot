@@ -50,14 +50,14 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1062 处 / 379 个文件；内联 trim 兜底 558 处 / 261 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 1055 处 / 377 个文件；内联 trim 兜底 552 处 / 259 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ----------- |
 | `client/noobot-chat`             | 365    | 158            | 0           |
-| `agent`                          | 183    | 116            | 0           |
+| `agent`                          | 177    | 110            | 0           |
 | `plugin/noobot-plugin-workflow`  | 112    | 86             | 0           |
-| `plugin/noobot-plugin-harness`   | 90     | 47             | 0           |
+| `plugin/noobot-plugin-harness`   | 89     | 47             | 0           |
 | `service`                        | 81     | 39             | 0           |
 | `authoritative-state`            | 31     | 11             | 0           |
 | `model-runtime`                  | 31     | 10             | 0           |
@@ -94,14 +94,15 @@
 
 本轮逐项处理，处理完即从表中删除并写入批次记录。
 
-| 项                                         | 现状                                                                                                                                        | 需要的决定                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| 引擎 `stepFailure`                         | `workflow/src/lib/runtime.js` 的 `markStepStateFailure` 只由 `action.stepFailure` 触发，插件已不再下发                                      | 引擎批次删除                                                                  |
-| `userId`                                   | workflow 已只读 `ctx.userId`；`runtime.userId` 与 hook meta 是否传同一入参尚未逐行确认                                                      | 确认后删除 `runtime.userId` 读取                                              |
-| turn lifecycle 输入事件                    | `turn-state.js:177` 读 `causationId \|\| commandId`；`commit-turn-lifecycle.js:23-53` 一组 `event.X \|\| turn.X`                            | lifecycle 协议批次：定输入事件必带字段后删除回退                              |
-| 子会话投影 `turnScopeId`/`dialogProcessId` | 后端 `message-event-stream` 已只读 `systemRuntime.dialogProcessId`/`turnScopeId`；`validateMessageEnvelope` 仍不强制 `identity.turnScopeId` | 在协议中强制后，再删 `subSessionEventProjection` 中的 `\|\| currentSession.X` |
-| `SESSION_RUN_EVENT.LOCAL_FAILURE`          | src 中只有 `eventNormalization`、`turnReducer` 两个消费方，没有构造方，仅测试发送                                                           | 确认无外部扩展发送后，连同消费分支和测试一并删除                              |
-| registry `canonicalTimingObserved`         | 只剩 `applyTurnTimingUpdate` 自身去重比较在读，不影响投影值                                                                                 | 确认快照重放的 `applied` 语义不依赖它后删除                                   |
+| 项                                         | 现状                                                                                                                                                                                                                | 需要的决定                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 引擎 `stepFailure`                         | `workflow/src/lib/runtime.js` 的 `markStepStateFailure` 只由 `action.stepFailure` 触发，插件已不再下发                                                                                                              | 引擎批次删除                                                                  |
+| 工具身份 `payloadRuntime` 覆盖             | `resolveSharedToolRuntime` 让 `payload.runtime.systemRuntime` 覆盖已绑定 runtime，可改写 `userId` 等身份字段（同 `systemRuntimePatch` 类）；`semanticTransfer` 在 src 无字面调用方，插件可能经 sharedTools 动态调用 | 核实调用方后按缺陷切片修正：身份字段只取绑定 runtime                          |
+| `agentContext.identity` 回退层             | `resource-broker`、`workspace-meta`、`native-script-tool` 等在 `systemRuntime.userId` 之后仍回退 `context.identity.userId` / `agentContext.userId`                                                                  | 确认 identity 与 `systemRuntime` 恒等后，择一为事实源删除另一层               |
+| turn lifecycle 输入事件                    | `turn-state.js:177` 读 `causationId \|\| commandId`；`commit-turn-lifecycle.js:23-53` 一组 `event.X \|\| turn.X`                                                                                                    | lifecycle 协议批次：定输入事件必带字段后删除回退                              |
+| 子会话投影 `turnScopeId`/`dialogProcessId` | 后端 `message-event-stream` 已只读 `systemRuntime.dialogProcessId`/`turnScopeId`；`validateMessageEnvelope` 仍不强制 `identity.turnScopeId`                                                                         | 在协议中强制后，再删 `subSessionEventProjection` 中的 `\|\| currentSession.X` |
+| `SESSION_RUN_EVENT.LOCAL_FAILURE`          | src 中只有 `eventNormalization`、`turnReducer` 两个消费方，没有构造方，仅测试发送                                                                                                                                   | 确认无外部扩展发送后，连同消费分支和测试一并删除                              |
+| registry `canonicalTimingObserved`         | 只剩 `applyTurnTimingUpdate` 自身去重比较在读，不影响投影值                                                                                                                                                         | 确认快照重放的 `applied` 语义不依赖它后删除                                   |
 
 ## 5. 挂起项
 
@@ -142,3 +143,5 @@
 | `acbe3bb9a` | agent                         | `turnScopeId` 只取 `systemRuntime.turnScopeId`：删除 `buildDynamicInfo` 与 `runtime-binding` 对 `systemRuntime.config.turnScopeId` 的同值重复写入；删除 accessor、hooks、`plugin-artifact-committer` 的 `config` 层读取、accessor 的 `runConfig` 回退（`getRuntimeRunConfig`）与 hooks 中无写入方的 `runtime.turnScopeId`；删除 `system-prompt-formatter` 重复字面量 `\|\| "user"` |
 | `ed5200e4d` | agent                         | 删除无写入方的 `runConfig.systemRuntimePatch` 合并分支（缺陷修正：旧代码允许 runConfig 覆盖 `userId` 等身份字段）；`context-builder-normalization` 用例改为断言身份不被覆盖                                                                                                                                                                                                        |
 | `b77aad00b` | workflow                      | 子会话终态收据被拒时提交节点 FAILED（缺陷修正：此前 `nodeTerminalReceiptRejected` 使 `commitWaveNodeFailure` 跳过提交，节点停在 RUNNING）；拒收 failure 为 `{ source: "workflow", code: WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID, message }`；删除 `nodeTerminalReceiptRejected` 标记                                                                                               |
+
+| 待回填 | agent、path-resolver、harness | `userId` 只取 `systemRuntime.userId`：删除 `createRuntimeContext` 与 memory 对 `runtime.userId` 的同值写入、`build-system-context` 的 `dynamicInfo.userId \|\| userId` 回退；全部 `runtime.userId` 读取改为 `systemRuntime`（accessor 新增 `resolveRuntimeUserId`）；删除 `execution-identity` 无写入方的 `runtime.sessionId`；hooks 与 sandbox-mapping 补反向用例；测试夹具改写 `systemRuntime.userId` |

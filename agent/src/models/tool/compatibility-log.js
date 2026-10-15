@@ -17,7 +17,7 @@ export function buildToolCompatibilityLogLine({
   return JSON.stringify({
     ts: new Date().toISOString(),
     event: text(event),
-    userId: text(runtime?.userId),
+    userId: text(runtime?.systemRuntime?.userId),
     sessionId: text(runtime?.systemRuntime?.sessionId),
     parentSessionId: normalizeParentSessionId(runtime?.systemRuntime?.parentSessionId),
     modelAlias: text(modelState?.activeModelAlias),

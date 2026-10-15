@@ -21,7 +21,7 @@ export function createTestAgentExecutionScope(
 ) {
   const systemRuntime = runtime?.systemRuntime || {};
   const resolvedIdentity = {
-    userId: String(identity.userId || runtime?.userId || systemRuntime?.userId || "u-test").trim(),
+    userId: String(identity.userId || systemRuntime?.userId || "u-test").trim(),
     sessionId: String(identity.sessionId || systemRuntime?.sessionId || "s-1").trim(),
     rootSessionId: String(
       identity.rootSessionId || systemRuntime?.rootSessionId || systemRuntime?.sessionId || "s-1",

@@ -82,7 +82,6 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   const parentSessionId = ` ${"p".repeat(220)} `;
   const runtime = {
     basePath,
-    userId: "admin",
     currentUserMessageUid: "user-source",
     currentUserMessageOrigin: "natural",
     runtimeModel: "parse-model",
@@ -105,7 +104,12 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
       },
     },
     userConfig: {},
-    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1", parentSessionId },
+    systemRuntime: {
+      userId: "admin",
+      sessionId: "session-1",
+      rootSessionId: "session-1",
+      parentSessionId,
+    },
     userMessageAttachments: [
       {
         attachmentId: "source-1",
@@ -271,7 +275,6 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
   let linkCalled = false;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
       multimodal: { parsing: { default_models: { document: "parse-model" } } },
@@ -288,7 +291,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
       },
     },
     userConfig: {},
-    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1" },
+    systemRuntime: { userId: "admin", sessionId: "session-1", rootSessionId: "session-1" },
     userMessageAttachments: [],
     modelPort: {
       async invoke() {
@@ -337,7 +340,7 @@ test("multimodal_parse rejects directly readable text before invoking a model", 
   let modelCalled = false;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    userId: "admin",
+    systemRuntime: { userId: "admin" },
     userMessageAttachments: [],
     modelPort: {
       async invoke() {
@@ -361,7 +364,6 @@ test("multimodal_parse passes audio and video files to the configured model", as
   let modelRequest = null;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
       multimodal: {
@@ -378,7 +380,7 @@ test("multimodal_parse passes audio and video files to the configured model", as
       },
     },
     userConfig: {},
-    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1" },
+    systemRuntime: { userId: "admin", sessionId: "session-1", rootSessionId: "session-1" },
     userMessageAttachments: [],
     modelPort: {
       async invoke(request) {
@@ -439,7 +441,7 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
   let modelCalled = false;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    userId: "admin",
+    systemRuntime: { userId: "admin" },
     userMessageAttachments: [],
     modelPort: {
       async invoke() {
@@ -461,7 +463,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
   await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    userId: "admin",
+    systemRuntime: { userId: "admin" },
     runtimeModel: "parse-model",
     globalConfig: {
       multimodal: { parsing: { default_models: { document: "parse-model" } } },
@@ -501,7 +503,7 @@ test("multimodal_parse uses the configured modality default instead of the runti
   let invokedModel = null;
   const agentContext = createTestAgentExecutionScope({
     basePath,
-    userId: "admin",
+    systemRuntime: { userId: "admin" },
     runtimeModel: "conversation-model",
     globalConfig: {
       multimodal: { parsing: { default_models: { document: "parse-model" } } },

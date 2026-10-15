@@ -201,7 +201,7 @@ function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
 
 function messageEventCommitInput(runtime, state, payload) {
   return {
-    userId: text(runtime?.userId),
+    userId: text(runtime?.systemRuntime?.userId),
     sessionId: text(state?.sessionId),
     parentSessionId: text(payload.parentSessionId),
     turnScopeId: text(state?.turnScopeId),

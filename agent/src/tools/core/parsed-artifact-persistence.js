@@ -84,7 +84,7 @@ export async function backwriteParsedAttachment({
     ? { ...parsedAttachment, ...parsedAttachment.identity }
     : parsedAttachment;
   const attachmentService = runtime?.attachmentService || null;
-  const userId = text(runtime?.userId);
+  const userId = text(runtime?.systemRuntime?.userId);
   if (!targetAttachment || !attachmentService || !userId) return null;
   const updated = await attachmentService.linkParsedResultToAttachment({
     userId,

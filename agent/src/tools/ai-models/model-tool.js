@@ -68,11 +68,11 @@ export function createModelTool({ agentContext, sessionId }) {
       if (
         runtime?.sessionManager &&
         typeof runtime.sessionManager.setSessionModelAlias === "function" &&
-        text(runtime?.userId) &&
+        text(runtime?.systemRuntime?.userId) &&
         resolvedSessionId
       ) {
         await runtime.sessionManager.setSessionModelAlias({
-          userId: text(runtime.userId),
+          userId: text(runtime.systemRuntime.userId),
           sessionId: resolvedSessionId,
           modelAlias: alias,
         });

@@ -11,11 +11,11 @@ import { createStateBuilder } from "../../../src/runtime/state-builder.js";
 
 function createRuntime() {
   return {
-    userId: "admin",
     globalConfig: {},
     userConfig: {},
     runConfig: { turnScopeId: "turn-1" },
     systemRuntime: {
+      userId: "admin",
       sessionId: "s1",
       parentSessionId: "parent-s1",
       dialogProcessId: "dlg-1",
@@ -106,6 +106,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     messageBlocks: loopState.modelContext.messageBlocks,
     userMetaBackwrites: [],
     systemRuntime: {
+      userId: "admin",
       sessionId: "s1",
       parentSessionId: "parent-s1",
       dialogProcessId: "dlg-1",

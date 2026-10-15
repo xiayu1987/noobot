@@ -177,8 +177,6 @@ export class MemoryManager {
           runId: `memory-summary:${sessionId}`,
         },
         runtime: {
-          userId,
-          sessionId,
           systemRuntime: { userId, sessionId },
         },
       },

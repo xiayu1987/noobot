@@ -33,8 +33,17 @@ import {
   resolvePathPolicy,
   resolvePathRef,
   resolveToolInputPath,
+  resolveRuntimeUserId,
   TOOL_PATH_CONTRACTS,
 } from "../src/index.js";
+
+test("resolveRuntimeUserId reads runtime identity only from systemRuntime", () => {
+  assert.equal(
+    resolveRuntimeUserId({ runtime: { userId: "stale", systemRuntime: { userId: "u1" } } }),
+    "u1",
+  );
+  assert.equal(resolveRuntimeUserId({ runtime: { userId: "stale" } }), "");
+});
 
 test("normalizes cross-platform path syntax through the protocol", () => {
   assert.equal(detectPathPlatform("C:\\work\\file.txt"), PATH_PLATFORMS.WINDOWS);

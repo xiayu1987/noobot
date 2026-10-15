@@ -13,7 +13,6 @@ import { createCanonicalMessageEventSessionManager } from "../../helpers/canonic
 
 export function executeToolCall(options = {}) {
   const runtime = options.runtime && typeof options.runtime === "object" ? options.runtime : {};
-  runtime.userId = String(runtime.userId || options.userId || "test-user");
   runtime.globalConfig =
     runtime.globalConfig && typeof runtime.globalConfig === "object" ? runtime.globalConfig : {};
   runtime.globalConfig.workspaceRoot = String(
@@ -24,6 +23,7 @@ export function executeToolCall(options = {}) {
       ? runtime.systemRuntime
       : (runtime.systemRuntime = {});
   const identity = String(options.identity || options.call?.id || "test-tool-call");
+  systemRuntime.userId = String(systemRuntime.userId || options.userId || "test-user");
   systemRuntime.sessionId = String(systemRuntime.sessionId || "test-session");
   systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || "test-dialog");
   systemRuntime.turnScopeId = String(systemRuntime.turnScopeId || "test-turn");

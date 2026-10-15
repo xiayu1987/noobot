@@ -73,9 +73,7 @@ export function buildScriptExecutionMeta({
 }
 
 function resolveRuntimeUserId(runtime = {}, agentContext = null) {
-  return text(
-    runtime?.systemRuntime?.userId || runtime?.userId || agentContext?.context?.identity?.userId,
-  );
+  return text(runtime?.systemRuntime?.userId || agentContext?.context?.identity?.userId);
 }
 
 async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = "" } = {}) {

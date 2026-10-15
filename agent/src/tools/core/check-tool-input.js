@@ -233,13 +233,13 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
         input: {
           view: "workspace",
           path: resolvedToolPath.logicalPath,
-          owner: String(runtime?.userId || ""),
+          owner: text(runtime?.systemRuntime?.userId),
         },
       })
     : resolvePathRef({
         input: resolvedTargetPath,
         workspaceRoot: workspacePath,
-        owner: String(runtime?.userId || ""),
+        owner: text(runtime?.systemRuntime?.userId),
       });
   if (
     resolvedToolPath.mountReadOnly === true &&
@@ -257,7 +257,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
   }
   const configuredPathPolicy = resolveConfiguredPathPolicy(runtime?.globalConfig);
   const principal = {
-    userId: String(runtime?.userId || ""),
+    userId: text(runtime?.systemRuntime?.userId),
     role: isSuperUser ? "super_admin" : "regular_user",
   };
   const authorization = authorizePathRef({

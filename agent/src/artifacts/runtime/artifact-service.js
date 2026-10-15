@@ -131,7 +131,7 @@ export async function persistModelGeneratedArtifacts({
   messageId = "",
 }) {
   const attachmentService = runtime?.attachmentService || null;
-  const userId = text(runtime?.userId);
+  const userId = text(runtime?.systemRuntime?.userId);
   if (!attachmentService || !userId) return [];
   const fetchImpl =
     typeof runtime?.sharedTools?.fetch === "function"

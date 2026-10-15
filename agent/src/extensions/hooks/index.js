@@ -97,8 +97,8 @@ export { resolveRuntimeHookManager };
 function resolveHookRuntimeMeta(runtime = {}) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
-    userId: text(systemRuntime?.userId || runtime?.userId),
-    sessionId: text(systemRuntime?.sessionId || runtime?.sessionId),
+    userId: text(systemRuntime?.userId),
+    sessionId: text(systemRuntime?.sessionId),
     parentSessionId: normalizeParentSessionId(systemRuntime?.parentSessionId),
     dialogProcessId: text(runtime?.systemRuntime?.dialogProcessId),
     turnScopeId: text(systemRuntime?.turnScopeId),

@@ -27,8 +27,8 @@ test("plugin artifact port owns persistence and publication behind one generic c
     data: { title: "document" },
   });
   const agentContext = createTestAgentExecutionScope({
-    userId: "user-1",
     systemRuntime: {
+      userId: "user-1",
       sessionId: "session-1",
       parentSessionId: "",
       turnScopeId: "turn-1",

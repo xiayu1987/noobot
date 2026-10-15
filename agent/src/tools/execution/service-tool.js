@@ -78,9 +78,7 @@ export function createServiceTool({ agentContext }) {
     }),
     func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
       const globalConfig = runtime?.globalConfig || {};
-      const userId = text(
-        agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId,
-      );
+      const userId = text(agentContext?.userId || runtime?.systemRuntime?.userId);
       const inputErr = validateInput({
         serviceName,
         endpointName,
