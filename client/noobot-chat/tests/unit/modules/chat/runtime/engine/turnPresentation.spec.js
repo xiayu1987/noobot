@@ -276,6 +276,41 @@ describe("selectTurnPresentations", () => {
     });
   });
 
+  it.each([
+    { terminal: "error", failure: { message: "provider down" }, detail: true },
+    { terminal: "error", failure: null, detail: false },
+    { terminal: "user_stopped", failure: { message: "provider down" }, detail: false },
+  ])("shows failure detail only for $terminal with message ($detail)", (testCase) => {
+    const sessionId = "session-failure-detail";
+    const turnScopeId = "turn-failure-detail";
+    const result = selectTurnPresentations({
+      activeSession: {
+        sessionId,
+        messages: [
+          { messageId: "user-failure-detail", sessionId, role: "user", turnScopeId, content: "go" },
+        ],
+      },
+      turnRuntimeRegistry: {
+        sessions: {
+          [sessionId]: {
+            turns: {
+              [turnScopeId]: {
+                turnScopeId,
+                terminal: testCase.terminal,
+                failure: testCase.failure,
+                finishedAt: "2026-07-31T10:00:00.000Z",
+              },
+            },
+          },
+        },
+      },
+    });
+    const presentation = result.find((message) => message.turnStatusPlaceholder === true);
+    expect(presentation).toMatchObject({ status: testCase.terminal });
+    expect(presentation.content.split("\n")).toHaveLength(testCase.detail ? 2 : 1);
+    expect(presentation.content.includes("provider down")).toBe(testCase.detail);
+  });
+
   it("keeps partial assistant content and terminal reason in one presentation", () => {
     const canonicalAssistant = {
       messageId: "assistant-partial-a",

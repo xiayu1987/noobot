@@ -13,6 +13,7 @@ import { isTurnRuntimeDeleted } from "../run-state-machine/turnRuntimeRegistry.j
 import {
   isTurnTerminalNotice,
   resolveTurnTerminalNoticeLabelKey,
+  TURN_RUNTIME_TERMINAL,
 } from "../sessionRunStateMachine.js";
 import { translateStoredLocaleMessageKey } from "../../../../shared/i18n/messageCatalog.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
@@ -98,6 +99,7 @@ function terminalStatusesFromRuntime(turnRuntimeRegistry = {}, sessionId = "") {
       turnScopeId: text(turn?.turnScopeId),
       dialogProcessId: text(turn?.dialogProcessId),
       status: text(turn?.terminal).toLowerCase(),
+      failureMessage: text(turn?.failure?.message),
       updatedAt: text(turn?.finishedAt || turn?.updatedAt),
     }))
     .filter((status) => Boolean(status.turnScopeId));
@@ -113,7 +115,11 @@ function authoritativeTurnSequence(turnRuntimeRegistry = {}, sessionId = "", tur
 
 function formatTerminalStatusContent(status = {}) {
   const state = text(status?.status).toLowerCase();
-  return translateStoredLocaleMessageKey(resolveTurnTerminalNoticeLabelKey(state));
+  const label = translateStoredLocaleMessageKey(resolveTurnTerminalNoticeLabelKey(state));
+  const failureMessage = state === TURN_RUNTIME_TERMINAL.ERROR ? text(status?.failureMessage) : "";
+  return failureMessage
+    ? `${label}\n${translateStoredLocaleMessageKey("message.turnTerminalErrorDetail", { error: failureMessage })}`
+    : label;
 }
 
 function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
