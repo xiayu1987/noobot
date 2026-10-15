@@ -272,6 +272,39 @@ test("rejects messages whose legacy id conflicts with messageId", () => {
   );
 });
 
+test("runs every message migration step even after an earlier step changed the message", () => {
+  const source = {
+    schemaVersion: 6,
+    sessionId: "session-1",
+    messages: [
+      {
+        messageUid: "u1",
+        id: "m1",
+        messageId: "m1",
+        role: "user",
+        turnCommit: {
+          action: "send",
+          commandId: "command-1",
+          requestHash: "hash-1",
+          runState: "pending_start",
+        },
+      },
+    ],
+  };
+  const result = migrateSessionDocument(source);
+  const [message] = result.document.messages;
+  assert.equal(Object.hasOwn(message, "id"), false);
+  assert.equal(message.messageId, "m1");
+  assert.deepEqual(message.turnCommit, {
+    action: "send",
+    commandId: "command-1",
+    requestHash: "hash-1",
+  });
+  const repeated = migrateSessionDocument(result.document);
+  assert.equal(repeated.changed, false);
+  assert.deepEqual(repeated.document, result.document);
+});
+
 test("does not reinterpret non-canonical fields in the current artifact protocol", () => {
   const source = {
     schemaVersion: SESSION_ARTIFACT_SCHEMA_VERSION,

@@ -95,7 +95,7 @@ function migrateMessage(
   const hadSessionId = Object.hasOwn(message, "sessionId");
   const next = { ...message, sessionId: text(message.sessionId || sessionId) };
   let changed = false;
-  changed ||= migrateMessageIdField(next, index);
+  changed = migrateMessageIdField(next, index) || changed;
   if (
     next.chatPresentation === true &&
     text(next.presentationMessageId) &&
@@ -119,7 +119,7 @@ function migrateMessage(
     delete next.turnCommit.idempotencyKey;
     changed = true;
   }
-  if (migrateArtifactProtocol) changed ||= migrateTurnCommitMetadata(next);
+  if (migrateArtifactProtocol) changed = migrateTurnCommitMetadata(next) || changed;
   if (!text(next.messageUid) && next.chatPresentation !== true) {
     const identitySeed = [sessionId, next.dialogProcessId, next.turnScopeId, next.messageId, index];
     if (!text(next.dialogProcessId) || !text(next.turnScopeId) || !text(next.messageId)) {
@@ -139,7 +139,7 @@ function migrateMessage(
     changed = true;
   }
   if (transferMigration) {
-    changed ||= migrateSemanticTransfers(next, transferMigration);
+    changed = migrateSemanticTransfers(next, transferMigration) || changed;
   }
   validateTransferCollections(next);
   if (!hadSessionId) delete next.sessionId;
