@@ -17,11 +17,11 @@ const NEXT_EXECUTION_SUGGESTION_BLOCK_RE =
   /\[NEXT_EXECUTION_SUGGESTION\]([\s\S]*?)(?=\[SUMMARY_END\]|$)/i;
 const SUMMARY_END_MARKER_RE = /\[SUMMARY_END\]/i;
 
-function splitLines(text = "") {
-  return String(text || "")
+function splitLines(sourceText = "") {
+  return String(sourceText || "")
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .map((line) => String(line || "").trim())
+    .map((line) => text(line))
     .filter(Boolean);
 }
 
@@ -36,12 +36,12 @@ function normalizeSummaryItems(items = []) {
   return [...map.values()].sort((a, b) => a.id - b.id);
 }
 
-function parseSummaryItemsFromText(text = "") {
+function parseSummaryItemsFromText(inputText = "") {
   const items = [];
-  for (const line of splitLines(text)) {
+  for (const line of splitLines(inputText)) {
     const match = line.match(SUMMARY_LINE_RE);
     if (!match) continue;
-    items.push({ id: Number(match[1]), content: String(match[2] || "").trim() });
+    items.push({ id: Number(match[1]), content: text(match[2]) });
   }
   return normalizeSummaryItems(items);
 }
@@ -53,15 +53,15 @@ function renderSummaryItems(items = []) {
     .trim();
 }
 
-export function parseSummaryPatchCommands(text = "") {
+export function parseSummaryPatchCommands(rawText = "") {
   const commands = [];
-  for (const line of splitLines(text)) {
+  for (const line of splitLines(rawText)) {
     const addOrUpdate = line.match(PATCH_ADD_UPDATE_RE);
     if (addOrUpdate) {
       commands.push({
         action: String(addOrUpdate[1] || "").toUpperCase(),
         id: Number(addOrUpdate[2]),
-        content: String(addOrUpdate[3] || "").trim(),
+        content: text(addOrUpdate[3]),
       });
       continue;
     }
@@ -110,8 +110,8 @@ export function mergeSummaryText(existingText = "", incomingText = "") {
   return [current, incoming].filter(Boolean).join("\n");
 }
 
-export function parseSummaryOverviewAndDetailFromText(text = "") {
-  const raw = String(text || "").trim();
+export function parseSummaryOverviewAndDetailFromText(summaryText = "") {
+  const raw = text(summaryText);
   if (!raw)
     return {
       overviewText: "",
@@ -133,9 +133,9 @@ export function parseSummaryOverviewAndDetailFromText(text = "") {
       usedV2: false,
     };
   }
-  const overviewText = String(overviewMatch?.[1] || "").trim();
-  const detailText = String(detailMatch?.[1] || "").trim();
-  const nextSuggestionText = String(nextSuggestionMatch?.[1] || "").trim();
+  const overviewText = text(overviewMatch?.[1]);
+  const detailText = text(detailMatch?.[1]);
+  const nextSuggestionText = text(nextSuggestionMatch?.[1]);
   const trailingText = endMatch
     ? String(raw.slice(Number(endMatch.index) + String(endMatch[0] || "").length)).trim()
     : "";

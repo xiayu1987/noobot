@@ -58,13 +58,10 @@ export function tToolDescription(runtime = {}, toolName = "") {
 
 export function tToolParamDescription(runtime = {}, toolName = "", paramName = "") {
   const schema =
-    resolveLocaleToolSchemaMap(runtime)?.[String(toolName || "").trim()] ||
-    resolveToolSchema(toolName);
-  const text = schema?.params?.[String(paramName || "").trim()]?.text;
-  if (!text) {
-    throw new Error(
-      `tool param schema i18n not configured: ${String(toolName || "").trim()}.${String(paramName || "").trim()}`,
-    );
+    resolveLocaleToolSchemaMap(runtime)?.[text(toolName)] || resolveToolSchema(toolName);
+  const normalizedText = schema?.params?.[text(paramName)]?.text;
+  if (!normalizedText) {
+    throw new Error(`tool param schema i18n not configured: ${text(toolName)}.${text(paramName)}`);
   }
-  return String(text).trim();
+  return String(normalizedText).trim();
 }

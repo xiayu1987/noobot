@@ -156,9 +156,9 @@ export async function saveCapabilityOutputAsTransferArtifacts(
 ) {
   const runtime = ctx?.agentContext?.bindings?.runtime || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  const text = String(content || "").trim();
-  if (!text) return [];
-  const producerId = String(purpose || "").trim();
+  const normalizedText = text(content);
+  if (!normalizedText) return [];
+  const producerId = text(purpose);
   if (!producerId) throw new Error("harness_semantic_transfer_producer_required");
   const transferOperationId = randomUUID();
   try {
@@ -190,7 +190,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         category,
         businessPoint: purpose,
         summary: "",
-        detail: text,
+        detail: normalizedText,
         name: normalizeString(name) || buildCapabilityArtifactName({ purpose }),
         mimeType: normalizeString(mimeType) || "text/markdown",
         attachmentSource: ATTACHMENT_SOURCE.MODEL,
@@ -201,7 +201,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         transferKey: transferOperationId,
         direction: "output",
         meta: {
-          purpose: String(purpose || "").trim(),
+          purpose: text(purpose),
         },
       });
       return normalizeTransferPayload(staged);
@@ -212,7 +212,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
       domain,
       event: SHARED_EVENTS.capabilityOutputAttachmentSaveFailed,
       detail: {
-        purpose: String(purpose || "").trim() || "unknown",
+        purpose: text(purpose) || "unknown",
         error: String(error?.message || error || ""),
       },
     });

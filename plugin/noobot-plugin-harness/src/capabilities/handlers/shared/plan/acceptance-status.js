@@ -50,22 +50,20 @@ export function mapPlanAcceptanceStatusToTaskStatus(status = "") {
 }
 
 export function parseAcceptanceItemsFromText(
-  text = "",
+  sourceText = "",
   {
     normalizePlanId: normalizePlanIdValue = normalizePlanId,
     normalizeStatus: normalizeStatusValue = normalizeAcceptanceStatus,
   } = {},
 ) {
-  const raw = String(text || "").trim();
+  const raw = text(sourceText);
   if (!raw) return [];
   const lines = raw.replace(/\r\n?/g, "\n").split("\n");
   const items = [];
   for (const line of lines) {
-    const match = String(line || "")
-      .trim()
-      .match(MODEL_ACCEPTANCE_LINE_RE);
+    const match = text(line).match(MODEL_ACCEPTANCE_LINE_RE);
     if (!match) continue;
-    const tail = String(match[3] || "").trim();
+    const tail = text(match[3]);
     const planMatch = tail.match(/(?:^|\s)plan=\[?([0-9]+(?:\.[0-9]+)?)\]?/i);
     const statusMatch = tail.match(/(?:^|\s)status=(pass|warn|fail)/i);
     const riskMatch = tail.match(/(?:^|\s)risk=(low|medium|high)/i);
@@ -86,18 +84,14 @@ export function parseAcceptanceItemsFromText(
     const status = normalizeStatusValue(statusMatch?.[1]);
     if (!planId || !status) continue;
     items.push({
-      action: String(match[1] || "")
-        .trim()
-        .toUpperCase(),
-      acceptanceId: `A${String(match[2] || "").trim()}`,
+      action: text(match[1]).toUpperCase(),
+      acceptanceId: `A${text(match[2])}`,
       planId,
       status,
-      risk: String(riskMatch?.[1] || "")
-        .trim()
-        .toLowerCase(),
+      risk: text(riskMatch?.[1]).toLowerCase(),
       evidence,
-      conclusion: String(conclusionMatch?.[1] || "").trim(),
-      raw: String(line || "").trim(),
+      conclusion: text(conclusionMatch?.[1]),
+      raw: text(line),
     });
   }
   return items;

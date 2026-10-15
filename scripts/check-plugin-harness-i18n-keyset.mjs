@@ -6,6 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 
 const ROOT = process.cwd();
 const TARGET_DIR = "plugin/noobot-plugin-harness/src";
@@ -41,8 +42,8 @@ const problems = [];
 for (const absPath of files) {
   const relPath = path.relative(ROOT, absPath);
   if (DIRECT_KEY_ALLOWED_FILES.has(relPath)) continue;
-  const text = fs.readFileSync(absPath, "utf8");
-  const matches = [...text.matchAll(DIRECT_KEY_CALL_RE)].map((m) => String(m[0] || "").trim());
+  const textValue = fs.readFileSync(absPath, "utf8");
+  const matches = [...textValue.matchAll(DIRECT_KEY_CALL_RE)].map((m) => text(m[0]));
   if (matches.length) problems.push({ file: relPath, matches });
 }
 

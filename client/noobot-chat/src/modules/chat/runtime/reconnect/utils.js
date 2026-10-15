@@ -27,7 +27,7 @@ export function _matchesDialogProcessId(msg, dpId) {
 export function normalizeExecutionLogForRealtime(logItem = {}) {
   const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
   const rawEvent = _trimStr(logItem?.event);
-  const text = _trimStr(data?.text || logItem?.text);
+  const textValue = _trimStr(data?.text || logItem?.text);
   return {
     ...data,
     event:
@@ -35,8 +35,8 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
       "execution_step",
     type: String(data?.type || logItem?.type || "execution").trim() || "execution",
     category: String(data?.category || logItem?.category || "execution").trim() || "execution",
-    dialogProcessId: String(data?.dialogProcessId || logItem?.dialogProcessId || "").trim(),
+    dialogProcessId: text(data?.dialogProcessId || logItem?.dialogProcessId),
     ts: _trimStr(data?.ts || logItem?.ts) || nowIso(),
-    text,
+    text: textValue,
   };
 }

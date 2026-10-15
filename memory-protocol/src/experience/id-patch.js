@@ -12,10 +12,10 @@ function normalizeText(text = "") {
     .trim();
 }
 
-function splitPatchLines(text = "") {
-  return normalizeText(text)
+function splitPatchLines(sourceText = "") {
+  return normalizeText(sourceText)
     .split("\n")
-    .map((line) => String(line || "").trim())
+    .map((line) => text(line))
     .filter(Boolean);
 }
 
@@ -28,9 +28,9 @@ function unquote(value = "") {
   return raw;
 }
 
-export function parseKvPayload(text = "") {
+export function parseKvPayload(inputText = "") {
   const out = {};
-  const source = String(text || "").trim();
+  const source = text(inputText);
   if (!source) return out;
   const isKeyStart = (character) => /[A-Za-z_]/.test(character || "");
   const isKeyPart = (character) => /[A-Za-z0-9_-]/.test(character || "");
@@ -82,31 +82,27 @@ export function parseKvPayload(text = "") {
 }
 
 export function parseListField(input = "") {
-  const text = String(input || "").trim();
-  if (!text) return [];
-  return dedupeTextList(text.includes("||") ? text.split("||") : text.split(/[\n;,；]/g));
+  const normalizedText = text(input);
+  if (!normalizedText) return [];
+  return dedupeTextList(
+    normalizedText.includes("||") ? normalizedText.split("||") : normalizedText.split(/[\n;,；]/g),
+  );
 }
 
-export function parseIdPatchCommands(text = "", { idPrefix = "" } = {}) {
+export function parseIdPatchCommands(rawText = "", { idPrefix = "" } = {}) {
   const commands = [];
-  const normalizedPrefix = String(idPrefix || "")
-    .trim()
-    .toUpperCase();
-  for (const line of splitPatchLines(text)) {
+  const normalizedPrefix = text(idPrefix).toUpperCase();
+  for (const line of splitPatchLines(rawText)) {
     const matched = /^(\w+)\s+([A-Za-z]*\s*(?:\[\s*\d+\s*\]|\d+))\s*[:：]?\s*([\s\S]*)$/i.exec(
       line,
     );
     if (!matched) continue;
-    const action = String(matched[1] || "")
-      .trim()
-      .toUpperCase();
+    const action = text(matched[1]).toUpperCase();
     if (!["ADD", "UPDATE", "DELETE"].includes(action)) continue;
-    const token = String(matched[2] || "").trim();
+    const token = text(matched[2]);
     const tokenMatched = /^([A-Za-z]*)\s*(?:\[\s*(\d+)\s*\]|(\d+))$/i.exec(token);
     if (!tokenMatched) continue;
-    const tokenPrefix = String(tokenMatched[1] || "")
-      .trim()
-      .toUpperCase();
+    const tokenPrefix = text(tokenMatched[1]).toUpperCase();
     if (normalizedPrefix && tokenPrefix !== normalizedPrefix) continue;
     const id = Number(tokenMatched[2] || tokenMatched[3]);
     if (!Number.isFinite(id) || id <= 0) continue;
@@ -114,7 +110,7 @@ export function parseIdPatchCommands(text = "", { idPrefix = "" } = {}) {
       action,
       id,
       idPrefix: tokenPrefix,
-      payload: String(matched[3] || "").trim(),
+      payload: text(matched[3]),
       raw: line,
     });
   }

@@ -23,19 +23,19 @@ const MARKDOWN_FENCE = "```";
 const FENCE_LANGUAGE_CHAR = /[a-zA-Z0-9_-]/;
 
 export function stripMarkdownFence(input = "") {
-  const text = String(input || "").trim();
+  const normalizedText = text(input);
   const fenceLength = MARKDOWN_FENCE.length;
   if (
-    text.length < fenceLength * 2 ||
-    !text.startsWith(MARKDOWN_FENCE) ||
-    !text.endsWith(MARKDOWN_FENCE)
+    normalizedText.length < fenceLength * 2 ||
+    !normalizedText.startsWith(MARKDOWN_FENCE) ||
+    !normalizedText.endsWith(MARKDOWN_FENCE)
   ) {
-    return text;
+    return normalizedText;
   }
-  const contentEnd = text.length - fenceLength;
+  const contentEnd = normalizedText.length - fenceLength;
   let contentStart = fenceLength;
-  while (contentStart < contentEnd && FENCE_LANGUAGE_CHAR.test(text[contentStart])) {
+  while (contentStart < contentEnd && FENCE_LANGUAGE_CHAR.test(normalizedText[contentStart])) {
     contentStart += 1;
   }
-  return text.slice(contentStart, contentEnd).trim();
+  return normalizedText.slice(contentStart, contentEnd).trim();
 }

@@ -17,10 +17,10 @@ function normalizeText(text = "") {
     .trim();
 }
 
-function splitLines(text = "") {
-  return normalizeText(text)
+function splitLines(sourceText = "") {
+  return normalizeText(sourceText)
     .split("\n")
-    .map((line) => String(line || "").trim())
+    .map((line) => text(line))
     .filter(Boolean);
 }
 
@@ -65,25 +65,30 @@ function normalizeSubPlans(subPlans = [], mainId = 0) {
 }
 
 function parseId(rawId = "") {
-  const raw = String(rawId || "").trim();
+  const raw = text(rawId);
   if (/\]\s*\.\s*\[/.test(raw)) return null;
-  const text = String(rawId || "")
-    .trim()
-    .replace(/[\[\]\s]/g, "");
-  if (!text) return null;
-  const parts = text.split(".");
+  const normalizedText = text(rawId).replace(/[\[\]\s]/g, "");
+  if (!normalizedText) return null;
+  const parts = normalizedText.split(".");
   if (parts.length === 0) return null;
   const [mainPart, subPart] = parts;
   const mainId = Number(mainPart);
   if (!Number.isFinite(mainId)) return null;
   if (subPart === undefined)
-    return { raw: text, mainId, subIndex: null, isSub: false, depth: 1, segments: [mainId] };
+    return {
+      raw: normalizedText,
+      mainId,
+      subIndex: null,
+      isSub: false,
+      depth: 1,
+      segments: [mainId],
+    };
   const numericParts = parts.map((item) => Number(item));
   if (numericParts.some((item) => !Number.isFinite(item))) return null;
   const subIndex = Number(subPart);
   if (!Number.isFinite(subIndex)) return null;
   return {
-    raw: text,
+    raw: normalizedText,
     mainId,
     subIndex,
     isSub: true,
@@ -200,16 +205,14 @@ function allocateNextSubPlanIndex(doc = {}, mainId = 0) {
   return candidate;
 }
 
-export function parsePlanDocumentFromText(text = "") {
+export function parsePlanDocumentFromText(inputText = "") {
   const doc = ensurePlanDocumentShape({});
-  for (const line of splitLines(text)) {
+  for (const line of splitLines(inputText)) {
     const addOrUpdate = line.match(PATCH_ADD_UPDATE);
     if (addOrUpdate) {
-      const action = String(addOrUpdate[1] || "")
-        .trim()
-        .toUpperCase();
+      const action = text(addOrUpdate[1]).toUpperCase();
       const target = parseId(addOrUpdate[2]);
-      const content = String(addOrUpdate[3] || "").trim();
+      const content = text(addOrUpdate[3]);
       if (!target || !content) continue;
       if (target.isSub) {
         if (action === "ADD" || action === "UPDATE") {
@@ -270,25 +273,21 @@ export function parseSubPlansFromPlanText(text = "", mainId = 0) {
   return normalizeSubPlans(doc.subPlansByMainId[String(mainId)], Number(mainId));
 }
 
-export function parsePatchCommands(text = "") {
+export function parsePatchCommands(rawText = "") {
   const commands = [];
-  for (const line of splitLines(text)) {
+  for (const line of splitLines(rawText)) {
     const addOrUpdate = line.match(PATCH_ADD_UPDATE);
     if (addOrUpdate) {
-      const action = String(addOrUpdate[1] || "")
-        .trim()
-        .toUpperCase();
+      const action = text(addOrUpdate[1]).toUpperCase();
       const target = parseId(addOrUpdate[2]);
-      const content = String(addOrUpdate[3] || "").trim();
+      const content = text(addOrUpdate[3]);
       if (!target || !content) continue;
       commands.push({ action, target, content, raw: line });
       continue;
     }
     const del = line.match(PATCH_DELETE);
     if (del) {
-      const action = String(del[1] || "")
-        .trim()
-        .toUpperCase();
+      const action = text(del[1]).toUpperCase();
       const target = parseId(del[2]);
       if (!target) continue;
       commands.push({ action, target, content: "", raw: line });

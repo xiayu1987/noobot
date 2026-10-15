@@ -45,13 +45,10 @@ function readField(lines = [], field = "") {
   const key = text(field).toLowerCase();
   if (!key) return "";
   for (const line of lines) {
-    const text = String(line || "").trim();
-    const matched = text.match(/^([a-zA-Z_][\w-]*)\s*[:=]\s*(.*)$/);
+    const normalizedText = text(line);
+    const matched = normalizedText.match(/^([a-zA-Z_][\w-]*)\s*[:=]\s*(.*)$/);
     if (!matched) continue;
-    const name = String(matched[1] || "")
-      .trim()
-      .toLowerCase()
-      .replace(/-/g, "_");
+    const name = text(matched[1]).toLowerCase().replace(/-/g, "_");
     if (name === key) return normalizeText(matched[2] || "");
   }
   return "";

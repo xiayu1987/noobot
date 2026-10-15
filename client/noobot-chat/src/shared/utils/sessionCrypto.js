@@ -47,14 +47,14 @@ export function encryptPayloadBySessionId(payload = {}, sessionId = "") {
 }
 
 export function decryptPayloadBySessionId(cipherText = "", sessionId = "") {
-  const sid = String(sessionId || "").trim();
+  const sid = text(sessionId);
   if (!sid) throw new Error("sessionId required for decryption");
   const source = base64ToBytes(String(cipherText || ""));
   const key = textToBytes(sid);
-  const text = bytesToText(xorBytes(source, key));
+  const textValue = bytesToText(xorBytes(source, key));
   try {
-    return JSON.parse(text);
+    return JSON.parse(textValue);
   } catch {
-    return text;
+    return textValue;
   }
 }

@@ -16,9 +16,9 @@ function normalizeStage(stage = "") {
 }
 
 export function isSyntheticMainPlanPlaceholder(content = "") {
-  const text = String(content || "").trim();
-  if (!text) return false;
-  return /^(\u4e3b\u8ba1\u5212|main plan)\s+\d+$/i.test(text);
+  const normalizedText = text(content);
+  if (!normalizedText) return false;
+  return /^(\u4e3b\u8ba1\u5212|main plan)\s+\d+$/i.test(normalizedText);
 }
 
 export function resolvePlanMutationPolicy(stage = "", overrides = {}) {

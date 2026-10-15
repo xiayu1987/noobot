@@ -7,6 +7,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import crypto from "node:crypto";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { text } from "@noobot/shared/value";
 
 function stableStringify(value) {
   try {
@@ -28,8 +29,8 @@ export function nowIso() {
 }
 
 export function safeId(value = "") {
-  const text = String(value || "").trim();
-  return text.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
+  const normalizedText = text(value);
+  return normalizedText.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
 }
 
 export function safeError(error) {

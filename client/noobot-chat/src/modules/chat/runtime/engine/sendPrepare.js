@@ -53,15 +53,15 @@ function applyUserMessageIdentity({
         );
 }
 
-function applySessionTitleFromText({ activeSession, translate, text }) {
-  if (!text) return;
+function applySessionTitleFromText({ activeSession, translate, text: sourceText }) {
+  if (!sourceText) return;
   const defaultTitles = [
-    String(translate("chat.newSession") || "").trim(),
-    String(zhCNMessages?.chat?.newSession || "").trim(),
-    String(enUSMessages?.chat?.newSession || "").trim(),
+    text(translate("chat.newSession")),
+    text(zhCNMessages?.chat?.newSession),
+    text(enUSMessages?.chat?.newSession),
   ];
-  if (!defaultTitles.includes(String(activeSession.value.title || "").trim())) return;
-  activeSession.value.title = text.slice(0, 20);
+  if (!defaultTitles.includes(text(activeSession.value.title))) return;
+  activeSession.value.title = sourceText.slice(0, 20);
 }
 
 export function prepareChatSend({
@@ -83,9 +83,9 @@ export function prepareChatSend({
   userAttachments = null,
   turnStartedAtMs = 0,
 }) {
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  const normalizedTurnScopeId = text(turnScopeId);
   const explicitText = typeof messageText === "string" ? messageText.trim() : "";
-  const text = explicitText || input.value.trim();
+  const normalizedText = explicitText || input.value.trim();
   input.value = "";
 
   const filesToSend = Array.isArray(attachmentFiles)
@@ -99,21 +99,26 @@ export function prepareChatSend({
   });
   const userMessage = reuseExistingUserTurn
     ? findExistingUserMessage(activeSession, userMessageId)
-    : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), resolvedUserAttachments, {
-        id: userMessageId,
-        messageId: userMessageId,
-        sessionId,
-        turnScopeId: normalizedTurnScopeId,
-        messageOrigin: "natural",
-        userMetaMaterialized: true,
-      });
+    : appendMessage(
+        RoleEnum.USER,
+        normalizedText || translate("chat.uploadOnly"),
+        resolvedUserAttachments,
+        {
+          id: userMessageId,
+          messageId: userMessageId,
+          sessionId,
+          turnScopeId: normalizedTurnScopeId,
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+        },
+      );
   applyUserMessageIdentity({
     userMessage,
     normalizedTurnScopeId,
     userAttachments,
     resolvedUserAttachments,
   });
-  applySessionTitleFromText({ activeSession, translate, text });
+  applySessionTitleFromText({ activeSession, translate, text: normalizedText });
 
   const botMessage = upsertCanonicalAssistantMessage(assistantMessageId, {
     sessionId,
@@ -140,7 +145,7 @@ export function prepareChatSend({
   };
 
   return {
-    text,
+    text: normalizedText,
     filesToSend,
     userMessage,
     botMessage,

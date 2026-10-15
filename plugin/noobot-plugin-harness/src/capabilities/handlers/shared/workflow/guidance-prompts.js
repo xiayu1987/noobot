@@ -166,13 +166,13 @@ export function buildPreviousSummaryContextContent({
   locale = LOCALE.ZH_CN,
   previousSummaryContent = "",
 } = {}) {
-  const text = String(previousSummaryContent || "").trim();
-  if (!text) return "";
+  const normalizedText = text(previousSummaryContent);
+  if (!normalizedText) return "";
   const header = `<!-- harness-previous-summary-context -->\n${translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PREVIOUS_SUMMARY_CONTEXT_HEADER,
   )}`;
-  return `${header}\n${text}`;
+  return `${header}\n${normalizedText}`;
 }
 
 export function buildPreviousSummaryContextMessages(options = {}) {

@@ -47,8 +47,8 @@ const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(
 );
 
 function normalizeSessionLogText(value = "", { fallback = "", maxLength = 4000 } = {}) {
-  const text = String(value || fallback || "").trim();
-  return maxLength > 0 ? text.slice(0, maxLength) : text;
+  const normalizedText = text(value || fallback);
+  return maxLength > 0 ? normalizedText.slice(0, maxLength) : normalizedText;
 }
 
 function normalizeSessionLogTime(value) {

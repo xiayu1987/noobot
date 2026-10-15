@@ -184,7 +184,7 @@ export function createMultimodalParseTool({ agentContext }) {
           processing,
           input: inputs[index],
           label:
-            String(resolvedInputs[index]?.resourceRef?.logical?.path || "").trim() ||
+            text(resolvedInputs[index]?.resourceRef?.logical?.path) ||
             (typeof inputs[index] === "string"
               ? inputs[index]
               : JSON.stringify(inputs[index] || {})),
@@ -262,8 +262,7 @@ export function createMultimodalParseTool({ agentContext }) {
           });
         }),
       );
-      const parsePrompt =
-        String(prompt || "").trim() || tTool(runtime, "tools.multimodalParse.defaultPrompt");
+      const parsePrompt = text(prompt) || tTool(runtime, "tools.multimodalParse.defaultPrompt");
       const response = await modelPort.invoke({
         model: modelSpec,
         messages: [],
@@ -282,12 +281,12 @@ export function createMultimodalParseTool({ agentContext }) {
           contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
         },
       });
-      const text = String(response?.output?.text || response?.result?.rawText || "");
+      const textValue = String(response?.output?.text || response?.result?.rawText || "");
       const persistedOutput = await persistParsedTextAttachment({
         runtime,
         agentContext,
         inputFile: inputFiles[0],
-        text,
+        text: textValue,
         mode: TOOL_DATA_MODE.MULTIMODAL_MODEL,
         identity: toolConfig?.configurable?.transferIdentity,
       });
@@ -334,7 +333,7 @@ export function createMultimodalParseTool({ agentContext }) {
             input_file_count: inputFiles.length,
             total_file_size_bytes: totalFileSizeBytes,
             saved_attachment_count: attachments.length,
-            text_length: text.length,
+            text_length: textValue.length,
           },
         },
         true,

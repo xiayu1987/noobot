@@ -11,8 +11,8 @@ const STARTUP_CONTEXT_ARG = "--startup-context";
 const SCHEMA_VERSION = 1;
 
 function normalizePath(value = "") {
-  const text = String(value || "").trim();
-  return text ? path.resolve(text) : "";
+  const normalizedText = text(value);
+  return normalizedText ? path.resolve(normalizedText) : "";
 }
 
 function normalizeEnvMap(value = {}) {

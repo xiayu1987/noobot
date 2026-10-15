@@ -27,9 +27,9 @@ export function recordLatestSummaryFullText(ctx = {}, summaryFullText = "") {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return "";
   const { bucket } = holder;
-  const text = String(summaryFullText || "").trim();
-  if (!text) return String(bucket?.summaryFullText || "").trim();
-  bucket.summaryFullText = text;
+  const normalizedText = text(summaryFullText);
+  if (!normalizedText) return text(bucket?.summaryFullText);
+  bucket.summaryFullText = normalizedText;
   return bucket.summaryFullText;
 }
 

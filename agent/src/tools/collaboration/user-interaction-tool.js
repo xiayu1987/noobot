@@ -157,8 +157,8 @@ function repairUnescapedQuotesInJsonStrings(text = "") {
   return repaired;
 }
 
-function parseJsonStringPayload(text = "") {
-  const source = String(text || "").trim();
+function parseJsonStringPayload(sourceText = "") {
+  const source = text(sourceText);
   try {
     return JSON.parse(source);
   } catch (strictParseError) {

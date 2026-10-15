@@ -20,9 +20,9 @@ import { summarizeSessionTurnPayload } from "./turn-payload-summary.js";
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
 function normalizeIsoTime(value = "") {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  const ms = Date.parse(text);
+  const normalizedText = text(value);
+  if (!normalizedText) return "";
+  const ms = Date.parse(normalizedText);
   return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : "";
 }
 

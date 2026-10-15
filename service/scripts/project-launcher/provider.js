@@ -71,9 +71,9 @@ function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programming
   const defaultScenario = String(source.default || "full").trim();
   const definitions = isPlainObject(source.definitions) ? source.definitions : {};
   const programming = isPlainObject(definitions.programming) ? definitions.programming : {};
-  const text = isPlainObject(definitions.text) ? definitions.text : {};
-  const model = String(programmingModel || programming.model || "").trim();
-  const textModel = String(programmingModel || text.model || "").trim();
+  const textValue = isPlainObject(definitions.text) ? definitions.text : {};
+  const model = text(programmingModel || programming.model);
+  const textModel = text(programmingModel || textValue.model);
   return {
     default: BUILTIN_SCENARIO_KEYS.has(defaultScenario) ? defaultScenario : "full",
     definitions: {

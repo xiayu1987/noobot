@@ -16,17 +16,17 @@ function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
     .replace(/\r\n?/g, "\n")
     .split("\n")
     .map((line) => {
-      const text = String(line || "");
-      const match = text.match(/^\s*(\d+(?:\.\d+)?)(?:\.|\s)\s+(.+?)\s*$/);
-      if (!match) return text;
-      const planId = String(match[1] || "").trim();
+      const textValue = String(line || "");
+      const match = textValue.match(/^\s*(\d+(?:\.\d+)?)(?:\.|\s)\s+(.+?)\s*$/);
+      if (!match) return textValue;
+      const planId = text(match[1]);
       const acceptance =
         statusMap[planId] && typeof statusMap[planId] === "object" ? statusMap[planId] : null;
-      if (!acceptance) return text;
-      const taskStatus = String(acceptance.taskStatus || "").trim() || "pending";
-      const source = String(acceptance.source || "").trim();
-      const resetSuffix = String(acceptance.resetAt || "").trim() ? ", reset" : "";
-      return `${text} [acceptance:${taskStatus}${source ? `, source:${source}` : ""}${resetSuffix}]`;
+      if (!acceptance) return textValue;
+      const taskStatus = text(acceptance.taskStatus) || "pending";
+      const source = text(acceptance.source);
+      const resetSuffix = text(acceptance.resetAt) ? ", reset" : "";
+      return `${textValue} [acceptance:${taskStatus}${source ? `, source:${source}` : ""}${resetSuffix}]`;
     })
     .join("\n")
     .trim();

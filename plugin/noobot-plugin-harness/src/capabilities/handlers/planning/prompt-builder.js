@@ -73,14 +73,14 @@ function buildPlanningToolCatalogPrompt(ctx = {}, locale = LOCALE.ZH_CN) {
   ].join("\n");
 }
 
-function isHarnessRelayMessage(text = "") {
-  const raw = String(text || "").trim();
+function isHarnessRelayMessage(sourceText = "") {
+  const raw = text(sourceText);
   if (!raw) return false;
   const prefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
     .map((locale) =>
       translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, { purpose: "" }),
     )
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .filter(Boolean);
   return prefixes.some((prefix) => raw.startsWith(prefix));
 }
@@ -115,9 +115,9 @@ function resolveLatestUserTextFromMessages(messageList = [], { preferFrontend = 
     const role = resolveCompatibleRole(item);
     if (role !== "user") continue;
     if (preferFrontend && !isNaturalUserMessage(item)) continue;
-    const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
-    if (isHarnessRelayMessage(text)) continue;
-    if (text) return text;
+    const normalizedText = text(extractRawTextContent(item?.content ?? item));
+    if (isHarnessRelayMessage(normalizedText)) continue;
+    if (normalizedText) return normalizedText;
   }
   return "";
 }
@@ -195,8 +195,8 @@ function resolveFallbackUserText(ctx = {}) {
     ctx?.agentContext?.bindings?.extensions?.latestUserGoal,
   ];
   for (const candidate of fallbackCandidates) {
-    const text = String(candidate || "").trim();
-    if (text) return text;
+    const trimmedText = text(candidate);
+    if (trimmedText) return trimmedText;
   }
   return "";
 }

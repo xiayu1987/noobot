@@ -7,6 +7,7 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { ignorePathParts, MISSING_DIRECTORY_POLICY, walkSourceFiles } from "./lib/guard-scan.mjs";
+import { text } from "@noobot/shared/value";
 
 function resolveRepoRoot() {
   const cwd = process.cwd();
@@ -47,14 +48,14 @@ function walk(dir) {
     missingDirectory: MISSING_DIRECTORY_POLICY.REQUIRE,
   });
 }
-function collectImportMatches(text = "", isViolation = () => false) {
+function collectImportMatches(sourceText = "", isViolation = () => false) {
   const matches = [];
-  for (const match of text.matchAll(IMPORT_SPECIFIER_REGEX)) {
-    const specifier = String(match[1] || "").trim();
+  for (const match of sourceText.matchAll(IMPORT_SPECIFIER_REGEX)) {
+    const specifier = text(match[1]);
     if (!isViolation(specifier)) continue;
     const offset = Number(match.index) || 0;
-    const line = text.slice(0, offset).split(/\r?\n/).length;
-    const sourceLine = text.split(/\r?\n/)[line - 1] || "";
+    const line = sourceText.slice(0, offset).split(/\r?\n/).length;
+    const sourceLine = sourceText.split(/\r?\n/)[line - 1] || "";
     matches.push({ line, terms: [specifier], text: sourceLine.trim() });
   }
   return matches;

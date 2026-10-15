@@ -39,18 +39,18 @@ export async function persistParsedTextAttachment({
   runtime = {},
   agentContext = null,
   inputFile = "",
-  text = "",
+  text: sourceText = "",
   mode = "",
   identity = null,
 } = {}) {
   const inputBaseName = sanitizeArtifactBaseName(
-    path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
+    path.basename(text(inputFile), path.extname(text(inputFile))),
   );
   const modeSuffix = sanitizeArtifactBaseName(mode || "result", "result");
   const materialized = await materializeTextForToolResult({
     runtime,
     agentContext,
-    text,
+    text: sourceText,
     name: `${inputBaseName}.multimodal-parse.${modeSuffix}.md`,
     mimeType: MIME_TYPE.TEXT_MARKDOWN,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,

@@ -36,9 +36,9 @@ function rejectUnknownKeys(value, allowedKeys, path) {
 }
 
 function requireText(value, path) {
-  const text = String(value || "").trim();
-  if (!text) throw new TypeError(`${path} is required`);
-  return text;
+  const normalizedText = text(value);
+  if (!normalizedText) throw new TypeError(`${path} is required`);
+  return normalizedText;
 }
 
 function normalizeImageOptions(input = {}) {

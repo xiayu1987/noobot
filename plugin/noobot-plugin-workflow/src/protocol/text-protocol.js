@@ -16,8 +16,8 @@ import {
 import { getWorkflowDslDefaultNodeNames } from "../core/i18n.js";
 import { text } from "@noobot/shared/value";
 
-function stripCodeFence(text = "") {
-  const trimmed = String(text || "").trim();
+function stripCodeFence(sourceText = "") {
+  const trimmed = text(sourceText);
   if (!trimmed.startsWith("```") || !trimmed.endsWith("```") || trimmed.length < 6) {
     return trimmed;
   }
@@ -181,10 +181,10 @@ function parseAutoAction(attrs, { lineNo, locale, fail }) {
   return { type, stepIndex };
 }
 
-function parseWorkflowDslTextWithOptions(text = "", options = {}) {
+function parseWorkflowDslTextWithOptions(inputText = "", options = {}) {
   const locale = normalizeDslLocale(options?.locale || "en-US");
   const { startName, endName } = resolveDslDefaultNodeNames(locale);
-  const normalized = stripCodeFence(text);
+  const normalized = stripCodeFence(inputText);
   if (!normalized) {
     throw new Error(dslError(dslMessage(DSL_ERROR_MESSAGE.EMPTY_TEXT, { locale }), { locale }));
   }
@@ -196,7 +196,7 @@ function parseWorkflowDslTextWithOptions(text = "", options = {}) {
 
   const lines = normalized
     .split(/\r?\n/)
-    .map((line, i) => ({ lineNo: i + 1, text: String(line || "").trim() }))
+    .map((line, i) => ({ lineNo: i + 1, text: text(line) }))
     .filter((item) => item.text && !item.text.startsWith("#") && !item.text.startsWith("//"));
 
   const semantic = { nodes: [], flowtos: [], autoActions: [] };
@@ -212,9 +212,7 @@ function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     const { lineNo, text: line } = item;
     const tokens = tokenize(line);
     if (!tokens.length) continue;
-    const head = String(tokens[0] || "")
-      .trim()
-      .toUpperCase();
+    const head = text(tokens[0]).toUpperCase();
 
     if (head === DSL_PROTOCOL.HEADER) {
       headerSeen = true;
@@ -224,7 +222,7 @@ function parseWorkflowDslTextWithOptions(text = "", options = {}) {
 
     if (head === DSL_PROTOCOL.CMD_NODE) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
-      const id = String(attrs.id || "").trim();
+      const id = text(attrs.id);
       const type = String(attrs.type || DSL_TYPES.NODE_STATE)
         .trim()
         .toLowerCase();
@@ -243,9 +241,7 @@ function parseWorkflowDslTextWithOptions(text = "", options = {}) {
         );
       }
       nodeSet.add(id);
-      const task = String(
-        attrs.task || attrs.taskText || attrs.instruction || attrs.mission || "",
-      ).trim();
+      const task = text(attrs.task || attrs.taskText || attrs.instruction || attrs.mission);
       const attachments = parseNodeAttachmentRefs(attrs.attachments || "");
       semantic.nodes.push({
         id,
@@ -260,12 +256,12 @@ function parseWorkflowDslTextWithOptions(text = "", options = {}) {
 
     if (head === DSL_PROTOCOL.CMD_EDGE) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
-      const from = String(attrs.from || "").trim();
-      const to = String(attrs.to || "").trim();
+      const from = text(attrs.from);
+      const to = text(attrs.to);
       if (!from || !to) {
         failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED, { locale }));
       }
-      if (String(attrs.when || attrs.condition || "").trim()) {
+      if (text(attrs.when || attrs.condition)) {
         failWithLocale(
           lineNo,
           dslMessage(DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED, { locale }),

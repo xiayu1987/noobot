@@ -97,10 +97,10 @@ export function useStartupBridge() {
   }
 
   function appendLogLine(line, { key = "" } = {}) {
-    const text = String(line || "").trim();
-    if (!text || text === lastMessage.value) return;
-    lastMessage.value = text;
-    logEntries.value.push({ key, raw: key ? "" : text });
+    const normalizedText = text(line);
+    if (!normalizedText || normalizedText === lastMessage.value) return;
+    lastMessage.value = normalizedText;
+    logEntries.value.push({ key, raw: key ? "" : normalizedText });
     if (logEntries.value.length > 120) logEntries.value.splice(0, logEntries.value.length - 120);
   }
 

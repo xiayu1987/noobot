@@ -67,11 +67,11 @@ function increasePlanningCaptureAttempts(state = {}) {
   return next;
 }
 
-function parsePlanningTextProtocol(text = "") {
-  const raw = String(text || "").trim();
+function parsePlanningTextProtocol(sourceText = "") {
+  const raw = text(sourceText);
   if (!raw) return { currentTaskGoal: "", planText: "" };
   const goalMatch = raw.match(CURRENT_TASK_GOAL_BLOCK_RE);
-  const currentTaskGoal = String(goalMatch?.[1] || "").trim();
+  const currentTaskGoal = text(goalMatch?.[1]);
   const planText = raw
     .replace(CURRENT_TASK_GOAL_BLOCK_RE, "")
     .replace(PLAN_BLOCK_MARKER_RE, "")

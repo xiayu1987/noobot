@@ -14,6 +14,7 @@ import { createSessionAggregateVersionManager } from "./sessionAggregateVersionM
 import { prepareResendTransaction } from "./resendPreparation.js";
 import { executeResendReplacement } from "./resendExecution.js";
 import { createReplaceTurnRequester } from "./resendTurnRequest.js";
+import { text } from "@noobot/shared/value";
 
 export { resolveKeptAttachments } from "./resendAttachments.js";
 
@@ -88,8 +89,8 @@ export function createResendMessageTransaction({
   });
 
   async function resendMonotonicMessage(targetMessage = {}, editedContent = "", options = {}) {
-    const text = String(editedContent || "").trim();
-    if (!text) return false;
+    const normalizedText = text(editedContent);
+    if (!normalizedText) return false;
 
     const userTargetMessage = resolveMonotonicUserTarget?.(targetMessage);
     if (!userTargetMessage) return false;
@@ -162,7 +163,7 @@ export function createResendMessageTransaction({
       send,
       sessionAggregateVersionManager,
       sessionId,
-      text,
+      text: normalizedText,
       turnRuntimeRegistry,
       userTargetMessage,
       requestReplaceTurn: ({ expectedAggregateVersion, attempt }) =>
@@ -170,7 +171,7 @@ export function createResendMessageTransaction({
           sessionId,
           originalSession,
           anchor,
-          text,
+          text: normalizedText,
           resendTurnScopeId,
           expectedAggregateVersion,
           commandId: operation?.opId || "",

@@ -6,25 +6,26 @@
 import { ElMessage } from "element-plus";
 import { overlayMessageBox } from "./overlayMessageBox.js";
 import { useLocale } from "../i18n/useLocale.js";
+import { text } from "@noobot/shared/value";
 
 export function useUiFeedback() {
   const { translate } = useLocale();
   function notify({ type = "info", message = "" } = {}) {
-    const text = String(message || "").trim();
-    if (!text) return;
+    const normalizedText = text(message);
+    if (!normalizedText) return;
     if (type === "success") {
-      ElMessage.success(text);
+      ElMessage.success(normalizedText);
       return;
     }
     if (type === "warning") {
-      ElMessage.warning(text);
+      ElMessage.warning(normalizedText);
       return;
     }
     if (type === "error") {
-      ElMessage.error(text);
+      ElMessage.error(normalizedText);
       return;
     }
-    ElMessage.info(text);
+    ElMessage.info(normalizedText);
   }
 
   async function confirmDeleteSession() {

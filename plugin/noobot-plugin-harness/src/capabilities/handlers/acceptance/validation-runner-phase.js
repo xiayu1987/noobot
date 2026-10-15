@@ -107,9 +107,10 @@ export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
       return {};
     },
     applyCaptureResult: ({ bucket, responseText, state }) => {
-      const text = String(responseText || "").trim();
-      if (!text) return { applied: false, detail: { reason: "empty_phase_acceptance_output" } };
-      const report = appendPhaseAcceptanceReport(bucket, text);
+      const normalizedText = text(responseText);
+      if (!normalizedText)
+        return { applied: false, detail: { reason: "empty_phase_acceptance_output" } };
+      const report = appendPhaseAcceptanceReport(bucket, normalizedText);
       if (report && state?.flags && typeof state.flags === "object") {
         state.flags.phaseAcceptanceTriggeredThisTurn = true;
       }

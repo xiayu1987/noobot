@@ -45,8 +45,8 @@ export function resolveSubSessionFinalOutput(subSession = {}) {
   return text(result?.answer || result?.output);
 }
 
-export function stripHarnessReviewAppendix(text = "") {
-  const raw = String(text || "").trim();
+export function stripHarnessReviewAppendix(inputText = "") {
+  const raw = text(inputText);
   if (!raw) return "";
   const markerIndex = raw.search(/(?:^|\n)\s*\[Harness-Review\]\s*(?:\n|$)/);
   if (markerIndex < 0) return raw;
@@ -79,10 +79,10 @@ function buildWorkflowTransferReferenceBlock(workflowPayload = null, ctx = {}) {
 }
 
 export function truncateWorkflowResultText(
-  text = "",
+  rawText = "",
   maxLength = LENGTH_THRESHOLDS.contextPreview.workflowResultTextChars,
 ) {
-  const raw = String(text || "").trim();
+  const raw = text(rawText);
   const fallback = LENGTH_THRESHOLDS.contextPreview.workflowResultTextChars;
   const limit = Number.isFinite(Number(maxLength)) ? Math.max(200, Number(maxLength)) : fallback;
   if (raw.length <= limit) return raw;

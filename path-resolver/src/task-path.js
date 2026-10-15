@@ -44,8 +44,8 @@ export function createTaskPath({ kind = "", relative = "", allowRoot = false } =
 }
 
 export function parseTaskPath(value = "", { kind = "", allowRoot = false } = {}) {
-  const text = String(value || "").trim();
-  const match = /^([a-z]+):\/\/(.*)$/.exec(text);
+  const normalizedText = text(value);
+  const match = /^([a-z]+):\/\/(.*)$/.exec(normalizedText);
   if (!match) throw new Error("task path token is required");
   const normalizedKind = normalizeTaskPathKind(match[1]);
   if (kind && normalizedKind !== normalizeTaskPathKind(kind))

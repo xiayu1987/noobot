@@ -92,17 +92,17 @@ function buildParamsJsonText(list = params.value) {
   return `${JSON.stringify({ values: toValuesObject(list) }, null, 2)}\n`;
 }
 
-function parseParamsFromJsonText(text = "") {
+function parseParamsFromJsonText(sourceText = "") {
   let parsed = {};
   try {
-    parsed = JSON.parse(String(text || "{}"));
+    parsed = JSON.parse(String(sourceText || "{}"));
   } catch (error) {
     throw new Error(`JSON parse error: ${error.message || String(error)}`);
   }
   const values = parsed?.values && typeof parsed.values === "object" ? parsed.values : {};
   return normalizeConfigParamList(
     Object.entries(values).map(([key, value]) => ({
-      key: String(key || "").trim(),
+      key: text(key),
       value: String(value ?? "").trim(),
     })),
   );

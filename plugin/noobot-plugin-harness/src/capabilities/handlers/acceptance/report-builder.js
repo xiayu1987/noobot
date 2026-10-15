@@ -49,13 +49,10 @@ function includesAnyKeyword(text = "", keywords = []) {
   return keywords.some((token) => source.includes(token));
 }
 
-function parseModelAcceptanceItemsFromText(text = "") {
-  return parseAcceptanceItemsFromText(text, {
-    normalizePlanId: (value = "") => String(value || "").trim(),
-    normalizeStatus: (value = "") =>
-      String(value || "")
-        .trim()
-        .toLowerCase(),
+function parseModelAcceptanceItemsFromText(sourceText = "") {
+  return parseAcceptanceItemsFromText(sourceText, {
+    normalizePlanId: (value = "") => text(value),
+    normalizeStatus: (value = "") => text(value).toLowerCase(),
   });
 }
 

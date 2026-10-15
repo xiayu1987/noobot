@@ -126,18 +126,18 @@ export function createPlanRevisionHelpers({
   }
 
   function appendRawPatchText(bucket = {}, patchText = "", source = "") {
-    const text = String(patchText || "").trim();
-    if (!text) return false;
+    const normalizedText = text(patchText);
+    if (!normalizedText) return false;
     const header = source ? `# ${source}` : "# plan_patch";
-    const existing = String(bucket.planText || "").trim();
-    bucket.planText = [existing, header, text].filter(Boolean).join("\n");
+    const existing = text(bucket.planText);
+    bucket.planText = [existing, header, normalizedText].filter(Boolean).join("\n");
     bucket.planDocument = parsePlanDocumentFromText(bucket.planText);
     return true;
   }
 
   function applyRevisedPlanFromText(
     ctx = {},
-    text = "",
+    sourceText = "",
     {
       summary = "",
       source = "planning_revision",
@@ -149,7 +149,7 @@ export function createPlanRevisionHelpers({
     if (!holder) return false;
     const { bucket, state } = holder;
     ensurePlanTextBucket(bucket);
-    const payloadText = String(text || "").trim();
+    const payloadText = text(sourceText);
     if (!payloadText) return false;
 
     const normalizedStage = String(stage || source || "revision")
@@ -211,7 +211,7 @@ export function createPlanRevisionHelpers({
         source,
         stage: "refinement",
         refinedAt: new Date().toISOString(),
-        summary: String(summary || "").trim() || undefined,
+        summary: text(summary) || undefined,
         targetMainStepIndexes: normalizedTargetMainStepIndexes,
         patchText: payloadText,
         planText: bucket.planText,
@@ -225,7 +225,7 @@ export function createPlanRevisionHelpers({
     const nextDocument = parsePlanDocumentFromText(bucket.planText);
     const acceptanceStatusReset = resetPlanAcceptanceStatusForPlanChange(
       bucket,
-      String(renderPlanDocument(previousDocument) || "").trim(),
+      text(renderPlanDocument(previousDocument)),
       bucket.planText,
       { stage: normalizedStage, reason: "plan_mutation_changed_item" },
     );
@@ -235,13 +235,13 @@ export function createPlanRevisionHelpers({
         nextDocument,
       );
     }
-    state.flags.planningCaptured = String(bucket.planText || "").trim().length > 0;
+    state.flags.planningCaptured = text(bucket.planText).length > 0;
     if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
     bucket.planRevisions.push({
       source,
       stage: normalizedStage,
       revisedAt: new Date().toISOString(),
-      summary: String(summary || "").trim() || undefined,
+      summary: text(summary) || undefined,
       planText: bucket.planText,
       checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
     });

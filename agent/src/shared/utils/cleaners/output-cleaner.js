@@ -5,6 +5,7 @@
  */
 import { safeNum } from "../shared-utils.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { text } from "@noobot/shared/value";
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 
@@ -30,17 +31,17 @@ export function normalizeTerminalText(input = "") {
 }
 
 export function compactStdout(input = "") {
-  const text = String(input || "").trim();
-  if (!text) return "";
+  const normalizedText = text(input);
+  if (!normalizedText) return "";
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(normalizedText);
     if (Array.isArray(parsed) || (parsed && typeof parsed === "object")) {
       return JSON.stringify(parsed);
     }
   } catch (error) {
     if (!(error instanceof SyntaxError)) throw error;
   }
-  return normalizeText(text);
+  return normalizeText(normalizedText);
 }
 
 function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars) {

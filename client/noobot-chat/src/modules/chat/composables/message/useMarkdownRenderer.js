@@ -137,8 +137,8 @@ function shouldHideCollapse({ attrs = {} } = {}) {
   return kind === "latest_complete_summary" || kind === "acceptance";
 }
 
-function renderCollapsibleMarkdown(text = "", renderEnv = {}) {
-  const source = String(text || "");
+function renderCollapsibleMarkdown(rawText = "", renderEnv = {}) {
+  const source = String(rawText || "");
   const markerNames = collapseMarkerNames();
   if (!markerNames.some((markerName) => source.includes(`<<<${markerName}:start`))) {
     return renderMarkdownSegment(source, renderEnv);
@@ -165,7 +165,7 @@ function renderCollapsibleMarkdown(text = "", renderEnv = {}) {
     }
 
     const attrs = parseMarkerAttributes(startMatch[1] || "");
-    const expectedKind = String(attrs.kind || "").trim();
+    const expectedKind = text(attrs.kind);
     const innerLines = [];
     let endIndex = -1;
     for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
@@ -175,7 +175,7 @@ function renderCollapsibleMarkdown(text = "", renderEnv = {}) {
         continue;
       }
       const endAttrs = parseMarkerAttributes(endMatch[1] || "");
-      const endKind = String(endAttrs.kind || "").trim();
+      const endKind = text(endAttrs.kind);
       if (expectedKind && endKind && endKind !== expectedKind) {
         innerLines.push(lines[cursor]);
         continue;

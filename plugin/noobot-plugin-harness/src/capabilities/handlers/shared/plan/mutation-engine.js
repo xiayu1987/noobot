@@ -38,8 +38,8 @@ function cloneSubPlansForMainId(subPlans = [], mainId = 0) {
     .filter(Boolean);
 }
 
-function parsePlanMutation(text = "") {
-  const normalizedText = String(text || "").trim();
+function parsePlanMutation(sourceText = "") {
+  const normalizedText = text(sourceText);
   const commands = parsePatchCommands(normalizedText);
   const parsedDocument = parsePlanDocumentFromText(normalizedText);
   const mainPlans = Array.isArray(parsedDocument?.mainPlans) ? parsedDocument.mainPlans : [];

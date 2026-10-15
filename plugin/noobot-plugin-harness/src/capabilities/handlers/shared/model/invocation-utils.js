@@ -21,8 +21,8 @@ import { text } from "@noobot/shared/value";
 const RESERVED_TOOL_PROTOCOL_PATTERN = /<\s*\/?\s*(?:tool_call|arg_value)\b/i;
 
 function assertAuxiliaryOutputProtocol(response = {}, purpose = "") {
-  const text = String(response?.output?.text || "").trim();
-  if (!RESERVED_TOOL_PROTOCOL_PATTERN.test(text)) return;
+  const normalizedText = text(response?.output?.text);
+  if (!RESERVED_TOOL_PROTOCOL_PATTERN.test(normalizedText)) return;
   throw new TypeError(
     `harness capability model emitted reserved tool protocol text: ${purpose || "unknown"}`,
   );

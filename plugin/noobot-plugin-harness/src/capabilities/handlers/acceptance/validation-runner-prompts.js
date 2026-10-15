@@ -33,8 +33,8 @@ import { resolveCurrentTaskGoalText } from "../shared/plan/checklist-context.js"
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
 import { text } from "@noobot/shared/value";
 
-export function buildTextAcceptanceValidationResult(text = "") {
-  const raw = String(text || "").trim();
+export function buildTextAcceptanceValidationResult(sourceText = "") {
+  const raw = text(sourceText);
   if (!raw) return null;
   return {
     status: "pass",

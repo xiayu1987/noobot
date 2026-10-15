@@ -121,9 +121,12 @@ export function createModelActivity(
         ]
       : undefined,
     async complete(finalText = "") {
-      const text = String(finalText || "").trim();
-      if (!text) return null;
-      return emitMessageEvent(eventListener, runtime, activityEventType, { ...activity, text });
+      const normalizedText = text(finalText);
+      if (!normalizedText) return null;
+      return emitMessageEvent(eventListener, runtime, activityEventType, {
+        ...activity,
+        text: normalizedText,
+      });
     },
   };
 }

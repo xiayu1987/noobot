@@ -96,7 +96,7 @@ function normalizeResponsesOutputItem(item = {}) {
 
 function extractResponsesOutput(payloadObject = null) {
   if (!Array.isArray(payloadObject?.output)) return { text: "", toolCalls: [], reasoning: [] };
-  const text = [];
+  const textValue = [];
   const toolCalls = [];
   const reasoning = [];
   for (const item of payloadObject.output) {
@@ -110,47 +110,46 @@ function extractResponsesOutput(payloadObject = null) {
       const summaries = Array.isArray(item.summary) ? item.summary : [];
       for (const summary of summaries) {
         const value = typeof summary === "string" ? summary : summary?.text;
-        if (String(value || "").trim()) reasoning.push(String(value).trim());
+        if (text(value)) reasoning.push(String(value).trim());
       }
       continue;
     }
     if (item.type === "message" && Array.isArray(item.content)) {
       for (const block of item.content) {
         if (block?.type === "output_text" || block?.type === "text") {
-          if (String(block.text || "").trim()) text.push(String(block.text).trim());
+          if (text(block.text)) textValue.push(String(block.text).trim());
         }
       }
     }
   }
-  return { text: text.join(""), toolCalls, reasoning };
+  return { text: textValue.join(""), toolCalls, reasoning };
 }
 
 function extractAnthropicContent(payloadObject = null) {
   if (!Array.isArray(payloadObject?.content)) return { text: "", toolCalls: [], reasoning: [] };
-  const text = [];
+  const rawText = [];
   const toolCalls = [];
   const reasoning = [];
   for (const block of payloadObject.content) {
-    if (block?.type === "text" && String(block.text || "").trim())
-      text.push(String(block.text).trim());
-    if (block?.type === "thinking" && String(block.thinking || "").trim())
+    if (block?.type === "text" && text(block.text)) rawText.push(String(block.text).trim());
+    if (block?.type === "thinking" && text(block.thinking))
       reasoning.push(String(block.thinking).trim());
     if (block?.type === "tool_use") {
       toolCalls.push({
-        id: String(block.id || "").trim(),
+        id: text(block.id),
         type: "function",
         function: {
-          name: String(block.name || "").trim(),
+          name: text(block.name),
           arguments: JSON.stringify(block.input ?? {}),
         },
       });
     }
   }
-  return { text: text.join(""), toolCalls, reasoning };
+  return { text: rawText.join(""), toolCalls, reasoning };
 }
 
-function formatResponseProjection({ text = "", toolCalls = [], reasoning = [] } = {}) {
-  if (String(text || "").trim()) return String(text).trim();
+function formatResponseProjection({ text: sourceText = "", toolCalls = [], reasoning = [] } = {}) {
+  if (text(sourceText)) return String(sourceText).trim();
   if (toolCalls.length) {
     return JSON.stringify({ type: "tool_calls", tool_calls: toolCalls }, null, 2);
   }
