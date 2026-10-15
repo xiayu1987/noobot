@@ -77,6 +77,7 @@ function finalizeCommand(turn, identity) {
     turnScopeId: clean(turn.turnScopeId),
     dialogProcessId: clean(turn.dialogProcessId),
     commandId: completionCommitId,
+    causationId: completionCommitId,
     eventType: isStop ? TURN_EVENT.STOP_COMPLETED : TURN_EVENT.COMPLETED,
     phase: isStop ? TURN_PHASE.STOP : TURN_PHASE.COMPLETION,
     expectedRevision: Number(turn.revision || 0),
@@ -93,11 +94,13 @@ function finalizeCommand(turn, identity) {
 function orphanCommand(turn, identity) {
   const turnScopeId = clean(turn.turnScopeId);
   const phase = PHASES.has(turn.phase) ? turn.phase : TURN_PHASE.PROCESSING;
+  const commandId = `orphaned:${turnScopeId}:failed:${phase}:r${Number(turn.revision || 0)}`;
   return {
     ...identity,
     turnScopeId,
     dialogProcessId: clean(turn.dialogProcessId),
-    commandId: `orphaned:${turnScopeId}:failed:${phase}:r${Number(turn.revision || 0)}`,
+    commandId,
+    causationId: commandId,
     eventType: TURN_EVENT.FAILED,
     phase,
     expectedRevision: Number(turn.revision || 0),

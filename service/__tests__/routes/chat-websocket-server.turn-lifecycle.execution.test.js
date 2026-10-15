@@ -303,6 +303,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
     sessionId: "s-deduplicated-ack",
     turnScopeId: "turn-deduplicated-ack",
     commandId: "command-deduplicated-ack",
+    causationId: "command-deduplicated-ack",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: "send",

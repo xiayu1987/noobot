@@ -59,6 +59,7 @@ test("initial provision replay is idempotent and concurrent first actions are mu
   const competing = await h.service.applyTurnLifecycleEvent({
     ...first,
     commandId: "competing",
+    causationId: "competing",
     turnScopeId: "t2",
   });
   assert.equal(accepted.sessionCreated, true);

@@ -372,6 +372,7 @@ function createLifecycleCommitter(session, lifecycleIdentity, scopedEventListene
 async function commitDetachedStart(lifecycle, startedAt, request, identity, runConfig) {
   const accepted = await lifecycle.commit({
     commandId: `${lifecycle.commandId}:accepted`,
+    causationId: `${lifecycle.commandId}:accepted`,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: "send",
@@ -389,6 +390,7 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
   });
   await lifecycle.commit({
     commandId: `${lifecycle.commandId}:processing-started`,
+    causationId: `${lifecycle.commandId}:processing-started`,
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: TURN_PHASE.PROCESSING,
     executionState: "sending",
@@ -465,18 +467,21 @@ async function commitDetachedError(error, dependencies, request, runtime, identi
 async function commitDetachedStop(dependencies, lifecycle) {
   await lifecycle.commit({
     commandId: `${lifecycle.commandId}:stop-accepted`,
+    causationId: `${lifecycle.commandId}:stop-accepted`,
     eventType: TURN_EVENT.STOP_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: "stop",
   });
   await lifecycle.commit({
     commandId: `${lifecycle.commandId}:stop-processing-completed`,
+    causationId: `${lifecycle.commandId}:stop-processing-completed`,
     eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
     phase: TURN_PHASE.STOP,
   });
   const completionCommitId = `${lifecycle.commandId}:stop-completed`;
   return lifecycle.commit({
     commandId: completionCommitId,
+    causationId: completionCommitId,
     eventType: TURN_EVENT.STOP_COMPLETED,
     phase: TURN_PHASE.STOP,
     executionState: "user_stopped",
@@ -489,6 +494,7 @@ async function commitDetachedStop(dependencies, lifecycle) {
 function commitDetachedFailure(error, lifecycle) {
   return lifecycle.commit({
     commandId: `${lifecycle.commandId}:failed`,
+    causationId: `${lifecycle.commandId}:failed`,
     eventType: TURN_EVENT.FAILED,
     phase: TURN_PHASE.PROCESSING,
     failure: {
@@ -519,12 +525,14 @@ function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, er
 async function commitDetachedCompletion(dependencies, lifecycle) {
   await lifecycle.commit({
     commandId: `${lifecycle.commandId}:processing-completed`,
+    causationId: `${lifecycle.commandId}:processing-completed`,
     eventType: TURN_EVENT.PROCESSING_COMPLETED,
     phase: TURN_PHASE.COMPLETION,
   });
   const completionCommitId = `${lifecycle.commandId}:completed`;
   return lifecycle.commit({
     commandId: completionCommitId,
+    causationId: completionCommitId,
     eventType: TURN_EVENT.COMPLETED,
     phase: TURN_PHASE.COMPLETION,
     executionState: "completed",

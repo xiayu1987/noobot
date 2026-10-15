@@ -25,12 +25,14 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     messageId: "turn-message-recover",
     presentationMessageId: "presentation-recover",
     commandId: "start",
+    causationId: "start",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     action: "send",
   });
   apply({
     turnScopeId: "turn-recover",
     commandId: "running",
+    causationId: "running",
     eventType: TURN_EVENT.PROCESSING_STARTED,
     phase: "processing",
     executionState: "sending",
@@ -38,6 +40,7 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
   apply({
     turnScopeId: "turn-recover",
     commandId: "processed",
+    causationId: "processed",
     eventType: TURN_EVENT.PROCESSING_COMPLETED,
     phase: "completion",
     finalizeCommandId: "stable-finalize",

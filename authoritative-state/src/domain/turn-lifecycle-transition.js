@@ -80,7 +80,9 @@ export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
 
 function validateRequestIdentity(request) {
   const { lifecycle, input, current, turnScopeId, commandId, eventType } = request;
-  if (!turnScopeId || !commandId || !eventType) return "invalid_lifecycle_identity";
+  if (!turnScopeId || !commandId || !text(input.causationId) || !eventType) {
+    return "invalid_lifecycle_identity";
+  }
   if (lifecycle.replacedTurns[turnScopeId]) return "turn_replaced";
   if (!request.messageId || !request.presentationMessageId)
     return "turn_message_identity_incomplete";

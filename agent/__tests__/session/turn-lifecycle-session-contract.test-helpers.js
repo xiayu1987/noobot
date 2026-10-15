@@ -141,6 +141,7 @@ const event = (eventType, commandId, expectedRevision, extra = {}) => {
     presentationMessageId: "presentation-t1",
     eventType,
     commandId,
+    causationId: commandId,
     expectedRevision,
     ...extra,
     ...(eventType === TURN_EVENT.ACTION_ACCEPTED && action !== "resend"

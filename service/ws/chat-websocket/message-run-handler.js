@@ -79,17 +79,19 @@ function createFailureCommitter(context) {
   ) {
     await settlePendingLifecycle(context);
     const failureContext = resolveFailureContext(context, fallbackPhase);
+    const commandId = createTurnLifecycleCommandId({
+      commandId: failureContext.commandBase,
+      eventType: TURN_EVENT.FAILED,
+      phase: failureContext.phase,
+    });
     return context.commitTurnLifecycle({
       userId: failureContext.userId,
       sessionId: failureContext.sessionId,
       parentSessionId: failureContext.parentSessionId,
       turnScopeId: failureContext.turnScopeId,
       dialogProcessId: failureContext.dialogProcessId,
-      commandId: createTurnLifecycleCommandId({
-        commandId: failureContext.commandBase,
-        eventType: TURN_EVENT.FAILED,
-        phase: failureContext.phase,
-      }),
+      commandId,
+      causationId: commandId,
       eventType: TURN_EVENT.FAILED,
       phase: failureContext.phase,
       failure: {

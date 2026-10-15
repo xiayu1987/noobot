@@ -18,6 +18,7 @@ function acceptedTurn() {
     event: {
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       commandId: "send-old",
+      causationId: "send-old",
       sessionId: "session-1",
       turnScopeId: "turn-old",
       dialogProcessId: "dialog-old",
@@ -91,6 +92,7 @@ test("replaced Turn tombstone rejects delayed lifecycle events and replacement c
   const delayed = transitionTurnLifecycle(committed.lifecycle, {
     eventType: TURN_EVENT.PROCESSING_STARTED,
     commandId: "late-processing",
+    causationId: "late-processing",
     turnScopeId: "turn-old",
     messageId: "source-old",
     presentationMessageId: "presentation-old",
@@ -160,6 +162,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
     {
       eventType: TURN_EVENT.PROCESSING_STARTED,
       commandId: "send-old-processing-started",
+      causationId: "send-old-processing-started",
       turnScopeId: "turn-old",
       messageId: "source-old",
       presentationMessageId: "presentation-old",
@@ -169,6 +172,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
     {
       eventType: TURN_EVENT.STOP_ACCEPTED,
       commandId: "stop-old",
+      causationId: "stop-old",
       turnScopeId: "turn-old",
       messageId: "source-old",
       presentationMessageId: "presentation-old",
@@ -177,6 +181,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
     {
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
       commandId: "stop-old-processing-completed",
+      causationId: "stop-old-processing-completed",
       turnScopeId: "turn-old",
       messageId: "source-old",
       presentationMessageId: "presentation-old",
@@ -185,6 +190,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
     {
       eventType: TURN_EVENT.STOP_COMPLETED,
       commandId: "stop-old-completed",
+      causationId: "stop-old-completed",
       turnScopeId: "turn-old",
       messageId: "source-old",
       presentationMessageId: "presentation-old",
@@ -197,6 +203,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
   const continued = transitionTurnLifecycle(sourceStopped, {
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     commandId: "continue-target",
+    causationId: "continue-target",
     turnScopeId: "turn-target",
     messageId: "source-target",
     presentationMessageId: "presentation-target",

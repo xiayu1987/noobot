@@ -46,17 +46,19 @@ export function createTurnFinalizer({
       }),
     );
   const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
+    const commandId = createTurnLifecycleCommandId({
+      commandId: state.runMeta?.commandId || state.runMeta?.turnScopeId || state.turnScopeId,
+      eventType: TURN_EVENT.FAILED,
+      phase: TURN_PHASE.PROCESSING,
+    });
     const failed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
       sessionId: state.runMeta?.sessionId || "",
       parentSessionId: state.runMeta?.parentSessionId || "",
       turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
       dialogProcessId: state.runMeta?.dialogProcessId || "",
-      commandId: createTurnLifecycleCommandId({
-        commandId: state.runMeta?.commandId || state.runMeta?.turnScopeId || state.turnScopeId,
-        eventType: TURN_EVENT.FAILED,
-        phase: TURN_PHASE.PROCESSING,
-      }),
+      commandId,
+      causationId: commandId,
       eventType: TURN_EVENT.FAILED,
       phase: TURN_PHASE.PROCESSING,
       failure: {

@@ -174,7 +174,7 @@ function materializeAcceptedUserMessage({
       attachments: [],
       turnCommit: {
         action: resolveTurnCommitAction(event.action),
-        commandId: text(event.causationId || event.commandId),
+        commandId: text(event.causationId),
         ...(event.continuationSource
           ? {
               resumeDialogProcessId: text(event.continuationSource.dialogProcessId),

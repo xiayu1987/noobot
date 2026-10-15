@@ -365,6 +365,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
     {
       turnScopeId: "turn-idle-stop",
       commandId: "turn-idle-stop",
+      causationId: "turn-idle-stop",
       eventType: "turn.action_accepted",
       phase: "action",
       action: "send",
@@ -374,6 +375,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
     {
       turnScopeId: "turn-idle-stop",
       commandId: "turn-idle-stop:processing-started",
+      causationId: "turn-idle-stop:processing-started",
       eventType: "turn.processing_started",
       phase: "processing",
       executionState: "sending",
@@ -546,6 +548,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
     const nextAction = transitionTurnLifecycle(lifecycle, {
       turnScopeId: "turn-after-idle-stop",
       commandId: "turn-after-idle-stop",
+      causationId: "turn-after-idle-stop",
       eventType: "turn.action_accepted",
       phase: "action",
       action: "send",

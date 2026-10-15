@@ -41,6 +41,7 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     presentationMessageId: `presentation-${turnScopeId}`,
     dialogProcessId: "dialog-1",
     commandId,
+    causationId: commandId,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: "send",
