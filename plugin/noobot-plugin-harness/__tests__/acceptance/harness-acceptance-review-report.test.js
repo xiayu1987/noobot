@@ -72,7 +72,7 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
         lastAcceptanceReport: {
           mode: "active",
           summary: { total: 1, completed: 1, inProgress: 0, pending: 0 },
-          taskChecklist: [{ index: 1, task: "执行核心任务", status: "completed" }],
+          finalPlanChecklist: [{ index: 1, task: "执行核心任务", status: "completed" }],
           semanticValidation: { status: "fail", consistent: false, missingItems: ["执行核心任务"] },
         },
         state: {

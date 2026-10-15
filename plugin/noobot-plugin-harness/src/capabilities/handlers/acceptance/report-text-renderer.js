@@ -58,7 +58,7 @@ function extractAcceptanceReportFields(report = {}) {
     mode: text(data.mode) || "active",
     forcedReason: text(data.forcedReason),
     acceptedAt: text(data.acceptedAt),
-    planText: text(data.planText || data?.plan?.planText),
+    planText: text(data.planText),
     checklist: Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [],
     summary: data?.summary && typeof data.summary === "object" ? data.summary : {},
     semanticValidation:

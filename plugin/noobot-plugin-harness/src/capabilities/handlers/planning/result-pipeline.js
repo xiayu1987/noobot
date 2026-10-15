@@ -166,8 +166,6 @@ function applyPlanText(
     previousDocument,
     bucket.planDocument,
   );
-  bucket.taskChecklist = [];
-  bucket.taskChecklistSource = "plan_text";
   bucket.taskOwner = bucket.taskOwner || getDefaultTaskOwner(state?.locale || LOCALE.ZH_CN);
   bucket.globalRevisionCount = Number.isFinite(Number(bucket.globalRevisionCount))
     ? Number(bucket.globalRevisionCount)

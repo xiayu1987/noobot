@@ -146,7 +146,7 @@ test("harness planning uses plan text flow without json repair", async () => {
 
   assert.equal(purposes.includes("planning"), true);
   assert.equal(purposes.includes("planning_json_repair"), false);
-  assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
+  assert.equal("taskChecklistSource" in ctx.agentContext.payload.harness, false);
   assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, true);
 });
 
@@ -184,7 +184,6 @@ test("harness planning requires parseable main plan payload", async () => {
   assertFlatCapabilityMessages(invocations[0].messages);
 
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, false);
-  assert.equal(Array.isArray(ctx.agentContext.payload.harness.taskChecklist), true);
-  assert.equal(ctx.agentContext.payload.harness.taskChecklist.length, 0);
+  assert.equal("taskChecklist" in ctx.agentContext.payload.harness, false);
   assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, false);
 });

@@ -45,7 +45,7 @@ test("planning result pipeline captures plan text directly", async () => {
   assert.equal(result.captured, true);
   assert.equal(result.sourceType, "plan_text");
   assert.equal(result.checklistCount, 2);
-  assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
+  assert.equal("taskChecklistSource" in ctx.agentContext.payload.harness, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
@@ -280,7 +280,7 @@ test("planning result pipeline applies default checklist when retry exhausted", 
   assert.equal(result.captured, true);
   assert.equal(result.retryScheduled, false);
   assert.equal(result.sourceType, "default");
-  assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
+  assert.equal("taskChecklistSource" in ctx.agentContext.payload.harness, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
   const logs = Array.isArray(ctx.agentContext.payload.harness.logs?.planning)
     ? ctx.agentContext.payload.harness.logs.planning

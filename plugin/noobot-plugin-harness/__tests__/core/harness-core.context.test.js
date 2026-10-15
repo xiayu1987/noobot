@@ -25,7 +25,6 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
             signals: { successfulToolCount: 3 },
             pending: { guidance: null, summary: false },
           },
-          taskChecklist: [{ index: 1, task: "t1" }],
           acceptanceReports: [],
           reviewReports: [],
           planningRawOutputs: [],
@@ -49,7 +48,6 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
     signals: first.state.signals,
     pending: first.state.pending,
     logs: first.bucket.logs,
-    taskChecklist: first.bucket.taskChecklist,
   };
 
   const second = ensureHarnessBucket(ctx);
@@ -61,7 +59,6 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
   assert.equal(second.state.signals, refs.signals);
   assert.equal(second.state.pending, refs.pending);
   assert.equal(second.bucket.logs, refs.logs);
-  assert.equal(second.bucket.taskChecklist, refs.taskChecklist);
   assert.equal(second.state.counters.llmTurns, 9);
   assert.equal(second.state.flags.planningCaptured, true);
   assert.equal(second.state.signals.successfulToolCount, 3);

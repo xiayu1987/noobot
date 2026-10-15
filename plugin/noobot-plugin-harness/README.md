@@ -235,15 +235,7 @@ Otherwise refinement is rejected (`planning_refinement_rejected_invalid_target_m
 
 ### Acceptance payload semantics
 
-Semantic acceptance validation now emphasizes:
-
-- `finalMainPlan` (latest revised main plan)
-- `refinementPlansForFinalMainPlan` (only refinements belonging to the same `mainPlanVersion`)
-
-Validation checklists (`taskChecklist`/`finalPlanChecklist`) are composed from:
-
-- `finalMainPlan.taskChecklist`
-- plus refinement items from `refinementPlansForFinalMainPlan`
+`bucket.planText` is the single source of the plan. The semantic validation payload carries only `planText` plus `acceptanceState`, `toolSignals` and `finalOutput`. An acceptance report carries the plan only as top-level `planText` and the checklist only as `finalPlanChecklist`, parsed from `planText`; when no plan exists, the default checklist template is used. The `plan` snapshot holds plan metadata (goal, owner, revisions) without repeating `planText`.
 
 ## Acceptance semantic validation
 

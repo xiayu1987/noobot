@@ -80,7 +80,6 @@ export function ensureHarnessBucket(ctx = {}) {
   const isFastPathReady =
     bucket.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
     typeof bucket.planText === "string" &&
-    Array.isArray(bucket.taskChecklist) &&
     Array.isArray(bucket.acceptanceReports) &&
     Array.isArray(bucket.reviewReports) &&
     Array.isArray(bucket.planningRawOutputs) &&
@@ -100,7 +99,6 @@ export function ensureHarnessBucket(ctx = {}) {
     fillMissingDefaults(flags, DEFAULT_HARNESS_FLAGS);
     fillMissingDefaults(signals, DEFAULT_HARNESS_SIGNALS);
     fillMissingDefaults(pending, DEFAULT_HARNESS_PENDING);
-    ensureArrayField(bucket, "taskChecklist");
     ensureArrayField(bucket, "acceptanceReports");
     ensureArrayField(bucket, "phaseAcceptanceReports");
     ensureArrayField(bucket, "reviewReports");

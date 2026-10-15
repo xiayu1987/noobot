@@ -42,7 +42,7 @@ Current summary-driven plan update pipeline:
 
 ### Persistence model (harness bucket)
 
-- `taskChecklist`: latest main plan checklist.
+- `planText`: the single source of the current plan (main steps and sub steps).
 - `planRevisions[]`: ordered revision/refinement history with `stage` and `mainPlanVersion`.
 - `planRefinementRecords[]`: refinement-only records, including `targetMainStepIndexes`.
 - `mainPlanVersion/currentMainPlanVersion`: versioning for matching refinements to main plan.
@@ -50,9 +50,4 @@ Current summary-driven plan update pipeline:
 
 ### Acceptance input model
 
-Acceptance semantic validation uses:
-
-- `finalMainPlan`
-- `refinementPlansForFinalMainPlan`
-
-and composes final validation checklist from those two sources (instead of relying only on raw `bucket.taskChecklist`).
+Acceptance semantic validation reads the plan only from `bucket.planText` and parses the checklist from it. The bucket stores no separate checklist; v5 migration removes the legacy `taskChecklist`/`taskChecklistSource` fields. Acceptance reports keep `planText` and `finalPlanChecklist` as their only plan and checklist fields; v6 migration removes the duplicated `taskChecklist` and `plan.planText` from persisted acceptance reports, including those embedded in review reports.

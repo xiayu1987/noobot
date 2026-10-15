@@ -16,8 +16,8 @@ import { collectRatchet, ratchetViolations } from "./quality/baseline-ratchet.mj
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  clones: 60,
-  duplicatedLines: 703,
+  clones: 58,
+  duplicatedLines: 685,
 });
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-duplication-"));

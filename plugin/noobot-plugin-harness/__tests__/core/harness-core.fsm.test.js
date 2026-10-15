@@ -77,7 +77,7 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
       agentContext: {
         payload: {
           harness: {
-            taskChecklist: [{ index: 1, task: "t1" }],
+            planText: "1. t1",
           },
         },
       },

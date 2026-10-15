@@ -68,10 +68,8 @@ export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
   const source = bucket && typeof bucket === "object" ? bucket : {};
   return {
     totalGoal: text(source.totalGoal),
-    planText: text(source.planText),
     taskOwner: text(source.taskOwner) || getDefaultTaskOwner(locale),
     nextPhase: source.nextPhase && typeof source.nextPhase === "object" ? source.nextPhase : null,
-    checklistSource: text(source.taskChecklistSource),
     revisionCount: Array.isArray(source.planRevisions) ? source.planRevisions.length : 0,
     operationDirectory:
       source.operationDirectory && typeof source.operationDirectory === "object"

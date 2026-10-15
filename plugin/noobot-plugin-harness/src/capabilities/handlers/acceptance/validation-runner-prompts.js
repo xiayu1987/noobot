@@ -7,7 +7,6 @@ import {
   HARNESS_I18N_KEYSET,
   LOCALE,
   buildCapabilityProtocolModelMessages,
-  getDefaultTaskOwner,
   translateI18nText,
 } from "./deps.js";
 import { appendMessage } from "../../../core/message-store.js";
@@ -30,6 +29,7 @@ import {
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptance-status.js";
 import { resolveCurrentTaskGoalText } from "../shared/plan/checklist-context.js";
+import { parseMainPlansFromPlanText } from "../shared/plan/text-protocol.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
 import { text } from "@noobot/shared/value";
 
@@ -73,61 +73,10 @@ export function filterHistoricalSummaryRelayMessages(messages = []) {
   );
 }
 
-export function resolveAcceptanceMainPlanContext(
-  promptPayload = {},
-  bucket = {},
-  locale = LOCALE.ZH_CN,
-  ctx = {},
-) {
-  const finalMainPlan =
-    promptPayload?.finalMainPlan && typeof promptPayload.finalMainPlan === "object"
-      ? promptPayload.finalMainPlan
-      : {};
-  const checklistFromFinalMainPlan = Array.isArray(finalMainPlan?.taskChecklist)
-    ? finalMainPlan.taskChecklist
-    : [];
-  const checklistFromPayload = Array.isArray(promptPayload?.finalPlanChecklist)
-    ? promptPayload.finalPlanChecklist
-    : [];
-  const mainPlanVersion = Number.isFinite(Number(finalMainPlan?.mainPlanVersion))
-    ? Number(finalMainPlan.mainPlanVersion)
-    : Number.isFinite(Number(bucket?.currentMainPlanVersion))
-      ? Number(bucket.currentMainPlanVersion)
-      : Number.isFinite(Number(bucket?.mainPlanVersion))
-        ? Number(bucket.mainPlanVersion)
-        : 1;
-  const taskOwner =
-    String(finalMainPlan?.taskOwner || bucket?.taskOwner || getDefaultTaskOwner(locale)).trim() ||
-    getDefaultTaskOwner(locale);
-  const totalGoal = text(finalMainPlan?.totalGoal || bucket?.totalGoal);
-  const nextPhase =
-    (finalMainPlan?.nextPhase && typeof finalMainPlan.nextPhase === "object"
-      ? finalMainPlan.nextPhase
-      : bucket?.nextPhase && typeof bucket.nextPhase === "object"
-        ? bucket.nextPhase
-        : null) || null;
+export function resolveAcceptanceMainPlanContext(promptPayload = {}, bucket = {}) {
   return {
-    mainPlanVersion,
-    totalGoal,
-    taskOwner,
-    nextPhase,
-    taskChecklist: checklistFromFinalMainPlan.length
-      ? checklistFromFinalMainPlan
-      : checklistFromPayload.length
-        ? checklistFromPayload
-        : Array.isArray(bucket?.taskChecklist)
-          ? bucket.taskChecklist
-          : [],
     planText: text(promptPayload?.planText),
-    currentTaskGoal: resolveCurrentTaskGoalText({
-      ctx,
-      bucket,
-      currentTaskGoal: promptPayload?.currentTaskGoal || "",
-    }),
-    plansInOrder: Array.isArray(promptPayload?.plansInOrder) ? promptPayload.plansInOrder : [],
-    refinementPlansForFinalMainPlan: Array.isArray(promptPayload?.refinementPlansForFinalMainPlan)
-      ? promptPayload.refinementPlansForFinalMainPlan
-      : [],
+    currentTaskGoal: resolveCurrentTaskGoalText({ bucket }),
   };
 }
 
@@ -183,13 +132,13 @@ export function buildPhaseAcceptanceRequestPayload({ bucket = {}, state = {} } =
   };
 }
 
-export function appendPhaseAcceptanceReport(bucket = {}, content = "", { planText = "" } = {}) {
+export function appendPhaseAcceptanceReport(bucket = {}, content = "") {
   if (!bucket || typeof bucket !== "object") return null;
   if (!Array.isArray(bucket.phaseAcceptanceReports)) bucket.phaseAcceptanceReports = [];
   const report = {
     type: "phase",
     acceptedAt: new Date().toISOString(),
-    planText: text(planText || bucket?.planText),
+    planText: text(bucket.planText),
     content: text(content),
   };
   bucket.phaseAcceptanceReports.push(report);
@@ -206,7 +155,7 @@ export function buildFinalOutputFallbackPhaseAcceptanceText(
   bucket = {},
   state = {},
 ) {
-  const checklistCount = Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist.length : 0;
+  const checklistCount = parseMainPlansFromPlanText(bucket?.planText).length;
   const signalCount = Number(state?.signals?.successfulToolCount || 0);
   return translateI18nText(
     locale,
@@ -236,7 +185,6 @@ export function pushRoleMessage(ctx = {}, messages = [], role = "system", conten
 
 export function buildAcceptancePromptParts({
   bucket = {},
-  state = {},
   locale = LOCALE.ZH_CN,
   requestPayload = {},
   phase = false,
@@ -245,14 +193,8 @@ export function buildAcceptancePromptParts({
   includeWorkflowPolicy = true,
 } = {}) {
   const mainPlanContext = resolveAcceptanceMainPlanContext(
-    {
-      planText: text(bucket?.planText),
-      finalPlanChecklist: Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist : [],
-      currentTaskGoal: resolveCurrentTaskGoalText({ ctx, bucket }),
-    },
+    { planText: text(bucket?.planText) },
     bucket,
-    locale,
-    ctx,
   );
   const planContextContent = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -296,7 +238,6 @@ export function buildAcceptancePromptParts({
         includeWorkflowPolicy,
         includeProtocol: false,
       });
-  void state;
   return {
     planContextContent,
     summaryReportsContents,

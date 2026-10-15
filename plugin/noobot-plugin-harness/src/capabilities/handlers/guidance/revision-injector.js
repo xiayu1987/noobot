@@ -16,6 +16,7 @@ import { captureInjectedResult, scheduleInjectTask } from "../inject-fallback.js
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
+import { parseMainPlansFromPlanText } from "../shared/plan/text-protocol.js";
 import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import {
   canAttemptPlanUpdate,
@@ -104,7 +105,7 @@ export function schedulePlanUpdateByInject(
         normalizedStage === "refinement"
           ? targetMainSteps.map((item = {}) => Number(item?.index))
           : [],
-      checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
+      checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
     }),
   });
 }
@@ -252,7 +253,7 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
             revisionApplied: applied === true,
             refinementScheduled: scheduled === true,
             refinementTargetMainStepIndexes,
-            checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
+            checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
           },
         };
       }
@@ -263,7 +264,7 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
           refinementTargetMainStepIndexes: Array.isArray(captureMeta?.targetMainStepIndexes)
             ? captureMeta.targetMainStepIndexes
             : [],
-          checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
+          checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
         },
       };
     },

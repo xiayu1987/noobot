@@ -225,7 +225,7 @@ test("resolveFsmTargetByHook uses rule table consistently", () => {
         bindings: {
           runtime: {},
           tools: [],
-          extensions: { harness: { taskChecklist: [{ task: "x" }] } },
+          extensions: { harness: { planText: "1. x" } },
         },
       },
     },

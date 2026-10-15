@@ -26,6 +26,14 @@ test("acceptance report does not project semantic-transfer storage paths", () =>
   assert.doesNotMatch(String(text), /runtime\/summary\/detail-1\.md/);
 });
 
+test("renderAcceptanceReportText reads plan text only from report.planText", () => {
+  const text = renderAcceptanceReportText(
+    { mode: "active", finalPlanChecklist: [], plan: { planText: "1. 快照计划" } },
+    "zh-CN",
+  );
+  assert.doesNotMatch(String(text), /快照计划/);
+});
+
 test("before_final_output keeps last acceptance report off the final output", async () => {
   const report = buildAcceptanceReport({
     bucket: {

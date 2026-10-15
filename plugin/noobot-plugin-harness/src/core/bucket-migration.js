@@ -88,6 +88,35 @@ function migratePlanUpdateState(state = {}) {
   if (flags.planUpdateCapturePending !== true) flags.planUpdateCapturePending = false;
 }
 
+function removeTaskChecklistFields(bucket = {}) {
+  delete bucket.taskChecklist;
+  delete bucket.taskChecklistSource;
+}
+
+function arrayField(target = {}, key = "") {
+  return Array.isArray(target[key]) ? target[key] : [];
+}
+
+function removeAcceptanceReportDuplicateFields(bucket = {}) {
+  const reviewReports = [bucket.lastReviewReport, ...arrayField(bucket, "reviewReports")];
+  const reports = [
+    bucket.lastAcceptanceReport,
+    ...arrayField(bucket, "acceptanceReports"),
+    ...reviewReports.map((review) => review?.acceptanceReport),
+  ];
+  for (const report of reports) {
+    if (!isPlainObject(report)) continue;
+    delete report.taskChecklist;
+    if (isPlainObject(report.plan)) delete report.plan.planText;
+  }
+}
+
+const MIGRATION_STEPS = Object.freeze([
+  { toVersion: 4, migrate: (bucket, state) => migratePlanUpdateState(state) },
+  { toVersion: 5, migrate: (bucket) => removeTaskChecklistFields(bucket) },
+  { toVersion: 6, migrate: (bucket) => removeAcceptanceReportDuplicateFields(bucket) },
+]);
+
 export function migrateHarnessBucket(ctx = {}) {
   const bucket = resolveHarnessBucket(ctx);
   if (!bucket) return { migrated: false, fromVersion: null, toVersion: null };
@@ -105,7 +134,9 @@ export function migrateHarnessBucket(ctx = {}) {
   if (fromVersion < 0 || fromVersion > HARNESS_BUCKET_VERSION) {
     throw new Error(`unsupported_harness_bucket_version:${fromVersion}`);
   }
-  migratePlanUpdateState(state);
+  for (const step of MIGRATION_STEPS) {
+    if (step.toVersion > fromVersion) step.migrate(bucket, state);
+  }
   delete state.__harnessBucketVersion;
   bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
   return { migrated: true, fromVersion, toVersion: HARNESS_BUCKET_VERSION };

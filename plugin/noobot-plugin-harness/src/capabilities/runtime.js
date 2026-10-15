@@ -38,9 +38,7 @@ function isMainPlanReady(bucket = null) {
   const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : {};
   if (state?.flags?.planningCaptured === true) return true;
   if (text(bucket?.planText)) return true;
-  if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0)
-    return true;
-  return Array.isArray(bucket?.taskChecklist) && bucket.taskChecklist.length > 0;
+  return Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0;
 }
 
 function markPlanningCapturedIfPlanReady(bucket = null) {

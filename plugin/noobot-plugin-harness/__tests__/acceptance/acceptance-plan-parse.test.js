@@ -24,7 +24,9 @@ test("acceptance report checklist includes first-level sub plans from planText",
     },
     state: { locale: "zh-CN", signals: {} },
   });
-  const checklist = Array.isArray(report?.taskChecklist) ? report.taskChecklist : [];
+  assert.equal("taskChecklist" in report, false);
+  assert.equal("planText" in report.plan, false);
+  const checklist = report.finalPlanChecklist;
   assert.equal(checklist.length, 4);
   assert.equal(checklist[0].index, 1);
   assert.equal(checklist[1].index, 1.1);
@@ -54,23 +56,6 @@ test("plan checklist context includes planning-model current task goal from buck
   assert.match(String(content), /计划模型提炼的当前任务目标/);
   assert.match(String(content), /任务清单/);
   assert.match(String(content), /^1\.1 梳理约束/m);
-});
-
-test("complete plan resolver preserves sub-plans from taskChecklist fallback", () => {
-  const text = resolveCompletePlanChecklistText({
-    bucket: {
-      taskChecklist: [
-        { index: 1, task: "主计划一", isMainStep: true },
-        { index: 101, mainStepIndex: 1, isMainStep: false, task: "子计划一" },
-        { index: 2, task: "主计划二", isMainStep: true },
-        { index: 205, mainStepIndex: 2, isMainStep: false, task: "子计划二一" },
-      ],
-    },
-  });
-  assert.match(String(text), /^1\. 主计划一/m);
-  assert.match(String(text), /^1\.1 子计划一/m);
-  assert.match(String(text), /^2\. 主计划二/m);
-  assert.match(String(text), /^2\.1 子计划二一/m);
 });
 
 test("complete plan resolver prefers bucket.planDocument over planText", () => {

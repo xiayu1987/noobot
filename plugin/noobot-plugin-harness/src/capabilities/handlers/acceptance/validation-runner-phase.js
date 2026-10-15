@@ -60,7 +60,6 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
     protocolContent,
   } = buildAcceptancePromptParts({
     bucket,
-    state,
     locale,
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
@@ -150,7 +149,6 @@ export async function runPhaseAcceptanceBySeparateModel(
     protocolContent,
   } = buildAcceptancePromptParts({
     bucket,
-    state,
     locale,
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
@@ -274,7 +272,6 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     protocolContent,
   } = buildAcceptancePromptParts({
     bucket,
-    state,
     locale,
     phase: true,
     requestPayload,

@@ -63,18 +63,8 @@ function isAllowedFsmTransition(from, to) {
   return HARNESS_FSM_ALLOWED_TRANSITIONS[from]?.has(to) === true;
 }
 
-function resolveChecklistLength(ctx = {}) {
-  const planText = text(ctx?.agentContext?.bindings?.extensions?.harness?.planText);
-  if (planText) {
-    const mainLineCount = planText
-      .split(/\r?\n/)
-      .map((line) => text(line))
-      .filter((line) => /^\d+\.\s+/.test(line)).length;
-    return mainLineCount || 1;
-  }
-  return Array.isArray(ctx?.agentContext?.bindings?.extensions?.harness?.taskChecklist)
-    ? ctx.agentContext.bindings.extensions.harness.taskChecklist.length
-    : 0;
+function hasPlanText(ctx = {}) {
+  return Boolean(text(ctx?.agentContext?.bindings?.extensions?.harness?.planText));
 }
 
 function hasToolCalls(ctx = {}) {
@@ -125,7 +115,7 @@ const FSM_TARGET_RULES = Object.freeze([
       ) {
         return null;
       }
-      return resolveChecklistLength(ctx) > 0 || hasToolCalls(ctx)
+      return hasPlanText(ctx) || hasToolCalls(ctx)
         ? HARNESS_FSM_STATES.PLANNED
         : HARNESS_FSM_STATES.PLANNING;
     },

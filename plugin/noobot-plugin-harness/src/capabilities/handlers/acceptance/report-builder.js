@@ -8,7 +8,6 @@ import {
   LOCALE,
   buildPlanSnapshot,
   defaultTaskChecklist,
-  getDefaultTaskOwner,
   normalizeChecklistItem,
   translateI18nText,
 } from "./deps.js";
@@ -204,9 +203,7 @@ export function buildAcceptanceReport({
   const checklistFromPlanText = buildChecklistFromParsedPlan(parsedPlan);
   const checklist = checklistFromPlanText.length
     ? checklistFromPlanText
-    : Array.isArray(bucket.taskChecklist) && bucket.taskChecklist.length
-      ? bucket.taskChecklist
-      : defaultTaskChecklist(locale);
+    : defaultTaskChecklist(locale);
   const latestModelAcceptance = resolveLatestModelAcceptance(bucket);
   const modelAcceptanceByPlan =
     latestModelAcceptance?.byPlan && typeof latestModelAcceptance.byPlan === "object"
@@ -267,7 +264,6 @@ export function buildAcceptanceReport({
     acceptedAt: nowIsoTimestamp(),
     planText,
     summary: buildAcceptanceSummary(items),
-    taskChecklist: items,
     finalPlanChecklist: items,
     plan,
     modelAcceptance: latestModelAcceptance.items.length
@@ -279,140 +275,6 @@ export function buildAcceptanceReport({
       : null,
     planAcceptanceStatusByPlanId: getPlanAcceptanceStatusMap(bucket),
   };
-}
-
-function resolveCurrentMainPlanVersion(bucket = {}) {
-  if (Number.isFinite(Number(bucket?.currentMainPlanVersion)))
-    return Number(bucket.currentMainPlanVersion);
-  if (Number.isFinite(Number(bucket?.mainPlanVersion))) return Number(bucket.mainPlanVersion);
-  return 1;
-}
-
-function buildBasePlanRecord({
-  source = "",
-  revisedAt = "",
-  totalGoal = "",
-  taskOwner = "",
-  nextPhase = null,
-  taskChecklist = [],
-} = {}) {
-  return {
-    source: text(source),
-    revisedAt: text(revisedAt) || undefined,
-    totalGoal: text(totalGoal),
-    taskOwner: text(taskOwner),
-    nextPhase: nextPhase && typeof nextPhase === "object" ? nextPhase : null,
-    taskChecklist: Array.isArray(taskChecklist) ? taskChecklist : [],
-  };
-}
-
-function buildFallbackMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
-  return {
-    ...buildBasePlanRecord({
-      source: bucket.taskChecklistSource || "current_plan",
-      revisedAt: undefined,
-      totalGoal: bucket.totalGoal || "",
-      taskOwner: bucket.taskOwner || getDefaultTaskOwner(locale),
-      nextPhase: bucket?.nextPhase,
-      taskChecklist: bucket.taskChecklist,
-    }),
-    taskOwner: text(bucket.taskOwner) || getDefaultTaskOwner(locale),
-    mainPlanVersion: resolveCurrentMainPlanVersion(bucket),
-    stage: "main_plan",
-  };
-}
-
-function resolveTaskOwner(taskOwner = "", fallbackTaskOwner = "", locale = LOCALE.ZH_CN) {
-  return (
-    String(taskOwner || fallbackTaskOwner || getDefaultTaskOwner(locale)).trim() ||
-    getDefaultTaskOwner(locale)
-  );
-}
-
-function normalizeMainPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) {
-  return {
-    ...buildBasePlanRecord({
-      source: text(plan?.source) || "unknown",
-      revisedAt: plan?.revisedAt,
-      totalGoal: plan?.totalGoal,
-      taskOwner: resolveTaskOwner(plan?.taskOwner, bucket.taskOwner, locale),
-      nextPhase: plan?.nextPhase,
-      taskChecklist: plan?.taskChecklist,
-    }),
-    mainPlanVersion: Number.isFinite(Number(plan?.mainPlanVersion))
-      ? Number(plan.mainPlanVersion)
-      : resolveCurrentMainPlanVersion(bucket),
-    stage: text(plan?.stage) || "main_plan",
-  };
-}
-
-function buildOrderedPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) {
-  return {
-    ...buildBasePlanRecord({
-      source: text(plan?.source) || "unknown",
-      revisedAt: plan?.revisedAt,
-      totalGoal: plan?.totalGoal,
-      taskOwner: resolveTaskOwner(plan?.taskOwner, bucket.taskOwner, locale),
-      nextPhase: plan?.nextPhase,
-      taskChecklist: plan?.taskChecklist,
-    }),
-  };
-}
-
-function buildOrderedFallbackPlanRecord(bucket = {}, locale = LOCALE.ZH_CN) {
-  return {
-    ...buildBasePlanRecord({
-      source: bucket.taskChecklistSource || "current_plan",
-      revisedAt: undefined,
-      totalGoal: bucket.totalGoal || "",
-      taskOwner: resolveTaskOwner(bucket.taskOwner, "", locale),
-      nextPhase: bucket?.nextPhase,
-      taskChecklist: bucket?.taskChecklist,
-    }),
-  };
-}
-
-function resolveFinalMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
-  const revisions = Array.isArray(bucket.planRevisions) ? bucket.planRevisions : [];
-  const mainCandidates = revisions.filter((plan = {}) => text(plan?.stage) !== "refinement");
-  const selected =
-    (mainCandidates.length ? mainCandidates[mainCandidates.length - 1] : null) ||
-    buildFallbackMainPlan(bucket, locale);
-  return normalizeMainPlanRecord(selected, bucket, locale);
-}
-
-function collectRefinementsForMainPlanVersion(bucket = {}, mainPlanVersion = 1) {
-  return (Array.isArray(bucket.planRefinementRecords) ? bucket.planRefinementRecords : [])
-    .filter((item = {}) => {
-      const version = Number(item?.mainPlanVersion);
-      return Number.isFinite(version) && version === Number(mainPlanVersion);
-    })
-    .map((item = {}, index) => ({
-      order: index + 1,
-      source: text(item?.source) || "planning_refinement",
-      refinedAt: text(item?.refinedAt) || undefined,
-      mainPlanVersion: Number(mainPlanVersion),
-      targetMainStepIndexes: Array.isArray(item?.targetMainStepIndexes)
-        ? item.targetMainStepIndexes
-        : [],
-      taskChecklist: Array.isArray(item?.taskChecklist) ? item.taskChecklist : [],
-    }));
-}
-
-function buildPlansInOrder(bucket = {}, locale = LOCALE.ZH_CN) {
-  const revisions = Array.isArray(bucket.planRevisions) ? bucket.planRevisions : [];
-  if (!revisions.length) {
-    return [
-      {
-        order: 1,
-        ...buildOrderedFallbackPlanRecord(bucket, locale),
-      },
-    ];
-  }
-  return revisions.map((plan = {}, index) => ({
-    order: index + 1,
-    ...buildOrderedPlanRecord(plan, bucket, locale),
-  }));
 }
 
 export function applySemanticAcceptanceToReport(report = {}) {
@@ -434,11 +296,7 @@ export function applySemanticAcceptanceToReport(report = {}) {
   }
   if (!Object.keys(semanticByPlan).length) return false;
 
-  const checklist = Array.isArray(data.finalPlanChecklist)
-    ? data.finalPlanChecklist
-    : Array.isArray(data.taskChecklist)
-      ? data.taskChecklist
-      : [];
+  const checklist = Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [];
   if (!checklist.length) return false;
 
   const nextChecklist = checklist.map((item = {}) => {
@@ -469,7 +327,6 @@ export function applySemanticAcceptanceToReport(report = {}) {
   });
 
   data.finalPlanChecklist = nextChecklist;
-  data.taskChecklist = nextChecklist;
   data.summary = buildAcceptanceSummary(nextChecklist);
   data.semanticAcceptance = {
     source: "acceptance_semantic_validation",
@@ -485,65 +342,21 @@ export function buildSemanticValidationPromptPayload({
   state = {},
   baseReport = null,
   finalOutput = "",
-  locale = LOCALE.ZH_CN,
 } = {}) {
   const planText = text(bucket?.planText);
-  if (planText) {
-    return {
-      expectedSchema: {
-        status: "pass|warn|fail",
-        consistent: true,
-        missingItems: [],
-        unsupportedClaims: [],
-        checklistCoverage: [],
-        suggestions: [],
-      },
-      planText,
-      taskChecklist: [],
-      finalPlanChecklist: [],
-      plan: buildPlanSnapshot(bucket, locale),
-      acceptanceState: buildAcceptanceValidationState(baseReport),
-      phaseAcceptanceReports: Array.isArray(bucket?.phaseAcceptanceReports)
-        ? bucket.phaseAcceptanceReports
-        : [],
-      toolSignals: state.signals || {},
-      finalOutput,
-    };
-  }
-  const finalMainPlan = resolveFinalMainPlan(bucket, locale);
-  const refinementPlansForFinalMainPlan = collectRefinementsForMainPlanVersion(
-    bucket,
-    finalMainPlan.mainPlanVersion,
-  );
-  const finalMainPlanChecklist = Array.isArray(finalMainPlan.taskChecklist)
-    ? finalMainPlan.taskChecklist
-    : [];
-  const finalRefinementChecklist = refinementPlansForFinalMainPlan.flatMap((item = {}) =>
-    Array.isArray(item?.taskChecklist) ? item.taskChecklist : [],
-  );
-  const validationChecklist = [...finalMainPlanChecklist, ...finalRefinementChecklist];
-  const plansInOrder = buildPlansInOrder(bucket, locale);
   return {
     expectedSchema: {
       status: "pass|warn|fail",
       consistent: true,
       missingItems: [],
       unsupportedClaims: [],
-      checklistCoverage: [
-        { index: 1, task: "...", covered: true, evidence: "...", risk: "low|medium|high" },
-      ],
+      checklistCoverage: planText
+        ? []
+        : [{ index: 1, task: "...", covered: true, evidence: "...", risk: "low|medium|high" }],
       suggestions: [],
     },
-    finalPlanChecklist: validationChecklist,
-    taskChecklist: validationChecklist,
-    plan: buildPlanSnapshot(bucket, locale),
-    finalMainPlan,
-    refinementPlansForFinalMainPlan,
-    plansInOrder,
+    planText,
     acceptanceState: buildAcceptanceValidationState(baseReport),
-    phaseAcceptanceReports: Array.isArray(bucket?.phaseAcceptanceReports)
-      ? bucket.phaseAcceptanceReports
-      : [],
     toolSignals: state.signals || {},
     finalOutput,
   };

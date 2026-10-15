@@ -46,8 +46,7 @@ test("harness planning captures checklist and forces acceptance at final output"
     agentContext,
   });
 
-  assert.equal(Array.isArray(agentContext.payload.harness.taskChecklist), true);
-  assert.equal(agentContext.payload.harness.taskChecklist.length, 0);
+  assert.equal("taskChecklist" in agentContext.payload.harness, false);
   assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, true);
   assert.equal(Array.isArray(agentContext.payload.harness.planningRawOutputs), true);
   assert.equal(agentContext.payload.harness.planningRawOutputs.length >= 1, true);

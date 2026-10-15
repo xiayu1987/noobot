@@ -8,7 +8,7 @@ import { resolveCompletePlanChecklistText } from "../plan/checklist-context.js";
 import { buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText } from "./protocols.js";
 import { normalizePromptOptions } from "./prompt-options.js";
 import { buildScenarioPolicyPromptText } from "./scenario-policy-prompts.js";
-import { text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function buildAcceptancePatchProtocolText(options = {}) {
   const { locale, data } = normalizePromptOptions(options);
@@ -23,27 +23,13 @@ export function buildAcceptancePatchProtocolText(options = {}) {
 
 export function buildAcceptanceMainPlanContextPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const payload = data.mainPlanContext ?? options?.mainPlanContext ?? null;
-  const source = payload && typeof payload === "object" ? payload : {};
-  const planTextFromPayload = text(source?.planText);
-  const currentTaskGoal = text(source?.currentTaskGoal);
-  const plansInOrder = Array.isArray(source?.plansInOrder) ? source.plansInOrder : [];
-  const checklist = Array.isArray(source?.taskChecklist) ? source.taskChecklist : [];
-  const planChecklistText = (() => {
-    const mergedPlanTextFromOrderedPlans = plansInOrder
-      .map((item = {}) => text(item?.planText))
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-    const resolved = resolveCompletePlanChecklistText({
-      planText: planTextFromPayload || mergedPlanTextFromOrderedPlans,
-      bucket: { taskChecklist: checklist },
-      currentTaskGoal,
+  const source = isPlainObject(data.mainPlanContext) ? data.mainPlanContext : {};
+  const planChecklistText =
+    resolveCompletePlanChecklistText({
+      planText: source.planText,
+      currentTaskGoal: source.currentTaskGoal,
       locale,
-    });
-    if (resolved) return resolved;
-    return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
-  })();
+    }) || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
   return [
     text(marker),
     translateI18nText(
@@ -58,11 +44,7 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
 
 export function buildAllPhaseAcceptanceReportSystemContents(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const reports = Array.isArray(data.phaseAcceptanceReports)
-    ? data.phaseAcceptanceReports
-    : Array.isArray(options?.phaseAcceptanceReports)
-      ? options.phaseAcceptanceReports
-      : [];
+  const reports = Array.isArray(data.phaseAcceptanceReports) ? data.phaseAcceptanceReports : [];
   if (!reports.length) return [];
   return reports.map((item = {}, index) => {
     const acceptedAt = text(item?.acceptedAt || item?.timestamp);

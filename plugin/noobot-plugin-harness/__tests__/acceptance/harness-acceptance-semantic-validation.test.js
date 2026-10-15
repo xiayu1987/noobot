@@ -237,7 +237,7 @@ test("harness acceptance semantic validation failure does not block active accep
     payload: {
       tools: { registry: [] },
       harness: {
-        taskChecklist: [{ index: 1, task: "执行核心任务" }],
+        planText: "1. 执行核心任务",
         state: {
           flags: {},
           counters: {},
@@ -302,10 +302,10 @@ test("request_task_acceptance returns a compact receipt while retaining the full
     payload: {
       tools: { registry: [] },
       harness: {
-        taskChecklist: Array.from({ length: 300 }, (_, index) => ({
-          index: index + 1,
-          task: `执行验收任务 ${index + 1} ${"完整证据上下文 ".repeat(20)}`,
-        })),
+        planText: Array.from(
+          { length: 300 },
+          (_, index) => `${index + 1}. 执行验收任务 ${index + 1} ${"完整证据上下文 ".repeat(20)}`,
+        ).join("\n"),
         state: {
           flags: {},
           counters: {},
@@ -336,7 +336,7 @@ test("request_task_acceptance returns a compact receipt while retaining the full
   assert.equal(JSON.stringify(result).length < 2000, true);
   assert.equal(result.report, undefined);
   assert.equal(result.acceptance.summary.total, 300);
-  assert.equal(fullReport.taskChecklist.length, 300);
+  assert.equal(fullReport.finalPlanChecklist.length, 300);
   assert.equal(agentContext.payload.harness.acceptanceReports.at(-1), fullReport);
 });
 
@@ -346,16 +346,7 @@ test("acceptance handler inject mode schedules and captures semantic validation 
     payload: {
       messages: { system: [], history: [] },
       harness: {
-        taskChecklist: [
-          {
-            index: 1,
-            task: "执行核心任务",
-            owner: "primary_task_owner",
-            input: "需求",
-            output: "结果",
-            files: { create: [], modify: ["src/a.js"], delete: [] },
-          },
-        ],
+        planText: "1. 执行核心任务",
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },

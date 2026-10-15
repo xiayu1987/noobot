@@ -55,7 +55,6 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     scheduledEvent: ACCEPTANCE_EVENTS.semanticValidationScheduledByInject,
     setPendingData: ({ bucket, state }) => {
-      const locale = state?.locale || LOCALE.ZH_CN;
       const finalOutput = text(ctx?.result?.output);
       const reportIndex = Array.isArray(bucket.acceptanceReports)
         ? bucket.acceptanceReports.lastIndexOf(baseReport)
@@ -67,7 +66,6 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
           state,
           baseReport,
           finalOutput,
-          locale,
         }),
       });
       return { reportIndex, hasFinalOutput: Boolean(finalOutput) };
@@ -98,7 +96,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   );
   const promptPayload =
     pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
-  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale, ctx);
+  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
   const systemContent = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -240,9 +238,8 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     state,
     baseReport,
     finalOutput,
-    locale,
   });
-  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale, ctx);
+  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
   const prompt = buildAcceptanceValidationRequestPromptText({
     locale,
