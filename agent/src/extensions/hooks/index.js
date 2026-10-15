@@ -14,6 +14,7 @@ import {
   createEmptyHookResult,
   requireHookPointDescriptor,
 } from "@noobot/hook-protocol";
+import { text } from "@noobot/shared/value";
 
 const HOOK_PROGRESS_TEXT_LIMIT = LENGTH_THRESHOLDS.display.hookProgressTextChars;
 const HOOK_PROGRESS_VERBOSE_ENABLED_VALUES = new Set([
@@ -96,17 +97,14 @@ export { resolveRuntimeHookManager };
 function resolveHookRuntimeMeta(runtime = {}) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
-    userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),
-    sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
+    userId: text(systemRuntime?.userId || runtime?.userId),
+    sessionId: text(systemRuntime?.sessionId || runtime?.sessionId),
     parentSessionId: normalizeParentSessionId(systemRuntime?.parentSessionId),
-    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
-    turnScopeId: String(
-      systemRuntime?.turnScopeId ||
-        systemRuntime?.config?.turnScopeId ||
-        runtime?.turnScopeId ||
-        "",
-    ).trim(),
-    caller: String(systemRuntime?.caller || "").trim(),
+    dialogProcessId: text(runtime?.systemRuntime?.dialogProcessId),
+    turnScopeId: text(
+      systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runtime?.turnScopeId,
+    ),
+    caller: text(systemRuntime?.caller),
   };
 }
 
@@ -133,7 +131,7 @@ function sanitizeForHookClient(value, depth = 0, seen = new WeakSet()) {
   const output = {};
   let count = 0;
   for (const [key, item] of Object.entries(value)) {
-    if (HOOK_CLIENT_BLOCKED_KEYS.has(String(key || "").trim())) continue;
+    if (HOOK_CLIENT_BLOCKED_KEYS.has(text(key))) continue;
     output[key] = sanitizeForHookClient(item, depth + 1, seen);
     count += 1;
     if (count >= 100) break;
@@ -159,13 +157,11 @@ function isHookPluginProgressTraceEnabled(runtime = {}) {
 }
 
 function isImportantHookPluginProgress(event = "", data = {}) {
-  const name = String(event || "").trim();
+  const name = text(event);
   if (HOOK_PROGRESS_IMPORTANT_EVENT_RE.test(name)) return true;
   if (data?.error) return true;
   if (data?.fsmRejected === true) return true;
-  const status = String(data?.status || data?.fsmState || "")
-    .trim()
-    .toLowerCase();
+  const status = text(data?.status || data?.fsmState).toLowerCase();
   return HOOK_PROGRESS_IMPORTANT_STATUSES.has(status);
 }
 
@@ -173,7 +169,7 @@ function normalizeHookPluginProgressData(data = {}) {
   const input = data && typeof data === "object" ? data : {};
   const output = {};
   for (const [key, value] of Object.entries(input)) {
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = text(key);
     if (!HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS.has(normalizedKey)) continue;
     if (normalizedKey === "error") {
       const safeError = sanitizeForHookClient(value);
@@ -202,7 +198,7 @@ function normalizePluginCapabilityResponseData(data = {}) {
   const input = data && typeof data === "object" ? data : {};
   const output = {};
   for (const [key, value] of Object.entries(input)) {
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = text(key);
     if (!PLUGIN_CAPABILITY_RESPONSE_ALLOWED_KEYS.has(normalizedKey)) continue;
     output[normalizedKey] = sanitizeForHookClient(value);
   }
@@ -211,7 +207,7 @@ function normalizePluginCapabilityResponseData(data = {}) {
 
 function createHookClientEmitter({ listener = null, point = "", runtime = {} } = {}) {
   return (event = "", data = {}) => {
-    const name = String(event || "").trim() || "hook_progress";
+    const name = text(event) || "hook_progress";
     if (name === "plugin_capability_response") {
       emitEvent(listener, name, normalizePluginCapabilityResponseData(data));
       return;
@@ -220,7 +216,7 @@ function createHookClientEmitter({ listener = null, point = "", runtime = {} } =
       return;
     }
     emitEvent(listener, "hook_plugin_progress", {
-      point: String(point || "").trim(),
+      point: text(point),
       event: name,
       data: normalizeHookPluginProgressData(data),
     });

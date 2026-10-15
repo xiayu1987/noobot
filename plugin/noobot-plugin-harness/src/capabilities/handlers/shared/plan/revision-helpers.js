@@ -16,9 +16,10 @@ import {
   getPlanningRefinementMarker,
 } from "../workflow/prompts.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "./acceptance-status.js";
+import { text } from "@noobot/shared/value";
 
 function toRefinementTarget(item = {}) {
-  return { index: Number(item.id), task: String(item.content || "").trim() };
+  return { index: Number(item.id), task: text(item.content) };
 }
 
 function pickKnownRefinementTargets(indexes, mainPlanMap) {
@@ -34,7 +35,7 @@ function formatSubPlansText(subPlans = [], targetId = 0) {
   return (
     subPlans
       .filter((item = {}) => Number(item.mainId) === Number(targetId))
-      .map((item = {}) => `${item.id} ${String(item.content || "").trim()}`)
+      .map((item = {}) => `${item.id} ${text(item.content)}`)
       .join("\n") || "\uff08\u7a7a\uff09"
   );
 }
@@ -56,12 +57,12 @@ export function extractChangedMainStepIndexes(previousDocument = {}, nextDocumen
   const nextMainPlans = Array.isArray(nextDocument?.mainPlans) ? nextDocument.mainPlans : [];
   const previousMap = new Map(
     previousMainPlans
-      .map((item = {}) => [Number(item.id), String(item.content || "").trim()])
+      .map((item = {}) => [Number(item.id), text(item.content)])
       .filter(([id, content]) => Number.isFinite(id) && id > 0 && content),
   );
   const nextMap = new Map(
     nextMainPlans
-      .map((item = {}) => [Number(item.id), String(item.content || "").trim()])
+      .map((item = {}) => [Number(item.id), text(item.content)])
       .filter(([id, content]) => Number.isFinite(id) && id > 0 && content),
   );
   const changed = new Set();
@@ -296,7 +297,7 @@ export function createPlanRevisionHelpers({
       .map((item = {}) => Number(item?.index))
       .filter((item) => Number.isFinite(item) && item > 0);
     const targetPlans = targets
-      .map((item = {}) => `${Number(item?.index)}. ${String(item?.task || "").trim()}`.trim())
+      .map((item = {}) => `${Number(item?.index)}. ${text(item?.task)}`.trim())
       .filter(Boolean)
       .join("\n")
       .trim();
@@ -336,7 +337,7 @@ export function createPlanRevisionHelpers({
         : locale === LOCALE?.EN_US
           ? "Revised plan text:"
           : "\u4fee\u6b63\u540e\u7684\u8ba1\u5212\u6587\u672c\uff1a";
-    return `${title}\n${String(bucket?.planText || "").trim() || (locale === LOCALE?.EN_US ? "N/A" : "\uff08\u7a7a\uff09")}`;
+    return `${title}\n${text(bucket?.planText) || (locale === LOCALE?.EN_US ? "N/A" : "\uff08\u7a7a\uff09")}`;
   }
 
   return {

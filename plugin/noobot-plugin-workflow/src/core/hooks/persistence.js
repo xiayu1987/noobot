@@ -14,6 +14,7 @@ import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } fro
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol/identity";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
+import { text } from "@noobot/shared/value";
 
 function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -28,11 +29,9 @@ function resolveSubSessionResult(subSession) {
 function findLastAssistantContent(messages) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index] || {};
-    const role = String(messageItem?.role || "")
-      .trim()
-      .toLowerCase();
+    const role = text(messageItem?.role).toLowerCase();
     if (role && role !== "assistant") continue;
-    const content = String(messageItem?.content || "").trim();
+    const content = text(messageItem?.content);
     if (content) return content;
   }
   return "";
@@ -43,7 +42,7 @@ export function resolveSubSessionFinalOutput(subSession = {}) {
   const messages = Array.isArray(result?.messages) ? result.messages : [];
   const lastAssistantContent = findLastAssistantContent(messages);
   if (lastAssistantContent) return lastAssistantContent;
-  return String(result?.answer || result?.output || "").trim();
+  return text(result?.answer || result?.output);
 }
 
 export function stripHarnessReviewAppendix(text = "") {
@@ -65,7 +64,7 @@ function buildWorkflowTransferReferenceBlock(workflowPayload = null, ctx = {}) {
         item?.name ||
           tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
-      const attachmentId = String(item?.identity?.attachmentId || "").trim();
+      const attachmentId = text(item?.identity?.attachmentId);
       if (!attachmentId) return "";
       return `- ${label}: attachmentId=${attachmentId}`;
     })
@@ -92,7 +91,7 @@ export function truncateWorkflowResultText(
 
 function composeWorkflowFinalContent({ semanticText = "", attachmentPathBlock = "" } = {}) {
   return [semanticText, attachmentPathBlock]
-    .map((item) => String(item || "").trim())
+    .map((item) => text(item))
     .filter(Boolean)
     .join("\n\n");
 }
@@ -116,7 +115,7 @@ function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
 }
 
 function trimText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function resolveNodeResultIdentity({ nodeIdentity, pendingStep, transition }) {
@@ -258,7 +257,7 @@ async function transferWorkflowFinalAttachment({
         meta: {
           phase: normalizedPhase,
           dialogProcessId,
-          sessionId: String(ctx?.sessionId || "").trim(),
+          sessionId: text(ctx?.sessionId),
         },
       },
     ],
@@ -292,12 +291,9 @@ function mergeWorkflowTransferEnvelopes(baseTransferPayload, composedTransferPay
 }
 
 function resolveWorkflowMessageId(ctx = {}) {
-  const messageId = String(
-    ctx?.messageId ||
-      ctx?.runConfig?.messageId ||
-      resolveWorkflowParentRunConfig(ctx)?.messageId ||
-      "",
-  ).trim();
+  const messageId = text(
+    ctx?.messageId || ctx?.runConfig?.messageId || resolveWorkflowParentRunConfig(ctx)?.messageId,
+  );
   if (!messageId) {
     throw new Error("Workflow final message requires canonical messageId");
   }
@@ -320,12 +316,12 @@ function buildSessionWorkflowPayload(baseWorkflowPayload, authoritativeWorkflowR
 function findExistingWorkflowMessage(turnMessages = [], dialogProcessId = "") {
   return turnMessages.find((messageItem = {}) => {
     if (messageItem?.pluginMessage !== true) return false;
-    if (String(messageItem?.dialogProcessId || "").trim() !== dialogProcessId) return false;
+    if (text(messageItem?.dialogProcessId) !== dialogProcessId) return false;
     const meta =
       messageItem?.pluginMeta && typeof messageItem.pluginMeta === "object"
         ? messageItem.pluginMeta
         : {};
-    return String(meta?.source || "").trim() === "workflow-plugin";
+    return text(meta?.source) === "workflow-plugin";
   });
 }
 
@@ -359,14 +355,13 @@ async function resolveWorkflowTransferParts({
 }
 
 function resolveAuthoritativeWorkflowRunId(workflowRunId, baseWorkflowPayload = {}, ctx = {}) {
-  return String(
+  return text(
     workflowRunId ||
       baseWorkflowPayload?.workflowRunId ||
       baseWorkflowPayload?.execution?.workflowRunId ||
       baseWorkflowPayload?.execution?.instanceId ||
-      ctx?.workflowRunId ||
-      "",
-  ).trim();
+      ctx?.workflowRunId,
+  );
 }
 
 function pickNonEmptyTimelines(messageEventProjection = {}) {
@@ -416,12 +411,12 @@ async function upsertWorkflowMessage({
   nodeAgentRuns = [],
   phase = "",
 } = {}) {
-  const normalizedPhase = String(phase || "").trim();
+  const normalizedPhase = text(phase);
   if (!WORKFLOW_MESSAGE_PHASES.has(normalizedPhase)) {
     throw new Error("Workflow message requires an explicit planning or completed phase");
   }
   const turnMessages = ensureTurnMessages(agentResult);
-  const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
+  const dialogProcessId = text(ctx?.dialogProcessId);
   const baseWorkflowPayload =
     workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {};
   const { mergedTransferPayload, attachmentReferenceBlock } = await resolveWorkflowTransferParts({
@@ -435,9 +430,9 @@ async function upsertWorkflowMessage({
     semanticText,
     attachmentPathBlock: attachmentReferenceBlock,
   });
-  const presentationMessageId = String(
-    ctx?.presentationMessageId || resolveWorkflowParentRunConfig(ctx)?.presentationMessageId || "",
-  ).trim();
+  const presentationMessageId = text(
+    ctx?.presentationMessageId || resolveWorkflowParentRunConfig(ctx)?.presentationMessageId,
+  );
   const messageId = resolveWorkflowMessageId(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
@@ -464,8 +459,8 @@ async function upsertWorkflowMessage({
     ...pickNonEmptyTimelines(messageEventProjection),
     content,
     dialogProcessId,
-    modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
-    modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
+    modelAlias: text(semanticResolution?.model || options?.semanticModel),
+    modelName: text(semanticResolution?.model || options?.semanticModel),
     summarized: false,
     ...(mergedTransferPayload.transferEnvelopes.length
       ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }

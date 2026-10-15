@@ -29,6 +29,7 @@ import {
   createAgentCommandReceipt,
   parseAgentCommand,
 } from "@noobot/agent-transport-protocol";
+import { text } from "@noobot/shared/value";
 
 function resolveRawMessageInfo(rawData) {
   const text = String(rawData || "");
@@ -118,21 +119,15 @@ export class WsRouter {
       }
 
       try {
-        const action = String(payload?.action || "")
-          .trim()
-          .toLowerCase();
+        const action = text(payload?.action).toLowerCase();
         void writeAgentProxyRouteLifecycleEvent({
           event: action ? "agentProxy.route.controlReceived" : "agentProxy.route.commandReceived",
           socket,
           data: {
             action,
-            commandType: String(payload?.commandType || "")
-              .trim()
-              .toLowerCase(),
-            hasSessionId: Boolean(
-              String(payload?.identity?.sessionId || payload?.sessionId || "").trim(),
-            ),
-            hasChannelKey: Boolean(String(payload?.channelKey || "").trim()),
+            commandType: text(payload?.commandType).toLowerCase(),
+            hasSessionId: Boolean(text(payload?.identity?.sessionId || payload?.sessionId)),
+            hasChannelKey: Boolean(text(payload?.channelKey)),
           },
         });
         if (action) {
@@ -159,7 +154,7 @@ export class WsRouter {
         });
         this._routeAgentCommand(socket, command, { connectionApiKey, connectionLocale });
       } catch (error) {
-        if (!String(payload?.action || "").trim()) {
+        if (!text(payload?.action)) {
           void writeAgentTransportDebugEvent({
             event: parsedCommand
               ? "agentProxy.agentTransport.commandDispatchFailed"
@@ -177,9 +172,9 @@ export class WsRouter {
           });
         }
         if (!parsedCommand && String(error?.code || "") === "INVALID_AGENT_COMMAND") {
-          const commandId = String(payload?.commandId || "").trim();
-          const commandType = String(payload?.commandType || "").trim();
-          const sessionId = String(payload?.identity?.sessionId || "").trim();
+          const commandId = text(payload?.commandId);
+          const commandType = text(payload?.commandType);
+          const sessionId = text(payload?.identity?.sessionId);
           if (commandId && commandType && sessionId) {
             this._sendCommandFailure(socket, payload, error);
           } else {
@@ -223,7 +218,7 @@ export class WsRouter {
         event: "agentProxy.route.lifecycleReceipt.rejected",
         socket,
         data: {
-          eventIdPresent: Boolean(String(payload?.eventId || "").trim()),
+          eventIdPresent: Boolean(text(payload?.eventId)),
           reason: result.reason,
         },
       });
@@ -239,7 +234,7 @@ export class WsRouter {
         !this.channelManager.hasChannelPermission(
           targetChannel,
           socket.__agentProxyApiKey,
-          String(socket?.__agentProxyUserId || "").trim(),
+          text(socket?.__agentProxyUserId),
         )
       ) {
         this.channelManager.sendSocketError(
@@ -271,7 +266,7 @@ export class WsRouter {
         });
         this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.RECONNECT_FAILED, {
           code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
-          identity: { sessionId: String(payload?.currentSessionId || "").trim() },
+          identity: { sessionId: text(payload?.currentSessionId) },
         });
       });
     },
@@ -347,7 +342,7 @@ export class WsRouter {
       !this.channelManager.hasChannelPermission(
         targetChannel,
         socket.__agentProxyApiKey,
-        String(socket?.__agentProxyUserId || "").trim(),
+        text(socket?.__agentProxyUserId),
       )
     ) {
       this.channelManager.sendSocketError(
@@ -367,7 +362,7 @@ export class WsRouter {
       !this.channelManager.hasChannelPermission(
         targetChannel,
         socket.__agentProxyApiKey,
-        String(socket?.__agentProxyUserId || "").trim(),
+        text(socket?.__agentProxyUserId),
       )
     ) {
       this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
@@ -382,7 +377,7 @@ export class WsRouter {
 
   _forwardExecutionQuery(socket, payload, commandType) {
     const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
-    const commandId = String(payload?.commandId || "").trim();
+    const commandId = text(payload?.commandId);
     if (!targetChannel || !commandId) {
       this._sendCommandFailure(socket, payload, {
         code: "UPSTREAM_UNAVAILABLE",
@@ -394,7 +389,7 @@ export class WsRouter {
       !this.channelManager.hasChannelPermission(
         targetChannel,
         socket.__agentProxyApiKey,
-        String(socket?.__agentProxyUserId || "").trim(),
+        text(socket?.__agentProxyUserId),
       )
     ) {
       this._sendCommandFailure(socket, payload, {
@@ -416,14 +411,14 @@ export class WsRouter {
   _forwardRunAction(socket, payload, action) {
     const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
     if (!targetChannel) {
-      const userId = String(socket?.__agentProxyUserId || "").trim();
-      const sessionId = String(payload?.identity?.sessionId || "").trim();
+      const userId = text(socket?.__agentProxyUserId);
+      const sessionId = text(payload?.identity?.sessionId);
       if (userId && sessionId && typeof this.channelManager?.startOrJoinChannel === "function") {
         this.channelManager.startOrJoinChannel({
           socket,
           payload,
-          connectionApiKey: String(socket?.__agentProxyApiKey || "").trim(),
-          connectionLocale: String(socket?.__agentProxyLocale || "").trim(),
+          connectionApiKey: text(socket?.__agentProxyApiKey),
+          connectionLocale: text(socket?.__agentProxyLocale),
         });
         void writeAgentProxyRouteDebugEvent({
           event: "agentProxy.route.forwardRun.recreated",
@@ -446,7 +441,7 @@ export class WsRouter {
       !this.channelManager.hasChannelPermission(
         targetChannel,
         socket.__agentProxyApiKey,
-        String(socket?.__agentProxyUserId || "").trim(),
+        text(socket?.__agentProxyUserId),
       )
     ) {
       void writeAgentProxyRouteDebugEvent({
@@ -525,8 +520,8 @@ export class WsRouter {
     this.channelManager.closeUpstreamChannel(targetChannel, 1000, UPSTREAM_CLOSE_REASON.RESTART);
     this.channelManager.connectUpstreamChannel(
       targetChannel,
-      String(socket?.__agentProxyApiKey || targetChannel?.apiKey || "").trim(),
-      String(targetChannel?.locale || "").trim(),
+      text(socket?.__agentProxyApiKey || targetChannel?.apiKey),
+      text(targetChannel?.locale),
     );
     return true;
   }

@@ -14,6 +14,7 @@ import {
   normalizeDslLocale,
 } from "./error-messages.js";
 import { getWorkflowDslDefaultNodeNames } from "../core/i18n.js";
+import { text } from "@noobot/shared/value";
 
 function stripCodeFence(text = "") {
   const trimmed = String(text || "").trim();
@@ -50,7 +51,7 @@ function tokenize(line = "") {
 }
 
 function unquote(value = "") {
-  const raw = String(value || "").trim();
+  const raw = text(value);
   if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
     return raw.slice(1, -1);
   }
@@ -107,19 +108,17 @@ function parseAttrs(input = "") {
 }
 
 function parseNodeAttachmentRefs(value = "") {
-  const raw = String(value || "").trim();
+  const raw = text(value);
   if (!raw) return [];
   if (["none", "null", "[]"].includes(raw.toLowerCase())) return [];
   return raw
     .split(/[,;，；]/)
-    .map((item) => String(item || "").trim())
+    .map((item) => text(item))
     .filter(Boolean);
 }
 
 function toStateType(value = "") {
-  const key = String(value || "")
-    .trim()
-    .toLowerCase();
+  const key = text(value).toLowerCase();
   if (key === "start") return 0;
   if (key === "end") return 1;
   if (key === "branch") return 2;
@@ -153,7 +152,7 @@ function promoteBranchAndMergeStateTypes(semantic) {
     ) {
       continue;
     }
-    const id = String(node?.id || "").trim();
+    const id = text(node?.id);
     if (Number(outgoingCount.get(id) || 0) > 1 && Number(node.stateType) === 0) {
       node.stateType = 2;
     }

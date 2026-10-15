@@ -45,6 +45,7 @@ import {
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 const MAX_RESPONSES_FILE_INPUT_BYTES = LENGTH_THRESHOLDS.dataProcessing.responsesFileInputBytes;
 const require = createRequire(import.meta.url);
@@ -62,11 +63,11 @@ function loadSharp() {
 }
 
 function resolveMimeType(filePath = "", sourceAttachment = null) {
-  return String(sourceAttachment?.mimeType || "").trim() || resolveMimeTypeFromFileName(filePath);
+  return text(sourceAttachment?.mimeType) || resolveMimeTypeFromFileName(filePath);
 }
 
 function resolveModelFileName(filePath = "", sourceAttachment = null, mimeType = "") {
-  const sourceName = String(sourceAttachment?.name || "").trim() || path.basename(filePath);
+  const sourceName = text(sourceAttachment?.name) || path.basename(filePath);
   if (mimeType !== MIME_TYPE.IMAGE_PNG || !/\.svg$/i.test(sourceName)) return sourceName;
   return sourceName.replace(/\.svg$/i, ".png");
 }
@@ -107,7 +108,7 @@ function resolveConfiguredParseModel({
 } = {}) {
   const globalConfig = runtime?.globalConfig || {};
   const userConfig = runtime?.userConfig || {};
-  const explicitModel = String(modelName || "").trim();
+  const explicitModel = text(modelName);
   const selection = explicitModel
     ? null
     : resolveMultimodalDefaultModelSelection(mergeConfig(globalConfig, userConfig), {
@@ -129,7 +130,7 @@ function resolveConfiguredParseModel({
 
 export function createMultimodalParseTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  if (!String(runtime?.basePath || "").trim()) return [];
+  if (!text(runtime?.basePath)) return [];
   const tool = new DynamicStructuredTool({
     name: TOOL_NAME.MULTIMODAL_PARSE,
     metadata: { pathContract: TOOL_PATH_CONTRACTS.multimodalInput },

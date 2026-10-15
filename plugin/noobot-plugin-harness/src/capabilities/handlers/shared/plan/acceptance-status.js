@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { parsePlanDocumentFromText } from "./text-protocol.js";
+import { text } from "@noobot/shared/value";
 
 const MODEL_ACCEPTANCE_LINE_RE = /^\s*(ADD|UPDATE)\s+A([A-Za-z0-9._-]+)\s+(.+?)\s*$/i;
 
@@ -33,9 +34,7 @@ function normalizePlanId(value = "") {
 }
 
 function normalizeAcceptanceStatus(status = "") {
-  const normalized = String(status || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(status).toLowerCase();
   if (normalized === PLAN_ACCEPTANCE_STATUS.PASS) return PLAN_ACCEPTANCE_STATUS.PASS;
   if (normalized === PLAN_ACCEPTANCE_STATUS.WARN) return PLAN_ACCEPTANCE_STATUS.WARN;
   if (normalized === PLAN_ACCEPTANCE_STATUS.FAIL) return PLAN_ACCEPTANCE_STATUS.FAIL;
@@ -116,7 +115,7 @@ function flattenPlanDocument(planDocument = {}) {
   const rows = [];
   for (const main of mainPlans) {
     const mainId = normalizePlanId(main?.id);
-    const mainContent = String(main?.content || "").trim();
+    const mainContent = text(main?.content);
     if (!mainId || !mainContent) continue;
     rows.push({ planId: mainId, mainId, isMainStep: true, content: mainContent });
     const subPlans = Array.isArray(subPlansByMainId[String(mainId)])
@@ -125,7 +124,7 @@ function flattenPlanDocument(planDocument = {}) {
     for (const sub of subPlans) {
       const subIndex = Number(sub?.subIndex);
       const subId = normalizePlanId(sub?.id || `${mainId}.${subIndex}`);
-      const subContent = String(sub?.content || "").trim();
+      const subContent = text(sub?.content);
       if (!subId || !subContent) continue;
       rows.push({ planId: subId, mainId, isMainStep: false, content: subContent });
     }
@@ -168,7 +167,7 @@ export function applyPhaseAcceptanceReportToPlanStatus(bucket = {}, report = nul
   if (!items.length) return { applied: false, count: 0 };
   const map = ensureStatusMap(bucket);
   const planContentById = buildPlanContentMapFromText(report?.planText || bucket?.planText || "");
-  const acceptedAt = String(report?.acceptedAt || "").trim() || nowIsoTimestamp();
+  const acceptedAt = text(report?.acceptedAt) || nowIsoTimestamp();
   let count = 0;
   for (const item of items) {
     const planId = normalizePlanId(item?.planId);
@@ -187,7 +186,7 @@ export function applyPhaseAcceptanceReportToPlanStatus(bucket = {}, report = nul
       acceptedAt,
       resetAt: "",
       resetReason: "",
-      planContent: planContentById.get(planId) || String(map[planId]?.planContent || "").trim(),
+      planContent: planContentById.get(planId) || text(map[planId]?.planContent),
     };
     count += 1;
   }

@@ -17,9 +17,10 @@ import {
 } from "../core/sensitive-field-patterns.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
+import { text } from "@noobot/shared/value";
 
 function tUserInteraction(runtime = {}, key = "", params = {}) {
-  return tTool(runtime, `tools.user_interaction.${String(key || "").trim()}`, params);
+  return tTool(runtime, `tools.user_interaction.${text(key)}`, params);
 }
 
 const SENSITIVE_FIELD_KEYWORDS = [
@@ -59,8 +60,8 @@ const SENSITIVE_FIELD_KEYWORDS = [
 ];
 
 function containsRelation(left = "", right = "") {
-  const normalizedLeft = String(left || "").trim();
-  const normalizedRight = String(right || "").trim();
+  const normalizedLeft = text(left);
+  const normalizedRight = text(right);
   if (!normalizedLeft || !normalizedRight) return false;
   if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) {
     if (Math.min(normalizedLeft.length, normalizedRight.length) >= 4) return true;
@@ -214,7 +215,7 @@ export function createUserInteractionTool({ agentContext }) {
         });
       }
 
-      const interactionContent = String(content || "").trim();
+      const interactionContent = text(content);
       if (!interactionContent) {
         throw recoverableToolError(tUserInteraction(runtime, "contentRequired"), {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -224,7 +225,7 @@ export function createUserInteractionTool({ agentContext }) {
       let normalizedFieldsPayload = { fields: [] };
       try {
         const parsedFields =
-          typeof fields === "string" && String(fields || "").trim()
+          typeof fields === "string" && text(fields)
             ? parseJsonStringPayload(fields)
             : fields || {};
         normalizedFieldsPayload = Array.isArray(parsedFields)
@@ -248,12 +249,11 @@ export function createUserInteractionTool({ agentContext }) {
 
       const result = await bridge.requestUserInteraction({
         authority: interactionAuthority,
-        interactionId: String(
+        interactionId: text(
           config?.configurable?.noobotHookContext?.call?.id ||
             config?.configurable?.noobotHookContext?.call?.tool_call_id ||
-            config?.configurable?.noobotHookContext?.call?.toolCallId ||
-            "",
-        ).trim(),
+            config?.configurable?.noobotHookContext?.call?.toolCallId,
+        ),
         content: interactionContent,
         fields: normalizedFieldsPayload.fields || [],
         requireEncryption: false,
@@ -288,7 +288,7 @@ export function createUserInteractionTool({ agentContext }) {
         }
         const requiredFields = normalizedFieldsPayload.fields
           .filter((item) => Boolean(item?.required))
-          .map((item) => String(item?.name || "").trim())
+          .map((item) => text(item?.name))
           .filter(Boolean);
         for (const key of requiredFields) {
           if (!String(result?.[key] ?? "").trim()) {

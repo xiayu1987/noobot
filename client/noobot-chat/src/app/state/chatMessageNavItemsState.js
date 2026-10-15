@@ -5,6 +5,7 @@
  */
 import { RoleEnum } from "../../modules/chat/model/chatConstants.js";
 import { getMessageRole } from "../../modules/chat/model/messageIdentity.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizeChatMessageNavContent(messageItem = {}) {
   return String(messageItem?.content || messageItem?.text || "")
@@ -16,14 +17,12 @@ export function resolveChatMessageNavRoleLabel(
   role = "",
   { translateRole, fallbackRole = "session" } = {},
 ) {
-  const normalizedRole = String(role || "")
-    .trim()
-    .toLowerCase();
+  const normalizedRole = text(role).toLowerCase();
   if (normalizedRole === RoleEnum.USER) return "ME";
   if (normalizedRole === RoleEnum.ASSISTANT) return "AI";
   if (normalizedRole === RoleEnum.TOOL) return "Tool";
   if (typeof translateRole === "function") {
-    const translatedRole = String(translateRole(normalizedRole) || "").trim();
+    const translatedRole = text(translateRole(normalizedRole));
     if (translatedRole) return translatedRole;
   }
   return fallbackRole;

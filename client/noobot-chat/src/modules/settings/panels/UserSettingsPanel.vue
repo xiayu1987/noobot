@@ -25,6 +25,7 @@ import {
   SettingsWorkspaceLayout,
   SettingsWorkspacePanel,
 } from "../public-api.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
@@ -80,8 +81,8 @@ const { authFetch } = createApiKeyFetch(() => props.apiKey);
 function normalizeUsers(list = []) {
   return (Array.isArray(list) ? list : [])
     .map((item) => ({
-      userId: String(item?.userId || "").trim(),
-      connectCode: String(item?.connectCode || "").trim(),
+      userId: text(item?.userId),
+      connectCode: text(item?.connectCode),
       allowIDE: item?.allowIDE === true,
     }))
     .filter((item) => item.userId || item.connectCode);
@@ -244,9 +245,9 @@ function generateConnectCodesForEmptyOnly() {
       throw new Error(translate("settings.atLeastOneUser"));
     }
     users.value = targetUsers.map((item) => {
-      const currentCode = String(item.connectCode || "").trim();
+      const currentCode = text(item.connectCode);
       return {
-        userId: String(item.userId || "").trim(),
+        userId: text(item.userId),
         connectCode: currentCode || generateUuid(),
         allowIDE: item.allowIDE === true,
       };
@@ -269,7 +270,7 @@ function forceRegenerateAllConnectCodes() {
       throw new Error(translate("settings.atLeastOneUser"));
     }
     users.value = targetUsers.map((item) => ({
-      userId: String(item.userId || "").trim(),
+      userId: text(item.userId),
       connectCode: generateUuid(),
       allowIDE: item.allowIDE === true,
     }));

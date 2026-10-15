@@ -7,6 +7,7 @@ import zlib from "node:zlib";
 import util from "node:util";
 import { parseServerSentEvents } from "@noobot/shared/event-stream";
 import { tryParseJson } from "./common.js";
+import { text } from "@noobot/shared/value";
 
 const gunzip = util.promisify(zlib.gunzip);
 const inflate = util.promisify(zlib.inflate);
@@ -46,13 +47,13 @@ function normalizeToolCallItem(toolCallItem = {}) {
   const normalizedFunction =
     toolCallItem.function && typeof toolCallItem.function === "object"
       ? {
-          name: String(toolCallItem.function.name || "").trim(),
+          name: text(toolCallItem.function.name),
           arguments: String(toolCallItem.function.arguments || ""),
         }
       : {};
   const normalized = {
-    id: String(toolCallItem.id || "").trim(),
-    type: String(toolCallItem.type || "").trim() || "function",
+    id: text(toolCallItem.id),
+    type: text(toolCallItem.type) || "function",
     function: normalizedFunction,
   };
   if (!normalized.id && !normalized.function?.name && !normalized.function?.arguments) return null;
@@ -82,10 +83,10 @@ function normalizeResponsesOutputItem(item = {}) {
   if (!item || typeof item !== "object") return null;
   if (item.type === "function_call") {
     return {
-      id: String(item.call_id || item.id || "").trim(),
+      id: text(item.call_id || item.id),
       type: "function",
       function: {
-        name: String(item.name || "").trim(),
+        name: text(item.name),
         arguments: String(item.arguments || "{}"),
       },
     };
@@ -164,17 +165,17 @@ function extractFinalTextFromJsonPayload(payloadObject = null) {
 
   const choices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
   const firstChoice = choices[0] && typeof choices[0] === "object" ? choices[0] : null;
-  const messageContent = String(firstChoice?.message?.content || "").trim();
+  const messageContent = text(firstChoice?.message?.content);
   if (messageContent) return messageContent;
 
-  const deltaContent = String(firstChoice?.delta?.content || "").trim();
+  const deltaContent = text(firstChoice?.delta?.content);
   if (deltaContent) return deltaContent;
 
   const outputText = payloadObject?.output_text;
   if (typeof outputText === "string" && outputText.trim()) return outputText.trim();
   if (Array.isArray(outputText)) {
     const joinedOutputText = outputText
-      .map((itemValue) => String(itemValue || "").trim())
+      .map((itemValue) => text(itemValue))
       .filter(Boolean)
       .join("\n");
     if (joinedOutputText) return joinedOutputText;
@@ -216,9 +217,9 @@ function extractFinalTextFromSseBody(sseText = "") {
       type: "function",
       function: { name: "", arguments: "" },
     };
-    const normalizedType = String(deltaToolCallItem.type || "").trim();
+    const normalizedType = text(deltaToolCallItem.type);
     if (normalizedType) existed.type = normalizedType;
-    const normalizedId = String(deltaToolCallItem.id || "").trim();
+    const normalizedId = text(deltaToolCallItem.id);
     if (normalizedId) existed.id = normalizedId;
 
     const fn =
@@ -263,7 +264,7 @@ function extractFinalTextFromSseBody(sseText = "") {
     }
   }
 
-  if (toolCallBufferByIndex.size && !String(latestResolvedText || "").trim()) {
+  if (toolCallBufferByIndex.size && !text(latestResolvedText)) {
     const toolCalls = Array.from(toolCallBufferByIndex.entries())
       .sort((left, right) => left[0] - right[0])
       .map(([, item]) => normalizeToolCallItem(item))

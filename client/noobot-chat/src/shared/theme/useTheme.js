@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ref } from "vue";
+import { text } from "@noobot/shared/value";
 
 const STORAGE_KEY = "noobot_theme";
 const SUPPORTED_THEMES = new Set(["dark", "light", "system"]);
@@ -19,7 +20,7 @@ function resolveInitialTheme() {
   if (!isBrowser) return "dark";
   let savedTheme = "";
   try {
-    savedTheme = String(globalThis.localStorage?.getItem?.(STORAGE_KEY) || "").trim();
+    savedTheme = text(globalThis.localStorage?.getItem?.(STORAGE_KEY));
   } catch {
     return "dark";
   }

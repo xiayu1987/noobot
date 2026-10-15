@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const MAIN_PLAN_LINE = /^\s*(\d+)\.\s+(.+?)\s*$/;
 const SUB_PLAN_LINE = /^\s*(\d+)\.(\d+)\.?\s+(.+?)\s*$/;
 const PATCH_ADD_UPDATE = /^\s*(ADD|UPDATE)\s+([[\]\d.\s]+)\s+(.+?)\s*$/i;
@@ -39,7 +41,7 @@ function normalizeMainPlans(mainPlans = []) {
   const map = new Map();
   for (const item of Array.isArray(mainPlans) ? mainPlans : []) {
     const id = Number(item?.id);
-    const content = String(item?.content || "").trim();
+    const content = text(item?.content);
     if (!Number.isFinite(id) || !content) continue;
     map.set(id, { id, content });
   }
@@ -50,7 +52,7 @@ function normalizeSubPlans(subPlans = [], mainId = 0) {
   const map = new Map();
   for (const item of Array.isArray(subPlans) ? subPlans : []) {
     const subIndex = Number(item?.subIndex);
-    const content = String(item?.content || "").trim();
+    const content = text(item?.content);
     if (!Number.isFinite(subIndex) || subIndex <= 0 || !content) continue;
     map.set(subIndex, {
       id: `${mainId}.${subIndex}`,
@@ -91,7 +93,7 @@ function parseId(rawId = "") {
 }
 
 function upsertMainPlan(doc = {}, mainId = 0, content = "") {
-  const normalizedContent = String(content || "").trim();
+  const normalizedContent = text(content);
   if (!Number.isFinite(mainId) || mainId <= 0 || !normalizedContent) return false;
   const current = ensurePlanDocumentShape(doc);
   const index = current.mainPlans.findIndex((item = {}) => Number(item.id) === Number(mainId));
@@ -126,7 +128,7 @@ function upsertSubPlan(
   content = "",
   { ensureMainPlaceholder = true } = {},
 ) {
-  const normalizedContent = String(content || "").trim();
+  const normalizedContent = text(content);
   if (
     !Number.isFinite(mainId) ||
     mainId <= 0 ||
@@ -307,14 +309,9 @@ export function applyPatchCommandsToPlanDocument(
   if (!commands.length) return { changed: false, commands: [] };
 
   let changed = false;
-  const isRefinement =
-    String(stage || "")
-      .trim()
-      .toLowerCase() === "refinement";
+  const isRefinement = text(stage).toLowerCase() === "refinement";
   for (const command of commands) {
-    const action = String(command.action || "")
-      .trim()
-      .toUpperCase();
+    const action = text(command.action).toUpperCase();
     const target = command.target || {};
     const targetDepth = Number(target.depth || (target.isSub ? 2 : 1));
     const isDeepSubPlan = target.isSub === true && targetDepth > 2;

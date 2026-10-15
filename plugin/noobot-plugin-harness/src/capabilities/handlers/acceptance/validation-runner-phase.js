@@ -36,6 +36,7 @@ import {
   buildScenarioPolicyPromptText,
   resolveScenarioPolicyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
+import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -218,7 +219,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     });
     return false;
   }
-  const responseText = String(response?.output?.text || "").trim();
+  const responseText = text(response?.output?.text);
   if (!responseText) return false;
   appendPhaseAcceptanceReport(bucket, responseText);
   if (state?.flags && typeof state.flags === "object") {
@@ -353,7 +354,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     });
     return false;
   }
-  const responseText = String(response?.output?.text || "").trim();
+  const responseText = text(response?.output?.text);
   const reportText =
     responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
   const report = appendPhaseAcceptanceReport(bucket, reportText);

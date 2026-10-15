@@ -10,15 +10,16 @@ import {
   mergeTransferEnvelopes,
   normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
+import { text } from "@noobot/shared/value";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return "";
   const { bucket } = holder;
-  const incoming = String(incomingSummaryText || "").trim();
-  if (!incoming) return String(bucket?.summaryText || "").trim();
+  const incoming = text(incomingSummaryText);
+  if (!incoming) return text(bucket?.summaryText);
   const merged = mergeSummaryText(bucket?.summaryText || "", incoming);
-  bucket.summaryText = String(merged || "").trim();
+  bucket.summaryText = text(merged);
   return bucket.summaryText;
 }
 

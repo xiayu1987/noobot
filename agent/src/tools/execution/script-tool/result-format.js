@@ -11,6 +11,7 @@ import { EXECUTE_SCRIPT_TOOL_NAME } from "./constants.js";
 import { buildOutputTransferDeclaration } from "./output-transfer-declaration.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { readFile } from "node:fs/promises";
+import { text } from "@noobot/shared/value";
 
 function formatCommandOutputWithLineNumbers(value = "") {
   const text = String(value || "");
@@ -63,7 +64,7 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
     const persisted = await persistTransferArtifacts({
       runtime,
       agentContext,
-      userId: String(runtime?.userId || runtime?.systemRuntime?.userId || "").trim(),
+      userId: text(runtime?.userId || runtime?.systemRuntime?.userId),
       artifacts,
       attachmentSource: ATTACHMENT_SOURCE.MODEL,
       generationSource: TRANSFER_REASON.EXECUTE_SCRIPT_OUTPUT_OVERFLOW,

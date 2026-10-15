@@ -7,6 +7,7 @@ import { normalizePathForPlatform } from "@noobot/path-resolver";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { toPositiveInt } from "../file-utils.js";
+import { text } from "@noobot/shared/value";
 
 function parseUnifiedHunkHeader(header = "") {
   const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(header);
@@ -28,7 +29,7 @@ function parseUnifiedHunkHeader(header = "") {
 }
 
 function normalizePatchPathInput(rawPath = "") {
-  const trimmed = String(rawPath || "").trim();
+  const trimmed = text(rawPath);
   if (!trimmed) return "";
   return normalizePathForPlatform(trimmed);
 }
@@ -51,10 +52,7 @@ function parseApplyPatchHunk(lines, startIndex) {
 }
 
 function stripDiffPath(rawPath = "", strip = 1) {
-  const pathToken =
-    String(rawPath || "")
-      .trim()
-      .split(/\s+/)[0] || "";
+  const pathToken = text(rawPath).split(/\s+/)[0] || "";
   const normalizedPath = normalizePatchPathInput(pathToken);
   if (!normalizedPath || normalizedPath === "/dev/null") return normalizedPath;
   if (isAbsoluteDiffPath(pathToken)) return normalizedPath;
@@ -65,7 +63,7 @@ function stripDiffPath(rawPath = "", strip = 1) {
 }
 
 function isAbsoluteDiffPath(value = "") {
-  const source = String(value || "").trim();
+  const source = text(value);
   return (
     source.startsWith("/") ||
     /^file:/i.test(source) ||

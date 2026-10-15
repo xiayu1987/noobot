@@ -14,9 +14,10 @@ import {
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { randomUUID } from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 function normalizeMetaValue(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function createInteractionId(ctx = {}) {

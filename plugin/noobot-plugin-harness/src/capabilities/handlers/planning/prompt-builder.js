@@ -34,6 +34,7 @@ import {
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
 import { isHarnessInjectedMessage } from "../shared/message/utils.js";
 import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/message-store.js";
+import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -48,7 +49,7 @@ function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
   const catalog = [];
   const seenNames = new Set();
   for (const toolItem of registry) {
-    const name = String(toolItem?.name || "").trim();
+    const name = text(toolItem?.name);
     if (!name || seenNames.has(name)) continue;
     const description = String(toolItem?.description || "")
       .replace(/\s+/g, " ")
@@ -85,15 +86,11 @@ function isHarnessRelayMessage(text = "") {
 }
 
 function resolveCompatibleRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "")
-    .trim()
-    .toLowerCase();
+  const role = text(message?.role || message?.lc_kwargs?.role).toLowerCase();
   if (role === "human") return "user";
   if (role === "ai") return "assistant";
   if (role) return role;
-  const type = String(message?.type || message?.lc_kwargs?.type || "")
-    .trim()
-    .toLowerCase();
+  const type = text(message?.type || message?.lc_kwargs?.type).toLowerCase();
   if (type === "human") return "user";
   if (type === "ai") return "assistant";
   if (type) return type;
@@ -102,15 +99,12 @@ function resolveCompatibleRole(message = {}) {
 
 function isNaturalUserMessage(item = {}) {
   return (
-    String(
+    text(
       item?.messageOrigin ||
         item?.lc_kwargs?.messageOrigin ||
         item?.additional_kwargs?.messageOrigin ||
-        item?.lc_kwargs?.additional_kwargs?.messageOrigin ||
-        "",
-    )
-      .trim()
-      .toLowerCase() === "natural"
+        item?.lc_kwargs?.additional_kwargs?.messageOrigin,
+    ).toLowerCase() === "natural"
   );
 }
 
@@ -154,7 +148,7 @@ function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta
   const contextSummary = {
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
-    latestUserGoal: String(latestUserGoal || "").trim(),
+    latestUserGoal: text(latestUserGoal),
     operationDirectory: compactOperationDirectoryForPrompt(resolveOperationDirectoryContext(ctx)),
     sceneTools: resolveSceneToolNames(ctx),
     toolAllowlist: resolvePlanningToolAllowlist(meta),

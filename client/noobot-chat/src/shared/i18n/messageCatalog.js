@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { messages } from "noobot-i18n/client/messages";
+import { text } from "@noobot/shared/value";
 
 const LOCALE_STORAGE_KEY = "noobot_locale";
 export const FALLBACK_LOCALE = "zh-CN";
@@ -12,16 +13,16 @@ export const SUPPORTED_LOCALES = Object.freeze(["zh-CN", "en-US"]);
 const SUPPORTED_LOCALE_SET = new Set(SUPPORTED_LOCALES);
 
 export function isSupportedLocale(value = "") {
-  return SUPPORTED_LOCALE_SET.has(String(value || "").trim());
+  return SUPPORTED_LOCALE_SET.has(text(value));
 }
 
 export function normalizeLocale(value = "") {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   return isSupportedLocale(normalized) ? normalized : FALLBACK_LOCALE;
 }
 
 export function readStoredLocale() {
-  return String(globalThis?.localStorage?.getItem?.(LOCALE_STORAGE_KEY) || "").trim();
+  return text(globalThis?.localStorage?.getItem?.(LOCALE_STORAGE_KEY));
 }
 
 export function writeStoredLocale(value = "") {

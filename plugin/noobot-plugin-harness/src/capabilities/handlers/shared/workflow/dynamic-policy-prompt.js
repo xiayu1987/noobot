@@ -5,6 +5,7 @@
  */
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { text } from "@noobot/shared/value";
 
 export const DYNAMIC_POLICY_PROMPT_BLOCK = "HARNESS_DYNAMIC_POLICY_PROMPT";
 const MAX_DYNAMIC_POLICY_PROMPT_CHARS =
@@ -12,7 +13,7 @@ const MAX_DYNAMIC_POLICY_PROMPT_CHARS =
 const VALID_SCENARIOS = new Set(["general", "text", "programming"]);
 
 function normalizeText(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function normalizeScenario(value = "") {
@@ -41,9 +42,7 @@ function extractProtocolBody(text = "") {
 }
 
 function readField(lines = [], field = "") {
-  const key = String(field || "")
-    .trim()
-    .toLowerCase();
+  const key = text(field).toLowerCase();
   if (!key) return "";
   for (const line of lines) {
     const text = String(line || "").trim();

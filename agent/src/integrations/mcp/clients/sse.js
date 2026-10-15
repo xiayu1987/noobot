@@ -14,6 +14,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 export class SseMcpClient extends BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
@@ -32,7 +33,7 @@ export class SseMcpClient extends BaseMcpClient {
   }
 
   _resolveMessageUrl(endpointData = "") {
-    const endpoint = String(endpointData || "").trim();
+    const endpoint = text(endpointData);
     if (!endpoint) return "";
     if (/^https?:\/\//i.test(endpoint)) return endpoint;
     return new URL(endpoint, this.baseUrl).toString();
@@ -47,8 +48,8 @@ export class SseMcpClient extends BaseMcpClient {
   }
 
   _handleSseEvent(eventName = "", rawData = "") {
-    const event = String(eventName || "").trim();
-    const data = String(rawData || "").trim();
+    const event = text(eventName);
+    const data = text(rawData);
     if (event === "endpoint") {
       const resolved = this._resolveMessageUrl(data);
       if (resolved && !this._endpointResolved) {

@@ -10,6 +10,7 @@ import {
   normalizeStartupLanguage,
   startupMessages,
 } from "../locales/messages.js";
+import { text } from "@noobot/shared/value";
 
 const dependencyPhases = new Set(["dependency", "dependency-missing"]);
 const localizedStatusKeys = Object.freeze({
@@ -23,9 +24,9 @@ const localizedStatusKeys = Object.freeze({
 });
 
 function normalizeModel(model, options) {
-  const value = String(model || "").trim();
+  const value = text(model);
   const optionKeys = Array.isArray(options)
-    ? options.map((item) => String(item?.key || "").trim()).filter(Boolean)
+    ? options.map((item) => text(item?.key)).filter(Boolean)
     : [];
   if (value && optionKeys.includes(value)) return value;
   return optionKeys[0] || value;
@@ -80,7 +81,7 @@ export function useStartupBridge() {
   });
 
   function setMessage(key, raw = "") {
-    messageState.value = { key, raw: String(raw || "").trim() };
+    messageState.value = { key, raw: text(raw) };
   }
 
   function updateSuperAdminForm(nextForm) {
@@ -131,7 +132,7 @@ export function useStartupBridge() {
     languageSelectedByUser.value = false;
     superAdminForm.language = normalizeStartupLanguage(superAdmin?.language);
     modelOptions.value = Array.isArray(superAdmin?.modelOptions)
-      ? superAdmin.modelOptions.filter((item) => String(item?.key || "").trim())
+      ? superAdmin.modelOptions.filter((item) => text(item?.key))
       : [];
     superAdminForm.model = normalizeModel(superAdmin?.model, modelOptions.value);
     if (!modelOptions.value.length && superAdminForm.model)
@@ -204,9 +205,9 @@ export function useStartupBridge() {
   async function submitSuperAdmin() {
     const language = normalizeStartupLanguage(superAdminForm.language);
     const model = normalizeModel(superAdminForm.model, modelOptions.value);
-    const userId = String(superAdminForm.userId || "").trim();
-    const connectCode = String(superAdminForm.connectCode || "").trim();
-    const dependencyProxyUrl = String(superAdminForm.dependencyProxyUrl || "").trim();
+    const userId = text(superAdminForm.userId);
+    const connectCode = text(superAdminForm.connectCode);
+    const dependencyProxyUrl = text(superAdminForm.dependencyProxyUrl);
     if (!userId || !connectCode || !model) {
       superAdminError.value = messages.value.setup.requiredError;
       return;
@@ -258,7 +259,7 @@ export function useStartupBridge() {
       const values = {};
       for (const item of requiredParams.value) {
         const key = String(item?.key || "");
-        const value = String(configValues[key] || "").trim();
+        const value = text(configValues[key]);
         if (value) values[key] = value;
       }
       await desktop?.saveConfigParams(values);

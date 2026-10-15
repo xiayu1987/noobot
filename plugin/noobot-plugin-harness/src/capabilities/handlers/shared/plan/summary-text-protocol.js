@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const SUMMARY_LINE_RE = /^\s*(\d+)\.\s+(.+?)\s*$/;
 const PATCH_ADD_UPDATE_RE = /^\s*(ADD|UPDATE)\s+(?:S\s*)?\[?(\d+)\]?\s+(.+?)\s*$/i;
 const PATCH_DELETE_RE = /^\s*(DELETE)\s+(?:S\s*)?\[?(\d+)\]?\s*$/i;
@@ -27,7 +29,7 @@ function normalizeSummaryItems(items = []) {
   const map = new Map();
   for (const item of Array.isArray(items) ? items : []) {
     const id = Number(item?.id);
-    const content = String(item?.content || "").trim();
+    const content = text(item?.content);
     if (!Number.isFinite(id) || id <= 0 || !content) continue;
     map.set(id, { id, content });
   }
@@ -76,8 +78,8 @@ export function parseSummaryPatchCommands(text = "") {
 }
 
 export function mergeSummaryText(existingText = "", incomingText = "") {
-  const incoming = String(incomingText || "").trim();
-  const current = String(existingText || "").trim();
+  const incoming = text(incomingText);
+  const current = text(existingText);
   if (!incoming) return current;
 
   const patchCommands = parseSummaryPatchCommands(incoming);
@@ -92,7 +94,7 @@ export function mergeSummaryText(existingText = "", incomingText = "") {
         map.delete(id);
         continue;
       }
-      const content = String(command.content || "").trim();
+      const content = text(command.content);
       if (!content) continue;
       map.set(id, { id, content });
     }

@@ -33,6 +33,7 @@ import {
   resolveModelMessages,
 } from "../../../core/message-store.js";
 import { isHarnessInjectedMessage } from "../shared/message/utils.js";
+import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -48,7 +49,7 @@ const PLAN_BLOCK_MARKER_RE = /^\s*\[(?:PLAN|PLAN_PATCH|CURRENT_PLAN)\]\s*$/gim;
 const CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE = "planning_current_task_goal";
 
 function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
-  const normalizedReason = String(reason || "").trim() || "planning_empty_response";
+  const normalizedReason = text(reason) || "planning_empty_response";
   const key = DEFAULT_PLAN_REASON_I18N_KEY[normalizedReason];
   if (!key) return normalizedReason;
   return translateI18nText(locale, key) || normalizedReason;
@@ -101,17 +102,13 @@ function removeCurrentTaskGoalInjectedMessages(ctx = {}) {
 }
 
 function buildCurrentTaskGoalSystemContent(currentTaskGoal = "") {
-  return [
-    "<!-- noobot-harness-current-task-goal -->",
-    "[CURRENT_TASK_GOAL]",
-    String(currentTaskGoal || "").trim(),
-  ]
+  return ["<!-- noobot-harness-current-task-goal -->", "[CURRENT_TASK_GOAL]", text(currentTaskGoal)]
     .filter(Boolean)
     .join("\n");
 }
 
 function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
-  const normalizedGoal = String(currentTaskGoal || "").trim();
+  const normalizedGoal = text(currentTaskGoal);
   if (!normalizedGoal) return false;
   removeCurrentTaskGoalInjectedMessages(ctx);
   const message = buildHarnessInjectedMessage(buildCurrentTaskGoalSystemContent(normalizedGoal), {
@@ -133,7 +130,7 @@ function applyPlanText(
   meta = {},
 ) {
   const parsedProtocol = parsePlanningTextProtocol(rawText);
-  const normalized = String(parsedProtocol.planText || "").trim();
+  const normalized = text(parsedProtocol.planText);
   if (!normalized) return false;
   const previousDocument = parsePlanDocumentFromText(bucket.planText);
   const appliedMutation = executePlanMutation({
@@ -157,7 +154,7 @@ function applyPlanText(
   }
   resetPlanAcceptanceStatusForPlanChange(
     bucket,
-    String(renderPlanDocument(previousDocument) || "").trim(),
+    text(renderPlanDocument(previousDocument)),
     bucket.planText,
     {
       stage: "planning_capture",
@@ -180,8 +177,8 @@ function applyPlanText(
     source,
     stage: "main_plan",
     revisedAt: new Date().toISOString(),
-    summary: String(summary || "").trim() || undefined,
-    currentTaskGoal: String(bucket.currentTaskGoal || "").trim() || undefined,
+    summary: text(summary) || undefined,
+    currentTaskGoal: text(bucket.currentTaskGoal) || undefined,
     planText: bucket.planText,
     checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
   });
@@ -234,7 +231,7 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: PLANNING_EVENTS.defaultChecklistApplied,
     detail: {
-      reason: String(reason || "").trim() || "planning_empty_response",
+      reason: text(reason) || "planning_empty_response",
       reasonLabel: resolveDefaultPlanReasonLabel(locale, reason),
     },
   });
@@ -251,7 +248,7 @@ export async function processPlanningResult(
     return { captured: false, retryScheduled: false, sourceType: "none", checklistCount: 0 };
   }
   const { bucket, state } = holder;
-  const responseText = String(rawText || "").trim();
+  const responseText = text(rawText);
   if (responseText) {
     const applied = applyPlanText(ctx, bucket, state, responseText, source, "", meta);
     if (!applied) {

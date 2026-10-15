@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function resolveWorkflowAgentContext(ctx = {}) {
   return ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
 }
@@ -26,7 +28,7 @@ function createWorkflowAbortError(ctx = {}) {
     typeof reason === "string"
       ? reason
       : reason && typeof reason === "object"
-        ? String(reason?.message || reason?.reason || reason?.type || "").trim()
+        ? text(reason?.message || reason?.reason || reason?.type)
         : "";
   const error = new Error(reasonText || "workflow aborted");
   error.name = "AbortError";
@@ -35,15 +37,9 @@ function createWorkflowAbortError(ctx = {}) {
 }
 
 export function isWorkflowAbortError(error = null, ctx = {}) {
-  const name = String(error?.name || "")
-    .trim()
-    .toLowerCase();
-  const code = String(error?.code || "")
-    .trim()
-    .toUpperCase();
-  const message = String(error?.message || error || "")
-    .trim()
-    .toLowerCase();
+  const name = text(error?.name).toLowerCase();
+  const code = text(error?.code).toUpperCase();
+  const message = text(error?.message || error).toLowerCase();
   return (
     resolveWorkflowAbortSignal(ctx)?.aborted === true ||
     name === "aborterror" ||
@@ -70,7 +66,7 @@ export function hasOwnObjectKey(source = {}, key = "") {
     source &&
     typeof source === "object" &&
     !Array.isArray(source) &&
-    Object.prototype.hasOwnProperty.call(source, String(key || "").trim()),
+    Object.prototype.hasOwnProperty.call(source, text(key)),
   );
 }
 
@@ -83,7 +79,7 @@ export function firstText(...values) {
 }
 
 export function normalizeString(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function withTimeout(promise, timeoutMs, message = "", { signal = null } = {}) {

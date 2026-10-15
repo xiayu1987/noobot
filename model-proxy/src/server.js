@@ -7,13 +7,14 @@ import http from "node:http";
 import { createProxyServer as createHttpProxyServer } from "http-proxy-3";
 import { getHeaderValue } from "./common.js";
 import { decodeBodyByEncoding, resolveFinalResponseBodyText } from "./response-body.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeTerminalError(error = null) {
   if (!error) return null;
   return {
-    name: String(error?.name || "").trim() || undefined,
-    message: String(error?.message || error?.code || error?.type || "").trim() || undefined,
-    code: String(error?.code || "").trim() || undefined,
+    name: text(error?.name) || undefined,
+    message: text(error?.message || error?.code || error?.type) || undefined,
+    code: text(error?.code) || undefined,
   };
 }
 

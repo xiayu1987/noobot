@@ -23,6 +23,7 @@ import {
   parsePlanAcceptanceItemsFromText,
   resolvePlanAcceptanceForChecklistItem,
 } from "../shared/plan/acceptance-status.js";
+import { text } from "@noobot/shared/value";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -34,11 +35,7 @@ function resolveKeywordSet(i18nKey = "") {
   const values = [LOCALE.ZH_CN, LOCALE.EN_US]
     .map((locale) => translateI18nText(locale, i18nKey))
     .flatMap((line) => String(line || "").split("|"))
-    .map((item) =>
-      String(item || "")
-        .trim()
-        .toLowerCase(),
-    )
+    .map((item) => text(item).toLowerCase())
     .filter(Boolean);
   return [...new Set(values)];
 }
@@ -67,9 +64,7 @@ function parseSemanticAcceptanceItemsFromText(text = "") {
 }
 
 function mapModelAcceptanceStatusToTaskStatus(status = "") {
-  const normalized = String(status || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(status).toLowerCase();
   return mapPlanAcceptanceStatusToTaskStatus(normalized);
 }
 
@@ -101,17 +96,17 @@ function resolveLatestModelAcceptance(bucket = {}) {
     ? bucket.phaseAcceptanceReports
     : [];
   const latest = reports.length ? reports[reports.length - 1] : null;
-  const content = String(latest?.content || "").trim();
+  const content = text(latest?.content);
   const items = parseModelAcceptanceItemsFromText(content);
   const byPlan = {};
   for (const item of items) {
-    const key = String(item?.planId || "").trim();
+    const key = text(item?.planId);
     if (!key) continue;
     byPlan[key] = item;
   }
   return {
     source: latest ? "phase_acceptance" : "",
-    acceptedAt: String(latest?.acceptedAt || "").trim(),
+    acceptedAt: text(latest?.acceptedAt),
     rawContent: content,
     items,
     byPlan,
@@ -152,9 +147,9 @@ function buildAcceptanceValidationState(report = null) {
   const source = report && typeof report === "object" ? report : null;
   if (!source) return null;
   return {
-    mode: String(source.mode || "").trim(),
-    forcedReason: String(source.forcedReason || "").trim(),
-    acceptedAt: String(source.acceptedAt || "").trim(),
+    mode: text(source.mode),
+    forcedReason: text(source.forcedReason),
+    acceptedAt: text(source.acceptedAt),
     summary: source.summary && typeof source.summary === "object" ? source.summary : {},
     planAcceptanceStatusByPlanId:
       source.planAcceptanceStatusByPlanId && typeof source.planAcceptanceStatusByPlanId === "object"
@@ -173,7 +168,7 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
   const checklist = [];
   for (const main of mainPlans) {
     const mainId = Number(main?.id);
-    const mainTask = String(main?.content || "").trim();
+    const mainTask = text(main?.content);
     if (!Number.isFinite(mainId) || !mainTask) continue;
     checklist.push({
       index: mainId,
@@ -186,7 +181,7 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
       : [];
     for (const sub of subPlans) {
       const subIndex = Number(sub?.subIndex);
-      const subTask = String(sub?.content || "").trim();
+      const subTask = text(sub?.content);
       if (!Number.isFinite(subIndex) || !subTask) continue;
       checklist.push({
         index: Number(`${mainId}.${subIndex}`),
@@ -207,7 +202,7 @@ export function buildAcceptanceReport({
   forcedReason = "",
 } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
-  const planText = String(bucket?.planText || "").trim();
+  const planText = text(bucket?.planText);
   const parsedPlan = parsePlanDocumentFromText(planText);
   const checklistFromPlanText = buildChecklistFromParsedPlan(parsedPlan);
   const checklist = checklistFromPlanText.length
@@ -228,7 +223,7 @@ export function buildAcceptanceReport({
       modelAcceptanceByPlan,
     );
     const persistedMappedStatus =
-      String(persistedAcceptance?.taskStatus || "").trim() ||
+      text(persistedAcceptance?.taskStatus) ||
       mapModelAcceptanceStatusToTaskStatus(persistedAcceptance?.status);
     const modelMappedStatus = mapModelAcceptanceStatusToTaskStatus(modelAcceptance?.status);
     const baseStatus = evaluateTaskStatus(normalized, state);
@@ -268,7 +263,7 @@ export function buildAcceptanceReport({
     };
   });
   const plan = buildPlanSnapshot(bucket, locale);
-  const normalizedForcedReason = String(forcedReason || "").trim();
+  const normalizedForcedReason = text(forcedReason);
   return {
     mode,
     forcedReason: mode === ACCEPTANCE_MODE.FORCED ? normalizedForcedReason : "",
@@ -305,10 +300,10 @@ function buildBasePlanRecord({
   taskChecklist = [],
 } = {}) {
   return {
-    source: String(source || "").trim(),
-    revisedAt: String(revisedAt || "").trim() || undefined,
-    totalGoal: String(totalGoal || "").trim(),
-    taskOwner: String(taskOwner || "").trim(),
+    source: text(source),
+    revisedAt: text(revisedAt) || undefined,
+    totalGoal: text(totalGoal),
+    taskOwner: text(taskOwner),
     nextPhase: nextPhase && typeof nextPhase === "object" ? nextPhase : null,
     taskChecklist: Array.isArray(taskChecklist) ? taskChecklist : [],
   };
@@ -341,7 +336,7 @@ function resolveTaskOwner(taskOwner = "", fallbackTaskOwner = "", locale = LOCAL
 function normalizeMainPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) {
   return {
     ...buildBasePlanRecord({
-      source: String(plan?.source || "").trim() || "unknown",
+      source: text(plan?.source) || "unknown",
       revisedAt: plan?.revisedAt,
       totalGoal: plan?.totalGoal,
       taskOwner: resolveTaskOwner(plan?.taskOwner, bucket.taskOwner, locale),
@@ -358,7 +353,7 @@ function normalizeMainPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) 
 function buildOrderedPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) {
   return {
     ...buildBasePlanRecord({
-      source: String(plan?.source || "").trim() || "unknown",
+      source: text(plan?.source) || "unknown",
       revisedAt: plan?.revisedAt,
       totalGoal: plan?.totalGoal,
       taskOwner: resolveTaskOwner(plan?.taskOwner, bucket.taskOwner, locale),
@@ -383,9 +378,7 @@ function buildOrderedFallbackPlanRecord(bucket = {}, locale = LOCALE.ZH_CN) {
 
 function resolveFinalMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
   const revisions = Array.isArray(bucket.planRevisions) ? bucket.planRevisions : [];
-  const mainCandidates = revisions.filter(
-    (plan = {}) => String(plan?.stage || "").trim() !== "refinement",
-  );
+  const mainCandidates = revisions.filter((plan = {}) => text(plan?.stage) !== "refinement");
   const selected =
     (mainCandidates.length ? mainCandidates[mainCandidates.length - 1] : null) ||
     buildFallbackMainPlan(bucket, locale);
@@ -400,8 +393,8 @@ function collectRefinementsForMainPlanVersion(bucket = {}, mainPlanVersion = 1) 
     })
     .map((item = {}, index) => ({
       order: index + 1,
-      source: String(item?.source || "").trim() || "planning_refinement",
-      refinedAt: String(item?.refinedAt || "").trim() || undefined,
+      source: text(item?.source) || "planning_refinement",
+      refinedAt: text(item?.refinedAt) || undefined,
       mainPlanVersion: Number(mainPlanVersion),
       targetMainStepIndexes: Array.isArray(item?.targetMainStepIndexes)
         ? item.targetMainStepIndexes
@@ -433,13 +426,13 @@ export function applySemanticAcceptanceToReport(report = {}) {
     data.semanticValidation && typeof data.semanticValidation === "object"
       ? data.semanticValidation
       : null;
-  const semanticRaw = String(semanticValidation?.content || "").trim();
+  const semanticRaw = text(semanticValidation?.content);
   if (!semanticRaw) return false;
   const semanticItems = parseSemanticAcceptanceItemsFromText(semanticRaw);
   if (!semanticItems.length) return false;
   const semanticByPlan = {};
   for (const item of semanticItems) {
-    const key = String(item?.planId || "").trim();
+    const key = text(item?.planId);
     if (!key) continue;
     semanticByPlan[key] = item;
   }
@@ -456,8 +449,8 @@ export function applySemanticAcceptanceToReport(report = {}) {
     const semanticAcceptance = resolveAcceptanceStatusForChecklistItem(item, semanticByPlan);
     const semanticMappedStatus = mapModelAcceptanceStatusToTaskStatus(semanticAcceptance?.status);
     const phaseMappedStatus = mapModelAcceptanceStatusToTaskStatus(item?.modelAcceptance?.status);
-    const phaseStatus = String(item?.phaseStatus || "").trim() || phaseMappedStatus || "";
-    const fallbackStatus = String(item?.status || "").trim() || "pending";
+    const phaseStatus = text(item?.phaseStatus) || phaseMappedStatus || "";
+    const fallbackStatus = text(item?.status) || "pending";
     const effectiveStatus = semanticMappedStatus || phaseStatus || fallbackStatus;
     const statusSource = semanticMappedStatus ? "semantic" : phaseStatus ? "phase" : "signal";
     return {
@@ -484,7 +477,7 @@ export function applySemanticAcceptanceToReport(report = {}) {
   data.summary = buildAcceptanceSummary(nextChecklist);
   data.semanticAcceptance = {
     source: "acceptance_semantic_validation",
-    acceptedAt: String(data?.acceptedAt || "").trim(),
+    acceptedAt: text(data?.acceptedAt),
     rawContent: semanticRaw,
   };
   data.statusAuthority = "semantic_over_phase_over_signal";
@@ -498,7 +491,7 @@ export function buildSemanticValidationPromptPayload({
   finalOutput = "",
   locale = LOCALE.ZH_CN,
 } = {}) {
-  const planText = String(bucket?.planText || "").trim();
+  const planText = text(bucket?.planText);
   if (planText) {
     return {
       expectedSchema: {

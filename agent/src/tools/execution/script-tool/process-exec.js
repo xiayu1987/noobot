@@ -19,6 +19,7 @@ import {
   terminateProcessTree,
   usesDetachedProcessGroup,
 } from "@noobot/platform-compatibility/process";
+import { text } from "@noobot/shared/value";
 
 const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
@@ -35,7 +36,7 @@ function resolveOutputDir(sessionDir, kind) {
 
 function resolveProcessCommand(command) {
   if (command && typeof command === "object" && !Array.isArray(command)) {
-    const executable = String(command.command || "").trim();
+    const executable = text(command.command);
     if (!executable) throw new TypeError("process command executable is required");
     return {
       executable,
@@ -292,9 +293,7 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
 }
 
 export function normalizeExecutionMode(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase() === SCRIPT_EXECUTION_MODE.BACKGROUND
+  return text(value).toLowerCase() === SCRIPT_EXECUTION_MODE.BACKGROUND
     ? SCRIPT_EXECUTION_MODE.BACKGROUND
     : SCRIPT_EXECUTION_MODE.FOREGROUND;
 }
@@ -404,7 +403,7 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
 
 export function hasCommand(commandName = "") {
   return new Promise((resolve) => {
-    const normalizedCommandName = String(commandName || "").trim();
+    const normalizedCommandName = text(commandName);
     if (!normalizedCommandName) {
       resolve(false);
       return;

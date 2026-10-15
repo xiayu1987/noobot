@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import {
   DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
@@ -32,8 +32,8 @@ function transferIdentityRequired(identity) {
   }
   if (
     !isPlainObject(identity.producer) ||
-    !String(identity.producer.type || "").trim() ||
-    !String(identity.producer.id || "").trim()
+    !text(identity.producer.type) ||
+    !text(identity.producer.id)
   ) {
     throw new Error("semantic_transfer_overflow_producer_required");
   }
@@ -47,17 +47,17 @@ function overflowArtifactName(call = {}) {
 
 function buildReadFileSourceReference({ parsed = {}, identity }) {
   const pathRef = parsed?.path && typeof parsed.path === "object" ? parsed.path : null;
-  const view = String(pathRef?.view || "").trim();
+  const view = text(pathRef?.view);
   const address =
     view === "attachment" && isPlainObject(pathRef?.identity)
       ? pathRef.identity
       : ["workspace", "host"].includes(view)
-        ? String(pathRef?.path || "").trim()
+        ? text(pathRef?.path)
         : null;
   if (!address) return null;
   const reference = {
     address,
-    name: String(parsed?.fileName || "").trim() || "read-file-source",
+    name: text(parsed?.fileName) || "read-file-source",
     mimeType: "text/plain",
     ...(Number.isFinite(Number(parsed?.totalLines)) ? { size: Number(parsed.totalLines) } : {}),
     ...(Number.isFinite(Number(parsed?.startLine)) ? { startLine: Number(parsed.startLine) } : {}),
@@ -99,11 +99,11 @@ export async function normalizeToolResultOverflow({
   }
 
   const ids = transferIdentityRequired(identity);
-  if (String(sessionId || "").trim() && String(sessionId).trim() !== ids.sessionId) {
+  if (text(sessionId) && String(sessionId).trim() !== ids.sessionId) {
     throw new Error("semantic_transfer_overflow_session_identity_conflict");
   }
   const parsed = parseJsonObject(rawText);
-  if (String(call?.name || "").trim() === "read_file") {
+  if (text(call?.name) === "read_file") {
     const referenceEnvelope = buildReadFileSourceReference({ parsed, identity: ids });
     if (!referenceEnvelope) throw new Error("read_file_source_reference_required");
     const normalized = toToolJsonResult(call?.name, {
@@ -137,8 +137,8 @@ export async function normalizeToolResultOverflow({
     identity: ids,
     meta: {
       overflowContentKind: "tool_result",
-      toolName: String(call?.name || "").trim(),
-      toolCallId: String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim(),
+      toolName: text(call?.name),
+      toolCallId: text(call?.id || call?.tool_call_id || call?.toolCallId),
     },
   });
   const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
@@ -149,7 +149,7 @@ export async function normalizeToolResultOverflow({
   }
 
   const message =
-    String(parsed?.message || "").trim() ||
+    text(parsed?.message) ||
     tTool(runtime, "tools.result.toolResultOverflow", { measuredLength: rawText.length });
   const normalized = toToolJsonResult(call?.name, {
     ...(typeof parsed?.ok === "boolean" ? { ok: parsed.ok } : { ok: true }),

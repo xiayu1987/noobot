@@ -9,10 +9,11 @@ import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { createLlmDeltaVisibilityFilter } from "../../events/llm-filter.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { resolveModelSpecByName } from "../index.js";
+import { text } from "@noobot/shared/value";
 
 function updateModelState(modelState, spec, shouldSwitch) {
-  modelState.activeModelName = String(spec.model || "").trim();
-  modelState.activeModelAlias = String(spec?.alias || "").trim();
+  modelState.activeModelName = text(spec.model);
+  modelState.activeModelAlias = text(spec?.alias);
   modelState.activeModelSpec = spec && typeof spec === "object" ? { ...spec } : null;
   if (shouldSwitch) {
     emitEvent(modelState.eventListener, "model_switched", {
@@ -24,7 +25,7 @@ function updateModelState(modelState, spec, shouldSwitch) {
 
 export function resolveLlmForTurn(modelState) {
   const { runtime, globalConfig, userConfig, defaultModelSpec } = modelState;
-  const runtimeModel = String(runtime?.runtimeModel || "").trim();
+  const runtimeModel = text(runtime?.runtimeModel);
 
   let targetSpec = null;
   let shouldSwitch = false;
@@ -53,8 +54,8 @@ export function resolveLlmForTurn(modelState) {
 
 export function resolveCurrentModelInfo(modelState = {}) {
   return {
-    modelAlias: String(modelState?.activeModelAlias || "").trim(),
-    modelName: String(modelState?.activeModelName || "").trim(),
+    modelAlias: text(modelState?.activeModelAlias),
+    modelName: text(modelState?.activeModelName),
   };
 }
 

@@ -8,6 +8,7 @@ import { provideExtensionValues } from "../../../../extensions/extension-registr
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { attachmentInlineRefPlugin } from "./attachmentInlineRefPlugin.js";
 import { workspaceFileLinkPlugin } from "./workspaceFileLinkPlugin.js";
+import { text } from "@noobot/shared/value";
 
 const MERMAID_PREFIXES = [
   "graph ",
@@ -24,12 +25,12 @@ const MERMAID_PREFIXES = [
 ];
 function collapseMarkerNames() {
   return ["NOOBOT_COLLAPSE", ...provideExtensionValues(EXTENSION_POINTS.MARKDOWN_COLLAPSE_MARKERS)]
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .filter(Boolean);
 }
 
 function looksLikeMermaidLine(rawLine = "") {
-  const line = String(rawLine || "").trim();
+  const line = text(rawLine);
   if (!line) return false;
   return MERMAID_PREFIXES.some((prefix) => line.startsWith(prefix));
 }
@@ -42,7 +43,7 @@ function normalizeMermaidMarkdown(inputText = "") {
   let inCodeFence = false;
 
   for (const currentLine of lines) {
-    const trimmedLine = String(currentLine || "").trim();
+    const trimmedLine = text(currentLine);
     if (trimmedLine.startsWith("```")) {
       inCodeFence = !inCodeFence;
       outputLines.push(currentLine);
@@ -67,9 +68,7 @@ const defaultFenceRenderer =
   ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx] || {};
-  const info = String(token?.info || "")
-    .trim()
-    .toLowerCase();
+  const info = text(token?.info).toLowerCase();
   if (info === "mermaid") {
     const diagramCode = md.utils.escapeHtml(String(token?.content || ""));
     return `<div class="mermaid">${diagramCode}</div>`;
@@ -87,8 +86,7 @@ function escapeHtmlAttribute(value = "") {
 
 function normalizeCssModifier(value = "") {
   return (
-    String(value || "")
-      .trim()
+    text(value)
       .toLowerCase()
       .replace(/[^a-z0-9_-]+/g, "-")
       .replace(/^-+|-+$/g, "") || "unknown"
@@ -135,7 +133,7 @@ function buildCollapseHtml({ attrs = {}, innerMarkdown = "", renderEnv = {} } = 
 }
 
 function shouldHideCollapse({ attrs = {} } = {}) {
-  const kind = String(attrs.kind || "").trim();
+  const kind = text(attrs.kind);
   return kind === "latest_complete_summary" || kind === "acceptance";
 }
 

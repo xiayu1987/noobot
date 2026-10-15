@@ -11,6 +11,7 @@ import {
   resolveToolName,
 } from "./execution-log-fields.js";
 import { summarizeExecutionMetrics } from "./execution-report-metrics.js";
+import { text } from "@noobot/shared/value";
 
 const TOOL_PHASE_BY_EVENT = Object.freeze({
   [TOOL_CALL_START_EVENT]: "call",
@@ -29,7 +30,7 @@ function countVisibleActivity(visibleLogs) {
   const counts = { toolCallCount: 0, toolResultCount: 0, errorCount: 0 };
   for (const log of visibleLogs) {
     const phase = TOOL_PHASE_BY_EVENT[log.event];
-    const toolCallId = String(resolveData(log).toolCallId || "").trim();
+    const toolCallId = text(resolveData(log).toolCallId);
     if (phase && toolCallId) {
       if (seen[phase].has(toolCallId)) continue;
       seen[phase].add(toolCallId);

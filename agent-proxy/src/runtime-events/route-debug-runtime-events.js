@@ -8,9 +8,10 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 function firstTrimmed(...candidates) {
-  return String(candidates.find(Boolean) || "").trim();
+  return text(candidates.find(Boolean));
 }
 
 function firstLowerTrimmed(...candidates) {

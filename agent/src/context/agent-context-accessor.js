@@ -6,6 +6,7 @@
 
 import { getAgentContextIdentity } from "@noobot/context-protocol/agent-context/accessors";
 import { getAgentContextEnvelope } from "./agent-execution-scope.js";
+import { text } from "@noobot/shared/value";
 
 export { getAgentContextEnvelope } from "./agent-execution-scope.js";
 
@@ -40,12 +41,11 @@ function getRuntimeRunConfig(runtime, systemRuntime) {
 
 export function resolveRuntimeTurnScopeId(runtime = {}) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  return String(
+  return text(
     systemRuntime?.turnScopeId ||
       systemRuntime?.config?.turnScopeId ||
-      getRuntimeRunConfig(runtime, systemRuntime)?.turnScopeId ||
-      "",
-  ).trim();
+      getRuntimeRunConfig(runtime, systemRuntime)?.turnScopeId,
+  );
 }
 
 export function getSystemRuntimeFromAgentContext(scope = {}) {
@@ -61,7 +61,7 @@ export function getChildRunParentSessionIdFromAgentContext(scope = {}) {
 }
 
 export function getBasePathFromAgentContext(scope = {}) {
-  return String(getRuntimeFromAgentContext(scope)?.basePath || "").trim();
+  return text(getRuntimeFromAgentContext(scope)?.basePath);
 }
 
 export function getDialogProcessIdFromAgentContext(scope = {}) {

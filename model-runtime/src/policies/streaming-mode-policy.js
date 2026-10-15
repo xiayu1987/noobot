@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const EXPLICIT_ERROR_CODES = new Set([
   "aborted",
   "authentication",
@@ -33,10 +35,10 @@ const EXPLICIT_ERROR_TEXT = [
 
 export function streamingProviderCacheKey({ model = {}, operation = {}, tools = [] } = {}) {
   return JSON.stringify([
-    String(model.operatorId || "").trim(),
-    String(model.adapterId || "").trim(),
-    String(model.base_url || "").trim(),
-    String(model.model || "").trim(),
+    text(model.operatorId),
+    text(model.adapterId),
+    text(model.base_url),
+    text(model.model),
     String(operation?.kind || "chat").trim(),
     Array.isArray(tools) && tools.length > 0,
   ]);
@@ -47,9 +49,7 @@ export function resolvePreferredStreaming({ requested, cached } = {}) {
 }
 
 function isExplicitModelError(error = {}) {
-  const code = String(error?.code || error?.kind || error?.cause?.code || "")
-    .trim()
-    .toLowerCase();
+  const code = text(error?.code || error?.kind || error?.cause?.code).toLowerCase();
   if (EXPLICIT_ERROR_CODES.has(code)) return true;
   const message = String(error?.message || error || "").toLowerCase();
   return EXPLICIT_ERROR_TEXT.some((text) => message.includes(text));
@@ -60,9 +60,7 @@ export function mayRetryWithAlternateStreaming(
   streamedTokens = 0,
   classification = {},
 ) {
-  const classifiedKind = String(classification?.kind || classification?.code || "")
-    .trim()
-    .toLowerCase();
+  const classifiedKind = text(classification?.kind || classification?.code).toLowerCase();
   return (
     Number(streamedTokens || 0) === 0 &&
     !isExplicitModelError(error) &&

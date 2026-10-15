@@ -12,10 +12,11 @@ import {
 } from "./summary-matrix.js";
 import { normalizePromptOptions } from "./prompt-options.js";
 import { buildScenarioPolicyPromptText } from "./scenario-policy-prompts.js";
+import { text } from "@noobot/shared/value";
 
 export function buildGuidanceAnalysisPromptText({ locale = LOCALE.ZH_CN, marker = "" } = {}) {
   return [
-    String(marker || "").trim(),
+    text(marker),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_ANALYSIS_PROMPT_GOAL),
   ]
     .filter(Boolean)
@@ -35,11 +36,11 @@ export function buildGuidanceFailurePromptText({
     locale,
     HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_FAILURE_PROMPT_TEMPLATE,
     {
-      reason: String(reason || "").trim(),
+      reason: text(reason),
     },
   );
   return [
-    String(marker || "").trim(),
+    text(marker),
     message,
     includeWorkflowPolicy === false
       ? ""
@@ -85,7 +86,7 @@ export function buildGuidanceSummaryInstructionPromptText(options = {}) {
         )
       : translateI18nText(locale, riskSampleKey);
   return [
-    String(marker || "").trim(),
+    text(marker),
     "[HARNESS_SUMMARY_INSTRUCTION]",
     `instruction_prompt = ${selection.promptId}`,
     `instruction_parts = ${[...selection.parts].join(",")}`,

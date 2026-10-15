@@ -47,6 +47,7 @@ import {
   reduceThinkingDetailContentTimelines,
   selectThinkingDetailContentTimeline,
 } from "@noobot/event-protocol/thinking-detail-content";
+import { text } from "@noobot/shared/value";
 
 export function useThinkingTimeline(
   props,
@@ -421,7 +422,7 @@ export function useThinkingTimeline(
           messageItem,
           dialogProcessId: identity.dialogProcessId,
           turnScopeId: identity.turnScopeId,
-          expectedRevision: String(cached?.revision || "").trim(),
+          expectedRevision: text(cached?.revision),
         });
         if (!detail) {
           logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", () => ({

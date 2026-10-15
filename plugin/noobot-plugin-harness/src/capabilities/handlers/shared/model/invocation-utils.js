@@ -16,6 +16,7 @@ import { ensureHarnessBucket } from "../bucket-utils.js";
 import { HARNESS_I18N_KEYSET, resolveLocale, translateI18nText } from "../i18n.js";
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 import { resolveAuxiliarySnapshotMessages } from "./auxiliary-snapshot-store.js";
+import { text } from "@noobot/shared/value";
 
 const RESERVED_TOOL_PROTOCOL_PATTERN = /<\s*\/?\s*(?:tool_call|arg_value)\b/i;
 
@@ -47,8 +48,7 @@ function appendReasoningAttemptsToBucket(ctx = {}, { purpose = "", response = nu
   const attempts = Array.isArray(response?.execution?.attempts) ? response.execution.attempts : [];
   const reasoningAttempts = attempts.filter(
     (attempt = {}) =>
-      attempt.kind === MODEL_ATTEMPT_KIND.REASONING_ONLY &&
-      String(attempt?.output?.reasoning || "").trim(),
+      attempt.kind === MODEL_ATTEMPT_KIND.REASONING_ONLY && text(attempt?.output?.reasoning),
   );
   if (!reasoningAttempts.length) return false;
   const holder = ensureHarnessBucket(ctx);
@@ -96,7 +96,7 @@ export async function invokeCapabilityModel({
       contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
     }),
   );
-  if (!String(response.output.text || "").trim()) {
+  if (!text(response.output.text)) {
     throw new TypeError(
       `harness capability model returned empty output: ${purpose || payload.purpose || "unknown"}`,
     );

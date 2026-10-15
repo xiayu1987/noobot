@@ -5,6 +5,7 @@
  */
 import http from "node:http";
 import { DEFAULT_HOST, IDE_PATH_PREFIX, IDE_TOKEN_QUERY_KEY } from "./config.js";
+import { text } from "@noobot/shared/value";
 
 const IDE_TOKEN_HEADER_KEY = "x-ide-token";
 const IDE_TOKEN_COOKIE_KEY = "noobot_ide_token";
@@ -27,7 +28,7 @@ function parseCookieHeader(cookieHeader = "") {
   return result;
 }
 function buildTokenCookieValue(instance = {}) {
-  return `${String(instance?.basePath || "").trim()}:${String(instance?.connectionToken || "").trim()}`;
+  return `${text(instance?.basePath)}:${text(instance?.connectionToken)}`;
 }
 function normalizeProxyPath(url = "", queryKeyToStrip = "") {
   try {
@@ -55,7 +56,7 @@ function buildOpenVSCodeUpstreamPath(urlPath, instance, result) {
 }
 
 function resolveTokenFromRequest(req = {}, instance = {}) {
-  const expectedToken = String(instance?.connectionToken || "").trim();
+  const expectedToken = text(instance?.connectionToken);
   if (!expectedToken) {
     return { ok: false, source: "none", queryTokenValid: false };
   }
@@ -65,14 +66,14 @@ function resolveTokenFromRequest(req = {}, instance = {}) {
   } catch {
     return { ok: false, source: "none", queryTokenValid: false };
   }
-  const queryToken = String(parsedUrl.searchParams.get(IDE_TOKEN_QUERY_KEY) || "").trim();
-  const headerToken = String(req?.headers?.[IDE_TOKEN_HEADER_KEY] || "").trim();
-  const cookieTokenValue = String(
-    parseCookieHeader(req?.headers?.cookie || "").get(IDE_TOKEN_COOKIE_KEY) || "",
-  ).trim();
-  const openVSCodeCookieToken = String(
-    parseCookieHeader(req?.headers?.cookie || "").get(OPENVSCODE_TOKEN_COOKIE_KEY) || "",
-  ).trim();
+  const queryToken = text(parsedUrl.searchParams.get(IDE_TOKEN_QUERY_KEY));
+  const headerToken = text(req?.headers?.[IDE_TOKEN_HEADER_KEY]);
+  const cookieTokenValue = text(
+    parseCookieHeader(req?.headers?.cookie || "").get(IDE_TOKEN_COOKIE_KEY),
+  );
+  const openVSCodeCookieToken = text(
+    parseCookieHeader(req?.headers?.cookie || "").get(OPENVSCODE_TOKEN_COOKIE_KEY),
+  );
   const cookieExpectedValue = buildTokenCookieValue(instance);
   const queryTokenValid = queryToken && queryToken === expectedToken;
   if (queryTokenValid) return { ok: true, source: "query", queryTokenValid };

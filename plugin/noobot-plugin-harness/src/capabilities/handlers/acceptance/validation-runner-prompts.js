@@ -31,6 +31,7 @@ import { buildHarnessInjectedMessage } from "../shared/message/injected-message-
 import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptance-status.js";
 import { resolveCurrentTaskGoalText } from "../shared/plan/checklist-context.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
+import { text } from "@noobot/shared/value";
 
 export function buildTextAcceptanceValidationResult(text = "") {
   const raw = String(text || "").trim();
@@ -44,13 +45,12 @@ export function buildTextAcceptanceValidationResult(text = "") {
 }
 
 function isSummaryRelayMessage(message = {}) {
-  const injectedType = String(
+  const injectedType = text(
     message?.injectedMessageType ||
       message?.injected_message_type ||
       message?.lc_kwargs?.injectedMessageType ||
-      message?.lc_kwargs?.injected_message_type ||
-      "",
-  ).trim();
+      message?.lc_kwargs?.injected_message_type,
+  );
   if (injectedType === "separate_model_relay:summary") return true;
   const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
   const relayPrefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
@@ -99,7 +99,7 @@ export function resolveAcceptanceMainPlanContext(
   const taskOwner =
     String(finalMainPlan?.taskOwner || bucket?.taskOwner || getDefaultTaskOwner(locale)).trim() ||
     getDefaultTaskOwner(locale);
-  const totalGoal = String(finalMainPlan?.totalGoal || bucket?.totalGoal || "").trim();
+  const totalGoal = text(finalMainPlan?.totalGoal || bucket?.totalGoal);
   const nextPhase =
     (finalMainPlan?.nextPhase && typeof finalMainPlan.nextPhase === "object"
       ? finalMainPlan.nextPhase
@@ -118,7 +118,7 @@ export function resolveAcceptanceMainPlanContext(
         : Array.isArray(bucket?.taskChecklist)
           ? bucket.taskChecklist
           : [],
-    planText: String(promptPayload?.planText || "").trim(),
+    planText: text(promptPayload?.planText),
     currentTaskGoal: resolveCurrentTaskGoalText({
       ctx,
       bucket,
@@ -137,7 +137,7 @@ export function resolveAcceptanceValidationRequestPayload(promptPayload = {}) {
     expectedSchema: source.expectedSchema || {},
     acceptanceState: source.acceptanceState || null,
     toolSignals: source.toolSignals || {},
-    finalOutput: String(source.finalOutput || "").trim(),
+    finalOutput: text(source.finalOutput),
   };
 }
 
@@ -152,7 +152,7 @@ export function buildFinalAcceptanceSemanticValidationMessages({
   textMode = false,
   dynamicPolicyPrompt = "",
 } = {}) {
-  const hasRequest = String(requestContent || "").trim();
+  const hasRequest = text(requestContent);
   return buildCapabilityProtocolModelMessages({
     locale,
     contextMessages: [
@@ -189,8 +189,8 @@ export function appendPhaseAcceptanceReport(bucket = {}, content = "", { planTex
   const report = {
     type: "phase",
     acceptedAt: new Date().toISOString(),
-    planText: String(planText || bucket?.planText || "").trim(),
-    content: String(content || "").trim(),
+    planText: text(planText || bucket?.planText),
+    content: text(content),
   };
   bucket.phaseAcceptanceReports.push(report);
   applyPhaseAcceptanceReportToPlanStatus(bucket, report);
@@ -219,7 +219,7 @@ export function buildFinalOutputFallbackPhaseAcceptanceText(
 }
 
 export function pushRoleMessage(ctx = {}, messages = [], role = "system", content = "") {
-  const normalizedContent = String(content || "").trim();
+  const normalizedContent = text(content);
   if (!Array.isArray(messages) || !normalizedContent) return false;
   const requestedRole = String(role || "system")
     .trim()
@@ -248,7 +248,7 @@ export function buildAcceptancePromptParts({
 } = {}) {
   const mainPlanContext = resolveAcceptanceMainPlanContext(
     {
-      planText: String(bucket?.planText || "").trim(),
+      planText: text(bucket?.planText),
       finalPlanChecklist: Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist : [],
       currentTaskGoal: resolveCurrentTaskGoalText({ ctx, bucket }),
     },
@@ -324,7 +324,7 @@ export function buildPhaseAcceptanceMessages({
   textMode = false,
   dynamicPolicyPrompt = "",
 } = {}) {
-  const hasRequest = String(requestContent || "").trim();
+  const hasRequest = text(requestContent);
   return buildCapabilityProtocolModelMessages({
     locale,
     agentMessages,

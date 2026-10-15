@@ -17,9 +17,10 @@ import {
   attachTransferPayloadToLatestInjectedMessage,
   normalizeTransferPayload,
 } from "./attachment-log-utils.js";
+import { text } from "@noobot/shared/value";
 
 function optionalText(value) {
-  return String(value || "").trim() || undefined;
+  return text(value) || undefined;
 }
 
 function limitRelayText(locale, rawText) {
@@ -97,7 +98,7 @@ export function relaySeparateModelOutputAsUserMessage(
   } = {},
 ) {
   const messages = resolveModelMessages(ctx);
-  const rawText = String(content || "").trim();
+  const rawText = text(content);
   if (!rawText) return false;
   const purposeLabel = optionalText(purpose) || "unknown";
   const relayContent = buildRelayContent(locale, purposeLabel, limitRelayText(locale, rawText));

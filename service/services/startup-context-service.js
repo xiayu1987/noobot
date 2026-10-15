@@ -5,6 +5,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { text } from "@noobot/shared/value";
 
 const STARTUP_CONTEXT_ARG = "--startup-context";
 const SCHEMA_VERSION = 1;
@@ -18,9 +19,9 @@ function normalizeEnvMap(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const output = {};
   for (const [key, rawValue] of Object.entries(source)) {
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = text(key);
     if (!normalizedKey) continue;
-    const normalizedValue = String(rawValue || "").trim();
+    const normalizedValue = text(rawValue);
     if (!normalizedValue) continue;
     output[normalizedKey] = normalizedValue;
   }
@@ -36,10 +37,10 @@ function normalizeDependencySourceSummary(value = {}) {
       .map((item) => {
         const dependency = item && typeof item === "object" ? item : {};
         const customSourceEnvKeys = Array.isArray(dependency.customSourceEnvKeys)
-          ? dependency.customSourceEnvKeys.map((key) => String(key || "").trim()).filter(Boolean)
+          ? dependency.customSourceEnvKeys.map((key) => text(key)).filter(Boolean)
           : [];
         const configKeys = Array.isArray(dependency.configKeys)
-          ? dependency.configKeys.map((key) => String(key || "").trim()).filter(Boolean)
+          ? dependency.configKeys.map((key) => text(key)).filter(Boolean)
           : [];
         return {
           key: String(dependency.key || ""),
@@ -66,7 +67,7 @@ function pickArgValue(argv = [], name = "") {
   const items = Array.isArray(argv) ? argv : [];
   for (let index = 0; index < items.length; index += 1) {
     const item = String(items[index] || "");
-    if (item === name) return String(items[index + 1] || "").trim();
+    if (item === name) return text(items[index + 1]);
     if (item.startsWith(`${name}=`)) return item.slice(name.length + 1).trim();
   }
   return "";
@@ -101,7 +102,7 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
     },
     service: {
       port: Number(service.port || process.env.PORT || 3000),
-      host: String(service.host || process.env.NOOBOT_SERVICE_HOST || "").trim(),
+      host: text(service.host || process.env.NOOBOT_SERVICE_HOST),
       origin: String(service.origin || ""),
     },
     runtime: {

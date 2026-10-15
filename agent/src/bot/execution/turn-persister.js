@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   readContextMessageField,
@@ -29,9 +29,7 @@ function normalizeIsoTime(value = "") {
 function filterSessionAttachments(attachments = []) {
   return (Array.isArray(attachments) ? attachments : []).filter(
     (attachmentItem = {}) =>
-      !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(
-        String(attachmentItem?.generationSource || "").trim(),
-      ),
+      !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(text(attachmentItem?.generationSource)),
   );
 }
 
@@ -62,7 +60,7 @@ function resolveAuthoritativeMessageId(message = {}) {
     message?.lc_kwargs?.additional_kwargs?.noobotMessageId,
     message?.lc_kwargs?.additional_kwargs?.messageId,
   ];
-  return String(candidates.find(Boolean) || "").trim();
+  return text(candidates.find(Boolean));
 }
 
 function valueOrDefault(value, defaultValue) {
@@ -113,9 +111,9 @@ function normalizeSessionTurnInput(input = {}) {
   return {
     ...input,
     userName: valueOrDefault(input.userName, input.userId),
-    messageUid: String(valueOrDefault(input.messageUid, "") || "").trim(),
-    messageId: String(valueOrDefault(input.messageId, "") || "").trim(),
-    presentationMessageId: String(valueOrDefault(input.presentationMessageId, "") || "").trim(),
+    messageUid: text(valueOrDefault(input.messageUid, "")),
+    messageId: text(valueOrDefault(input.messageId, "")),
+    presentationMessageId: text(valueOrDefault(input.presentationMessageId, "")),
     chatPresentation: input.chatPresentation === true,
     type: valueOrDefault(input.type, ""),
     taskId: valueOrDefault(input.taskId, null),
@@ -136,16 +134,14 @@ function normalizeSessionTurnInput(input = {}) {
     dialogProcessId,
     parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
     parentSessionId: normalizeParentSessionId(valueOrDefault(input.parentSessionId, "")),
-    turnScopeId: String(valueOrDefault(input.turnScopeId, "") || "").trim(),
+    turnScopeId: text(valueOrDefault(input.turnScopeId, "")),
     injectedMessage: input.injectedMessage === true,
     noobotInternalMessageType: valueOrDefault(input.noobotInternalMessageType, ""),
     injectedBy: valueOrDefault(input.injectedBy, ""),
     injectedMessageType: valueOrDefault(input.injectedMessageType, ""),
     relayCorrelationId: valueOrDefault(input.relayCorrelationId, ""),
     interjectionSequence: positiveIntegerValue(input.interjectionSequence),
-    messageOrigin: String(input.messageOrigin || "")
-      .trim()
-      .toLowerCase(),
+    messageOrigin: text(input.messageOrigin).toLowerCase(),
     userMetaMaterialized: input.userMetaMaterialized === true,
     pluginMessage: input.pluginMessage === true,
     pluginMeta: valueOrDefault(input.pluginMeta, null),

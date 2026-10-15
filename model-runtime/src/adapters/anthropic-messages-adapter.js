@@ -9,6 +9,7 @@ import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js"
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { MODEL_OPERATION_KIND, MODEL_WEB_SEARCH_INSTRUCTION } from "@noobot/model-protocol";
 import { readAnthropicMessageStream } from "./anthropic-message-stream.js";
+import { text } from "@noobot/shared/value";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_SERVER_WEB_SEARCH_TOOL = Object.freeze({
@@ -20,7 +21,7 @@ const ANTHROPIC_PAUSE_TURN_MAX_CONTINUATIONS = 3;
 const ANTHROPIC_DOCUMENT_MIME_TYPE = "application/pdf";
 
 function splitDataUrl(value = "") {
-  const raw = String(value || "").trim();
+  const raw = text(value);
   if (!raw.startsWith("data:")) return { mediaType: "", base64: raw };
   const separatorIndex = raw.indexOf(",");
   if (separatorIndex < 0) return { mediaType: "", base64: "" };
@@ -32,7 +33,7 @@ function splitDataUrl(value = "") {
 }
 
 function anthropicImageSource(url = "") {
-  const raw = String(url || "").trim();
+  const raw = text(url);
   if (!raw.startsWith("data:")) return { type: "url", url: raw };
   const { mediaType, base64 } = splitDataUrl(raw);
   return { type: "base64", media_type: mediaType, data: base64 };
@@ -81,13 +82,9 @@ function textBlocks(content) {
 }
 
 function resolveMessageRole(message = {}) {
-  const explicitRole = String(message?.role || "")
-    .trim()
-    .toLowerCase();
+  const explicitRole = text(message?.role).toLowerCase();
   if (explicitRole) return explicitRole;
-  const type = String(message?.type || message?.lc_kwargs?.type || "")
-    .trim()
-    .toLowerCase();
+  const type = text(message?.type || message?.lc_kwargs?.type).toLowerCase();
   if (type === "human") return "user";
   if (type === "ai") return "assistant";
   return type;
@@ -348,16 +345,16 @@ function sourcesFromAnthropicBlocks(blocks = []) {
   for (const block of blocks) {
     if (block?.type !== "web_search_tool_result" || !Array.isArray(block.content)) continue;
     for (const item of block.content) {
-      const url = String(item?.url || "").trim();
+      const url = text(item?.url);
       if (item?.type !== "web_search_result" || !url || sources.has(url)) continue;
-      sources.set(url, { title: String(item.title || "").trim(), url });
+      sources.set(url, { title: text(item.title), url });
     }
   }
   return [...sources.values()];
 }
 
 export function mapAnthropicMultimodalAttachment(attachment = {}) {
-  const mimeType = String(attachment.mimeType || "").trim();
+  const mimeType = text(attachment.mimeType);
   const normalizedMimeType = mimeType.toLowerCase();
   const { mediaType, base64 } = splitDataUrl(attachment.data);
   const resolvedMediaType = mediaType || normalizedMimeType;
@@ -437,7 +434,7 @@ async function executeAnthropicOperation({
       signal,
       serverTools: [ANTHROPIC_SERVER_WEB_SEARCH_TOOL],
       system: MODEL_WEB_SEARCH_INSTRUCTION,
-      content: [{ type: "text", text: String(operation.input.query || "").trim() }],
+      content: [{ type: "text", text: text(operation.input.query) }],
     });
     return {
       rawText: textFromAnthropicBlocks(blocks),
@@ -456,7 +453,7 @@ async function executeAnthropicOperation({
         {
           role: "user",
           content: [
-            { type: "text", text: String(operation.input.prompt || "").trim() },
+            { type: "text", text: text(operation.input.prompt) },
             ...operation.input.attachments.map(mapMultimodalAttachment),
           ],
         },

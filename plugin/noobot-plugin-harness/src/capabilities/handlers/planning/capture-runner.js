@@ -37,6 +37,7 @@ import {
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
 import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/message-store.js";
+import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -113,9 +114,7 @@ function collectAgentStyleHistoryMessages(ctx = {}) {
 
   return source
     .map((msg = {}) => {
-      const role = String(msg?.role || msg?.lc_kwargs?.role || "")
-        .trim()
-        .toLowerCase();
+      const role = text(msg?.role || msg?.lc_kwargs?.role).toLowerCase();
       const assistantRaw =
         typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
           ? msg.rawModelContent
@@ -138,12 +137,9 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
     Array.isArray(unifiedMessages) && unifiedMessages.length
       ? unifiedMessages
       : collectAgentStyleHistoryMessages(ctx);
-  const latestUserMessage = [...messages].reverse().find(
-    (item) =>
-      String(item?.role || "")
-        .trim()
-        .toLowerCase() === "user",
-  );
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((item) => text(item?.role).toLowerCase() === "user");
   const latestUserGoalText =
     resolveLatestUserMessageText(ctx) ||
     compactText(extractRawTextContent(latestUserMessage?.content), PLANNING_CONTEXT_GOAL_MAX_CHARS);
@@ -176,7 +172,7 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
 }
 
 function extractPlanningResponseText(response = null) {
-  return String(response?.output?.text || "").trim();
+  return text(response?.output?.text);
 }
 
 function extractAfterCallContent(ctx = {}) {
@@ -193,8 +189,8 @@ function hasToolCallOnlyWithoutText(ctx = {}, sourceContent = "") {
     Array.isArray(ctx?.ai?.toolCalls) ||
     Array.isArray(ctx?.modelResponse?.tool_calls) ||
     Array.isArray(ctx?.modelResponse?.toolCalls) ||
-    String(ctx?.modelResponse?.finish_reason || "").trim() === "tool_calls";
-  return hasToolCalls && !String(sourceContent || "").trim();
+    text(ctx?.modelResponse?.finish_reason) === "tool_calls";
+  return hasToolCalls && !text(sourceContent);
 }
 
 function shouldBlockToolCallOnlyTurn(meta = {}) {
@@ -326,7 +322,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     });
     return false;
   }
-  if (String(bucket?.planText || "").trim().length > 0) {
+  if (text(bucket?.planText).length > 0) {
     state.flags.planningCaptured = true;
     return false;
   }

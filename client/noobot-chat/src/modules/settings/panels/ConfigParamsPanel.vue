@@ -29,6 +29,7 @@ import {
   serializeConfigDocument,
 } from "../state/configDocumentState.js";
 import { buildConfigNavTree, firstConfigNavPath } from "../state/configNavigation.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
@@ -63,7 +64,7 @@ const activeScopeLabel = computed(() =>
 const activeScopeFilePath = computed(() =>
   activeScope.value === "system"
     ? "workspace/config-params.json"
-    : `workspace/${String(props.userId || "").trim() || "<user>"}/${
+    : `workspace/${text(props.userId) || "<user>"}/${
         activeScope.value === CONFIG_SCOPE ? CONFIG_DOCUMENT_PATH : "config-params.json"
       }`,
 );

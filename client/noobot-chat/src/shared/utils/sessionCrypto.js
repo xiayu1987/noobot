@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function textToBytes(text = "") {
   return new TextEncoder().encode(String(text || ""));
 }
@@ -36,7 +38,7 @@ function base64ToBytes(base64 = "") {
 }
 
 export function encryptPayloadBySessionId(payload = {}, sessionId = "") {
-  const sid = String(sessionId || "").trim();
+  const sid = text(sessionId);
   if (!sid) throw new Error("sessionId required for encryption");
   const plainText = typeof payload === "string" ? payload : JSON.stringify(payload || {});
   const source = textToBytes(plainText);

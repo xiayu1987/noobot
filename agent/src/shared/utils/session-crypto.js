@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { text } from "@noobot/shared/value";
 
 function toUtf8Bytes(input = "") {
   return Buffer.from(String(input || ""), "utf8");
@@ -21,7 +22,7 @@ function xorBytes(data = Buffer.alloc(0), key = Buffer.alloc(0)) {
 }
 
 function normalizeSessionId(sessionId = "") {
-  const normalized = String(sessionId || "").trim();
+  const normalized = text(sessionId);
   if (!normalized) throw new Error(tSystem("common.sessionIdRequiredForCrypto"));
   return normalized;
 }

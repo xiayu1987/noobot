@@ -7,9 +7,10 @@ import { filePath as path } from "@noobot/path-resolver";
 import { buildMonthlySummaryPrompt } from "../../prompts/builders.js";
 import { buildSubcategoryModelEntries } from "../model-entry-builder.js";
 import { assertNotAborted } from "../../../shared/utils/error-utils.js";
+import { text } from "@noobot/shared/value";
 
 function toMonthKey(weekKeys = []) {
-  const firstWeek = String((Array.isArray(weekKeys) ? weekKeys[0] : "") || "").trim();
+  const firstWeek = text(Array.isArray(weekKeys) ? weekKeys[0] : "");
   const matched = firstWeek.match(/^(\d{4})-W(\d{2})$/);
   if (!matched) return new Date().toISOString().slice(0, 7);
   const year = Number(matched[1]);

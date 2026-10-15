@@ -6,6 +6,7 @@
 
 import { readMessageField } from "./message.js";
 import { CONTEXT_CONTROL_MESSAGE_TYPES } from "../message/injected-types.js";
+import { text } from "@noobot/shared/value";
 
 export {
   CONTEXT_INJECTED_MESSAGE_TYPE,
@@ -16,7 +17,7 @@ export {
 const contextControlTypes = new Set(CONTEXT_CONTROL_MESSAGE_TYPES);
 
 export function resolveContextInternalMessageType(message = {}) {
-  return String(readMessageField(message, "noobotInternalMessageType") || "").trim();
+  return text(readMessageField(message, "noobotInternalMessageType"));
 }
 
 export function isContextControlMessage(message = {}) {

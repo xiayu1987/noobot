@@ -19,7 +19,7 @@ import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 function normalizeString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function normalizeTransferPayload(payload = {}) {
@@ -43,7 +43,7 @@ export function applyTransferPayloadToMessage(message = {}, payload = {}) {
 }
 
 import { isHarnessInjectedMessage as isHarnessInjectedMessageBase } from "./message/utils.js";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function isHarnessInjectedMessage(message = {}) {
   return isHarnessInjectedMessageBase(message, { role: "user" });
@@ -79,23 +79,17 @@ export function appendCapabilityLog(
   if (!domain || !bucket?.logs?.[domain] || !Array.isArray(bucket.logs[domain])) return false;
   const inputDetail = detail && typeof detail === "object" ? detail : {};
   const normalizedPurpose =
-    String(inputDetail?.purpose || "").trim() ||
-    String(ctx?.harnessCapabilityPurpose || "").trim() ||
-    "unknown";
+    text(inputDetail?.purpose) || text(ctx?.harnessCapabilityPurpose) || "unknown";
   const normalizedPromptVersion =
-    String(inputDetail?.promptVersion || "").trim() ||
-    String(ctx?.harnessPromptVersion || "").trim() ||
-    PROMPT_ENVELOPE.VERSION;
+    text(inputDetail?.promptVersion) || text(ctx?.harnessPromptVersion) || PROMPT_ENVELOPE.VERSION;
   const normalizedEnvelopeType =
-    String(inputDetail?.envelopeType || "").trim() ||
-    String(ctx?.harnessEnvelopeType || "").trim() ||
-    PROMPT_ENVELOPE.TYPE;
+    text(inputDetail?.envelopeType) || text(ctx?.harnessEnvelopeType) || PROMPT_ENVELOPE.TYPE;
   const entry = {
-    ...(String(traceId || "").trim() ? { traceId: String(traceId).trim() } : {}),
+    ...(text(traceId) ? { traceId: String(traceId).trim() } : {}),
     domain,
-    event: String(event || "").trim() || "unknown",
+    event: text(event) || "unknown",
     timestamp: new Date().toISOString(),
-    point: String(ctx?.phase || "").trim() || undefined,
+    point: text(ctx?.phase) || undefined,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
     detail: {
       ...inputDetail,
@@ -137,8 +131,7 @@ export function consumeDeferredCapabilityLogs(ctx = {}) {
 }
 
 function sanitizeArtifactFileNamePart(value = "") {
-  return String(value || "")
-    .trim()
+  return text(value)
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -236,9 +229,9 @@ export async function appendCapabilityModelTraceLog(
     : [];
   if (!modelAttempts.length) return false;
   const detail = {
-    purpose: String(purpose || "").trim() || undefined,
-    pluginFlow: String(pluginFlow || "").trim() || undefined,
-    chain: String(chain || "").trim() || undefined,
+    purpose: text(purpose) || undefined,
+    pluginFlow: text(pluginFlow) || undefined,
+    chain: text(chain) || undefined,
     modelAttempts,
   };
   const log = {

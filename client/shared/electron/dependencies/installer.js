@@ -7,6 +7,7 @@ import { dependencySpecs, desktopDependencyTimeouts } from "./specs.js";
 import { createDependencyError, getDependencyErrorMeta, withTimeout } from "./process.js";
 import { getDependencyProxyEnv, maskDependencyProxyUrl } from "./proxy.js";
 import { joinClientPath } from "../../path-resolver.js";
+import { text } from "@noobot/shared/value";
 
 export function createDependencyInstaller({
   app = null,
@@ -49,7 +50,7 @@ export function createDependencyInstaller({
   }
 
   function getProxyRunOptions() {
-    const proxyUrl = String(getDependencyProxyUrl() || "").trim();
+    const proxyUrl = text(getDependencyProxyUrl());
     return {
       env: getDependencyProxyEnv(proxyUrl),
       masked: maskDependencyProxyUrl(proxyUrl),
@@ -72,7 +73,7 @@ export function createDependencyInstaller({
   }
 
   function compactProcessOutput(result) {
-    const raw = String(result?.stderr || result?.stdout || result?.error || "").trim();
+    const raw = text(result?.stderr || result?.stdout || result?.error);
     if (raw.length <= 1600) return raw;
     return `${raw.slice(0, 700)}\n...\n${raw.slice(-900)}`;
   }

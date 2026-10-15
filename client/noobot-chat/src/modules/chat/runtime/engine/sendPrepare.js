@@ -9,11 +9,10 @@ import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { BackendChannelState } from "../sessionRunStateMachine.js";
 import { nowMs, toIsoTime } from "../../model/timeFields.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
+import { text } from "@noobot/shared/value";
 
 function toDraftAttachmentMeta(fileItem, isImageMime) {
-  const clientAttachmentId = String(
-    fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",
-  ).trim();
+  const clientAttachmentId = text(fileItem?.clientAttachmentId || fileItem?.draftAttachmentId);
   return {
     ...(clientAttachmentId ? { clientAttachmentId } : {}),
     name: fileItem.name,
@@ -29,9 +28,9 @@ function resolveUserAttachments({ userAttachments, filesToSend, isImageMime }) {
 }
 
 function findExistingUserMessage(activeSession, userMessageId) {
-  const targetId = String(userMessageId || "").trim();
+  const targetId = text(userMessageId);
   return (activeSession.value?.messages || []).find(
-    (message) => String(message?.messageId || "").trim() === targetId,
+    (message) => text(message?.messageId) === targetId,
   );
 }
 

@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../model/timeFields.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizeTrimmedString(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 const INTERNAL_EVENT_PLACEHOLDER_LINE_RE =
@@ -36,7 +37,7 @@ function stringifyExecutionValue(value) {
   try {
     return JSON.stringify(value);
   } catch {
-    return String(value || "").trim();
+    return text(value);
   }
 }
 

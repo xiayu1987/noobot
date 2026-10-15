@@ -8,6 +8,7 @@ import { TOOL_SCHEMA_BY_TOOL as enToolSchemaByTool } from "noobot-i18n/agent/loc
 import { TOOL_MANUAL_BY_TOOL as zhToolManualByTool } from "noobot-i18n/agent/locales/zh-CN/tool-manual";
 import { TOOL_MANUAL_BY_TOOL as enToolManualByTool } from "noobot-i18n/agent/locales/en-US/tool-manual";
 import { resolveToolLocale } from "./tool-i18n.js";
+import { text } from "@noobot/shared/value";
 
 const TOOL_SCHEMA_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhToolSchemaByTool || {}),
@@ -24,9 +25,9 @@ function resolveToolSchema(toolName = "") {
     TOOL_SCHEMA_I18N["zh-CN"] && typeof TOOL_SCHEMA_I18N["zh-CN"] === "object"
       ? TOOL_SCHEMA_I18N["zh-CN"]
       : {};
-  const schema = localeSchemas[String(toolName || "").trim()];
+  const schema = localeSchemas[text(toolName)];
   if (!schema) {
-    throw new Error(`tool schema i18n not configured: ${String(toolName || "").trim()}`);
+    throw new Error(`tool schema i18n not configured: ${text(toolName)}`);
   }
   return schema;
 }
@@ -42,7 +43,7 @@ function resolveLocaleToolManualMap(runtime = {}) {
 }
 
 export function tToolManual(runtime = {}, toolName = "") {
-  const normalizedToolName = String(toolName || "").trim();
+  const normalizedToolName = text(toolName);
   const manual =
     resolveLocaleToolManualMap(runtime)?.[normalizedToolName] ||
     TOOL_MANUAL_I18N["zh-CN"]?.[normalizedToolName];
@@ -51,9 +52,8 @@ export function tToolManual(runtime = {}, toolName = "") {
 
 export function tToolDescription(runtime = {}, toolName = "") {
   const schema =
-    resolveLocaleToolSchemaMap(runtime)?.[String(toolName || "").trim()] ||
-    resolveToolSchema(toolName);
-  return String(schema?.description?.text || "").trim();
+    resolveLocaleToolSchemaMap(runtime)?.[text(toolName)] || resolveToolSchema(toolName);
+  return text(schema?.description?.text);
 }
 
 export function tToolParamDescription(runtime = {}, toolName = "", paramName = "") {

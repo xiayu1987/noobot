@@ -6,6 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { resolveModelMessageBlocks, resolveModelMessages } from "../../../../core/message-store.js";
+import { text } from "@noobot/shared/value";
 
 function escapeRegExp(value = "") {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -30,13 +31,12 @@ function stripSummaryRelayPrefix(content = "") {
 }
 
 function isSummaryRelayMessage(message = {}) {
-  const injectedType = String(
+  const injectedType = text(
     message?.injectedMessageType ||
       message?.injected_message_type ||
       message?.lc_kwargs?.injectedMessageType ||
-      message?.lc_kwargs?.injected_message_type ||
-      "",
-  ).trim();
+      message?.lc_kwargs?.injected_message_type,
+  );
   if (injectedType === "separate_model_relay:summary") return true;
   const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
   return new RegExp(`^${resolveSummaryRelayPrefixPattern()}`, "i").test(content);
@@ -57,19 +57,19 @@ export function resolveLatestSummaryOutputFullText(bucket = {}) {
   const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
   for (let index = outputs.length - 1; index >= 0; index -= 1) {
     const item = outputs[index] || {};
-    if (String(item?.purpose || "").trim() !== "summary") continue;
-    const content = String(item?.content || "").trim();
+    if (text(item?.purpose) !== "summary") continue;
+    const content = text(item?.content);
     if (content) return content;
   }
   return "";
 }
 
 export function resolveLatestCompleteSummaryText({ bucket = {}, ctx = {} } = {}) {
-  const fullText = String(bucket?.summaryFullText || "").trim();
+  const fullText = text(bucket?.summaryFullText);
   if (fullText) return fullText;
   const outputFullText = resolveLatestSummaryOutputFullText(bucket);
   if (outputFullText) return outputFullText;
   const relayText = resolveLatestSummaryRelayText(ctx);
   if (relayText) return relayText;
-  return String(bucket?.summaryText || "").trim();
+  return text(bucket?.summaryText);
 }

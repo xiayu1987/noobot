@@ -28,9 +28,10 @@ import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { AGENT_RUN_EVENT, emitEvent } from "../../events/index.js";
 import { queueUserMetaBackwrite } from "../../context/assembly/message-builder/user-meta-backwrite.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 function sanitizeArtifactBaseName(input = "", fallback = "multimodal-parse") {
-  const normalized = String(input || "").trim();
+  const normalized = text(input);
   return normalized ? normalized.replace(/[^\w.-]+/g, "_") : fallback;
 }
 
@@ -77,14 +78,13 @@ export async function backwriteParsedAttachment({
   sourceAttachmentMeta,
   parsedAttachment,
 }) {
-  if (String(sourceAttachmentMeta?.attachmentSource || "").trim() !== ATTACHMENT_SOURCE.USER)
-    return null;
+  if (text(sourceAttachmentMeta?.attachmentSource) !== ATTACHMENT_SOURCE.USER) return null;
   const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
   const targetAttachment = parsedAttachment?.identity
     ? { ...parsedAttachment, ...parsedAttachment.identity }
     : parsedAttachment;
   const attachmentService = runtime?.attachmentService || null;
-  const userId = String(runtime?.userId || "").trim();
+  const userId = text(runtime?.userId);
   if (!targetAttachment || !attachmentService || !userId) return null;
   const updated = await attachmentService.linkParsedResultToAttachment({
     userId,
@@ -105,13 +105,11 @@ export async function backwriteParsedAttachment({
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: new Date().toISOString(),
-    turnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim() || undefined,
-    runId: String(runtime?.systemRuntime?.runId || "").trim() || undefined,
+    turnScopeId: text(runtime?.systemRuntime?.turnScopeId) || undefined,
+    runId: text(runtime?.systemRuntime?.runId) || undefined,
     relation,
   });
-  const sessionId = String(
-    runtime?.systemRuntime?.sessionId || runtime?.runConfig?.sessionId || "",
-  ).trim();
+  const sessionId = text(runtime?.systemRuntime?.sessionId || runtime?.runConfig?.sessionId);
   const parentSessionId = normalizeParentSessionId(runtime?.systemRuntime?.parentSessionId);
   const committed = await runtime?.sessionManager?.commitAuthorityEvent?.({
     userId,

@@ -14,6 +14,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { normalizeOptionalSessionId } from "./session-id.js";
 import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_SCOPES } from "./constants.js";
+import { text } from "@noobot/shared/value";
 
 export const SESSION_LOG_CATEGORIES = Object.freeze([
   RUNTIME_EVENT_CATEGORIES.STATE,
@@ -117,9 +118,7 @@ export function isSessionLogDebugTypeEnabled(debugType, options = {}) {
 }
 
 export function shouldRecordSessionLog(event = {}, options = {}) {
-  const level = String(event?.level || "")
-    .trim()
-    .toLowerCase();
+  const level = text(event?.level).toLowerCase();
   if (["warn", "error", "fatal"].includes(level) || event?.error) return true;
   const control = resolveSessionLogControlConfig(options);
   const category = normalizeSessionLogCategory(event.category);

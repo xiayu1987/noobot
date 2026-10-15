@@ -24,6 +24,7 @@ import {
   toTextLine,
   toWorkspaceRelativePath,
 } from "./file-utils.js";
+import { text } from "@noobot/shared/value";
 
 const execFile = promisify(execFileCallback);
 let ripgrepPathPromise = null;
@@ -248,9 +249,9 @@ function buildRipgrepArgs({ query, isRegex, caseSensitive, glob, contextCount })
   if (contextCount > 0) args.push("--context", String(contextCount));
   if (!caseSensitive) args.push("-i");
   if (!isRegex) args.push("-F");
-  const normalizedGlob = String(glob || "").trim();
+  const normalizedGlob = text(glob);
   if (normalizedGlob) args.push("--glob", normalizedGlob);
-  args.push("--", String(query || "").trim(), ".");
+  args.push("--", text(query), ".");
   return args;
 }
 
@@ -275,9 +276,9 @@ function firstSubmatchColumn(data = {}) {
 }
 
 function recordRipgrepEvent(event, rawMatches, contextByFile) {
-  const type = String(event?.type || "").trim();
+  const type = text(event?.type);
   const data = event?.data && typeof event.data === "object" ? event.data : {};
-  const filePathRaw = String(data?.path?.text || "").trim();
+  const filePathRaw = text(data?.path?.text);
   if (!filePathRaw || (type !== "match" && type !== "context")) return;
   const entry = readRipgrepLine(data);
   if (!entry) return;

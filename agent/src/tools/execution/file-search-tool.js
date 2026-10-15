@@ -34,6 +34,7 @@ import {
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { buildFileToolDescription, resolveFileResourceRiskScope } from "./file-tool-shared.js";
+import { text } from "@noobot/shared/value";
 
 function buildSearchSchema(agentContext) {
   return z.object({
@@ -162,7 +163,7 @@ async function collectFallbackMatches({
 async function resolveSearchMatches({ matches, searchRoot, searchPathRef, agentContext }) {
   const resolvedMatches = await Promise.all(
     matches.map(async (match) => {
-      const relativeMatchPath = String(match?.filePath || "").trim();
+      const relativeMatchPath = text(match?.filePath);
       const matchedPath =
         searchPathRef.view === "host"
           ? path.resolve(searchRoot, relativeMatchPath)

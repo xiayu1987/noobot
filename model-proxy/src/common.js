@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import crypto from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 function pad(numberValue, lengthValue = 2) {
   return String(numberValue).padStart(lengthValue, "0");
@@ -29,26 +30,19 @@ function getHeaderValue(headers = {}, candidateKeys = []) {
   const keys = Array.isArray(candidateKeys) ? candidateKeys : [candidateKeys];
   const normalizedHeaders = Object.fromEntries(
     Object.entries(headers)
-      .map(([key, value]) => [
-        String(key || "")
-          .trim()
-          .toLowerCase(),
-        value,
-      ])
+      .map(([key, value]) => [text(key).toLowerCase(), value])
       .filter(([key]) => Boolean(key)),
   );
   for (const key of keys) {
-    const normalizedKey = String(key || "")
-      .trim()
-      .toLowerCase();
+    const normalizedKey = text(key).toLowerCase();
     if (!normalizedKey) continue;
     const rawHeaderValue = normalizedHeaders[normalizedKey];
     if (Array.isArray(rawHeaderValue)) {
-      const value = String(rawHeaderValue[0] || "").trim();
+      const value = text(rawHeaderValue[0]);
       if (value) return value;
       continue;
     }
-    const value = String(rawHeaderValue || "").trim();
+    const value = text(rawHeaderValue);
     if (value) return value;
   }
   return "";

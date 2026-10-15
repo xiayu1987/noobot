@@ -8,6 +8,7 @@ import { runBestEffort } from "@noobot/shared/best-effort";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
+import { text } from "@noobot/shared/value";
 
 export class StreamableHttpMcpClient extends BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
@@ -28,7 +29,7 @@ export class StreamableHttpMcpClient extends BaseMcpClient {
       body: JSON.stringify(buildJsonRpcRequest(requestId, method, params)),
       signal: this.signal || undefined,
     });
-    const responseSessionId = String(response.headers?.get?.("mcp-session-id") || "").trim();
+    const responseSessionId = text(response.headers?.get?.("mcp-session-id"));
     if (responseSessionId) this.sessionId = responseSessionId;
     if (!response.ok) {
       const text = await response.text().catch(() => "");

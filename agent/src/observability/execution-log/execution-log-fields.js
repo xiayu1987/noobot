@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const TOOL_CALL_START_EVENT = "tool_call_start";
 export const TOOL_CALL_END_EVENT = "tool_call_end";
 
@@ -12,7 +14,7 @@ export function resolveData(log) {
 }
 
 export function resolveToolName(log) {
-  return String(resolveData(log).tool || "").trim();
+  return text(resolveData(log).tool);
 }
 
 export function resolveTimestampMs(log) {

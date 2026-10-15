@@ -6,9 +6,10 @@
 import { RoleEnum } from "../../model/chatConstants.js";
 import { getMessageDialogProcessId, getMessageRole } from "../../model/messageIdentity.js";
 import { nowIso } from "../../model/timeFields.js";
+import { text } from "@noobot/shared/value";
 
 export function _trimStr(x) {
-  return String(x || "").trim();
+  return text(x);
 }
 
 export function _ensureArray(x) {

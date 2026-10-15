@@ -15,6 +15,7 @@ import { DEFAULT_OPTIONS } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
@@ -155,7 +156,7 @@ async function unlinkIfPresent(filePath) {
 }
 
 function resolveRunWriteLockPath(targetPath = "") {
-  const dir = path.dirname(String(targetPath || "").trim());
+  const dir = path.dirname(text(targetPath));
   if (!dir || dir === ".") return "";
   return path.join(dir, HARNESS_FILES.RUN_WRITE_LOCK);
 }
@@ -334,7 +335,7 @@ function trimJsonlBuffer(filePath = "", buffer = [], strategy = DEFAULT_JSONL_FL
 }
 
 async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = {}) {
-  const targetPath = String(filePath || "").trim();
+  const targetPath = text(filePath);
   if (!targetPath) return 0;
   const now = Date.now();
   const last = Number(tmpCleanupLastRunByFile.get(targetPath) || 0);
@@ -392,9 +393,7 @@ export async function appendJsonlBuffered(
   buffer.push(JSON.stringify(record));
   trimJsonlBuffer(filePath, buffer, strategy);
 
-  const reason = String(flushHint?.reason || "")
-    .trim()
-    .toLowerCase();
+  const reason = text(flushHint?.reason).toLowerCase();
   const shouldFlushByReason =
     (reason === HARNESS_FLUSH_REASONS.TERMINAL && strategy.onTerminal) ||
     (reason === HARNESS_FLUSH_REASONS.ERROR && strategy.onError);

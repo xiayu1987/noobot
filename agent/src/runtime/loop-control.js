@@ -19,6 +19,7 @@ import { TOOL_NAME } from "../tools/constants/index.js";
 import { resolveControlToolOutcome } from "./control-tool-outcome.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
 import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
+import { text } from "@noobot/shared/value";
 
 function getSystemRuntime(runtime = {}) {
   return runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
@@ -27,9 +28,7 @@ function getSystemRuntime(runtime = {}) {
 }
 
 function hasTool(tools = [], toolName) {
-  return (Array.isArray(tools) ? tools : []).some(
-    (def) => String(def?.name || "").trim() === toolName,
-  );
+  return (Array.isArray(tools) ? tools : []).some((def) => text(def?.name) === toolName);
 }
 
 function hasTaskSummaryTool(tools = []) {

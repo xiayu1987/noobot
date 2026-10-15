@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
 import { applyPrimaryModelReferencesToConfigFile } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions, resolveModelLibraryProvider } from "@noobot/model-protocol";
@@ -18,7 +18,7 @@ export function listConversationModelOptions() {
 }
 
 export function resolveLibraryModelKey(input = "") {
-  const value = String(input || "").trim();
+  const value = text(input);
   if (!value) return "";
   const options = listConversationModelOptions();
   const byKey = options.find((option) => option.key === value);
@@ -29,7 +29,7 @@ export function resolveLibraryModelKey(input = "") {
 }
 
 export function parseTemplateVariableName(templateValue = "") {
-  const match = TEMPLATE_VARIABLE_PATTERN.exec(String(templateValue || "").trim());
+  const match = TEMPLATE_VARIABLE_PATTERN.exec(text(templateValue));
   return match ? match[1] : "";
 }
 
@@ -61,7 +61,7 @@ export function buildProviderFromTemplate({
 
 export function resolveProviderTemplate(providers = {}, providerAlias = "") {
   const sourceProviders = isPlainObject(providers) ? providers : {};
-  const alias = String(providerAlias || "").trim();
+  const alias = text(providerAlias);
   if (isPlainObject(sourceProviders[alias])) return sourceProviders[alias];
   return resolveModelLibraryProvider(alias);
 }
@@ -84,7 +84,7 @@ function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programming
 }
 
 export function alignInitialModelReferences({ globalConfig = {}, providerAlias = "" } = {}) {
-  const alias = String(providerAlias || "").trim();
+  const alias = text(providerAlias);
   if (!isPlainObject(globalConfig) || !alias) return globalConfig;
 
   globalConfig.scenarios = normalizeBuiltinScenarioConfigForLauncher(globalConfig.scenarios, {

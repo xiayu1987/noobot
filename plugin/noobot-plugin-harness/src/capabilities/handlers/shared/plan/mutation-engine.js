@@ -11,11 +11,10 @@ import {
   renderPlanDocument,
 } from "./text-protocol.js";
 import { isSyntheticMainPlanPlaceholder, resolvePlanMutationPolicy } from "./mutation-policy.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeStage(stage = "") {
-  const value = String(stage || "")
-    .trim()
-    .toLowerCase();
+  const value = text(stage).toLowerCase();
   if (value === "planning_capture" || value === "capture" || value === "planning") {
     return "planning_capture";
   }
@@ -27,7 +26,7 @@ function cloneSubPlansForMainId(subPlans = [], mainId = 0) {
   return (Array.isArray(subPlans) ? subPlans : [])
     .map((item = {}) => {
       const subIndex = Number(item?.subIndex);
-      const content = String(item?.content || "").trim();
+      const content = text(item?.content);
       if (!Number.isFinite(subIndex) || subIndex <= 0 || !content) return null;
       return {
         id: `${mainId}.${subIndex}`,
@@ -88,7 +87,7 @@ function validatePlanInvariants({ beforeDocument = {}, afterDocument = {}, polic
   const beforeMainPlans = Array.isArray(beforeDocument?.mainPlans) ? beforeDocument.mainPlans : [];
   const afterMainPlans = Array.isArray(afterDocument?.mainPlans) ? afterDocument.mainPlans : [];
   if (beforeMainPlans.length > 1 && afterMainPlans.length === 1) {
-    const content = String(afterMainPlans[0]?.content || "").trim();
+    const content = text(afterMainPlans[0]?.content);
     if (isSyntheticMainPlanPlaceholder(content)) {
       return { ok: false, reason: "synthetic_main_placeholder_collapse" };
     }
@@ -120,7 +119,7 @@ export function runPlanMutationEngine({
       parsedMutation.hasMainPlans !== true,
     currentDocument,
     nextDocument: currentDocument,
-    nextPlanText: String(currentPlanText || "").trim(),
+    nextPlanText: text(currentPlanText),
   });
 
   if (!parsedMutation.text) return rejected("empty_mutation_text");
@@ -129,7 +128,7 @@ export function runPlanMutationEngine({
   }
 
   if (normalizedStage === "planning_capture") {
-    const rendered = String(renderPlanDocument(parsedMutation.parsedDocument) || "").trim();
+    const rendered = text(renderPlanDocument(parsedMutation.parsedDocument));
     if (!rendered) return rejected("empty_rendered_plan");
     return {
       applied: true,
@@ -169,7 +168,7 @@ export function runPlanMutationEngine({
       classification,
       currentDocument,
       nextDocument,
-      nextPlanText: String(renderPlanDocument(nextDocument) || "").trim(),
+      nextPlanText: text(renderPlanDocument(nextDocument)),
       patchApplied: {
         changed: refinementPatchApplied.changed || revisionPatchApplied.changed,
       },
@@ -204,7 +203,7 @@ export function runPlanMutationEngine({
         classification,
         currentDocument,
         nextDocument,
-        nextPlanText: String(renderPlanDocument(nextDocument) || "").trim(),
+        nextPlanText: text(renderPlanDocument(nextDocument)),
         revisionPatchApplied,
         refinementPatchApplied,
       };
@@ -240,7 +239,7 @@ export function runPlanMutationEngine({
       classification,
       currentDocument,
       nextDocument: replaced,
-      nextPlanText: String(renderPlanDocument(replaced) || "").trim(),
+      nextPlanText: text(renderPlanDocument(replaced)),
     };
   }
 

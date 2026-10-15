@@ -10,6 +10,6 @@ import { text } from "@noobot/shared/value";
 
 export function tEngine(runtime = {}, key = "", params = {}) {
   const locale = resolveLocaleFromRuntime(runtime);
-  const mappedKey = text(ENGINE_I18N_KEY_MAP[String(key || "").trim()] || key);
+  const mappedKey = text(ENGINE_I18N_KEY_MAP[text(key)] || key);
   return pickLocaleText({ locale, dict: BACKEND_I18N, key: mappedKey, params });
 }
