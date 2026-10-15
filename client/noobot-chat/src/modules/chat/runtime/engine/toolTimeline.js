@@ -61,13 +61,13 @@ const TOOL_TIMELINE_AUTHORITY = TIMELINE_AUTHORITY;
 const TOOL_SEQUENCE_DOMAIN = SEQUENCE_DOMAIN;
 
 function toolCallIdOf(value = {}) {
-  return text(value.toolCallId || value.tool_call_id || value.id);
+  return text(value.toolCallId);
 }
 
 function timelineKey(value = {}) {
   const callId = toolCallIdOf(value);
   if (callId) return `call:${callId}`;
-  const eventId = text(value.eventId || value.id);
+  const eventId = text(value.eventId);
   return eventId ? `event:${eventId}` : "";
 }
 

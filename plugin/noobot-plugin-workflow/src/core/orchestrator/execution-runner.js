@@ -37,7 +37,7 @@ import {
 } from "./node-state-commit.js";
 
 function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = {} } = {}) {
-  const nodeId = String(pendingStep?.nodeId || pendingStep?.id || "").trim();
+  const nodeId = String(pendingStep?.nodeId || "").trim();
   if (!nodeId || !Array.isArray(planningNodeSessions) || !planningNodeSessions.length) return null;
   const attempt = Math.max(
     1,

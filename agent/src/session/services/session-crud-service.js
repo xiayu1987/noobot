@@ -287,7 +287,7 @@ export class SessionCrudService {
       });
     }
     if (
-      String(bundle.session.sessionId || bundle.session.id || "").trim() !== normalizedSessionId ||
+      String(bundle.session.sessionId || "").trim() !== normalizedSessionId ||
       (persistenceScope?.parentSessionId &&
         String(bundle.session.parentSessionId || "").trim() !==
           String(persistenceScope.parentSessionId).trim())
