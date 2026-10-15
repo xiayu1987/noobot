@@ -132,7 +132,7 @@ test("workflow node state repository protects terminal nodes from rollback", asy
     nodeExecutionId: "node-a-exec",
     status: "failed",
     expectedRevision: 2,
-    failure: "boom",
+    failure: { source: "workflow_node_agent", code: "BOOM", message: "boom" },
   });
 
   await assert.rejects(

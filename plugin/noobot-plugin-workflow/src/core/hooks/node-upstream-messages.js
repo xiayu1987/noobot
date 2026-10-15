@@ -61,10 +61,8 @@ function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults =
   const stepId = text(upstreamStep.stepId);
   const completed = completedStepResults.get(stepId) || {};
   const transferEnvelopes = getWorkflowTransferPayloadFromResult(completed).transferEnvelopes;
-  const status = firstText(completed.status, upstreamStep.status);
-  const stepFailure = resolveWorkflowStepFailure(completed, upstreamStep);
   const transferFiles = resolveWorkflowTransferAttachmentReferences({ transferEnvelopes }, {});
-  if (!transferFiles.length && status !== "failed" && !stepFailure) return null;
+  if (!transferFiles.length) return null;
   const stepIndex = Number(completed.stepIndex ?? upstreamStep.stepIndex);
   return {
     nodeId,
@@ -76,20 +74,9 @@ function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults =
     transition: Number(completed.transition ?? 0),
     nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(completed),
     nodeSessionId: text(completed.nodeSessionId),
-    status,
-    stepFailure,
+    status: firstText(completed.status, upstreamStep.status),
     transferEnvelopes,
   };
-}
-
-function resolveWorkflowStepFailure(completed, upstreamStep) {
-  if (completed?.stepFailure && typeof completed.stepFailure === "object") {
-    return completed.stepFailure;
-  }
-  if (upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object") {
-    return upstreamStep.stepFailure;
-  }
-  return null;
 }
 
 export async function buildWorkflowUpstreamAttachmentSystemMessage({
@@ -100,8 +87,8 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
 } = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const normalizedResults = Array.isArray(upstreamNodeResults) ? upstreamNodeResults : [];
-  const { lines, failureLines } = collectUpstreamEvidence(normalizedResults, ctx, locale);
-  if (!lines.length && !failureLines.length) return "";
+  const lines = collectUpstreamEvidence(normalizedResults, ctx, locale);
+  if (!lines.length) return "";
   const customUpstreamMessage = buildCustomUpstreamMessage(
     options,
     ctx,
@@ -109,36 +96,15 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     normalizedResults,
   );
   const pendingName = text(pendingStep?.nodeName);
-  return (
-    customUpstreamMessage || buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines)
-  );
+  return customUpstreamMessage || buildDefaultUpstreamMessage(locale, pendingName, lines);
 }
 
 function collectUpstreamEvidence(results, ctx, locale) {
   const lines = [];
-  const failureLines = [];
   for (const result of results) {
-    const nodeLabel = text(result?.nodeName);
-    const failureLine = buildUpstreamFailureLine(result, nodeLabel, locale);
-    if (failureLine) failureLines.push(failureLine);
-    appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale);
+    appendUpstreamAttachmentLines(lines, result, text(result?.nodeName), ctx, locale);
   }
-  return { lines, failureLines };
-}
-
-function buildUpstreamFailureLine(result, nodeLabel, locale) {
-  const failed =
-    text(result?.status) === "failed" ||
-    (result?.stepFailure && typeof result.stepFailure === "object");
-  if (!failed) return "";
-  const task = text(result?.nodeTask);
-  const message =
-    text(result?.stepFailure?.message) ||
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK);
-  const key = task
-    ? WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITH_TASK
-    : WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITHOUT_TASK;
-  return tWorkflow(locale, key, { nodeLabel, task, message });
+  return lines;
 }
 
 function appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale) {
@@ -171,7 +137,7 @@ function buildCustomUpstreamMessage(options, ctx, pendingStep, upstreamNodeResul
   }
 }
 
-function buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines) {
+function buildDefaultUpstreamMessage(locale, pendingName, lines) {
   return [
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_ATTACHMENTS_TITLE),
     "",
@@ -179,12 +145,7 @@ function buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines) {
     "",
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_HINT),
     "",
-    failureLines.length
-      ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_FAILURE_TITLE)
-      : "",
-    ...failureLines,
-    failureLines.length && lines.length ? "" : "",
-    lines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_RESULT_TITLE) : "",
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_RESULT_TITLE),
     ...lines,
   ].join("\n");
 }

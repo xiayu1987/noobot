@@ -99,7 +99,6 @@ function buildNodeSessionRecord({ ctx, item, nodeState, semanticNode }) {
     sessionId: preferText(state, run, "nodeSessionId"),
     ...buildNodeStateFields(state),
     transferEnvelopes: pickTransferEnvelopeList(item, TRANSFER_ENVELOPE_FIELD.NODE_RESULT),
-    stepFailure: resolveFailure(run.stepFailure),
     parallelWave: count(run.parallelWave),
     waveOrder: count(run.waveOrder),
   };

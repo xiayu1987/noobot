@@ -228,7 +228,11 @@ test("runWorkflowExecution commits a failed child lifecycle to node state and re
   const snapshot = await repository.getSnapshot({ workflowRunId });
   const node = snapshot.nodes.find((item) => item.nodeId === "a");
   assert.equal(node.status, "failed");
-  assert.deepEqual(node.failure, { message: "child crashed", code: "CHILD_CRASHED", name: "" });
+  assert.deepEqual(node.failure, {
+    source: "child_execution",
+    code: "CHILD_CRASHED",
+    message: "child crashed",
+  });
 });
 
 test("runWorkflowExecution rejects duplicate planning identities for the same node", async () => {
@@ -327,4 +331,37 @@ test("runWorkflowExecution rejects planning identity without nodeName", async ()
     }),
     /incomplete workflow node identity for a: nodeName/,
   );
+});
+
+test("runWorkflowExecution commits FAILED with a boundary code when a child throws a bare error", async () => {
+  const semantic = buildSemantic();
+  const workflowRunId = "wf_run_bare_error";
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+  const { ctx } = buildCtx();
+  const repository = createInMemoryWorkflowNodeStateRepository();
+  const options = buildOptions({
+    subSessionRunner: async () => {
+      throw new Error("bare failure");
+    },
+  });
+  options.workflowNodeStateRepository = repository;
+  await assert.rejects(
+    runWorkflowExecution({
+      hookManager: { emit: async () => ({ outcomes: [] }) },
+      options,
+      ctx,
+      semantic,
+      workflowRunId,
+      planningNodeSessions,
+    }),
+    /bare failure/,
+  );
+  const snapshot = await repository.getSnapshot({ workflowRunId });
+  const node = snapshot.nodes.find((item) => item.nodeId === "a");
+  assert.equal(node.status, "failed");
+  assert.deepEqual(node.failure, {
+    source: "workflow_node_agent",
+    code: "WORKFLOW_NODE_EXECUTION_FAILED",
+    message: "bare failure",
+  });
 });

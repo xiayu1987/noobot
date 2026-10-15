@@ -28,17 +28,15 @@ function nowIso() {
 
 function normalizeFailure(failure = null) {
   if (!failure) return null;
-  if (typeof failure === "object") {
-    return {
-      message: normalizeText(
-        failure.message || failure.reason || failure.code || "workflow node failed",
-      ),
-      code: normalizeText(failure.code || ""),
-      name: normalizeText(failure.name || ""),
-    };
+  const normalized = {
+    source: normalizeText(failure.source),
+    code: normalizeText(failure.code),
+    message: normalizeText(failure.message),
+  };
+  if (!normalized.source || !normalized.code || !normalized.message) {
+    throw new Error("workflow node failure requires source, code and message");
   }
-  const message = normalizeText(failure);
-  return message ? { message } : null;
+  return normalized;
 }
 
 function normalizeIdentity(input = {}) {

@@ -13,6 +13,7 @@ import {
   createRegisterWorkflowHooks,
   WORKFLOW_PLUGIN_DEFAULTS,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
+import { createInMemoryWorkflowNodeStateRepository } from "../../src/core/orchestrator/node-state-repository.js";
 
 function assertWorkflowFailedWithoutSuccessfulResult({
   ctx,
@@ -395,4 +396,66 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
     subSessionCalls,
     forbiddenNodes: ["节点C", "节点D"],
   });
+});
+
+test("workflow hook commits FAILED for a node whose sub-session throws without a lifecycle", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const workflowNodeStateRepository = createInMemoryWorkflowNodeStateRepository();
+  const subSessionCalls = [];
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      workflowNodeStateRepository,
+      resolveModelMessages: () => [],
+      capabilityModelInvoker: async () => ({
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=a type=action name="节点A" task="执行A"',
+            'NODE id=b type=action name="节点B" task="执行B"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=a",
+            "EDGE from=a to=b",
+            "EDGE from=b to=end",
+            "END",
+          ].join("\n"),
+        },
+      }),
+      subSessionRunner: async (payload = {}) => {
+        subSessionCalls.push(payload);
+        const error = new Error("子会话启动失败");
+        error.code = "SUB_SESSION_START_FAILED";
+        throw error;
+      },
+      generatedArtifactPersister: async () => [],
+    },
+  });
+
+  const ctx = {
+    userId: "u1",
+    sessionId: "s-failure-no-lifecycle",
+    dialogProcessId: "d-failure-no-lifecycle",
+    userMessage: "请运行失败传播流程",
+    runConfig: { locale: "zh-CN" },
+  };
+  await getBeforeDispatch(hookManager).handler(ctx);
+
+  assert.equal(subSessionCalls.length, 1);
+  const runs = Array.from(workflowNodeStateRepository.exportState().values());
+  assert.equal(runs.length, 1);
+  const nodes = Array.from(runs[0].nodes.values());
+  const nodeA = nodes.find((node) => node.nodeName === "节点A");
+  const nodeB = nodes.find((node) => node.nodeName === "节点B");
+  assert.equal(nodeA.status, "failed");
+  assert.deepEqual(nodeA.failure, {
+    source: "workflow_node_agent",
+    code: "SUB_SESSION_START_FAILED",
+    message: "子会话启动失败",
+  });
+  assert.equal(nodeB.status, "skipped");
 });

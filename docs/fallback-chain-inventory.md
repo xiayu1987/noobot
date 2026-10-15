@@ -50,13 +50,13 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1066 处 / 380 个文件；内联 trim 兜底 562 处 / 263 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 1065 处 / 380 个文件；内联 trim 兜底 561 处 / 262 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ----------- |
 | `client/noobot-chat`             | 365    | 158            | 0           |
 | `agent`                          | 186    | 119            | 0           |
-| `plugin/noobot-plugin-workflow`  | 113    | 87             | 0           |
+| `plugin/noobot-plugin-workflow`  | 112    | 86             | 0           |
 | `plugin/noobot-plugin-harness`   | 90     | 47             | 0           |
 | `service`                        | 81     | 39             | 0           |
 | `authoritative-state`            | 31     | 11             | 0           |
@@ -94,15 +94,19 @@
 
 | 项                                         | 现状                                                                                                                                                  | 需要的决定                                                                    |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `createFailedNodeAgentResult`              | 子会话超时或抛错且无 lifecycle 时走该分支，节点记为失败、workflow 继续                                                                                | 是否改为节点失败即终止整个 workflow                                           |
+| 引擎 `stepFailure`                         | `workflow/src/lib/runtime.js` 的 `markStepStateFailure` 只由 `action.stepFailure` 触发，插件已不再下发                                                | 引擎批次删除                                                                  |
+| 前端 `failure`→`stepFailure` 投影          | `workflowRuntimeSessions`、`workflowRuntimeStatus` 与 agent `pickPayloadStepFailure` 仍读取历史会话中的 `stepFailure`                                 | 按存储版本迁移历史数据后删除                                                  |
+| 收据被拒时节点停在 RUNNING                 | `resolveCommittedChildTerminal` 拒收（身份不匹配、收据格式错误）时带 `nodeTerminalReceiptRejected`，`commitWaveNodeFailure` 跳过提交                  | 定义拒收后的节点终态（建议 FAILED，source 为 `workflow`）后再改               |
 | `userId`                                   | workflow 已只读 `ctx.userId`；`runtime.userId` 与 hook meta 是否传同一入参尚未逐行确认                                                                | 确认后删除 `runtime.userId` 读取                                              |
 | turn lifecycle 输入事件                    | `turn-state.js:177` 读 `causationId \|\| commandId`；`commit-turn-lifecycle.js:23-53` 一组 `event.X \|\| turn.X`                                      | lifecycle 协议批次：定输入事件必带字段后删除回退                              |
-| `NODE_AGENT_EXECUTE` failure 结构          | 公开 hook 未定义 `stepFailure` 形状，`normalizeFailure` 读 `message \|\| reason \|\| code`                                                            | 协议固定为 `{ source, code, message }`（建议）                                |
 | 子会话投影 `turnScopeId`/`dialogProcessId` | 后端 `message-event-stream` 已只读 `systemRuntime.dialogProcessId`/`turnScopeId`；`validateMessageEnvelope` 仍不强制 `identity.turnScopeId`           | 在协议中强制后，再删 `subSessionEventProjection` 中的 `\|\| currentSession.X` |
 | `runConfig.systemRuntimePatch`             | `build-system-context.js` 只有读取方，src 中没有写入方                                                                                                | 确认无外部扩展写入后删除读取分支                                              |
 | `systemRuntime.config.turnScopeId`         | `runtime-binding` 与 `systemRuntime.turnScopeId` 同值写入；`plugin-artifact-committer`、`agent-context-accessor`、`extensions/hooks` 仍读 `config` 层 | 下一切片删除 `config` 层读取，再删写入                                        |
 | `SESSION_RUN_EVENT.LOCAL_FAILURE`          | src 中只有 `eventNormalization`、`turnReducer` 两个消费方，没有构造方，仅测试发送                                                                     | 确认无外部扩展发送后，连同消费分支和测试一并删除                              |
 | registry `canonicalTimingObserved`         | 只剩 `applyTurnTimingUpdate` 自身去重比较在读，不影响投影值                                                                                           | 确认快照重放的 `applied` 语义不依赖它后删除                                   |
+| `user-template/default-user/services`      | 已有 `package.json`（`type: module`）；handler 复制到用户工作区后由 `integrations/services` 动态加载，须自包含，不能依赖 `@noobot/shared`；已计入基线 | 建议：保持计数，不排除、不引入共享包；回退多为配置默认值，按边界代码对待      |
+| 守卫第四条规则 `字段 \|\| 字面量`          | 非测试源码命中 316 处（字符串 267、数字 49）；抽样 30 处多为 HTTP 状态、外部错误文案、配置与 i18n 参数默认值                                          | 建议：不加计数规则；改由协议必带字段校验拦截（同 `turn_failure_incomplete`）  |
+| 终态提示显示 `failure.message`             | `terminalStatusesFromRuntime` 不映射 `failure`，提示只渲染状态标签；原 `turnTerminalErrorDetail` 键因 `[object Object]` 缺陷从未生效                  | 建议：仅 failed 终态在标签下显示 `failure.message`，stopped/cancelled 不显示  |
 
 ## 5. 批次记录
 
@@ -123,4 +127,5 @@
 | `dad7809e9` | client                        | 子会话投影 `parentSessionId`/`workflowRunId`/`nodeExecutionId` 只读事件 payload（gate 与协议已强制三元组）；删除 `buildNextSubSessionState`、`applySubSessionMessageOrdering` 5 处回退；新增前提用例固定行为等价依据                                                                                                                                                               |
 | `ffc6a2d88` | client、i18n                  | 终态失败以 `failure` 为唯一事实源（缺陷修正：`turn.error` 此前被投影成 `"[object Object]"`）；删除终态提示中无写入方的 `reason`/`terminalReason`/`description`/`error` 死链路及 `turnTerminalReason`、`turnTerminalErrorDetail` 两个键；删除 `source`/`authority` 死回退                                                                                                           |
 | `d6e96d374` | client                        | 计时字段统一为 `startedAt`/`finishedAt`：后端持久化的 `turnTimings.thinking*` 只在 `applyTurnTimingSnapshot` 入口映射一次；`sendFlow` 改发 `startedAt`；删除 reducer、selectors、snapshot projection、messageRuntime、`SharedChatMessageItem` 的双名兜底，以及 reducer 中无写入方的 `rawEvent.canonicalTimingObserved` 分支                                                        |
-| 待回填      | agent                         | 消息事件 payload 身份只取已绑定的 stream 与 `systemRuntime`：删除 `parentSessionId`、`dialogProcessId`（含无独立写入方的 `currentDialogProcessId`）、`workflowRunId`、`nodeExecutionId` 的 `data`/`state` 回退，commit input 的 `sessionId`、`turnScopeId` 收敛为 `systemRuntime` 单一来源；删除 `agent-dispatch` 重复字面量兜底；新增反向用例（旧代码中 `data` 可覆盖已绑定身份） |
+| `2b3e9e56a` | agent                         | 消息事件 payload 身份只取已绑定的 stream 与 `systemRuntime`：删除 `parentSessionId`、`dialogProcessId`（含无独立写入方的 `currentDialogProcessId`）、`workflowRunId`、`nodeExecutionId` 的 `data`/`state` 回退，commit input 的 `sessionId`、`turnScopeId` 收敛为 `systemRuntime` 单一来源；删除 `agent-dispatch` 重复字面量兜底；新增反向用例（旧代码中 `data` 可覆盖已绑定身份） |
+| 待回填      | workflow                      | 节点失败一律终止并提交 FAILED（缺陷修正：子会话抛出无 lifecycle 的错误时，节点此前停在 RUNNING）；删除 `createFailedNodeAgentResult`、`createWorkflowNodeFailure` 与 `stepFailure` 透传、上游失败行链路及 4 个 i18n 键；节点 failure 固定为 `{ source, code, message }`，`normalizeFailure` 缺字段即拒绝                                                                           |

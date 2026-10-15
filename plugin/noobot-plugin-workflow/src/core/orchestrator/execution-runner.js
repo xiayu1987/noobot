@@ -79,10 +79,6 @@ function resolveWorkflowExecutionLimits(options = {}) {
   };
 }
 
-function resolveItemStepFailure(item = {}) {
-  return item.effectiveAction.stepFailure || null;
-}
-
 function resolveStepItemRefs(item = {}) {
   const step = item?.step || {};
   const subSession = item?.subSession || {};
@@ -102,7 +98,6 @@ function resolveStepItemRefs(item = {}) {
     stepIndex: Number.isFinite(Number(step.stepIndex)) ? Number(step.stepIndex) : -1,
     transferEnvelopes: getWorkflowTransferPayloadFromResult(subSession.result || {})
       .transferEnvelopes,
-    stepFailure: resolveItemStepFailure(item),
   };
 }
 
@@ -142,7 +137,6 @@ function buildNodeAgentRunRecord({
       4000,
     ),
     nodeResultTransferEnvelopes: refs.transferEnvelopes,
-    stepFailure: refs.stepFailure,
     upstreamNodeResults: Array.isArray(item?.upstreamNodeResults) ? item.upstreamNodeResults : [],
     ...resolveWaveFields({ item, snapshot, transitions, parallelEnabled, waveSize }),
   };
@@ -174,7 +168,6 @@ function rememberCompletedStepResult({
     commandId: refs.commandId,
     turnScopeId: refs.turnScopeId,
     nodeSessionId: refs.nodeSessionId,
-    stepFailure: refs.stepFailure,
     transferEnvelopes: refs.transferEnvelopes,
   });
 }
@@ -246,7 +239,11 @@ async function commitWaveChildTerminal({
     activeChildExecutionId,
     failure:
       childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
-        ? childTerminal.lifecycle.failure
+        ? {
+            source: "child_execution",
+            code: text(childTerminal.lifecycle.failure?.code),
+            message: text(childTerminal.lifecycle.failure?.message),
+          }
         : null,
   });
   const terminalError = buildChildTerminalError(childTerminal);
@@ -260,9 +257,9 @@ function shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFa
 
 function toWaveNodeFailure(error) {
   return {
-    name: error?.name || "Error",
-    code: error?.code || "",
-    message: error?.message || String(error || "workflow node failed"),
+    source: "workflow_node_agent",
+    code: text(error?.code) || "WORKFLOW_NODE_EXECUTION_FAILED",
+    message: text(error?.message) || text(error),
   };
 }
 
@@ -459,9 +456,6 @@ export async function runWorkflowExecution({
         const effectiveAction = {
           type: (text(item?.action?.type) || WORKFLOW_ACTION.SUBMIT).toLowerCase(),
           stepIndex: resolvedStepIndex,
-          ...(item?.action?.stepFailure && typeof item.action.stepFailure === "object"
-            ? { stepFailure: item.action.stepFailure }
-            : {}),
         };
         snapshot = advanceWorkflowInstance({
           instanceId,

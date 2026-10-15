@@ -88,7 +88,7 @@ export async function runNodeAgent({
     nodeInputAttachments,
     upstreamAttachmentSystemMessage,
   });
-  const { subSession, failure } = await runWorkflowNodeSubSession({
+  const { subSession, childFailed } = await runWorkflowNodeSubSession({
     options,
     ctx,
     instanceId,
@@ -109,7 +109,7 @@ export async function runNodeAgent({
     pendingStep,
     hookPayload,
     subSession,
-    failure,
+    childFailed,
     resolvedNodeIdentity,
   });
 }
@@ -192,21 +192,17 @@ function collectUpstreamAttachmentReferences(upstreamNodeResults, ctx) {
 
 async function runWorkflowNodeSubSession(params) {
   if (typeof params.options?.subSessionRunner !== "function") {
-    return { subSession: null, failure: null };
+    return { subSession: null, childFailed: false };
   }
-  let subSession = null;
-  let failure = null;
   try {
-    subSession = await executeWorkflowNodeSubSession(params);
+    const subSession = await executeWorkflowNodeSubSession(params);
+    if (subSession) await persistWorkflowNodeSubSession(params, subSession);
+    return { subSession, childFailed: false };
   } catch (error) {
     if (isWorkflowAbortError(error, params.ctx)) throw error;
-    failure = createWorkflowNodeFailure(error);
-    if (error?.lifecycle && typeof error.lifecycle === "object") {
-      subSession = { lifecycle: error.lifecycle };
-    }
+    if (!error?.lifecycle || typeof error.lifecycle !== "object") throw error;
+    return { subSession: { lifecycle: error.lifecycle }, childFailed: true };
   }
-  if (subSession) await persistWorkflowNodeSubSession(params, subSession);
-  return { subSession, failure };
 }
 
 async function executeWorkflowNodeSubSession(params) {
@@ -339,14 +335,6 @@ function resolveNodeAgentTimeout(options) {
     : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
 }
 
-function createWorkflowNodeFailure(error) {
-  return {
-    source: "workflow_node_agent",
-    code: text(error?.code) || "WORKFLOW_NODE_SUBSESSION_FAILED",
-    message: String(error?.message || error || "workflow node sub-session failed").trim(),
-  };
-}
-
 async function persistWorkflowNodeSubSession(params, subSession) {
   throwIfWorkflowAborted(params.ctx);
   await persistWorkflowNodeResultAttachment({
@@ -368,11 +356,10 @@ async function resolveNodeAgentResult({
   pendingStep,
   hookPayload,
   subSession,
-  failure,
+  childFailed,
   resolvedNodeIdentity,
 }) {
-  if (failure)
-    return createFailedNodeAgentResult(pendingStep, subSession, failure, resolvedNodeIdentity);
+  if (childFailed) return createNodeAgentResult(null, subSession, resolvedNodeIdentity);
   const emitted = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload);
   throwIfWorkflowAborted(ctx);
   const action = emitted.outcomes
@@ -391,21 +378,6 @@ function createNodeAgentResult(action, subSession, identity) {
     subSession,
     nodeDialogProcessId: identity.dialogProcessId,
     nodeIdentity: { ...identity, sessionId: text(subSession?.sessionId) },
-  };
-}
-
-function createFailedNodeAgentResult(pendingStep, subSession, failure, identity) {
-  return {
-    action: {
-      type: WORKFLOW_ACTION.SUBMIT,
-      stepIndex: Number(pendingStep?.index || 0),
-      stepFailure: failure,
-    },
-    subSession,
-    nodeDialogProcessId: identity.dialogProcessId,
-    nodeIdentity: identity,
-    status: "failed",
-    stepFailure: failure,
   };
 }
 

@@ -141,7 +141,7 @@ export async function settleUnstartedWorkflowNodes({
       failure:
         status === WORKFLOW_NODE_STATUS.STOPPED
           ? {
-              name: "AbortError",
+              source: "workflow",
               code: "WORKFLOW_STOPPED",
               message: "workflow stopped before node execution",
             }
