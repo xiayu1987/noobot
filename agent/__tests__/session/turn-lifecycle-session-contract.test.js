@@ -462,7 +462,7 @@ test("summary and reconnect snapshots share action-failure presentation scope", 
     event(TURN_EVENT.FAILED, "action-failed", 1, {
       phase: TURN_PHASE.ACTION,
       executionState: "error",
-      failure: { code: "attachment_rejected", retryable: false },
+      failure: { code: "attachment_rejected", message: "attachment rejected", retryable: false },
       terminalStatus: {
         command: "error",
         turnScopeId: "t1",
@@ -517,7 +517,7 @@ test("retryable finalize failure keeps the session locked and completes idempote
   const failed = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.FAILED, "f", 3, {
       phase: TURN_PHASE.COMPLETION,
-      failure: { code: "summary_failed", retryable: true },
+      failure: { code: "summary_failed", message: "summary failed", retryable: true },
     }),
   );
   assert.equal(failed.turn.state, TURN_STATE.COMPLETION_FAILED);
@@ -571,7 +571,7 @@ test("retryable stop finalize failure keeps intent and can recover once", async 
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.FAILED, "sf-stop", 4, {
       phase: TURN_PHASE.STOP,
-      failure: { retryable: true },
+      failure: { code: "stop_finalize_failed", message: "stop finalize failed", retryable: true },
     }),
   );
   const restored = h.reload().turnLifecycle;

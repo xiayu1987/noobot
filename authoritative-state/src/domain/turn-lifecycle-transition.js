@@ -184,6 +184,12 @@ function validateRequestedAction(request) {
     return "unexpected_continuation_source";
   }
   if (
+    eventType === TURN_EVENT.FAILED &&
+    (!text(request.input.failure?.code) || !text(request.input.failure?.message))
+  ) {
+    return "turn_failure_incomplete";
+  }
+  if (
     eventType === TURN_EVENT.STOP_ACCEPTED &&
     !deriveAuthoritativeTurnCapabilities(current || {}).canStop
   ) {

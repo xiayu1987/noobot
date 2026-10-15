@@ -22,7 +22,7 @@ function assertWorkflowFailedWithoutSuccessfulResult({
 } = {}) {
   assert.equal(outcome?.disposition, "handled");
   assert.equal(outcome?.owner, "workflow");
-  assert.equal(outcome?.failure?.code, "WORKFLOW_CHILD_EXECUTION_FAILED");
+  assert.equal(outcome?.failure?.code, "detached_sub_session_failed");
   assert.equal(Object.hasOwn(outcome || {}, "result"), false);
   assert.equal(Object.hasOwn(ctx || {}, "overrideAgentResult"), false);
   assert.equal(Object.hasOwn(ctx || {}, "skipAgentDispatch"), false);
@@ -71,7 +71,12 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
               state: "processing_failed",
               revision: 3,
               sequence: 3,
-              failure: { message: error.message },
+              failure: {
+                phase: "processing",
+                code: "detached_sub_session_failed",
+                message: error.message,
+                retryable: false,
+              },
             };
             throw error;
           }
@@ -165,7 +170,12 @@ test("workflow hook stops all fan-out downstream nodes after their upstream node
             state: "processing_failed",
             revision: 3,
             sequence: 3,
-            failure: { message: error.message },
+            failure: {
+              phase: "processing",
+              code: "detached_sub_session_failed",
+              message: error.message,
+              retryable: false,
+            },
           };
           throw error;
         }
@@ -250,7 +260,12 @@ test("workflow hook does not execute a merge downstream node after an upstream b
             state: "processing_failed",
             revision: 3,
             sequence: 3,
-            failure: { message: error.message },
+            failure: {
+              phase: "processing",
+              code: "detached_sub_session_failed",
+              message: error.message,
+              retryable: false,
+            },
           };
           throw error;
         }
@@ -339,7 +354,12 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
             state: "processing_failed",
             revision: 3,
             sequence: 3,
-            failure: { message: error.message },
+            failure: {
+              phase: "processing",
+              code: "detached_sub_session_failed",
+              message: error.message,
+              retryable: false,
+            },
           };
           throw error;
         }

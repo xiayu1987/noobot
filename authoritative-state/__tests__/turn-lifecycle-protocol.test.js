@@ -548,6 +548,44 @@ test("execution identity is immutable after the first Turn revision", () => {
   assert.equal(conflict.lifecycle.turns["identity-turn"].revision, 1);
 });
 
+test("failed transition requires failure code and message", () => {
+  const accepted = transitionTurnLifecycle(
+    {},
+    {
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "failure-r1",
+      turnScopeId: "failure-turn",
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      messageId: "failure-message",
+      presentationMessageId: "failure-presentation",
+    },
+  );
+  assert.equal(accepted.applied, true);
+  const failedInput = (commandId, failure) => ({
+    eventType: TURN_EVENT.FAILED,
+    commandId,
+    turnScopeId: "failure-turn",
+    phase: TURN_PHASE.ACTION,
+    failure,
+  });
+  for (const [commandId, failure] of [
+    ["failure-missing", undefined],
+    ["failure-no-code", { message: "boom" }],
+    ["failure-no-message", { code: "boom" }],
+  ]) {
+    const rejected = transitionTurnLifecycle(accepted.lifecycle, failedInput(commandId, failure));
+    assert.equal(rejected.applied, false);
+    assert.equal(rejected.reason, "turn_failure_incomplete");
+  }
+  const failed = transitionTurnLifecycle(
+    accepted.lifecycle,
+    failedInput("failure-ok", { code: "boom", message: "boom failed", retryable: false }),
+  );
+  assert.equal(failed.applied, true);
+  assert.equal(failed.lifecycle.turns["failure-turn"].failure.code, "boom");
+});
+
 test("continuation consumes the exact stopped Turn atomically and advances as one chain", () => {
   const transition = (lifecycle, input) => {
     const result = transitionTurnLifecycle(lifecycle, input, () => "2026-07-31T00:00:00.000Z");

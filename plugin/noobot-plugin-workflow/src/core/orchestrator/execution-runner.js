@@ -209,20 +209,17 @@ async function commitWaveNodeState({ nodeState, nodeIdentity, ctx, ...fields } =
 
 function buildChildTerminalError(childTerminal = {}) {
   if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED) {
-    const failure = childTerminal.lifecycle.failure || { message: "child execution failed" };
-    const error = new Error(failure.message || "child execution failed");
-    error.code = failure.code || "WORKFLOW_CHILD_EXECUTION_FAILED";
+    const { failure } = childTerminal.lifecycle;
+    const error = new Error(failure.message);
+    error.code = failure.code;
     error.failure = failure;
     error.nodeTerminalCommitted = true;
     return error;
   }
   if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.STOPPED) {
-    const error = new Error(
-      childTerminal.lifecycle?.failure?.message ||
-        `child execution reached ${childTerminal.lifecycle.state}`,
-    );
+    const error = new Error(`child execution reached ${childTerminal.lifecycle.state}`);
     error.name = "AbortError";
-    error.code = childTerminal.lifecycle?.failure?.code || "WORKFLOW_CHILD_TERMINAL_FAILURE";
+    error.code = "WORKFLOW_CHILD_TERMINAL_FAILURE";
     error.nodeTerminalCommitted = true;
     return error;
   }
@@ -249,7 +246,7 @@ async function commitWaveChildTerminal({
     activeChildExecutionId,
     failure:
       childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
-        ? childTerminal.lifecycle.failure || { message: "child execution failed" }
+        ? childTerminal.lifecycle.failure
         : null,
   });
   const terminalError = buildChildTerminalError(childTerminal);

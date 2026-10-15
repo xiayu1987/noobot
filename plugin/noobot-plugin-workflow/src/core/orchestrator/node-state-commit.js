@@ -35,7 +35,7 @@ export function resolveCommittedChildTerminal(subSession = {}, expectedExecution
   if (text(lifecycle.executionId) !== text(expectedExecutionId)) {
     return fail("execution_identity_mismatch");
   }
-  if ((text(lifecycle.executionKind) || "agent").toLowerCase() !== "agent") {
+  if (text(lifecycle.executionKind) !== "agent") {
     return fail("execution_kind_mismatch");
   }
   if (!Number.isInteger(lifecycle.revision) || lifecycle.revision < 1) {
