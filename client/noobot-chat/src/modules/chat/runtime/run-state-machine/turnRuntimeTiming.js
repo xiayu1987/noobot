@@ -42,14 +42,11 @@ export function applyTurnTimingUpdate(registry, update = {}) {
   const nextFinishedAt = runtimeText(current.finishedAt || finishedAt);
   const nextDialogProcessId = runtimeText(current.dialogProcessId || dialogProcessId);
   const nextModelLoopRound = modelLoopRound || normalizeModelLoopRound(current.modelLoopRound);
-  const canonicalTimingObserved =
-    update.canonical === true || current.canonicalTimingObserved === true;
   if (
     runtimeText(current.startedAt) === nextStartedAt &&
     runtimeText(current.finishedAt) === nextFinishedAt &&
     runtimeText(current.dialogProcessId) === nextDialogProcessId &&
-    normalizeModelLoopRound(current.modelLoopRound) === nextModelLoopRound &&
-    current.canonicalTimingObserved === canonicalTimingObserved
+    normalizeModelLoopRound(current.modelLoopRound) === nextModelLoopRound
   ) {
     return { applied: false, deduplicated: true, reason: "timing_unchanged", turn: current };
   }
@@ -65,7 +62,6 @@ export function applyTurnTimingUpdate(registry, update = {}) {
       ? Date.parse(nextFinishedAt) || 0
       : Number(current.finishedAtMs || 0),
     modelLoopRound: nextModelLoopRound,
-    canonicalTimingObserved,
     timingSource: runtimeText(update?.source || current.timingSource || "turn_runtime_event"),
   };
   bucket.turns[turnScopeId] = turn;
@@ -103,7 +99,6 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
       startedAt: timing.startedAt,
       finishedAt: timing.finishedAt,
       modelLoopRound: timing.modelLoopRound,
-      canonical: true,
       source: "session_turn_timing_snapshot",
     });
     if (result.reason === "dialog_process_identity_conflict") return result;

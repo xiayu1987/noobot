@@ -185,6 +185,41 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     ).toBe(0);
   });
 
+  it("deduplicates a timing snapshot whose values already match the live turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    registry.sessions = {
+      s1: {
+        activeTurnScopeId: "",
+        authoritativeSequence: 0,
+        protocolVersion: 0,
+        turns: {
+          "client-turn:live": {
+            sessionId: "s1",
+            turnScopeId: "client-turn:live",
+            dialogProcessId: "dp-live",
+            startedAt: "2026-07-21T12:00:00.000Z",
+            finishedAt: "2026-07-21T12:00:05.000Z",
+            modelLoopRound: 2,
+          },
+        },
+      },
+    };
+    expect(
+      applyTurnTimingSnapshot(registry, {
+        sessionId: "s1",
+        turnTimings: [
+          {
+            turnScopeId: "client-turn:live",
+            dialogProcessId: "dp-live",
+            thinkingStartedAt: "2026-07-21T12:00:00.000Z",
+            thinkingFinishedAt: "2026-07-21T12:00:05.000Z",
+            modelLoopRound: 2,
+          },
+        ],
+      }),
+    ).toMatchObject({ applied: false, deduplicated: true, reason: "timing_snapshot_unchanged" });
+  });
+
   it("hydrates a turn timing carrying only the model loop round", () => {
     const registry = createTurnRuntimeRegistryState();
     expect(
