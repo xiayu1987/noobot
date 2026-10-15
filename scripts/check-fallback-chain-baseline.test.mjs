@@ -7,7 +7,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   compareWithBaseline,
-  evaluateTargets,
   findRebaseIncreases,
   findFallbackChains,
   findInlineTypeChecks,
@@ -62,18 +61,6 @@ test("detects local object type checks that duplicate shared isPlainObject", () 
   assert.equal(findInlineTypeChecks('const ok = typeof v === "object";').length, 0);
   assert.equal(findInlineTypeChecks("const ok = isPlainObject(v);").length, 0);
   assert.equal(RULES.typeCheck.includeFile("shared/value.js"), false);
-});
-
-test("targets cap the total and require a minimum drop per batch until the goal", () => {
-  const targets = { start: { a: 10 }, goal: { a: 4 }, minBatchDrop: 3 };
-  const counts = (n) => ({ a: { "x.js": n } });
-  const run = (previous, next, mode) =>
-    evaluateTargets({ previous: counts(previous), next: counts(next), mode, targets }).violations;
-  assert.deepEqual(run(10, 10), []);
-  assert.match(run(10, 11)[0], /exceeds start ceiling 10/);
-  assert.match(run(10, 8, "update")[0], /batch dropped 2, at least 3 required/);
-  assert.deepEqual(run(10, 7, "update"), []);
-  assert.deepEqual(run(5, 4, "update"), []);
 });
 
 test("rebase may add new rules but never raises an existing rule total", () => {

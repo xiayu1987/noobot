@@ -216,7 +216,7 @@ export async function executeReadEmail({
   const { ImapFlow } = await import("imapflow");
   const { simpleParser } = await import("mailparser");
   const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
-  const folder = text(payload?.folder) || "INBOX" || "INBOX";
+  const folder = text(payload?.folder) || "INBOX";
   const uid = Number(payload?.uid || 0);
   const imapClient = createImapClient(ImapFlow, normalizedConnectionInfo);
   await imapClient.connect();

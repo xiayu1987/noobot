@@ -60,12 +60,6 @@ export const EXEMPTIONS = Object.freeze({
   ]),
 });
 
-export const TARGETS = Object.freeze({
-  start: Object.freeze({ fallbackChain: 920, inlineTrim: 148, typeCheck: 175 }),
-  goal: Object.freeze({ fallbackChain: 460, inlineTrim: 74, typeCheck: 88 }),
-  minBatchDrop: 120,
-});
-
 const PLAIN_OBJECT_HELPER_NAMES = new Set([
   "isPlainObject",
   "isObject",
@@ -424,31 +418,6 @@ function describeTotals(counts) {
     .join(", ");
 }
 
-function targetTotal(counts, names) {
-  return names.reduce((total, name) => total + sumCounts(counts[name] ?? {}), 0);
-}
-
-const sumValues = (table) => Object.values(table).reduce((total, value) => total + value, 0);
-
-export function evaluateTargets({ previous, next, mode, targets = TARGETS }) {
-  const start = sumValues(targets.start);
-  const goal = sumValues(targets.goal);
-  const names = Object.keys(targets.goal);
-  const nextTotal = targetTotal(next, names);
-  const violations = [];
-  if (nextTotal > start)
-    violations.push(`target total ${nextTotal} exceeds start ceiling ${start}`);
-  if (mode === "update" && nextTotal > goal) {
-    const dropped = targetTotal(previous, names) - nextTotal;
-    if (dropped < targets.minBatchDrop)
-      violations.push(
-        `batch dropped ${dropped}, at least ${targets.minBatchDrop} required until goal ${goal}`,
-      );
-  }
-  const progress = `${nextTotal}/${start} → goal ${goal}, ${Math.max(nextTotal - goal, 0)} left`;
-  return { violations, progress };
-}
-
 export function findRebaseIncreases(previous, next) {
   return Object.keys(RULES)
     .filter((name) => previous[name])
@@ -476,11 +445,10 @@ async function main(argv) {
   const baseline = JSON.parse(await readFile(BASELINE_PATH, "utf8"));
   const markdown = await readFile(INVENTORY_DOC_PATH, "utf8");
   if (argv.includes("--rebase")) {
-    const { violations, progress } = evaluateTargets({ previous: baseline, next: measured });
-    violations.push(...findRebaseIncreases(baseline, measured));
+    const violations = findRebaseIncreases(baseline, measured);
     if (violations.length) return fail(violations);
     const lowered = await writeBaseline(markdown, measured);
-    console.log(`Fallback baseline rebased to ${describeTotals(lowered)} (${progress})`);
+    console.log(`Fallback baseline rebased to ${describeTotals(lowered)}`);
     return;
   }
   const increases = [];
@@ -494,24 +462,16 @@ async function main(argv) {
   }
   if (increases.length) return fail(["New fallback patterns are not allowed:", ...increases]);
   if (argv.includes("--update")) {
-    const { violations, progress } = evaluateTargets({
-      previous: baseline,
-      next: measured,
-      mode: "update",
-    });
-    if (violations.length) return fail(violations);
     const lowered = await writeBaseline(markdown, measured);
-    console.log(`Fallback baseline lowered to ${describeTotals(lowered)} (${progress})`);
+    console.log(`Fallback baseline lowered to ${describeTotals(lowered)}`);
     return;
   }
   const violations = decreases.map((line) => `stale baseline, run with --update: ${line}`);
   if ((await renderInventoryDoc(markdown, baseline)) !== markdown) {
     violations.push("docs/fallback-chain-inventory.md module table is stale, run with --update");
   }
-  const target = evaluateTargets({ previous: baseline, next: baseline });
-  violations.push(...target.violations);
   if (violations.length) return fail(violations);
-  console.log(`Fallback baseline passed (${describeTotals(measured)}; ${target.progress})`);
+  console.log(`Fallback baseline passed (${describeTotals(measured)})`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href)

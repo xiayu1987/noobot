@@ -42,20 +42,19 @@ export function summarizeStateMachineMessage(message = {}) {
 }
 
 export function summarizeStateMachineEvent(event = {}) {
-  const raw = event?.raw && typeof event.raw === "object" ? event.raw : {};
   return {
     eventType: clean(event?.type),
-    lifecycleEventType: clean(event?.eventType || raw?.eventType),
-    source: clean(event?.source || raw?.source),
-    authority: clean(event?.authority || raw?.authority),
-    sessionId: clean(event?.sessionId || raw?.sessionId),
-    dialogProcessId: clean(event?.dialogProcessId || raw?.dialogProcessId),
-    turnScopeId: clean(event?.turnScopeId || raw?.turnScopeId),
-    executionId: clean(event?.executionId || raw?.executionId),
-    executionKind: clean(event?.executionKind || raw?.executionKind),
-    revision: Number(event?.revision ?? raw?.revision ?? 0),
-    sequence: Number(event?.sequence ?? event?.seq ?? raw?.sequence ?? raw?.seq ?? 0),
-    commandId: clean(event?.commandId || raw?.commandId),
+    lifecycleEventType: clean(event?.eventType),
+    source: clean(event?.source),
+    authority: clean(event?.authority),
+    sessionId: clean(event?.sessionId),
+    dialogProcessId: clean(event?.dialogProcessId),
+    turnScopeId: clean(event?.turnScopeId),
+    executionId: clean(event?.executionId),
+    executionKind: clean(event?.executionKind),
+    revision: Number(event?.revision ?? 0),
+    sequence: Number(event?.seq ?? 0),
+    commandId: clean(event?.commandId),
   };
 }
 

@@ -79,7 +79,7 @@ export function normalizeProxyPathname(
   pathname = "/",
   stripPrefix = config.upstreamHttpStripPrefix,
 ) {
-  const normalizedPathname = text(pathname) || "/" || "/";
+  const normalizedPathname = text(pathname) || "/";
   const normalizedStripPrefix = text(stripPrefix);
   if (!normalizedStripPrefix || normalizedStripPrefix === "/") return normalizedPathname;
   if (normalizedPathname === normalizedStripPrefix) return "/";

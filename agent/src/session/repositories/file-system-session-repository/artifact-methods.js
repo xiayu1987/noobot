@@ -412,7 +412,7 @@ class SessionArtifactMethods {
         ...session,
         sessionId: text(session.sessionId || sessionId),
         parentSessionId: text(session.parentSessionId || parentSessionId),
-        caller: text(session.caller) || "user" || "user",
+        caller: text(session.caller) || "user",
         modelAlias: String(session.modelAlias || ""),
         messages: this.normalizeMessages(session.messages || [], { sessionId }),
         selectedConnectorIds: this.normalizeSelectedConnectorIds(session.selectedConnectorIds),

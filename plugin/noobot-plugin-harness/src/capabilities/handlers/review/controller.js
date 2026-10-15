@@ -38,7 +38,7 @@ export function createReviewHandler() {
     }
     const mode = resolveWorkflowMode(meta);
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.REVIEW });
-    const locale = text(ensureHarnessBucket(ctx)?.state?.locale) || "zh-CN" || "zh-CN";
+    const locale = text(ensureHarnessBucket(ctx)?.state?.locale) || "zh-CN";
     const reviewOptions =
       meta?.harness?.review && typeof meta.harness.review === "object" ? meta.harness.review : {};
     const attachToFinalOutput =

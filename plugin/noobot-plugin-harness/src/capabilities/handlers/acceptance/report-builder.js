@@ -316,7 +316,7 @@ function buildFallbackMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
       nextPhase: bucket?.nextPhase,
       taskChecklist: bucket.taskChecklist,
     }),
-    taskOwner: text(bucket.taskOwner) || getDefaultTaskOwner(locale) || getDefaultTaskOwner(locale),
+    taskOwner: text(bucket.taskOwner) || getDefaultTaskOwner(locale),
     mainPlanVersion: resolveCurrentMainPlanVersion(bucket),
     stage: "main_plan",
   };
@@ -342,7 +342,7 @@ function normalizeMainPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) 
     mainPlanVersion: Number.isFinite(Number(plan?.mainPlanVersion))
       ? Number(plan.mainPlanVersion)
       : resolveCurrentMainPlanVersion(bucket),
-    stage: text(plan?.stage) || "main_plan" || "main_plan",
+    stage: text(plan?.stage) || "main_plan",
   };
 }
 

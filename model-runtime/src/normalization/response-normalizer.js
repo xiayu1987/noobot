@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const THINK_OPEN = "<think>";
 const THINK_CLOSE = "</think>";
@@ -74,9 +74,7 @@ export function resolveFinishReason(response = {}) {
     response.finish_reason,
     response.finishReason,
   ]) {
-    const output = String(value || "")
-      .trim()
-      .toLowerCase();
+    const output = text(value).toLowerCase();
     if (output) return output;
   }
   return "";

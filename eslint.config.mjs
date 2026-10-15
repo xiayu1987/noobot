@@ -69,6 +69,7 @@ export default [
       "security/detect-possible-timing-attacks": "off",
       eqeqeq: ["warn", "always", { null: "ignore" }],
       "no-constant-condition": "warn",
+      "no-constant-binary-expression": "error",
       "no-dupe-keys": "warn",
       "no-duplicate-imports": "warn",
       "no-duplicate-case": "warn",

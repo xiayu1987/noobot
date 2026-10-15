@@ -15,7 +15,7 @@ export class ChannelEventJournal {
   append(event = "message", data = {}) {
     const envelope = {
       sequence: ++this.sequence,
-      event: text(event) || "message" || "message",
+      event: text(event) || "message",
       data: data && typeof data === "object" ? data : {},
     };
     this.events.push(envelope);
@@ -28,7 +28,7 @@ export class ChannelEventJournal {
   transient(event = "message", data = {}) {
     return {
       sequence: this.sequence,
-      event: text(event) || "message" || "message",
+      event: text(event) || "message",
       data: data && typeof data === "object" ? data : {},
     };
   }

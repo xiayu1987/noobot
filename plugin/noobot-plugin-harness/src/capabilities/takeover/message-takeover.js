@@ -44,11 +44,7 @@ function findAfterLeadingSystemIndex(messages = []) {
 function filterInternalForcedMessages(messages = [], directive = {}) {
   if (!Array.isArray(messages)) return { messages: [], removed: 0 };
   const removeAll = directive?.cancelInternalForcedMessages === true;
-  const removeTypesInput =
-    directive?.removeInternalMessageTypes ||
-    directive?.stripInternalMessageTypes ||
-    directive?.blockInternalMessageTypes ||
-    [];
+  const removeTypesInput = directive?.removeInternalMessageTypes || [];
   const removeTypes = Array.isArray(removeTypesInput)
     ? new Set(removeTypesInput.map((item) => text(item)).filter(Boolean))
     : new Set();

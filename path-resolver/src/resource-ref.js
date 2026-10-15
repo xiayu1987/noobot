@@ -46,7 +46,7 @@ export function createResourceRef({
     source: text(source),
     logical: {
       view: text(logical?.view || source),
-      path: text(logical?.path || ""),
+      path: text(logical?.path),
     },
     attachment: attachment ? clone(attachment) : null,
     size: Number.isFinite(Number(size)) ? Number(size) : null,

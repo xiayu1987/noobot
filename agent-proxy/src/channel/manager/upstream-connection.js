@@ -274,7 +274,7 @@ class UpstreamConnectionMethods {
           });
         },
       },
-      { purpose: text(options?.purpose) || "run" || "run" },
+      { purpose: text(options?.purpose) || "run" },
     );
     if (!connection?.socket) {
       channel.transport.phase = CHANNEL_STATUS.IDLE;

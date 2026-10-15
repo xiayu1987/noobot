@@ -233,15 +233,6 @@ export function useChatEngine({
       before: summarizeStateMachineTurn(beforeTurn, before),
       activeSessionId: activeSessionId?.value || "",
     }));
-    if (event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
-      const lifecycleResult = applyAuthoritativeTurnLifecycle(event?.raw || event);
-      logStateMachineDebug("stateMachine.reducer.skipped", () => ({
-        ...eventSummary,
-        reason: "authoritative_lifecycle_owned",
-        before: summarizeStateMachineTurn(beforeTurn, before),
-      }));
-      return lifecycleResult;
-    }
     const turnResult = applyTurnRuntimeEvent?.(event);
     const runtime = selectSessionTurnRuntime(
       turnRuntimeRegistry?.value,
@@ -300,7 +291,6 @@ export function useChatEngine({
   } = createChatEngineConversationState({
     activeSession,
     activeSessionId,
-    applyRunStateEvent,
     interactionSubmitting,
     pendingInteractionRequest,
     clearPendingInteraction,

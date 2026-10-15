@@ -109,7 +109,7 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
 
   if (!changed) return false;
   appendCapabilityLog(ctx, {
-    domain: text(domain) || "guidance" || "guidance",
+    domain: text(domain) || "guidance",
     event: SHARED_EVENTS.workflowInvariantViolation,
     detail: { violations },
   });

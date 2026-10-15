@@ -41,7 +41,7 @@ function transferIdentityRequired(identity) {
 }
 
 function overflowArtifactName(call = {}) {
-  const toolName = text(call?.name) || "tool" || "tool";
+  const toolName = text(call?.name) || "tool";
   return `${toolName}.result.txt`;
 }
 

@@ -29,7 +29,6 @@ import { text } from "@noobot/shared/value";
 export function createChatEngineConversationState({
   activeSession,
   activeSessionId,
-  applyRunStateEvent,
   interactionSubmitting,
   pendingInteractionRequest,
   clearPendingInteraction,

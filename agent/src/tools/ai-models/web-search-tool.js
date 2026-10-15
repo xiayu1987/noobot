@@ -75,7 +75,7 @@ function parseQueryStringFormat(format = "") {
   const raw = text(format);
   if (!raw) return { key: "q", value: "" };
   const [key, ...rest] = raw.split("=");
-  return { key: text(key) || "q" || "q", value: rest.join("=") };
+  return { key: text(key) || "q", value: rest.join("=") };
 }
 
 function parseBodyFormat(bodyFormat = "{}") {

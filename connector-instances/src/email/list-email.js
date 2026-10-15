@@ -59,7 +59,7 @@ function buildRecentSequenceRange({ page = 1, pageSize = 10, exists = 0 } = {}) 
 export async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
   const { ImapFlow } = await import("imapflow");
   const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
-  const folder = text(payload?.folder) || "INBOX" || "INBOX";
+  const folder = text(payload?.folder) || "INBOX";
   const { page, pageSize } = normalizeListPaging(payload);
   const unseenOnly = payload?.unseen_only === true;
 

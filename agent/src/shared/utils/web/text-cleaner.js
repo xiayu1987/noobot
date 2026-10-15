@@ -8,6 +8,7 @@ import { JSDOM } from "jsdom";
 import { normalizeText } from "../shared-utils.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { text } from "@noobot/shared/value";
 
 const MIN_TAG_TEXT_LENGTH = LENGTH_THRESHOLDS.toolIO.webMinTagTextChars;
 
@@ -84,8 +85,8 @@ function removeShortTextNodes(doc, minLength = MIN_TAG_TEXT_LENGTH) {
   for (let targetIndex = targets.length - 1; targetIndex >= 0; targetIndex -= 1) {
     const node = targets[targetIndex];
     if (!node || node.children?.length > 0) continue;
-    const text = normalizeText(node.textContent || "");
-    if (!text || text.length < minLength) {
+    const nodeText = normalizeText(node.textContent || "");
+    if (!nodeText || nodeText.length < minLength) {
       node.remove();
     }
   }
@@ -110,11 +111,7 @@ function aggressiveCleanText(input = "", maxLines = QUANTITY_THRESHOLDS.web.text
 function filterByExtraNoisePatterns(lines = [], extraNoisePatterns = []) {
   if (!Array.isArray(lines) || !lines.length) return [];
   const normalizedPatterns = (Array.isArray(extraNoisePatterns) ? extraNoisePatterns : [])
-    .map((patternItem) =>
-      String(patternItem || "")
-        .trim()
-        .toLowerCase(),
-    )
+    .map((patternItem) => text(patternItem).toLowerCase())
     .filter(Boolean);
   if (!normalizedPatterns.length) return lines;
   return lines.filter((lineText) => {

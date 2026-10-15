@@ -6,6 +6,7 @@
 import { MEMORY_DOCUMENT_KIND } from "../document.js";
 import { BUILTIN_EXPERIENCE_FIELDS } from "./fields.js";
 import { EXPERIENCE_STRUCTURE_FIELDS } from "./structure.js";
+import { text } from "@noobot/shared/value";
 
 const {
   domain: DOMAIN_FIELD,
@@ -63,12 +64,7 @@ const STAGE_STRUCTURE = Object.freeze({
 });
 
 function requireStructure(stage) {
-  const structure =
-    STAGE_STRUCTURE[
-      String(stage || "")
-        .trim()
-        .toLowerCase()
-    ];
+  const structure = STAGE_STRUCTURE[text(stage).toLowerCase()];
   if (!structure) throw new Error(`unknown experience patch schema: ${stage}`);
   return structure;
 }
@@ -116,28 +112,26 @@ export function renderExperiencePatchProtocol(
   stage,
   { fields = BUILTIN_EXPERIENCE_FIELDS, labels = {} } = {},
 ) {
-  const key = String(stage || "")
-    .trim()
-    .toLowerCase();
+  const key = text(stage).toLowerCase();
   const schema = buildExperiencePatchSchema(key, fields);
-  const text = { ...DEFAULT_PROMPT_LABELS, ...labels };
+  const promptLabels = { ...DEFAULT_PROMPT_LABELS, ...labels };
   const itemPlaceholder =
-    typeof text.itemPlaceholder === "function"
-      ? text.itemPlaceholder
+    typeof promptLabels.itemPlaceholder === "function"
+      ? promptLabels.itemPlaceholder
       : DEFAULT_PROMPT_LABELS.itemPlaceholder;
   const structureToken = (field, example) =>
     field.type === "boolean"
       ? `${field.key}=${example ? "true" : "true|false"}`
-      : `${field.key}="${text[field.key]}"`;
+      : `${field.key}="${promptLabels[field.key]}"`;
   const structure = (example) =>
     Object.values(schema.structureFields).map((field) => structureToken(field, example));
   const contents = schema.contentFields.map((item) => {
-    const label = text.fieldPlaceholders?.[item.key] || item.title || item.key;
+    const label = promptLabels.fieldPlaceholders?.[item.key] || item.title || item.key;
     return `${item.key}="${itemPlaceholder(label, 1)} || ${itemPlaceholder(label, 2)}"`;
   });
   return {
     protocol: [
-      `ADD/UPDATE/DELETE ${schema.idPrefix}[${text.id}]`,
+      `ADD/UPDATE/DELETE ${schema.idPrefix}[${promptLabels.id}]`,
       ...structure(false),
       ...contents,
     ].join(" "),

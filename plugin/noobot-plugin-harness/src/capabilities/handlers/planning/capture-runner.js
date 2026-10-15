@@ -66,7 +66,7 @@ function recordPlanningRawOutput(
   const { bucket } = holder;
   const rawText = String(content || "");
   const entry = {
-    source: text(source) || "unknown" || "unknown",
+    source: text(source) || "unknown",
     capturedAt: new Date().toISOString(),
     content: rawText,
     parsedCount: Number.isFinite(Number(parsedCount)) ? Number(parsedCount) : 0,

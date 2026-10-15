@@ -57,4 +57,24 @@ describe("useChatEngine session state log identity", () => {
       });
     }
   });
+
+  it("routes every run-state event through the turn reducer, never the lifecycle envelope", () => {
+    const applyTurnRuntimeEvent = vi.fn(() => ({ applied: false, reason: "test" }));
+    const applyTurnLifecycleEnvelope = vi.fn();
+    const { engine } = createHarness({
+      sessionId: "s-active",
+      deps: { applyTurnRuntimeEvent, applyTurnLifecycleEnvelope },
+    });
+    const event = {
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      sessionId: "s-event",
+      turnScopeId: "turn-event",
+      raw: { sessionId: "s-event", turnScopeId: "turn-event" },
+    };
+
+    engine.dispatchAuthoritativeRunStateEvent(event);
+
+    expect(applyTurnRuntimeEvent).toHaveBeenCalledWith(event);
+    expect(applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
+  });
 });

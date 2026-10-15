@@ -14,7 +14,7 @@ import {
 import { text } from "@noobot/shared/value";
 
 function sanitizeDownloadFileName(fileName = "") {
-  const value = text(fileName) || "download" || "download";
+  const value = text(fileName) || "download";
   return (
     value
       .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")

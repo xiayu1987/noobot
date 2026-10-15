@@ -37,12 +37,12 @@ describe("stateMachineLogger", () => {
 
   it("summarizes identity and state without serializing message or event bodies", () => {
     const event = summarizeStateMachineEvent({
-      type: "backend_turn_lifecycle",
-      eventType: "turn.completed",
+      type: "local_user_stop_requested",
+      eventType: "turn.stop_requested",
       sessionId: "s-1",
       turnScopeId: "t-1",
       revision: 4,
-      sequence: 7,
+      seq: 7,
       content: "private event body",
       raw: { message: "private raw body" },
     });
@@ -59,7 +59,11 @@ describe("stateMachineLogger", () => {
       { displayState: "completed", sending: false, canStop: false },
     );
 
-    expect(event).toMatchObject({ lifecycleEventType: "turn.completed", revision: 4, sequence: 7 });
+    expect(event).toMatchObject({
+      lifecycleEventType: "turn.stop_requested",
+      revision: 4,
+      sequence: 7,
+    });
     expect(turn).toMatchObject({
       state: "completed",
       terminalResolved: true,
@@ -67,5 +71,27 @@ describe("stateMachineLogger", () => {
       sequence: 7,
     });
     expect(JSON.stringify({ event, turn })).not.toContain("private");
+  });
+
+  it("reads identity only from the normalized top level, never from raw", () => {
+    const event = summarizeStateMachineEvent({
+      type: "local_reset",
+      raw: {
+        sessionId: "raw-session",
+        turnScopeId: "raw-turn",
+        commandId: "raw-command",
+        source: "raw-source",
+        seq: 9,
+        sequence: 9,
+      },
+    });
+
+    expect(event).toMatchObject({
+      sessionId: "",
+      turnScopeId: "",
+      commandId: "",
+      source: "",
+      sequence: 0,
+    });
   });
 });

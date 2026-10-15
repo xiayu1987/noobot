@@ -61,7 +61,7 @@ export function createSubSessionStore({
   applyTurnTimingSnapshot = null,
 }) {
   function ensureSubSessionMessageContainer(eventData = {}) {
-    const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
+    const sessionId = text(eventData?.sessionId);
     if (!sessionId) return { applied: false, reason: "missing_session" };
     const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
     registry.sessions = registry.sessions || {};

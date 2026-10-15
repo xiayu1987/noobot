@@ -198,7 +198,7 @@ async function executeImagesAsync({
   const baseUrl = normalizeBaseUrl(modelSpec.base_url);
   const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
   const requestHeaders = { ...headers, Authorization: `Bearer ${credential}` };
-  const size = text(options.size) || "1:1" || "1:1";
+  const size = text(options.size) || "1:1";
   const resolution = text(options.resolution) || (RATIO_SIZE.test(size) ? "1K" : "");
   const created = await requestJson({
     fetchImpl,

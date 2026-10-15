@@ -50,7 +50,7 @@ export function useWorkflowNodeMessages({
         ...summary,
         sessionId,
         parentSessionId: text(summary?.parentSessionId || selectedNode.value?.rootSessionId),
-        caller: text(summary?.caller) || "bot" || "bot",
+        caller: text(summary?.caller) || "bot",
         depth: Number.isFinite(Number(summary?.depth)) ? Number(summary.depth) : 1,
 
         messages: Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : [],

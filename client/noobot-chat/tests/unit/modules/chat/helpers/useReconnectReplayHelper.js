@@ -265,21 +265,6 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     applied: false,
     reason: "terminal_unresolved",
   }));
-  const dispatchAuthoritativeRunStateEvent = vi.fn((event = {}) => {
-    const lifecycleTerminal =
-      event?.type === "backend_turn_lifecycle" &&
-      ["turn.completed", "turn.stop_completed", "turn.failed"].includes(
-        text(event?.eventType).toLowerCase(),
-      );
-    if (lifecycleTerminal) {
-      return resolveTurnTerminalState(event?.sessionId, event?.turnScopeId, {
-        commandId: String(event?.commandId || ""),
-        sequence: Number(event?.sequence || event?.seq || 0),
-        source: "reconnect_replay",
-      });
-    }
-    return applyTurnRuntimeEvents([event])[0];
-  });
   const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
   const reduceSubSessionMessageEvent = vi.fn(() => ({ applied: true }));
   const applyTerminalResolution = (response) => {
@@ -400,7 +385,6 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     notify,
     processStore,
     turnRuntimeRegistry,
-    dispatchAuthoritativeRunStateEvent,
     applyWorkflowRuntimeEvent,
     reduceSubSessionMessageEvent,
     applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
@@ -441,7 +425,6 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       chatList,
       chatWebSocketClient,
       applyTurnRuntimeEvents,
-      dispatchAuthoritativeRunStateEvent,
       applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
       applyWorkflowRuntimeEvent,
       reduceSubSessionMessageEvent,

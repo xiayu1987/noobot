@@ -67,7 +67,6 @@ export function useReconnectReplay({
   notify = () => {},
   processStore,
   turnRuntimeRegistry,
-  dispatchAuthoritativeRunStateEvent,
   applyTurnLifecycleEnvelope,
   applyExecutionSnapshot,
   applyExecutionChildren,

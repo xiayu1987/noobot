@@ -5,7 +5,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTurnFinalizer } from "../../ws/chat-websocket/terminal-outcomes.js";
+import {
+  createTurnFinalizer,
+  snapshotRunState,
+} from "../../ws/chat-websocket/terminal-outcomes.js";
 import { buildAbortErrorMessage } from "../../ws/chat-websocket/stop-lifecycle.js";
 import {
   AGENT_COMMAND,
@@ -44,7 +47,7 @@ test("timeout finalization exposes the canonical timeout error code", async () =
   });
 
   await finalizer.finalizeTimeout(
-    {
+    snapshotRunState({
       runMeta: {
         commandId: "command-timeout",
         commandType: AGENT_COMMAND.SEND,
@@ -54,7 +57,7 @@ test("timeout finalization exposes the canonical timeout error code", async () =
         dialogProcessId: "dialog-timeout",
       },
       turnScopeId: "turn-timeout",
-    },
+    }),
     {
       description: "run timeout after 18000000ms",
       errorObject: { message: "run timeout after 18000000ms", code: "run_timeout" },
@@ -70,4 +73,22 @@ test("timeout finalization exposes the canonical timeout error code", async () =
   assert.equal(receipt?.data?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
   assert.equal(receipt?.data?.error?.code, "run_timeout");
   assert.equal(receipt?.data?.error?.message, "run timeout after 18000000ms");
+});
+
+test("run state snapshot resolves identity once, falling back to the connection turn before runMeta binds", () => {
+  assert.deepEqual(snapshotRunState({ runMeta: null, turnScopeId: " turn-early " }).identity, {
+    userId: "",
+    sessionId: "",
+    parentSessionId: "",
+    dialogProcessId: "",
+    turnScopeId: "turn-early",
+    commandRoot: "turn-early",
+  });
+  const bound = snapshotRunState({
+    runMeta: { commandId: "cmd-1", userId: "u", sessionId: "s", turnScopeId: "turn-run" },
+    turnScopeId: "turn-connection",
+  }).identity;
+  assert.equal(bound.turnScopeId, "turn-run");
+  assert.equal(bound.commandRoot, "cmd-1");
+  assert.equal(bound.sessionId, "s");
 });

@@ -22,7 +22,7 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
   return {
     sessionId,
     parentSessionId: text(session?.parentSessionId),
-    caller: text(session?.caller) || "user" || "user",
+    caller: text(session?.caller) || "user",
     currentTaskId: text(session?.currentTaskId),
     createdAt: text(session?.createdAt),
     updatedAt: text(session?.updatedAt),
@@ -54,7 +54,7 @@ export function buildUnavailableSessionSummary({
   return {
     sessionId: normalizedSessionId,
     parentSessionId: text(parentSessionId),
-    caller: text(caller) || "user" || "user",
+    caller: text(caller) || "user",
     currentTaskId: "",
     createdAt: text(createdAt),
     updatedAt: text(updatedAt),
@@ -66,7 +66,7 @@ export function buildUnavailableSessionSummary({
     lastMessage: null,
     availability: "unavailable",
     unavailableReason: {
-      code: text(errorCode) || "SESSION_PROTOCOL_INVALID" || "SESSION_PROTOCOL_INVALID",
+      code: text(errorCode) || "SESSION_PROTOCOL_INVALID",
       message: text(reason) || "Session uses an unsupported protocol",
     },
   };
@@ -82,7 +82,7 @@ export function normalizeSessionsSummaryPayload(
     .map((item) => ({
       sessionId: text(item?.sessionId),
       parentSessionId: text(item?.parentSessionId),
-      caller: text(item?.caller) || "user" || "user",
+      caller: text(item?.caller) || "user",
       currentTaskId: text(item?.currentTaskId),
       createdAt: text(item?.createdAt),
       updatedAt: text(item?.updatedAt),

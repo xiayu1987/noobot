@@ -184,7 +184,7 @@ class SessionSummaryMethods {
       const manifest = await readJsonArtifactFile(scope.sessionFile, null);
       return {
         title: text(manifest?.customTitle),
-        caller: text(manifest?.caller) || "user" || "user",
+        caller: text(manifest?.caller) || "user",
         createdAt: text(manifest?.createdAt),
         updatedAt: text(manifest?.updatedAt),
       };

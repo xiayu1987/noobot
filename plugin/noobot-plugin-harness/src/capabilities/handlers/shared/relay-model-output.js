@@ -107,7 +107,7 @@ export function relaySeparateModelOutputAsUserMessage(
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: relayContent,
-    injectedMessageType: `separate_model_relay:${text(purpose) || "unknown" || "unknown"}`,
+    injectedMessageType: `separate_model_relay:${text(purpose) || "unknown"}`,
     purpose: optionalText(purpose),
     pluginFlow: optionalText(pluginFlow),
     chain: optionalText(chain),

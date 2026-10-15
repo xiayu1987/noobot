@@ -60,7 +60,7 @@ export class ScopedArtifactPersistenceHelpers {
       absoluteDir,
     });
     if (!outputDir) throw new Error(outputDirError);
-    const normalizedFileName = text(fileName) || "payload.json" || "payload.json";
+    const normalizedFileName = text(fileName) || "payload.json";
     if (normalizedFileName.includes("/") || normalizedFileName.includes("\\")) {
       throw new Error(fileNameError);
     }

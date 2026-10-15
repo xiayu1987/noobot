@@ -245,7 +245,7 @@ ${bodyText}
     const logEntry = `
 --- ${new Date().toLocaleString()} ---
 [Terminal]
-Outcome: ${text(outcome) || "error" || "error"}
+Outcome: ${text(outcome) || "error"}
 Model: ${modelName}
 Flow: ${flowName}
 SessionId: ${sessionId}

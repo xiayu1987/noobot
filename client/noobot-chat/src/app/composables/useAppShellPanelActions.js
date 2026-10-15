@@ -56,7 +56,7 @@ export function useAppShellPanelActions({
   async function openUserSettings() {
     if (!ensureConnected?.()) return;
     if (!isSuperAdmin?.value) {
-      const currentRole = text(apiRole?.value) || "user" || "user";
+      const currentRole = text(apiRole?.value) || "user";
       notify?.({
         type: "warning",
         message: `${translate("common.superAdminOnly")} (role=${currentRole})`,

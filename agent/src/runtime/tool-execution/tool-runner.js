@@ -390,7 +390,7 @@ function toolInvocationConfig(state) {
         sessionId: state.sessionId,
         producer,
         direction: "output",
-        strategy: text(state.call?.name) || "tool_output" || "tool_output",
+        strategy: text(state.call?.name) || "tool_output",
       }),
       noobotHookContext: toolHookContext(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
         status: HOOK_PHASE_STATUS.RUNNING,

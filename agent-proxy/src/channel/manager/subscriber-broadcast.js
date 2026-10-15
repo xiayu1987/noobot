@@ -527,7 +527,7 @@ class SubscriberBroadcastMethods {
     } catch (error) {
       return {
         result: "failed",
-        reason: text(error?.name) || "send_error" || "send_error",
+        reason: text(error?.name) || "send_error",
       };
     }
   }

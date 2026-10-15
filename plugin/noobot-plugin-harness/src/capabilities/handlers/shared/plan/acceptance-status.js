@@ -221,8 +221,8 @@ export function resetPlanAcceptanceStatusForPlanChange(
       taskStatus: TASK_ACCEPTANCE_STATUS.PENDING,
       source: "plan_change_reset",
       resetAt,
-      resetReason: text(reason) || "plan_changed" || "plan_changed",
-      resetStage: text(stage) || "revision" || "revision",
+      resetReason: text(reason) || "plan_changed",
+      resetStage: text(stage) || "revision",
       planContent: nextContent,
     };
     resetCount += 1;
@@ -246,7 +246,7 @@ export function resolvePlanAcceptanceForChecklistItem(bucket = {}, item = {}) {
     if (exact) return exact;
   }
   if (item?.isMainStep !== false) return null;
-  const parentId = normalizePlanId(item?.mainStepIndex ?? item?.parentIndex);
+  const parentId = normalizePlanId(item?.mainStepIndex);
   if (!parentId) return null;
   return resolvePlanAcceptanceForPlanId(bucket, parentId);
 }

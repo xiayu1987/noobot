@@ -116,7 +116,7 @@ function renderMarkdownSegment(inputText = "", renderEnv = {}) {
 }
 
 function buildCollapseHtml({ attrs = {}, innerMarkdown = "", renderEnv = {} } = {}) {
-  const kind = text(attrs.kind) || "unknown" || "unknown";
+  const kind = text(attrs.kind) || "unknown";
   const kindClass = normalizeCssModifier(kind);
   const title = String(attrs.title || kind).trim() || kind;
   const defaultState = (text(attrs.default) || "closed").toLowerCase();

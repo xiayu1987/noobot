@@ -11,7 +11,11 @@ import {
   buildPlanChecklistSystemContent,
   resolveCompletePlanChecklistText,
 } from "../../src/capabilities/handlers/shared/plan/checklist-context.js";
-import { applyPhaseAcceptanceReportToPlanStatus } from "../../src/capabilities/handlers/shared/plan/acceptance-status.js";
+import {
+  applyPhaseAcceptanceReportToPlanStatus,
+  resolvePlanAcceptanceForChecklistItem,
+} from "../../src/capabilities/handlers/shared/plan/acceptance-status.js";
+import { normalizeChecklistItem } from "../../src/capabilities/handlers/shared/checklist-utils.js";
 
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({
@@ -106,4 +110,15 @@ test("phase acceptance status is written back to complete plan checklist context
   const report = buildAcceptanceReport({ bucket, state: { locale: "zh-CN", signals: {} } });
   assert.equal(report.finalPlanChecklist[0].status, "completed");
   assert.equal(report.finalPlanChecklist[0].statusSource, "plan_acceptance_status");
+});
+
+test("sub-plan acceptance resolves its parent only through the normalized mainStepIndex", () => {
+  const bucket = { planAcceptanceStatusByPlanId: { 1: { planId: "1", status: "pass" } } };
+  const normalized = normalizeChecklistItem({ index: 7, parentIndex: 1 }, 0);
+  assert.equal(normalized.mainStepIndex, 1);
+  assert.equal(resolvePlanAcceptanceForChecklistItem(bucket, normalized)?.status, "pass");
+  assert.equal(
+    resolvePlanAcceptanceForChecklistItem(bucket, { index: 7, isMainStep: false, parentIndex: 1 }),
+    null,
+  );
 });

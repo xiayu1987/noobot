@@ -103,10 +103,7 @@ async function transferAgentPluginSummaryInjection({
   agentContext = null,
   ...options
 } = {}) {
-  const injectMode =
-    text(options?.injectMode || options?.summaryInjectMode || "full").toLowerCase() === "summary"
-      ? "summary"
-      : "full";
+  const injectMode = text(options?.injectMode).toLowerCase() === "summary" ? "summary" : "full";
   const fullText = firstText(
     options?.fullText,
     options?.rawSummaryText,
