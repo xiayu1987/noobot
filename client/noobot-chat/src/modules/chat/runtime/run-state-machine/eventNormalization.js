@@ -61,7 +61,6 @@ function resolveTurnState(rawEvent = {}) {
 
 function resolveEventState(type, rawEvent, wireState) {
   if (AUTHORITATIVE_EVENT_TYPES.has(type)) return resolveTurnState(rawEvent);
-  if (type === SESSION_RUN_EVENT.LOCAL_FAILURE) return normalizeState(rawEvent?.failureState);
   return wireState;
 }
 

@@ -35,13 +35,13 @@ describe("normalizeSessionRunEvent", () => {
     expect(normalized.failure).toEqual({ phase: "model" });
   });
 
-  it("derives state from failureState for local failure events", () => {
+  it("treats local_failure as a non-protocol event without failureState derivation", () => {
     const normalized = normalizeSessionRunEvent({
-      type: SESSION_RUN_EVENT.LOCAL_FAILURE,
+      type: "local_failure",
       failureState: "error",
       state: "running",
     });
-    expect(normalized.state).toBe("error");
+    expect(normalized.state).toBe("sending");
     expect(normalized.authoritativeTurnState).toBe("");
   });
 

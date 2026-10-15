@@ -417,7 +417,7 @@ describe("turn runtime interaction lifecycle", () => {
       processingStarted,
       processingCompleted,
       { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED },
-      { type: SESSION_RUN_EVENT.LOCAL_FAILURE },
+      { type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED },
     ]) {
       expect(reduceTurnRuntimeEvent(current, { ...identity, ...event })).toMatchObject({
         applied: false,

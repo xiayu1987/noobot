@@ -103,7 +103,6 @@ export const SESSION_RUN_EVENT = Object.freeze({
   BACKEND_CHANNEL_STATE: "backend_channel_state",
   BACKEND_TURN_LIFECYCLE: "backend_turn_lifecycle",
   TERMINAL_RESOLVED: "turn_terminal_resolved",
-  LOCAL_FAILURE: "local_failure",
   LOCAL_RESET: "local_reset",
 });
 
