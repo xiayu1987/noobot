@@ -31,8 +31,7 @@ export function summarizeStateMachineMessage(message = {}) {
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.messageRole || message.type || "",
     sessionId: message.sessionId || message.owner?.sessionId || "",
-    dialogProcessId:
-      message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
+    dialogProcessId: message.dialogProcessId || message.owner?.dialogProcessId || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",
     pending: message.pending === true,
     channelState: channelState?.state || "",

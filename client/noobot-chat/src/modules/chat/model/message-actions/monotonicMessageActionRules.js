@@ -20,11 +20,8 @@ function normalizeMessageRole(messageItem = {}) {
   const explicitRole = normalizeText(
     messageItem?.role ||
       messageItem?.messageRole ||
-      messageItem?.message_role ||
       messageItem?.authorRole ||
-      messageItem?.author_role ||
-      messageItem?.senderRole ||
-      messageItem?.sender_role,
+      messageItem?.senderRole,
   );
   if (explicitRole === "human") return "user";
   if (explicitRole === "ai" || explicitRole === "bot") return "assistant";
@@ -47,43 +44,24 @@ function firstIdentityValue(...values) {
   return "";
 }
 function getMessagePrimaryId(messageItem = {}) {
-  return normalizeIdentityValue(
-    messageItem?.messageId ||
-      messageItem?.message_id ||
-      messageItem?.clientMessageId ||
-      messageItem?.client_message_id,
-  );
+  return normalizeIdentityValue(messageItem?.messageId);
 }
 function getMessageDialogProcessId(messageItem = {}) {
   return normalizeIdentityValue(
     firstIdentityValue(
       messageItem?.dialogProcessId,
-      messageItem?.dialog_process_id,
       messageItem?.dialogId,
-      messageItem?.dialog_id,
       messageItem?.channelState?.dialogProcessId,
-      messageItem?.channelState?.dialog_process_id,
       messageItem?.channelState?.dialogId,
-      messageItem?.channelState?.dialog_id,
     ),
   );
 }
 function getMessageTurnScopeId(messageItem = {}) {
-  return normalizeIdentityValue(
-    messageItem?.turnScopeId ||
-      messageItem?.turn_scope_id ||
-      messageItem?.channelState?.turnScopeId ||
-      messageItem?.channelState?.turn_scope_id,
-  );
+  return normalizeIdentityValue(messageItem?.turnScopeId || messageItem?.channelState?.turnScopeId);
 }
 function getMessageSessionId(messageItem = {}) {
   return normalizeIdentityValue(
-    firstIdentityValue(
-      messageItem?.sessionId,
-      messageItem?.backend_session_id,
-      messageItem?.channelState?.sessionId,
-      messageItem?.channelState?.backend_session_id,
-    ),
+    firstIdentityValue(messageItem?.sessionId, messageItem?.channelState?.sessionId),
   );
 }
 function sameTurnScope(left = "", right = "") {

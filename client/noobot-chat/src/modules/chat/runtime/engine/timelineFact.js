@@ -26,7 +26,7 @@ const timestampOf = (value = {}) => {
 };
 
 const sequenceScopeOf = (value = {}) =>
-  text(value.sequenceScopeId || value.sequenceScope || value.messageId || value.message_id);
+  text(value.sequenceScopeId || value.sequenceScope || value.messageId);
 
 function resolveSequenceIdentity(value = {}) {
   return {

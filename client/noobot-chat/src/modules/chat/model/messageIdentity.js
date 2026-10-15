@@ -107,9 +107,7 @@ function normalizeTurnOwner(raw = {}) {
   return {
     sessionId: getMessageSessionId(owner) || getMessageSessionId(raw),
     turnScopeId: trim(owner?.turnScopeId),
-    dialogProcessId: trim(
-      owner?.dialogProcessId || owner?.dialog_process_id || raw?.ownerDialogProcessId,
-    ),
+    dialogProcessId: trim(owner?.dialogProcessId || raw?.ownerDialogProcessId),
     role: trim(owner?.role),
   };
 }
@@ -119,10 +117,8 @@ export function normalizeTurnMeta(raw = {}) {
   const normalized = {
     sessionId: getMessageSessionId(raw),
     turnScopeId: trim(raw?.turnScopeId),
-    dialogProcessId: trim(raw?.dialogProcessId || raw?.dialog_process_id || raw?.dialogId),
-    parentDialogProcessId: trim(
-      raw?.parentDialogProcessId || raw?.parent_dialog_process_id || raw?.parentDialogId,
-    ),
+    dialogProcessId: trim(raw?.dialogProcessId || raw?.dialogId),
+    parentDialogProcessId: trim(raw?.parentDialogProcessId || raw?.parentDialogId),
   };
   if (hasTurnOwner(owner)) normalized.owner = owner;
   return normalized;
@@ -132,11 +128,8 @@ export function getMessageRole(messageItem = {}) {
   const explicitRole = normalizeRoleAlias(
     messageItem?.role ||
       messageItem?.messageRole ||
-      messageItem?.message_role ||
       messageItem?.authorRole ||
-      messageItem?.author_role ||
-      messageItem?.senderRole ||
-      messageItem?.sender_role,
+      messageItem?.senderRole,
   );
   if (explicitRole) return explicitRole;
   if (hasNaturalUserMarker(messageItem)) return "user";

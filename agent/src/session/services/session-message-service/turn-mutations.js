@@ -168,7 +168,7 @@ function normalizeAnchoredCommandRequest({ userId, sessionId, anchor, commandId 
 
 function buildReplacementUserMessage(replacedUserMessage, fields, nowValue) {
   const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage);
-  for (const key of ["turnId", "turn_id", "messageId", "message_id", "id", "messageUid"]) {
+  for (const key of ["turnId", "messageId", "messageUid"]) {
     delete replacementBaseMessage[key];
   }
   const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(fields.attachments);

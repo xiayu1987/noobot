@@ -60,7 +60,7 @@ function conflicts(message, event) {
   const eventPresentationId = resolveMessageEventPresentationId(event.payload);
   if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId)
     return true;
-  const messageTurn = text(message.turnScopeId || message.turn_scope_id);
+  const messageTurn = text(message.turnScopeId);
   const eventTurn = text(event.identity.turnScopeId);
   return Boolean(eventTurn && messageTurn !== eventTurn);
 }

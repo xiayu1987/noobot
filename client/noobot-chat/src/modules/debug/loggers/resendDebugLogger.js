@@ -24,9 +24,8 @@ export function summarizeDebugMessage(message = {}) {
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.messageRole || message.type || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",
-    dialogProcessId:
-      message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
-    parentDialogProcessId: message.parentDialogProcessId || message.parent_dialog_process_id || "",
+    dialogProcessId: message.dialogProcessId || message.owner?.dialogProcessId || "",
+    parentDialogProcessId: message.parentDialogProcessId || "",
     pending: message.pending === true,
     terminalOutcome: message.terminalOutcome || "",
     status: message.status || "",

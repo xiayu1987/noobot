@@ -131,7 +131,7 @@ export function useThinkingDetailsPanel({
 
   async function fetchThinkingDetailForMessage(messageItem = {}, fetchDetailOverride = null) {
     const dialogProcessId = normalizeDialogProcessId(messageItem);
-    const turnScopeId = String(messageItem?.turnScopeId || messageItem?.turn_scope_id || "").trim();
+    const turnScopeId = String(messageItem?.turnScopeId || "").trim();
     if (!dialogProcessId && !turnScopeId) return null;
     const runFetchDetail =
       typeof fetchDetailOverride === "function"
@@ -256,9 +256,7 @@ export function useThinkingDetailsPanel({
     }
     const currentMessage = thinkingDetailsMessageItem.value;
     const dialogProcessId = normalizeDialogProcessId(currentMessage);
-    const turnScopeId = String(
-      currentMessage?.turnScopeId || currentMessage?.turn_scope_id || "",
-    ).trim();
+    const turnScopeId = String(currentMessage?.turnScopeId || "").trim();
     if (!dialogProcessId && !turnScopeId) return;
     const sourceMessage = findActiveCanonicalMessage(currentMessage);
     if (sourceMessage?.pending === true) {
@@ -283,8 +281,7 @@ export function useThinkingDetailsPanel({
         requestVersion !== detailRequestVersion ||
         !detail ||
         normalizeDialogProcessId(latestMessage) !== dialogProcessId ||
-        String(latestMessage?.turnScopeId || latestMessage?.turn_scope_id || "").trim() !==
-          turnScopeId
+        String(latestMessage?.turnScopeId || "").trim() !== turnScopeId
       )
         return;
       thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;

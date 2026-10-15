@@ -74,7 +74,7 @@ function addLiveBotProjection(targetMessages, targetSessionId, identity, context
   if (!botMessage) return;
   const sameSession = String(botMessage.sessionId || targetSessionId).trim() === targetSessionId;
   const sameTurn =
-    String(botMessage.turnScopeId || botMessage.turn_scope_id || context.turnScopeId).trim() ===
+    String(botMessage.turnScopeId || context.turnScopeId).trim() ===
     String(identity.turnScopeId || context.turnScopeId).trim();
   const isAssistant = String(botMessage.role || "assistant").trim() === "assistant";
   if (sameSession && sameTurn && isAssistant && !targetMessages.includes(botMessage)) {
