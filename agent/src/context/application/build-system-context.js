@@ -58,16 +58,9 @@ export function buildSystemRuntime({
   const runtimeWithStartup = dependencySourceSummary
     ? { ...dynamicInfo, desktopDependencySources: dependencySourceSummary }
     : dynamicInfo;
-  const runtimePatch =
-    runConfig?.systemRuntimePatch && typeof runConfig.systemRuntimePatch === "object"
-      ? runConfig.systemRuntimePatch
-      : null;
-  const mergedRuntime = runtimePatch
-    ? { ...runtimeWithStartup, ...runtimePatch }
-    : runtimeWithStartup;
   const protectedDialogProcessId = text(dynamicInfo?.dialogProcessId);
   return {
-    ...mergedRuntime,
+    ...runtimeWithStartup,
     ...(staticInfo && typeof staticInfo === "object" ? { staticInfo } : {}),
     ...(protectedDialogProcessId
       ? {
@@ -79,7 +72,7 @@ export function buildSystemRuntime({
       globalConfig,
       userId: dynamicInfo?.userId || userId,
     }),
-    parentSessionId: normalizeParentSessionId(mergedRuntime?.parentSessionId),
+    parentSessionId: normalizeParentSessionId(runtimeWithStartup?.parentSessionId),
   };
 }
 

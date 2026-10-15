@@ -557,7 +557,7 @@ test("buildSystemRuntime defaults isSuperUser to false when config is missing", 
   assert.equal(runtime.isSuperUser, false);
 });
 
-test("buildSystemRuntime does not allow systemRuntimePatch to grant super user", () => {
+test("buildSystemRuntime ignores runConfig identity overrides", () => {
   const runtime = buildSystemRuntime({
     globalConfig: { superAdmin: { userId: "super-root-user" } },
     userId: "regular-user",
@@ -568,7 +568,7 @@ test("buildSystemRuntime does not allow systemRuntimePatch to grant super user",
   });
 
   assert.equal(runtime.isSuperUser, false);
-  assert.equal(runtime.userId, "super-root-user");
+  assert.equal(runtime.userId, "regular-user");
 });
 
 function createBuilderForLongMemoryTest(
