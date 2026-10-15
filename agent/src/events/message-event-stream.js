@@ -187,18 +187,10 @@ function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
   const payload = deepFreeze({
     ...data,
     eventType: text(eventType),
-    parentSessionId: text(
-      data?.parentSessionId || stream.parentSessionId || state?.parentSessionId,
-    ),
-    dialogProcessId: text(
-      data?.dialogProcessId || state?.dialogProcessId || state?.currentDialogProcessId,
-    ),
-    ...(text(data?.workflowRunId || stream.workflowRunId)
-      ? { workflowRunId: text(data?.workflowRunId || stream.workflowRunId) }
-      : {}),
-    ...(text(data?.nodeExecutionId || stream.nodeExecutionId)
-      ? { nodeExecutionId: text(data?.nodeExecutionId || stream.nodeExecutionId) }
-      : {}),
+    parentSessionId: text(stream.parentSessionId),
+    dialogProcessId: text(state?.dialogProcessId),
+    ...(text(stream.workflowRunId) ? { workflowRunId: text(stream.workflowRunId) } : {}),
+    ...(text(stream.nodeExecutionId) ? { nodeExecutionId: text(stream.nodeExecutionId) } : {}),
     presentationMessageId,
     ...(modelMessageId ? { modelMessageId } : {}),
     ...(toolCallId ? { toolCallId } : {}),
@@ -210,11 +202,9 @@ function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
 function messageEventCommitInput(runtime, state, payload) {
   return {
     userId: text(runtime?.userId),
-    sessionId: text(state?.sessionId || runtime?.sessionId),
+    sessionId: text(state?.sessionId),
     parentSessionId: text(payload.parentSessionId),
-    turnScopeId: text(
-      state?.turnScopeId || state?.config?.turnScopeId || runtime?.runConfig?.turnScopeId,
-    ),
+    turnScopeId: text(state?.turnScopeId),
     messageId: text(state?.messageEventStream?.activeMessageId),
     executionId: text(runtime?.runConfig?.executionId),
     commandId: text(runtime?.runConfig?.commandId),

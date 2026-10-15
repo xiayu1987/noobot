@@ -96,8 +96,8 @@ function buildDispatchModelContext({
 function normalizeDispatchOwner({ owner, source, executionKind, origin, stage }) {
   return {
     owner: text(owner),
-    source: text(source) || "agent_dispatch" || "agent_dispatch",
-    executionKind: (text(executionKind) || "agent").toLowerCase() || "agent",
+    source: text(source) || "agent_dispatch",
+    executionKind: (text(executionKind) || "agent").toLowerCase(),
     origin: origin && typeof origin === "object" && !Array.isArray(origin) ? { ...origin } : {},
     stage: text(stage),
   };

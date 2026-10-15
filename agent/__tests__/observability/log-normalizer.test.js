@@ -22,6 +22,7 @@ import {
 function runtimeForTurn({
   messageId = "turn-message-1",
   presentationMessageId = "presentation-1",
+  streamIdentity = {},
 } = {}) {
   let sequence = 0;
   const runtime = {
@@ -54,9 +55,34 @@ function runtimeForTurn({
       },
     },
   };
-  bindAssistantMessageEventStream(runtime, { messageId, presentationMessageId });
+  bindAssistantMessageEventStream(runtime, { messageId, presentationMessageId, ...streamIdentity });
   return runtime;
 }
+
+test("message event payload identity comes only from the bound stream", async () => {
+  const runtime = runtimeForTurn({
+    streamIdentity: {
+      parentSessionId: "parent-bound",
+      workflowRunId: "run-bound",
+      nodeExecutionId: "node-bound",
+    },
+  });
+  runtime.systemRuntime.dialogProcessId = "dialog-bound";
+  beginAssistantMessageEventStream(runtime);
+  const envelope = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", {
+    text: "token",
+    parentSessionId: "parent-stale",
+    dialogProcessId: "dialog-stale",
+    workflowRunId: "run-stale",
+    nodeExecutionId: "node-stale",
+  });
+
+  assert.equal(envelope.payload.parentSessionId, "parent-bound");
+  assert.equal(envelope.payload.dialogProcessId, "dialog-bound");
+  assert.equal(envelope.payload.workflowRunId, "run-bound");
+  assert.equal(envelope.payload.nodeExecutionId, "node-bound");
+  assert.equal(envelope.identity.turnScopeId, "turn-1");
+});
 
 test("authoritative message events declare the message-event sequence domain", async () => {
   const emitted = [];
