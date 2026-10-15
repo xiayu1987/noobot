@@ -1,17 +1,29 @@
 # 回退链收敛清单
 
-本文档跟踪生产源码中尚未收敛的字段回退链。逐文件计数的唯一事实源是 `scripts/quality/fallback-chain-baseline.json`，守卫是 `scripts/check-fallback-chain-baseline.mjs`（已挂入 `npm run check:quality`）。下方模块表由守卫脚本生成，不手工编辑。
+本文档跟踪尚未收敛的字段回退写法。逐文件、按规则分组的计数唯一事实源是 `scripts/quality/fallback-chain-baseline.json`，守卫是 `scripts/check-fallback-chain-baseline.mjs`（已挂入 `npm run check:quality`）。下方模块表由守卫脚本生成，不手工编辑。
 
 ## 1. 判定口径
 
-一条回退链是值位置上的 `||` 或 `??` 链，且至少有两个操作数读取运行时数据的属性，例如 `ctx.runConfig.executionId || ctx.executionId`、`identity.sessionId || envelope.sessionId`。
+### 1.1 回退链（`fallbackChain`）
+
+值位置上的 `||` 或 `??` 链，且至少有两个操作数读取运行时数据的属性，例如 `ctx.runConfig.executionId || ctx.executionId`、`identity.sessionId || envelope.sessionId`。
 
 不计入：
 
 - 条件位置：`if`/`while`/`for` 条件、三元条件、`!`、`&&` 的操作数。
 - 常量表默认值：根对象为全大写标识符，例如 `error?.message || AGENT_PROXY_ERROR.X`。
 - 单字段默认值：`value || ""`、`options.limit ?? 20`。
-- 测试、vendor、workspace 等 `scripts/quality/source-inventory.mjs` 排除的路径；`.vue` 只统计 `<script>`，模板表达式不在统计内。
+- 非生产路径：以 `source-inventory.mjs` 的 `isFirstPartyProductionPath` 为准（排除测试文件、`__tests__`/`__mocks__`/`tests`、vendor、workspace 等）。
+
+### 1.2 内联 trim 兜底（`inlineTrim`）
+
+`String(x || d).trim()`、`String(x ?? d).trim()`：重复实现了 `@noobot/shared/value` 的 `text()`。改写为 `text(x)` 或 `text(x) || d`。
+
+- 范围：除测试文件（`isTestFilePath`）外的全部第一方代码，包含 `__tests__/helpers` 等夹具，因为夹具按同一协议构造数据。
+- 改写不是机械替换：`String(x || "").trim()` → `text(x)` 时，`0`/`false` 会从 `""` 变为 `"0"`/`"false"`；`String(x || "d").trim()` → `text(x) || "d"` 时，纯空白会从 `""` 变为 `"d"`。逐处确认写入方类型后再改。
+- 依赖边界：`shared` 内部用本地 `text`；`workspace-protocol` 零依赖；`scripts`、`user-template` 无 `package.json`。这些位置照常计数，清零时按各自边界处理。
+
+两条规则都只统计 `.vue` 的 `<script>`，模板表达式不在统计内。
 
 ## 2. 收敛流程
 
@@ -30,42 +42,44 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：1103 条，382 个文件。
+总计：回退链 1103 处 / 382 个文件；内联 trim 兜底 460 处 / 212 个文件。
 
-| 模块                             | 文件数 | 回退链 |
-| -------------------------------- | ------ | ------ |
-| `client/noobot-chat`             | 103    | 386    |
-| `agent`                          | 90     | 200    |
-| `plugin/noobot-plugin-workflow`  | 35     | 115    |
-| `plugin/noobot-plugin-harness`   | 30     | 90     |
-| `service`                        | 30     | 81     |
-| `authoritative-state`            | 5      | 31     |
-| `client/shared`                  | 12     | 31     |
-| `model-runtime`                  | 7      | 31     |
-| `agent-proxy`                    | 10     | 23     |
-| `context-protocol`               | 8      | 20     |
-| `path-resolver`                  | 4      | 15     |
-| `shared`                         | 3      | 11     |
-| `event-protocol`                 | 3      | 10     |
-| `scripts`                        | 6      | 8      |
-| `session-protocol`               | 4      | 7      |
-| `plugin/noobot-plugin-character` | 6      | 6      |
-| `session-repair`                 | 1      | 5      |
-| `client/startup`                 | 1      | 4      |
-| `connector-instances`            | 2      | 4      |
-| `user-template`                  | 2      | 4      |
-| `agent-config-protocol`          | 3      | 3      |
-| `i18n`                           | 2      | 3      |
-| `model-protocol`                 | 3      | 3      |
-| `memory-protocol`                | 2      | 2      |
-| `model-proxy`                    | 2      | 2      |
-| `workflow`                       | 2      | 2      |
-| `connector-protocol`             | 1      | 1      |
-| `platform-compatibility`         | 1      | 1      |
-| `plugin-protocol`                | 1      | 1      |
-| `runtime-events`                 | 1      | 1      |
-| `sanitize`                       | 1      | 1      |
-| `semantic-transfer-protocol`     | 1      | 1      |
+| 模块                             | 回退链 | 内联 trim 兜底 |
+| -------------------------------- | ------ | -------------- |
+| `client/noobot-chat`             | 386    | 110            |
+| `agent`                          | 200    | 81             |
+| `plugin/noobot-plugin-workflow`  | 115    | 50             |
+| `plugin/noobot-plugin-harness`   | 90     | 74             |
+| `service`                        | 81     | 31             |
+| `agent-proxy`                    | 23     | 23             |
+| `model-runtime`                  | 31     | 7              |
+| `client/shared`                  | 31     | 1              |
+| `authoritative-state`            | 31     | 0              |
+| `shared`                         | 11     | 17             |
+| `context-protocol`               | 20     | 2              |
+| `path-resolver`                  | 15     | 3              |
+| `user-template`                  | 4      | 12             |
+| `workflow`                       | 2      | 11             |
+| `scripts`                        | 8      | 4              |
+| `connector-instances`            | 4      | 7              |
+| `event-protocol`                 | 10     | 1              |
+| `model-protocol`                 | 3      | 7              |
+| `session-protocol`               | 7      | 2              |
+| `plugin/noobot-plugin-character` | 6      | 1              |
+| `session-repair`                 | 5      | 0              |
+| `agent-config-protocol`          | 3      | 1              |
+| `client/startup`                 | 4      | 0              |
+| `i18n`                           | 3      | 1              |
+| `memory-protocol`                | 2      | 2              |
+| `model-proxy`                    | 2      | 2              |
+| `connector-protocol`             | 1      | 2              |
+| `runtime-events`                 | 1      | 2              |
+| `workspace-protocol`             | 0      | 3              |
+| `platform-compatibility`         | 1      | 1              |
+| `sanitize`                       | 1      | 1              |
+| `execution-isolation-protocol`   | 0      | 1              |
+| `plugin-protocol`                | 1      | 0              |
+| `semantic-transfer-protocol`     | 1      | 0              |
 
 <!-- fallback-chain-modules:end -->
 
@@ -86,4 +100,5 @@
 | `716593609` | workflow        | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                      |
 | `74c3842c1` | workflow        | abort 判定改用 session-protocol 执行中止协议                                                                                |
 | `08148dccd` | scripts         | 回退链守卫与本清单                                                                                                          |
-| 本批        | agent、workflow | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed` |
+| `b62dfd769` | agent、workflow | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed` |
+| 守卫分组    | scripts         | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                           |

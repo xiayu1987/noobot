@@ -9,7 +9,11 @@ import { pathToFileURL } from "node:url";
 import * as espree from "espree";
 import * as prettier from "prettier";
 import { parse as parseVue } from "vue-eslint-parser";
-import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
+import {
+  getFirstPartyCodeFiles,
+  isFirstPartyProductionPath,
+  isTestFilePath,
+} from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 export const BASELINE_PATH = path.join(root, "scripts/quality/fallback-chain-baseline.json");
@@ -56,6 +60,20 @@ function isConditionPosition(node, parent) {
   return parent.type === "LogicalExpression" && parent.operator === "&&";
 }
 
+function walk(node, parent, visitor) {
+  if (!node || typeof node.type !== "string") return;
+  visitor(node, parent);
+  for (const [key, value] of Object.entries(node)) {
+    if (SKIPPED_KEYS.has(key)) continue;
+    if (Array.isArray(value)) value.forEach((child) => walk(child, node, visitor));
+    else if (value && typeof value.type === "string") walk(value, node, visitor);
+  }
+}
+
+function snippet(source, node) {
+  return { line: node.loc.start.line, code: source.slice(...node.range).replace(/\s+/g, " ") };
+}
+
 function parseSource(source, filename) {
   const options = { ecmaVersion: "latest", sourceType: "module", loc: true, range: true };
   if (filename.endsWith(".vue")) return parseVue(source, options);
@@ -64,43 +82,75 @@ function parseSource(source, filename) {
 
 export function findFallbackChains(source, filename = "source.js") {
   const chains = [];
-  const visit = (node, parent) => {
-    if (!node || typeof node.type !== "string") return;
+  walk(parseSource(source, filename), null, (node, parent) => {
     const isChainHead =
       node.type === "LogicalExpression" &&
       FALLBACK_OPERATORS.has(node.operator) &&
       !(parent?.type === "LogicalExpression" && parent.operator === node.operator);
-    if (isChainHead && !isConditionPosition(node, parent)) {
-      const operands = flattenChain(node, node.operator);
-      if (operands.filter(isFieldOperand).length >= 2) {
-        chains.push({
-          line: node.loc.start.line,
-          code: source.slice(node.range[0], node.range[1]).replace(/\s+/g, " "),
-        });
-      }
-    }
-    for (const [key, value] of Object.entries(node)) {
-      if (SKIPPED_KEYS.has(key)) continue;
-      if (Array.isArray(value)) value.forEach((child) => visit(child, node));
-      else if (value && typeof value.type === "string") visit(value, node);
-    }
-  };
-  visit(parseSource(source, filename), null);
+    if (!isChainHead || isConditionPosition(node, parent)) return;
+    const operands = flattenChain(node, node.operator);
+    if (operands.filter(isFieldOperand).length >= 2) chains.push(snippet(source, node));
+  });
   return chains;
 }
 
-export async function measureFallbackChains({ repositoryRoot = root } = {}) {
-  const files = await getFirstPartyProductionFiles({
+function isStringCall(node) {
+  return (
+    node.type === "CallExpression" &&
+    node.callee.type === "Identifier" &&
+    node.callee.name === "String" &&
+    node.arguments.length === 1
+  );
+}
+
+export function findInlineTrimFallbacks(source, filename = "source.js") {
+  const hits = [];
+  walk(parseSource(source, filename), null, (node) => {
+    if (node.type !== "CallExpression" || node.arguments.length) return;
+    const callee = unwrapMember(node.callee);
+    if (callee.type !== "MemberExpression" || callee.computed) return;
+    if (callee.property.name !== "trim" || !isStringCall(callee.object)) return;
+    const argument = callee.object.arguments[0];
+    if (argument.type === "LogicalExpression" && FALLBACK_OPERATORS.has(argument.operator)) {
+      hits.push(snippet(source, node));
+    }
+  });
+  return hits;
+}
+
+export const RULES = Object.freeze({
+  fallbackChain: {
+    title: "回退链",
+    find: findFallbackChains,
+    includeFile: isFirstPartyProductionPath,
+    hint: "read the single writer field instead",
+  },
+  inlineTrim: {
+    title: "内联 trim 兜底",
+    find: findInlineTrimFallbacks,
+    includeFile: (file) => !isTestFilePath(file),
+    hint: 'use text(x) from "@noobot/shared/value" instead of String(x || d).trim()',
+  },
+});
+
+export async function measureRules({ repositoryRoot = root } = {}) {
+  const files = await getFirstPartyCodeFiles({
     repositoryRoot,
     extensions: [".js", ".mjs", ".cjs", ".jsx", ".vue"],
+    includeTests: true,
   });
-  const counts = {};
+  const measured = Object.fromEntries(Object.keys(RULES).map((name) => [name, {}]));
   for (const relativePath of files) {
+    const file = relativePath.replaceAll("\\", "/");
+    const rules = Object.entries(RULES).filter(([, rule]) => rule.includeFile(file));
+    if (!rules.length) continue;
     const source = await readFile(path.join(repositoryRoot, relativePath), "utf8");
-    const total = findFallbackChains(source, relativePath).length;
-    if (total) counts[relativePath.replaceAll("\\", "/")] = total;
+    for (const [name, rule] of rules) {
+      const total = rule.find(source, file).length;
+      if (total) measured[name][file] = total;
+    }
   }
-  return counts;
+  return measured;
 }
 
 export function compareWithBaseline(measured, baseline) {
@@ -128,26 +178,34 @@ export function moduleOf(file) {
 }
 
 export function renderModuleSection(baseline) {
+  const ruleNames = Object.keys(RULES);
   const modules = {};
-  for (const [file, count] of Object.entries(baseline)) {
-    const name = moduleOf(file);
-    modules[name] ??= { files: 0, chains: 0 };
-    modules[name].files += 1;
-    modules[name].chains += count;
+  for (const name of ruleNames) {
+    for (const [file, count] of Object.entries(baseline[name] ?? {})) {
+      const row = (modules[moduleOf(file)] ??= Object.fromEntries(ruleNames.map((n) => [n, 0])));
+      row[name] += count;
+    }
   }
+  const total = (row) => ruleNames.reduce((sum, name) => sum + row[name], 0);
   const rows = Object.entries(modules)
     .sort(
       ([leftName, left], [rightName, right]) =>
-        right.chains - left.chains || leftName.localeCompare(rightName),
+        total(right) - total(left) || leftName.localeCompare(rightName),
     )
-    .map(([name, { files, chains }]) => `| \`${name}\` | ${files} | ${chains} |`);
+    .map(
+      ([module, row]) => `| \`${module}\` | ${ruleNames.map((name) => row[name]).join(" | ")} |`,
+    );
+  const totals = ruleNames.map((name) => {
+    const counts = baseline[name] ?? {};
+    return `${RULES[name].title} ${sumCounts(counts)} 处 / ${Object.keys(counts).length} 个文件`;
+  });
   return [
     MODULE_SECTION_START,
     "",
-    `总计：${sumCounts(baseline)} 条，${Object.keys(baseline).length} 个文件。`,
+    `总计：${totals.join("；")}。`,
     "",
-    "| 模块 | 文件数 | 回退链 |",
-    "| --- | --- | --- |",
+    `| 模块 | ${ruleNames.map((name) => RULES[name].title).join(" | ")} |`,
+    `| --- | ${ruleNames.map(() => "---").join(" | ")} |`,
     ...rows,
     "",
     MODULE_SECTION_END,
@@ -180,23 +238,37 @@ function sortCounts(counts) {
   );
 }
 
+function describeTotals(counts) {
+  return Object.keys(RULES)
+    .map((name) => `${name}=${sumCounts(counts[name] ?? {})}`)
+    .join(", ");
+}
+
 async function main(argv) {
-  const measured = await measureFallbackChains();
+  const measured = await measureRules();
   const baseline = JSON.parse(await readFile(BASELINE_PATH, "utf8"));
-  const { increases, decreases } = compareWithBaseline(measured, baseline);
+  const increases = [];
+  const decreases = [];
+  for (const [name, rule] of Object.entries(RULES)) {
+    const result = compareWithBaseline(measured[name], baseline[name] ?? {});
+    if (result.increases.length) {
+      increases.push(`[${name}] ${rule.hint}:`, ...result.increases);
+    }
+    decreases.push(...result.decreases.map((line) => `[${name}] ${line}`));
+  }
   if (increases.length) {
-    console.error(
-      `New fallback chains are not allowed; read the single writer field instead:\n${increases.join("\n")}`,
-    );
+    console.error(`New fallback patterns are not allowed:\n${increases.join("\n")}`);
     process.exitCode = 1;
     return;
   }
   const markdown = await readFile(INVENTORY_DOC_PATH, "utf8");
   if (argv.includes("--update")) {
-    const lowered = sortCounts(measured);
+    const lowered = Object.fromEntries(
+      Object.keys(RULES).map((name) => [name, sortCounts(measured[name])]),
+    );
     await writeFile(BASELINE_PATH, `${JSON.stringify(lowered, null, 2)}\n`);
     await writeFile(INVENTORY_DOC_PATH, await renderInventoryDoc(markdown, lowered));
-    console.log(`Fallback chain baseline lowered to ${sumCounts(lowered)}`);
+    console.log(`Fallback baseline lowered to ${describeTotals(lowered)}`);
     return;
   }
   const violations = decreases.map((line) => `stale baseline, run with --update: ${line}`);
@@ -208,7 +280,7 @@ async function main(argv) {
     process.exitCode = 1;
     return;
   }
-  console.log(`Fallback chain baseline passed (${sumCounts(measured)} chains)`);
+  console.log(`Fallback baseline passed (${describeTotals(measured)})`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href)

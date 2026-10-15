@@ -8,6 +8,8 @@ import test from "node:test";
 import {
   compareWithBaseline,
   findFallbackChains,
+  findInlineTrimFallbacks,
+  RULES,
   renderModuleSection,
   replaceModuleSection,
 } from "./check-fallback-chain-baseline.mjs";
@@ -37,6 +39,30 @@ test("scans vue script blocks", () => {
   assert.equal(findFallbackChains(source, "Component.vue").length, 1);
 });
 
+test("detects String(x || d).trim() and String(x ?? d).trim() re-implementations of text()", () => {
+  assert.equal(
+    findInlineTrimFallbacks('const v = String(runConfig.commandId || "").trim();').length,
+    1,
+  );
+  assert.equal(findInlineTrimFallbacks('const v = String(a ?? "").trim();').length, 1);
+  assert.equal(findInlineTrimFallbacks('const v = String(a || "message").trim();').length, 1);
+  assert.equal(findInlineTrimFallbacks('const v = String(a?.b || "").trim?.();').length, 1);
+});
+
+test("ignores text(), plain String().trim() and non-fallback arguments", () => {
+  assert.equal(findInlineTrimFallbacks('const v = text(a) || "d";').length, 0);
+  assert.equal(findInlineTrimFallbacks("const v = String(a).trim();").length, 0);
+  assert.equal(findInlineTrimFallbacks("const v = String(a && b).trim();").length, 0);
+  assert.equal(findInlineTrimFallbacks('const v = String(a || "").toLowerCase();').length, 0);
+});
+
+test("rules share the source-inventory test path predicate", () => {
+  assert.equal(RULES.fallbackChain.includeFile("agent/__tests__/helpers/fixture.js"), false);
+  assert.equal(RULES.inlineTrim.includeFile("agent/__tests__/helpers/fixture.js"), true);
+  assert.equal(RULES.inlineTrim.includeFile("agent/src/a.test.ts"), false);
+  assert.equal(RULES.fallbackChain.includeFile("agent/src/a.js"), true);
+});
+
 test("baseline only allows decreases and flags stale entries", () => {
   const { increases, decreases } = compareWithBaseline(
     { "a.js": 3, "c.js": 1 },
@@ -46,12 +72,15 @@ test("baseline only allows decreases and flags stale entries", () => {
   assert.deepEqual(decreases, ["b.js: 0 below baseline 4"]);
 });
 
-test("module table is generated from the baseline", () => {
-  const baseline = { "agent/src/a.js": 2, "plugin/noobot-plugin-workflow/src/b.js": 1 };
+test("module table is generated from the grouped baseline", () => {
+  const baseline = {
+    fallbackChain: { "agent/src/a.js": 2, "plugin/noobot-plugin-workflow/src/b.js": 1 },
+    inlineTrim: { "agent/src/a.js": 4 },
+  };
   const section = renderModuleSection(baseline);
-  assert.match(section, /总计：3 条，2 个文件。/);
-  assert.match(section, /\| `agent` \| 1 \| 2 \|/);
-  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 1 \|/);
+  assert.match(section, /总计：回退链 3 处 \/ 2 个文件；内联 trim 兜底 4 处 \/ 1 个文件。/);
+  assert.match(section, /\| `agent` \| 2 \| 4 \|/);
+  assert.match(section, /\| `plugin\/noobot-plugin-workflow` \| 1 \| 0 \|/);
   const doc =
     "head\n<!-- fallback-chain-modules:start -->\nold\n<!-- fallback-chain-modules:end -->\ntail";
   assert.equal(replaceModuleSection(doc, baseline), `head\n${section}\ntail`);

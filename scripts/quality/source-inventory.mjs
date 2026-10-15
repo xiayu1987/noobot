@@ -60,10 +60,14 @@ export function isFirstPartyProductionPath(relativePath = "") {
   return isFirstPartyCodePath(relativePath, { includeTests: false });
 }
 
+export function isTestFilePath(relativePath = "") {
+  return testFilePattern.test(relativePath);
+}
+
 export function isFirstPartyCodePath(relativePath = "", { includeTests = true } = {}) {
   const normalized = String(relativePath || "").replaceAll("\\", "/");
   if (!normalized) return false;
-  if (!includeTests && testFilePattern.test(normalized)) return false;
+  if (!includeTests && isTestFilePath(normalized)) return false;
   return !normalized
     .split("/")
     .some(
