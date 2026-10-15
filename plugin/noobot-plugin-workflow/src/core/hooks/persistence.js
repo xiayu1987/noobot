@@ -208,13 +208,13 @@ export async function persistWorkflowNodeResultAttachment({
     businessPoint: "task_result",
     messages: [
       {
+        id: nodeId,
         nodeId,
         nodeName,
         content: body,
         meta: buildNodeResultTransferMeta({ identity, subSession, normalizedTransition }),
       },
     ],
-    nextSteps: [],
     forceAttachment: true,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: "workflow_node_agent_result",
@@ -261,7 +261,6 @@ async function transferWorkflowFinalAttachment({
         },
       },
     ],
-    nextSteps: [],
     forceAttachment: true,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: `workflow_${normalizedPhase}_attachment_summary`,

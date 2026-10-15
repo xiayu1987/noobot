@@ -51,6 +51,29 @@ test("subagent results are separate V2 envelopes with producer identity", async 
   );
 });
 
+test("subagent messages carry identity only through id and nodeName", async () => {
+  await assert.rejects(
+    transferSemanticContent({
+      scenario: "workflow",
+      strategy: "workflow_subagent",
+      identity: identity(),
+      runtime: attachmentRuntime(),
+      messages: [{ stepId: "node-a", nodeId: "a", nodeName: "A", content: "result-a" }],
+    }),
+    /semantic_transfer_subagent_message_identity_required/,
+  );
+  await assert.rejects(
+    transferSemanticContent({
+      scenario: "workflow",
+      strategy: "workflow_subagent",
+      identity: identity(),
+      runtime: attachmentRuntime(),
+      messages: [{ id: "node-a", nodeId: "a", name: "A", content: "result-a" }],
+    }),
+    /semantic_transfer_subagent_message_node_name_required/,
+  );
+});
+
 test("agent plugin stage stores detail as an attachment reference and final message stays direct", async () => {
   const staged = await transferSemanticContent({
     scenario: "harness",

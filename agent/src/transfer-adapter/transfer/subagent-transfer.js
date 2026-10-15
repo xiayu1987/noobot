@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { firstText, isPlainObject, text } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   directTransfer,
@@ -15,35 +15,15 @@ import {
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 
-function normalizeNextSteps(nextSteps = []) {
-  return (Array.isArray(nextSteps) ? nextSteps : [])
-    .map((item = {}) => ({
-      nodeId: firstText(item?.nodeId, item?.id, item),
-      nodeName: firstText(item?.nodeName, item?.name),
-    }))
-    .filter((item) => item.nodeId);
-}
-
 function normalizeSubAgentMessages(messages = []) {
-  const list = Array.isArray(messages) ? messages : [messages];
-  return list
-    .map((item = {}) => {
-      if (typeof item === "string") {
-        return {
-          id: "",
-          nodeId: "",
-          nodeName: "",
-          content: item,
-        };
-      }
-      return {
-        id: firstText(item?.id, item?.stepId, item?.nodeId),
-        nodeId: firstText(item?.nodeId),
-        nodeName: firstText(item?.nodeName, item?.name),
-        content: String(item?.content || item?.output || item?.text || ""),
-        meta: isPlainObject(item?.meta) ? item.meta : {},
-      };
-    })
+  return messages
+    .map((item = {}) => ({
+      id: text(item.id),
+      nodeId: text(item.nodeId),
+      nodeName: text(item.nodeName),
+      content: String(item.content ?? ""),
+      meta: isPlainObject(item.meta) ? item.meta : {},
+    }))
     .filter((item) => text(item.content));
 }
 
@@ -51,7 +31,6 @@ export async function transferBotPluginSubagentResult({
   runtime = {},
   agentContext = null,
   messages = [],
-  nextSteps = [],
   forceAttachment = true,
   attachmentSource = "model",
   generationSource = "workflow_subagent",
@@ -71,13 +50,12 @@ export async function transferBotPluginSubagentResult({
     fallbackSource: TRANSFER_SOURCE.PLUGIN,
     fallbackReason: TRANSFER_REASON.WORKFLOW_SUBAGENT,
   });
-  normalizeNextSteps(nextSteps);
   const persistedItems = [];
 
-  for (const [index, item] of normalizedMessages.entries()) {
-    const itemContent = String(item?.content || "");
-    if (!itemContent) continue;
+  for (const item of normalizedMessages) {
+    const itemContent = item.content;
     if (!item.id) throw new Error("semantic_transfer_subagent_message_identity_required");
+    if (!item.nodeName) throw new Error("semantic_transfer_subagent_message_node_name_required");
     const itemIdentity = {
       ...identity,
       transferId: `${identity.transferId}:subagent:${item.id}`,
@@ -106,13 +84,7 @@ export async function transferBotPluginSubagentResult({
       continue;
     }
 
-    const name = [
-      "bot-plugin-node",
-      firstText(item?.nodeName, item?.nodeId, item?.id, String(index + 1))
-        .replace(/\s+/g, "-")
-        .toLowerCase(),
-      "result.md",
-    ]
+    const name = ["bot-plugin-node", item.nodeName.replace(/\s+/g, "-").toLowerCase(), "result.md"]
       .filter(Boolean)
       .join("-");
     const persisted = await persistTransferFile({
