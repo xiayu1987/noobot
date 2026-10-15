@@ -31,7 +31,7 @@ function splitThinkContent(value = "") {
   return { visible: visible.join(""), reasoning };
 }
 
-function text(value) {
+function extractContentText(value) {
   if (typeof value === "string") return value;
   if (Array.isArray(value))
     return value
@@ -42,7 +42,7 @@ function text(value) {
 }
 
 export function extractResponseText(response = {}) {
-  const raw = text(response.content) || response.text || response.output || "";
+  const raw = extractContentText(response.content) || response.text || response.output || "";
   return splitThinkContent(raw).visible.trim();
 }
 
@@ -56,10 +56,10 @@ export function extractReasoningText(response = {}) {
     response.response_metadata?.reasoningContent,
     response.raw?.choices?.[0]?.message?.reasoning_content,
   ]) {
-    const output = text(value);
+    const output = extractContentText(value);
     if (output) return output;
   }
-  const raw = text(response.content) || response.text || response.output || "";
+  const raw = extractContentText(response.content) || response.text || response.output || "";
   return splitThinkContent(raw).reasoning.join("\n");
 }
 

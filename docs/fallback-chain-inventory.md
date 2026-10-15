@@ -50,7 +50,7 @@
 
 <!-- fallback-chain-modules:start -->
 
-总计：回退链 1103 处 / 382 个文件；内联 trim 兜底 620 处 / 268 个文件；遮蔽 text() 0 处 / 0 个文件。
+总计：回退链 1103 处 / 382 个文件；内联 trim 兜底 617 处 / 268 个文件；遮蔽 text() 0 处 / 0 个文件。
 
 | 模块                             | 回退链 | 内联 trim 兜底 | 遮蔽 text() |
 | -------------------------------- | ------ | -------------- | ----------- |
@@ -65,7 +65,7 @@
 | `context-protocol`               | 20     | 12             | 0           |
 | `agent-proxy`                    | 23     | 8              | 0           |
 | `path-resolver`                  | 15     | 7              | 0           |
-| `shared`                         | 11     | 9              | 0           |
+| `shared`                         | 11     | 6              | 0           |
 | `user-template`                  | 4      | 12             | 0           |
 | `event-protocol`                 | 10     | 4              | 0           |
 | `scripts`                        | 8      | 3              | 0           |
@@ -101,12 +101,13 @@
 
 ## 5. 批次记录
 
-| 提交        | 模块            | 内容                                                                                                                        |
-| ----------- | --------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `3d9f986d3` | workflow        | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写                                                                          |
-| `716593609` | workflow        | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                      |
-| `74c3842c1` | workflow        | abort 判定改用 session-protocol 执行中止协议                                                                                |
-| `08148dccd` | scripts         | 回退链守卫与本清单                                                                                                          |
-| `b62dfd769` | agent、workflow | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed` |
-| `5e8207f13` | scripts         | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                           |
-| 待回填      | 全仓            | 单字段 `String(x \|\| d).trim()` 301 处改为 `text(x)`/`(text(x) \|\| d)`；82 处 `text` 遮蔽改名；守卫增加 `textShadow` 规则 |
+| 提交        | 模块                  | 内容                                                                                                                                 |
+| ----------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `3d9f986d3` | workflow              | 运行身份只从 `ctx.runConfig` 读一次，删除 ctx 回写                                                                                   |
+| `716593609` | workflow              | 删除 `nodeAgentExecutor`，DSL 只读 `task`、`stateType`                                                                               |
+| `74c3842c1` | workflow              | abort 判定改用 session-protocol 执行中止协议                                                                                         |
+| `08148dccd` | scripts               | 回退链守卫与本清单                                                                                                                   |
+| `b62dfd769` | agent、workflow       | `commandId` 由 `applyCanonicalRunMessageIdentity` 和 detached strategy 唯一写入，四处读取回退删除；删除 `commandIdConsumed`          |
+| `5e8207f13` | scripts               | 守卫增加 `inlineTrim` 规则，基线按规则分组；测试路径判定统一到 `source-inventory`                                                    |
+| `acec6da42` | 全仓                  | 单字段 `String(x \|\| d).trim()` 301 处改为 `text(x)`/`(text(x) \|\| d)`；82 处 `text` 遮蔽改名；守卫增加 `textShadow` 规则          |
+| 待回填      | shared、model-runtime | `message-diagnostics` 单字段 trim 改用 `text()`；`response-normalizer` 本地内容提取器改名 `extractContentText`，消除与 `text()` 同名 |

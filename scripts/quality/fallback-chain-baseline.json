@@ -642,7 +642,7 @@
     "service/ws/chat-websocket/stop-lifecycle.js": 1,
     "service/ws/chat-websocket/terminal-outcomes.js": 1,
     "session-repair/src/document-migration.js": 4,
-    "shared/message-diagnostics.js": 7,
+    "shared/message-diagnostics.js": 4,
     "shared/runtime-events-config.js": 1,
     "shared/value.js": 1,
     "user-template/default-user/services/weather-service-handler.js": 3,

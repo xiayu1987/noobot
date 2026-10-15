@@ -7,12 +7,13 @@ import crypto from "node:crypto";
 
 import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
 import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
+import { text } from "./value.js";
 
 const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
 const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
 
 function readField(message = {}, field = "") {
-  const key = String(field || "").trim();
+  const key = text(field);
   if (!key || !message || typeof message !== "object") return "";
   return String(
     message?.[key] ??
@@ -33,10 +34,10 @@ function resolveContent(message = {}) {
   }
 }
 
-function textHash(text = "") {
+function textHash(value = "") {
   return crypto
     .createHash("sha256")
-    .update(String(text || ""))
+    .update(String(value || ""))
     .digest("hex")
     .slice(0, 16);
 }
@@ -59,7 +60,7 @@ function providerMessageValue(message = {}) {
   const dictionary = typeof message?.toDict === "function" ? message.toDict() : null;
   const dictionaryData =
     dictionary?.data && typeof dictionary.data === "object" ? dictionary.data : {};
-  const role = resolveDiagnosticRole(message) || String(dictionary?.type || "").trim();
+  const role = resolveDiagnosticRole(message) || text(dictionary?.type);
   const content = firstDefined(
     message?.content,
     message?.lc_kwargs?.content,
@@ -106,7 +107,7 @@ export function fingerprintDiagnosticMessages(messages = []) {
 }
 
 function incrementCount(counts, key) {
-  const normalized = String(key || "unknown").trim() || "unknown";
+  const normalized = text(key) || "unknown";
   counts[normalized] = Number(counts[normalized] || 0) + 1;
 }
 
