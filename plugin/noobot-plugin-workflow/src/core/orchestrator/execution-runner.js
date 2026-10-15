@@ -33,6 +33,7 @@ import {
 import {
   commitAndPublishWorkflowNodeState,
   resolveCommittedChildTerminal,
+  CHILD_TERMINAL_RECEIPT_INVALID_CODE,
   settleUnstartedWorkflowNodes,
 } from "./node-state-commit.js";
 import { text } from "@noobot/shared/value";
@@ -252,10 +253,13 @@ async function commitWaveChildTerminal({
 
 function shouldCommitWaveNodeFailure({ error, nodeState, nodeIdentity, runningFact } = {}) {
   if (!nodeState.repository || !nodeIdentity || !runningFact?.node) return false;
-  return error?.nodeTerminalCommitted !== true && error?.nodeTerminalReceiptRejected !== true;
+  return error?.nodeTerminalCommitted !== true;
 }
 
 function toWaveNodeFailure(error) {
+  if (error?.code === CHILD_TERMINAL_RECEIPT_INVALID_CODE) {
+    return { source: "workflow", code: error.code, message: text(error.message) };
+  }
   return {
     source: "workflow_node_agent",
     code: text(error?.code) || "WORKFLOW_NODE_EXECUTION_FAILED",

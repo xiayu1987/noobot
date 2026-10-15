@@ -55,7 +55,6 @@ test("rejects missing, mismatched, non-terminal and malformed child receipts", (
       (error) => {
         assert.equal(error?.code, "WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID");
         assert.equal(error?.receiptReason, reason);
-        assert.equal(error?.nodeTerminalReceiptRejected, true);
         return true;
       },
     );

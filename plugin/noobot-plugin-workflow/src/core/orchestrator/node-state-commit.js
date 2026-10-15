@@ -21,14 +21,15 @@ const CHILD_TERMINAL_NODE_STATUS = Object.freeze({
   stop_failed: WORKFLOW_NODE_STATUS.FAILED,
 });
 
+export const CHILD_TERMINAL_RECEIPT_INVALID_CODE = "WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID";
+
 export function resolveCommittedChildTerminal(subSession = {}, expectedExecutionId = "") {
   const lifecycle =
     subSession?.lifecycle && typeof subSession.lifecycle === "object" ? subSession.lifecycle : null;
   const fail = (reason) => {
     const error = new Error(`invalid child execution terminal receipt: ${reason}`);
-    error.code = "WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID";
+    error.code = CHILD_TERMINAL_RECEIPT_INVALID_CODE;
     error.receiptReason = reason;
-    error.nodeTerminalReceiptRejected = true;
     throw error;
   };
   if (!lifecycle) return fail("missing_lifecycle");

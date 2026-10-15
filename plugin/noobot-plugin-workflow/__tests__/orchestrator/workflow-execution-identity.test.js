@@ -365,3 +365,45 @@ test("runWorkflowExecution commits FAILED with a boundary code when a child thro
     message: "bare failure",
   });
 });
+
+test("runWorkflowExecution commits FAILED when the child terminal receipt is rejected", async () => {
+  const semantic = buildSemantic();
+  const workflowRunId = "wf_run_receipt_rejected";
+  const planningNodeSessions = buildWorkflowPlanningNodeSessions({ workflowRunId, semantic });
+  const { ctx } = buildCtx();
+  const repository = createInMemoryWorkflowNodeStateRepository();
+  const options = buildOptions({
+    subSessionRunner: async () => {
+      throw Object.assign(new Error("child crashed"), {
+        lifecycle: {
+          executionId: "agent:old-attempt",
+          executionKind: "agent",
+          state: "action_failed",
+          revision: 2,
+          sequence: 2,
+          failure: { code: "CHILD_CRASHED", message: "child crashed" },
+        },
+      });
+    },
+  });
+  options.workflowNodeStateRepository = repository;
+  await assert.rejects(
+    runWorkflowExecution({
+      hookManager: { emit: async () => ({ outcomes: [] }) },
+      options,
+      ctx,
+      semantic,
+      workflowRunId,
+      planningNodeSessions,
+    }),
+    (error) => error.code === "WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID",
+  );
+  const snapshot = await repository.getSnapshot({ workflowRunId });
+  const node = snapshot.nodes.find((item) => item.nodeId === "a");
+  assert.equal(node.status, "failed");
+  assert.deepEqual(node.failure, {
+    source: "workflow",
+    code: "WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID",
+    message: "invalid child execution terminal receipt: execution_identity_mismatch",
+  });
+});
