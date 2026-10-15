@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function resolveApiKey(getApiKey = "") {
-  return typeof getApiKey === "function"
-    ? String(getApiKey() || "").trim()
-    : String(getApiKey || "").trim();
+  return typeof getApiKey === "function" ? text(getApiKey()) : text(getApiKey);
 }
 
 export function createApiKeyFetch(getApiKey = "") {

@@ -21,6 +21,7 @@ import { createFileDownloadController } from "./useMessagePreview/file-download-
 import { createFilePreviewController } from "./useMessagePreview/file-preview-controller.js";
 import { createAttachmentPreviewController } from "./useMessagePreview/attachment-preview-controller.js";
 import { canPreviewFileItem } from "./useMessagePreview/file-preview-capabilities.js";
+import { text } from "@noobot/shared/value";
 
 export function useMessagePreview({
   userId = "",
@@ -121,7 +122,7 @@ function createAttachmentDownloadController({ userId, attachmentService, transla
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
-  const options = () => ({ userId: String(userId || "").trim() });
+  const options = () => ({ userId: text(userId) });
   return {
     async onDownloadAttachment(item = {}) {
       await downloadFromUrl(

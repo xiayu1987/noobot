@@ -12,10 +12,11 @@ import { mergeMessagePresentationFacets } from "./messagePresentation.js";
 import { getMessageAttachments, normalizeArray } from "./messageAttachmentsProjection.js";
 import { resolveMessageTurnScopeMergeKey } from "./conversationFoldingIdentity.js";
 import { reduceThinkingDetailContentTimelines } from "@noobot/event-protocol/thinking-detail-content";
+import { text } from "@noobot/shared/value";
 
 function mergeFoldedContent(previousMessage, currentMessage) {
-  const previousContent = String(previousMessage?.content || "").trim();
-  const currentContent = String(currentMessage?.content || "").trim();
+  const previousContent = text(previousMessage?.content);
+  const currentContent = text(currentMessage?.content);
   previousMessage.content =
     previousContent && previousContent === currentContent
       ? previousContent
@@ -23,7 +24,7 @@ function mergeFoldedContent(previousMessage, currentMessage) {
   if (currentMessage?.chatPresentation === true) {
     previousMessage.chatPresentation = true;
   }
-  const currentType = String(currentMessage?.type || "").trim();
+  const currentType = text(currentMessage?.type);
   if (currentType && currentType !== "tool_call") {
     previousMessage.type = currentType;
   }
@@ -76,11 +77,11 @@ function mergeFoldedArtifacts(previousMessage, currentMessage) {
 }
 
 function mergeFoldedModelIdentity(previousMessage, currentMessage) {
-  if (String(currentMessage?.modelAlias || "").trim()) {
-    previousMessage.modelAlias = String(currentMessage.modelAlias || "").trim();
+  if (text(currentMessage?.modelAlias)) {
+    previousMessage.modelAlias = text(currentMessage.modelAlias);
   }
-  if (String(currentMessage?.modelName || "").trim()) {
-    previousMessage.modelName = String(currentMessage.modelName || "").trim();
+  if (text(currentMessage?.modelName)) {
+    previousMessage.modelName = text(currentMessage.modelName);
   }
   previousMessage.modelRuns = Array.from(
     new Set(

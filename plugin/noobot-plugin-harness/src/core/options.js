@@ -11,10 +11,11 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { z } from "zod";
+import { text } from "@noobot/shared/value";
 
 export function resolveHarnessDenyToolNames(input = null) {
   if (!Array.isArray(input)) return [];
-  return Array.from(new Set(input.map((item) => String(item || "").trim()).filter(Boolean)));
+  return Array.from(new Set(input.map((item) => text(item)).filter(Boolean)));
 }
 
 export const DEFAULT_HARNESS_DENY_TOOL_NAMES = Object.freeze(["task_summary"]);
@@ -171,11 +172,11 @@ function normalizeModelByPurpose(...items) {
   for (const item of items) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     for (const [key, value] of Object.entries(item)) {
-      const normalizedKey = String(key || "").trim();
+      const normalizedKey = text(key);
       if (!normalizedKey) continue;
       const rawValue =
         value && typeof value === "object" && !Array.isArray(value) ? value.model : value;
-      const normalizedValue = String(rawValue || "").trim();
+      const normalizedValue = text(rawValue);
       if (normalizedValue) out[normalizedKey] = normalizedValue;
     }
   }
@@ -222,7 +223,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
   }
 
   const capabilityToolAllowlist = Array.isArray(safe.capabilityToolAllowlist)
-    ? safe.capabilityToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
+    ? safe.capabilityToolAllowlist.map((item) => text(item)).filter(Boolean)
     : DEFAULT_OPTIONS.capabilityToolAllowlist;
   const capabilityToolAllowlistByPurpose =
     safe.capabilityToolAllowlistByPurpose &&
@@ -230,10 +231,8 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     !Array.isArray(safe.capabilityToolAllowlistByPurpose)
       ? Object.fromEntries(
           Object.entries(safe.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
-            String(purpose || "").trim(),
-            Array.isArray(value)
-              ? value.map((item) => String(item || "").trim()).filter(Boolean)
-              : [],
+            text(purpose),
+            Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [],
           ]),
         )
       : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose;
@@ -266,7 +265,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     capabilityToolAllowlistByPurpose,
     miniRunnerMaxTurns: safe.miniRunnerMaxTurns,
     miniRunnerToolAllowlist: Array.isArray(safe.miniRunnerToolAllowlist)
-      ? safe.miniRunnerToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
+      ? safe.miniRunnerToolAllowlist.map((item) => text(item)).filter(Boolean)
       : DEFAULT_OPTIONS.miniRunnerToolAllowlist,
     acceptance: {
       ...(DEFAULT_OPTIONS.acceptance || {}),

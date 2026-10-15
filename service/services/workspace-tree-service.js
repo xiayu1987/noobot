@@ -6,9 +6,10 @@
 import path from "node:path";
 import { readdir } from "node:fs/promises";
 import { safeJoin } from "#agent/utils";
+import { text } from "@noobot/shared/value";
 
 function isWorkspaceControlEntry(name = "") {
-  const normalized = String(name || "").trim();
+  const normalized = text(name);
   return normalized.endsWith(".mutation-lock") || normalized.endsWith(".mutation-locks");
 }
 

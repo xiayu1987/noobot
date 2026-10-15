@@ -66,6 +66,7 @@ import {
 } from "./native-script-ipc.js";
 import { acquireBrowserSession, closeBrowserSession } from "./browser-session-registry.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
+import { text } from "@noobot/shared/value";
 
 const FORBIDDEN_IDENTIFIERS = new Set(NATIVE_SCRIPT_FORBIDDEN_IDENTIFIERS);
 const FORBIDDEN_PROPERTIES = new Set(NATIVE_SCRIPT_FORBIDDEN_PROPERTIES);
@@ -272,9 +273,7 @@ async function collectOutputFiles(root, relative = "") {
 }
 
 function resolveNativeScriptOwner(runtime, agentContext) {
-  return String(
-    runtime?.userId || runtime?.systemRuntime?.userId || agentContext?.userId || "",
-  ).trim();
+  return text(runtime?.userId || runtime?.systemRuntime?.userId || agentContext?.userId);
 }
 
 function createNativeScriptIpcHandlers({
@@ -312,7 +311,7 @@ function createNativeScriptIpcHandlers({
       const result = await bridge.requestUserInteraction({
         authority: interactionAuthority,
         interactionId,
-        content: String(content || "").trim(),
+        content: text(content),
         fields: fields || [],
         requireEncryption: false,
         toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
@@ -338,7 +337,7 @@ export function createNativeScriptTool({ agentContext }) {
   const execution = projectToolExecutionMeta({ policy: executionPolicy });
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const config = effectiveConfig?.tools?.[TOOL_NAME.EXECUTE_NATIVE_SCRIPT];
-  if (config?.enabled !== true || !String(runtime?.basePath || "").trim()) return [];
+  if (config?.enabled !== true || !text(runtime?.basePath)) return [];
   const tool = new DynamicStructuredTool({
     name: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
     metadata: { pathContract: TOOL_PATH_CONTRACTS.nativeInput },
@@ -441,12 +440,11 @@ export function createNativeScriptTool({ agentContext }) {
             browserProfileRoot:
               resolveBrowserProfileRoot() ||
               path.join(runtime.basePath, WORKSPACE_LAYOUT.BROWSER_PROFILES_DIR),
-            interactionId: String(
+            interactionId: text(
               toolConfig?.configurable?.noobotHookContext?.call?.id ||
                 toolConfig?.configurable?.noobotHookContext?.call?.tool_call_id ||
-                toolConfig?.configurable?.noobotHookContext?.call?.toolCallId ||
-                "",
-            ).trim(),
+                toolConfig?.configurable?.noobotHookContext?.call?.toolCallId,
+            ),
           }),
         });
         const outputFiles = result.code === 0 ? await collectOutputFiles(outputRoot) : [];

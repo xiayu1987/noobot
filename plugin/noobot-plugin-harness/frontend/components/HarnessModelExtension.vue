@@ -6,6 +6,7 @@
 <script setup>
 import { computed } from "vue";
 import { useHarnessLocale } from "../i18n/index.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },
@@ -28,7 +29,7 @@ const HARNESS_MODEL_STEPS = [
 const { translate } = useHarnessLocale();
 
 function getHarnessStepModel(stepKey = "") {
-  return String(pluginConfig.value?.stepModels?.[stepKey] || "").trim();
+  return text(pluginConfig.value?.stepModels?.[stepKey]);
 }
 
 function normalizeGuidanceAnalysisIntensity(value = 10) {
@@ -64,10 +65,10 @@ const guidanceAnalysisIntensity = computed({
 });
 
 function onHarnessStepModelChange(stepKey = "", value = "") {
-  const key = String(stepKey || "").trim();
+  const key = text(stepKey);
   if (!key) return;
   if (isHarnessStepModelDisabled(key)) return;
-  const nextValue = String(value || "").trim();
+  const nextValue = text(value);
   const currentConfig = pluginConfig.value;
   const currentStepModels =
     currentConfig?.stepModels && typeof currentConfig.stepModels === "object"
@@ -80,7 +81,7 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
 }
 
 function isHarnessCapabilityEnabled(capabilityKey = "") {
-  const key = String(capabilityKey || "").trim();
+  const key = text(capabilityKey);
   if (!key) return true;
   const configuredValue = pluginConfig.value?.capabilityProfile?.[key]?.enabled;
   if (key === "planning" || key === "acceptance") return configuredValue === true;
@@ -88,7 +89,7 @@ function isHarnessCapabilityEnabled(capabilityKey = "") {
 }
 
 function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
-  const key = String(capabilityKey || "").trim();
+  const key = text(capabilityKey);
   if (!key) return;
   if (key === "guidance") return;
   const enabled = value !== false;
@@ -130,12 +131,12 @@ function onGuidanceAnalysisIntensityChange(value = 10) {
 }
 
 function canToggleHarnessCapability(stepKey = "") {
-  const key = String(stepKey || "").trim();
+  const key = text(stepKey);
   return key && key !== "default" && key !== "guidance";
 }
 
 function isHarnessStepModelDisabled(stepKey = "") {
-  const key = String(stepKey || "").trim();
+  const key = text(stepKey);
   if (!props.hasModelOptions) return true;
   return canToggleHarnessCapability(key) && !isHarnessCapabilityEnabled(key);
 }

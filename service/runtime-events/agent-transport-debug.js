@@ -12,6 +12,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 export function recordServiceAgentTransportDebug({ event, command, userId = "", data = {} } = {}) {
   const summary = summarizeAgentTransportCommand(command, data);
@@ -23,7 +24,7 @@ export function recordServiceAgentTransportDebug({ event, command, userId = "", 
     level: "debug",
     debugType: AGENT_TRANSPORT_DEBUG_TYPE,
     event,
-    userId: String(userId || "").trim(),
+    userId: text(userId),
     sessionId: summary.sessionId,
     parentSessionId: summary.parentSessionId,
     dialogProcessId: summary.dialogProcessId,

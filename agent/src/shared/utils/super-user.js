@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const SUPER_ADMIN_ROLE = "super_admin";
 
 function asObject(value) {
@@ -17,17 +19,17 @@ function resolveRuntimeFromAgentContext(agentContext = {}) {
 
 export function resolveConfiguredSuperUserId(globalConfig = {}) {
   const config = asObject(globalConfig) || {};
-  return String(config?.superAdmin?.userId || "").trim();
+  return text(config?.superAdmin?.userId);
 }
 
 export function isConfiguredSuperUser({ globalConfig = {}, userId = "" } = {}) {
   const configuredSuperUserId = resolveConfiguredSuperUserId(globalConfig);
   if (!configuredSuperUserId) return false;
-  return String(userId || "").trim() === configuredSuperUserId;
+  return text(userId) === configuredSuperUserId;
 }
 
 export function isSuperAdminRole(role = "") {
-  return String(role || "").trim() === SUPER_ADMIN_ROLE;
+  return text(role) === SUPER_ADMIN_ROLE;
 }
 
 export function isSuperUserAgentContext(agentContext = {}) {

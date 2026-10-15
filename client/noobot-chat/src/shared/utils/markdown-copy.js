@@ -3,21 +3,21 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function stripBackgroundStylesFromHtml(htmlContent = "") {
   const wrapper = document.createElement("div");
   wrapper.innerHTML = String(htmlContent || "");
   const allElements = wrapper.querySelectorAll("*");
   for (const elementNode of allElements) {
-    const styleText = String(elementNode.getAttribute("style") || "").trim();
+    const styleText = text(elementNode.getAttribute("style"));
     if (!styleText) continue;
     const keptStyleRules = styleText
       .split(";")
       .map((styleRule) => styleRule.trim())
       .filter(Boolean)
       .filter((styleRule) => {
-        const ruleName = String(styleRule.split(":")[0] || "")
-          .trim()
-          .toLowerCase();
+        const ruleName = text(styleRule.split(":")[0]).toLowerCase();
         return ruleName !== "background" && ruleName !== "background-color";
       });
     if (keptStyleRules.length) {
@@ -67,7 +67,7 @@ function applyInlineStylesForCopy(htmlContent = "") {
       .map(([styleKey, styleValue]) => `${styleKey}: ${styleValue}`)
       .join("; ");
     if (!mergedStyles) return;
-    const originalStyles = String(elementNode.getAttribute("style") || "").trim();
+    const originalStyles = text(elementNode.getAttribute("style"));
     elementNode.setAttribute(
       "style",
       originalStyles ? `${originalStyles}; ${mergedStyles}` : mergedStyles,
@@ -152,7 +152,7 @@ function applyInlineStylesForCopy(htmlContent = "") {
 }
 
 function buildHtmlDocumentForCopy(htmlBodyContent = "") {
-  const normalizedHtmlBodyContent = String(htmlBodyContent || "").trim();
+  const normalizedHtmlBodyContent = text(htmlBodyContent);
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -188,7 +188,7 @@ ${normalizedHtmlBodyContent}
 }
 
 export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
-  let rawHtml = String(rawHtmlContent || "").trim();
+  let rawHtml = text(rawHtmlContent);
   if (!rawHtml) throw new Error("NO_COPYABLE_CONTENT");
 
   rawHtml = rawHtml.replace(

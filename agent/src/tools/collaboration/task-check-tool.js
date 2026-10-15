@@ -21,6 +21,7 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { text } from "@noobot/shared/value";
 
 const TASK_CHECK_TOOL_NAME = TOOL_NAME.TASK_CHECK;
 
@@ -39,7 +40,7 @@ export function createTaskCheckTool(ctx = {}) {
         contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
       },
       func: async ({ checkContent }) => {
-        const content = String(checkContent || "").trim();
+        const content = text(checkContent);
         if (!content) {
           throw recoverableToolError(tTool(runtime, "tools.task_check.checkContentRequired"), {
             code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,

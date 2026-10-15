@@ -9,6 +9,7 @@ import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
 import { registerHarnessHooks } from "./hooks.js";
 import { normalizeOptions } from "./options.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
+import { text } from "@noobot/shared/value";
 
 export function createHarnessRegistration(deps = {}) {
   const createPluginRuntimeContextFn =
@@ -23,7 +24,7 @@ export function createHarnessRegistration(deps = {}) {
       api,
       userOptions,
     );
-    const locale = String(options?.locale || "").trim() || "en-US";
+    const locale = text(options?.locale) || "en-US";
     assertHookManagerFn(hookManager, { locale });
     if (!options.enabled) return { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers: [] };
     if (

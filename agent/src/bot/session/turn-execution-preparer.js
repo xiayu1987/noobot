@@ -16,6 +16,7 @@ import {
   restoreSnapshotUserAttachmentFactsFromSessionAuthority,
 } from "@noobot/context-protocol/policy/snapshot";
 import { applySystemRuntimeTurnProgress, resolveToolBindings } from "@noobot/agent-config-protocol";
+import { text } from "@noobot/shared/value";
 
 async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, messageBlocks = {}) {
   if (typeof engine?.session?.getSessionContextSource !== "function") {
@@ -39,7 +40,7 @@ export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}
   const runtimeBasePath =
     typeof contextBuilder._resolveRuntimeBasePath === "function"
       ? contextBuilder._resolveRuntimeBasePath()
-      : await engine._resolveAttachmentIndexBasePath(String(payload.userId || "").trim());
+      : await engine._resolveAttachmentIndexBasePath(text(payload.userId));
   const effectiveConfig =
     typeof contextBuilder._getEffectiveConfig === "function"
       ? contextBuilder._getEffectiveConfig()
@@ -51,8 +52,8 @@ export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}
     userMessageAttachments: Array.isArray(payload.userMessageAttachments)
       ? payload.userMessageAttachments
       : [],
-    userId: String(payload.userId || "").trim(),
-    sessionId: String(payload.sessionId || "").trim(),
+    userId: text(payload.userId),
+    sessionId: text(payload.sessionId),
   });
   return { contextBuilder, userMessageAttachments };
 }
@@ -93,15 +94,15 @@ export async function prepareAgentTurnExecution(
       ? preparedRuntimeAttachments
       : payloadUserMessageAttachments;
   const existingSessionAttachments = await engine._resolveExistingUserMessageAttachments({
-    userId: String(payload?.userId || "").trim(),
-    sessionId: String(payload?.sessionId || "").trim(),
-    parentSessionId: String(payload?.parentSessionId || "").trim(),
-    turnScopeId: String(payload?.turnScopeId || payload?.runConfig?.turnScopeId || "").trim(),
-    dialogProcessId: String(payload?.dialogProcessId || "").trim(),
+    userId: text(payload?.userId),
+    sessionId: text(payload?.sessionId),
+    parentSessionId: text(payload?.parentSessionId),
+    turnScopeId: text(payload?.turnScopeId || payload?.runConfig?.turnScopeId),
+    dialogProcessId: text(payload?.dialogProcessId),
   });
   const enrichedRuntimeAttachments = await engine._enrichUserInputAttachmentsFromIndex({
-    userId: String(payload?.userId || "").trim(),
-    sessionId: String(payload?.sessionId || "").trim(),
+    userId: text(payload?.userId),
+    sessionId: text(payload?.sessionId),
     attachments: runtimeAttachments,
     existingAttachments: existingSessionAttachments,
   });
@@ -109,7 +110,7 @@ export async function prepareAgentTurnExecution(
     ...(prepared && typeof prepared === "object" ? prepared : {}),
     userMessageAttachments: mapAttachmentRecordsToMetas(enrichedRuntimeAttachments, {
       fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
-      userId: String(payload?.userId || "").trim(),
+      userId: text(payload?.userId),
     }),
   };
 }
@@ -127,15 +128,15 @@ function readSnapshotMessageBlocks(snapshot) {
 }
 
 function buildStoppedResumeIdentity(payload, runConfig) {
-  const resumeDialogProcessId = String(runConfig.resumeDialogProcessId || "").trim();
-  const resumeTurnScopeId = String(runConfig.resumeTurnScopeId || "").trim();
+  const resumeDialogProcessId = text(runConfig.resumeDialogProcessId);
+  const resumeTurnScopeId = text(runConfig.resumeTurnScopeId);
   if (!resumeDialogProcessId || !resumeTurnScopeId) {
     throw new Error("stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId");
   }
   return {
-    userId: String(payload?.userId || "").trim(),
-    sessionId: String(payload?.sessionId || "").trim(),
-    parentSessionId: String(payload?.parentSessionId || "").trim(),
+    userId: text(payload?.userId),
+    sessionId: text(payload?.sessionId),
+    parentSessionId: text(payload?.parentSessionId),
     dialogProcessId: resumeDialogProcessId,
     turnScopeId: resumeTurnScopeId,
   };
@@ -143,12 +144,12 @@ function buildStoppedResumeIdentity(payload, runConfig) {
 
 function buildContinuationIdentity(payload, runConfig) {
   return {
-    userName: String(payload?.userName || payload?.userId || "").trim(),
-    sessionId: String(payload?.sessionId || "").trim(),
-    parentSessionId: String(payload?.parentSessionId || "").trim(),
-    dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-    parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
-    turnScopeId: String(payload?.turnScopeId || runConfig?.turnScopeId || "").trim(),
+    userName: text(payload?.userName || payload?.userId),
+    sessionId: text(payload?.sessionId),
+    parentSessionId: text(payload?.parentSessionId),
+    dialogProcessId: text(payload?.dialogProcessId),
+    parentDialogProcessId: text(payload?.parentDialogProcessId),
+    turnScopeId: text(payload?.turnScopeId || runConfig?.turnScopeId),
   };
 }
 
@@ -241,7 +242,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     hydratedMessageBlocks.system,
     hydratedMessageBlocks.history,
     {
-      dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
+      dialogProcessId: text(payload?.dialogProcessId || identity.dialogProcessId),
       attachments: userMessageAttachments,
       incrementalMessages: continuedIncrementalMessages,
     },
@@ -281,7 +282,7 @@ export async function resolveStoppedResumeAttachments(
     userMessageAttachments: Array.isArray(payload?.userMessageAttachments)
       ? payload.userMessageAttachments
       : [],
-    userId: String(payload?.userId || "").trim(),
-    sessionId: String(payload?.sessionId || "").trim(),
+    userId: text(payload?.userId),
+    sessionId: text(payload?.sessionId),
   });
 }

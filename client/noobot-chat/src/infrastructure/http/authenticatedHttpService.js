@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 let authenticatedFetcher = null;
 
 function compileRoutePattern(definition = {}) {
-  const method = String(definition?.method || "")
-    .trim()
-    .toUpperCase();
-  const path = String(definition?.path || "").trim();
+  const method = text(definition?.method).toUpperCase();
+  const path = text(definition?.path);
   const segments = path.split("/").filter(Boolean);
   if (!method || !segments.length || !path.startsWith("/api/internal/")) return null;
   return {
@@ -36,9 +36,7 @@ export function createScopedAuthenticatedHttpService({ routePatterns = [] } = {}
         throw new Error("authenticated HTTP service is unavailable");
       }
       const parsed = new URL(String(url || ""), window.location.origin);
-      const method = String(options?.method || "")
-        .trim()
-        .toUpperCase();
+      const method = text(options?.method).toUpperCase();
       if (
         parsed.origin !== window.location.origin ||
         !allowedRoutes.some(

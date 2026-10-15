@@ -25,6 +25,7 @@ import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pa
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { resolveGatedThresholdWithSource } from "../shared/threshold-utils.js";
+import { text } from "@noobot/shared/value";
 
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
@@ -77,15 +78,15 @@ const PLANNING_BLOCKED_REASON_LABEL_KEY = Object.freeze({
 });
 
 function resolvePlanningReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
-  const key = PLANNING_REASON_LABEL_KEY[String(reason || "").trim()];
-  if (!key) return String(reason || "").trim();
-  return translateI18nText(locale, key) || String(reason || "").trim();
+  const key = PLANNING_REASON_LABEL_KEY[text(reason)];
+  if (!key) return text(reason);
+  return translateI18nText(locale, key) || text(reason);
 }
 
 function resolvePlanningBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
-  const key = PLANNING_BLOCKED_REASON_LABEL_KEY[String(reason || "").trim()];
-  if (!key) return String(reason || "").trim();
-  return translateI18nText(locale, key) || String(reason || "").trim();
+  const key = PLANNING_BLOCKED_REASON_LABEL_KEY[text(reason)];
+  if (!key) return text(reason);
+  return translateI18nText(locale, key) || text(reason);
 }
 
 function resolvePlanningTriggeredActions({ planUpdate = false, phaseAcceptance = false } = {}) {

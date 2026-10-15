@@ -9,6 +9,7 @@ import { ElIcon } from "element-plus";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { useLocale } from "../i18n/useLocale.js";
 import { resolveToolEventVisual } from "../utils/toolEventIcon.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   eventText: { type: String, default: "" },
@@ -31,17 +32,13 @@ const emit = defineEmits(["toggle"]);
 const { translate } = useLocale();
 const eventLabel = computed(() => {
   if (!props.tool) return "";
-  const eventName = String(props.eventText || "")
-    .trim()
-    .toLowerCase();
+  const eventName = text(props.eventText).toLowerCase();
   if (eventName === "tool_call") return translate("message.toolCallEvent");
   if (eventName === "tool_result") return translate("message.toolResultEvent");
   return translate("message.toolEvent");
 });
 const eventClass = computed(() => {
-  const eventName = String(props.eventText || "")
-    .trim()
-    .toLowerCase();
+  const eventName = text(props.eventText).toLowerCase();
   if (eventName === "tool_call") return "is-tool-call";
   if (eventName === "tool_result") return "is-tool-result";
   return "is-tool-event";
@@ -60,7 +57,7 @@ const riskLabel = computed(() =>
 );
 const contentWithoutToolName = computed(() => {
   const content = String(props.contentText || "");
-  const toolName = String(props.toolName || "").trim();
+  const toolName = text(props.toolName);
   if (!toolName || !content.startsWith(toolName)) return content;
   const boundary = content.charAt(toolName.length);
   if (boundary && !/[\s·:：([]/.test(boundary)) return content;

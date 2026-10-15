@@ -11,6 +11,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
+import { text } from "@noobot/shared/value";
 
 export function createWorkspaceUsersService({ workspaceRootPath } = {}) {
   function normalizeWorkspaceUsersConfig(input) {
@@ -21,8 +22,8 @@ export function createWorkspaceUsersService({ workspaceRootPath } = {}) {
         : [];
     const users = sourceItems
       .map((userItem) => ({
-        userId: String(userItem?.userId || "").trim(),
-        connectCode: String(userItem?.connectCode || "").trim(),
+        userId: text(userItem?.userId),
+        connectCode: text(userItem?.connectCode),
         allowIDE: userItem?.allowIDE === true,
       }))
       .filter((userItem) => userItem.userId && userItem.connectCode);

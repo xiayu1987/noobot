@@ -11,6 +11,7 @@ import {
   I18N_TEXT,
   LOCALE,
 } from "../../../i18n.js";
+import { text } from "@noobot/shared/value";
 export { HARNESS_I18N_KEYSET };
 
 export function resolveLocale(ctx = {}) {
@@ -25,7 +26,7 @@ export function resolveLocale(ctx = {}) {
     runtime?.globalConfig?.locale,
     runtime?.runConfig?.locale,
   ]
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .filter(Boolean);
   const locale = localeCandidates[0] || LOCALE.ZH_CN;
   return String(locale).toLowerCase().startsWith("en") ? LOCALE.EN_US : LOCALE.ZH_CN;
@@ -33,7 +34,7 @@ export function resolveLocale(ctx = {}) {
 
 export function translateI18nText(locale = LOCALE.ZH_CN, key = "", params = {}) {
   const dict = I18N_TEXT[locale] || I18N_TEXT[LOCALE.ZH_CN];
-  const raw = String(dict?.[key] || I18N_TEXT[LOCALE.ZH_CN]?.[key] || "").trim();
+  const raw = text(dict?.[key] || I18N_TEXT[LOCALE.ZH_CN]?.[key]);
   if (!raw) return "";
   return raw.replace(/\{(\w+)\}/g, (_all, token) => String(params?.[token] ?? ""));
 }

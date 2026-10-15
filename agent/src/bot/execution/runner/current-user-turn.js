@@ -13,6 +13,7 @@ import { assertTurnAttachmentsBoundEventData } from "@noobot/session-protocol/tu
 import { createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { createTurnCommand, toCommitTurnPayload } from "../turn-command.js";
 import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
+import { text } from "@noobot/shared/value";
 
 function emitPreparedTurnDebug({
   eventListener,
@@ -26,9 +27,9 @@ function emitPreparedTurnDebug({
   userMessageAttachments,
 }) {
   emitEvent(eventListener, "debug_resend_runner_received", {
-    requestThinkingStartedAt: String(requestRunConfig?.thinkingStartedAt || "").trim(),
-    scenarioThinkingStartedAt: String(scenarioResolvedRunConfig?.thinkingStartedAt || "").trim(),
-    resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
+    requestThinkingStartedAt: text(requestRunConfig?.thinkingStartedAt),
+    scenarioThinkingStartedAt: text(scenarioResolvedRunConfig?.thinkingStartedAt),
+    resolvedThinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
     reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
     attachments: summarizeDebugAttachments(attachments),
     userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
@@ -69,12 +70,10 @@ function emitCurrentUserIdentityDebug({
     resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
     {
       messageUid: persistedMessageUid,
-      persistedMessageId: String(currentUserMessage?.messageId || "").trim(),
+      persistedMessageId: text(currentUserMessage?.messageId),
       canonicalMessageId: canonicalMessageId(currentUserMessage),
-      role: String(currentUserMessage?.role || "").trim(),
-      messageOrigin: String(currentUserMessage?.messageOrigin || "")
-        .trim()
-        .toLowerCase(),
+      role: text(currentUserMessage?.role),
+      messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),
       userMetaMaterialized: currentUserMessage?.userMetaMaterialized === true,
       contentLength: String(currentUserMessage?.content || "").length,
       attachmentCount: Array.isArray(currentUserMessage?.attachments)
@@ -184,7 +183,7 @@ export async function prepareCurrentUserTurn({
     });
     currentUserMessage = reusedTurnResult?.userMessage;
     if (precommittedUserTurn) {
-      if (String(currentUserMessage?.messageUid || "").trim() !== acceptanceReceipt.messageUid) {
+      if (text(currentUserMessage?.messageUid) !== acceptanceReceipt.messageUid) {
         throw new TypeError("accepted Turn message identity does not match Session authority");
       }
       committedTurnResult = {
@@ -252,7 +251,7 @@ export async function prepareCurrentUserTurn({
         sessionId,
         parentSessionId,
         turnScopeId,
-        messageUid: String(currentUserMessage?.messageUid || "").trim(),
+        messageUid: text(currentUserMessage?.messageUid),
         attachments: canonicalAttachments,
         expectedAggregateVersion: committedTurnResult?.aggregateVersion,
         commandId: `${String(turnCommand?.commandId || acceptanceReceipt?.commandId || resolvedRunConfig?.commandId || turnScopeId).trim()}:attachments.bind`,
@@ -278,7 +277,7 @@ export async function prepareCurrentUserTurn({
       );
     }
   }
-  const persistedMessageUid = String(currentUserMessage?.messageUid || "").trim();
+  const persistedMessageUid = text(currentUserMessage?.messageUid);
   if (!persistedMessageUid) {
     throw new Error(
       "persisted current user message identity is required before Context construction",

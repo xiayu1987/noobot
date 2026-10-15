@@ -11,6 +11,7 @@ import {
   resolveWorkflowActionDecision,
   resolveWorkflowActionExecutor,
 } from "../shared/workflow/scheduler.js";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 const GUIDANCE_REASON_LABEL_KEY = Object.freeze({
@@ -27,22 +28,20 @@ const GUIDANCE_BLOCKED_REASON_LABEL_KEY = Object.freeze({
 });
 
 function resolveDecisionLocale(state = {}) {
-  const locale = String(state?.locale || "")
-    .trim()
-    .toLowerCase();
+  const locale = text(state?.locale).toLowerCase();
   return locale.startsWith("en") ? LOCALE.EN_US : LOCALE.ZH_CN;
 }
 
 function resolveReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
-  const key = GUIDANCE_REASON_LABEL_KEY[String(reason || "").trim()];
-  if (!key) return String(reason || "").trim();
-  return translateI18nText(locale, key) || String(reason || "").trim();
+  const key = GUIDANCE_REASON_LABEL_KEY[text(reason)];
+  if (!key) return text(reason);
+  return translateI18nText(locale, key) || text(reason);
 }
 
 function resolveBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
-  const key = GUIDANCE_BLOCKED_REASON_LABEL_KEY[String(reason || "").trim()];
-  if (!key) return String(reason || "").trim();
-  return translateI18nText(locale, key) || String(reason || "").trim();
+  const key = GUIDANCE_BLOCKED_REASON_LABEL_KEY[text(reason)];
+  if (!key) return text(reason);
+  return translateI18nText(locale, key) || text(reason);
 }
 
 export function resolvePendingPlanUpdate(state = {}) {
@@ -57,7 +56,7 @@ export function resolvePendingPlanUpdate(state = {}) {
 }
 
 function guidanceActionFromDecision(decision = {}) {
-  const action = String(decision?.chosenAction || "").trim();
+  const action = text(decision?.chosenAction);
   if (resolveWorkflowActionExecutor(action) !== "guidance") {
     return {
       action: GUIDANCE_DECISION.action.none,

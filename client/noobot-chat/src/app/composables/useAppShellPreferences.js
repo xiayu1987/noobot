@@ -31,9 +31,10 @@ import {
   applyPluginPreferenceDefaults,
 } from "../storage/uiPreferencesStorage.js";
 import { resolvePluginPreferenceDefaults } from "../../plugins/plugin-preference-defaults.js";
+import { text } from "@noobot/shared/value";
 
 function resolveModelValue(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function resolveDefaultSelectedModelFromConfig(config = {}, scenarioKey = "") {
@@ -105,7 +106,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   }
 
   function syncSelectedModelWithConfig() {
-    const currentScenarioKey = String(botScenario.value || "").trim();
+    const currentScenarioKey = text(botScenario.value);
     if (hasStoredSelectedModelPreference(currentScenarioKey)) {
       selectedModel.value = readSelectedModelPreference(currentScenarioKey);
       return;
@@ -117,7 +118,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   }
 
   function syncPluginModelConfigWithPreference() {
-    const currentScenarioKey = String(botScenario.value || "").trim();
+    const currentScenarioKey = text(botScenario.value);
     pluginModelConfig.value = applyPluginPreferenceDefaults(
       readPluginModelConfigPreference(currentScenarioKey),
       pluginPreferenceDefaults,
@@ -162,7 +163,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   }
 
   function onMemoryModelUpdate(value = "") {
-    memoryModel.value = String(value || "").trim();
+    memoryModel.value = text(value);
     persistMemoryModelPreference(memoryModel.value, botScenario.value);
   }
 
@@ -187,17 +188,17 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     const selectablePluginKeySet = new Set(
       availablePlugins.value
         .filter((pluginItem) => pluginItem?.enabled === true)
-        .map((pluginItem) => String(pluginItem?.key || "").trim())
+        .map((pluginItem) => text(pluginItem?.key))
         .filter(Boolean),
     );
     selectedPlugins.value = (Array.isArray(value) ? value : [])
-      .map((pluginKey) => String(pluginKey || "").trim())
+      .map((pluginKey) => text(pluginKey))
       .filter((pluginKey) => pluginKey && selectablePluginKeySet.has(pluginKey));
     persistSelectedPlugins();
   }
 
   function onUserIdUpdate(value = "") {
-    const nextUserId = String(value || "").trim();
+    const nextUserId = text(value);
     if (nextUserId === userId.value) return;
     userId.value = nextUserId;
     hasStoredSelectedPlugins.value = hasStoredSelectedPluginKeys(nextUserId);

@@ -41,6 +41,7 @@ import {
   buildDynamicPolicyPromptSignature,
   resolveActiveDynamicPolicyPromptFromContext,
 } from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
+import { text } from "@noobot/shared/value";
 
 export { resolvePolicyPromptSelection } from "./policy-prompt-matrix.js";
 
@@ -50,7 +51,7 @@ function resolveHarnessBucket(ctx = {}) {
 }
 
 function resolvePolicyPromptScopeId(ctx = {}) {
-  return String(ctx?.turnScopeId || ctx?.agentContext?.context?.identity?.turnScopeId || "").trim();
+  return text(ctx?.turnScopeId || ctx?.agentContext?.context?.identity?.turnScopeId);
 }
 
 function resolvePolicyPromptState(ctx = {}) {
@@ -108,12 +109,11 @@ function isStoppedSnapshotResumeInitializingFirstLlmCall(ctx = {}) {
   ) {
     return true;
   }
-  const lifecycleState = String(
+  const lifecycleState = text(
     runtime.agentLifecycleState ||
       runtime.agentLifecycleInitialState ||
-      runtime.agentLifecycle?.state ||
-      "",
-  ).trim();
+      runtime.agentLifecycle?.state,
+  );
   if (lifecycleState && lifecycleState !== "resume_initializing") return false;
   return Number(ctx?.turn) === 1;
 }
@@ -143,7 +143,7 @@ function resolveManifestDialogProcessId(ctx = {}, current = {}) {
     dialogProcessId: current?.dialogProcessId,
   });
   if (fromCurrent) return fromCurrent;
-  return String(current?.harnessRunId || "").trim();
+  return text(current?.harnessRunId);
 }
 
 function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = null, plugin = {}) {

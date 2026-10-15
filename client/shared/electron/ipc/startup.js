@@ -5,6 +5,7 @@
  */
 import { createRequire } from "node:module";
 import { maskDependencyProxyUrl, validateDependencyProxy } from "../dependencies/proxy.js";
+import { text } from "@noobot/shared/value";
 
 const require = createRequire(import.meta.url);
 
@@ -130,7 +131,7 @@ export function registerStartupIpcHandlers({
 
   ipcMain.handle("noobot:save-super-admin", async (_event, values = {}) => {
     const state = refreshDesktopConfigState();
-    const proxyUrl = String(values.dependencyProxyUrl || "").trim();
+    const proxyUrl = text(values.dependencyProxyUrl);
     if (proxyUrl) {
       sendStatus({
         phase: "dependency",

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
@@ -16,11 +17,11 @@ export const WORKFLOW_SCHEDULER_ORDER = Object.freeze([
 
 export const WORKFLOW_ACTION_META = Object.freeze(
   WORKFLOW_SCHEDULER_ORDER.reduce((acc, item = {}, index) => {
-    const action = String(item?.action || "").trim();
+    const action = text(item?.action);
     if (!action) return acc;
     acc[action] = Object.freeze({
-      flow: String(item?.flow || "").trim(),
-      subflow: String(item?.subflow || "").trim(),
+      flow: text(item?.flow),
+      subflow: text(item?.subflow),
       action,
       executor: String(item?.executor || "none").trim() || "none",
       kind: String(item?.kind || "workflow").trim() || "workflow",
@@ -188,7 +189,7 @@ function actionSortScore(action = "") {
 }
 
 export function resolveWorkflowActionExecutor(action = "") {
-  return WORKFLOW_ACTION_EXECUTOR[String(action || "").trim()] || "none";
+  return WORKFLOW_ACTION_EXECUTOR[text(action)] || "none";
 }
 
 export function resolveWorkflowActionDecision(state = {}) {

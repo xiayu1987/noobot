@@ -12,6 +12,7 @@ import {
   hydrateModelContextSnapshot,
   normalizeSnapshotIdentity,
 } from "@noobot/context-protocol/policy/snapshot";
+import { text } from "@noobot/shared/value";
 
 const SNAPSHOT_DIR_NAME = "model-message-snapshots";
 
@@ -20,7 +21,7 @@ function snapshotFileSegment(value = "") {
 }
 
 async function resolveSnapshotLocation(identity = {}, globalConfig = {}) {
-  const workspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
+  const workspaceRoot = text(globalConfig?.workspaceRoot);
   if (!workspaceRoot) {
     throw new TypeError("model message snapshot requires globalConfig.workspaceRoot");
   }
@@ -58,18 +59,16 @@ function countSnapshotMessages(candidate = {}) {
 }
 
 function readMessageField(message = {}, field = "") {
-  return String(
+  return text(
     message?.[field] ||
       message?.additional_kwargs?.[field] ||
-      message?.lc_kwargs?.additional_kwargs?.[field] ||
-      "",
-  ).trim();
+      message?.lc_kwargs?.additional_kwargs?.[field],
+  );
 }
 
 function snapshotMessageId(message = {}) {
   return (
-    readMessageField(message, "noobotMessageId") ||
-    String(message?.messageUid || message?.messageId || "").trim()
+    readMessageField(message, "noobotMessageId") || text(message?.messageUid || message?.messageId)
   );
 }
 
@@ -184,11 +183,11 @@ export async function saveStoppedModelMessageSnapshotCandidate({
     return result;
   }
   const identity = {
-    userId: String(candidate.userId || "").trim(),
-    sessionId: String(candidate.sessionId || "").trim(),
-    parentSessionId: String(candidate.parentSessionId || "").trim(),
-    dialogProcessId: String(candidate.dialogProcessId || "").trim(),
-    turnScopeId: String(candidate.turnScopeId || "").trim(),
+    userId: text(candidate.userId),
+    sessionId: text(candidate.sessionId),
+    parentSessionId: text(candidate.parentSessionId),
+    dialogProcessId: text(candidate.dialogProcessId),
+    turnScopeId: text(candidate.turnScopeId),
   };
   const missingIdentityFields = ["userId", "sessionId", "dialogProcessId", "turnScopeId"].filter(
     (key) => !identity[key],

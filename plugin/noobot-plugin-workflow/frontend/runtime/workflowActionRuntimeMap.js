@@ -5,6 +5,7 @@
  */
 import { computed } from "vue";
 import { makeActionStateKey, makeRuntimeStep } from "./workflowRuntimeSteps.js";
+import { text } from "@noobot/shared/value";
 
 export function createActionRuntimeBySemanticKey({
   runtimeNodeSessions,
@@ -15,8 +16,8 @@ export function createActionRuntimeBySemanticKey({
   return computed(() => {
     const map = new Map();
     const ensureNodeRuntime = (item = {}) => {
-      const nodeId = String(item?.nodeId || "").trim();
-      const nodeName = String(item?.nodeName || "").trim();
+      const nodeId = text(item?.nodeId);
+      const nodeName = text(item?.nodeName);
       const primaryKey = nodeId ? `id:${nodeId}` : nodeName ? `name:${nodeName}` : "";
       if (!primaryKey) return null;
       if (!map.has(primaryKey)) {
@@ -40,8 +41,8 @@ export function createActionRuntimeBySemanticKey({
       if (!runtime._stateMap.has(stateKey)) {
         runtime._stateMap.set(stateKey, {
           actionNodeStateId: stateKey,
-          nodeId: String(item?.nodeId || runtime.nodeId || "").trim(),
-          nodeName: String(item?.nodeName || runtime.nodeName || "").trim(),
+          nodeId: text(item?.nodeId || runtime.nodeId),
+          nodeName: text(item?.nodeName || runtime.nodeName),
           steps: [],
         });
         runtime.actionNodeStates.push(runtime._stateMap.get(stateKey));

@@ -10,6 +10,7 @@ import { BaseZoomControls } from "noobot-chat/plugin-api/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
@@ -58,12 +59,10 @@ const nodeWidth = computed(() => {
 
 const normalizedNodes = computed(() => {
   const baseNodes = (Array.isArray(props.nodes) ? props.nodes : []).map((nodeItem = {}, index) => {
-    const status = String(nodeItem?.status || nodeItem?._status || "")
-      .trim()
-      .toLowerCase();
+    const status = text(nodeItem?.status || nodeItem?._status).toLowerCase();
     const resolvedStatus = status || "pending";
     const dialogProcessId = resolveDialogProcessId(nodeItem);
-    const sessionId = String(nodeItem?.sessionId || "").trim();
+    const sessionId = text(nodeItem?.sessionId);
     const actionNodeStates = Array.isArray(nodeItem?.actionNodeStates)
       ? nodeItem.actionNodeStates
       : Array.isArray(nodeItem?.runtimeBoxes)
@@ -92,15 +91,11 @@ const normalizedNodes = computed(() => {
   if (!baseNodes.length) return [];
 
   const hasStartBoundary = baseNodes.some((item) => {
-    const nodeId = String(item?.nodeId || "")
-      .trim()
-      .toLowerCase();
+    const nodeId = text(item?.nodeId).toLowerCase();
     return Number(item?.stateType) === 0 && nodeId === "start";
   });
   const hasEndBoundary = baseNodes.some((item) => {
-    const nodeId = String(item?.nodeId || "")
-      .trim()
-      .toLowerCase();
+    const nodeId = text(item?.nodeId).toLowerCase();
     return Number(item?.stateType) === 1 && nodeId === "end";
   });
 
@@ -110,9 +105,7 @@ const normalizedNodes = computed(() => {
   }, 0);
 
   const allFinished = baseNodes.every((item) => {
-    const status = String(item?._status || "")
-      .trim()
-      .toLowerCase();
+    const status = text(item?._status).toLowerCase();
     return status === "success" || status === "failed" || status === "error";
   });
 
@@ -154,15 +147,15 @@ const normalizedNodes = computed(() => {
 });
 
 function resolveSemanticNodeId(nodeItem = {}) {
-  return String(nodeItem?.nodeId || "").trim();
+  return text(nodeItem?.nodeId);
 }
 
 function buildTopologyRows(nodes = [], flowtos = []) {
   const nodeList = Array.isArray(nodes) ? nodes : [];
   const edgeList = (Array.isArray(flowtos) ? flowtos : [])
     .map((flowto = {}, index) => ({
-      from: String(flowto?.from || "").trim(),
-      to: String(flowto?.to || "").trim(),
+      from: text(flowto?.from),
+      to: text(flowto?.to),
       index,
     }))
     .filter((flowto) => flowto.from && flowto.to);
@@ -311,7 +304,7 @@ function resolveRuntimeBoxes(nodeItem = {}) {
 }
 
 function nodeContainsDialogProcessId(nodeItem = {}, dialogProcessId = "") {
-  const selected = String(dialogProcessId || "").trim();
+  const selected = text(dialogProcessId);
   if (!selected) return false;
   if (resolveDialogProcessId(nodeItem) === selected) return true;
   if (
@@ -370,7 +363,7 @@ const positionedNodes = computed(() => {
 });
 
 const effectiveSelectedDialogProcessId = computed(() =>
-  String(props.selectedDialogProcessId || innerSelectedDialogProcessId.value || "").trim(),
+  text(props.selectedDialogProcessId || innerSelectedDialogProcessId.value),
 );
 
 const selectedNode = computed(
@@ -401,7 +394,7 @@ function getNodeStyle(nodeItem = {}) {
 }
 
 function resolveStatusClass(nodeItem = {}) {
-  const status = String(nodeItem?._status || "").trim();
+  const status = text(nodeItem?._status);
   if (status === "success") return "success";
   if (status === "failed" || status === "error") return "failed";
   if (status === "running") return "running";
@@ -409,9 +402,7 @@ function resolveStatusClass(nodeItem = {}) {
 }
 
 function isActionNode(nodeItem = {}) {
-  const type = String(nodeItem?.type || "")
-    .trim()
-    .toLowerCase();
+  const type = text(nodeItem?.type).toLowerCase();
   if (type) return type === "action";
   return Number(nodeItem?.nodeType) === 2;
 }
@@ -474,13 +465,13 @@ const edgeSegments = computed(() => {
   if (flowtos.length) {
     const nodeBySemanticId = new Map();
     for (const nodeItem of positionedNodes.value) {
-      const semanticId = String(nodeItem?.nodeId || "").trim();
+      const semanticId = text(nodeItem?.nodeId);
       if (!semanticId) continue;
       nodeBySemanticId.set(semanticId, nodeItem);
     }
     for (const flowto of flowtos) {
-      const fromId = String(flowto?.from || "").trim();
-      const toId = String(flowto?.to || "").trim();
+      const fromId = text(flowto?.from);
+      const toId = text(flowto?.to);
       const fromNode = nodeBySemanticId.get(fromId);
       const toNode = nodeBySemanticId.get(toId);
       if (!fromNode || !toNode) continue;

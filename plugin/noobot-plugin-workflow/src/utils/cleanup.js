@@ -7,12 +7,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../core/constants.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeSessionIds(input = []) {
   if (Array.isArray(input)) {
-    return input.map((item) => String(item || "").trim()).filter(Boolean);
+    return input.map((item) => text(item)).filter(Boolean);
   }
-  const sessionId = String(input || "").trim();
+  const sessionId = text(input);
   return sessionId ? [sessionId] : [];
 }
 
@@ -31,7 +32,7 @@ function hasPathSeparator(value = "") {
 }
 
 function addSessionId(sessionIds, value = "") {
-  const sessionId = String(value || "").trim();
+  const sessionId = text(value);
   if (sessionId && !hasPathSeparator(sessionId)) sessionIds.add(sessionId);
 }
 
@@ -88,7 +89,7 @@ async function collectPlannedNodeSessionIds(workflowRoot = "", rootSessionId = "
 }
 
 export async function collectWorkflowRelatedSessionIds(basePath = "", rootSessionIds = []) {
-  const rootBasePath = String(basePath || "").trim();
+  const rootBasePath = text(basePath);
   const normalizedRootSessionIds = normalizeSessionIds(rootSessionIds);
   if (!rootBasePath || !normalizedRootSessionIds.length) return [];
   const workflowRoot = path.resolve(rootBasePath, resolveWorkflowDataRelativePath());
@@ -106,7 +107,7 @@ export async function collectWorkflowRelatedSessionIds(basePath = "", rootSessio
 }
 
 export async function cleanupWorkflowBySessionIds(basePath = "", sessionIds = []) {
-  const rootBasePath = String(basePath || "").trim();
+  const rootBasePath = text(basePath);
   if (!rootBasePath) {
     return { deleted: 0, errors: 0, matchedDirs: 0, relatedSessionIds: [] };
   }

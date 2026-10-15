@@ -16,6 +16,7 @@ import {
 } from "../../../extensions/extension-registry.js";
 import { createPluginContext } from "../../../extensions/create-plugin-context.js";
 import { SECURITY_RISK_LEVELS } from "@noobot/security-assessment-protocol";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   ...sharedComposerOptionProps,
@@ -112,7 +113,7 @@ function pluginContext(pluginId = "") {
 }
 
 function getSelectedModelLabel() {
-  const selectedValue = String(props.selectedModel || "").trim();
+  const selectedValue = text(props.selectedModel);
   if (!selectedValue) return translate("composer.modelUsingDefault");
   return selectedValue;
 }

@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { hasUsableModelChatOutput } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 export function classifyEmptyResponse(output = {}) {
-  return !hasUsableModelChatOutput(output) && !String(output?.reasoning || "").trim();
+  return !hasUsableModelChatOutput(output) && !text(output?.reasoning);
 }

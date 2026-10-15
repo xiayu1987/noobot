@@ -13,6 +13,7 @@ import {
   MODEL_WEB_SEARCH_INSTRUCTION,
   resolveModelImageGenerationApiType,
 } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
 const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
@@ -35,7 +36,7 @@ function normalizeBaseUrl(baseUrl = "") {
     while (end > 0 && value[end - 1] === "/") end -= 1;
     return value.slice(0, end);
   };
-  const normalized = withoutTrailingSlashes(String(baseUrl || "").trim());
+  const normalized = withoutTrailingSlashes(text(baseUrl));
   if (!normalized) return "";
   try {
     const url = new URL(normalized);
@@ -56,7 +57,7 @@ function buildApiUrl(baseUrl = "", path = "") {
 }
 
 function resolveResponsesOutputText(result = {}) {
-  const sdkOutputText = String(result?.output_text || "").trim();
+  const sdkOutputText = text(result?.output_text);
   if (sdkOutputText) return sdkOutputText;
   return (Array.isArray(result?.output) ? result.output : [])
     .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
@@ -71,9 +72,9 @@ function extractResponsesUrlCitations(output = []) {
   for (const item of Array.isArray(output) ? output : []) {
     for (const part of Array.isArray(item?.content) ? item.content : []) {
       for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
-        const url = String(annotation?.url || "").trim();
+        const url = text(annotation?.url);
         if (annotation?.type !== "url_citation" || !url || sources.has(url)) continue;
-        sources.set(url, { title: String(annotation.title || "").trim(), url });
+        sources.set(url, { title: text(annotation.title), url });
       }
     }
   }
@@ -82,11 +83,7 @@ function extractResponsesUrlCitations(output = []) {
 
 function normalizeCount(value = 1, modelName = "") {
   const count = Math.min(10, Math.max(1, Math.floor(Number(value || 1)) || 1));
-  return String(modelName || "")
-    .trim()
-    .toLowerCase() === "gpt-image-2-beta"
-    ? 1
-    : count;
+  return text(modelName).toLowerCase() === "gpt-image-2-beta" ? 1 : count;
 }
 
 function unwrapPayload(payload = {}) {
@@ -121,20 +118,18 @@ function normalizeTask(payload = {}) {
 
 function taskId(payload = {}) {
   const task = normalizeTask(payload);
-  return String(task.id || task.task_id || task.taskId || "").trim();
+  return text(task.id || task.task_id || task.taskId);
 }
 
 function imageArtifacts(items = []) {
   return (Array.isArray(items) ? items : [])
     .map((item = {}, index) => {
-      const value = String(
-        item.b64_json || item.image_base64 || item.base64 || item.data || "",
-      ).trim();
+      const value = text(item.b64_json || item.image_base64 || item.base64 || item.data);
       const dataUrlMatch = /^data:[^;]+;base64,(.+)$/i.exec(value);
       return {
         fileName: `generated_image_${index + 1}.png`,
         b64Json: dataUrlMatch ? dataUrlMatch[1] : value,
-        url: String(item.url || item.image_url || "").trim(),
+        url: text(item.url || item.image_url),
       };
     })
     .filter((item) => item.b64Json || item.url);
@@ -172,13 +167,12 @@ async function requestJson({
     payload = { message: responseText };
   }
   if (!response.ok) {
-    const returnedMessage = String(
+    const returnedMessage = text(
       (typeof payload?.error?.message === "string" ? payload.error.message : "") ||
         (typeof payload?.message === "string" ? payload.message : "") ||
         (typeof payload?.error === "string" ? payload.error : "") ||
-        (!parsedJson ? responseText : "") ||
-        "",
-    ).trim();
+        (!parsedJson ? responseText : ""),
+    );
     const message =
       returnedMessage || httpStatusFallback(locale, response.status) || `HTTP ${response.status}`;
     const error = new Error(message);
@@ -206,7 +200,7 @@ async function executeImagesAsync({
   const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
   const requestHeaders = { ...headers, Authorization: `Bearer ${credential}` };
   const size = String(options.size || "1:1").trim() || "1:1";
-  const resolution = String(options.resolution || "").trim() || (RATIO_SIZE.test(size) ? "1K" : "");
+  const resolution = text(options.resolution) || (RATIO_SIZE.test(size) ? "1K" : "");
   const created = await requestJson({
     fetchImpl,
     url: createUrl,
@@ -216,11 +210,11 @@ async function executeImagesAsync({
     locale,
     body: {
       model: modelSpec.model,
-      prompt: String(input.prompt || "").trim(),
+      prompt: text(input.prompt),
       size,
       ...(resolution ? { resolution } : {}),
       n: normalizeCount(options.n, modelSpec.model),
-      ...(String(options.quality || "").trim() ? { quality: String(options.quality).trim() } : {}),
+      ...(text(options.quality) ? { quality: String(options.quality).trim() } : {}),
       ...(Array.isArray(options.imageUrls) && options.imageUrls.length
         ? { image_urls: options.imageUrls }
         : {}),
@@ -238,9 +232,7 @@ async function executeImagesAsync({
     const task = normalizeTask(
       await requestJson({ fetchImpl, url: taskUrl, headers: requestHeaders, signal, locale }),
     );
-    const status = String(task.status || "")
-      .trim()
-      .toLowerCase();
+    const status = text(task.status).toLowerCase();
     if (status === "completed") {
       return {
         taskId: id,
@@ -270,10 +262,8 @@ function extractResponsesImages(output = []) {
     for (const value of values) {
       const type = String(value?.type || "").toLowerCase();
       if (!type.includes("image")) continue;
-      const b64Json = String(
-        value?.result || value?.b64_json || value?.image_base64 || value?.data || "",
-      ).trim();
-      const url = String(value?.image_url?.url || value?.url || "").trim();
+      const b64Json = text(value?.result || value?.b64_json || value?.image_base64 || value?.data);
+      const url = text(value?.image_url?.url || value?.url);
       if (b64Json || url)
         artifacts.push({ fileName: `generated_image_${artifacts.length + 1}.png`, b64Json, url });
     }
@@ -322,7 +312,7 @@ export async function executeOpenAiOperation({
         input: [
           {
             role: "user",
-            content: [{ type: "input_text", text: String(operation.input.query || "").trim() }],
+            content: [{ type: "input_text", text: text(operation.input.query) }],
           },
         ],
         tools: [{ type: "web_search" }],
@@ -344,7 +334,7 @@ export async function executeOpenAiOperation({
           {
             role: "user",
             content: [
-              { type: "input_text", text: String(operation.input.prompt || "").trim() },
+              { type: "input_text", text: text(operation.input.prompt) },
               ...attachmentContent,
             ],
           },
@@ -364,7 +354,7 @@ export async function executeOpenAiOperation({
         input: [
           {
             role: "user",
-            content: [{ type: "input_text", text: String(operation.input.prompt || "").trim() }],
+            content: [{ type: "input_text", text: text(operation.input.prompt) }],
           },
         ],
         tools: [
@@ -388,7 +378,7 @@ export async function executeOpenAiOperation({
 
 function mapOpenAiMultimodalAttachment(attachment = {}) {
   const mimeType = String(attachment.mimeType || "application/octet-stream").trim();
-  const data = String(attachment.data || "").trim();
+  const data = text(attachment.data);
   const normalizedMimeType = mimeType.toLowerCase();
   if (normalizedMimeType.startsWith("image/")) return { type: "input_image", image_url: data };
   if (normalizedMimeType.startsWith("audio/")) {
@@ -399,6 +389,6 @@ function mapOpenAiMultimodalAttachment(attachment = {}) {
   return {
     type: "input_file",
     file_data: data,
-    filename: String(attachment.fileName || "").trim() || undefined,
+    filename: text(attachment.fileName) || undefined,
   };
 }

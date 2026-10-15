@@ -11,6 +11,7 @@ import {
   joinClientPath,
   normalizeClientPath,
 } from "../../path-resolver.js";
+import { text } from "@noobot/shared/value";
 
 function sanitizeDownloadFileName(fileName = "") {
   const value = String(fileName || "download").trim() || "download";
@@ -52,7 +53,7 @@ function sanitizeFileAccessLogPayload(payload = {}) {
 }
 
 function maskHostPath(pathValue = "") {
-  const normalized = normalizeClientPath(String(pathValue || "").trim());
+  const normalized = normalizeClientPath(text(pathValue));
   if (!normalized) return "";
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return normalized;
@@ -60,7 +61,7 @@ function maskHostPath(pathValue = "") {
 }
 
 async function resolveHostFile(pathValue = "") {
-  const targetPath = String(pathValue || "").trim();
+  const targetPath = text(pathValue);
   if (!targetPath) {
     const error = new Error("Missing host file path.");
     error.code = "missing_path";
@@ -130,7 +131,7 @@ function registerHostFileIpcHandlers({ app, dialog, ipcMain, getMainWindow, logH
   ipcMain.handle(
     "noobot:read-host-file",
     async (_event, { path: pathValue = "", traceId = "" } = {}) => {
-      const hostPath = String(pathValue || "").trim();
+      const hostPath = text(pathValue);
       try {
         logHostFileAccess("host.read.request", {
           traceId,
@@ -174,7 +175,7 @@ function registerHostFileIpcHandlers({ app, dialog, ipcMain, getMainWindow, logH
   ipcMain.handle(
     "noobot:download-host-file",
     async (_event, { path: pathValue = "", traceId = "" } = {}) => {
-      const hostPath = String(pathValue || "").trim();
+      const hostPath = text(pathValue);
       try {
         logHostFileAccess("host.download.request", {
           traceId,

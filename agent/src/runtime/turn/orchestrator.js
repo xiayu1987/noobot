@@ -40,6 +40,7 @@ import {
   recoverMainFlowNoFinalResponse,
   resetNoFinalResponseRetryStreak,
 } from "./no-final-response-recovery.js";
+import { text } from "@noobot/shared/value";
 
 function withNoFinalResponseRecovery(invokeTurn) {
   return async function invokeTurnWithNoFinalResponseRecovery(input = {}) {
@@ -75,7 +76,7 @@ export function createTurnOrchestrator({
   function resolveTaskSummaryCall(calls = []) {
     return (
       (Array.isArray(calls) ? calls : []).find(
-        (call = {}) => String(call?.name || "").trim() === TOOL_NAME.TASK_SUMMARY,
+        (call = {}) => text(call?.name) === TOOL_NAME.TASK_SUMMARY,
       ) || null
     );
   }
@@ -83,7 +84,7 @@ export function createTurnOrchestrator({
   function resolveTaskCheckCall(calls = []) {
     return (
       (Array.isArray(calls) ? calls : []).find(
-        (call = {}) => String(call?.name || "").trim() === TOOL_NAME.TASK_CHECK,
+        (call = {}) => text(call?.name) === TOOL_NAME.TASK_CHECK,
       ) || null
     );
   }
@@ -143,8 +144,8 @@ export function createTurnOrchestrator({
       markMainFlowFinalNoToolsTurnActive(systemRuntime, true);
       emitEvent(eventListener, eventName, {
         turn: finalTurn,
-        reason: String(instruction?.reason || "").trim(),
-        source: String(instruction?.source || "").trim(),
+        reason: text(instruction?.reason),
+        source: text(instruction?.source),
       });
       try {
         const noToolsResult = await invokeNoToolsTurnFn({
@@ -307,7 +308,7 @@ export function createTurnOrchestrator({
           {
             turn,
             toolCallCount: calls.length,
-            controlToolName: String(controlToolCall?.name || "").trim(),
+            controlToolName: text(controlToolCall?.name),
           },
         );
         return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
@@ -378,9 +379,7 @@ export function createTurnOrchestrator({
           source: "task_summary",
           summarizedMessageIds: summaryTargets
             .map((message) =>
-              String(
-                message?.messageUid || message?.additional_kwargs?.noobotMessageId || "",
-              ).trim(),
+              text(message?.messageUid || message?.additional_kwargs?.noobotMessageId),
             )
             .filter(Boolean),
         });

@@ -15,25 +15,25 @@ import {
   hasCheckpointBoundaryToolCall,
 } from "@noobot/context-protocol/policy/summary";
 import { applyPendingUserMetaBackwrites } from "../../context/assembly/message-builder/user-meta-backwrite.js";
+import { text } from "@noobot/shared/value";
 
 function isSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
 }
 
 function resolveMessageId(message = {}) {
-  return String(
+  return text(
     message?.messageUid ||
       message?.additional_kwargs?.noobotMessageId ||
-      message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
-      "",
-  ).trim();
+      message?.lc_kwargs?.additional_kwargs?.noobotMessageId,
+  );
 }
 
 function createSummaryCompletionMarker(summaryCompletion = null) {
   if (!summaryCompletion || typeof summaryCompletion !== "object") return null;
   if (!Array.isArray(summaryCompletion.summarizedMessageIds)) return null;
   const summarizedMessageIds = new Set(
-    summaryCompletion.summarizedMessageIds.map((id) => String(id || "").trim()).filter(Boolean),
+    summaryCompletion.summarizedMessageIds.map((id) => text(id)).filter(Boolean),
   );
   return () => (message) => summarizedMessageIds.has(resolveMessageId(message));
 }
@@ -45,15 +45,15 @@ function compactPromotionSource(message = {}) {
     : [];
   if (!attachments.length && !transferEnvelopes.length) return null;
   return {
-    role: String(message?.role || "").trim(),
-    type: String(message?.type || "").trim(),
+    role: text(message?.role),
+    type: text(message?.type),
     ...(attachments.length ? { attachments } : {}),
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
   };
 }
 
 function resolveMessageUid(message = {}) {
-  return String(message?.messageUid || "").trim();
+  return text(message?.messageUid);
 }
 
 function buildCheckpointId({
@@ -114,9 +114,7 @@ function normalizeSummaryCompletion(summaryCompletion = null, retainedIds = new 
   return {
     ...summaryCompletion,
     summarizedMessageIds: Array.isArray(summaryCompletion.summarizedMessageIds)
-      ? summaryCompletion.summarizedMessageIds.filter(
-          (id) => !retainedIds.has(String(id || "").trim()),
-        )
+      ? summaryCompletion.summarizedMessageIds.filter((id) => !retainedIds.has(text(id)))
       : summaryCompletion.summarizedMessageIds,
   };
 }
@@ -127,7 +125,7 @@ function resolveDurablyPersistedMessageUids(runtime = null) {
       ...arrayOrEmpty(runtime?.timelineCheckpointPersistedMessageUids),
       ...arrayOrEmpty(runtime?.summaryCheckpointPersistedMessageUids),
     ]
-      .map((uid) => String(uid || "").trim())
+      .map((uid) => text(uid))
       .filter(Boolean),
   );
 }
@@ -174,9 +172,7 @@ function resolveSummarizedMessageUids({ hasMarker, completion, turnMessages = []
   if (!hasMarker) return turnMessages.filter(isSummarized).map(resolveMessageUid).filter(Boolean);
   return [
     ...new Set(
-      completion.summarizedMessageIds
-        .map((messageUid) => String(messageUid || "").trim())
-        .filter(Boolean),
+      completion.summarizedMessageIds.map((messageUid) => text(messageUid)).filter(Boolean),
     ),
   ];
 }
@@ -191,8 +187,8 @@ function assertCheckpointScope({
 } = {}) {
   const complete =
     hasMarker &&
-    String(dialogProcessId || "").trim() &&
-    String(turnScopeId || "").trim() &&
+    text(dialogProcessId) &&
+    text(turnScopeId) &&
     persistedMessageUids.length === turnMessages.length &&
     summarizedMessageUids.length;
   if (!complete) {
@@ -358,7 +354,7 @@ export async function commitSummaryCheckpoint({
   });
   recordCommittedCheckpoint({ runtime, persistedMessageUids, checkpointRevision });
   emitEvent(eventListener, "summary_checkpoint_committed", {
-    source: String(completion?.source || "").trim(),
+    source: text(completion?.source),
     requestedMessageCount: Array.isArray(completion?.summarizedMessageIds)
       ? completion.summarizedMessageIds.length
       : 0,

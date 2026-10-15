@@ -15,9 +15,10 @@ import { normalizeMessageEntity } from "../../entities/message-entity.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
+import { text } from "@noobot/shared/value";
 
 function normalizedString(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function optionalStringField(name, value) {
@@ -81,9 +82,7 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       injectedMessageType: normalizedString(input.injectedMessageType),
       relayCorrelationId: normalizedString(input.relayCorrelationId),
       interjectionSequence: Number(input.interjectionSequence || 0),
-      messageOrigin: String(input.messageOrigin || "")
-        .trim()
-        .toLowerCase(),
+      messageOrigin: text(input.messageOrigin).toLowerCase(),
       userMetaMaterialized: input.userMetaMaterialized === true,
       pluginMessage: input.pluginMessage === true,
       pluginMeta: resolvePluginMeta(input.pluginMeta),

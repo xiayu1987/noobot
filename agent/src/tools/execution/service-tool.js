@@ -13,6 +13,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 function getServices(agentContext) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -23,7 +24,7 @@ function getServices(agentContext) {
 }
 
 function tService(agentContext = {}, key = "", params = {}) {
-  return tTool(agentContext, `tools.service.${String(key || "").trim()}`, params);
+  return tTool(agentContext, `tools.service.${text(key)}`, params);
 }
 
 function isServiceEnabled(serviceCfg) {
@@ -31,7 +32,7 @@ function isServiceEnabled(serviceCfg) {
 }
 
 function normalizeName(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function validateInput({ serviceName, endpointName, queryString, agentContext }) {
@@ -77,9 +78,9 @@ export function createServiceTool({ agentContext }) {
     }),
     func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
       const globalConfig = runtime?.globalConfig || {};
-      const userId = String(
-        agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
-      ).trim();
+      const userId = text(
+        agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId,
+      );
       const inputErr = validateInput({
         serviceName,
         endpointName,
@@ -133,7 +134,7 @@ export function createServiceTool({ agentContext }) {
           { code: ERROR_CODE.RECOVERABLE_ENDPOINT_NOT_FOUND },
         );
       }
-      const endpointUrl = String(endpointCfg.url || "").trim();
+      const endpointUrl = text(endpointCfg.url);
       if (!endpointUrl) {
         throw recoverableToolError(
           tService(agentContext, "endpointUrlMissing", {
@@ -152,7 +153,7 @@ export function createServiceTool({ agentContext }) {
         endpointName: normalizedEndpointName,
         serviceCfg,
         endpointCfg,
-        customParam: String(custom_param || "").trim(),
+        customParam: text(custom_param),
         queryString,
         body,
       });

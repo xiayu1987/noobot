@@ -9,7 +9,7 @@ import {
   parseAttachmentRelations,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function validatedEnvelopes(value) {
   const source =
@@ -35,8 +35,8 @@ function compactAttachmentRef(reference = {}) {
 export function compactSessionAttachmentRef(reference = {}) {
   if (!isPlainObject(reference)) return null;
   const identity = projectAttachmentIdentity(reference);
-  const name = String(reference.name || "").trim();
-  const mimeType = String(reference.mimeType || "").trim();
+  const name = text(reference.name);
+  const mimeType = text(reference.mimeType);
   if (!name || !mimeType) return null;
   const output = { ...identity, name, mimeType };
   for (const key of [
@@ -55,8 +55,8 @@ export function compactSessionAttachmentRef(reference = {}) {
   const relations = parseAttachmentRelations(reference.relations);
   if (relations.length) output.relations = relations;
   if (isPlainObject(reference.owner)) {
-    const type = String(reference.owner.type || "").trim();
-    const id = String(reference.owner.id || "").trim();
+    const type = text(reference.owner.type);
+    const id = text(reference.owner.id);
     if (type || id) output.owner = { ...(type ? { type } : {}), ...(id ? { id } : {}) };
   }
   return output;

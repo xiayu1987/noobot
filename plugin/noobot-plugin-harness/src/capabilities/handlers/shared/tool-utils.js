@@ -4,17 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { BLOCKED_AGENT_TOOL_NAMES } from "./constants.js";
+import { text } from "@noobot/shared/value";
 
 export function resolveSceneToolNames(ctx = {}) {
   const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return [];
-  return registry.map((tool) => String(tool?.name || "").trim()).filter(Boolean);
+  return registry.map((tool) => text(tool?.name)).filter(Boolean);
 }
 
 export function shouldProcessPrimaryToolHooks(ctx = {}) {
-  const scope = String(ctx?.executionScope || "")
-    .trim()
-    .toLowerCase();
+  const scope = text(ctx?.executionScope).toLowerCase();
   if (!scope) return true;
   return scope === "primary";
 }
@@ -23,7 +22,7 @@ export function disableBlockedToolsInRegistry(ctx = {}) {
   const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return false;
   const next = registry.filter((tool) => {
-    const name = String(tool?.name || "").trim();
+    const name = text(tool?.name);
     return name && !BLOCKED_AGENT_TOOL_NAMES.has(name);
   });
   if (next.length === registry.length) return false;
@@ -33,9 +32,7 @@ export function disableBlockedToolsInRegistry(ctx = {}) {
 
 export function disableBlockedCalls(calls = []) {
   if (!Array.isArray(calls)) return false;
-  const next = calls.filter(
-    (call) => !BLOCKED_AGENT_TOOL_NAMES.has(String(call?.name || "").trim()),
-  );
+  const next = calls.filter((call) => !BLOCKED_AGENT_TOOL_NAMES.has(text(call?.name)));
   if (next.length === calls.length) return false;
   calls.splice(0, calls.length, ...next);
   return true;

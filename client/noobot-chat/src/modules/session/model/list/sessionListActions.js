@@ -20,6 +20,7 @@ import {
   sessionRuntimeId,
 } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { clearSessionTurnUiStates } from "../../../chat/runtime/engine/turnUiStore.js";
+import { text } from "@noobot/shared/value";
 
 export function createSessionListActions({
   sessions,
@@ -54,7 +55,7 @@ export function createSessionListActions({
     if (!sessionId) return;
     const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
-    const targetPrimaryId = String(target.sessionId || sessionId || "").trim();
+    const targetPrimaryId = text(target.sessionId || sessionId);
     if (!force && targetPrimaryId === activeSessionId.value) return;
     if (target.isUnavailable === true) {
       notify({
@@ -88,7 +89,7 @@ export function createSessionListActions({
 
     if (!silent) loadingSessionDetail.value = true;
     try {
-      const detailSessionId = String(target.sessionId || sessionId || "").trim();
+      const detailSessionId = text(target.sessionId || sessionId);
       const detail = await fetchSessionDetail(detailSessionId, {
         source: "selectSession",
         force,
@@ -128,7 +129,7 @@ export function createSessionListActions({
 
       const existingSessionsById = buildSessionIdentityMap(sessions.value);
       const persistedSessionIds = new Set();
-      const requestedSessionId = String(preferredActiveId || "").trim();
+      const requestedSessionId = text(preferredActiveId);
       let requestedSessionDetail = null;
       const nextSessions = (data.sessions || [])
         .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
@@ -172,7 +173,7 @@ export function createSessionListActions({
           (Array.isArray(requestedSessionDetail?.sessions)
             ? requestedSessionDetail.sessions
             : []
-          ).find((doc) => String(doc?.sessionId || "").trim() === requestedSessionId) ||
+          ).find((doc) => text(doc?.sessionId) === requestedSessionId) ||
           requestedSessionDetail?.sessions?.[0] ||
           {};
         const resolvedRequestedSessionId = String(
@@ -228,8 +229,8 @@ export function createSessionListActions({
   }
 
   async function renameSession(sessionId = "", title = "") {
-    const targetSessionId = String(sessionId || "").trim();
-    const normalizedTitle = String(title || "").trim();
+    const targetSessionId = text(sessionId);
+    const normalizedTitle = text(title);
     if (!targetSessionId) return false;
     if (!normalizedTitle) {
       notify({ type: "warning", message: translate("common.sessionTitleRequired") });
@@ -241,7 +242,7 @@ export function createSessionListActions({
       notify({ type: "warning", message: translate("common.sessionUnavailableLegacyProtocol") });
       return false;
     }
-    if (String(targetSession.title || "").trim() === normalizedTitle) {
+    if (text(targetSession.title) === normalizedTitle) {
       notify({ type: "info", message: translate("common.sessionTitleUnchanged") });
       return false;
     }
@@ -264,7 +265,7 @@ export function createSessionListActions({
   }
 
   async function deleteSession(sessionId = "") {
-    const targetSessionId = String(sessionId || "").trim();
+    const targetSessionId = text(sessionId);
     if (!targetSessionId) return false;
 
     const index = sessions.value.findIndex(

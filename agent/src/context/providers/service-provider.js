@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function normalizeStringArray(input = []) {
-  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  return Array.isArray(input) ? input.map((item) => text(item)).filter(Boolean) : [];
 }
 
 function resolveServiceFilter(includeRefs = []) {
@@ -17,8 +19,8 @@ function resolveServiceFilter(includeRefs = []) {
   }
   for (const refItem of normalizedRefs) {
     const [serviceName, endpointName] = String(refItem || "").split(".");
-    const normalizedServiceName = String(serviceName || "").trim();
-    const normalizedEndpointName = String(endpointName || "").trim();
+    const normalizedServiceName = text(serviceName);
+    const normalizedEndpointName = text(endpointName);
     if (!normalizedServiceName) continue;
     if (normalizedEndpointName === "*") {
       serviceNameSet.add(normalizedServiceName);
@@ -61,12 +63,12 @@ export function resolveServices(effectiveConfig = {}, { includeRefs = [] } = {})
       serviceEndpointList.push({
         serviceName,
         endpointName,
-        description: String(endpointCfg?.description || "").trim(),
-        url: String(endpointCfg?.url || "").trim(),
-        handler: String(serviceConfig?.handler || "").trim(),
-        query_string_format: String(endpointCfg?.query_string_format || "").trim(),
-        body_format: String(endpointCfg?.body_format || "").trim(),
-        custom_param_format: String(endpointCfg?.custom_param_format || "").trim(),
+        description: text(endpointCfg?.description),
+        url: text(endpointCfg?.url),
+        handler: text(serviceConfig?.handler),
+        query_string_format: text(endpointCfg?.query_string_format),
+        body_format: text(endpointCfg?.body_format),
+        custom_param_format: text(endpointCfg?.custom_param_format),
       });
     }
   }

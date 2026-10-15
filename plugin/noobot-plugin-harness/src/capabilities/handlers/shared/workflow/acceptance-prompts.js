@@ -8,6 +8,7 @@ import { resolveCompletePlanChecklistText } from "../plan/checklist-context.js";
 import { buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText } from "./protocols.js";
 import { normalizePromptOptions } from "./prompt-options.js";
 import { buildScenarioPolicyPromptText } from "./scenario-policy-prompts.js";
+import { text } from "@noobot/shared/value";
 
 export function buildAcceptancePatchProtocolText(options = {}) {
   const { locale, data } = normalizePromptOptions(options);
@@ -24,13 +25,13 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const payload = data.mainPlanContext ?? options?.mainPlanContext ?? null;
   const source = payload && typeof payload === "object" ? payload : {};
-  const planTextFromPayload = String(source?.planText || "").trim();
-  const currentTaskGoal = String(source?.currentTaskGoal || "").trim();
+  const planTextFromPayload = text(source?.planText);
+  const currentTaskGoal = text(source?.currentTaskGoal);
   const plansInOrder = Array.isArray(source?.plansInOrder) ? source.plansInOrder : [];
   const checklist = Array.isArray(source?.taskChecklist) ? source.taskChecklist : [];
   const planChecklistText = (() => {
     const mergedPlanTextFromOrderedPlans = plansInOrder
-      .map((item = {}) => String(item?.planText || "").trim())
+      .map((item = {}) => text(item?.planText))
       .filter(Boolean)
       .join("\n")
       .trim();
@@ -44,7 +45,7 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
     return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
   })();
   return [
-    String(marker || "").trim(),
+    text(marker),
     translateI18nText(
       locale,
       HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER,
@@ -64,11 +65,11 @@ export function buildAllPhaseAcceptanceReportSystemContents(options = {}) {
       : [];
   if (!reports.length) return [];
   return reports.map((item = {}, index) => {
-    const acceptedAt = String(item?.acceptedAt || item?.timestamp || "").trim();
-    const content = String(item?.content || item?.text || "").trim();
+    const acceptedAt = text(item?.acceptedAt || item?.timestamp);
+    const content = text(item?.content || item?.text);
     const total = reports.length;
     return [
-      String(marker || "").trim(),
+      text(marker),
       translateI18nText(
         locale,
         HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_CHECKLIST_TITLE,
@@ -98,7 +99,7 @@ export function buildAllSummaryReportSystemContents(options = {}) {
   if (!reportText) return [];
   return [
     [
-      String(marker || "").trim(),
+      text(marker),
       translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SUMMARY_CHECKLIST_TITLE, {
         index: 1,
         total: 1,
@@ -120,7 +121,7 @@ export function buildPhaseAcceptanceRequestPromptText(options = {}) {
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
   const includeProtocol = options?.includeProtocol !== false;
   return [
-    String(marker || "").trim(),
+    text(marker),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy
       ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })
@@ -145,7 +146,7 @@ export function buildAcceptanceValidationRequestPromptText(options = {}) {
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
   const includeProtocol = options?.includeProtocol !== false;
   return [
-    String(marker || "").trim(),
+    text(marker),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.FINAL_ACCEPTANCE_REQUEST_GOAL),
     includeWorkflowPolicy
       ? buildScenarioPolicyPromptText(locale, { programmingMode, textMode, dynamicPolicyPrompt })

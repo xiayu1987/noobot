@@ -5,6 +5,7 @@
  */
 import { fsMkdir } from "../../shared/storage/fs-adapter.js";
 import { buildSessionArtifactFileMap, writeTaskArtifact } from "../session-artifact-store.js";
+import { text } from "@noobot/shared/value";
 
 export class FileSystemTaskRepository {
   constructor({
@@ -56,8 +57,8 @@ export class FileSystemTaskRepository {
       updatedAt: this.now(),
     });
     return {
-      sessionId: String(bundle?.sessionId || sessionId || "").trim(),
-      currentTaskId: String(bundle?.currentTaskId || "").trim(),
+      sessionId: text(bundle?.sessionId || sessionId),
+      currentTaskId: text(bundle?.currentTaskId),
       tasks: Array.isArray(bundle?.tasks)
         ? bundle.tasks.map((task) => this.normalizeTask(task))
         : [],
@@ -104,7 +105,7 @@ export class FileSystemTaskRepository {
         );
         await fsMkdir(sessionDir, { recursive: true });
         const bundle = await this.getBundle(userId, sessionId, parentSessionId, persistenceContext);
-        bundle.currentTaskId = String(mutate(bundle) || "").trim();
+        bundle.currentTaskId = text(mutate(bundle));
         bundle.updatedAt = this.now();
         await writeTaskArtifact({
           storageService: this.storageService,

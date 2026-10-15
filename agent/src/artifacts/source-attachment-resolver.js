@@ -5,6 +5,7 @@
  */
 import { parseAttachmentIdentity } from "@noobot/attachment-protocol";
 import { getRuntimeFromAgentContext } from "../context/agent-context-accessor.js";
+import { text } from "@noobot/shared/value";
 
 export async function resolveCanonicalSourceAttachment({
   attachmentIdentity,
@@ -13,7 +14,7 @@ export async function resolveCanonicalSourceAttachment({
   const identity = parseAttachmentIdentity(attachmentIdentity);
   const runtime = getRuntimeFromAgentContext(agentContext);
   const attachmentService = runtime?.attachmentService || null;
-  const userId = String(runtime?.userId || "").trim();
+  const userId = text(runtime?.userId);
   if (!attachmentService?.getAttachmentById || !userId) return null;
 
   return attachmentService.getAttachmentById({

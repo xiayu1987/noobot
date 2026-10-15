@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const CONNECTOR_STATUS = Object.freeze({
   DISCONNECTED: "disconnected",
   CONNECTING: "connecting",
@@ -17,7 +19,7 @@ export const CONNECTOR_ACCESS_CANCELLATION = Object.freeze({
 });
 
 function assertConnectorAccessCancellation(value) {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!Object.values(CONNECTOR_ACCESS_CANCELLATION).includes(normalized)) {
     throw new TypeError(`connector access cancellation is invalid: ${value}`);
   }
@@ -46,7 +48,7 @@ export function assertConnectorAccessPort(port = {}) {
 }
 
 export function createConnectorConnectionResult(connector = {}) {
-  const status = String(connector?.status || "").trim();
+  const status = text(connector?.status);
   if (!Object.values(CONNECTOR_STATUS).includes(status)) {
     throw new TypeError(`connector status is invalid: ${status}`);
   }

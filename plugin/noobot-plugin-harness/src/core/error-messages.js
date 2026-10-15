@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const HARNESS_CORE_ERROR = Object.freeze({
   HOOK_MANAGER_REQUIRED: "HOOK_MANAGER_REQUIRED",
   CLEANUP_OLD_RUNS_FAILED: "CLEANUP_OLD_RUNS_FAILED",
 });
 
 function normalizeLocale(input = "") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   return value.startsWith("en") ? "en-US" : "zh-CN";
 }
 
@@ -32,12 +32,12 @@ const HARNESS_CORE_ERROR_TEXT = Object.freeze({
 });
 
 export function formatHarnessCoreError(code = "", { locale = "en-US", params = {} } = {}) {
-  const key = String(code || "").trim();
+  const key = text(code);
   if (!key) return "";
   const normalized = normalizeLocale(locale);
   const dict = HARNESS_CORE_ERROR_TEXT[normalized] || HARNESS_CORE_ERROR_TEXT["en-US"];
   const fallbackDict = HARNESS_CORE_ERROR_TEXT["en-US"];
-  const template = String(dict?.[key] || fallbackDict?.[key] || "").trim();
+  const template = text(dict?.[key] || fallbackDict?.[key]);
   if (!template) return "";
   return template.replace(/\{(\w+)\}/g, (_all, token) => String(params?.[token] ?? ""));
 }

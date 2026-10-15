@@ -11,16 +11,17 @@ import {
   resolveModelMessageBlocks,
   writeMessageBlocks,
 } from "../../core/message-store.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeStringArray(input) {
   if (!Array.isArray(input)) return [];
-  return input.map((item) => String(item || "").trim()).filter(Boolean);
+  return input.map((item) => text(item)).filter(Boolean);
 }
 
 function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
   if (!ctx || typeof ctx !== "object") return false;
   if (!ctx.payload || typeof ctx.payload !== "object") return false;
-  const commitType = String(ctx?.commitType || "").trim();
+  const commitType = text(ctx?.commitType);
   const allowCommitTypes = normalizeStringArray(takeover?.allowCommitTypes);
   const blockCommitTypes = normalizeStringArray(takeover?.blockCommitTypes);
   if (allowCommitTypes.length && !allowCommitTypes.includes(commitType)) return false;
@@ -65,8 +66,8 @@ function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
     payload.content = String(replaceContent || "");
     changed = true;
   } else if (typeof payload?.content === "string") {
-    const prepend = String(takeover?.prependContent || "").trim();
-    const append = String(takeover?.appendContent || "").trim();
+    const prepend = text(takeover?.prependContent);
+    const append = text(takeover?.appendContent);
     if (prepend) {
       payload.content = `${prepend}${payload.content}`;
       changed = true;
@@ -96,7 +97,7 @@ function applyMemoryTakeoverForModelContext(ctx = {}, takeover = {}) {
     }
   }
 
-  const memoryNote = String(takeover?.memoryNote || takeover?.injectSystemNote || "").trim();
+  const memoryNote = text(takeover?.memoryNote || takeover?.injectSystemNote);
   if (memoryNote) {
     const marker = String(takeover?.id || "harness-memory-takeover").trim();
     const content = `<!-- ${marker} -->\n${memoryNote}`;

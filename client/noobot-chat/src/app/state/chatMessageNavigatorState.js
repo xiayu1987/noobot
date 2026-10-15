@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { lockChatMessageScrollSyncToAnchor } from "../runtime/chatMessageScrollSync.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizeChatMessageNavigatorAnchor(item = {}) {
-  return String(item?.id || "").trim();
+  return text(item?.id);
 }
 
 export function buildChatMessageNavigatorOpenRoute({

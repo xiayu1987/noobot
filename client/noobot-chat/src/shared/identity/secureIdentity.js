@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function secureCrypto() {
   const crypto = globalThis.crypto;
   if (!crypto || typeof crypto.getRandomValues !== "function") {
@@ -29,7 +31,7 @@ export function createSecureUuid() {
 }
 
 export function createSecureId(prefix = "id", separator = ":") {
-  const normalizedPrefix = String(prefix || "").trim();
+  const normalizedPrefix = text(prefix);
   if (!normalizedPrefix) throw new TypeError("secure identity prefix is required");
   return `${normalizedPrefix}${separator}${createSecureUuid()}`;
 }

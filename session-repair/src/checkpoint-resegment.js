@@ -10,7 +10,7 @@ import { checkpointContentHash, resolveRepairArtifactPath } from "./repair-primi
 import { readRepairJson, readRepairJournal } from "./repair-artifact-io.js";
 
 function messageTimestamp(record, turnId) {
-  const timestamp = Date.parse(String(record?.message?.ts || "").trim());
+  const timestamp = Date.parse(text(record?.message?.ts));
   if (Number.isFinite(timestamp)) return timestamp;
   throw Object.assign(
     new Error(`Cannot resegment checkpoint baseline with an invalid message timestamp: ${turnId}`),
@@ -19,7 +19,7 @@ function messageTimestamp(record, turnId) {
 }
 
 function checkpointTimestamp(payload, turnId) {
-  const timestamp = Date.parse(String(payload?.committedAt || "").trim());
+  const timestamp = Date.parse(text(payload?.committedAt));
   if (Number.isFinite(timestamp)) return timestamp;
   throw Object.assign(
     new Error(`Cannot resegment checkpoint baseline with an invalid commit timestamp: ${turnId}`),

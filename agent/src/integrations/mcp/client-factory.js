@@ -8,9 +8,10 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { StreamableHttpMcpClient } from "./clients/streamable-http.js";
 import { SseMcpClient } from "./clients/sse.js";
+import { text } from "@noobot/shared/value";
 
 export function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName = "" }) {
-  const name = String(mcpName || "").trim();
+  const name = text(mcpName);
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const servers = effectiveConfig?.mcpServers || {};
   const server = servers?.[name];
@@ -18,12 +19,12 @@ export function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName
   if (server?.isActive === false) return null;
   const serverType = normalizeMcpServerType(server?.type);
   if (!serverType) return null;
-  if (!String(server?.baseUrl || "").trim()) return null;
+  if (!text(server?.baseUrl)) return null;
   const resolvedHeaders =
     server?.headers && typeof server.headers === "object" && !Array.isArray(server.headers)
       ? { ...server.headers }
       : {};
-  const authHeader = String(resolvedHeaders?.Authorization || "").trim();
+  const authHeader = text(resolvedHeaders?.Authorization);
   if (/^Bearer\s*$/i.test(authHeader)) {
     throw recoverableToolError(`${tSystem("mcp.authHeaderEmptyAfterResolve")}: ${name}`);
   }

@@ -11,6 +11,7 @@ import {
   resolveWorkspaceSandboxLayout,
 } from "@noobot/execution-isolation-protocol";
 import { randomUUID } from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 export function buildDockerCommand({ userRoot, userId = "", command, isolation, workdir = "" }) {
   const resolvedIsolation = assertExecutionIsolationProtocol(isolation);
@@ -27,7 +28,7 @@ export function buildDockerCommand({ userRoot, userId = "", command, isolation, 
   });
   const workspaceSource = workspaceMount.source;
   const workspaceTarget = workspaceMount.target;
-  const resolvedWorkdir = String(workdir || "").trim() || layout.userRoot;
+  const resolvedWorkdir = text(workdir) || layout.userRoot;
   const encodedCommand = Buffer.from(String(command || ""), "utf8").toString("base64");
   const executionToken = randomUUID();
   const mountArgs = [

@@ -33,6 +33,7 @@ import {
   withAuthorityOutboxMutation,
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir } from "./outbox-scope.js";
+import { text } from "@noobot/shared/value";
 
 function assertIdempotencyDecision(decision) {
   if (decision.allowed) return;
@@ -161,7 +162,7 @@ function normalizeAnchoredCommandRequest({ userId, sessionId, anchor, commandId 
   if (!userId || !sessionId) throw badRequest("userId and sessionId are required");
   const matcher = createMessageAnchorMatcher(anchor);
   if (!matcher) throw badRequest("message anchor is required");
-  const normalizedCommandId = String(commandId || "").trim();
+  const normalizedCommandId = text(commandId);
   if (!normalizedCommandId) throw badRequest("commandId is required");
   return { matcher, normalizedCommandId };
 }
@@ -295,7 +296,7 @@ export async function replaceTurn({
   commandId = "",
   attachments = undefined,
 } = {}) {
-  const normalizedNewContent = String(newContent || "").trim();
+  const normalizedNewContent = text(newContent);
   if (!normalizedNewContent) throw badRequest("newContent is required");
   const { matcher, normalizedCommandId } = normalizeAnchoredCommandRequest({
     userId,
@@ -304,7 +305,7 @@ export async function replaceTurn({
     commandId,
   });
   const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  const normalizedTurnScopeId = text(turnScopeId);
   if (!normalizedTurnScopeId) throw badRequest("turnScopeId is required");
   const requestHash = createTurnReplaceFingerprint({
     anchor,
@@ -357,7 +358,7 @@ export async function replaceTurn({
       session.updatedAt = nowValue;
       session.aggregateVersion = nextAggregateVersion;
 
-      const replacementUserMessageId = String(newMessage.messageId || "").trim();
+      const replacementUserMessageId = text(newMessage.messageId);
       const turnReplacement = createTurnReplacementCommit({
         commandId: normalizedCommandId,
         sessionId,

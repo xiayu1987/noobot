@@ -8,6 +8,7 @@ import {
   createAttachmentLifecycleEvent,
 } from "@noobot/attachment-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 const ROUTE_IDENTITY_FIELDS = Object.freeze([
   "userId",
@@ -27,10 +28,10 @@ export function omitExecutionRouteIdentity(data = {}) {
 export function projectExecutionRouteIdentity(data = {}, route = {}) {
   return {
     ...omitExecutionRouteIdentity(data),
-    userId: String(route.userId || "").trim(),
-    dialogProcessId: String(route.dialogProcessId || "").trim(),
-    sessionId: String(route.sessionId || "").trim(),
-    turnScopeId: String(route.turnScopeId || "").trim(),
+    userId: text(route.userId),
+    dialogProcessId: text(route.dialogProcessId),
+    sessionId: text(route.sessionId),
+    turnScopeId: text(route.turnScopeId),
     parentSessionId: normalizeParentSessionId(route.parentSessionId),
   };
 }

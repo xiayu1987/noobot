@@ -15,6 +15,7 @@ import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { text } from "@noobot/shared/value";
 
 const RECENT_SESSION_DETAIL_REUSE_MS = 2000;
 
@@ -185,8 +186,8 @@ export function createSessionDetailRequests({
 
   async function fetchThinkingDetail(sessionId, { dialogProcessId = "", turnScopeId = "" } = {}) {
     const normalizedSessionId = normalizeSessionId(sessionId);
-    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    const normalizedDialogProcessId = text(dialogProcessId);
+    const normalizedTurnScopeId = text(turnScopeId);
     if (!normalizedDialogProcessId && !normalizedTurnScopeId) {
       throw new Error("dialogProcessId or turnScopeId is required");
     }

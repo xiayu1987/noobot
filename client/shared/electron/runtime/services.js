@@ -16,6 +16,7 @@ import {
   summarizeDependencySources,
 } from "../dependencies/runtime-env.js";
 import { getDependencyProxyEnv } from "../dependencies/proxy.js";
+import { text } from "@noobot/shared/value";
 
 export function createDesktopServiceManager({
   app,
@@ -179,7 +180,7 @@ export function createDesktopServiceManager({
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
     const startupContextPath = path.join(runtimeDir, "startup-context.json");
     const dependencyProxyEnv = getDependencyProxyEnv(
-      String(configState?.superAdmin?.dependencyProxyUrl || "").trim(),
+      text(configState?.superAdmin?.dependencyProxyUrl),
     );
     const dependencyEnv = {
       ...buildDependencyRuntimeEnv({ app, backendRoot }),

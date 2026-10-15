@@ -9,9 +9,10 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { fsRm } from "../../../shared/storage/fs-adapter.js";
 import { createSessionDeletedError, normalizeParentSessionId } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 function requireLifecycleSessionKey(sessionId = "") {
-  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedSessionId = text(sessionId);
   if (!normalizedSessionId) {
     throw fatalSystemError(tSystem("common.sessionIdRequired"), {
       code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
@@ -102,7 +103,7 @@ class SessionLifecycleMethods {
     const ids = [
       ...new Set(
         (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
-          .map((item) => String(item || "").trim())
+          .map((item) => text(item))
           .filter(Boolean),
       ),
     ].sort();

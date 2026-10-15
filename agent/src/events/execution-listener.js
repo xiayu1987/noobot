@@ -14,6 +14,7 @@ import {
 import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
+import { text } from "@noobot/shared/value";
 
 function projectExecutionLogRecord(event = "", data = {}) {
   if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
@@ -101,16 +102,16 @@ export function createExecutionEventListener({
 
   const summarizeDelivery = (event, data, route) => ({
     sourceEvent: event,
-    eventId: String(data?.envelope?.identity?.eventId || "").trim(),
-    eventType: String(data?.envelope?.identity?.eventType || event || "").trim(),
+    eventId: text(data?.envelope?.identity?.eventId),
+    eventType: text(data?.envelope?.identity?.eventType || event),
     route: {
-      sessionId: String(route.sessionId || "").trim(),
-      parentSessionId: String(route.parentSessionId || "").trim(),
-      dialogProcessId: String(route.dialogProcessId || "").trim(),
-      turnScopeId: String(route.turnScopeId || "").trim(),
+      sessionId: text(route.sessionId),
+      parentSessionId: text(route.parentSessionId),
+      dialogProcessId: text(route.dialogProcessId),
+      turnScopeId: text(route.turnScopeId),
     },
-    messageId: String(data?.envelope?.identity?.messageId || "").trim(),
-    presentationMessageId: String(data?.presentationMessageId || "").trim(),
+    messageId: text(data?.envelope?.identity?.messageId),
+    presentationMessageId: text(data?.presentationMessageId),
     sequence: Number(data?.envelope?.ordering?.sequence || 0),
     contentLength: String(data?.text || data?.content || "").length,
     attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,

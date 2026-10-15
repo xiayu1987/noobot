@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function resolveWorkflowDialogProcessId(item = {}) {
-  return String(item?.dialogProcessId || "").trim();
+  return text(item?.dialogProcessId);
 }
 
 export function collectWorkflowDialogProcessIds(...items) {
@@ -14,6 +16,6 @@ export function collectWorkflowDialogProcessIds(...items) {
       if (!item || typeof item !== "object") return [];
       return [item?.dialogProcessId];
     })
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .filter(Boolean);
 }

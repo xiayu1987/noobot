@@ -13,6 +13,7 @@ import {
   createWorkflowRuntimeEnvelope,
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/event-protocol/workflow-runtime-event";
+import { text } from "@noobot/shared/value";
 const normalizeRouteText = (value) => String(value ?? "").trim();
 
 function mergeSessionSnapshotBody(session, sessionSummary) {
@@ -85,11 +86,11 @@ function logDetail({
     level,
     debugType: "workflow-diagnostics",
     event,
-    userId: String(userId || "").trim(),
-    sessionId: String(sessionId || "").trim(),
-    dialogProcessId: String(dialogProcessId || "").trim(),
+    userId: text(userId),
+    sessionId: text(sessionId),
+    dialogProcessId: text(dialogProcessId),
     data: {
-      traceId: String(traceId || "").trim(),
+      traceId: text(traceId),
       ...(data && typeof data === "object" ? data : {}),
     },
   });
@@ -112,9 +113,9 @@ function createThinkingDetailHandler(sessions, httpStatus) {
     });
     res.json({
       ok: true,
-      userId: String(userId || "").trim(),
-      rootSessionId: String(sessionId || "").trim(),
-      dialogProcessId: String(routeDialogProcessId || "").trim(),
+      userId: text(userId),
+      rootSessionId: text(sessionId),
+      dialogProcessId: text(routeDialogProcessId),
       ...detail,
     });
   };
@@ -219,9 +220,9 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     });
     res.json({
       ok: true,
-      userId: String(userId || "").trim(),
-      sessionId: String(sessionId || "").trim(),
-      dialogProcessId: String(dialogProcessId || "").trim(),
+      userId: text(userId),
+      sessionId: text(sessionId),
+      dialogProcessId: text(dialogProcessId),
       workflowSession: {
         aggregateVersion,
         snapshotEnvelope,

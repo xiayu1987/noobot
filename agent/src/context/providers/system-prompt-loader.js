@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { normalizeLocale } from "noobot-i18n/shared";
 import { filePath as path } from "@noobot/path-resolver";
+import { text } from "@noobot/shared/value";
 
 const systemPromptCachePromises = new Map();
 
@@ -15,7 +16,7 @@ function resolveDefaultSystemPromptPath({
   env = process.env,
   locale = "zh-CN",
 } = {}) {
-  const rawEnvPath = String(env?.AGENT_SYSTEM_PROMPT_PATH || "").trim();
+  const rawEnvPath = text(env?.AGENT_SYSTEM_PROMPT_PATH);
   if (rawEnvPath) return path.resolve(cwd, rawEnvPath);
   const normalizedLocale = normalizeLocale(locale, "zh-CN");
   const fileName = normalizedLocale === "en-US" ? "base.en-US.md" : "base.zh-CN.md";

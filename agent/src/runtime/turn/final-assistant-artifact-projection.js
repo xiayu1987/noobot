@@ -11,15 +11,15 @@ import {
   compactTransferEnvelopes,
   dedupeSessionAttachmentRefs,
 } from "../../session/transfer-attachment-refs.js";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
 function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
   if (!isPlainObject(attachmentItem)) return false;
-  const generationSource = String(attachmentItem?.generationSource || "").trim();
+  const generationSource = text(attachmentItem?.generationSource);
   if (HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource)) return false;
-  const attachmentSource = String(attachmentItem?.attachmentSource || "").trim();
+  const attachmentSource = text(attachmentItem?.attachmentSource);
   return (
     attachmentItem?.generatedByModel === true ||
     attachmentSource === ATTACHMENT_SOURCE.MODEL ||

@@ -11,13 +11,13 @@ import {
   getTaskTemplate,
   translateI18nText,
 } from "./i18n.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeFilePlan(files = null) {
   const source = files && typeof files === "object" && !Array.isArray(files) ? files : {};
   const readArray = (...keys) => {
     for (const key of keys) {
-      if (Array.isArray(source[key]))
-        return source[key].map((item) => String(item || "").trim()).filter(Boolean);
+      if (Array.isArray(source[key])) return source[key].map((item) => text(item)).filter(Boolean);
     }
     return [];
   };
@@ -56,9 +56,7 @@ export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_
       String(source.owner ?? source.assignee ?? getDefaultTaskOwner(locale)).trim() ||
       getDefaultTaskOwner(locale),
     subOwners: Array.isArray(source.subOwners ?? source.subTaskOwners)
-      ? (source.subOwners ?? source.subTaskOwners)
-          .map((name) => String(name || "").trim())
-          .filter(Boolean)
+      ? (source.subOwners ?? source.subTaskOwners).map((name) => text(name)).filter(Boolean)
       : [],
     input: String(source.input ?? source.inputs ?? source.requiredInput ?? "").trim(),
     output: String(source.output ?? source.outputs ?? source.expectedOutput ?? "").trim(),
@@ -69,12 +67,12 @@ export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_
 export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
   const source = bucket && typeof bucket === "object" ? bucket : {};
   return {
-    totalGoal: String(source.totalGoal || "").trim(),
-    planText: String(source.planText || "").trim(),
+    totalGoal: text(source.totalGoal),
+    planText: text(source.planText),
     taskOwner:
       String(source.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
     nextPhase: source.nextPhase && typeof source.nextPhase === "object" ? source.nextPhase : null,
-    checklistSource: String(source.taskChecklistSource || "").trim(),
+    checklistSource: text(source.taskChecklistSource),
     revisionCount: Array.isArray(source.planRevisions) ? source.planRevisions.length : 0,
     operationDirectory:
       source.operationDirectory && typeof source.operationDirectory === "object"

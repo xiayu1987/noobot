@@ -11,6 +11,7 @@ import {
   CONTEXT_CONTROL_MESSAGE_TYPES,
   CONTEXT_INJECTED_MESSAGE_TYPE,
 } from "@noobot/context-protocol/policy/injected-message";
+import { text } from "@noobot/shared/value";
 
 function requireTurnContextStores({
   turnMessageStore,
@@ -37,9 +38,9 @@ export function appendTurnContextControlMessage({
 } = {}) {
   const turnMessageStore = runtime?.currentTurnMessages;
   const modelContext = loopState?.modelContext;
-  const dialogProcessId = String(loopState?.dialogProcessId || "").trim();
-  const turnScopeId = String(modelContext?.activeTurnIdentity?.turnScopeId || "").trim();
-  const normalizedInternalType = String(internalType || "").trim();
+  const dialogProcessId = text(loopState?.dialogProcessId);
+  const turnScopeId = text(modelContext?.activeTurnIdentity?.turnScopeId);
+  const normalizedInternalType = text(internalType);
   if (!CONTEXT_CONTROL_MESSAGE_TYPES.includes(normalizedInternalType)) {
     throw new TypeError(
       `Turn context control message internalType must be a context control type: ${normalizedInternalType}`,
@@ -91,12 +92,12 @@ export function appendUserInterjectionMessage({
 } = {}) {
   const turnMessageStore = runtime?.currentTurnMessages;
   const modelContext = loopState?.modelContext || runtime?.activeMessageContext;
-  const dialogProcessId = String(
-    loopState?.dialogProcessId || modelContext?.activeTurnIdentity?.dialogProcessId || "",
-  ).trim();
-  const turnScopeId = String(modelContext?.activeTurnIdentity?.turnScopeId || "").trim();
-  const messageUid = String(interjection?.messageUid || "").trim();
-  const content = String(interjection?.message || "").trim();
+  const dialogProcessId = text(
+    loopState?.dialogProcessId || modelContext?.activeTurnIdentity?.dialogProcessId,
+  );
+  const turnScopeId = text(modelContext?.activeTurnIdentity?.turnScopeId);
+  const messageUid = text(interjection?.messageUid);
+  const content = text(interjection?.message);
   const interjectionSequence = Number(interjection?.interjectionSequence || 0);
   requireTurnContextStores({
     turnMessageStore,
@@ -109,7 +110,7 @@ export function appendUserInterjectionMessage({
     throw new TypeError("User interjection identity and content are required");
   const existing = turnMessageStore
     .toArray()
-    .find((message = {}) => String(message.messageUid || "").trim() === messageUid);
+    .find((message = {}) => text(message.messageUid) === messageUid);
   if (existing) return existing;
   const additionalKwargs = {
     noobotMessageId: messageUid,

@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { readFile, writeFile } from "node:fs/promises";
 import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
+import { text } from "@noobot/shared/value";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   session: "session.json",
@@ -20,7 +21,7 @@ export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
 });
 
 export function buildSessionArtifactFileMap(sessionDir = "") {
-  const dir = String(sessionDir || "").trim();
+  const dir = text(sessionDir);
   return {
     session: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.session),
     sessionSummary: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.sessionSummary),
@@ -64,7 +65,7 @@ export async function assertArtifactSessionWritable({
 }
 
 export function resolveSessionArtifactMutationLock(sessionDir = "") {
-  const normalized = String(sessionDir || "").trim();
+  const normalized = text(sessionDir);
   if (!normalized) throw new Error("session artifact mutation lock requires sessionDir");
   return `${path.resolve(normalized)}.mutation-lock`;
 }

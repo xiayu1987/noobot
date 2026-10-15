@@ -20,6 +20,7 @@ import {
 import { safeError } from "../data/record-builders.js";
 import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
 import { applyAgentResolvedModelMessages } from "../core/model-message-context.js";
+import { text } from "@noobot/shared/value";
 
 async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
   const bootstrap = meta?.harness?.globalBootstrap;
@@ -36,7 +37,7 @@ function isMainPlanReady(bucket = null) {
   if (!bucket) return true;
   const state = bucket?.state && typeof bucket.state === "object" ? bucket.state : {};
   if (state?.flags?.planningCaptured === true) return true;
-  if (String(bucket?.planText || "").trim()) return true;
+  if (text(bucket?.planText)) return true;
   if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0)
     return true;
   return Array.isArray(bucket?.taskChecklist) && bucket.taskChecklist.length > 0;

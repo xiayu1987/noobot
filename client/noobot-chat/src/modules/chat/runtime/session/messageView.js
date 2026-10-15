@@ -24,6 +24,7 @@ import {
   summarizeWorkflowMessage,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { projectTurnPresentation } from "@noobot/event-protocol/message-event";
+import { text } from "@noobot/shared/value";
 
 const PRESENTATION_RUNTIME_FIELDS = Object.freeze([
   "messageEventState",
@@ -56,19 +57,19 @@ export function createSessionMessageView({
   }
 
   function findCanonicalMessageById(sessionId, messageId) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedSessionId = text(sessionId);
+    const normalizedMessageId = text(messageId);
     if (!normalizedSessionId || !normalizedMessageId) return null;
     const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
     const targetSession = sessionItems.find((sessionItem) =>
       [sessionItem?.sessionId, sessionItem?.sessionId, sessionItem?.sessionId].some(
-        (candidate) => String(candidate || "").trim() === normalizedSessionId,
+        (candidate) => text(candidate) === normalizedSessionId,
       ),
     );
     const messages = Array.isArray(targetSession?.messages) ? targetSession.messages : [];
     const matchingMessages = messages.filter((message) => {
-      const messageIdentity = String(message?.messageId || "").trim();
-      const presentationIdentity = String(message?.presentationMessageId || "").trim();
+      const messageIdentity = text(message?.messageId);
+      const presentationIdentity = text(message?.presentationMessageId);
       return (
         messageIdentity === normalizedMessageId || presentationIdentity === normalizedMessageId
       );
@@ -79,27 +80,27 @@ export function createSessionMessageView({
   }
 
   function findCanonicalMessagesById(sessionId, messageId) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedSessionId = text(sessionId);
+    const normalizedMessageId = text(messageId);
     if (!normalizedSessionId || !normalizedMessageId) return [];
     const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
     const targetSession = sessionItems.find(
-      (sessionItem) => String(sessionItem?.sessionId || "").trim() === normalizedSessionId,
+      (sessionItem) => text(sessionItem?.sessionId) === normalizedSessionId,
     );
     const messages = Array.isArray(targetSession?.messages) ? targetSession.messages : [];
     return messages.filter(
       (message) =>
-        String(message?.messageId || "").trim() === normalizedMessageId ||
-        String(message?.presentationMessageId || "").trim() === normalizedMessageId,
+        text(message?.messageId) === normalizedMessageId ||
+        text(message?.presentationMessageId) === normalizedMessageId,
     );
   }
 
   function upsertCanonicalAssistantMessage(messageId, identity = {}) {
-    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedMessageId = text(messageId);
     if (!normalizedMessageId) return null;
-    const sessionId = String(
-      identity?.sessionId || activeSession.value?.sessionId || activeSessionId.value || "",
-    ).trim();
+    const sessionId = text(
+      identity?.sessionId || activeSession.value?.sessionId || activeSessionId.value,
+    );
     const existing = findCanonicalMessageById(sessionId, normalizedMessageId);
     if (existing) return existing;
     return appendMessage(RoleEnum.ASSISTANT, "", [], {
@@ -111,9 +112,9 @@ export function createSessionMessageView({
 
   function materializeTurnPresentation(envelope = {}) {
     const presentation = projectTurnPresentation(envelope?.payload);
-    const sessionId = String(envelope?.identity?.sessionId || "").trim();
+    const sessionId = text(envelope?.identity?.sessionId);
     const targetSession = (Array.isArray(sessions?.value) ? sessions.value : []).find(
-      (sessionItem) => String(sessionItem?.sessionId || "").trim() === sessionId,
+      (sessionItem) => text(sessionItem?.sessionId) === sessionId,
     );
     if (!presentation || !targetSession) {
       return { applied: false, reason: presentation ? "session_not_found" : "not_presentation" };
@@ -128,10 +129,8 @@ export function createSessionMessageView({
         sessionId,
         ts: source.ts || source.createdAt || envelope.occurredAt,
       };
-      const messageId = String(sourceMessage.messageId || "").trim();
-      const existing = messages.find(
-        (message) => String(message?.messageId || "").trim() === messageId,
-      );
+      const messageId = text(sourceMessage.messageId);
+      const existing = messages.find((message) => text(message?.messageId) === messageId);
       const canonical = makeViewMessage(sourceMessage);
       if (existing) {
         const runtime = Object.fromEntries(

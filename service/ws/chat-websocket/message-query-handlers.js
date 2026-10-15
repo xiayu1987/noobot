@@ -13,6 +13,7 @@ import {
 } from "@noobot/session-protocol/execution-lifecycle";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
 import { findPendingInteraction } from "./pending-interaction-registry.js";
+import { text } from "@noobot/shared/value";
 
 const EXECUTION_QUERY_READERS = Object.freeze({
   [EXECUTION_QUERY_COMMAND.SNAPSHOT_GET]: Object.freeze({
@@ -41,7 +42,7 @@ function sendAuthoritativeTurnSnapshot(sendEvent, command, snapshot) {
   sendEvent(TURN_SNAPSHOT_WIRE_EVENT, createTurnSnapshotEnvelope(snapshot));
 }
 
-const trimText = (value) => String(value || "").trim();
+const trimText = (value) => text(value);
 
 function resolveTurnCommandIdentity(authInfo, command) {
   const identity = {
@@ -64,7 +65,7 @@ export function createMessageQueryHandlers({
   turnRecovery,
 }) {
   const handleInteractionResponse = (command) => {
-    const requestId = String(command.interaction?.requestId || "").trim();
+    const requestId = text(command.interaction?.requestId);
     const requestItem = findPendingInteraction({ requestId, ownerUserId: canonicalRunOwnerId });
     if (!requestItem) {
       sendFailedCommandReceipt(sendEvent, command, {
@@ -101,10 +102,10 @@ export function createMessageQueryHandlers({
   };
 
   const handleExecutionQuery = async (command, commandType) => {
-    const userId = String(authInfo?.userId || "").trim();
-    const executionId = String(command.query?.executionId || "").trim();
-    const rootExecutionId = String(command.query?.rootExecutionId || "").trim();
-    const commandId = String(command.commandId || "").trim();
+    const userId = text(authInfo?.userId);
+    const executionId = text(command.query?.executionId);
+    const rootExecutionId = text(command.query?.rootExecutionId);
+    const commandId = text(command.commandId);
     const contract = EXECUTION_QUERY_CONTRACT[commandType];
     const readerSpec = EXECUTION_QUERY_READERS[commandType];
     if (

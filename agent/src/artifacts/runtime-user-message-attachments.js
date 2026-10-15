@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function cloneAttachmentList(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -31,12 +33,12 @@ export function applyRuntimeUserMessageAttachments(runtime = {}, attachments = [
 
 export function updateRuntimeUserMessageAttachment(runtime = {}, attachmentId = "", update = {}) {
   if (!runtime || typeof runtime !== "object") return false;
-  const normalizedAttachmentId = String(attachmentId || "").trim();
+  const normalizedAttachmentId = text(attachmentId);
   if (!normalizedAttachmentId || !update || typeof update !== "object") return false;
 
   const sourceAttachments = resolveRuntimeUserMessageAttachments(runtime);
   const sourceAttachmentIndex = sourceAttachments.findIndex(
-    (item) => String(item?.attachmentId || "").trim() === normalizedAttachmentId,
+    (item) => text(item?.attachmentId) === normalizedAttachmentId,
   );
   if (sourceAttachmentIndex < 0) return false;
 

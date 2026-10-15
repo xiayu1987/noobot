@@ -4,14 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { text } from "@noobot/shared/value";
 function normalizeToolNameSet(input) {
   if (!Array.isArray(input)) return new Set();
-  return new Set(input.map((item) => String(item || "").trim()).filter(Boolean));
+  return new Set(input.map((item) => text(item)).filter(Boolean));
 }
 
 function normalizeCallShape(call = null) {
   if (!call || typeof call !== "object") return null;
-  const name = String(call?.name || "").trim();
+  const name = text(call?.name);
   if (!name) return null;
   return {
     ...call,
@@ -31,7 +32,7 @@ function applyTakeoverForBeforeToolCalls(ctx = {}, takeover = {}) {
   const denySet = normalizeToolNameSet(takeover?.denyToolNames || takeover?.denyTools);
   if (allowSet.size || denySet.size) {
     const nextCalls = calls.filter((call) => {
-      const toolName = String(call?.name || "").trim();
+      const toolName = text(call?.name);
       if (!toolName) return false;
       if (allowSet.size && !allowSet.has(toolName)) return false;
       if (denySet.size && denySet.has(toolName)) return false;

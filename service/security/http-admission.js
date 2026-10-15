@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ipKeyGenerator } from "express-rate-limit";
+import { text } from "@noobot/shared/value";
 
 const HTTP_ADMISSION_POLICY = Object.freeze({
   connection: Object.freeze({ limit: 120, windowMs: 60000 }),
@@ -34,7 +35,7 @@ export function createHttpAdmissionOptions({
     if (category === "connection") return `network:${networkIdentity}`;
     const auth = resolveAuthByApiKey(req);
     if (auth) req.auth = auth;
-    const userId = String(auth?.userId || "").trim();
+    const userId = text(auth?.userId);
     return userId ? `user:${userId}` : `network:${networkIdentity}`;
   }
 

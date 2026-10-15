@@ -27,6 +27,7 @@ import {
   createDeclaredFrontendComponentLoader,
   validateDeclaredFrontendComponentLoaders,
 } from "@noobot/plugin-runtime/contributions";
+import { text } from "@noobot/shared/value";
 
 let activeScope = null;
 let lifecycleOperation = Promise.resolve();
@@ -39,7 +40,7 @@ function runLifecycleOperation(operation) {
 
 function loadedFrontendEntries() {
   return externalFrontendPluginEntries.map((item) => {
-    const pluginId = String(item?.pluginId || "").trim();
+    const pluginId = text(item?.pluginId);
     const componentLoaders = validateDeclaredFrontendComponentLoaders(
       item.manifest,
       item.componentLoaders,
@@ -83,7 +84,7 @@ async function activateFrontendPluginGeneration() {
           pluginMeta: Object.freeze({
             pluginId: entry.pluginId,
             name: String(entry.item?.name || entry.pluginId).trim(),
-            version: String(entry.item?.version || "").trim(),
+            version: text(entry.item?.version),
             protocolVersion: entry.manifest.protocolVersion,
           }),
           logger: console,

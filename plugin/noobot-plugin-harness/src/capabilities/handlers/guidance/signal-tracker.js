@@ -9,6 +9,7 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { getMessageId, resolveModelMessageBlocks } from "../../../core/message-store.js";
 import { requestSummaryCheckpointMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
+import { text } from "@noobot/shared/value";
 
 const FAILURE_THRESHOLD = Object.freeze({
   CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
@@ -42,7 +43,7 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   const summaryCheckpointMessageIdsValue = holder?.state?.pending?.summaryCheckpointMessageIds;
   const summaryCheckpointMessageIds = Array.isArray(summaryCheckpointMessageIdsValue)
-    ? summaryCheckpointMessageIdsValue.map((id) => String(id || "").trim()).filter(Boolean)
+    ? summaryCheckpointMessageIdsValue.map((id) => text(id)).filter(Boolean)
     : [];
   const hasSummaryCheckpoint = Array.isArray(summaryCheckpointMessageIdsValue);
 
@@ -67,7 +68,7 @@ export function markToolSignals(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { state } = holder;
-  const toolName = String(ctx?.toolName || ctx?.call?.name || "").trim();
+  const toolName = text(ctx?.toolName || ctx?.call?.name);
   if (!toolName) return false;
   let changed = false;
   if (ctx?.success === true) {

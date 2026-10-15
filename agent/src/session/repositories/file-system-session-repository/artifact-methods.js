@@ -32,6 +32,7 @@ import {
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
 } from "@noobot/session-repair";
+import { text } from "@noobot/shared/value";
 
 class SessionArtifactMethods {
   async repairSessionProtocol(
@@ -42,8 +43,8 @@ class SessionArtifactMethods {
   ) {
     return this._repairSessionToCurrentProtocol(
       userId,
-      String(sessionId || "").trim(),
-      String(parentSessionId || "").trim(),
+      text(sessionId),
+      text(parentSessionId),
       persistenceContext,
     );
   }
@@ -84,7 +85,7 @@ class SessionArtifactMethods {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return { summary: null, migrated: false, rebuilt: false };
     const scope = await this.resolveSessionScope(
       userId,
@@ -199,7 +200,7 @@ class SessionArtifactMethods {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return null;
     const { sessionDir } = await this.resolveSessionScope(
       userId,
@@ -215,7 +216,7 @@ class SessionArtifactMethods {
   }
 
   async writeSessionDisplaySummary(userId = "", session = {}, { persistenceContext = null } = {}) {
-    const sessionId = String(session?.sessionId || "").trim();
+    const sessionId = text(session?.sessionId);
     if (!sessionId) return null;
     const { sessionDir } = await this.resolveSessionScope(
       userId,
@@ -251,7 +252,7 @@ class SessionArtifactMethods {
       persistenceContext = null,
     } = {},
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return null;
     const { sessionDir } = await this.resolveSessionScope(
       userId,
@@ -268,7 +269,7 @@ class SessionArtifactMethods {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return { migrated: false };
     const scope = await this.resolveSessionScope(
       userId,
@@ -409,8 +410,8 @@ class SessionArtifactMethods {
     const normalized = normalizeSessionEntity(
       {
         ...session,
-        sessionId: String(session.sessionId || sessionId || "").trim(),
-        parentSessionId: String(session.parentSessionId || parentSessionId || "").trim(),
+        sessionId: text(session.sessionId || sessionId),
+        parentSessionId: text(session.parentSessionId || parentSessionId),
         caller: String(session.caller || "user").trim() || "user",
         modelAlias: String(session.modelAlias || ""),
         messages: this.normalizeMessages(session.messages || [], { sessionId }),
@@ -445,7 +446,7 @@ class SessionArtifactMethods {
 
   async removeSessionDisplaySummaries(userId = "", sessionIds = []) {
     const ids = (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
-      .map((item) => String(item || "").trim())
+      .map((item) => text(item))
       .filter(Boolean);
     let removed = 0;
     for (const sessionId of ids) {

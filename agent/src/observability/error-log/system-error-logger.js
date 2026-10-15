@@ -7,6 +7,7 @@ import { appendSystemErrorLog } from "./system-error-log.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { logError } from "../console/logger.js";
 import { resolveErrorHeaderValue } from "../../shared/utils/error-header.js";
+import { text } from "@noobot/shared/value";
 
 function resolveErrorStatus(error = {}) {
   const rawStatus =
@@ -86,7 +87,7 @@ export class SystemErrorLogger {
     extra = {},
   } = {}) {
     try {
-      const normalizedUserId = String(userId || "").trim();
+      const normalizedUserId = text(userId);
       const normalizedExtra =
         extra && typeof extra === "object" && !Array.isArray(extra) ? extra : {};
       const defaultErrorExtra = buildDefaultErrorExtra(error);
@@ -94,7 +95,7 @@ export class SystemErrorLogger {
         ...defaultErrorExtra,
         ...normalizedExtra,
       };
-      const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
+      const workspaceRoot = text(this.globalConfig?.workspaceRoot);
       if (!workspaceRoot)
         throw new TypeError("system error logger requires globalConfig.workspaceRoot");
       const basePath = normalizedUserId

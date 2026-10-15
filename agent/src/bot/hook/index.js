@@ -11,6 +11,7 @@ import {
   HOOK_CANCELLATION_MODE,
   requireHookPointDescriptor,
 } from "@noobot/hook-protocol";
+import { text } from "@noobot/shared/value";
 
 function resolveBotRuntimeHookManager(runtime = {}) {
   return runtime?.botHookManager && typeof runtime.botHookManager.emit === "function"
@@ -26,11 +27,11 @@ function resolveBotHookRuntimeMeta({
   caller = "",
 } = {}) {
   return {
-    userId: String(userId || "").trim(),
-    sessionId: String(sessionId || "").trim(),
+    userId: text(userId),
+    sessionId: text(sessionId),
     parentSessionId: normalizeParentSessionId(parentSessionId),
     dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-    caller: String(caller || "").trim(),
+    caller: text(caller),
   };
 }
 

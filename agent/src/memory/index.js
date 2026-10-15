@@ -27,6 +27,7 @@ import {
   MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
 } from "./constants.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 const MEMORY_PROMPT_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhSystemPromptI18n?.memoryPrompt || {}),
@@ -106,14 +107,14 @@ export class MemoryManager {
       });
     }
     assertNotAborted(abortSignal);
-    const prompt = String(
+    const prompt = text(
       promptI18n?.prompt?.({
         fieldModel: renderLongMemoryFieldsForPrompt(state.model, state.values),
         existingLongMemory: renderLongMemoryBody(state.model, state.values),
         patchGrammar: LONG_MEMORY_PATCH_GRAMMAR,
         promptPayload,
-      }) || "",
-    ).trim();
+      }),
+    );
     if (!prompt) throw new Error("long memory prompt is not configured");
     const request = { flow: "memory.summary", purpose: "memory_consolidation" };
     const output = await invokeModel({ ...request, prompt });
@@ -182,7 +183,7 @@ export class MemoryManager {
         },
       },
     });
-    const memorySystemPrompt = String(promptI18n?.system || "").trim();
+    const memorySystemPrompt = text(promptI18n?.system);
     if (!memorySystemPrompt) {
       throw new Error("memory system prompt is not configured");
     }

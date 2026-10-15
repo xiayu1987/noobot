@@ -9,6 +9,7 @@ import {
   isPluginInjectedMessage,
 } from "../../../chat/model/messageModel.js";
 import { isNewerSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
+import { text } from "@noobot/shared/value";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {
@@ -32,8 +33,7 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
   const isUnavailable = item?.availability === "unavailable";
   const messages = Array.isArray(item.messages) ? item.messages : [];
   const titleFallback = item.sessionId.slice(0, 8);
-  const title =
-    String(item.title || "").trim() || sessionTitleFromMessages(messages, titleFallback);
+  const title = text(item.title) || sessionTitleFromMessages(messages, titleFallback);
   const messageCount = Number.isFinite(Number(item.messageCount))
     ? Number(item.messageCount)
     : messages.length || 0;
@@ -114,7 +114,7 @@ export function mergeExistingSessionState(
       ? findVisibleLastMessage(existingMessages)
       : mappedSession.lastMessage,
     title:
-      String(mappedSession.title || "").trim() ||
+      text(mappedSession.title) ||
       (existingMessages.length
         ? sessionTitleFromMessages(existingMessages, existingSession.title || mappedSession.title)
         : existingSession.title || mappedSession.title),

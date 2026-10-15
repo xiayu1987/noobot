@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_STATE, TURN_TERMINAL_STATUS } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 export function createDetachedTerminalReceipt({
   lifecycle = null,
@@ -11,13 +12,11 @@ export function createDetachedTerminalReceipt({
   failed = false,
 } = {}) {
   if (!lifecycle || typeof lifecycle !== "object" || Array.isArray(lifecycle)) return null;
-  const sourceState = String(lifecycle?.state || lifecycle?.branchState || "")
-    .trim()
-    .toLowerCase();
+  const sourceState = text(lifecycle?.state || lifecycle?.branchState).toLowerCase();
   const state = resolveDetachedReceiptState(sourceState, failed);
   return {
     ...lifecycle,
-    executionId: String(lifecycle?.executionId || executionId || "").trim(),
+    executionId: text(lifecycle?.executionId || executionId),
     executionKind: "agent",
     state,
     revision: Number(lifecycle?.revision || 0),

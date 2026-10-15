@@ -21,13 +21,14 @@ import {
   isTurnCommitContinuation,
   resolveTurnCommitAction,
 } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 function createStatusError(message, statusCode, fields = {}) {
   return Object.assign(new Error(message), { statusCode, ...fields });
 }
 
 function trimText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 const COMMIT_TURN_TEXT_FIELDS = [

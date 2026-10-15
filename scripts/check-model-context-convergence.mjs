@@ -580,7 +580,7 @@ assertFileContains("agent/src/context/index.js", [
   },
   {
     name: "context passes current turnScopeId to session history",
-    pattern: /currentTurnScopeId:\s*String\(this\.runConfig\?\.turnScopeId/,
+    pattern: /currentTurnScopeId:\s*text\(this\.runConfig\?\.turnScopeId\)/,
   },
 ]);
 
@@ -613,7 +613,8 @@ if (
   /\bsameCurrentText\b/.test(messageBuilderText) ||
   /String\(\s*msg\?\.content\s*\|\|\s*["']["']\s*\)\.trim\(\)\s*===\s*normalizedCurrentUserMessage/.test(
     messageBuilderText,
-  )
+  ) ||
+  /\btext\(\s*msg\?\.content\s*\)\s*===\s*normalizedCurrentUserMessage/.test(messageBuilderText)
 ) {
   fail(
     "history filtering by current user text found",
@@ -639,7 +640,7 @@ const messageStoreText = assertFileContains("context-protocol/src/message/store.
   {
     name: "persisted message uid owns canonical entity identity",
     pattern:
-      /function\s+resolveMessageId[\s\S]*?const\s+persistedMessageUid\s*=\s*String\(message\?\.messageUid[\s\S]*?return\s+canonicalMessageId\s*\|\|\s*persistedMessageUid/,
+      /function\s+resolveMessageId[\s\S]*?const\s+persistedMessageUid\s*=\s*text\(message\?\.messageUid\)[\s\S]*?return\s+canonicalMessageId\s*\|\|\s*persistedMessageUid/,
   },
   {
     name: "persisted and context identities cannot diverge",

@@ -5,12 +5,11 @@
  */
 
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 export function useWorkflowNodeSessionLabels(translate) {
   function resolveStatusLabel(nodeItem = {}) {
-    const status = String(nodeItem?._status || nodeItem?.status || "")
-      .trim()
-      .toLowerCase();
+    const status = text(nodeItem?._status || nodeItem?.status).toLowerCase();
     if (status === "success") return translate("workflow.statusSuccess");
     if (status === "failed" || status === "error") return translate("workflow.statusFailed");
     if (status === "running") return translate("workflow.statusRunning");
@@ -18,9 +17,7 @@ export function useWorkflowNodeSessionLabels(translate) {
   }
 
   function resolveStatusClass(nodeItem = {}) {
-    const status = String(nodeItem?._status || nodeItem?.status || "")
-      .trim()
-      .toLowerCase();
+    const status = text(nodeItem?._status || nodeItem?.status).toLowerCase();
     if (status === "success") return "success";
     if (status === "failed" || status === "error") return "failed";
     if (status === "running") return "running";
@@ -35,14 +32,14 @@ export function useWorkflowNodeSessionLabels(translate) {
   }
 
   function resolveStateBoxLabel(stateBox = {}, stateIndex = 0) {
-    const id = String(stateBox?.actionNodeStateId || "").trim();
+    const id = text(stateBox?.actionNodeStateId);
     if (!id) return translate("workflow.nodeBoxLabelFallback", { index: stateIndex + 1 });
     return translate("workflow.nodeBoxLabel", { id });
   }
 
   function stepHasSession(stepItem = {}) {
     return Boolean(
-      String(stepItem?.activeChildExecutionId || "").trim() ||
+      text(stepItem?.activeChildExecutionId) ||
       (Array.isArray(stepItem?.attemptExecutionIds) &&
         stepItem.attemptExecutionIds.some(Boolean)) ||
       resolveWorkflowDialogProcessId(stepItem),

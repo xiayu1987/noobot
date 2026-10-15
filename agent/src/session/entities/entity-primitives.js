@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function normalizeTextField(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function firstTextField(values = []) {

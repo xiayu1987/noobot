@@ -11,6 +11,7 @@ import {
   readJournalRecords,
   readSummarySnapshots,
 } from "./turn-journal-store.js";
+import { text } from "@noobot/shared/value";
 
 function assertCanonicalTurnJournal(session, operation) {
   if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
@@ -63,19 +64,16 @@ export async function readSessionTurn({
   const session = await readJsonArtifactFile(files.session, null);
   if (!session || typeof session !== "object") return null;
   assertCanonicalTurnJournal(session, "session turn lookup");
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
-  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  const normalizedTurnScopeId = text(turnScopeId);
+  const normalizedDialogProcessId = text(dialogProcessId);
   if (!normalizedTurnScopeId) {
     const error = new Error("turnScopeId is required");
     error.code = "SESSION_TURN_IDENTITY_REQUIRED";
     throw error;
   }
   const matches = (Array.isArray(session.turnOrder) ? session.turnOrder : []).filter((item) => {
-    if (String(item?.turnScopeId || "").trim() !== normalizedTurnScopeId) return false;
-    return (
-      !normalizedDialogProcessId ||
-      String(item?.dialogProcessId || "").trim() === normalizedDialogProcessId
-    );
+    if (text(item?.turnScopeId) !== normalizedTurnScopeId) return false;
+    return !normalizedDialogProcessId || text(item?.dialogProcessId) === normalizedDialogProcessId;
   });
   if (matches.length > 1) {
     const error = new Error("session turn identity is ambiguous");
@@ -84,12 +82,12 @@ export async function readSessionTurn({
   }
   if (!matches[0]) return null;
   return {
-    sessionId: String(session.sessionId || "").trim(),
+    sessionId: text(session.sessionId),
     ...(await materializeTurn(sessionDir, matches[0])),
-    turnId: String(matches[0].turnId || "").trim(),
+    turnId: text(matches[0].turnId),
     artifactOrdinal: Number(matches[0].artifactOrdinal || 0),
-    turnScopeId: String(matches[0].turnScopeId || "").trim(),
-    dialogProcessId: String(matches[0].dialogProcessId || "").trim(),
+    turnScopeId: text(matches[0].turnScopeId),
+    dialogProcessId: text(matches[0].dialogProcessId),
   };
 }
 

@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
+import { text } from "@noobot/shared/value";
 
 export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
     if (!targetAssistantMessage) return;
-    targetAssistantMessage.error = String(errorMessage || "").trim();
-    if (!String(targetAssistantMessage.content || "").trim()) {
+    targetAssistantMessage.error = text(errorMessage);
+    if (!text(targetAssistantMessage.content)) {
       targetAssistantMessage.content = `> ${translate("chat.occurredError", {
         error: targetAssistantMessage.error || translate("chat.unknownError"),
       })}`;

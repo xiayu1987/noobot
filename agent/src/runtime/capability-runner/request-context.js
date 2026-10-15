@@ -16,6 +16,7 @@ import {
 } from "@noobot/context-protocol/message/codec";
 import { PLUGIN_MODEL_HEADER_KEY } from "../../models/headers/plugin-headers.js";
 import { requireModelContextSequencePolicy } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 function compactToolMessagesForMiniRunner(messages = []) {
   return (Array.isArray(messages) ? messages : []).map((messageItem = {}) => {
@@ -45,9 +46,7 @@ export function resolveCapabilityExecution(ctx = {}, signal = null) {
 }
 
 export function resolveAllowPolicy(input = []) {
-  const normalized = (Array.isArray(input) ? input : [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
+  const normalized = (Array.isArray(input) ? input : []).map((item) => text(item)).filter(Boolean);
   const allowAll = normalized.includes("*");
   return {
     allowAll,
@@ -60,15 +59,14 @@ export function resolveToolsFromContext(
   allowPolicy = { allowAll: false, allowSet: new Set() },
 ) {
   const registry = getToolsFromAgentContext(ctx.agentContext);
-  const tools = registry.filter((tool) => String(tool?.name || "").trim());
+  const tools = registry.filter((tool) => text(tool?.name));
   if (allowPolicy?.allowAll === true) return tools;
   if (!allowPolicy?.allowSet?.size) return [];
-  return tools.filter((tool) => allowPolicy.allowSet.has(String(tool?.name || "").trim()));
+  return tools.filter((tool) => allowPolicy.allowSet.has(text(tool?.name)));
 }
 
 function normalizeHeaderValue(input = "") {
-  return String(input || "")
-    .trim()
+  return text(input)
     .replace(/[^\w.-]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 120);
@@ -115,7 +113,7 @@ export function createCapabilityRequestIdentity({
   const customDomainHeaderKey = namespaceHeaderKeys.DOMAIN;
   const customSessionHeaderKey = namespaceHeaderKeys.SESSION_ID;
   const flowValue = `${resolvedFlowPrefix}.${normalizedFlowName}`;
-  const resolvedSessionId = String(sessionMeta?.sessionId || "").trim();
+  const resolvedSessionId = text(sessionMeta?.sessionId);
   const additionalHeaders = {
     [customFlowHeaderKey]: flowValue,
     [customPurposeHeaderKey]: normalizedPurpose,

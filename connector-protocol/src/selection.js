@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function normalizeSelectedConnectorIds(input = []) {
   if (!Array.isArray(input)) return Object.freeze([]);
-  return Object.freeze([
-    ...new Set(input.map((value) => String(value || "").trim()).filter(Boolean)),
-  ]);
+  return Object.freeze([...new Set(input.map((value) => text(value)).filter(Boolean))]);
 }
 
 export function assertSelectedConnectorsOwned(selectedConnectorIds = [], connectors = []) {
   const normalizedIds = normalizeSelectedConnectorIds(selectedConnectorIds);
   const ownedIds = new Set(
     (Array.isArray(connectors) ? connectors : [])
-      .map((item) => String(item?.connectorId || "").trim())
+      .map((item) => text(item?.connectorId))
       .filter(Boolean),
   );
   const unknownIds = normalizedIds.filter((connectorId) => !ownedIds.has(connectorId));

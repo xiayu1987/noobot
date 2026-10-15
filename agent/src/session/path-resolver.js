@@ -8,6 +8,7 @@ import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
+import { text } from "@noobot/shared/value";
 
 function requireBasePath(basePath) {
   const normalizedBasePath = String(basePath ?? "").trim();
@@ -26,8 +27,8 @@ export class PathResolver {
   }
 
   resolveBasePath(userId = "") {
-    const normalizedUserId = String(userId || "").trim();
-    const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
+    const normalizedUserId = text(userId);
+    const workspaceRoot = text(this.globalConfig?.workspaceRoot);
     if (!normalizedUserId || !workspaceRoot) {
       throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
         code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,

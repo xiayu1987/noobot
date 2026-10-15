@@ -5,6 +5,7 @@
  */
 import { nowIso } from "../../model/timeFields.js";
 import { sanitizeExecutionLogText } from "./utils.js";
+import { text } from "@noobot/shared/value";
 
 const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
@@ -41,7 +42,7 @@ function formatToolLifecycleDetail(data = {}, toolEventType = "") {
 
 export function classifyRealtimeLog(data = {}) {
   const nestedData = data?.data && typeof data.data === "object" ? data.data : {};
-  const authoritativeEventType = String(data.eventType || "").trim();
+  const authoritativeEventType = text(data.eventType);
   const authoritativeToolEvent =
     authoritativeEventType === "tool_call_start"
       ? "tool_call"
@@ -60,8 +61,8 @@ export function classifyRealtimeLog(data = {}) {
   const displayText = sanitizeExecutionLogText(
     rawText || formatToolLifecycleText(data, authoritativeToolEvent),
   );
-  const category = String(data.category || "").trim();
-  const type = String(data.type || "").trim();
+  const category = text(data.category);
+  const type = text(data.type);
   const isTool =
     category === "tool" ||
     TOOL_LOG_TYPES.has(type) ||

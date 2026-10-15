@@ -8,13 +8,14 @@ import {
   isWorkflowNodeTerminalStatus,
   normalizeWorkflowNodeStatus,
 } from "@noobot/event-protocol/workflow-runtime-event";
+import { text } from "@noobot/shared/value";
 
 export { WORKFLOW_NODE_STATUS };
 
 const STARTABLE_STATUSES = new Set([WORKFLOW_NODE_STATUS.PENDING, WORKFLOW_NODE_STATUS.READY]);
 
 function normalizeText(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function cloneJson(value) {

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { formatLocalTime } from "../../modules/chat/model/timeFields.js";
+import { text } from "@noobot/shared/value";
 export { classifyRealtimeLog } from "../../modules/chat/runtime/engine/realtimeLogClassifier.js";
 
 export function isImageMime(type = "") {
@@ -21,5 +22,5 @@ export function formatTime(ts) {
 }
 
 export function hasActiveSessionForReconnect({ activeSession = {} } = {}) {
-  return Boolean(String(activeSession?.sessionId || "").trim());
+  return Boolean(text(activeSession?.sessionId));
 }

@@ -17,7 +17,7 @@ import {
   isTerminalTurnState,
   normalizeTurnContinuationSource,
 } from "@noobot/session-protocol";
-import { text as clean } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 const integer = (value, fallback = 0) =>
   Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : fallback;
@@ -33,32 +33,32 @@ function normalizeOrigin(inputOrigin, currentOrigin) {
 
 export function resolveLifecycleTransitionRequest(lifecycle, input, current) {
   const currentValue = current || {};
-  const turnScopeId = clean(input.turnScopeId);
-  const commandId = clean(input.commandId);
-  const eventType = clean(input.eventType);
-  const phase = clean(input.phase);
+  const turnScopeId = text(input.turnScopeId);
+  const commandId = text(input.commandId);
+  const eventType = text(input.eventType);
+  const phase = text(input.phase);
   const executionIdentity = {
     executionId: deriveAgentExecutionId({
       executionId: input.executionId || currentValue.executionId,
       turnScopeId,
     }),
-    executionKind: clean(input.executionKind || currentValue.executionKind) || EXECUTION_KIND.AGENT,
-    parentExecutionId: clean(input.parentExecutionId || currentValue.parentExecutionId),
+    executionKind: text(input.executionKind || currentValue.executionKind) || EXECUTION_KIND.AGENT,
+    parentExecutionId: text(input.parentExecutionId || currentValue.parentExecutionId),
     rootExecutionId:
-      clean(input.rootExecutionId || currentValue.rootExecutionId) ||
+      text(input.rootExecutionId || currentValue.rootExecutionId) ||
       deriveAgentExecutionId({
         executionId: input.executionId || currentValue.executionId,
         turnScopeId,
       }),
     origin: normalizeOrigin(input.origin, currentValue.origin),
-    stage: clean(input.stage || currentValue.stage),
+    stage: text(input.stage || currentValue.stage),
   };
-  const presentationMessageId = clean(
+  const presentationMessageId = text(
     input.presentationMessageId || currentValue.presentationMessageId,
   );
-  const messageId = clean(input.messageId || currentValue.messageId);
+  const messageId = text(input.messageId || currentValue.messageId);
   const action =
-    eventType === TURN_EVENT.STOP_ACCEPTED ? "stop" : clean(input.action || currentValue.action);
+    eventType === TURN_EVENT.STOP_ACCEPTED ? "stop" : text(input.action || currentValue.action);
   const continuationSource = normalizeTurnContinuationSource(
     input.continuationSource || currentValue.continuationSource,
   );
@@ -84,17 +84,13 @@ function validateRequestIdentity(request) {
   if (lifecycle.replacedTurns[turnScopeId]) return "turn_replaced";
   if (!request.messageId || !request.presentationMessageId)
     return "turn_message_identity_incomplete";
-  if (
-    current?.messageId &&
-    clean(input.messageId) &&
-    clean(input.messageId) !== current.messageId
-  ) {
+  if (current?.messageId && text(input.messageId) && text(input.messageId) !== current.messageId) {
     return "turn_message_identity_conflict";
   }
   if (
     current?.presentationMessageId &&
-    clean(input.presentationMessageId) &&
-    clean(input.presentationMessageId) !== current.presentationMessageId
+    text(input.presentationMessageId) &&
+    text(input.presentationMessageId) !== current.presentationMessageId
   ) {
     return "turn_presentation_identity_conflict";
   }
@@ -107,24 +103,24 @@ function requestHashFor(request) {
     eventType: request.eventType,
     turnScopeId: request.turnScopeId,
     phase: request.phase,
-    action: clean(input.action),
+    action: text(input.action),
     userMessage:
       input.userMessage && typeof input.userMessage === "object"
         ? {
-            content: String(input.userMessage.content || "").trim(),
-            messageId: clean(input.userMessage.messageId),
-            parentDialogProcessId: clean(input.userMessage.parentDialogProcessId),
+            content: text(input.userMessage.content),
+            messageId: text(input.userMessage.messageId),
+            parentDialogProcessId: text(input.userMessage.parentDialogProcessId),
             messageOrigin: input.userMessage.messageOrigin,
             userMetaMaterialized: input.userMessage.userMetaMaterialized === true,
           }
         : null,
-    executionState: clean(input.executionState),
-    startedAt: clean(input.startedAt),
-    finishedAt: clean(input.finishedAt),
+    executionState: text(input.executionState),
+    startedAt: text(input.startedAt),
+    finishedAt: text(input.finishedAt),
     presentationMessageId: request.presentationMessageId,
     messageId: request.messageId,
     continuationSource: request.continuationSource,
-    completionCommitId: clean(input.completionCommitId),
+    completionCommitId: text(input.completionCommitId),
     failure: input.failure && typeof input.failure === "object" ? input.failure : null,
     terminalStatus:
       input.terminalStatus && typeof input.terminalStatus === "object"
@@ -148,7 +144,7 @@ function validateCurrentIdentity(request) {
       "rootExecutionId",
     ];
     const conflict = immutableFields.some(
-      (field) => clean(current[field]) !== clean(executionIdentity[field]),
+      (field) => text(current[field]) !== text(executionIdentity[field]),
     );
     if (
       conflict ||
@@ -232,9 +228,9 @@ function resolveFinalizeType(eventType, phase) {
 function createPendingFinalizeIntent(input, currentIntent, type, commandId, nowValue) {
   return {
     type,
-    commandId: clean(input.finalizeCommandId) || `${commandId}:finalize`,
+    commandId: text(input.finalizeCommandId) || `${commandId}:finalize`,
     retryable: true,
-    createdAt: clean(currentIntent.createdAt) || nowValue,
+    createdAt: text(currentIntent.createdAt) || nowValue,
     updatedAt: nowValue,
     payload:
       input.finalizePayload && typeof input.finalizePayload === "object"
@@ -246,10 +242,10 @@ function createPendingFinalizeIntent(input, currentIntent, type, commandId, nowV
 function createRetryFinalizeIntent(input, currentIntent, type, commandId, nowValue) {
   return {
     ...currentIntent,
-    type: clean(currentIntent.type) || type,
-    commandId: clean(input.finalizeCommandId || currentIntent.commandId) || `${commandId}:retry`,
+    type: text(currentIntent.type) || type,
+    commandId: text(input.finalizeCommandId || currentIntent.commandId) || `${commandId}:retry`,
     retryable: true,
-    createdAt: clean(currentIntent.createdAt) || nowValue,
+    createdAt: text(currentIntent.createdAt) || nowValue,
     updatedAt: nowValue,
   };
 }
@@ -286,7 +282,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     messageId: request.messageId,
     presentationMessageId: request.presentationMessageId,
     ...request.executionIdentity,
-    dialogProcessId: clean(input.dialogProcessId || currentValue.dialogProcessId),
+    dialogProcessId: text(input.dialogProcessId || currentValue.dialogProcessId),
     commandId,
     action: request.action,
     state,
@@ -298,7 +294,7 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     revision,
     sequence,
     summaryVersion: integer(input.summaryVersion, integer(currentValue.summaryVersion)),
-    completionCommitId: clean(input.completionCommitId || currentValue.completionCommitId),
+    completionCommitId: text(input.completionCommitId || currentValue.completionCommitId),
     terminalStatus:
       input.terminalStatus &&
       typeof input.terminalStatus === "object" &&
@@ -308,13 +304,13 @@ export function projectLifecycleTransition(request, transition, nowValue) {
     failure: eventType === TURN_EVENT.FAILED ? { ...(input.failure || {}), phase } : null,
     finalizeIntent: createFinalizeIntent({ input, current, eventType, phase, commandId, nowValue }),
     continuationSource: request.continuationSource,
-    continuedByTurnScopeId: clean(currentValue.continuedByTurnScopeId),
+    continuedByTurnScopeId: text(currentValue.continuedByTurnScopeId),
     startedAt:
-      clean(input.startedAt || currentValue.startedAt) || clean(currentValue.createdAt) || nowValue,
+      text(input.startedAt || currentValue.startedAt) || text(currentValue.createdAt) || nowValue,
     finishedAt: isTerminalTurnState(state)
-      ? clean(input.finishedAt) || nowValue
-      : clean(currentValue.finishedAt),
-    createdAt: clean(currentValue.createdAt) || nowValue,
+      ? text(input.finishedAt) || nowValue
+      : text(currentValue.finishedAt),
+    createdAt: text(currentValue.createdAt) || nowValue,
     updatedAt: nowValue,
   };
   return { turn, revision, sequence };

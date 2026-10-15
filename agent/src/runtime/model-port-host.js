@@ -14,9 +14,10 @@ import {
 } from "@noobot/model-protocol";
 import { emitEvent } from "../events/index.js";
 import { resolveEffectiveModelSpec } from "./run-config/index.js";
+import { text } from "@noobot/shared/value";
 
 function resolveCredential(modelSpec = {}) {
-  return String(modelSpec.api_key || "").trim();
+  return text(modelSpec.api_key);
 }
 
 function createCredentialPort() {
@@ -53,8 +54,8 @@ function buildInvocation(modelState, request = {}) {
   }
   const identity = request.invocation || {};
   for (const field of ["sessionId", "parentSessionId", "dialogProcessId", "turnScopeId", "runId"]) {
-    const requestedValue = String(identity[field] || "").trim();
-    const hostValue = String(baseIdentity[field] || "").trim();
+    const requestedValue = text(identity[field]);
+    const hostValue = text(baseIdentity[field]);
     if (requestedValue && requestedValue !== hostValue) {
       throw new TypeError(`model invocation.${field} conflicts with host identity`);
     }
@@ -62,15 +63,15 @@ function buildInvocation(modelState, request = {}) {
   return {
     requestId: identity.requestId || randomUUID(),
     invocationId: identity.invocationId || randomUUID(),
-    sessionId: String(baseIdentity.sessionId || "").trim(),
-    parentSessionId: String(baseIdentity.parentSessionId || "").trim(),
-    dialogProcessId: String(baseIdentity.dialogProcessId || "").trim(),
-    turnScopeId: String(baseIdentity.turnScopeId || "").trim(),
-    runId: String(baseIdentity.runId || "").trim(),
-    flow: String(identity.flow || "").trim(),
-    purpose: String(identity.purpose || "").trim(),
-    domain: String(identity.domain || "").trim(),
-    contextSequencePolicy: String(identity.contextSequencePolicy || "").trim(),
+    sessionId: text(baseIdentity.sessionId),
+    parentSessionId: text(baseIdentity.parentSessionId),
+    dialogProcessId: text(baseIdentity.dialogProcessId),
+    turnScopeId: text(baseIdentity.turnScopeId),
+    runId: text(baseIdentity.runId),
+    flow: text(identity.flow),
+    purpose: text(identity.purpose),
+    domain: text(identity.domain),
+    contextSequencePolicy: text(identity.contextSequencePolicy),
   };
 }
 
@@ -134,11 +135,11 @@ export function initializeAgentModelHost({
     throw new TypeError("agent model host requires runtime");
   }
   const identity = Object.freeze({
-    sessionId: String(invocationIdentity?.sessionId || "").trim(),
-    parentSessionId: String(invocationIdentity?.parentSessionId || "").trim(),
-    dialogProcessId: String(invocationIdentity?.dialogProcessId || "").trim(),
-    turnScopeId: String(invocationIdentity?.turnScopeId || "").trim(),
-    runId: String(invocationIdentity?.runId || "").trim(),
+    sessionId: text(invocationIdentity?.sessionId),
+    parentSessionId: text(invocationIdentity?.parentSessionId),
+    dialogProcessId: text(invocationIdentity?.dialogProcessId),
+    turnScopeId: text(invocationIdentity?.turnScopeId),
+    runId: text(invocationIdentity?.runId),
   });
   for (const field of ["sessionId", "dialogProcessId", "turnScopeId", "runId"]) {
     if (!identity[field]) throw new TypeError(`agent model host identity.${field} is required`);
@@ -147,7 +148,7 @@ export function initializeAgentModelHost({
   const existing = runtime.modelHost;
   if (existing) {
     for (const field of Object.keys(identity)) {
-      if (String(existing.invocationIdentity?.[field] || "").trim() !== identity[field]) {
+      if (text(existing.invocationIdentity?.[field]) !== identity[field]) {
         throw new TypeError(`agent model host identity.${field} conflict`);
       }
     }

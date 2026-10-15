@@ -7,6 +7,7 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
+import { text } from "@noobot/shared/value";
 
 export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   userId: "noobot_user_id",
@@ -62,7 +63,7 @@ function removeStorageValue(key) {
 }
 
 function normalizePreferenceString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function normalizeScenarioPreferenceKey(value = "") {

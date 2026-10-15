@@ -16,6 +16,7 @@ import {
   createConnectorSecretAad,
   normalizeConnectorSecretEnvelope,
 } from "@noobot/connector-protocol";
+import { text } from "@noobot/shared/value";
 
 const scrypt = promisify(deriveKey);
 const KEY_DOCUMENT_VERSION = 1;
@@ -27,7 +28,7 @@ const {
 } = LENGTH_THRESHOLDS.connectorSecrets;
 
 const requiredText = (value, label) => {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!normalized) throw new TypeError(`${label} is required`);
   return normalized;
 };

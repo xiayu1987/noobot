@@ -25,6 +25,7 @@ import {
   buildMessageStatusFacet,
   buildMessageTimelineFacet,
 } from "./messageModelFacets.js";
+import { text } from "@noobot/shared/value";
 
 const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
@@ -46,10 +47,10 @@ function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
 }
 
 function buildMessageIdentityFacet(canonicalMessage = {}) {
-  const sessionId = String(canonicalMessage?.sessionId || "").trim();
+  const sessionId = text(canonicalMessage?.sessionId);
   const messageRole = getMessageRole(canonicalMessage) || "assistant";
-  const sourceMessageId = String(canonicalMessage?.messageId || "").trim();
-  const presentationMessageId = String(canonicalMessage?.presentationMessageId || "").trim();
+  const sourceMessageId = text(canonicalMessage?.messageId);
+  const presentationMessageId = text(canonicalMessage?.presentationMessageId);
   const messageId =
     messageRole === "assistant" && presentationMessageId ? presentationMessageId : sourceMessageId;
   return {

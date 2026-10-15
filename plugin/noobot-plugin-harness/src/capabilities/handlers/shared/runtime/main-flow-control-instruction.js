@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const HARNESS_MAIN_FLOW_CONTROL_ACTION = Object.freeze({
   FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
   SUMMARY_CHECKPOINT: "summary_checkpoint",
@@ -29,7 +31,7 @@ export function hasFinalNoToolsMainFlowInstruction(ctx = {}) {
   if (!systemRuntime) return false;
   return (
     systemRuntime.mainFlowFinalNoToolsTurnActive === true ||
-    String(systemRuntime.mainFlowControlInstruction?.action || "").trim() ===
+    text(systemRuntime.mainFlowControlInstruction?.action) ===
       HARNESS_MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN
   );
 }
@@ -44,7 +46,7 @@ export function requestSummaryCheckpointMainFlowInstruction(
   const canonicalMessageIds = [
     ...new Set(
       (Array.isArray(summarizedMessageIds) ? summarizedMessageIds : [])
-        .map((id) => String(id || "").trim())
+        .map((id) => text(id))
         .filter(Boolean),
     ),
   ];

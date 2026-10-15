@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveActiveDynamicPolicyPromptFromContext } from "./dynamic-policy-prompt.js";
+import { text } from "@noobot/shared/value";
 
 export const HARNESS_SCENARIO = Object.freeze({
   GENERAL: "general",
@@ -12,7 +13,7 @@ export const HARNESS_SCENARIO = Object.freeze({
 });
 
 function normalizeScenarioKey(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function isProgrammingScenarioKey(value = "") {
@@ -104,7 +105,7 @@ export function resolveTextModeFromContext(ctx = {}) {
 
 export function resolveScenarioPolicyFlagsFromContext(ctx = {}) {
   const dynamicPolicyPromptRecord = resolveActiveDynamicPolicyPromptFromContext(ctx);
-  const dynamicScenario = String(dynamicPolicyPromptRecord?.scenario || "").trim();
+  const dynamicScenario = text(dynamicPolicyPromptRecord?.scenario);
   const dynamicProgrammingMode = dynamicScenario === HARNESS_SCENARIO.PROGRAMMING;
   const dynamicTextMode = dynamicScenario === HARNESS_SCENARIO.TEXT;
   const programmingMode =

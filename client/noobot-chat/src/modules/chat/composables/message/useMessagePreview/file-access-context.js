@@ -11,10 +11,11 @@ import {
   resolveFileItemName,
   resolveFileItemRelativePath,
 } from "./path-utils.js";
+import { text } from "@noobot/shared/value";
 
 export function createFileAccessContext(action, fileItem, userId, desktopCapability) {
   const traceId = createFileAccessTraceId(action);
-  const normalizedUserId = String(userId || "").trim();
+  const normalizedUserId = text(userId);
   const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
   const hostPath = resolveFileItemHostPath(fileItem);
   const isSandbox = fileItem?.isSandbox;

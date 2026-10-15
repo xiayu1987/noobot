@@ -15,6 +15,7 @@ import { resolveCanonicalSourceAttachment } from "../../artifacts/index.js";
 import { getBasePathFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveAuthorizedUserWorkspaceFilePath } from "./check-tool-input.js";
 import { registerResource } from "./resource-broker.js";
+import { text } from "@noobot/shared/value";
 
 export function createFileSourceSchema({ filePathDescription, attachmentRefDescription } = {}) {
   return z
@@ -57,9 +58,7 @@ export async function resolveFileInput({
       agentContext,
     });
     if (!sourceAttachmentMeta) throw new Error("attachment not found for the supplied identity");
-    const executionPath = String(
-      sourceAttachmentMeta.absolutePath || sourceAttachmentMeta.path || "",
-    ).trim();
+    const executionPath = text(sourceAttachmentMeta.absolutePath || sourceAttachmentMeta.path);
     if (!executionPath) throw new Error("attachment has no execution path");
     authorizationInput = path.relative(getBasePathFromAgentContext(agentContext), executionPath);
   }
@@ -97,7 +96,7 @@ export async function resolveFileInput({
     resourcePath,
     displayInput: sourceAttachmentMeta
       ? normalizedSource
-      : String(resourceRef.logical?.path || authorizationInput || "").trim(),
+      : text(resourceRef.logical?.path || authorizationInput),
     resourceRef,
     pathRef: sourceAttachmentMeta
       ? resolvePathRef({ input: { view: "attachment", identity: attachmentIdentity } })
@@ -107,5 +106,5 @@ export async function resolveFileInput({
 }
 
 export function isUserAttachment(attachmentMeta = null) {
-  return String(attachmentMeta?.attachmentSource || "").trim() === ATTACHMENT_SOURCE.USER;
+  return text(attachmentMeta?.attachmentSource) === ATTACHMENT_SOURCE.USER;
 }

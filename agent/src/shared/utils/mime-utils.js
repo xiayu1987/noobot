@@ -8,6 +8,7 @@ import {
   MIME_PREFIX_FALLBACK_EXTENSION,
   MIME_TO_EXTENSION,
 } from "@noobot/attachment-protocol/mime";
+import { text } from "@noobot/shared/value";
 
 const MIME_EXTENSION_MAP = MIME_TO_EXTENSION;
 
@@ -18,9 +19,7 @@ export function getMimeExtensionMap() {
 }
 
 export function getExtensionFromMime(mimeType = "") {
-  const normalizedMimeType = String(mimeType || "")
-    .trim()
-    .toLowerCase();
+  const normalizedMimeType = text(mimeType).toLowerCase();
   if (!normalizedMimeType) return "";
 
   if (MIME_EXTENSION_MAP[normalizedMimeType]) {
@@ -37,14 +36,14 @@ export function getExtensionFromMime(mimeType = "") {
 }
 
 export function parseDataUrl(dataUrl = "") {
-  const normalizedDataUrl = String(dataUrl || "").trim();
+  const normalizedDataUrl = text(dataUrl);
   const matchResult = normalizedDataUrl.match(/^data:([^;,]+)?;base64,([\s\S]+)$/i);
   if (!matchResult) return null;
   return {
     mimeType: String(matchResult[1] || DEFAULT_MIME_TYPE)
       .trim()
       .toLowerCase(),
-    contentBase64: String(matchResult[2] || "").trim(),
+    contentBase64: text(matchResult[2]),
   };
 }
 

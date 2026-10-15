@@ -10,6 +10,7 @@ import {
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { commitWorkflowRuntimeEvent } from "../hooks/authority-event-commit.js";
 import { WORKFLOW_NODE_STATUS } from "./node-state-repository.js";
+import { text } from "@noobot/shared/value";
 
 const CHILD_TERMINAL_NODE_STATUS = Object.freeze({
   completed: WORKFLOW_NODE_STATUS.SUCCEEDED,
@@ -31,7 +32,7 @@ export function resolveCommittedChildTerminal(subSession = {}, expectedExecution
     throw error;
   };
   if (!lifecycle) return fail("missing_lifecycle");
-  if (String(lifecycle.executionId || "").trim() !== String(expectedExecutionId || "").trim()) {
+  if (text(lifecycle.executionId) !== text(expectedExecutionId)) {
     return fail("execution_identity_mismatch");
   }
   if (
@@ -47,9 +48,7 @@ export function resolveCommittedChildTerminal(subSession = {}, expectedExecution
   if (!Number.isInteger(lifecycle.sequence) || lifecycle.sequence < 1) {
     return fail("invalid_sequence");
   }
-  const state = String(lifecycle.state || "")
-    .trim()
-    .toLowerCase();
+  const state = text(lifecycle.state).toLowerCase();
   const nodeStatus = CHILD_TERMINAL_NODE_STATUS[state];
   if (!nodeStatus) return fail("non_terminal_state");
   return { lifecycle, nodeStatus };

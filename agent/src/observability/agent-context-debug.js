@@ -5,6 +5,7 @@
  */
 
 import { emitEvent } from "../events/index.js";
+import { text } from "@noobot/shared/value";
 
 function messageBlockCounts(modelContext = {}) {
   const blocks = modelContext?.messageBlocks || {};
@@ -32,22 +33,22 @@ function buildAgentContextDebugData(scope = {}) {
   const extensions =
     bindings?.extensions && typeof bindings.extensions === "object" ? bindings.extensions : {};
   return {
-    userId: String(identity.userId || "").trim(),
-    sessionId: String(identity.sessionId || "").trim(),
-    rootSessionId: String(identity.rootSessionId || "").trim(),
-    parentSessionId: String(identity.parentSessionId || "").trim(),
-    dialogProcessId: String(identity.dialogProcessId || "").trim(),
-    turnScopeId: String(identity.turnScopeId || "").trim(),
-    runId: String(identity.runId || "").trim(),
+    userId: text(identity.userId),
+    sessionId: text(identity.sessionId),
+    rootSessionId: text(identity.rootSessionId),
+    parentSessionId: text(identity.parentSessionId),
+    dialogProcessId: text(identity.dialogProcessId),
+    turnScopeId: text(identity.turnScopeId),
+    runId: text(identity.runId),
     envelope: {
-      kind: String(context?.kind || "").trim(),
+      kind: text(context?.kind),
       protocolVersion: Number(context?.protocolVersion || 0),
       keys: Object.keys(context),
       workspace: {
-        cwd: String(context?.environment?.workspace?.cwd || "").trim(),
-        basePath: String(context?.environment?.workspace?.basePath || "").trim(),
+        cwd: text(context?.environment?.workspace?.cwd),
+        basePath: text(context?.environment?.workspace?.basePath),
       },
-      caller: String(context?.execution?.caller || "").trim(),
+      caller: text(context?.execution?.caller),
       modelContextProtocolVersion: Number(context?.modelContext?.protocolVersion || 0),
       activeTurnIdentity: { ...(context?.modelContext?.activeTurnIdentity || {}) },
       messageBlockCounts: messageBlockCounts(context?.modelContext),
@@ -56,7 +57,7 @@ function buildAgentContextDebugData(scope = {}) {
       keys: Object.keys(bindings),
       runtimeBound: Boolean(bindings?.runtime && typeof bindings.runtime === "object"),
       toolCount: tools.length,
-      toolNames: tools.map((tool = {}) => String(tool?.name || "").trim()).filter(Boolean),
+      toolNames: tools.map((tool = {}) => text(tool?.name)).filter(Boolean),
       extensionNames: Object.keys(extensions),
     },
     separation: {

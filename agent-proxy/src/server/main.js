@@ -40,6 +40,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { text } from "@noobot/shared/value";
 
 async function loadWebSocketLibrary() {
   try {
@@ -74,7 +75,7 @@ const ideHttpRateLimiter = createFixedWindowRateLimiter({
   windowMs: config.ideHttpRateLimitWindowMs,
   maxRequests: config.ideHttpRateLimitMaxRequests,
 });
-const frontendRoot = String(process.env.AGENT_PROXY_FRONTEND_ROOT || "").trim();
+const frontendRoot = text(process.env.AGENT_PROXY_FRONTEND_ROOT);
 const frontendIndexPath = frontendRoot ? path.join(frontendRoot, "index.html") : "";
 const shouldServeFrontend = Boolean(frontendRoot && fs.existsSync(frontendIndexPath));
 
@@ -155,7 +156,7 @@ function tryServeFrontend(request, response, pathname) {
 }
 
 function isIdeProxyPath(pathname = "") {
-  const normalizedPathname = String(pathname || "").trim();
+  const normalizedPathname = text(pathname);
   return normalizedPathname === "/ide" || normalizedPathname.startsWith("/ide/");
 }
 
@@ -301,7 +302,7 @@ const httpServer = http.createServer((request, response) => {
   const locale = resolveLocaleFromRequest(request);
   const pathname = parseRequestPathname(request);
   const clientIp = getClientIp(request, config.trustedProxies);
-  const requestOrigin = String(request?.headers?.origin || "").trim();
+  const requestOrigin = text(request?.headers?.origin);
 
   if (!isIpTrusted(clientIp, config.trustedIps)) {
     writeProxyError(response, 403, AGENT_PROXY_ERROR.CLIENT_IP_NOT_ALLOWED, locale);
@@ -371,7 +372,7 @@ const websocketServer = new WebSocketServer({
 httpServer.on("upgrade", (request, socket, head) => {
   const { pathname } = parseRequestQuery(request);
   const clientIp = getClientIp(request, config.trustedProxies);
-  const requestOrigin = String(request?.headers?.origin || "").trim();
+  const requestOrigin = text(request?.headers?.origin);
   if (!isIpTrusted(clientIp, config.trustedIps)) {
     socket.destroy();
     return;
@@ -444,7 +445,7 @@ websocketServer.on("connection", (socket, request) => {
   socket.__agentProxyApiKey = connectionApiKey;
   socket.__agentProxyLocale = connectionLocale;
   const socketIdentity = channelManager.resolveApiKeyIdentity(connectionApiKey);
-  socket.__agentProxyUserId = String(socketIdentity?.userId || "").trim();
+  socket.__agentProxyUserId = text(socketIdentity?.userId);
   logAgentProxyEvent(connectionApiKey, {
     category: "agent-proxy",
     event: "agentProxy.chat.connected",

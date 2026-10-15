@@ -9,6 +9,7 @@ import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { normalizeClientModelOptions } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { text } from "@noobot/shared/value";
 
 const CONNECTION_PROFILE_STORAGE_KEY = "noobot_connection_profile";
 const ADMISSION_MAX_RETRIES = TURN_THRESHOLDS.client.admissionMaxRetries;
@@ -39,8 +40,8 @@ function readConnectionProfile() {
   try {
     const parsed = JSON.parse(localStorage.getItem(CONNECTION_PROFILE_STORAGE_KEY) || "null");
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const userId = String(parsed.userId || "").trim();
-    const connectCode = String(parsed.connectCode || "").trim();
+    const userId = text(parsed.userId);
+    const connectCode = text(parsed.connectCode);
     return userId && connectCode ? { userId, connectCode } : null;
   } catch {
     return null;
@@ -50,7 +51,7 @@ function readConnectionProfile() {
 export function useApiConnection({ userId, onConnected = async () => {}, notify = () => {} }) {
   const { translate, locale } = useLocale();
   const restoredConnectionProfile = readConnectionProfile();
-  const initialUserId = String(userId.value || "").trim();
+  const initialUserId = text(userId.value);
   let restoredConnectCode = restoredConnectionProfile?.userId === initialUserId;
   const connectCode = ref(
     restoredConnectionProfile?.userId === initialUserId
@@ -76,9 +77,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
   let activeConnectCallCount = 0;
 
   const connected = computed(
-    () =>
-      Boolean(apiKey.value) &&
-      String(apiKeyUserId.value || "").trim() === String(userId.value || "").trim(),
+    () => Boolean(apiKey.value) && text(apiKeyUserId.value) === text(userId.value),
   );
   const isSuperAdmin = computed(
     () => connected.value && String(apiRole.value || "") === "super_admin",
@@ -95,8 +94,8 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
   }
 
   function persistConnectProfile() {
-    const normalizedUserId = String(userId.value || "").trim();
-    const normalizedConnectCode = String(connectCode.value || "").trim();
+    const normalizedUserId = text(userId.value);
+    const normalizedConnectCode = text(connectCode.value);
     if (normalizedUserId && normalizedConnectCode) {
       localStorage.setItem("noobot_user_id", normalizedUserId);
       localStorage.setItem(
@@ -131,8 +130,8 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
 
   function snapshotCredentials() {
     const credentials = {
-      userId: String(userId.value || "").trim(),
-      connectCode: String(connectCode.value || "").trim(),
+      userId: text(userId.value),
+      connectCode: text(connectCode.value),
     };
     return {
       ...credentials,
@@ -154,56 +153,48 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
     const definitionsSource = isPlainObject(source?.definitions) ? source.definitions : {};
     const normalizedDefinitions = {};
     for (const [scenarioKey, definitionItem] of Object.entries(definitionsSource)) {
-      const normalizedScenarioKey = String(scenarioKey || "").trim();
+      const normalizedScenarioKey = text(scenarioKey);
       if (!normalizedScenarioKey) continue;
       const sourceDefinition = isPlainObject(definitionItem) ? definitionItem : {};
       normalizedDefinitions[normalizedScenarioKey] = {
         ...sourceDefinition,
-        name: String(sourceDefinition?.name || "").trim(),
-        description: String(sourceDefinition?.description || "").trim(),
-        model: String(sourceDefinition?.model || "").trim(),
+        name: text(sourceDefinition?.name),
+        description: text(sourceDefinition?.description),
+        model: text(sourceDefinition?.model),
         tools: Array.isArray(sourceDefinition?.tools)
-          ? sourceDefinition.tools.map((toolName) => String(toolName || "").trim()).filter(Boolean)
+          ? sourceDefinition.tools.map((toolName) => text(toolName)).filter(Boolean)
           : [],
         context: Array.isArray(sourceDefinition?.context)
-          ? sourceDefinition.context
-              .map((contextKey) => String(contextKey || "").trim())
-              .filter(Boolean)
+          ? sourceDefinition.context.map((contextKey) => text(contextKey)).filter(Boolean)
           : [],
         services: Array.isArray(sourceDefinition?.services)
-          ? sourceDefinition.services
-              .map((serviceItem) => String(serviceItem || "").trim())
-              .filter(Boolean)
+          ? sourceDefinition.services.map((serviceItem) => text(serviceItem)).filter(Boolean)
           : [],
         mcpServers: Array.isArray(sourceDefinition?.mcpServers)
-          ? sourceDefinition.mcpServers
-              .map((serverItem) => String(serverItem || "").trim())
-              .filter(Boolean)
+          ? sourceDefinition.mcpServers.map((serverItem) => text(serverItem)).filter(Boolean)
           : [],
       };
     }
     const pluginSource = isPlainObject(source?.plugins) ? source.plugins : {};
     const normalizedPlugins = {};
     for (const [pluginKey, pluginValue] of Object.entries(pluginSource)) {
-      const normalizedPluginKey = String(pluginKey || "").trim();
+      const normalizedPluginKey = text(pluginKey);
       if (!normalizedPluginKey) continue;
       const sourcePlugin = isPlainObject(pluginValue) ? pluginValue : {};
-      const normalizedMode = String(sourcePlugin?.mode || "")
-        .trim()
-        .toLowerCase();
+      const normalizedMode = text(sourcePlugin?.mode).toLowerCase();
       normalizedPlugins[normalizedPluginKey] = {
         ...sourcePlugin,
-        description: String(sourcePlugin?.description || "").trim(),
+        description: text(sourcePlugin?.description),
         enabled: sourcePlugin?.enabled !== false,
         mode: normalizedMode === "on" ? "on" : "off",
       };
     }
     return {
-      default: String(source?.default || "").trim(),
+      default: text(source?.default),
       definitions: normalizedDefinitions,
       plugins: normalizedPlugins,
       enabledModels: normalizeClientModelOptions(source?.enabledModels),
-      defaultModelAlias: String(source?.defaultModelAlias || "").trim(),
+      defaultModelAlias: text(source?.defaultModelAlias),
     };
   }
 
@@ -221,9 +212,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
         headers: {
           ...(options.headers || {}),
           ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
-          ...(String(locale.value || "").trim()
-            ? { "x-noobot-locale": String(locale.value || "").trim() }
-            : {}),
+          ...(text(locale.value) ? { "x-noobot-locale": text(locale.value) } : {}),
         },
       });
     const res = await fetchWithAdmissionRetry(runFetch);
@@ -245,7 +234,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
         connectApi({
           userId: credentials.userId,
           connectCode: credentials.connectCode,
-          locale: String(locale.value || "").trim(),
+          locale: text(locale.value),
         }),
       { isStale: () => snapshotCredentials().key !== credentials.key },
     );
@@ -254,7 +243,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
     if (!res.ok || !data.ok || !data.apiKey) {
       throw new Error(data.error || translate("infra.connectFailed"));
     }
-    const authenticatedUserId = String(data.userId || "").trim();
+    const authenticatedUserId = text(data.userId);
     if (!authenticatedUserId || authenticatedUserId !== credentials.userId) {
       throw new Error("authentication_identity_mismatch");
     }
@@ -269,8 +258,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
       defaultModelAlias: data?.defaultModelAlias,
     });
     permissions.value = {
-      canUseIDE:
-        String(data?.role || "").trim() === "super_admin" || data?.permissions?.canUseIDE === true,
+      canUseIDE: text(data?.role) === "super_admin" || data?.permissions?.canUseIDE === true,
     };
     persistConnectProfile();
     return true;
@@ -298,14 +286,14 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
       .then(async () => {
         if (
           snapshotCredentials().key !== credentials.key ||
-          String(apiKeyUserId.value || "").trim() !== credentials.userId
+          text(apiKeyUserId.value) !== credentials.userId
         ) {
           return false;
         }
         await onConnected();
         return (
           snapshotCredentials().key === credentials.key &&
-          String(apiKeyUserId.value || "").trim() === credentials.userId
+          text(apiKeyUserId.value) === credentials.userId
         );
       })
       .finally(() => {
@@ -339,7 +327,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
       if (runConnected && !(await runConnectedCallback(credentials))) return false;
       return (
         snapshotCredentials().key === credentials.key &&
-        String(apiKeyUserId.value || "").trim() === credentials.userId
+        text(apiKeyUserId.value) === credentials.userId
       );
     } catch (error) {
       if (runConnected && snapshotCredentials().key === credentials.key) clearApiAuth();
@@ -357,8 +345,8 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
   }
 
   async function tryAutoConnect() {
-    if (!String(userId.value || "").trim()) return false;
-    if (!String(connectCode.value || "").trim()) return false;
+    if (!text(userId.value)) return false;
+    if (!text(connectCode.value)) return false;
     return Boolean(await connectBackend({ silent: true }));
   }
 
@@ -366,13 +354,13 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
     [userId, connectCode],
     ([nextUserId, nextConnectCode], [previousUserId, previousConnectCode]) => {
       clearApiAuth();
-      if (String(nextUserId || "").trim() !== String(previousUserId || "").trim()) {
+      if (text(nextUserId) !== text(previousUserId)) {
         if (restoredConnectCode) connectCode.value = "";
         restoredConnectCode = false;
         clearConnectionProfile();
         return;
       }
-      if (String(nextConnectCode || "").trim() !== String(previousConnectCode || "").trim()) {
+      if (text(nextConnectCode) !== text(previousConnectCode)) {
         if (!restoredConnectCode) clearConnectionProfile();
         restoredConnectCode = false;
       }

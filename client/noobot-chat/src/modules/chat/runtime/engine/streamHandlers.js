@@ -17,6 +17,7 @@ import {
   isTerminalInteraction,
   normalizeInteractionRequestPayload,
 } from "../interactionPayload.js";
+import { text } from "@noobot/shared/value";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -24,11 +25,9 @@ function markFirstStreamEvent(botMessage) {
 }
 
 function canonicalAttachmentProjectionKey(attachment = {}) {
-  const attachmentId = String(attachment?.attachmentId || "").trim();
-  const sessionId = String(attachment?.sessionId || "").trim();
-  const attachmentSource = String(attachment?.attachmentSource || "")
-    .trim()
-    .toLowerCase();
+  const attachmentId = text(attachment?.attachmentId);
+  const sessionId = text(attachment?.sessionId);
+  const attachmentSource = text(attachment?.attachmentSource).toLowerCase();
   if (attachmentId && sessionId && attachmentSource) {
     return `canonical:${attachmentIdentityKey(projectAttachmentIdentity(attachment))}`;
   }
@@ -61,8 +60,8 @@ export function handleAttachmentLifecycleStreamEvent({
     debugType: "workflow-diagnostics",
     event: "frontend.attachmentParsed.received",
     sessionId: event.identity.sessionId,
-    dialogProcessId: String(data?.dialogProcessId || "").trim(),
-    turnScopeId: String(event.turnScopeId || "").trim(),
+    dialogProcessId: text(data?.dialogProcessId),
+    turnScopeId: text(event.turnScopeId),
     data: { incomingCount: 1 },
   });
   const eventKey = canonicalAttachmentProjectionKey(event.identity);
@@ -91,9 +90,9 @@ export function handleAttachmentLifecycleStreamEvent({
     level: "debug",
     debugType: "workflow-diagnostics",
     event: "frontend.attachmentParsed.projected",
-    sessionId: String(activeSession?.value?.sessionId || "").trim(),
-    dialogProcessId: String(data?.dialogProcessId || "").trim(),
-    turnScopeId: String(data?.turnScopeId || "").trim(),
+    sessionId: text(activeSession?.value?.sessionId),
+    dialogProcessId: text(data?.dialogProcessId),
+    turnScopeId: text(data?.turnScopeId),
     data: {
       incomingCount: 1,
       messageCount: messages.length,

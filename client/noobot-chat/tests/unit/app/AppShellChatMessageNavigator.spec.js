@@ -215,7 +215,7 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageNavigatorStateSource).toContain(
       "function normalizeChatMessageNavigatorAnchor(item = {})",
     );
-    expect(chatMessageNavigatorStateSource).toContain('return String(item?.id || "").trim();');
+    expect(chatMessageNavigatorStateSource).toContain("return text(item?.id);");
     expect(chatMessageNavigatorStateSource).toContain(
       "messageListPanelRef.value?.scrollToMessageAnchor?.(anchor)",
     );

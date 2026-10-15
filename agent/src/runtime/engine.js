@@ -14,9 +14,10 @@ import { emitEvent } from "../events/index.js";
 import { emitMessageEvent } from "../events/message-event-stream.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistant-artifact-projection.js";
 import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
+import { text } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
-  return String(message?.messageId || message?.additional_kwargs?.noobotMessageId || "").trim();
+  return text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
 }
 
 function canonicalTurnMessages(runtime = {}) {
@@ -28,7 +29,7 @@ function canonicalTurnMessages(runtime = {}) {
 }
 
 function authoritativeFinalMessages(result = {}, runtime = {}) {
-  const messageId = String(result?.assistantMessageId || "").trim();
+  const messageId = text(result?.assistantMessageId);
   if (!messageId) return [];
   return canonicalTurnMessages(runtime).filter(
     (message) => message && typeof message === "object" && messageIdentity(message) === messageId,
@@ -37,7 +38,7 @@ function authoritativeFinalMessages(result = {}, runtime = {}) {
 
 function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
   const messages = canonicalTurnMessages(runtime);
-  const assistantMessageId = String(result?.assistantMessageId || "").trim();
+  const assistantMessageId = text(result?.assistantMessageId);
   const matches = messages.filter(
     (message) =>
       message && typeof message === "object" && messageIdentity(message) === assistantMessageId,
@@ -48,9 +49,7 @@ function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
     storeMessageCount: messages.length,
     storeMessageIds: messages.map((message) => messageIdentity(message)),
     matchCount: matches.length,
-    matchedPresentationMessageIds: matches.map((message) =>
-      String(message?.presentationMessageId || "").trim(),
-    ),
+    matchedPresentationMessageIds: matches.map((message) => text(message?.presentationMessageId)),
     attachmentCount:
       matches.length === 1 && Array.isArray(matches[0]?.attachments)
         ? matches[0].attachments.length
@@ -64,7 +63,7 @@ function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
 
 export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {}) {
   const finalOutput = String(result?.output || "");
-  const messageId = String(result?.assistantMessageId || "").trim();
+  const messageId = text(result?.assistantMessageId);
   if (!finalOutput || !messageId) return false;
   const store = runtime?.currentTurnMessages;
   const matches = authoritativeFinalMessages(result, runtime);
@@ -90,7 +89,7 @@ export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {
 export async function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
   const eventListener = runtime?.eventListener || null;
   const finalOutput = String(result?.output || "");
-  const messageId = String(result?.assistantMessageId || "").trim();
+  const messageId = text(result?.assistantMessageId);
   if (!eventListener?.onEvent || !finalOutput || !messageId) return false;
   const messages = authoritativeFinalMessages(result, runtime);
   if (messages.length === 0) return false;
@@ -107,7 +106,7 @@ export async function emitAuthoritativeFinalMessageContent({ result = {}, runtim
       : [];
   const event = await emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
-    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+    dialogProcessId: text(runtime?.systemRuntime?.dialogProcessId),
     source: "before_final_output_committed",
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
     ...(attachments.length ? { attachments } : {}),
@@ -158,9 +157,9 @@ export async function commitAuthoritativeFinalResult({ result = {}, runtime = {}
   if (!event) throw new Error("authoritative final result failed to emit its message event");
   emitEvent(runtime?.eventListener || null, "authoritative_final_commit_completed", {
     ...authoritativeFinalDiagnostics(result, runtime),
-    eventId: String(event?.identity?.eventId || "").trim(),
-    messageId: String(event?.identity?.messageId || "").trim(),
-    presentationMessageId: String(event?.payload?.presentationMessageId || "").trim(),
+    eventId: text(event?.identity?.eventId),
+    messageId: text(event?.identity?.messageId),
+    presentationMessageId: text(event?.payload?.presentationMessageId),
   });
   return true;
 }

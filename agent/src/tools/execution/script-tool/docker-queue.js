@@ -9,6 +9,7 @@ import {
   DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
 } from "./constants.js";
+import { text } from "@noobot/shared/value";
 
 const dockerContainerQueueMap = new Map();
 
@@ -18,7 +19,7 @@ export function enqueueDockerContainerTask({
   lockWaitTimeoutMs = ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   abortSignal = null,
 } = {}) {
-  const key = String(containerName || "").trim() || "__default__";
+  const key = text(containerName) || "__default__";
   const previousTail = dockerContainerQueueMap.get(key) || Promise.resolve();
   const queueDepthBefore = dockerContainerQueueMap.has(key) ? 1 : 0;
   const waitStartedAt = Date.now();

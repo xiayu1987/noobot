@@ -13,6 +13,7 @@ import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeSessionTree } from "@noobot/workspace-protocol/session-tree";
 import { firstTextField, normalizeTextField, objectRecord } from "./entity-primitives.js";
 import { normalizeMessagesEntity } from "./message-entity.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   const events = [];
@@ -39,11 +40,11 @@ function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
 
 function normalizeTurnTimingEntity(timing = {}) {
   if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
-  const turnScopeId = String(timing?.turnScopeId || "").trim();
+  const turnScopeId = text(timing?.turnScopeId);
   const dialogProcessId = resolveContextMessageDialogProcessId(timing);
   if (!turnScopeId) return null;
-  const thinkingStartedAt = String(timing?.thinkingStartedAt || "").trim();
-  const thinkingFinishedAt = String(timing?.thinkingFinishedAt || "").trim();
+  const thinkingStartedAt = text(timing?.thinkingStartedAt);
+  const thinkingFinishedAt = text(timing?.thinkingFinishedAt);
   const modelLoopRoundValue = Number(timing?.modelLoopRound || 0);
   const modelLoopRound =
     Number.isFinite(modelLoopRoundValue) && modelLoopRoundValue > 0 ? modelLoopRoundValue : 0;
@@ -70,9 +71,7 @@ function normalizeTurnTimingsEntity(turnTimings = []) {
 
 function normalizeCheckpointUidList(values) {
   return [
-    ...new Set(
-      (Array.isArray(values) ? values : []).map((uid) => String(uid || "").trim()).filter(Boolean),
-    ),
+    ...new Set((Array.isArray(values) ? values : []).map((uid) => text(uid)).filter(Boolean)),
   ];
 }
 
@@ -81,30 +80,30 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
   const normalized = {};
   for (const [scopeKey, value] of Object.entries(checkpoints)) {
     if (!value || typeof value !== "object" || Array.isArray(value)) continue;
-    const turnScopeId = String(value.turnScopeId || scopeKey || "").trim();
-    const dialogProcessId = String(value.dialogProcessId || "").trim();
+    const turnScopeId = text(value.turnScopeId || scopeKey);
+    const dialogProcessId = text(value.dialogProcessId);
     if (!turnScopeId || !dialogProcessId) continue;
     const checkpointRevision = Math.max(0, Number(value.checkpointRevision) || 0);
     const sessionMessages = Array.isArray(messages) ? messages : [];
     const allMessageUids = new Set(
-      sessionMessages.map((message) => String(message?.messageUid || "").trim()).filter(Boolean),
+      sessionMessages.map((message) => text(message?.messageUid)).filter(Boolean),
     );
     const ownedMessageUids = new Set(
       sessionMessages
         .filter(
           (message) =>
             resolveContextMessageDialogProcessId(message) === dialogProcessId &&
-            String(message?.turnScopeId || "").trim() === turnScopeId,
+            text(message?.turnScopeId) === turnScopeId,
         )
-        .map((message) => String(message?.messageUid || "").trim())
+        .map((message) => text(message?.messageUid))
         .filter(Boolean),
     );
     if (!ownedMessageUids.size) continue;
     const receipts = (Array.isArray(value.receipts) ? value.receipts : [])
       .map((receipt) => {
         if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
-        const checkpointId = String(receipt.checkpointId || "").trim();
-        const requestHash = String(receipt.requestHash || "").trim();
+        const checkpointId = text(receipt.checkpointId);
+        const requestHash = text(receipt.requestHash);
         if (!checkpointId || !requestHash) return null;
         const persistedMessageUids = normalizeCheckpointUidList(receipt.persistedMessageUids);
         const summarizedMessageUids = normalizeCheckpointUidList(receipt.summarizedMessageUids);
@@ -119,7 +118,7 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
           summarizedMessageUids,
           retainedMessageUids,
           markedCount: Math.max(0, Number(receipt.markedCount) || 0),
-          committedAt: String(receipt.committedAt || "").trim(),
+          committedAt: text(receipt.committedAt),
         };
       })
       .filter(Boolean)

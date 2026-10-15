@@ -8,10 +8,10 @@ import {
   canonicalizeTurnScopeId,
   turnScopeIdentityKey,
 } from "@noobot/session-protocol/turn-scope-identity";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function trim(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function lower(value = "") {
@@ -36,15 +36,12 @@ function stringifyMessageContent(value) {
 
 function hasNaturalUserMarker(messageItem = {}) {
   return (
-    String(
+    text(
       messageItem?.messageOrigin ||
         messageItem?.additional_kwargs?.messageOrigin ||
         messageItem?.lc_kwargs?.messageOrigin ||
-        messageItem?.lc_kwargs?.additional_kwargs?.messageOrigin ||
-        "",
-    )
-      .trim()
-      .toLowerCase() === "natural"
+        messageItem?.lc_kwargs?.additional_kwargs?.messageOrigin,
+    ).toLowerCase() === "natural"
   );
 }
 

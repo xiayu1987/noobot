@@ -5,6 +5,7 @@
  */
 import { LOCALE } from "../constants.js";
 import { isTextScenarioKey } from "./matrix-resolver.js";
+import { text } from "@noobot/shared/value";
 
 function resolveTextModeFromPromptSource(source = {}, data = {}) {
   return (
@@ -31,12 +32,10 @@ export function normalizePromptOptions(options = {}) {
   const textMode = !programmingMode && resolveTextModeFromPromptSource(source, data);
   return {
     locale: source.locale || LOCALE.ZH_CN,
-    marker: String(source.marker || "").trim(),
+    marker: text(source.marker),
     data,
     programmingMode,
     textMode,
-    dynamicPolicyPrompt: String(
-      source.dynamicPolicyPrompt || data.dynamicPolicyPrompt || "",
-    ).trim(),
+    dynamicPolicyPrompt: text(source.dynamicPolicyPrompt || data.dynamicPolicyPrompt),
   };
 }

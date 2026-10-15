@@ -7,6 +7,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { RESPONSIVE_BREAKPOINTS } from "../src/shared/composables/useMobileViewport.js";
+import { text } from "@noobot/shared/value";
 
 const allowedBreakpoints = new Set(RESPONSIVE_BREAKPOINTS);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -115,7 +116,7 @@ function inspectEmptyStyleRules(filePath, source) {
     : [{ source, offset: 0 }];
   for (const region of styleRegions) {
     for (const match of region.source.matchAll(/(?:^|})\s*([^{}]+)\{\s*\}/g)) {
-      const selector = String(match[1] || "").trim();
+      const selector = text(match[1]);
       if (!selector || selector.startsWith("@")) continue;
       const lineNumber = source.slice(0, region.offset + (match.index || 0)).split(/\r?\n/).length;
       violations.push(

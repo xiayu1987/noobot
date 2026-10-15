@@ -41,6 +41,7 @@ import {
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { hasFinalNoToolsMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
+import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
 const ACCEPTANCE_REQUESTED_ACTION = ACCEPTANCE_DECISION.requestedAction;
@@ -67,19 +68,19 @@ const ACCEPTANCE_BLOCKED_REASON_LABEL_KEY = Object.freeze({
 });
 
 function resolveAcceptanceLocale(state = {}) {
-  return String(state?.locale || "").trim() || "zh-CN";
+  return text(state?.locale) || "zh-CN";
 }
 
 function resolveAcceptanceReasonLabel(locale = "zh-CN", reason = "") {
-  const key = ACCEPTANCE_REASON_LABEL_KEY[String(reason || "").trim()];
-  if (!key) return String(reason || "").trim();
-  return translateI18nText(locale, key) || String(reason || "").trim();
+  const key = ACCEPTANCE_REASON_LABEL_KEY[text(reason)];
+  if (!key) return text(reason);
+  return translateI18nText(locale, key) || text(reason);
 }
 
 function resolveAcceptanceBlockedReasonLabel(locale = "zh-CN", reason = "") {
-  const key = ACCEPTANCE_BLOCKED_REASON_LABEL_KEY[String(reason || "").trim()];
-  if (!key) return String(reason || "").trim();
-  return translateI18nText(locale, key) || String(reason || "").trim();
+  const key = ACCEPTANCE_BLOCKED_REASON_LABEL_KEY[text(reason)];
+  if (!key) return text(reason);
+  return translateI18nText(locale, key) || text(reason);
 }
 
 function hasHigherPriorityPendingForPhaseAcceptance(state = {}) {
@@ -252,9 +253,8 @@ function resolveAcceptanceRequestedAction({
   chosenReason = ACCEPTANCE_DECISION.reason.idle,
   forceAcceptanceDueToOverflow = false,
 } = {}) {
-  const normalizedMode =
-    String(mode || "").trim() === "separate_model" ? "separate_model" : "inject";
-  const hook = String(point || "").trim();
+  const normalizedMode = text(mode) === "separate_model" ? "separate_model" : "inject";
+  const hook = text(point);
   if (hook === HOOK_POINT.AGENT.BEFORE_TURN) {
     return ACCEPTANCE_REQUESTED_ACTION.acceptanceToolGuardBeforeTurn;
   }
@@ -397,7 +397,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
       } else if (
         point === HOOK_POINT.AGENT.BEFORE_TOOL_CALL &&
         decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard &&
-        BLOCKED_AGENT_TOOL_NAMES.has(String(ctx?.call?.name || "").trim())
+        BLOCKED_AGENT_TOOL_NAMES.has(text(ctx?.call?.name))
       ) {
         ctx.call.name = TASK_ACCEPTANCE_TOOL_NAME;
         ctx.call.args = { mode: ACCEPTANCE_MODE.ACTIVE };
@@ -495,7 +495,7 @@ export function createAcceptanceHandler({ shouldProcessPrimaryToolHooks }) {
         HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
         HOOK_POINT.AGENT.AFTER_TOOL_CALL,
         HOOK_POINT.AGENT.TOOL_CALL_ERROR,
-      ].includes(String(point || "").trim()) &&
+      ].includes(text(point)) &&
       !shouldProcessPrimaryToolHooks(ctx)
     ) {
       return { capability, point, status: "active", changed: false };

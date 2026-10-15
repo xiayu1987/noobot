@@ -17,6 +17,7 @@ import {
   canonicalMessageId,
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
+import { text } from "@noobot/shared/value";
 
 export function buildContextMessageBlocks(agentContext, { currentUserMessage = null } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -25,11 +26,11 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   const runtimeParentSessionId = context.identity.parentSessionId;
   const currentUserMessageAttachments = resolveRuntimeUserMessageAttachments(runtime);
   const fallbackUserMeta = {
-    userName: String(runtime?.userId || "").trim(),
+    userName: text(runtime?.userId),
     sessionId: context.identity.sessionId,
     parentSessionId: runtimeParentSessionId,
     dialogProcessId: "",
-    parentDialogProcessId: String(systemRuntime?.parentDialogProcessId || "").trim(),
+    parentDialogProcessId: text(systemRuntime?.parentDialogProcessId),
     attachments: currentUserMessageAttachments,
     userMessageAttachments: currentUserMessageAttachments,
   };
@@ -46,7 +47,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
   const currentCanonicalId = canonicalMessageId(currentUserMessage);
   emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", {
-    messageUid: String(currentUserMessage?.messageUid || "").trim(),
+    messageUid: text(currentUserMessage?.messageUid),
     currentCanonicalId,
     systemCount: systemMessages.length,
     historyCount: rawHistoryMessages.length,
@@ -97,7 +98,7 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
   });
   const projectedIds = incremental.map(canonicalMessageId).filter(Boolean);
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", {
-    sourceMessageUid: String(currentUserMessage?.messageUid || "").trim(),
+    sourceMessageUid: text(currentUserMessage?.messageUid),
     contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",
     userMetaProjectionId:
       projectedIds.find((id) => id === `${currentCanonicalId}::user_meta`) || "",

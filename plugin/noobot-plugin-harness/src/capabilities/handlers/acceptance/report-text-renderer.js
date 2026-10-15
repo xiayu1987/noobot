@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ACCEPTANCE_MODE, HARNESS_I18N_KEYSET, LOCALE, translateI18nText } from "./deps.js";
+import { text } from "@noobot/shared/value";
 
 const ALLOWED_STATUS = new Set(["completed", "in_progress", "pending"]);
 
@@ -31,8 +32,8 @@ function hasRecognitionFailure(report = {}) {
   const checklist = Array.isArray(report.finalPlanChecklist) ? report.finalPlanChecklist : [];
   for (const item of checklist) {
     const index = String(item?.index ?? "").trim();
-    const task = String(item?.task || "").trim();
-    const status = String(item?.status || "").trim() || "pending";
+    const task = text(item?.task);
+    const status = text(item?.status) || "pending";
     if (!index || !task || !ALLOWED_STATUS.has(status)) return true;
   }
 
@@ -54,10 +55,10 @@ function hasRecognitionFailure(report = {}) {
 function extractAcceptanceReportFields(report = {}) {
   const data = report && typeof report === "object" ? report : {};
   return {
-    mode: String(data.mode || "").trim() || "active",
-    forcedReason: String(data.forcedReason || "").trim(),
-    acceptedAt: String(data.acceptedAt || "").trim(),
-    planText: String(data.planText || data?.plan?.planText || "").trim(),
+    mode: text(data.mode) || "active",
+    forcedReason: text(data.forcedReason),
+    acceptedAt: text(data.acceptedAt),
+    planText: text(data.planText || data?.plan?.planText),
     checklist: Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [],
     summary: data?.summary && typeof data.summary === "object" ? data.summary : {},
     semanticValidation:
@@ -116,8 +117,8 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
     checklistHeader,
     ...checklist.map((item = {}) => {
       const index = String(item?.index ?? "").trim();
-      const task = String(item?.task || "").trim();
-      const status = String(item?.status || "").trim() || "pending";
+      const task = text(item?.task);
+      const status = text(item?.status) || "pending";
       return `${index}. [${status}] ${task}`;
     }),
     Object.keys(summary).length ? `${summaryField}: ${JSON.stringify(summary)}` : "",
@@ -189,8 +190,8 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
     ...(checklist.length
       ? checklist.map((item = {}) => {
           const index = String(item?.index ?? "").trim();
-          const task = String(item?.task || "").trim();
-          const status = String(item?.status || "").trim() || "pending";
+          const task = text(item?.task);
+          const status = text(item?.status) || "pending";
           return `- ${index}. [${status}] ${task}`;
         })
       : [emptyLine]),

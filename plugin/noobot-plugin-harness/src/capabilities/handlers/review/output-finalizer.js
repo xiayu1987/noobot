@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HARNESS_I18N_KEYSET, LOCALE, ensureHarnessBucket, translateI18nText } from "./deps.js";
+import { text } from "@noobot/shared/value";
 
 export function attachReviewReportToFinalOutput(ctx = {}, report = null) {
   if (!report) return false;
@@ -11,7 +12,7 @@ export function attachReviewReportToFinalOutput(ctx = {}, report = null) {
   if (!holder || !ctx?.result || typeof ctx.result !== "object") return false;
   const { state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const original = String(ctx.result.output || "").trim();
+  const original = text(ctx.result.output);
   const publicReport =
     report && typeof report === "object" ? { ...report, acceptanceReport: undefined } : report;
   ctx.result.output = [

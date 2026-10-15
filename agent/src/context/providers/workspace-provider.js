@@ -7,9 +7,10 @@ import { access, readdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { isMissingPersistencePathError } from "../../shared/storage/json-file-reader.js";
+import { text } from "@noobot/shared/value";
 
 export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
-  const basePath = String(runtimeBasePath || "").trim();
+  const basePath = text(runtimeBasePath);
   if (!basePath) return [];
   try {
     await access(basePath);

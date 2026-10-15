@@ -8,13 +8,14 @@ import {
   normalizeSelectedConnectorIds,
   projectSelectedConnectorContext,
 } from "@noobot/connector-protocol";
+import { text } from "@noobot/shared/value";
 
 export async function resolveConnectorStatusSection({
   userId = "",
   selectedConnectorIds = [],
   connectorAccessPort = null,
 } = {}) {
-  const ownerUserId = String(userId || "").trim();
+  const ownerUserId = text(userId);
   const selectedIds = normalizeSelectedConnectorIds(selectedConnectorIds);
   if (!ownerUserId || !selectedIds.length) {
     return { connectors: [] };

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 function hasValue(value) {
   return value !== undefined && value !== null && value !== "";
@@ -23,8 +24,7 @@ function getCurrentSessionAggregateVersion(activeSession) {
 
 function isSessionAggregateVersionConflict(result, payload) {
   return (
-    String(payload?.errorCode || result?.errorCode || "").trim() ===
-    SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT
+    text(payload?.errorCode || result?.errorCode) === SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT
   );
 }
 

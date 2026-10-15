@@ -6,12 +6,13 @@
 <script setup>
 import { computed } from "vue";
 import { WarningFilled } from "@element-plus/icons-vue";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   error: { type: String, default: "" },
 });
 
-const normalizedError = computed(() => String(props.error || "").trim());
+const normalizedError = computed(() => text(props.error));
 </script>
 
 <template>

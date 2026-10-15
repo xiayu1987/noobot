@@ -194,10 +194,7 @@ export function reconcileCompletedTurnSummaryMarks(document = {}) {
   const messages = Array.isArray(next.messages) ? next.messages : [];
   const completedTurns = new Set(
     Object.values(next.turnLifecycle?.turns || {})
-      .filter(
-        (turn) =>
-          String(turn?.terminalStatus?.status || "").trim() === TURN_TERMINAL_STATUS.COMPLETED,
-      )
+      .filter((turn) => text(turn?.terminalStatus?.status) === TURN_TERMINAL_STATUS.COMPLETED)
       .map((turn) => `${text(turn?.dialogProcessId)}\u0000${text(turn?.turnScopeId)}`)
       .filter((key) => !key.startsWith("\u0000") && !key.endsWith("\u0000")),
   );

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const TASK_PROTOCOL_STATE = Object.freeze({
   CONTINUE: "CONTINUE",
   COMPLETE: "COMPLETE",
@@ -33,13 +35,13 @@ export function parseTaskProtocolReceipt(value, { protocolError, subject, fieldP
     );
   }
   const states = Object.values(TASK_PROTOCOL_STATE);
-  const state = String(value.state || "").trim();
+  const state = text(value.state);
   if (!states.includes(state)) {
     throw protocolError(`${fieldPrefix}state must be one of ${states.join(", ")}`);
   }
-  const abstract = String(value.abstract || "").trim();
-  const nextAction = String(value.nextAction || "").trim();
-  const contentHash = String(value.contentHash || "").trim();
+  const abstract = text(value.abstract);
+  const nextAction = text(value.nextAction);
+  const contentHash = text(value.contentHash);
   if (!abstract) throw protocolError(`${fieldPrefix}abstract must not be empty`);
   if (!nextAction) throw protocolError(`${fieldPrefix}nextAction must not be empty`);
   if (!CONTENT_HASH_PATTERN.test(contentHash)) {

@@ -8,6 +8,7 @@ import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
+import { text } from "@noobot/shared/value";
 
 const assertInsideWorkspace = (resolvedWorkspacePath, resolvedDir) => {
   const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedDir);
@@ -32,13 +33,11 @@ export class ScopedArtifactPersistenceHelpers {
   resolveScopedDir({ userId = "", relativeDir = "", absoluteDir = "" } = {}) {
     const workspacePath = this.workspaceService.getWorkspacePath(userId);
     const resolvedWorkspacePath = path.resolve(workspacePath);
-    if (absoluteDir && String(absoluteDir || "").trim()) {
-      const resolvedAbsoluteDir = path.resolve(String(absoluteDir || "").trim());
+    if (absoluteDir && text(absoluteDir)) {
+      const resolvedAbsoluteDir = path.resolve(text(absoluteDir));
       return assertInsideWorkspace(resolvedWorkspacePath, resolvedAbsoluteDir);
     }
-    const normalizedRelativeDir = String(relativeDir || "")
-      .trim()
-      .replaceAll("\\", "/");
+    const normalizedRelativeDir = text(relativeDir).replaceAll("\\", "/");
     if (!normalizedRelativeDir) return "";
     const resolvedDir = path.resolve(resolvedWorkspacePath, normalizedRelativeDir);
     return assertInsideWorkspace(resolvedWorkspacePath, resolvedDir);
@@ -53,7 +52,7 @@ export class ScopedArtifactPersistenceHelpers {
     outputDirError = "plugin scoped writer requires output directory",
     fileNameError = "plugin scoped writer fileName must be plain file name",
   } = {}) {
-    const normalizedUserId = String(userId || "").trim();
+    const normalizedUserId = text(userId);
     if (!normalizedUserId) throw new Error(userIdError);
     const outputDir = this.resolveScopedDir({
       userId: normalizedUserId,
@@ -151,8 +150,8 @@ export class ScopedArtifactPersistenceHelpers {
       if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
         return [];
       }
-      const normalizedUserId = String(userId || "").trim();
-      const normalizedSessionId = String(sessionId || "").trim();
+      const normalizedUserId = text(userId);
+      const normalizedSessionId = text(sessionId);
       if (!normalizedUserId || !normalizedSessionId) return [];
       const artifactList = Array.isArray(artifacts) ? artifacts : [];
       if (!artifactList.length) return [];

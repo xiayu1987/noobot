@@ -12,6 +12,7 @@ import zlib from "node:zlib";
 import { dependencySpecs, desktopDependencyTimeouts } from "./specs.js";
 import { createDependencyError } from "./process.js";
 import { getCurlProxyArgs, getDependencyProxyEnv, maskDependencyProxyUrl } from "./proxy.js";
+import { text } from "@noobot/shared/value";
 
 export function createMacDependencyInstallerTools({
   app,
@@ -22,7 +23,7 @@ export function createMacDependencyInstallerTools({
   getDependencyProxyUrl = () => "",
 } = {}) {
   function getProxyOptions() {
-    const proxyUrl = String(getDependencyProxyUrl() || "").trim();
+    const proxyUrl = text(getDependencyProxyUrl());
     return {
       proxyUrl,
       args: getCurlProxyArgs(proxyUrl),
@@ -129,11 +130,11 @@ export function createMacDependencyInstallerTools({
   }
 
   async function getMacLibreOfficeDmgUrlCandidates(spec) {
-    const configuredUrl = String(spec.darwinDmg?.url || "").trim();
+    const configuredUrl = text(spec.darwinDmg?.url);
     if (configuredUrl) return [configuredUrl];
 
     const candidates = [];
-    const configuredVersion = String(spec.darwinDmg?.version || "").trim();
+    const configuredVersion = text(spec.darwinDmg?.version);
     if (configuredVersion) candidates.push(getMacLibreOfficeDmgUrlForVersion(configuredVersion));
 
     const stableVersions = await fetchLibreOfficeStableVersions();
@@ -205,9 +206,7 @@ export function createMacDependencyInstallerTools({
       error: result.error,
     });
     if (!result.ok) {
-      const detail = String(result.stderr || result.stdout || result.error || "")
-        .trim()
-        .slice(0, 1000);
+      const detail = text(result.stderr || result.stdout || result.error).slice(0, 1000);
       const error = new Error(`Failed to download ${label}.${detail ? ` ${detail}` : ""}`);
       error.failureKind = "download";
       error.retryable = true;
@@ -276,11 +275,10 @@ export function createMacDependencyInstallerTools({
         error: attachResult.error,
       });
       if (!attachResult.ok) {
-        const detail = String(
-          attachResult.stderr || attachResult.stdout || attachResult.error || "",
-        )
-          .trim()
-          .slice(0, 1000);
+        const detail = text(attachResult.stderr || attachResult.stdout || attachResult.error).slice(
+          0,
+          1000,
+        );
         throw createDependencyError(
           `Failed to mount LibreOffice DMG.${detail ? ` ${detail}` : ""}`,
           { failureKind: "package" },
@@ -318,9 +316,10 @@ export function createMacDependencyInstallerTools({
         error: copyResult.error,
       });
       if (!copyResult.ok) {
-        const detail = String(copyResult.stderr || copyResult.stdout || copyResult.error || "")
-          .trim()
-          .slice(0, 1000);
+        const detail = text(copyResult.stderr || copyResult.stdout || copyResult.error).slice(
+          0,
+          1000,
+        );
         throw createDependencyError(
           `Failed to copy LibreOffice to /Applications. macOS may require permission to write to /Applications.${detail ? ` ${detail}` : ""}`,
           { failureKind: "permission" },
@@ -355,9 +354,7 @@ export function createMacDependencyInstallerTools({
   }
 
   function getMacNodeTarUrlForVersion(version) {
-    const normalized = String(version || "")
-      .trim()
-      .replace(/^v?/, "v");
+    const normalized = text(version).replace(/^v?/, "v");
     return `https://nodejs.org/dist/${normalized}/node-${normalized}-darwin-${getMacNodeArch()}.tar.xz`;
   }
 
@@ -474,7 +471,7 @@ export function createMacDependencyInstallerTools({
   }
 
   function getMacFfmpegUrlCandidates(spec) {
-    const configuredUrl = String(spec.darwinManaged?.url || "").trim();
+    const configuredUrl = text(spec.darwinManaged?.url);
     return Array.from(
       new Set(
         [
@@ -612,8 +609,8 @@ export function createMacDependencyInstallerTools({
   }
 
   function getMacNodeUrlCandidates(spec) {
-    const configuredUrl = String(spec.darwinManaged?.url || "").trim();
-    const configuredVersion = String(spec.darwinManaged?.version || "").trim();
+    const configuredUrl = text(spec.darwinManaged?.url);
+    const configuredVersion = text(spec.darwinManaged?.version);
     const versions = [configuredVersion, "v24.21.0", "v26.9.0"].filter(Boolean);
     return Array.from(
       new Set([configuredUrl, ...versions.map(getMacNodeTarUrlForVersion)].filter(Boolean)),

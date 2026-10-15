@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const objectValue = (value, label) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
@@ -12,8 +14,8 @@ const objectValue = (value, label) => {
 };
 
 export function normalizeConnectorAccessRequest(request = {}) {
-  const connectorId = String(request.connectorId || "").trim();
-  const operation = String(request.operation || "").trim();
+  const connectorId = text(request.connectorId);
+  const operation = text(request.operation);
   if (!connectorId) throw new TypeError("connectorId is required");
   if (!operation) throw new TypeError("connector operation is required");
   return Object.freeze({
@@ -30,7 +32,7 @@ export function normalizeConnectorAccessContext(context = {}) {
     throw new TypeError("connector access abortSignal must be an AbortSignal");
   }
   return Object.freeze({
-    sessionId: String(source.sessionId || "").trim(),
+    sessionId: text(source.sessionId),
     artifactSink: source.artifactSink ?? null,
     abortSignal,
   });

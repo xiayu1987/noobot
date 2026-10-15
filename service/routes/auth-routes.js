@@ -13,7 +13,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
   const globalSource = isPlainObject(globalPlugins) ? globalPlugins : {};
@@ -21,7 +21,7 @@ function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
   const keys = new Set([...Object.keys(globalSource), ...Object.keys(userSource)]);
   const mergedPlugins = {};
   for (const key of keys) {
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = text(key);
     if (!normalizedKey) continue;
     const globalItem = isPlainObject(globalSource?.[normalizedKey])
       ? globalSource[normalizedKey]
@@ -84,8 +84,8 @@ export function registerAuthRoutes(
     "/internal/connect",
     withJsonError(
       async (req, res) => {
-        const userId = String(req.body?.userId || "").trim();
-        const connectCode = String(req.body?.connectCode || "").trim();
+        const userId = text(req.body?.userId);
+        const connectCode = text(req.body?.connectCode);
         if (!userId || !connectCode) {
           throw new Error(translateText("connect.userIdConnectCodeRequired", req.locale));
         }
@@ -105,7 +105,7 @@ export function registerAuthRoutes(
               category: RUNTIME_EVENT_CATEGORIES.CONFIG,
               level: "warn",
               event: "service.authRoutes.userConfig.load.failed",
-              data: { userIdLength: String(targetUserId || "").trim().length },
+              data: { userIdLength: text(targetUserId).length },
               error,
             });
             return {};
@@ -113,7 +113,7 @@ export function registerAuthRoutes(
         };
         const superAdmin = globalConfig?.superAdmin || {};
         const superAdminUserId = resolveConfiguredSuperUserId(globalConfig);
-        const superAdminCode = String(superAdmin?.connectCode || "").trim();
+        const superAdminCode = text(superAdmin?.connectCode);
         if (
           superAdminUserId &&
           superAdminCode &&

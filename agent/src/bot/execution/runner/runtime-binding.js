@@ -17,6 +17,7 @@ import { initializeAgentModelHost } from "../../../runtime/model-port-host.js";
 import { buildAgentTransportConsumption } from "./agent-transport-consumption.js";
 import { bindCurrentTurnPersistence } from "./current-turn-persistence.js";
 import { appendUserInterjectionMessage } from "../../../runtime/turn/turn-context-message-appender.js";
+import { text } from "@noobot/shared/value";
 
 function projectPresentationAttachments(attachments) {
   return Array.isArray(attachments)
@@ -32,11 +33,11 @@ function projectUserPresentationMessage({
   parentDialogProcessId,
   turnScopeId,
 }) {
-  const messageId = String(currentUserMessage?.messageId || "").trim();
+  const messageId = text(currentUserMessage?.messageId);
   return {
     id: messageId,
     messageId,
-    messageUid: String(currentUserMessage?.messageUid || "").trim(),
+    messageUid: text(currentUserMessage?.messageUid),
     sessionId,
     parentSessionId,
     dialogProcessId,
@@ -46,9 +47,7 @@ function projectUserPresentationMessage({
     type: String(currentUserMessage?.type || "message").trim(),
     content: String(currentUserMessage?.content || ""),
     attachments: projectPresentationAttachments(currentUserMessage?.attachments),
-    messageOrigin: String(currentUserMessage?.messageOrigin || "")
-      .trim()
-      .toLowerCase(),
+    messageOrigin: text(currentUserMessage?.messageOrigin).toLowerCase(),
     userMetaMaterialized: currentUserMessage?.userMetaMaterialized === true,
     ts: currentUserMessage?.ts,
   };
@@ -95,11 +94,9 @@ export async function bindAgentDispatchRuntime({
   systemRuntime.config =
     systemRuntime.config && typeof systemRuntime.config === "object" ? systemRuntime.config : {};
   systemRuntime.config.turnScopeId = turnScopeId;
-  systemRuntime.sessionDir = String(sessionDir || "").trim();
-  dispatchRuntime.currentUserMessageUid = String(currentUserMessage?.messageUid || "").trim();
-  dispatchRuntime.currentUserMessageOrigin = String(currentUserMessage?.messageOrigin || "")
-    .trim()
-    .toLowerCase();
+  systemRuntime.sessionDir = text(sessionDir);
+  dispatchRuntime.currentUserMessageUid = text(currentUserMessage?.messageUid);
+  dispatchRuntime.currentUserMessageOrigin = text(currentUserMessage?.messageOrigin).toLowerCase();
   dispatchRuntime.userInterjectionPort = userInterjectionPort;
 
   const modelHost = initializeAgentModelHost({
@@ -113,10 +110,10 @@ export async function bindAgentDispatchRuntime({
     messageId,
     presentationMessageId,
     parentSessionId,
-    workflowRunId: String(resolvedRunConfig?.workflowRunId || "").trim(),
-    nodeExecutionId: String(
-      resolvedRunConfig?.workflowNodeExecutionId || resolvedRunConfig?.nodeExecutionId || "",
-    ).trim(),
+    workflowRunId: text(resolvedRunConfig?.workflowRunId),
+    nodeExecutionId: text(
+      resolvedRunConfig?.workflowNodeExecutionId || resolvedRunConfig?.nodeExecutionId,
+    ),
   });
   applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
   bindLifecycleToRuntime(dispatchRuntime, lifecycle);
@@ -149,7 +146,7 @@ export async function bindAgentDispatchRuntime({
           chatPresentation: true,
           content: "",
           attachments: [],
-          thinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
+          thinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
         },
       },
     },

@@ -31,6 +31,7 @@ import {
   WorkspaceEditorPanel,
   WorkspaceResetDialog,
 } from "../public-api.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -102,9 +103,9 @@ const userParamTreeData = computed(() => toParamTreeData(userParamCatalog.value)
 
 function toParamTreeData(list = []) {
   return (list || []).map((item) => ({
-    key: String(item?.key || "").trim(),
-    label: String(item?.key || "").trim(),
-    description: String(item?.description || "").trim(),
+    key: text(item?.key),
+    label: text(item?.key),
+    description: text(item?.description),
     type: "param",
   }));
 }
@@ -143,12 +144,7 @@ async function loadAllWorkspaceTree() {
 
 async function loadParamCatalog(scope = "system") {
   if (!props.connected || !props.apiKey) return;
-  const normalizedScope =
-    String(scope || "")
-      .trim()
-      .toLowerCase() === "user"
-      ? "user"
-      : "system";
+  const normalizedScope = text(scope).toLowerCase() === "user" ? "user" : "system";
   if (normalizedScope === "system") loadingSystemParamCatalog.value = true;
   else loadingUserParamCatalog.value = true;
   try {
@@ -189,7 +185,7 @@ async function reloadActiveFile() {
 async function openFile(node, source = "user") {
   if (!props.connected || !node || !props.userId || !props.apiKey) return;
   const normalizedSource = source === "all" ? "all" : "user";
-  const nodePath = String(node.path || "").trim();
+  const nodePath = text(node.path);
   if (!nodePath) return;
   if (node.type === "dir") {
     activePath.value = nodePath;
@@ -417,7 +413,7 @@ async function confirmResetDialog() {
 }
 
 async function insertParamAtCursor(key = "") {
-  const normalizedKey = String(key || "").trim();
+  const normalizedKey = text(key);
   if (!normalizedKey) return;
   if (!activePath.value || !isTextFile.value) {
     ElMessage.warning(translate("settings.selectEditableTextFile"));

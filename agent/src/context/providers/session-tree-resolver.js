@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 export async function resolveRootSessionId({
   sessionManager = null,
   userId = "",
@@ -12,8 +14,8 @@ export async function resolveRootSessionId({
   if (typeof sessionManager?.getRootSessionId !== "function") {
     throw new TypeError("resolveRootSessionId requires sessionManager.getRootSessionId");
   }
-  const normalizedUserId = String(userId || "").trim();
-  const rootAnchorSessionId = String(parentSessionId || sessionId || "").trim();
+  const normalizedUserId = text(userId);
+  const rootAnchorSessionId = text(parentSessionId || sessionId);
   if (!normalizedUserId || !rootAnchorSessionId) {
     throw new TypeError("resolveRootSessionId requires userId and sessionId");
   }

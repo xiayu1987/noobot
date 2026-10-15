@@ -25,6 +25,7 @@ import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 import { applyLatestSessionAggregateVersion } from "../runtime/engine/sessionAggregateVersionManager.js";
+import { text } from "@noobot/shared/value";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
@@ -99,8 +100,8 @@ export function useChatEngine({
     navigateToLastMessage?.();
   };
   const applyAuthoritativeTerminalResolution = (response) => {
-    const sessionId = String(response?.sessionId || "").trim();
-    const turnScopeId = String(response?.turnScopeId || "").trim();
+    const sessionId = text(response?.sessionId);
+    const turnScopeId = text(response?.turnScopeId);
     const terminalStatus =
       response?.turn?.terminalStatus || response?.materialization?.terminalStatus;
     if (!sessionId || !turnScopeId || !terminalStatus || typeof terminalStatus !== "object") {
@@ -135,7 +136,7 @@ export function useChatEngine({
       }
       if (result?.applied) {
         const targetSession = activeSession?.value;
-        if (String(targetSession?.sessionId || "").trim() === sessionId) {
+        if (text(targetSession?.sessionId) === sessionId) {
           applyLatestSessionAggregateVersion(targetSession, response);
           navigateToLastMessageOnTurnTerminalOnce(sessionId, turnScopeId);
         }
@@ -203,15 +204,15 @@ export function useChatEngine({
     return terminalResolution ? terminalResolution.then(() => lifecycleResult) : lifecycleResult;
   };
   const logSessionStateEvent = (event, name, data) => {
-    const sessionId = String(event?.sessionId || "").trim();
+    const sessionId = text(event?.sessionId);
     if (!sessionId) return false;
     return sessionLogWebSocketClient?.log?.({
       scope: "session",
       category: "state",
       event: name,
       sessionId,
-      dialogProcessId: String(event?.dialogProcessId || "").trim(),
-      turnScopeId: String(event?.turnScopeId || "").trim(),
+      dialogProcessId: text(event?.dialogProcessId),
+      turnScopeId: text(event?.turnScopeId),
       data,
     });
   };

@@ -14,6 +14,7 @@ import {
   HOOK_POINT,
   resolveSessionDeletionTargets,
 } from "@noobot/hook-protocol";
+import { text } from "@noobot/shared/value";
 
 export function registerWorkflowSessionCleanupHook({ hookManager, options = {} } = {}) {
   return hookManager.on(
@@ -21,7 +22,7 @@ export function registerWorkflowSessionCleanupHook({ hookManager, options = {} }
     async (ctx = {}) => {
       const sessionIds = resolveSessionDeletionTargets(ctx);
       if (!sessionIds.length) return createSessionDeletionHookResult();
-      const basePath = String(ctx?.basePath || "").trim();
+      const basePath = text(ctx?.basePath);
       if (!basePath) return createSessionDeletionHookResult();
       const cleanup = await cleanupWorkflowBySessionIds(basePath, sessionIds);
       const retainedRelatedSessionIds = await collectWorkflowRelatedSessionIds(

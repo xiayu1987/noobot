@@ -39,6 +39,7 @@ import { normalizeTrimmedStringList, selectHookManager } from "./session-executi
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { commitPluginArtifact, getPluginArtifact } from "./plugin-artifact-committer.js";
+import { text } from "@noobot/shared/value";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS =
@@ -49,7 +50,7 @@ function plainObject(value) {
 }
 
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
-  const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
+  const scopeId = text(turnScopeId || runConfig?.turnScopeId);
   const executionId = deriveAgentExecutionId({
     executionId: runConfig?.executionId,
     turnScopeId: scopeId,
@@ -57,10 +58,10 @@ function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
   return Object.freeze({
     executionId,
     executionKind: "agent",
-    parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+    parentExecutionId: text(runConfig?.parentExecutionId),
     rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
     origin: Object.freeze(plainObject(runConfig?.origin)),
-    stage: String(runConfig?.stage || "").trim(),
+    stage: text(runConfig?.stage),
   });
 }
 
@@ -127,20 +128,20 @@ export class RunConfigPluginPreparer {
     }
     const declaration = declarations[0];
     if (!declaration) return createAgentExecutionIntent({ runConfig, turnScopeId });
-    const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
+    const scopeId = text(turnScopeId || runConfig?.turnScopeId);
     const executionId = String(
       runConfig?.executionId || `${declaration.idPrefix}:${scopeId}`,
     ).trim();
     return Object.freeze({
       executionId,
       executionKind: declaration.kind,
-      parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+      parentExecutionId: text(runConfig?.parentExecutionId),
       rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
       origin: Object.freeze({
         type: declaration.originType,
         [declaration.originIdKey]: executionId,
       }),
-      stage: String(declaration.stage || "").trim(),
+      stage: text(declaration.stage),
     });
   }
 
@@ -148,7 +149,7 @@ export class RunConfigPluginPreparer {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
     const configSnapshot = createConfigSnapshot({
       config: effectiveConfig,
-      scope: { kind: "agent_turn", userId: String(userId || "").trim() },
+      scope: { kind: "agent_turn", userId: text(userId) },
     });
     const plan = createPluginConfigPlan({
       runConfig,
@@ -158,7 +159,7 @@ export class RunConfigPluginPreparer {
     const options =
       plan.plugins.find((plugin) => plugin.pluginId === entry.pluginId)?.options || {};
     const basePath =
-      String(options.basePath || "").trim() ||
+      text(options.basePath) ||
       (this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : "");
     const next = { ...options, enabled: true, mode: "on", basePath };
     next.frontendThresholdsEnabled = runConfig?.frontendThresholdsEnabled === true;

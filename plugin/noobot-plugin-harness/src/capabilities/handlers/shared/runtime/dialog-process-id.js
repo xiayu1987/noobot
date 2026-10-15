@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function resolveDialogProcessIdFromContext(ctx = {}) {
-  return String(ctx?.dialogProcessId || "").trim();
+  return text(ctx?.dialogProcessId);
 }

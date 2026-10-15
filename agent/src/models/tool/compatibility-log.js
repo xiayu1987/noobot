@@ -6,6 +6,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { filePath as path, resolveRuntimeWorkspaceRoot } from "@noobot/path-resolver";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 export function buildToolCompatibilityLogLine({
   modelState = {},
@@ -15,13 +16,13 @@ export function buildToolCompatibilityLogLine({
 } = {}) {
   return JSON.stringify({
     ts: new Date().toISOString(),
-    event: String(event || "").trim(),
-    userId: String(runtime?.userId || "").trim(),
-    sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
+    event: text(event),
+    userId: text(runtime?.userId),
+    sessionId: text(runtime?.systemRuntime?.sessionId),
     parentSessionId: normalizeParentSessionId(runtime?.systemRuntime?.parentSessionId),
-    modelAlias: String(modelState?.activeModelAlias || "").trim(),
-    modelName: String(modelState?.activeModelName || "").trim(),
-    tools: Array.isArray(tools) ? tools.map((t) => String(t || "").trim()).filter(Boolean) : [],
+    modelAlias: text(modelState?.activeModelAlias),
+    modelName: text(modelState?.activeModelName),
+    tools: Array.isArray(tools) ? tools.map((t) => text(t)).filter(Boolean) : [],
   });
 }
 

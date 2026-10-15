@@ -5,6 +5,7 @@
  */
 import { v4 as uuidv4 } from "uuid";
 import { readRepositoryParentSessionId } from "./session-scope-resolution.js";
+import { text } from "@noobot/shared/value";
 
 export class TaskService {
   constructor({ taskRepo, sessionRepo, now = () => new Date().toISOString() } = {}) {
@@ -168,9 +169,7 @@ export class TaskService {
         if (result) task.result = result;
 
         const nextCurrentTaskId =
-          String(taskBundle.currentTaskId || "").trim() === currentTaskId
-            ? ""
-            : taskBundle.currentTaskId;
+          text(taskBundle.currentTaskId) === currentTaskId ? "" : taskBundle.currentTaskId;
         await this.taskRepo.saveBatch(
           userId,
           sessionId,
@@ -180,7 +179,7 @@ export class TaskService {
           persistenceContext,
         );
 
-        if (String(session.currentTaskId || "").trim() === currentTaskId) {
+        if (text(session.currentTaskId) === currentTaskId) {
           session.currentTaskId = "";
         }
         if (session.messages?.length) {
@@ -207,10 +206,10 @@ export class TaskService {
       async ({ session, resolvedParentSessionId }) => {
         const normalizedTurnTasks = (
           Array.isArray(currentTurnTasks) ? currentTurnTasks : []
-        ).filter((task) => String(task?.taskId || "").trim());
+        ).filter((task) => text(task?.taskId));
 
         const lastTask = normalizedTurnTasks[normalizedTurnTasks.length - 1] || null;
-        const currentTaskId = String(lastTask?.taskId || "").trim();
+        const currentTaskId = text(lastTask?.taskId);
 
         await this.taskRepo.saveBatch(
           userId,

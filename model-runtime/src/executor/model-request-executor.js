@@ -33,6 +33,7 @@ import {
   resolvePreferredStreaming,
   streamingProviderCacheKey,
 } from "../policies/streaming-mode-policy.js";
+import { text } from "@noobot/shared/value";
 
 function wrapStreamingCallbacks(callbacks, attemptState) {
   if (!Array.isArray(callbacks) || !callbacks.length) return callbacks;
@@ -49,11 +50,11 @@ function wrapStreamingCallbacks(callbacks, attemptState) {
 
 function projectObservableModel(model = {}) {
   return Object.freeze({
-    alias: String(model.alias || "").trim(),
-    model: String(model.model || "").trim(),
-    operatorId: String(model.operatorId || "").trim(),
-    modelFamily: String(model.modelFamily || "").trim(),
-    adapterId: String(model.adapterId || "").trim(),
+    alias: text(model.alias),
+    model: text(model.model),
+    operatorId: text(model.operatorId),
+    modelFamily: text(model.modelFamily),
+    adapterId: text(model.adapterId),
   });
 }
 
@@ -64,7 +65,7 @@ function buildInvocationHeaders({
   headers = {},
 } = {}) {
   return {
-    "X-Model-Name": String(model.model || "").trim(),
+    "X-Model-Name": text(model.model),
     "X-Model-Operation": operationKind,
     "X-Plugin-Flow": invocation.flow,
     "X-Plugin-Purpose": invocation.purpose,
@@ -273,8 +274,8 @@ export function createModelRequestExecutor({
                 invocationSequence: modelObservationState.sequence,
                 attempt,
                 model: {
-                  alias: String(request.model.alias || "").trim(),
-                  name: String(request.model.model || "").trim(),
+                  alias: text(request.model.alias),
+                  name: text(request.model.model),
                   streaming,
                   boundToolCount: request.tools.length,
                 },

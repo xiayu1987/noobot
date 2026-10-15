@@ -11,6 +11,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 function tModel(runtime = {}, key = "", params = {}) {
   const keyMap = {
@@ -18,10 +19,10 @@ function tModel(runtime = {}, key = "", params = {}) {
     modelNameRequired: "model.nameRequired",
     notConversationModel: "model.notConversationModel",
   };
-  if (String(key || "").trim() === "modelNotFound") {
-    return `${tTool(runtime, "model.enabledProviderModelNotFound")}: ${String(params.input || "").trim()}`;
+  if (text(key) === "modelNotFound") {
+    return `${tTool(runtime, "model.enabledProviderModelNotFound")}: ${text(params.input)}`;
   }
-  return tTool(runtime, keyMap[String(key || "").trim()] || "", params);
+  return tTool(runtime, keyMap[text(key)] || "", params);
 }
 
 function isConversationModel(providerSpec = {}) {
@@ -46,7 +47,7 @@ export function createModelTool({ agentContext, sessionId }) {
           code: ERROR_CODE.RECOVERABLE_SESSION_CONTEXT_MISSING,
         });
       }
-      const input = String(modelName || "").trim();
+      const input = text(modelName);
       if (!input) {
         throw recoverableToolError(tModel(runtime, "modelNameRequired"), {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -63,15 +64,15 @@ export function createModelTool({ agentContext, sessionId }) {
           code: ERROR_CODE.RECOVERABLE_MODEL_NOT_CONVERSATION,
         });
       }
-      const resolvedSessionId = String(runtime?.systemRuntime?.sessionId || sessionId || "").trim();
+      const resolvedSessionId = text(runtime?.systemRuntime?.sessionId || sessionId);
       if (
         runtime?.sessionManager &&
         typeof runtime.sessionManager.setSessionModelAlias === "function" &&
-        String(runtime?.userId || "").trim() &&
+        text(runtime?.userId) &&
         resolvedSessionId
       ) {
         await runtime.sessionManager.setSessionModelAlias({
-          userId: String(runtime.userId || "").trim(),
+          userId: text(runtime.userId),
           sessionId: resolvedSessionId,
           modelAlias: alias,
         });

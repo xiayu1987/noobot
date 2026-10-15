@@ -5,6 +5,7 @@
  */
 import { pickAlias, byAliasWithUser } from "../provider/resolver.js";
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
+import { text } from "@noobot/shared/value";
 
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
   const alias = pickAlias({ globalConfig, userConfig, skillConfig: {} });
@@ -16,7 +17,7 @@ export function resolveModelSpecByAlias({ alias, globalConfig, userConfig }) {
 }
 
 export function resolveModelSpecByName({ name, modelName, globalConfig, userConfig }) {
-  const targetName = String(modelName || name || "").trim();
+  const targetName = text(modelName || name);
   if (!targetName) return null;
   return resolveModelSpecByAlias({
     alias: targetName,
@@ -26,7 +27,7 @@ export function resolveModelSpecByName({ name, modelName, globalConfig, userConf
 }
 
 export function resolveModelSpecOrConfiguredDefault({ name, modelName, globalConfig, userConfig }) {
-  const requestedModel = String(modelName || name || "").trim();
+  const requestedModel = text(modelName || name);
   if (!requestedModel) return resolveDefaultModelSpec({ globalConfig, userConfig });
   const requestedModelSpec = resolveModelSpecByName({
     modelName: requestedModel,

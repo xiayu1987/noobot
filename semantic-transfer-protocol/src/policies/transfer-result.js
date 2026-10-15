@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export const TRANSFER_RESULT_STATUS = Object.freeze({
   DIRECT: "direct",
@@ -15,7 +15,7 @@ export const TRANSFER_RESULT_STATUS = Object.freeze({
 });
 
 function normalizeString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function cleanObject(value = {}) {

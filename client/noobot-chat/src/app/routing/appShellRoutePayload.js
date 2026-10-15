@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function normalizePseudoRouteValue(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function buildSessionPseudoRoute(sessionId = "") {

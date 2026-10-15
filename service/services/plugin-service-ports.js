@@ -21,12 +21,13 @@ import {
   resolvePluginAssetsRelativePath,
   resolvePluginDataRelativePath,
 } from "@noobot/workspace-protocol";
+import { text } from "@noobot/shared/value";
 
 const assetIdPattern = WORKSPACE_PATH_SEGMENT_PATTERN;
 const assetVersionPattern = /^[a-f0-9]{64}$/;
 
 function requireAssetToken(value, pattern, label) {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!pattern.test(normalized)) throw new TypeError(`invalid workspace asset ${label}`);
   return normalized;
 }
@@ -103,7 +104,7 @@ function createWorkspaceAssetWriter({ resolveRoot }) {
 function createWorkspaceAssetPort({ bot, pluginId }) {
   const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
   const resolveRoot = (userId) => {
-    const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
+    const workspacePath = text(bot?.getWorkspacePath?.(userId));
     if (!workspacePath) throw new Error("workspace path not found");
     return path.resolve(workspacePath, resolvePluginAssetsRelativePath(normalizedPluginId));
   };
@@ -198,7 +199,7 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
   const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
   function resolveSessionDir({ userId, segments, locale = "" }) {
     const notFound = () => new Error(translateText?.("common.notFound", locale) || "not found");
-    const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
+    const workspacePath = text(bot?.getWorkspacePath?.(userId));
     if (!workspacePath) throw notFound();
     let relativeDir;
     try {
@@ -221,9 +222,9 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
         if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
       }
       const snapshot = await readSessionArtifactSnapshot({ outputDir });
-      const childSessionId = String(
-        snapshot.sessionSummary?.sessionId || snapshot.session?.sessionId || "",
-      ).trim();
+      const childSessionId = text(
+        snapshot.sessionSummary?.sessionId || snapshot.session?.sessionId,
+      );
       return { ...snapshot, childSessionId, artifactNames: entries };
     },
     async readThinkingDetail({ userId, segments, dialogProcessId, turnScopeId, locale }) {
@@ -236,18 +237,17 @@ function createPluginSessionPort({ bot, pluginId, translateText }) {
         Array.isArray(sessionSummary?.messages) ? sessionSummary.messages : []
       ).find(
         (message = {}) =>
-          String(message?.turnScopeId || "").trim() === String(turnScopeId || "").trim() &&
-          (!dialogProcessId ||
-            String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim()),
+          text(message?.turnScopeId) === text(turnScopeId) &&
+          (!dialogProcessId || text(message?.dialogProcessId) === String(dialogProcessId).trim()),
       );
       return buildThinkingDetailPayload(
         {
           exists: Boolean(session?.sessionId),
-          sessionId: String(session?.sessionId || "").trim(),
-          revision: String(summaryMessage?.thinkingDetailRef?.contentHash || "").trim(),
+          sessionId: text(session?.sessionId),
+          revision: text(summaryMessage?.thinkingDetailRef?.contentHash),
           sessions: [
             {
-              sessionId: String(session?.sessionId || "").trim(),
+              sessionId: text(session?.sessionId),
               rawMessages: Array.isArray(session?.messages) ? session.messages : [],
             },
           ],

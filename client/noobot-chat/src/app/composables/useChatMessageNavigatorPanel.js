@@ -12,6 +12,7 @@ import {
 } from "../state/chatMessageNavigatorState.js";
 import { buildChatMessageNavItems } from "../state/chatMessageNavItemsState.js";
 import { selectTurnPresentations } from "../../modules/chat/runtime/engine/turnPresentation.js";
+import { text } from "@noobot/shared/value";
 
 export function useChatMessageNavigatorPanel({
   activeSession,
@@ -68,7 +69,7 @@ export function useChatMessageNavigatorPanel({
     nextTick(() => {
       const items = Array.isArray(chatMessageNavItems.value) ? chatMessageNavItems.value : [];
       const lastItem = items[items.length - 1] || null;
-      if (!String(lastItem?.id || "").trim()) return;
+      if (!text(lastItem?.id)) return;
       handleSelectChatMessageNavItem(lastItem);
     });
   }

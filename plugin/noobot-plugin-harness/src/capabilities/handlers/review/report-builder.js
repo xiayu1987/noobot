@@ -9,6 +9,7 @@ import { HARNESS_RUN_STATUS } from "../../../core/constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { collectRuleCodes } from "../shared/rule-table-utils.js";
 import { nowIsoTimestamp } from "../shared/report-utils.js";
+import { text } from "@noobot/shared/value";
 
 const REVIEW_EVENTS = WORKFLOW_PARAMS.logging.events.review;
 
@@ -50,7 +51,7 @@ const REVIEW_ISSUE_RULES = Object.freeze([
 ]);
 
 function resolveReviewStatus(point = "", ctx = {}) {
-  const explicitStatus = String(ctx?.status || "").trim();
+  const explicitStatus = text(ctx?.status);
   if (explicitStatus) return explicitStatus;
   if (REVIEW_ERROR_POINTS.has(point)) return HARNESS_RUN_STATUS.ERROR;
   if (point === HOOK_POINT.AGENT.ON_ABORT) return HARNESS_RUN_STATUS.ABORT;

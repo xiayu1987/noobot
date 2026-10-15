@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const SESSION_ERROR_CODE = Object.freeze({
   AGGREGATE_VERSION_CONFLICT: "SESSION_AGGREGATE_VERSION_CONFLICT",
   IDEMPOTENCY_KEY_REUSED: "SESSION_IDEMPOTENCY_KEY_REUSED",
@@ -16,11 +18,11 @@ export const SESSION_ERROR_CODE = Object.freeze({
 export const SESSION_DELETED_REASON = "session_deleted";
 
 export function createSessionDeletedError({ userId = "", sessionId = "", operation = "" } = {}) {
-  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedSessionId = text(sessionId);
   const error = new Error(`session has been deleted: ${normalizedSessionId}`);
   error.statusCode = 410;
   error.code = SESSION_ERROR_CODE.SESSION_DELETED;
-  error.userId = String(userId || "").trim();
+  error.userId = text(userId);
   error.sessionId = normalizedSessionId;
   if (operation) error.operation = String(operation);
   return error;

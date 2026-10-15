@@ -15,6 +15,7 @@ import {
   resolveContextMessageRole,
 } from "../message/codec.js";
 import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
+import { text } from "@noobot/shared/value";
 
 const SNAPSHOT_VERSION = 3;
 const IDENTITY_FIELDS = [
@@ -65,9 +66,7 @@ function messageType(message = {}) {
 }
 
 export function normalizeSnapshotIdentity(identity = {}) {
-  return Object.fromEntries(
-    IDENTITY_FIELDS.map((field) => [field, String(identity?.[field] || "").trim()]),
-  );
+  return Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, text(identity?.[field])]));
 }
 
 export function serializeContextMessage(message = {}) {
@@ -205,7 +204,7 @@ export function createModelContextSnapshot({
 function assertModelContextSnapshotIdentity(snapshot = {}, identity = {}) {
   const normalized = normalizeSnapshotIdentity(identity);
   for (const field of ["userId", "sessionId", "dialogProcessId", "turnScopeId"]) {
-    if (String(snapshot?.[field] || "").trim() !== normalized[field]) {
+    if (text(snapshot?.[field]) !== normalized[field]) {
       throw new Error(`Stopped model message snapshot identity mismatch: ${field}`);
     }
   }
@@ -243,7 +242,7 @@ function indexAuthoritativeSessionMessages(messages) {
   }
   const indexed = new Map();
   for (const message of messages) {
-    const messageUid = String(message?.messageUid || "").trim();
+    const messageUid = text(message?.messageUid);
     if (!messageUid) {
       throw new Error("Session authority message requires messageUid");
     }
@@ -300,8 +299,8 @@ export function restoreSnapshotUserAttachmentFactsFromSessionAuthority(
 }
 
 export function projectSnapshotIncrementalToContinuation(messages = [], identity = {}) {
-  const currentDialogProcessId = String(identity?.dialogProcessId || "").trim();
-  const currentTurnScopeId = String(identity?.turnScopeId || "").trim();
+  const currentDialogProcessId = text(identity?.dialogProcessId);
+  const currentTurnScopeId = text(identity?.turnScopeId);
   if (!currentDialogProcessId || !currentTurnScopeId) {
     throw new Error("Continuation projection requires dialogProcessId and turnScopeId");
   }

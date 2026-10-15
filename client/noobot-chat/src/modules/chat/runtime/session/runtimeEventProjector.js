@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
+import { text } from "@noobot/shared/value";
 
 export function createRuntimeEventProjector({
   sessions,
@@ -13,7 +14,7 @@ export function createRuntimeEventProjector({
   resolveActiveSessionIdentity,
 }) {
   const submitTurnRuntimeEvent = (event) => {
-    const requestedSessionId = String(event?.sessionId || "").trim();
+    const requestedSessionId = text(event?.sessionId);
 
     const result = chatStore.applyTurnRuntimeEvent(event);
     const selectedSessionId = resolveActiveSessionIdentity();
@@ -22,19 +23,17 @@ export function createRuntimeEventProjector({
       sessionId: requestedSessionId || selectedSessionId,
       requestedSessionId,
       selectedSessionId,
-      eventTurnScopeId: String(event?.turnScopeId || "").trim(),
-      eventDialogProcessId: String(event?.dialogProcessId || "").trim(),
-      eventType: String(event?.type || event?.eventType || "").trim(),
-      eventState: String(event?.state || event?.backendState || "").trim(),
+      eventTurnScopeId: text(event?.turnScopeId),
+      eventDialogProcessId: text(event?.dialogProcessId),
+      eventType: text(event?.type || event?.eventType),
+      eventState: text(event?.state || event?.backendState),
       resultApplied: result?.applied === true,
-      resultReason: String(result?.reason || "").trim(),
-      canonicalSessionId: String(
-        result?.canonicalSessionId || result?.turn?.sessionId || "",
-      ).trim(),
-      canonicalTurnScopeId: String(result?.turn?.turnScopeId || "").trim(),
-      canonicalState: String(result?.turn?.state || "").trim(),
+      resultReason: text(result?.reason),
+      canonicalSessionId: text(result?.canonicalSessionId || result?.turn?.sessionId),
+      canonicalTurnScopeId: text(result?.turn?.turnScopeId),
+      canonicalState: text(result?.turn?.state),
       canonicalTerminal: result?.turn?.terminal || null,
-      activeBucketTurnScopeId: String(activeBucket?.activeTurnScopeId || "").trim(),
+      activeBucketTurnScopeId: text(activeBucket?.activeTurnScopeId),
     }));
     return {
       ...result,

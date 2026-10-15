@@ -19,6 +19,7 @@ import {
 } from "@noobot/runtime-events";
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 import { pipeline } from "node:stream/promises";
+import { text } from "@noobot/shared/value";
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {
   const command = assertSessionCommand(body);
@@ -115,7 +116,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
   function resolveDeletedSessionIds(result = {}, fallbackSessionId = "") {
     const fromResult = mergeSessionDeletionIds(result?.deletedSessionIds);
     if (fromResult.length) return fromResult;
-    const fallback = String(fallbackSessionId || "").trim();
+    const fallback = text(fallbackSessionId);
     return fallback ? [fallback] : [];
   }
 
@@ -123,12 +124,8 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     "/internal/plugins",
     jsonRoute(async (req, res) => {
       const refresh =
-        String(req.query?.refresh || "")
-          .trim()
-          .toLowerCase() === "1" ||
-        String(req.query?.refresh || "")
-          .trim()
-          .toLowerCase() === "true";
+        text(req.query?.refresh).toLowerCase() === "1" ||
+        text(req.query?.refresh).toLowerCase() === "true";
       res.json({
         ok: true,
         plugins: await pluginHost.getPluginDiagnostics({ refresh }),
@@ -160,15 +157,15 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
         level: "debug",
         debugType: "timeline-pipeline",
         event: "service.timelinePipeline.sessionDetailRead",
-        userId: String(userId || "").trim(),
-        sessionId: String(sessionId || "").trim(),
+        userId: text(userId),
+        sessionId: text(sessionId),
         data: {
           mode,
           exists: result?.exists !== false,
-          responseSessionId: String(result?.sessionId || "").trim(),
+          responseSessionId: text(result?.sessionId),
           sessionDocCount: sessionDocs.length,
           sessionDocs: sessionDocs.map((doc = {}) => ({
-            sessionId: String(doc.sessionId || "").trim(),
+            sessionId: text(doc.sessionId),
             aggregateVersion: Number(doc.aggregateVersion || 0),
             turnOrderCount: Array.isArray(doc.turnOrder) ? doc.turnOrder.length : 0,
             turnOrderMessageCount: Array.isArray(doc.turnOrder)
@@ -179,14 +176,12 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
               : 0,
             summaryMessageCount: Array.isArray(doc.messages) ? doc.messages.length : 0,
             rawMessageCount: Array.isArray(doc.rawMessages) ? doc.rawMessages.length : 0,
-            messageProjection: String(result?.messageProjection || "").trim(),
+            messageProjection: text(result?.messageProjection),
             schemaVersion: Number(doc.schemaVersion || 0),
             summaryStatsMessageCount: Number(doc.stats?.messageCount || 0),
             summaryStatsDisplayMessageCount: Number(doc.stats?.displayMessageCount || 0),
             summaryAssistantCount: Array.isArray(doc.messages)
-              ? doc.messages.filter(
-                  (message = {}) => String(message.role || "").trim() === "assistant",
-                ).length
+              ? doc.messages.filter((message = {}) => text(message.role) === "assistant").length
               : 0,
             summaryAssistantActivityCount: Array.isArray(doc.messages)
               ? doc.messages.reduce(
@@ -196,22 +191,20 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
                   0,
                 )
               : 0,
-            activeTurnScopeId: String(
-              doc.turnLifecycleSnapshot?.activeTurn?.turnScopeId || "",
-            ).trim(),
-            activePresentationMessageId: String(
-              doc.turnLifecycleSnapshot?.activeTurn?.presentationMessageId || "",
-            ).trim(),
+            activeTurnScopeId: text(doc.turnLifecycleSnapshot?.activeTurn?.turnScopeId),
+            activePresentationMessageId: text(
+              doc.turnLifecycleSnapshot?.activeTurn?.presentationMessageId,
+            ),
           })),
           messages: sessionDocs.flatMap((doc = {}) =>
             (Array.isArray(doc.messages) ? doc.messages : []).map((message = {}) => ({
-              messageUid: String(message.messageUid || "").trim(),
-              messageId: String(message.messageId || "").trim(),
-              presentationMessageId: String(message.presentationMessageId || "").trim(),
-              sourceMessageId: String(message.sourceMessageId || "").trim(),
-              sourceMessageUid: String(message.sourceMessageUid || "").trim(),
-              role: String(message.role || "").trim(),
-              type: String(message.type || "").trim(),
+              messageUid: text(message.messageUid),
+              messageId: text(message.messageId),
+              presentationMessageId: text(message.presentationMessageId),
+              sourceMessageId: text(message.sourceMessageId),
+              sourceMessageUid: text(message.sourceMessageUid),
+              role: text(message.role),
+              type: text(message.type),
               chatPresentation: message.chatPresentation,
               turnPlaceholder: message.turnPlaceholder === true,
               contentLength: typeof message.content === "string" ? message.content.length : 0,
@@ -233,8 +226,8 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
         level: "debug",
         debugType: "workflow-diagnostics",
         event: "service.workflowDetail.dataSourceRead",
-        userId: String(userId || "").trim(),
-        sessionId: String(sessionId || "").trim(),
+        userId: text(userId),
+        sessionId: text(sessionId),
         data: {
           mode,
           exists: result?.exists !== false,
@@ -268,7 +261,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     if (Object.keys(req.query || {}).some((key) => key !== "commandId")) {
       throw new TypeError("unsupported terminal resolution query field");
     }
-    const commandId = String(req.query?.commandId || "").trim() || crypto.randomUUID();
+    const commandId = text(req.query?.commandId) || crypto.randomUUID();
     const resolution = await bot.session.resolveTurnTerminalState({
       userId,
       sessionId,
@@ -283,22 +276,22 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
       level: "debug",
       debugType: "terminal-resolution",
       event: "backend.terminalResolution.read",
-      userId: String(userId || "").trim(),
-      sessionId: String(sessionId || "").trim(),
-      turnScopeId: String(turnScopeId || "").trim(),
+      userId: text(userId),
+      sessionId: text(sessionId),
+      turnScopeId: text(turnScopeId),
       data: {
         commandId,
         resolved: resolution?.resolved === true,
         retryable: resolution?.retryable === true,
-        reason: String(resolution?.reason || "").trim(),
-        responseSessionId: String(resolution?.sessionId || "").trim(),
-        responseTurnScopeId: String(resolution?.turnScopeId || "").trim(),
-        turnState: String(resolution?.turn?.state || "").trim(),
-        executionState: String(resolution?.turn?.executionState || "").trim(),
+        reason: text(resolution?.reason),
+        responseSessionId: text(resolution?.sessionId),
+        responseTurnScopeId: text(resolution?.turnScopeId),
+        turnState: text(resolution?.turn?.state),
+        executionState: text(resolution?.turn?.executionState),
         revision: Number(resolution?.turn?.revision || resolution?.revision || 0),
         sequence: Number(resolution?.turn?.sequence || resolution?.sequence || 0),
-        startedAt: String(resolution?.turn?.startedAt || "").trim(),
-        finishedAt: String(resolution?.turn?.finishedAt || "").trim(),
+        startedAt: text(resolution?.turn?.startedAt),
+        finishedAt: text(resolution?.turn?.finishedAt),
         hasTerminalStatus: Boolean(resolution?.turn?.terminalStatus),
       },
     });
@@ -376,10 +369,10 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           level,
           debugType: "workflow-diagnostics",
           event,
-          userId: String(userId || "").trim(),
-          sessionId: String(sessionId || "").trim(),
-          dialogProcessId: String(payload.anchor?.dialogProcessId || "").trim(),
-          turnScopeId: String(payload.anchor?.turnScopeId || "").trim(),
+          userId: text(userId),
+          sessionId: text(sessionId),
+          dialogProcessId: text(payload.anchor?.dialogProcessId),
+          turnScopeId: text(payload.anchor?.turnScopeId),
           data,
         });
       void logDeleteMutation("service.messageDelete.requestReceived", {
@@ -398,11 +391,11 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           deduplicated: result.deduplicated === true,
           remainingMessages: result.session.messages.map((message = {}, index) => ({
             index,
-            id: String(message?.messageId || "").trim(),
-            role: String(message?.role || "").trim(),
-            type: String(message?.type || "").trim(),
-            dialogProcessId: String(message?.dialogProcessId || "").trim(),
-            turnScopeId: String(message?.turnScopeId || "").trim(),
+            id: text(message?.messageId),
+            role: text(message?.role),
+            type: text(message?.type),
+            dialogProcessId: text(message?.dialogProcessId),
+            turnScopeId: text(message?.turnScopeId),
             contentLength: String(message?.content || "").length,
           })),
         });
@@ -412,7 +405,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
           "service.messageDelete.failed",
           {
             error: String(error?.message || error || "delete_failed"),
-            errorCode: String(error?.code || "").trim(),
+            errorCode: text(error?.code),
             statusCode: Number(error?.statusCode || 0),
           },
           "error",
@@ -434,8 +427,8 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
       sessionId,
       parentSessionId: command.scope.parentSessionId,
       anchor: command.payload.anchor || {},
-      newContent: String(command.payload.newContent || "").trim(),
-      turnScopeId: String(command.payload.turnScopeId || "").trim(),
+      newContent: text(command.payload.newContent),
+      turnScopeId: text(command.payload.turnScopeId),
       expectedAggregateVersion: command.expectedAggregateVersion,
       commandId: command.commandId,
     };
@@ -455,21 +448,19 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
       level: "debug",
       debugType: "state-machine",
       event: "service.turnReplacement.authorityCommitted",
-      userId: String(userId || "").trim(),
-      sessionId: String(sessionId || "").trim(),
-      dialogProcessId: String(result?.turnReplacement?.replacementDialogProcessId || "").trim(),
-      turnScopeId: String(result?.turnReplacement?.replacementTurnScopeId || "").trim(),
+      userId: text(userId),
+      sessionId: text(sessionId),
+      dialogProcessId: text(result?.turnReplacement?.replacementDialogProcessId),
+      turnScopeId: text(result?.turnReplacement?.replacementTurnScopeId),
       data: {
-        commandId: String(result?.turnReplacement?.commandId || "").trim(),
-        replacementDialogProcessId: String(
-          result?.turnReplacement?.replacementDialogProcessId || "",
-        ).trim(),
+        commandId: text(result?.turnReplacement?.commandId),
+        replacementDialogProcessId: text(result?.turnReplacement?.replacementDialogProcessId),
         committedAggregateVersion: Number(result?.turnReplacement?.committedAggregateVersion || 0),
         lifecycleSequence: Number(lifecycle?.sequence || 0),
-        activeTurnScopeId: String(lifecycle?.activeTurnScopeId || "").trim(),
+        activeTurnScopeId: text(lifecycle?.activeTurnScopeId),
         remainingTurnScopeIds: Object.keys(lifecycle?.turns || {}).sort(),
         replacedTurnScopeIds: (result?.turnReplacement?.replacedTurnScopeIds || [])
-          .map((value) => String(value || "").trim())
+          .map((value) => text(value))
           .filter(Boolean),
         tombstonedTurnScopeIds: Object.keys(replacedTurns).sort(),
         removedAuthorityOutboxEvents: Number(result?.removedAuthorityOutboxEvents || 0),
@@ -483,7 +474,7 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
 
   const renameSessionHandler = jsonRoute(async (req, res) => {
     const { userId, sessionId } = req.params;
-    const title = String(req.body?.title || "").trim();
+    const title = text(req.body?.title);
     if (!title) {
       const error = new Error("Session title is required");
       error.statusCode = HTTP_STATUS.BAD_REQUEST;
@@ -505,14 +496,14 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     jsonRoute(
       async (req, res) => {
         const { userId, sessionId } = req.params;
-        const normalizedSessionId = String(sessionId || "").trim();
+        const normalizedSessionId = text(sessionId);
         const result = await bot.session.deleteSessionBranch({
           userId,
           sessionId,
         });
         const branchSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
         const remainingSessionIds = (await bot.session.listSessionIds({ userId }))
-          .map((item) => String(item || "").trim())
+          .map((item) => text(item))
           .filter(Boolean);
         const pluginCleanup = await pluginHost.emitAfterSessionDelete({
           bot,
@@ -563,9 +554,9 @@ export function registerSessionRoutes(app, { bot, handleChat, translateText, plu
     jsonRoute(
       async (req, res) => {
         const { userId, attachmentId } = req.params;
-        const sessionId = String(req.query?.sessionId || "").trim();
-        const attachmentSource = String(req.query?.attachmentSource || "").trim();
-        if (!sessionId || !attachmentSource || !String(attachmentId || "").trim()) {
+        const sessionId = text(req.query?.sessionId);
+        const attachmentSource = text(req.query?.attachmentSource);
+        if (!sessionId || !attachmentSource || !text(attachmentId)) {
           throw new Error(translateText("common.attachmentNotFound", req.locale));
         }
         const attachment = await bot.openAttachmentStream({

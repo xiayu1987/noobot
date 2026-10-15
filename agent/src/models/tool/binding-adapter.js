@@ -8,13 +8,14 @@ import {
   resolveModelFamilyId,
   resolveModelStrictToolSchema,
 } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 export const TOOL_BINDING_NAME_MAX_LENGTH = 64;
 const TOOL_BINDING_NAME_PATTERN = new RegExp(`^[a-zA-Z0-9_-]{1,${TOOL_BINDING_NAME_MAX_LENGTH}}$`);
 const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
 
 function assertModelSpec(modelSpec) {
-  if (!modelSpec || typeof modelSpec !== "object" || !String(modelSpec.model || "").trim()) {
+  if (!modelSpec || typeof modelSpec !== "object" || !text(modelSpec.model)) {
     throw new TypeError("adaptToolsForBinding requires a resolved model spec");
   }
 }
@@ -41,10 +42,8 @@ export function adaptToolsForBinding(tools, modelSpec) {
   const disableClaudeToolSearch = resolveModelFamilyId(modelSpec) === MODEL_FAMILY_ID.CLAUDE;
 
   for (const toolItem of sourceTools) {
-    const toolName = String(toolItem?.name || "").trim();
-    const toolType = String(toolItem?.type || "")
-      .trim()
-      .toLowerCase();
+    const toolName = text(toolItem?.name);
+    const toolType = text(toolItem?.type).toLowerCase();
     if (
       disableClaudeToolSearch &&
       (toolName.toLowerCase() === "tool_search" || toolType.startsWith("tool_search"))
@@ -66,7 +65,7 @@ export function adaptToolsForBinding(tools, modelSpec) {
 
   const strictByPolicy = resolveModelStrictToolSchema(modelSpec);
   const strictIncompatibleTools = validTools
-    .map((t) => String(t?.name || "").trim())
+    .map((t) => text(t?.name))
     .filter((n) => STRICT_INCOMPATIBLE_TOOL_NAMES.has(n));
   const strict = strictByPolicy && strictIncompatibleTools.length === 0;
   const toolChoice = "auto";

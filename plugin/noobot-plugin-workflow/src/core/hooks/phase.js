@@ -5,6 +5,7 @@
  */
 
 import { WORKFLOW_PHASE_STATUS, WORKFLOW_TRACE } from "../constants.js";
+import { text } from "@noobot/shared/value";
 
 export function appendWorkflowTrace(agentResult = {}, payload = {}) {
   const traces = Array.isArray(agentResult?.traces) ? agentResult.traces : [];
@@ -20,14 +21,14 @@ export function createPhaseTracker() {
   return {
     start(name = "", meta = {}) {
       phases.push({
-        phase: String(name || "").trim(),
+        phase: text(name),
         status: WORKFLOW_PHASE_STATUS.STARTED,
         startedAt: new Date().toISOString(),
         ...meta,
       });
     },
     end(name = "", status = WORKFLOW_PHASE_STATUS.SUCCEEDED, meta = {}) {
-      const phaseName = String(name || "").trim();
+      const phaseName = text(name);
       const now = new Date().toISOString();
       const openIdx = [...phases]
         .reverse()

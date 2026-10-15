@@ -18,15 +18,15 @@ import {
   resolveModelMessages,
   writeMessageBlocks,
 } from "../../core/message-store.js";
+import { text } from "@noobot/shared/value";
 
 function resolveInternalMessageType(message = {}) {
-  return String(
+  return text(
     message?.additional_kwargs?.noobotInternalMessageType ||
       message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
       message?.metadata?.noobotInternalMessageType ||
-      message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
-      "",
-  ).trim();
+      message?.lc_kwargs?.metadata?.noobotInternalMessageType,
+  );
 }
 
 function findAfterLeadingSystemIndex(messages = []) {
@@ -50,7 +50,7 @@ function filterInternalForcedMessages(messages = [], directive = {}) {
     directive?.blockInternalMessageTypes ||
     [];
   const removeTypes = Array.isArray(removeTypesInput)
-    ? new Set(removeTypesInput.map((item) => String(item || "").trim()).filter(Boolean))
+    ? new Set(removeTypesInput.map((item) => text(item)).filter(Boolean))
     : new Set();
   if (!removeAll && !removeTypes.size) return { messages: [...messages], removed: 0 };
   const retained = messages.filter((message) => {
@@ -61,7 +61,7 @@ function filterInternalForcedMessages(messages = [], directive = {}) {
 }
 
 function buildTakeoverMessage(directive = {}) {
-  const id = String(directive?.id || "").trim();
+  const id = text(directive?.id);
   const content = String(directive?.content ?? directive?.text ?? directive?.message ?? "").trim();
   if (!content) return null;
   const messageContent = id ? `<!-- ${id} -->\n${content}` : content;

@@ -6,9 +6,10 @@
 import { getMessageContentIdentity } from "./messageIdentity.js";
 import { normalizeStatusStepDisplayState } from "./messagePresentation.js";
 import { normalizeArray } from "./messageAttachmentsProjection.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeMessageType(messageItem = {}) {
-  const rawType = String(messageItem?.type || "").trim();
+  const rawType = text(messageItem?.type);
   const normalizedType = rawType.toLowerCase();
   if (!rawType || ["constructor", "human", "ai", "assistant", "user"].includes(normalizedType)) {
     return "message";
@@ -65,7 +66,7 @@ function buildMessageStatusFacet(canonicalMessage = {}) {
     status: canonicalMessage.status || "",
     channelState: canonicalMessage.channelState || "",
     terminalOutcome: canonicalMessage.terminalOutcome || "",
-    statusTurnScopeId: String(canonicalMessage.statusTurnScopeId || "").trim(),
+    statusTurnScopeId: text(canonicalMessage.statusTurnScopeId),
     projectedStatusStepState: normalizeStatusStepDisplayState(
       canonicalMessage.projectedStatusStepState,
     ),
@@ -75,19 +76,18 @@ function buildMessageStatusFacet(canonicalMessage = {}) {
 }
 
 function resolveNoobotInternalMessageType(canonicalMessage = {}) {
-  return String(
+  return text(
     canonicalMessage?.noobotInternalMessageType ||
       canonicalMessage?.additional_kwargs?.noobotInternalMessageType ||
-      canonicalMessage?.metadata?.noobotInternalMessageType ||
-      "",
-  ).trim();
+      canonicalMessage?.metadata?.noobotInternalMessageType,
+  );
 }
 
 function buildMessageOriginFacet(canonicalMessage = {}, { workflowMeta = null } = {}) {
   return {
     noobotInternalMessageType: resolveNoobotInternalMessageType(canonicalMessage),
     injectedMessage: canonicalMessage.injectedMessage === true,
-    injectedBy: String(canonicalMessage.injectedBy || "").trim(),
+    injectedBy: text(canonicalMessage.injectedBy),
     pluginMessage: canonicalMessage.pluginMessage === true,
     pluginMeta: workflowMeta,
     workflowMeta,

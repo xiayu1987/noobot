@@ -25,6 +25,7 @@ import { resolveServices } from "../providers/service-provider.js";
 import { resolveRootSessionId } from "../providers/session-tree-resolver.js";
 import { resolveSkills } from "../providers/skills-resolver.js";
 import { loadSystemPrompt } from "../providers/system-prompt-loader.js";
+import { text } from "@noobot/shared/value";
 
 export function buildSystemRuntime({
   userId = "",
@@ -64,7 +65,7 @@ export function buildSystemRuntime({
   const mergedRuntime = runtimePatch
     ? { ...runtimeWithStartup, ...runtimePatch }
     : runtimeWithStartup;
-  const protectedDialogProcessId = String(dynamicInfo?.dialogProcessId || "").trim();
+  const protectedDialogProcessId = text(dynamicInfo?.dialogProcessId);
   return {
     ...mergedRuntime,
     ...(staticInfo && typeof staticInfo === "object" ? { staticInfo } : {}),

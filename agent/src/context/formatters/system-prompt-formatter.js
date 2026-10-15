@@ -7,6 +7,7 @@ import { normalizeLocale } from "noobot-i18n/shared";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
 import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
 import { projectAttachmentMetaForModel } from "../../artifacts/index.js";
+import { text } from "@noobot/shared/value";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
@@ -37,10 +38,8 @@ function resolveWorkspaceDescription(
   workspaceDirectoryDescriptions = {},
   defaultWorkspaceDescription = "",
 ) {
-  const normalizedPath = String(dirPath || "")
-    .trim()
-    .replaceAll("\\", "/");
-  if (!normalizedPath) return String(defaultWorkspaceDescription || "").trim();
+  const normalizedPath = text(dirPath).replaceAll("\\", "/");
+  if (!normalizedPath) return text(defaultWorkspaceDescription);
   if (workspaceDirectoryDescriptions[normalizedPath]) {
     return workspaceDirectoryDescriptions[normalizedPath];
   }
@@ -50,7 +49,7 @@ function resolveWorkspaceDescription(
       normalizedPath.endsWith(`/${key}`) ||
       normalizedPath.includes(`/${key}/`),
   );
-  return suffixHit?.[1] || String(defaultWorkspaceDescription || "").trim();
+  return suffixHit?.[1] || text(defaultWorkspaceDescription);
 }
 
 function buildWorkspaceDirectorySection({
@@ -76,7 +75,7 @@ function buildPathGuidanceSection(staticInfo = {}, contextPromptI18n = {}) {
       : {};
   const identity =
     staticInfo?.identity && typeof staticInfo.identity === "object" ? staticInfo.identity : {};
-  const sandboxView = String(staticInfo?.directories?.view || "").trim() === "sandbox";
+  const sandboxView = text(staticInfo?.directories?.view) === "sandbox";
   const lines = [
     pathGuidanceI18n.preferRelative,
     sandboxView ? pathGuidanceI18n.sandboxWorkspaceView : pathGuidanceI18n.hostWorkspaceView,
@@ -88,7 +87,7 @@ function buildPathGuidanceSection(staticInfo = {}, contextPromptI18n = {}) {
         : pathGuidanceI18n.regularHost,
     pathGuidanceI18n.patchRoot,
   ]
-    .map((item) => String(item || "").trim())
+    .map((item) => text(item))
     .filter(Boolean);
   return lines.join("\n");
 }
@@ -120,7 +119,7 @@ function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
       ? dynamicInfo.config
       : {};
   return {
-    now: String(dynamicInfo.now || "").trim(),
+    now: text(dynamicInfo.now),
     caller: String(dynamicInfo.caller || "user").trim() || "user",
     config: {
       allowUserInteraction: config.allowUserInteraction !== false,
@@ -141,7 +140,7 @@ function asObject(value) {
 }
 
 function sectionTitle(sections, key) {
-  return String(sections?.[key] || "").trim();
+  return text(sections?.[key]);
 }
 
 function textSection(title, content) {
@@ -154,9 +153,7 @@ function resolveContextPromptSettings(locale) {
     contextPromptI18n,
     sections: contextPromptI18n?.sections || {},
     workspaceDirectoryDescriptions: asObject(contextPromptI18n?.workspaceDirectoryDescriptions),
-    defaultWorkspaceDescription: String(
-      contextPromptI18n?.defaultWorkspaceDescription || "",
-    ).trim(),
+    defaultWorkspaceDescription: text(contextPromptI18n?.defaultWorkspaceDescription),
     emptyValueText: String(contextPromptI18n?.emptyValueText || "(none)").trim(),
   };
 }
@@ -202,7 +199,7 @@ export function composeSystemInfoSections({
     ? String(contextPromptI18n.executionEvidence).trim()
     : "";
   return [
-    String(systemPrompt || "").trim(),
+    text(systemPrompt),
     jsonSection("staticInfo", staticInfo),
     textSection(
       sectionTitle(sections, "pathGuidance"),

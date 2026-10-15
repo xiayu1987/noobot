@@ -10,6 +10,7 @@ import {
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
+import { text } from "@noobot/shared/value";
 
 function resolveRole(message = {}) {
   return resolveContextMessageRole(message);
@@ -23,14 +24,14 @@ function extractContextTextContent(content = "") {
       .map((item = {}) => {
         if (typeof item === "string") return item;
         if (!item || typeof item !== "object") return "";
-        return String(item?.text || item?.content || item?.value || "").trim();
+        return text(item?.text || item?.content || item?.value);
       })
       .filter(Boolean)
       .join("\n")
       .trim();
   }
   if (typeof content === "object") {
-    return String(content?.text || content?.content || content?.value || "").trim();
+    return text(content?.text || content?.content || content?.value);
   }
   return String(content).trim();
 }
@@ -75,7 +76,7 @@ function assertToolEvidenceAlignment(messages = []) {
       continue;
     }
     if (message.role !== "tool") continue;
-    const id = String(message.tool_call_id || "").trim();
+    const id = text(message.tool_call_id);
     if (!declared.has(id)) throw new Error(`orphan auxiliary tool result: ${id}`);
     if (completed.has(id)) throw new Error(`duplicate auxiliary tool result: ${id}`);
     completed.add(id);

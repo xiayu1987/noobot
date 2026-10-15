@@ -14,9 +14,10 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 function isConnectTokenAuthorized(request = null) {
-  const expectedToken = String(config.connectToken || "").trim();
+  const expectedToken = text(config.connectToken);
   if (!expectedToken) return true;
   const providedToken = resolveHeaderValue(request, config.connectTokenHeader);
   if (secureEquals(providedToken, expectedToken)) return true;

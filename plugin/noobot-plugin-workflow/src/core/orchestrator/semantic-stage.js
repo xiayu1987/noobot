@@ -8,6 +8,7 @@ import { WORKFLOW_PHASE_STATUS, WORKFLOW_PHASES } from "../constants.js";
 import { throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { resolveSemanticText } from "./semantic-resolution.js";
 import { startWorkflowPhase, endWorkflowPhase } from "./phase-events.js";
+import { text } from "@noobot/shared/value";
 
 export async function runSemanticResolutionStage({
   options = {},
@@ -44,6 +45,6 @@ export async function runSemanticResolutionStage({
 
   return {
     semanticResolution,
-    semanticText: String(semanticResolution?.text || "").trim(),
+    semanticText: text(semanticResolution?.text),
   };
 }

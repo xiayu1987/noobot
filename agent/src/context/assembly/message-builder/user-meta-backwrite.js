@@ -12,6 +12,7 @@ import { deriveContextMessageProjectionId } from "@noobot/context-protocol/messa
 import { resolveMessagesByIds } from "@noobot/context-protocol/message/store";
 import { updateContextMessageById } from "@noobot/context-protocol/mutation/context";
 import { appendUserMetaParsedResult } from "./user-meta.js";
+import { text } from "@noobot/shared/value";
 
 function setBackwrites(runtime = {}, records = []) {
   const normalized = normalizeUserMetaBackwrites(records);
@@ -32,10 +33,8 @@ export function queueUserMetaBackwrite(
   runtime = {},
   { attachmentRef = "", result = {}, createdAt = "" } = {},
 ) {
-  const sourceMessageUid = String(runtime?.currentUserMessageUid || "").trim();
-  const sourceOrigin = String(runtime?.currentUserMessageOrigin || "")
-    .trim()
-    .toLowerCase();
+  const sourceMessageUid = text(runtime?.currentUserMessageUid);
+  const sourceOrigin = text(runtime?.currentUserMessageOrigin).toLowerCase();
   if (!sourceMessageUid || sourceOrigin !== "natural") {
     throw new Error("user_meta backwrite requires the current natural user message");
   }

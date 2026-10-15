@@ -3,8 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function normalizeStringArray(input = []) {
-  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  return Array.isArray(input) ? input.map((item) => text(item)).filter(Boolean) : [];
 }
 
 export function resolveAvailableMcpServers(effectiveConfig = {}, { includeNames = [] } = {}) {

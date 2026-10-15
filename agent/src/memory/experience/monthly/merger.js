@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { readMemoryDocumentBody } from "@noobot/memory-protocol/document";
 import { EXPERIENCE_PATCH_SCHEMA } from "@noobot/memory-protocol/experience/schema";
+import { text } from "@noobot/shared/value";
 
 export async function mergeDomainTextForWeeks({ storage, basePath = "", weekKeys = [] } = {}) {
   const domainMap = new Map();
@@ -14,7 +15,7 @@ export async function mergeDomainTextForWeeks({ storage, basePath = "", weekKeys
     const domainEntries = await storage.safeReadDirEntries(weekDir);
     for (const domainEntry of domainEntries) {
       if (!domainEntry.isDirectory()) continue;
-      const domainName = String(domainEntry.name || "").trim();
+      const domainName = text(domainEntry.name);
       if (!domainName) continue;
       const domainDir = path.join(weekDir, domainName);
       const categoryEntries = await storage.safeReadDirEntries(domainDir);

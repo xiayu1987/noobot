@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function normalizeAnchorValue(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function resolveTurnScopeId(message = {}) {

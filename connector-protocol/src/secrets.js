@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const CONNECTOR_SECRET_ENVELOPE_VERSION = 1;
 export const CONNECTOR_SECRET_ALGORITHM = "aes-256-gcm";
 export const CONNECTOR_SECRET_KDF = "scrypt";
 
 const requiredText = (value, label) => {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!normalized) throw new TypeError(`${label} is required`);
   return normalized;
 };
@@ -28,7 +30,7 @@ export function normalizeConnectorSecretEnvelope(input = {}) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const envelope = {
     version: Number(source.version),
-    algorithm: String(source.algorithm || "").trim(),
+    algorithm: text(source.algorithm),
     iv: requiredText(source.iv, "connector secret iv"),
     tag: requiredText(source.tag, "connector secret authentication tag"),
     ciphertext: requiredText(source.ciphertext, "connector secret ciphertext"),

@@ -16,6 +16,7 @@ const ALLOW_EXACT_FILES = new Set(["agent/src/bot/session/session-execution-engi
 
 const RULES = [
   /String\(\s*parentSessionId\s*\|\|\s*""\s*\)\.trim\(\)/,
+  /\btext\(\s*parentSessionId\s*\)/,
   /\(\s*parentSessionId\s*\?\?\s*""\s*\)\.trim\(\)/,
   /systemRuntime\?\.parentSessionId\s*\|\|/,
   /runtime\?\.parentSessionId\s*\|\|/,

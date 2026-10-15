@@ -26,6 +26,7 @@ import {
   resolveWorkspaceBackupBase,
   upgradeWorkspaceLayout,
 } from "./sections.js";
+import { text } from "@noobot/shared/value";
 
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
@@ -38,15 +39,15 @@ function resolveWorkspaceMutationLockDir(workspaceRoot, userId) {
 }
 
 async function resolveWorkspacePaths({ workspaceRoot, assetPackagePath, userId }) {
-  const normalizedUserId = String(userId || "").trim();
-  const normalizedWorkspaceRoot = String(workspaceRoot || "").trim();
+  const normalizedUserId = text(userId);
+  const normalizedWorkspaceRoot = text(workspaceRoot);
   if (!normalizedUserId || !normalizedWorkspaceRoot) {
     throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
       code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,
       details: { userId: normalizedUserId, workspaceRoot: normalizedWorkspaceRoot },
     });
   }
-  const configuredAssetPath = String(assetPackagePath || "").trim();
+  const configuredAssetPath = text(assetPackagePath);
   if (!configuredAssetPath) {
     throw fatalSystemError(tSystem("init.workspaceTemplatePathRequired"), {
       code: ERROR_CODE.FATAL_WORKSPACE_TEMPLATE_PATH_REQUIRED,

@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { buildSessionArtifactFileMap } from "./session-artifact-store.js";
+import { text } from "@noobot/shared/value";
 
 const SESSION_PERSISTENCE_SCOPE_KIND = "noobot.session_persistence_scope";
 const SESSION_PERSISTENCE_SCOPE_VERSION = 1;
@@ -12,7 +13,7 @@ const SESSION_PERSISTENCE_SCOPE_VERSION = 1;
 function buildScope(sessionDir, resolvedParentSessionId = "") {
   const files = buildSessionArtifactFileMap(sessionDir);
   return Object.freeze({
-    resolvedParentSessionId: String(resolvedParentSessionId || "").trim(),
+    resolvedParentSessionId: text(resolvedParentSessionId),
     sessionDir,
     sessionFile: files.session,
     sessionSummaryFile: files.sessionSummary,
@@ -35,12 +36,12 @@ export class ScopedSessionLocationResolver {
     allowedRoot = "",
   } = {}) {
     this.pathResolver = pathResolver;
-    this.userId = String(userId || "").trim();
-    this.sessionId = String(sessionId || "").trim();
-    this.parentSessionId = String(parentSessionId || "").trim();
-    this.scopeId = String(scopeId || "").trim();
-    this.relativeDir = String(relativeDir || "").trim();
-    this.allowedRoot = String(allowedRoot || "").trim();
+    this.userId = text(userId);
+    this.sessionId = text(sessionId);
+    this.parentSessionId = text(parentSessionId);
+    this.scopeId = text(scopeId);
+    this.relativeDir = text(relativeDir);
+    this.allowedRoot = text(allowedRoot);
     if (
       !this.pathResolver ||
       !this.userId ||
@@ -80,7 +81,7 @@ export class ScopedSessionLocationResolver {
 
   async resolveSessionScope(userId, sessionId, parentSessionId = "") {
     this._assertIdentity(userId, sessionId);
-    const resolvedParentSessionId = String(parentSessionId || "").trim();
+    const resolvedParentSessionId = text(parentSessionId);
     if (this.parentSessionId && resolvedParentSessionId !== this.parentSessionId) {
       throw new Error("scoped session parent does not match its execution scope");
     }
@@ -88,10 +89,10 @@ export class ScopedSessionLocationResolver {
   }
 
   _assertIdentity(userId, sessionId) {
-    if (String(userId || "").trim() !== this.userId) {
+    if (text(userId) !== this.userId) {
       throw new Error("scoped session location user does not match its execution scope");
     }
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) {
       throw new Error("scoped session location requires a sessionId");
     }
@@ -106,9 +107,9 @@ export function createPersistenceContext({ locationResolver, metadataContributor
     throw new TypeError("persistence context requires a locationResolver");
   }
   if (
-    !String(locationResolver?.userId || "").trim() ||
-    !String(locationResolver?.sessionId || "").trim() ||
-    !String(locationResolver?.scopeId || "").trim()
+    !text(locationResolver?.userId) ||
+    !text(locationResolver?.sessionId) ||
+    !text(locationResolver?.scopeId)
   ) {
     throw new TypeError("persistence context requires a bound userId, sessionId and scopeId");
   }
@@ -118,10 +119,10 @@ export function createPersistenceContext({ locationResolver, metadataContributor
   return Object.freeze({
     kind: SESSION_PERSISTENCE_SCOPE_KIND,
     version: SESSION_PERSISTENCE_SCOPE_VERSION,
-    scopeId: String(locationResolver?.scopeId || "").trim(),
-    userId: String(locationResolver?.userId || "").trim(),
-    sessionId: String(locationResolver?.sessionId || "").trim(),
-    parentSessionId: String(locationResolver?.parentSessionId || "").trim(),
+    scopeId: text(locationResolver?.scopeId),
+    userId: text(locationResolver?.userId),
+    sessionId: text(locationResolver?.sessionId),
+    parentSessionId: text(locationResolver?.parentSessionId),
     locationResolver,
     metadataContributor,
   });
@@ -139,13 +140,13 @@ export function assertPersistenceContextIdentity(
     throw new TypeError("invalid scoped session persistence context");
   }
   const expected = {
-    userId: String(userId || "").trim(),
-    sessionId: String(sessionId || "").trim(),
-    parentSessionId: String(parentSessionId || "").trim(),
-    scopeId: String(scopeId || "").trim(),
+    userId: text(userId),
+    sessionId: text(sessionId),
+    parentSessionId: text(parentSessionId),
+    scopeId: text(scopeId),
   };
   for (const key of Object.keys(expected)) {
-    if (expected[key] && String(context[key] || "").trim() !== expected[key]) {
+    if (expected[key] && text(context[key]) !== expected[key]) {
       throw new Error(`scoped session persistence ${key} does not match its execution scope`);
     }
   }

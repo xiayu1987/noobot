@@ -14,6 +14,7 @@ import {
   summarizeDiagnosticMessages,
 } from "@noobot/context-protocol/assembly/diagnostics";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { text } from "@noobot/shared/value";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -65,7 +66,7 @@ export class ModelMessageRuntimeHelpers {
         getRuntimeFromAgentContext(ctx.agentContext).eventListener,
         "resolve_model_messages",
         {
-          purpose: String(purpose || "").trim(),
+          purpose: text(purpose),
           blockSource: "ctx.modelContext.messageBlocks",
           blocks: summarizeDiagnosticBlocks(ctx.modelContext.messageBlocks),
           resolvedMessages: summarizeDiagnosticMessages(resolved.messages),

@@ -12,9 +12,10 @@ import {
   joinClientPath,
   normalizeClientPath,
 } from "../../path-resolver.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function uniqueTruthyStrings(values = []) {

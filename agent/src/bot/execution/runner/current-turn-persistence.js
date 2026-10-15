@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../../events/index.js";
+import { text } from "@noobot/shared/value";
 
 function checkpointKey(message = {}, index = 0) {
-  const messageUid = String(message?.messageUid || "").trim();
+  const messageUid = text(message?.messageUid);
   if (messageUid) return `uid:${messageUid}`;
-  const messageId = String(message?.messageId || "").trim();
-  const dialogProcessId = String(message?.dialogProcessId || "").trim();
-  const turnScopeId = String(message?.turnScopeId || "").trim();
+  const messageId = text(message?.messageId);
+  const dialogProcessId = text(message?.dialogProcessId);
+  const turnScopeId = text(message?.turnScopeId);
   if (messageId) return `message:${dialogProcessId}:${turnScopeId}:${messageId}`;
   return `index:${index}:${String(message?.role || "")}:${String(message?.tool_call_id || "")}`;
 }
@@ -34,19 +35,19 @@ function buildCheckpointEntries(messages = []) {
 function projectActivityDurability(activityMessages, durableMessages) {
   const durableByUid = new Map(
     (Array.isArray(durableMessages) ? durableMessages : [])
-      .map((item = {}) => [String(item.messageUid || "").trim(), item])
+      .map((item = {}) => [text(item.messageUid), item])
       .filter(([messageUid]) => messageUid),
   );
   return activityMessages.map((item = {}) => {
-    const messageUid = String(item.messageUid || "").trim();
+    const messageUid = text(item.messageUid);
     const expectedEventIds = item.activityTimeline
-      .map((activity = {}) => String(activity.eventId || "").trim())
+      .map((activity = {}) => text(activity.eventId))
       .filter(Boolean);
     const durable = durableByUid.get(messageUid);
     const durableEventIds = (
       Array.isArray(durable?.activityTimeline) ? durable.activityTimeline : []
     )
-      .map((activity = {}) => String(activity.eventId || "").trim())
+      .map((activity = {}) => text(activity.eventId))
       .filter(Boolean);
     const missingEventIds = expectedEventIds.filter(
       (eventId) => !durableEventIds.includes(eventId),
@@ -57,11 +58,11 @@ function projectActivityDurability(activityMessages, durableMessages) {
 
 function projectPersistedMessage(message = {}) {
   return {
-    messageUid: String(message.messageUid || "").trim(),
-    messageId: String(message.messageId || "").trim(),
-    presentationMessageId: String(message.presentationMessageId || "").trim(),
-    role: String(message.role || "").trim(),
-    type: String(message.type || "").trim(),
+    messageUid: text(message.messageUid),
+    messageId: text(message.messageId),
+    presentationMessageId: text(message.presentationMessageId),
+    role: text(message.role),
+    type: text(message.type),
     chatPresentation: message.chatPresentation === true,
     contentLength: typeof message.content === "string" ? message.content.length : 0,
     activityTimelineCount: Array.isArray(message.activityTimeline)
@@ -69,19 +70,17 @@ function projectPersistedMessage(message = {}) {
       : 0,
     toolTimelineCount: Array.isArray(message.toolTimeline) ? message.toolTimeline.length : 0,
     toolCallIds: Array.isArray(message.toolTimeline)
-      ? message.toolTimeline
-          .map((tool = {}) => String(tool.toolCallId || "").trim())
-          .filter(Boolean)
+      ? message.toolTimeline.map((tool = {}) => text(tool.toolCallId)).filter(Boolean)
       : [],
     activityTimeline: Array.isArray(message.activityTimeline)
       ? message.activityTimeline.slice(0, 64).map((activity = {}) => ({
-          eventId: String(activity.eventId || "").trim(),
-          eventType: String(activity.eventType || "").trim(),
-          activityKind: String(activity.activityKind || "").trim(),
+          eventId: text(activity.eventId),
+          eventType: text(activity.eventType),
+          activityKind: text(activity.activityKind),
           sequence: Number(activity.sequence || 0),
-          sequenceDomain: String(activity.sequenceDomain || "").trim(),
-          sequenceScopeId: String(activity.sequenceScopeId || "").trim(),
-          authority: String(activity.authority || "").trim(),
+          sequenceDomain: text(activity.sequenceDomain),
+          sequenceScopeId: text(activity.sequenceScopeId),
+          authority: text(activity.authority),
         }))
       : [],
   };
@@ -118,7 +117,7 @@ export function bindCurrentTurnPersistence({
       const messagesToPersist = changedEntries.map(({ message }) => message);
       if (!messagesToPersist.length) {
         dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
-          .map((item = {}) => String(item.messageUid || "").trim())
+          .map((item = {}) => text(item.messageUid))
           .filter(Boolean);
         return;
       }
@@ -135,7 +134,7 @@ export function bindCurrentTurnPersistence({
       });
       const activityMessages = messagesToPersist.filter(
         (item = {}) =>
-          String(item.messageUid || "").trim() &&
+          text(item.messageUid) &&
           Array.isArray(item.activityTimeline) &&
           item.activityTimeline.length > 0,
       );
@@ -162,7 +161,7 @@ export function bindCurrentTurnPersistence({
         if (fingerprint !== null) persistedFingerprints.set(key, fingerprint);
       }
       dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
-        .map((item = {}) => String(item.messageUid || "").trim())
+        .map((item = {}) => text(item.messageUid))
         .filter(Boolean);
       emitEvent(eventListener, "timeline_checkpoint_verified", {
         sessionId,

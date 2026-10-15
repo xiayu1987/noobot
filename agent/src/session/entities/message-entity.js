@@ -20,6 +20,7 @@ import {
   parseAttachmentRelations,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   return normalizeTransferEnvelopes(compactTransferEnvelopes(message?.transferEnvelopes || []));
@@ -28,8 +29,8 @@ function normalizeTransferEnvelopesFromMessage(message = {}) {
 function normalizeSessionAttachment(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
   const identity = projectAttachmentIdentity(item);
-  const name = String(item.name || "").trim();
-  const mimeType = String(item.mimeType || "").trim();
+  const name = text(item.name);
+  const mimeType = text(item.mimeType);
   if (!name || !mimeType) return null;
   const normalized = { ...identity, name, mimeType };
   copyPresentFields(normalized, item, [
@@ -51,8 +52,8 @@ function normalizeSessionAttachment(item = {}) {
 
 function normalizeAttachmentOwner(owner = null) {
   if (!owner || typeof owner !== "object" || Array.isArray(owner)) return null;
-  const type = String(owner.type || "").trim();
-  const id = String(owner.id || "").trim();
+  const type = text(owner.type);
+  const id = text(owner.id);
   if (!type && !id) return null;
   return { ...(type ? { type } : {}), ...(id ? { id } : {}) };
 }
@@ -100,11 +101,11 @@ function applyMessageInjection(target, message) {
   if (message?.injectedMessage === true) target.injectedMessage = true;
   const internalType = readContextMessageField(message, "noobotInternalMessageType");
   if (internalType) target.noobotInternalMessageType = internalType;
-  const injectedBy = String(message?.injectedBy || "").trim();
-  const injectedMessageType = String(message?.injectedMessageType || "").trim();
+  const injectedBy = text(message?.injectedBy);
+  const injectedMessageType = text(message?.injectedMessageType);
   if (injectedBy) target.injectedBy = injectedBy;
   if (injectedMessageType) target.injectedMessageType = injectedMessageType;
-  const relayCorrelationId = String(message?.relayCorrelationId || "").trim();
+  const relayCorrelationId = text(message?.relayCorrelationId);
   if (relayCorrelationId) target.relayCorrelationId = relayCorrelationId;
   const interjectionSequence = Number(message?.interjectionSequence || 0);
   if (Number.isInteger(interjectionSequence) && interjectionSequence > 0) {
@@ -123,7 +124,7 @@ function applyUserMetaMaterialized(target, message) {
 }
 
 function applyPresentationIdentity(target, message) {
-  const presentationMessageId = String(message?.presentationMessageId || "").trim();
+  const presentationMessageId = text(message?.presentationMessageId);
   if (presentationMessageId) target.presentationMessageId = presentationMessageId;
 }
 
@@ -155,8 +156,8 @@ function applyMessagePresentation(target, message) {
 }
 
 function applyMessageThinkingTiming(target, message) {
-  const thinkingStartedAt = String(message?.thinkingStartedAt || "").trim();
-  const thinkingFinishedAt = String(message?.thinkingFinishedAt || "").trim();
+  const thinkingStartedAt = text(message?.thinkingStartedAt);
+  const thinkingFinishedAt = text(message?.thinkingFinishedAt);
   if (thinkingStartedAt) target.thinkingStartedAt = thinkingStartedAt;
   if (thinkingFinishedAt) target.thinkingFinishedAt = thinkingFinishedAt;
 }
@@ -220,8 +221,8 @@ function applyMessageRuntimeFields(target, message) {
 }
 
 function applyMessageToolFields(target, message) {
-  const toolCallId = String(message?.tool_call_id || "").trim();
-  const toolName = String(message?.toolName || message?.tool_name || "").trim();
+  const toolCallId = text(message?.tool_call_id);
+  const toolName = text(message?.toolName || message?.tool_name);
   const contextPolicy = resolveToolContextPolicy(message);
   if (toolCallId) target.tool_call_id = toolCallId;
   if (toolName) target.toolName = toolName;

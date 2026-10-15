@@ -11,6 +11,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 const reportedRuntimes = new WeakSet();
 
@@ -45,7 +46,7 @@ const defaultRuntimeDescriptor = runtimeDescriptor(loadedDynamicPlugins);
 export async function createSessionPluginRuntimeBundle({ pluginRootDir = "" } = {}) {
   const loadedPlugins = await getNoobotPluginRuntime({
     surface: PLUGIN_SURFACE.AGENT,
-    ...(String(pluginRootDir || "").trim() ? { pluginRootDir: String(pluginRootDir).trim() } : {}),
+    ...(text(pluginRootDir) ? { pluginRootDir: String(pluginRootDir).trim() } : {}),
   });
   if (loadedPlugins.errors.length) {
     throw new Error(

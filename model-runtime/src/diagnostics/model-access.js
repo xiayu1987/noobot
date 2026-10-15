@@ -7,6 +7,7 @@ import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { createModelRequestExecutor } from "../executor/model-request-executor.js";
 import { createProviderAdapterRegistry } from "../adapters/registry.js";
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
+import { text } from "@noobot/shared/value";
 
 const RESPONSE_LIMIT = 2 * 1024 * 1024;
 const REDACTED = "[REDACTED]";
@@ -76,7 +77,7 @@ export async function testModelAccess({
   if (body !== undefined && (!body || typeof body !== "object" || Array.isArray(body))) {
     throw new TypeError("Request body must be a JSON object / 请求体必须是 JSON 对象");
   }
-  const credential = String(spec.api_key || "").trim();
+  const credential = text(spec.api_key);
   if (!preview && (!credential || credential.includes("${"))) {
     throw new Error("Model credential is missing / 模型密钥未配置");
   }

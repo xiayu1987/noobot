@@ -20,6 +20,7 @@ import {
   STATUS_STEP_STAGE,
 } from "../../runtime/sessionRunStateMachine.js";
 import { resolveStatusStepPresentation } from "../../model/messagePresentation.js";
+import { text } from "@noobot/shared/value";
 
 const SUB_TASK_STATUS_TEXT_KEY = Object.freeze({
   [MESSAGE_TERMINAL_OUTCOME.STOPPED]: "message.subtaskStopped",
@@ -33,11 +34,11 @@ export function useMessageMeta({ getMessageItem = () => ({}), getRuntimeView = n
   const messageModelLabel = computed(() => {
     const messageItem = getMessageItem() || {};
     const modelRuns = Array.isArray(messageItem?.modelRuns)
-      ? messageItem.modelRuns.filter((runLabel) => String(runLabel || "").trim())
+      ? messageItem.modelRuns.filter((runLabel) => text(runLabel))
       : [];
     if (modelRuns.length) return modelRuns.join(" -> ");
-    const modelAlias = String(messageItem?.modelAlias || "").trim();
-    const modelName = String(messageItem?.modelName || "").trim();
+    const modelAlias = text(messageItem?.modelAlias);
+    const modelName = text(messageItem?.modelName);
     if (modelAlias && modelName) return `${modelAlias} (${modelName})`;
     return modelAlias || modelName || "";
   });
@@ -85,7 +86,7 @@ export function useMessageMeta({ getMessageItem = () => ({}), getRuntimeView = n
       messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem),
     ).trim();
     const turnRuntime = resolveTurnRuntimeByScope(turnRuntimeRegistry.value, turnScopeId, {
-      sessionId: String(messageItem?.sessionId || "").trim(),
+      sessionId: text(messageItem?.sessionId),
     });
     const projectedRuntime =
       typeof getRuntimeView === "function" ? getRuntimeView(messageItem) : null;

@@ -14,6 +14,7 @@ import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS, WEB_SEARCH_MODE } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 const WEB_SEARCH_FLOW_NAME = "agent.do_search_web";
 const WEB_SEARCH_PURPOSE_NAME = "do_search_web";
@@ -21,7 +22,7 @@ const WEB_SEARCH_DOMAIN_NAME = "tool";
 const WEB_SEARCH_SERVICE_ENDPOINT_NAME = "search";
 
 function tWebSearch(runtime = {}, key = "", params = {}) {
-  return tTool(runtime, `tools.do_search_web.${String(key || "").trim()}`, params);
+  return tTool(runtime, `tools.do_search_web.${text(key)}`, params);
 }
 
 function resolveSearchModelSpec({ modelName, globalConfig, userConfig }) {
@@ -35,9 +36,7 @@ function resolveSearchModelSpec({ modelName, globalConfig, userConfig }) {
 const WEB_SEARCH_MODES = Object.freeze(Object.values(WEB_SEARCH_MODE));
 
 function normalizeWebSearchMode(mode = "") {
-  const normalizedMode = String(mode || "")
-    .trim()
-    .toLowerCase();
+  const normalizedMode = text(mode).toLowerCase();
   if (!normalizedMode) throw new TypeError("tools.do_search_web.mode is required");
   if (!WEB_SEARCH_MODES.includes(normalizedMode)) {
     throw new TypeError(
@@ -73,7 +72,7 @@ function resolveSearchEngineConfig(toolCfg = {}) {
 }
 
 function parseQueryStringFormat(format = "") {
-  const raw = String(format || "").trim();
+  const raw = text(format);
   if (!raw) return { key: "q", value: "" };
   const [key, ...rest] = raw.split("=");
   return { key: String(key || "q").trim() || "q", value: rest.join("=") };
@@ -92,13 +91,13 @@ function parseBodyFormat(bodyFormat = "{}") {
 
 export function buildSearchEngineRequest({ toolCfg = {}, query = "" }) {
   const endpointCfg = toolCfg?.endpoints?.[WEB_SEARCH_SERVICE_ENDPOINT_NAME] || {};
-  const endpointUrl = String(endpointCfg?.url || "").trim();
+  const endpointUrl = text(endpointCfg?.url);
   const { key: queryKey } = parseQueryStringFormat(endpointCfg?.query_string_format);
   const url = new URL(endpointUrl);
-  url.searchParams.set(queryKey, String(query || "").trim());
+  url.searchParams.set(queryKey, text(query));
   const body = parseBodyFormat(endpointCfg?.body_format || "{}");
   const method = body && Object.keys(body).length > 0 ? "POST" : "GET";
-  const apiKey = String(toolCfg?.api_key || "").trim();
+  const apiKey = text(toolCfg?.api_key);
   const headers = {
     Accept: "application/json, text/plain, */*",
     ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
@@ -107,18 +106,15 @@ export function buildSearchEngineRequest({ toolCfg = {}, query = "" }) {
     url: url.toString(),
     method,
     headers,
-    body:
-      method === "POST"
-        ? JSON.stringify({ ...body, [queryKey]: String(query || "").trim() })
-        : undefined,
+    body: method === "POST" ? JSON.stringify({ ...body, [queryKey]: text(query) }) : undefined,
     endpointCfg,
-    queryString: { [queryKey]: String(query || "").trim() },
+    queryString: { [queryKey]: text(query) },
   };
 }
 
 export async function searchWithSearchEngine({ runtime = {}, toolCfg = {}, query = "" }) {
   const endpointCfg = toolCfg?.endpoints?.[WEB_SEARCH_SERVICE_ENDPOINT_NAME] || {};
-  const endpointUrl = String(endpointCfg?.url || "").trim();
+  const endpointUrl = text(endpointCfg?.url);
   if (!endpointUrl) {
     throw recoverableToolError(tWebSearch(runtime, "searchEngineUrlMissing"), {
       code: ERROR_CODE.RECOVERABLE_ENDPOINT_URL_MISSING,
@@ -161,7 +157,7 @@ export function createWebSearchTool({ agentContext }) {
         query: z.string().describe(tTool(runtime, "tools.do_search_web.fieldQuery")),
       }),
       func: async ({ query }) => {
-        const normalizedQuery = String(query || "").trim();
+        const normalizedQuery = text(query);
         let resolvedModelSpec = null;
         if (!normalizedQuery) {
           throw recoverableToolError(tWebSearch(runtime, "queryRequired"), {
@@ -225,8 +221,8 @@ export function createWebSearchTool({ agentContext }) {
               status: TOOL_RESULT_STATUS.COMPLETED,
               mode,
               provider: response.execution.provider,
-              modelAlias: String(resolvedModelSpec?.alias || "").trim(),
-              model: String(resolvedModelSpec?.model || "").trim(),
+              modelAlias: text(resolvedModelSpec?.alias),
+              model: text(resolvedModelSpec?.model),
               query: normalizedQuery,
               text: searchResult.rawText,
               sources: searchResult.sources,
@@ -239,8 +235,8 @@ export function createWebSearchTool({ agentContext }) {
           throw recoverableToolError(errorMessage || tWebSearch(runtime, "searchFailed"), {
             code: String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_ERROR),
             details: {
-              modelAlias: String(resolvedModelSpec?.alias || "").trim(),
-              model: String(resolvedModelSpec?.model || "").trim(),
+              modelAlias: text(resolvedModelSpec?.alias),
+              model: text(resolvedModelSpec?.model),
             },
           });
         }

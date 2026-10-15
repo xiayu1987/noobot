@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
@@ -148,10 +148,10 @@ function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools 
 
     const encryptedPayload = result?.payload;
     const encryptedFlag = result?.encrypted === true;
-    const fallbackSessionId = String(payload?.authority?.session?.sessionId || "").trim();
-    const responseSessionId = String(result?.sessionId || "").trim();
+    const fallbackSessionId = text(payload?.authority?.session?.sessionId);
+    const responseSessionId = text(result?.sessionId);
     const targetSessionId = responseSessionId || fallbackSessionId;
-    if (!encryptedFlag || !String(encryptedPayload || "").trim() || !targetSessionId) {
+    if (!encryptedFlag || !text(encryptedPayload) || !targetSessionId) {
       throw new Error("encrypted interaction response required");
     }
     return decryptBySessionId(String(encryptedPayload || ""), targetSessionId);
@@ -162,7 +162,7 @@ function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools 
 export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   if (!isPlainObject(runtimeContext)) return;
   const sharedTools = ensureSharedTools(runtimeContext);
-  const sessionId = String(runtimeContext?.systemRuntime?.sessionId || "").trim();
+  const sessionId = text(runtimeContext?.systemRuntime?.sessionId);
 
   initializeSharedFetch(sharedTools);
   initializeTextCleaner(sharedTools);

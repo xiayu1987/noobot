@@ -39,6 +39,7 @@ import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationR
 import { applyReconnectInteractionRequest } from "../runtime/reconnect/interactionReplay.js";
 import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
+import { text } from "@noobot/shared/value";
 
 export function useReconnectReplay({
   sessions,
@@ -213,13 +214,13 @@ export function useReconnectReplay({
   }
 
   async function hydrateActiveSessionBeforeReplay(sessionId = "", activeTurnSnapshot = null) {
-    const requestedSessionId = String(sessionId || "").trim();
+    const requestedSessionId = text(sessionId);
     if (!requestedSessionId || !isCurrentActiveSession(requestedSessionId)) return false;
-    const presentationMessageId = String(activeTurnSnapshot?.presentationMessageId || "").trim();
+    const presentationMessageId = text(activeTurnSnapshot?.presentationMessageId);
     logStateMachineDebug("stateMachine.reconnect.presentationHydration.before", () => ({
       sessionId: requestedSessionId,
-      dialogProcessId: String(activeTurnSnapshot?.dialogProcessId || "").trim(),
-      turnScopeId: String(activeTurnSnapshot?.turnScopeId || "").trim(),
+      dialogProcessId: text(activeTurnSnapshot?.dialogProcessId),
+      turnScopeId: text(activeTurnSnapshot?.turnScopeId),
       presentationMessageId,
       messages: (Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages
@@ -248,8 +249,8 @@ export function useReconnectReplay({
       presentationMessageId && !presentationMessage ? "presentation_missing" : "";
     logStateMachineDebug("stateMachine.reconnect.presentationHydration.after", () => ({
       sessionId: requestedSessionId,
-      dialogProcessId: String(activeTurnSnapshot?.dialogProcessId || "").trim(),
-      turnScopeId: String(activeTurnSnapshot?.turnScopeId || "").trim(),
+      dialogProcessId: text(activeTurnSnapshot?.dialogProcessId),
+      turnScopeId: text(activeTurnSnapshot?.turnScopeId),
       presentationMessageId,
       detailHydrated: hydrated === true,
       presentationHydratedFromDetail: Boolean(presentationMessage),
@@ -265,7 +266,7 @@ export function useReconnectReplay({
   }
 
   async function reconcileSessionState({ sessionId = "" } = {}) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return false;
     let detailApplied = false;
     if (
@@ -315,7 +316,7 @@ export function useReconnectReplay({
     dialogProcessId,
     { turnScopeId = "" } = {},
   ) {
-    const sessionId = String(activeSession.value?.sessionId || "").trim();
+    const sessionId = text(activeSession.value?.sessionId);
     if (isDeletedTurn({ sessionId, turnScopeId })) {
       return { applied: false, reason: "deleted_turn_tombstoned" };
     }

@@ -3,19 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 export const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
 
 export function selectedPluginsStorageKey(userId = "") {
-  const owner = String(userId || "").trim();
+  const owner = text(userId);
   return owner ? `${SELECTED_PLUGINS_STORAGE_KEY}:${encodeURIComponent(owner)}` : "";
 }
 
 export function safeParseStringArray(rawValue = "") {
   try {
     const parsed = JSON.parse(String(rawValue || "[]"));
-    return Array.isArray(parsed)
-      ? parsed.map((item) => String(item || "").trim()).filter(Boolean)
-      : [];
+    return Array.isArray(parsed) ? parsed.map((item) => text(item)).filter(Boolean) : [];
   } catch {
     return [];
   }
@@ -39,13 +39,10 @@ export function normalizeAvailablePlugins(pluginDefinitions = {}) {
       const source =
         pluginDefinition && typeof pluginDefinition === "object" ? pluginDefinition : {};
       return {
-        key: String(pluginKey || "").trim(),
-        description: String(source?.description || "").trim(),
+        key: text(pluginKey),
+        description: text(source?.description),
         enabled: source?.enabled === true,
-        selectedByDefault:
-          String(source?.mode || "")
-            .trim()
-            .toLowerCase() === "on",
+        selectedByDefault: text(source?.mode).toLowerCase() === "on",
       };
     })
     .filter((pluginItem) => Boolean(pluginItem.key) && pluginItem.enabled === true);

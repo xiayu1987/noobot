@@ -14,11 +14,10 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { resolveExecutionCategoryDebugType } from "@noobot/shared/runtime-events-config";
+import { text } from "@noobot/shared/value";
 
 function mapExecutionLogToSessionChannel(normalizedLog = {}) {
-  const category = String(normalizedLog?.category || "")
-    .trim()
-    .toLowerCase();
+  const category = text(normalizedLog?.category).toLowerCase();
   if (category === "tool") return { category: RUNTIME_EVENT_CATEGORIES.INTERACTION, debugType: "" };
   if (category === "activity") return { category: RUNTIME_EVENT_CATEGORIES.MESSAGE, debugType: "" };
   const debugType = resolveExecutionCategoryDebugType(category);
@@ -59,11 +58,7 @@ export class ExecutionLogRepository {
   }
 
   _appendQueueKey(userId = "", sessionId = "", parentSessionId = "") {
-    return [
-      String(userId || "").trim(),
-      normalizeParentSessionId(parentSessionId),
-      String(sessionId || "").trim(),
-    ].join("::");
+    return [text(userId), normalizeParentSessionId(parentSessionId), text(sessionId)].join("::");
   }
 
   async _withAppendQueue(queueKey = "", operation = async () => {}) {
@@ -80,7 +75,7 @@ export class ExecutionLogRepository {
   }
 
   _requireSessionId(sessionId) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,

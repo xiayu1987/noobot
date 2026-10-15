@@ -23,14 +23,13 @@ import {
   assertCanonicalAssistantPresentation,
   canonicalAssistantPresentationIdentity,
 } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const turnScopeId = resolveRuntimeTurnScopeId(runtime);
-  const resolvedDialogProcessId = String(
-    dialogProcessId || systemRuntime?.dialogProcessId || "",
-  ).trim();
-  const sessionId = String(systemRuntime?.sessionId || "").trim();
+  const resolvedDialogProcessId = text(dialogProcessId || systemRuntime?.dialogProcessId);
+  const sessionId = text(systemRuntime?.sessionId);
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
 }
 
@@ -75,7 +74,7 @@ export function createStateCommitter({
       const canonicalActivityTimeline = Array.isArray(pendingProjection.activityTimeline)
         ? pendingProjection.activityTimeline
         : [];
-      const canonicalMessageUid = String(messageUid || "").trim() || createSessionMessageUid();
+      const canonicalMessageUid = text(messageUid) || createSessionMessageUid();
       let assistantMessage = {
         messageUid: canonicalMessageUid,
         role: "assistant",
@@ -84,9 +83,9 @@ export function createStateCommitter({
         dialogProcessId,
         ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
         tool_calls: Array.isArray(toolCalls) ? toolCalls : [],
-        modelAlias: String(modelAlias || "").trim(),
-        modelName: String(modelName || "").trim(),
-        presentationMessageId: String(presentationMessageId || "").trim(),
+        modelAlias: text(modelAlias),
+        modelName: text(modelName),
+        presentationMessageId: text(presentationMessageId),
         chatPresentation: chatPresentation === true,
         ...(Array.isArray(transferEnvelopes) && transferEnvelopes.length
           ? { transferEnvelopes }

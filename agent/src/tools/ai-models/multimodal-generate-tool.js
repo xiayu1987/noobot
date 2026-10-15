@@ -24,20 +24,21 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
 import { TOOL_CALL_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
 const MULTIMODAL_DOMAIN_NAME = "tool";
 function tMultimodal(runtime = {}, key = "", params = {}) {
-  return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
+  return tTool(runtime, `tools.multimodal.${text(key)}`, params);
 }
 
 function resolveModelBaseUrl(modelSpec = {}) {
-  return String(modelSpec.base_url || "").trim();
+  return text(modelSpec.base_url);
 }
 
 function describeBaseUrlForDiagnostics(baseUrl = "") {
-  const value = String(baseUrl || "").trim();
+  const value = text(baseUrl);
   if (!value) return "";
   try {
     const url = new URL(value);
@@ -52,13 +53,13 @@ function describeBaseUrlForDiagnostics(baseUrl = "") {
 }
 
 function resolveGenerateErrorCode(error = {}) {
-  const errorCode = String(error?.code || "").trim();
+  const errorCode = text(error?.code);
   if (errorCode && errorCode !== "undefined") return errorCode;
   return ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED;
 }
 
 function maskDiagnosticUrl(value = "") {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!normalized) return "";
   try {
     const url = new URL(normalized);
@@ -102,23 +103,19 @@ function buildFailureDetails({
     ...(message ? { message } : {}),
     modelAlias,
     model,
-    ...(String(requestedModel || "").trim()
-      ? { requestedModel: String(requestedModel).trim() }
-      : {}),
+    ...(text(requestedModel) ? { requestedModel: String(requestedModel).trim() } : {}),
     callMode: TOOL_CALL_MODE.MULTIMODAL_GENERATION,
     baseUrl: describeBaseUrlForDiagnostics(resolveModelBaseUrl(modelSpec || {})),
     requestUrl: describeBaseUrlForDiagnostics(requestUrl),
-    requestMethod: String(requestMethod || "")
-      .trim()
-      .toUpperCase(),
-    imageSize: String(effectiveImageSize || "").trim(),
+    requestMethod: text(requestMethod).toUpperCase(),
+    imageSize: text(effectiveImageSize),
     platform: process.platform,
     proxyEnv: collectProxyEnvDiagnostics(),
   };
 }
 
 async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
-  const normalizedUrl = String(url || "").trim();
+  const normalizedUrl = text(url);
   if (!normalizedUrl || typeof fetchImpl !== "function") return "";
   const response = await fetchImpl(normalizedUrl);
   if (!response?.ok) {
@@ -132,9 +129,7 @@ async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
 }
 
 function normalizeStringArray(value = []) {
-  return (Array.isArray(value) ? value : [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
+  return (Array.isArray(value) ? value : []).map((item) => text(item)).filter(Boolean);
 }
 
 function shouldAppendCapabilityHint(error = {}) {
@@ -146,7 +141,7 @@ function shouldAppendCapabilityHint(error = {}) {
 }
 
 function appendCapabilityHint(message = "", runtime = {}) {
-  const baseMessage = String(message || "").trim() || tMultimodal(runtime, "generateFailed");
+  const baseMessage = text(message) || tMultimodal(runtime, "generateFailed");
   const hint = tMultimodal(runtime, "capabilityUnavailable");
   return hint ? `${baseMessage}\n${hint}` : baseMessage;
 }
@@ -157,7 +152,7 @@ function resolveGenerationModelSpec({
   globalConfig = {},
   userConfig = {},
 }) {
-  const preferredModelName = String(modelName || "").trim();
+  const preferredModelName = text(modelName);
   const configuredDefault = preferredModelName
     ? ""
     : resolveMultimodalDefaultModelSelection(effectiveConfig, {
@@ -178,7 +173,7 @@ function resolveGenerationModelSpec({
 }
 
 function trimmedText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function assertGenerationModelSupported(state, runtime) {

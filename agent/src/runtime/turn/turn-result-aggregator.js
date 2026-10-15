@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 function requireCanonicalTurnMessageStore(turnMessageStore = null) {
   if (
     !turnMessageStore ||
@@ -35,7 +37,7 @@ export function buildLoopResult({
   const modelLoopRound = Number(loopState?.systemRuntime?.modelLoopRound || 0);
   return {
     output,
-    assistantMessageId: String(assistantMessageId || "").trim(),
+    assistantMessageId: text(assistantMessageId),
     traces,
     turnMessages: finalTurnMessages,
     modelMessages: Array.isArray(modelMessages) ? modelMessages : [],

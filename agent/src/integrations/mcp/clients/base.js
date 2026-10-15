@@ -7,6 +7,7 @@ import { recoverableToolError } from "../../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { MIME_TYPE } from "@noobot/attachment-protocol/mime";
+import { text } from "@noobot/shared/value";
 
 function resolveFetchImpl(fetchImpl = null) {
   if (typeof fetchImpl === "function") return fetchImpl;
@@ -48,7 +49,7 @@ function throwRpcError(method, payloadError, baseUrl = "") {
 
 export class BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
-    this.baseUrl = String(baseUrl || "").trim();
+    this.baseUrl = text(baseUrl);
     this.headers = headers && typeof headers === "object" && !Array.isArray(headers) ? headers : {};
     this.signal = signal || null;
     this.fetch = resolveFetchImpl(fetchImpl);
@@ -103,7 +104,7 @@ export class BaseMcpClient {
     return this._request({
       method: "tools/call",
       params: {
-        name: String(name || "").trim(),
+        name: text(name),
         arguments: args && typeof args === "object" ? args : {},
       },
     });

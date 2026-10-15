@@ -9,6 +9,7 @@ import {
   buildClosePseudoPanelRoute,
   buildSessionPseudoRoute,
 } from "../routing/appShellRoutePayload.js";
+import { text } from "@noobot/shared/value";
 
 export { PSEUDO_PANEL };
 
@@ -106,24 +107,24 @@ export function useAppShellPseudoRoute({
   }
 
   function isLoadedActiveSessionRouteTarget(sessionId = "") {
-    const targetSessionId = String(sessionId || "").trim();
+    const targetSessionId = text(sessionId);
     const currentSession = activeSession?.value || null;
     if (!targetSessionId || !currentSession?.loaded) return false;
     const currentIds = [activeSessionId?.value, currentSession.sessionId]
-      .map((value) => String(value || "").trim())
+      .map((value) => text(value))
       .filter(Boolean);
     return currentIds.includes(targetSessionId);
   }
 
   function resolveRoutableSessionId() {
     if (activeSession?.value?.isLocal === true) return "";
-    return String(activeSessionId?.value || "").trim();
+    return text(activeSessionId?.value);
   }
 
   async function applyPseudoRouteToUi(route = {}) {
-    const targetSessionId = String(route.sessionId || "").trim();
-    const targetPanel = String(route.panel || "").trim();
-    const targetAnchor = String(route.anchor || "").trim();
+    const targetSessionId = text(route.sessionId);
+    const targetPanel = text(route.panel);
+    const targetAnchor = text(route.anchor);
     closeAllPseudoPanels();
     if (targetSessionId && !isLoadedActiveSessionRouteTarget(targetSessionId)) {
       await handleSelectSession(targetSessionId, {
@@ -165,7 +166,7 @@ export function useAppShellPseudoRoute({
 
   async function handleSelectSession(sessionId, options = {}) {
     const { fromHistory = false, ...selectOptions } = options || {};
-    const previousSessionId = String(activeSessionId?.value || "").trim();
+    const previousSessionId = text(activeSessionId?.value);
     closeMobileSidebarOnSelect?.(isMobile, mobileSidebarOpen);
     await selectSession?.(sessionId, selectOptions);
     const nextSessionId = resolveRoutableSessionId();

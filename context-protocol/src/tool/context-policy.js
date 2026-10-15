@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const TOOL_SEMANTIC_CLASS = Object.freeze({
   FLOW_CONTROL: "flow_control",
 });
@@ -16,7 +18,7 @@ export const FLOW_CONTROL_ROLE = Object.freeze({
 const flowControlRoles = new Set(Object.values(FLOW_CONTROL_ROLE));
 
 export function createFlowControlContextPolicy(flowControlRole) {
-  const normalizedRole = String(flowControlRole || "").trim();
+  const normalizedRole = text(flowControlRole);
   if (!flowControlRoles.has(normalizedRole)) {
     throw new Error(`invalid flow-control role: ${normalizedRole || "missing"}`);
   }
@@ -29,8 +31,8 @@ export function createFlowControlContextPolicy(flowControlRole) {
 function normalizeToolContextPolicy(value = null) {
   const candidate = value && typeof value === "object" && !Array.isArray(value) ? value : null;
   if (!candidate) return null;
-  const semanticClass = String(candidate.semanticClass || "").trim();
-  const flowControlRole = String(candidate.flowControlRole || "").trim();
+  const semanticClass = text(candidate.semanticClass);
+  const flowControlRole = text(candidate.flowControlRole);
   if (semanticClass !== TOOL_SEMANTIC_CLASS.FLOW_CONTROL) return null;
   if (!flowControlRoles.has(flowControlRole)) return null;
   return Object.freeze({ semanticClass, flowControlRole });
@@ -44,7 +46,7 @@ export function resolveToolContextPolicy(value = null) {
 }
 
 export function hasFlowControlRole(value = null, role = "") {
-  return resolveToolContextPolicy(value)?.flowControlRole === String(role || "").trim();
+  return resolveToolContextPolicy(value)?.flowControlRole === text(role);
 }
 
 export function projectToolContextPolicy(target = {}, source = null) {

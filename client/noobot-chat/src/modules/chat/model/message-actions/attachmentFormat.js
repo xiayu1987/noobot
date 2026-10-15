@@ -5,6 +5,7 @@
  */
 import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { createSecureUuid } from "../../../../shared/identity/secureIdentity.js";
+import { text } from "@noobot/shared/value";
 
 export function isImageMime(mimeType = "") {
   return String(mimeType || "")
@@ -13,9 +14,7 @@ export function isImageMime(mimeType = "") {
 }
 
 export function attachmentName(item = {}) {
-  return String(
-    item?.name || item?.filename || item?.fileName || item?.path || item?.relativePath || "",
-  ).trim();
+  return text(item?.name || item?.filename || item?.fileName || item?.path || item?.relativePath);
 }
 
 export function attachmentMime(item = {}) {
@@ -63,10 +62,10 @@ export function cloneHistoryAttachment(item = {}) {
 
 export function rawFileKey(file = {}) {
   return [
-    String(file?.name || "").trim(),
+    text(file?.name),
     String(file?.size || 0),
     String(file?.lastModified || 0),
-    String(file?.type || "").trim(),
+    text(file?.type),
   ].join("|");
 }
 

@@ -46,14 +46,15 @@ import {
   getToolRiskLevel,
   runWithToolRiskAssessment,
 } from "../../tools/execution/tool-risk.js";
+import { text } from "@noobot/shared/value";
 
 function shouldTransferToolInput(call = {}) {
-  const toolName = String(call?.name || "").trim();
+  const toolName = text(call?.name);
   return Boolean(toolName) && hasToolInputPolicy(toolName);
 }
 
 function toolProducer(call = {}) {
-  const id = String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
+  const id = text(call?.id || call?.tool_call_id || call?.toolCallId);
   if (!id) throw new Error("semantic_transfer_tool_call_id_required");
   return { type: "tool", id };
 }
@@ -100,7 +101,7 @@ function mergeToolResultWithInputTransferPayload(
   transferPayload = {},
   toolName = "",
 ) {
-  if (String(toolName || "").trim() === "task_summary") {
+  if (text(toolName) === "task_summary") {
     return mergeTaskSummaryTransferPayload(toolResultText, transferPayload);
   }
   return mergeToolInputTransferPayload(toolResultText, transferPayload);
@@ -143,7 +144,7 @@ async function materializeToolOutputArtifacts({
   const rawArtifacts = parseToolOutputArtifacts(rawResult);
   if (!rawArtifacts.length) return { toolResultText, transferEnvelopes: [] };
   if (!identity) throw new Error("semantic_transfer_identity_required");
-  const toolName = String(call?.name || "").trim();
+  const toolName = text(call?.name);
   const outputPolicy = getToolOutputPolicy(toolName);
   const artifacts = rawArtifacts.map((artifact = {}) => {
     if (artifact.type !== outputPolicy.type) {
@@ -155,14 +156,14 @@ async function materializeToolOutputArtifacts({
     const mimeType = artifact.mimeType;
     const contentBase64 =
       artifact.type === "attachment_bytes"
-        ? String(artifact.contentBase64 || "").trim()
+        ? text(artifact.contentBase64)
         : Buffer.from(String(artifact.content || ""), "utf8").toString("base64");
     return { name, mimeType, contentBase64 };
   });
   const persisted = await persistTransferArtifacts({
     runtime,
     agentContext,
-    userId: String(runtime?.userId || runtime?.systemRuntime?.userId || "").trim(),
+    userId: text(runtime?.userId || runtime?.systemRuntime?.userId),
     artifacts,
     attachmentSource: ATTACHMENT_SOURCE.MODEL,
     generationSource: `${toolName}_output`,
@@ -194,7 +195,7 @@ function deriveToolInputTransferMeta(inputTransfer = {}) {
     .filter((meta = null) => meta && typeof meta === "object" && !Array.isArray(meta));
   const overflowMeta = metas.find((meta = {}) => meta?.toolInputOverflow);
   const exceededMeta = metas.find((meta = {}) => meta?.exceeded === true);
-  const messageMeta = metas.find((meta = {}) => String(meta?.message || "").trim());
+  const messageMeta = metas.find((meta = {}) => text(meta?.message));
   const sourceMeta = overflowMeta || exceededMeta || messageMeta || metas[0] || {};
   const toolInputOverflow =
     sourceMeta?.toolInputOverflow &&
@@ -204,7 +205,7 @@ function deriveToolInputTransferMeta(inputTransfer = {}) {
       : null;
   return {
     exceeded: sourceMeta?.exceeded === true || toolInputOverflow?.exceeded === true,
-    message: String(sourceMeta?.message || toolInputOverflow?.message || "").trim(),
+    message: text(sourceMeta?.message || toolInputOverflow?.message),
     toolInputOverflow,
   };
 }
@@ -484,9 +485,9 @@ function reportToolInvocationError(state, error) {
     metadata: {
       source: "tool-runner",
       turn: state.turn,
-      tool: String(state.call?.name || "").trim(),
+      tool: text(state.call?.name),
       toolCallId: resolveToolCallId(state.call),
-      sessionId: String(state.sessionId || "").trim(),
+      sessionId: text(state.sessionId),
       parentSessionId: normalizeParentSessionId(state.parentSessionId),
     },
   });
@@ -568,7 +569,7 @@ async function finalizeToolExecution(state) {
     }),
   });
   state.toolResultText = overflowNormalized.toolResultText;
-  if (String(state.call?.name || "").trim() === "task_summary") {
+  if (text(state.call?.name) === "task_summary") {
     state.toolResultText = mergeTaskSummaryTransferPayload(
       state.toolResultText,
       state.toolInputTransferPayload,

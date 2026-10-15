@@ -8,10 +8,11 @@ import {
   normalizeSelectedConnectorIds,
 } from "@noobot/connector-protocol";
 import { withJsonError } from "./route-wrapper.js";
+import { text } from "@noobot/shared/value";
 
 function assertOwner(req, userId = "") {
-  const authenticatedUserId = String(req?.auth?.userId || "").trim();
-  const requestedUserId = String(userId || "").trim();
+  const authenticatedUserId = text(req?.auth?.userId);
+  const requestedUserId = text(userId);
   if (!authenticatedUserId || authenticatedUserId !== requestedUserId) {
     const error = new Error("connector owner does not match authenticated user");
     error.status = 403;
@@ -138,7 +139,7 @@ export function registerConnectorRoutes(app, { bot, connectorRuntime, translateT
     "/internal/connectors/:userId/:connectorId",
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
-      const connectorId = String(req.params.connectorId || "").trim();
+      const connectorId = text(req.params.connectorId);
       const record = await connectorRuntime.updateConnector({
         userId,
         connectorId,
@@ -162,7 +163,7 @@ export function registerConnectorRoutes(app, { bot, connectorRuntime, translateT
     "/internal/connectors/:userId/:connectorId",
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
-      const connectorId = String(req.params.connectorId || "").trim();
+      const connectorId = text(req.params.connectorId);
       const connectorExists = (await connectorRuntime.listUserConnectors(userId)).some(
         (connector) => connector.connectorId === connectorId,
       );
@@ -195,7 +196,7 @@ export function registerConnectorRoutes(app, { bot, connectorRuntime, translateT
     "/internal/connectors/:userId/:connectorId/disconnect",
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
-      const connectorId = String(req.params.connectorId || "").trim();
+      const connectorId = text(req.params.connectorId);
       const disconnected = await connectorRuntime.disconnect({ userId, connectorId });
       const updatedSessionCount = await removeConnectorFromSessionSelections({
         bot,

@@ -84,6 +84,8 @@
 </template>
 
 <script setup>
+import { text } from "@noobot/shared/value";
+
 const props = defineProps({
   form: { type: Object, required: true },
   modelOptions: { type: Array, default: () => [] },
@@ -95,7 +97,7 @@ const emit = defineEmits(["submit", "update:form"]);
 
 function formatModelLabel(item) {
   return [item?.key, item?.model, item?.description]
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .filter(Boolean)
     .join(" · ");
 }

@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function resolveControlToolOutcome(toolCallResults = [], toolName = "") {
-  const expectedName = String(toolName || "").trim();
+  const expectedName = text(toolName);
   const attempts = (Array.isArray(toolCallResults) ? toolCallResults : []).filter(
-    (result) => String(result?.call?.name || "").trim() === expectedName,
+    (result) => text(result?.call?.name) === expectedName,
   );
   return Object.freeze({
     attempted: attempts.length > 0,

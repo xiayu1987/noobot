@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function routeWorkflowDiagnosticsPayload(parentSessionIdValue, payload = {}) {
-  const parentSessionId = String(parentSessionIdValue || "").trim();
+  const parentSessionId = text(parentSessionIdValue);
   const safePayload = payload && typeof payload === "object" ? payload : {};
-  const payloadSessionId = String(safePayload.sessionId || "").trim();
+  const payloadSessionId = text(safePayload.sessionId);
   return {
     ...safePayload,
     ...(payloadSessionId && payloadSessionId !== parentSessionId

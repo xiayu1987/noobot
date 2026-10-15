@@ -53,8 +53,8 @@ function hasValidSourceRevision(payload) {
 }
 
 function hasMatchingSessionId(payload, sessionId) {
-  const normalizedSessionId = String(sessionId || "").trim();
-  return !normalizedSessionId || String(payload?.sessionId || "").trim() === normalizedSessionId;
+  const normalizedSessionId = text(sessionId);
+  return !normalizedSessionId || text(payload?.sessionId) === normalizedSessionId;
 }
 
 function assertValidTransferEnvelopes(payload) {

@@ -10,6 +10,7 @@ import {
   getSystemRuntimeFromAgentContext,
   getToolsFromAgentContext,
 } from "../../../context/agent-context-accessor.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizePreparedAgentTurnExecution(prepared = {}) {
   const source = prepared && typeof prepared === "object" ? prepared : {};
@@ -39,8 +40,8 @@ export function buildAgentContextSummary(agentContext = {}) {
     sessionId: context.identity.sessionId,
     parentSessionId: context.identity.parentSessionId,
     dialogProcessId: getDialogProcessIdFromAgentContext(agentContext),
-    caller: String(systemRuntime?.caller || "").trim(),
-    runtimeModel: String(runtime?.runtimeModel || "").trim(),
+    caller: text(systemRuntime?.caller),
+    runtimeModel: text(runtime?.runtimeModel),
     messageCount: context.modelContext.messageBlocks.history.length,
     toolCount: getToolsFromAgentContext(agentContext).length,
     attachmentCount: userMessageAttachments.length + runtimeAttachments.length,

@@ -9,6 +9,7 @@ import { attachModelContextRuntime } from "./model-runtime.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
+import { text } from "@noobot/shared/value";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -36,8 +37,8 @@ function resolveInitialBlocks(messages = []) {
 function normalizeActiveTurnIdentity(identity = null) {
   if (identity == null) return null;
   const normalized = {
-    dialogProcessId: String(identity?.dialogProcessId || "").trim(),
-    turnScopeId: String(identity?.turnScopeId || "").trim(),
+    dialogProcessId: text(identity?.dialogProcessId),
+    turnScopeId: text(identity?.turnScopeId),
   };
   if (!normalized.dialogProcessId || !normalized.turnScopeId) {
     throw new Error("modelContext activeTurnIdentity requires dialogProcessId and turnScopeId");
@@ -122,8 +123,8 @@ export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
       if (
         activeTurnIdentity != null &&
         (!asObject(activeTurnIdentity) ||
-          !String(activeTurnIdentity?.dialogProcessId || "").trim() ||
-          !String(activeTurnIdentity?.turnScopeId || "").trim())
+          !text(activeTurnIdentity?.dialogProcessId) ||
+          !text(activeTurnIdentity?.turnScopeId))
       )
         warnings.push(
           "modelContext.activeTurnIdentity must contain dialogProcessId and turnScopeId",
@@ -134,7 +135,7 @@ export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
         warnings.push("modelContext.messageBlocks should be object");
     }
   }
-  const normalizedPoint = String(point || context?.point || "").trim();
+  const normalizedPoint = text(point || context?.point);
   if (!normalizedPoint) warnings.push("point should be present");
   return { success: warnings.length === 0, warnings };
 }

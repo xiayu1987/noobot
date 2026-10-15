@@ -17,6 +17,7 @@ import {
 } from "../state/configNavigation.js";
 import { resolveConfigFieldLabel } from "../state/configLabels.js";
 import ConfigFieldControl from "./ConfigFieldControl.vue";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -39,7 +40,7 @@ const groupEntries = computed(() => entries.value.filter((item) => isConfigGroup
 const rawFieldNode = computed(() => ({ ...props.node, key: props.node.key }));
 
 function addCollectionEntry() {
-  const key = String(newEntryKey.value || "").trim();
+  const key = text(newEntryKey.value);
   if (!key || !props.container) return;
   if (props.container[key] === undefined) {
     props.container[key] = defaultValueForConfigNode(props.node.entry);

@@ -182,8 +182,8 @@ class ReconnectMethods {
     if (currentSocketChannelKeys.length) {
       return currentSocketChannelKeys;
     }
-    const normalizedCurrentSessionId = String(currentSessionId || "").trim();
-    const requesterApiKey = String(socket?.__agentProxyApiKey || "").trim();
+    const normalizedCurrentSessionId = text(currentSessionId);
+    const requesterApiKey = text(socket?.__agentProxyApiKey);
     const requesterUserId = text(socket?.__agentProxyUserId);
     const resolvedChannelKeys = [];
     for (const [channelKey, channel] of this.channelStore.entries()) {

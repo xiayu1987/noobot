@@ -18,6 +18,7 @@ import {
   isAssistantWithoutTurnScope,
 } from "../../../chat/model/messageIdentity.js";
 import { getMessageAttachments } from "../../../chat/model/messageModel.js";
+import { text } from "@noobot/shared/value";
 
 export function buildNormalizedDetailMessages({
   detailMessages = [],
@@ -61,13 +62,13 @@ export function buildChildAttachmentsByParentDialogProcessId({
   if (!rootDialogProcessIdSet.size) return output;
   const parentByDialogProcessId = buildDialogProcessParentMap(flattenSessionMessages(sessionDocs));
   for (const sessionDoc of Array.isArray(sessionDocs) ? sessionDocs : []) {
-    const sessionId = String(sessionDoc?.sessionId || "").trim();
-    if (!sessionId || sessionId === String(rootSessionId || "").trim()) continue;
+    const sessionId = text(sessionDoc?.sessionId);
+    if (!sessionId || sessionId === text(rootSessionId)) continue;
     const messageList = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
     for (const messageItem of messageList) {
       const normalizedAttachments = getMessageAttachments(makeViewMessage(messageItem));
       if (!normalizedAttachments.length) continue;
-      const parentDialogProcessId = String(messageItem?.parentDialogProcessId || "").trim();
+      const parentDialogProcessId = text(messageItem?.parentDialogProcessId);
       if (!parentDialogProcessId) continue;
       const rootDialogProcessId = resolveRootDialogProcessIdByChain({
         startDialogProcessId: parentDialogProcessId,

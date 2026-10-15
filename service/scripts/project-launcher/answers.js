@@ -15,19 +15,18 @@ import {
 } from "./constants.js";
 import { normalizeSetupLocale, resolveConfigLanguage, t } from "./i18n.js";
 import { listConversationModelOptions, resolveLibraryModelKey } from "./provider.js";
+import { text } from "@noobot/shared/value";
 
 function validateCollectedAnswers(raw = {}) {
   const setupLocale = normalizeSetupLocale(raw.setupLocale, "zh");
-  const workspaceRoot = String(raw.workspaceRoot || "").trim();
-  const workspaceTemplatePath = String(raw.workspaceTemplatePath || "").trim();
-  const modelName = String(raw.modelName || "").trim();
-  const apiKey = String(raw.apiKey || "").trim();
-  const baseUrl = String(raw.baseUrl || "").trim();
-  const executionIsolationMode = String(raw.executionIsolationMode || "")
-    .trim()
-    .toLowerCase();
-  const superAdminUserId = String(raw.superAdminUserId || "").trim();
-  const superAdminConnectCode = String(raw.superAdminConnectCode || "").trim();
+  const workspaceRoot = text(raw.workspaceRoot);
+  const workspaceTemplatePath = text(raw.workspaceTemplatePath);
+  const modelName = text(raw.modelName);
+  const apiKey = text(raw.apiKey);
+  const baseUrl = text(raw.baseUrl);
+  const executionIsolationMode = text(raw.executionIsolationMode).toLowerCase();
+  const superAdminUserId = text(raw.superAdminUserId);
+  const superAdminConnectCode = text(raw.superAdminConnectCode);
 
   if (!workspaceRoot) throw new Error(t(setupLocale, "errWorkspaceRootRequired"));
   if (!workspaceTemplatePath) throw new Error(t(setupLocale, "errWorkspaceTemplatePathRequired"));
@@ -106,7 +105,7 @@ async function askInteractiveQuestions(cliOptions = {}) {
     while (true) {
       const suffix = defaultValue ? t(locale, "defaultSuffix", { value: defaultValue }) : "";
       const answer = (await rl.question(`${label}${suffix}: `)).trim();
-      const value = answer || String(defaultValue || "").trim();
+      const value = answer || text(defaultValue);
       if (required && !value) {
         console.log(t(locale, "requiredField"));
         continue;
@@ -133,13 +132,13 @@ async function askInteractiveQuestions(cliOptions = {}) {
   } = {}) {
     const normalizedOptions = (Array.isArray(options) ? options : [])
       .map((item) => ({
-        value: String(item?.value || "").trim(),
-        label: String(item?.label || item?.value || "").trim(),
+        value: text(item?.value),
+        label: text(item?.label || item?.value),
       }))
       .filter((item) => item.value);
     const optionMap = new Map(normalizedOptions.map((item) => [item.value, item.value]));
     const indexMap = new Map(normalizedOptions.map((item, idx) => [String(idx + 1), item.value]));
-    const defaultNormalized = String(defaultValue || "").trim();
+    const defaultNormalized = text(defaultValue);
 
     while (true) {
       console.log(`${title}:`);

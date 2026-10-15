@@ -29,6 +29,7 @@ import { randomUUID } from "node:crypto";
 import { isWorkspaceRuntimeRelativePath } from "@noobot/workspace-protocol";
 import { AttachmentService } from "../artifacts/index.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 export {
   SESSION_GENERATED_DATA_DIRS,
   resolveSessionGeneratedDataRoot,
@@ -49,8 +50,8 @@ function normalizeContextServicePayload(payload = {}) {
       !Array.isArray(source.userConfig)
         ? source.userConfig
         : {},
-    currentDialogProcessId: String(source.currentDialogProcessId || "").trim(),
-    currentTurnScopeId: String(source.currentTurnScopeId || "").trim(),
+    currentDialogProcessId: text(source.currentDialogProcessId),
+    currentTurnScopeId: text(source.currentTurnScopeId),
   };
 }
 
@@ -75,7 +76,7 @@ function createScopedPersistenceContextFactory(pathResolver) {
     allowedRoot = "",
     metadataContributor = null,
   } = {}) {
-    if (!String(sessionId || "").trim() || !String(scopeId || "").trim()) {
+    if (!text(sessionId) || !text(scopeId)) {
       throw new TypeError("scoped persistence context requires sessionId and scopeId");
     }
     return createPersistenceContext({
@@ -240,12 +241,10 @@ export function createSessionFacade(runtime = {}) {
     }
     const persistenceScope = validation.scope;
     if (!persistenceScope) return payload;
-    const allowedRoot = String(persistenceScope.allowedRoot || "")
-      .trim()
-      .replaceAll("\\", "/");
-    const scopeId = String(persistenceScope.scopeId || "").trim();
-    const scopeParentSessionId = String(persistenceScope.parentSessionId || "").trim();
-    const requestedParentSessionId = String(payload.parentSessionId || "").trim();
+    const allowedRoot = text(persistenceScope.allowedRoot).replaceAll("\\", "/");
+    const scopeId = text(persistenceScope.scopeId);
+    const scopeParentSessionId = text(persistenceScope.parentSessionId);
+    const requestedParentSessionId = text(payload.parentSessionId);
     if (!isWorkspaceRuntimeRelativePath(allowedRoot) || !scopeId.startsWith("agent:")) {
       throw new Error("scoped session access requires an Agent-owned runtime persistence scope");
     }

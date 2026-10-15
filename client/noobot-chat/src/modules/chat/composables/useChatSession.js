@@ -74,6 +74,7 @@ import { createComposerActions } from "../runtime/session/composerActions.js";
 import { createReconnectCoordinator } from "../runtime/session/reconnectCoordinator.js";
 import { installSessionLifecycleHydration } from "../runtime/session/sessionLifecycleHydration.js";
 import { createRuntimeEventProjector } from "../runtime/session/runtimeEventProjector.js";
+import { text } from "@noobot/shared/value";
 
 export function useChatSession({
   userId,
@@ -120,7 +121,7 @@ export function useChatSession({
   const pendingTerminalResolutionDiscoveries = new Map();
   let resolveDiscoveredTerminalTurn = null;
   function resolveActiveSessionIdentity() {
-    const sessionId = String(activeSession.value?.sessionId || activeSessionId.value || "").trim();
+    const sessionId = text(activeSession.value?.sessionId || activeSessionId.value);
     return sessionId;
   }
 
@@ -130,12 +131,12 @@ export function useChatSession({
     const continuableStoppedTurn = !activeTurn
       ? resolveLatestContinuableStoppedTurn(turnRuntimeRegistry.value, sessionId)
       : null;
-    return String(activeTurn?.turnScopeId || continuableStoppedTurn?.turnScopeId || "").trim();
+    return text(activeTurn?.turnScopeId || continuableStoppedTurn?.turnScopeId);
   }
 
   function scheduleTerminalResolution(sessionId, turnScopeId, metadata = {}) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    const normalizedSessionId = text(sessionId);
+    const normalizedTurnScopeId = text(turnScopeId);
     if (!normalizedSessionId || !normalizedTurnScopeId) return;
     const key = `${normalizedSessionId}::${normalizedTurnScopeId}`;
     const resolutionMetadata = { ...metadata };
@@ -189,11 +190,11 @@ export function useChatSession({
   });
 
   function trackConversationState(stateEntry = {}) {
-    const state = String(stateEntry?.state || "").trim();
+    const state = text(stateEntry?.state);
     if (!state) return;
-    const sessionId = String(stateEntry?.sessionId || "").trim();
-    const turnScopeId = String(stateEntry?.turnScopeId || "").trim();
-    const dialogProcessId = String(stateEntry?.dialogProcessId || "").trim();
+    const sessionId = text(stateEntry?.sessionId);
+    const turnScopeId = text(stateEntry?.turnScopeId);
+    const dialogProcessId = text(stateEntry?.dialogProcessId);
     const stateIdentity = turnScopeId
       ? `turnScope:${turnScopeId}`
       : dialogProcessId
@@ -205,8 +206,8 @@ export function useChatSession({
     });
     const applied = stateEntry?.applied !== false;
     const normalizedEntry = {
-      source: String(stateEntry?.source || "").trim(),
-      sourceEvent: String(stateEntry?.sourceEvent || "").trim(),
+      source: text(stateEntry?.source),
+      sourceEvent: text(stateEntry?.sourceEvent),
       state,
       sessionId,
       turnScopeId,
@@ -287,7 +288,7 @@ export function useChatSession({
     sessionItem = null,
     mainSessionDoc = {},
   } = {}) {
-    const sessionId = String(sessionItem?.sessionId || "").trim();
+    const sessionId = text(sessionItem?.sessionId);
     const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
     if (!isCurrentSession) return;
     hydrateSessionDetailExtensions(
@@ -312,13 +313,13 @@ export function useChatSession({
 
   const sessionLogWebSocketClient = createSessionLogWebSocketClient({
     resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
-    resolveTransportOwner: () => String(userId.value || "").trim(),
+    resolveTransportOwner: () => text(userId.value),
     source: "frontend",
     refreshAuthentication,
   });
   const chatWebSocketClient = createChatWebSocketClient({
     resolveWebSocketUrl: () => buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
-    resolveTransportOwner: () => String(userId.value || "").trim(),
+    resolveTransportOwner: () => text(userId.value),
     translateText: translate,
     refreshAuthentication,
     sessionLogSink: sessionLogWebSocketClient,

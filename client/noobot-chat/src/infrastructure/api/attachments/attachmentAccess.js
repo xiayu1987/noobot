@@ -10,12 +10,11 @@ import {
   findAttachmentRelation,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 function normalizedDraftAttachmentId(attachmentItem = {}) {
-  if (String(attachmentItem?.attachmentId || "").trim()) return "";
-  return String(
-    attachmentItem?.clientAttachmentId || attachmentItem?.draftAttachmentId || "",
-  ).trim();
+  if (text(attachmentItem?.attachmentId)) return "";
+  return text(attachmentItem?.clientAttachmentId || attachmentItem?.draftAttachmentId);
 }
 
 export function isDraftAttachmentItem(attachmentItem = {}) {

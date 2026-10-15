@@ -5,6 +5,7 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { isSuperAdminRole } from "#agent/utils";
+import { text } from "@noobot/shared/value";
 
 export function registerIdeRoutes(
   app,
@@ -15,8 +16,8 @@ export function registerIdeRoutes(
   app.post(
     "/internal/ide/open/:userId",
     jsonRoute(async (req, res) => {
-      const userId = String(req.params?.userId || req.auth?.userId || "").trim();
-      const authUserId = String(req.auth?.userId || "").trim();
+      const userId = text(req.params?.userId || req.auth?.userId);
+      const authUserId = text(req.auth?.userId);
       const isSuperAdmin = isSuperAdminRole(req.auth?.role);
       if (!isSuperAdmin && authUserId !== userId) {
         res.status(403).json({ ok: false, error: "forbidden user scope" });
@@ -25,7 +26,7 @@ export function registerIdeRoutes(
       if (!isSuperAdmin) {
         const users = typeof readWorkspaceUsers === "function" ? await readWorkspaceUsers() : [];
         const matchedUser = (Array.isArray(users) ? users : []).find(
-          (item) => String(item?.userId || "").trim() === userId,
+          (item) => text(item?.userId) === userId,
         );
         if (matchedUser?.allowIDE !== true) {
           res.status(403).json({

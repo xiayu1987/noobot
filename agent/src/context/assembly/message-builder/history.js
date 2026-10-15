@@ -28,25 +28,24 @@ import {
   shouldBuildUserMetaForHistoryMessage,
   isDerivedUserMetaMessage,
 } from "./user-meta.js";
+import { text } from "@noobot/shared/value";
 
 function hasMaterializedUserMeta(messages = [], index = 0, sourceMessage = {}) {
-  const sourceId = String(
+  const sourceId = text(
     sourceMessage?.messageUid ||
       sourceMessage?.noobotMessageId ||
       sourceMessage?.additional_kwargs?.noobotMessageId ||
-      sourceMessage?.lc_kwargs?.noobotMessageId ||
-      "",
-  ).trim();
+      sourceMessage?.lc_kwargs?.noobotMessageId,
+  );
   if (!sourceId) return false;
   const meta = messages[index + 1];
   if (!meta || !isDerivedUserMetaMessage(meta)) return false;
-  const metaId = String(
+  const metaId = text(
     meta?.messageUid ||
       meta?.noobotMessageId ||
       meta?.additional_kwargs?.noobotMessageId ||
-      meta?.lc_kwargs?.noobotMessageId ||
-      "",
-  ).trim();
+      meta?.lc_kwargs?.noobotMessageId,
+  );
   return metaId === deriveContextMessageProjectionId(sourceId, "user_meta");
 }
 
@@ -65,7 +64,7 @@ export function buildHistoryMessages({
     if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
     const normalizedToolCalls = toLangChainToolCalls(resolveContextToolCalls(msg));
     for (const toolCall of normalizedToolCalls) {
-      const toolCallId = String(toolCall?.id || "").trim();
+      const toolCallId = text(toolCall?.id);
       if (toolCallId) {
         knownHistoryToolCallIds.add(toolCallId);
         historyToolCallsById.set(toolCallId, toolCall);

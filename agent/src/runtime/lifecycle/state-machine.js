@@ -6,6 +6,7 @@
 
 import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { AGENT_RUN_EVENT } from "../../events/run-event.js";
+import { text } from "@noobot/shared/value";
 
 export const AGENT_LIFECYCLE_STATE = Object.freeze({
   INITIALIZING: "initializing",
@@ -23,7 +24,7 @@ export const AGENT_LIFECYCLE_BRANCH_STATE = Object.freeze({
 });
 
 function normalizeText(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function isBranchState(state = "") {

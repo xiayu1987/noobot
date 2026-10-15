@@ -16,6 +16,7 @@ import {
   normalizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
 import { WORKSPACE_LAYOUT, WORKSPACE_ROOT_LAYOUT } from "@noobot/workspace-protocol/layout";
+import { text } from "@noobot/shared/value";
 
 export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRaw } = {}) {
   function workspaceConfigParamsFilePath() {
@@ -23,7 +24,7 @@ export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRa
   }
 
   function userConfigParamsFilePath(userId = "") {
-    const normalizedUserId = String(userId || "").trim();
+    const normalizedUserId = text(userId);
     return path.join(workspaceRootPath(), normalizedUserId, WORKSPACE_LAYOUT.CONFIG_PARAMS_FILE);
   }
 
@@ -88,7 +89,7 @@ export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRa
           event: "service.configParams.user.read.failed",
           filePath,
           error,
-          data: { userIdLength: String(userId || "").trim().length },
+          data: { userIdLength: text(userId).length },
         });
         throw error;
       }
@@ -125,7 +126,7 @@ export function createConfigParamsService({ workspaceRootPath, getGlobalConfigRa
   }
 
   async function collectUserConfigTemplateKeys(userId = "") {
-    const normalizedUserId = String(userId || "").trim();
+    const normalizedUserId = text(userId);
     if (!normalizedUserId) throw new TypeError("collectUserConfigTemplateKeys requires userId");
     const userConfigFilePath = path.join(
       workspaceRootPath(),

@@ -9,9 +9,10 @@ import {
   isThinkingDetailInjectedMessage,
   projectThinkingDetailContentTimeline,
 } from "@noobot/event-protocol/thinking-detail-content";
+import { text } from "@noobot/shared/value";
 
 export function normalizeThinkingRoute(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function isInjectedThinkingMessage(message = {}) {

@@ -39,9 +39,10 @@ import {
 } from "../observability/context-identity-debug.js";
 import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
 import { initializeAgentModelHost } from "./model-port-host.js";
+import { text } from "@noobot/shared/value";
 
 function trimmedText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function resolveLoopConfig(resolvers, sys, effectiveConfig, runConfig) {

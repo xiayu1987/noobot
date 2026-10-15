@@ -19,6 +19,7 @@ import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { logResendDebug } from "../../debug/loggers/resendDebugLogger.js";
 import ExtensionOutlet from "../../../extensions/components/ExtensionOutlet.vue";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
@@ -91,7 +92,7 @@ const {
 } = useComposerOptions(props, emit, translate);
 
 const sendDisabledState = computed(() => {
-  const inputLength = String(props.modelValue || "").trim().length;
+  const inputLength = text(props.modelValue).length;
   const interjectionMode = props.composerActionState?.canInterject === true;
   const noInput = interjectionMode ? !inputLength : !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
@@ -275,7 +276,7 @@ function onConnectorSelectionChange(selectedConnectorIds = []) {
 function updatePluginModelConfig(pluginId = "", next = {}) {
   emit("update:pluginModelConfig", {
     ...(props.pluginModelConfig || {}),
-    [String(pluginId || "").trim()]: next && typeof next === "object" ? next : {},
+    [text(pluginId)]: next && typeof next === "object" ? next : {},
   });
 }
 const moreActionsExtensionContext = computed(() => ({

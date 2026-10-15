@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { findSessionByAnyId as findSessionByAnyIdInList } from "../../../chat/model/sessionIdentity.js";
+import { text } from "@noobot/shared/value";
 
 export function normalizeSessionId(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function collectSessionIdentityIds(sessionItem = null) {

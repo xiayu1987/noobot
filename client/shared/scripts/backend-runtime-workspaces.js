@@ -5,6 +5,7 @@
  */
 import { readFile, stat } from "node:fs/promises";
 import { clientFilePath as path } from "../path-resolver.js";
+import { text } from "@noobot/shared/value";
 
 const DESKTOP_BACKEND_ENTRY_WORKSPACES = Object.freeze([
   "service",
@@ -30,7 +31,7 @@ export async function resolveDesktopBackendRuntimeWorkspaces({
 
   for (const workspacePath of workspacePaths) {
     const packageJson = await readPackageJson(path.join(repoRoot, workspacePath, "package.json"));
-    const packageName = String(packageJson?.name || "").trim();
+    const packageName = text(packageJson?.name);
     if (!packageName) throw new Error(`Workspace package name is required: ${workspacePath}`);
     packagesByPath.set(workspacePath, packageJson);
     workspacePathByPackageName.set(packageName, workspacePath);
@@ -61,7 +62,7 @@ export async function resolveDesktopBackendRuntimeWorkspaces({
 }
 
 function assertRuntimeWorkspacePath(value) {
-  const workspacePath = String(value || "").trim();
+  const workspacePath = text(value);
   const segments = workspacePath.split(/[\\/]+/).filter(Boolean);
   if (
     !workspacePath ||
@@ -76,7 +77,7 @@ function assertRuntimeWorkspacePath(value) {
 }
 
 function installedPackageJsonPath(packageName) {
-  const name = String(packageName || "").trim();
+  const name = text(packageName);
   const segments = name.split("/").filter(Boolean);
   if (!name || segments.some((segment) => segment === "." || segment === "..")) {
     throw new Error(`Invalid prepared backend runtime package name: ${name || "<empty>"}`);

@@ -67,6 +67,7 @@ import {
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -122,7 +123,7 @@ function buildPlanRevisionModelMessages({ ctx, meta, locale, bucket, state, mode
     bucket,
     ctx,
   })
-    .map((item = {}) => String(item?.content || "").trim())
+    .map((item = {}) => text(item?.content))
     .filter(Boolean);
   return buildCapabilityProtocolModelMessages({
     locale,
@@ -212,7 +213,7 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     });
     return changed;
   }
-  const revisionText = String(revisionResponse?.output?.text || "").trim();
+  const revisionText = text(revisionResponse?.output?.text);
   applyDynamicPolicyPromptFromText(ctx, revisionText, {
     source: "planning_revision",
     stage: "revision",
@@ -368,9 +369,7 @@ function buildGuidanceWorkflowContextContents({ ctx, bucket, locale, purpose }) 
           }),
         ]
       : planChecklistContextMessages;
-  return workflowContextMessages
-    .map((item = {}) => String(item?.content || "").trim())
-    .filter(Boolean);
+  return workflowContextMessages.map((item = {}) => text(item?.content)).filter(Boolean);
 }
 
 function buildGuidanceInvokerMessages({ ctx, meta, bucket, policy, request }) {
@@ -493,7 +492,7 @@ async function invokeGuidanceModel({
 
 async function prepareSummaryRelay(ctx, meta, responseText) {
   const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
-  const summaryMergeText = String(parsedSummary?.overviewText || "").trim() || responseText;
+  const summaryMergeText = text(parsedSummary?.overviewText) || responseText;
   const summaryTransferPayload =
     shouldSaveSummaryToAttachment(meta) && responseText
       ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
@@ -528,7 +527,7 @@ async function prepareGuidanceRelay(ctx, meta, request, responseText) {
       ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
           purpose,
           content: responseText,
-          generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,
+          generationSource: `harness_${text(purpose) || "guidance"}`,
           domain: CAPABILITY_DOMAIN.GUIDANCE,
         })
       : [];
@@ -622,7 +621,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     relayCorrelationId,
   });
   if (!invocation.ok) return false;
-  const responseText = String(invocation.response?.output?.text || "").trim();
+  const responseText = text(invocation.response?.output?.text);
   const { relayText, relayAttachments, summaryMergeText } = await prepareGuidanceRelay(
     ctx,
     meta,

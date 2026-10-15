@@ -12,16 +12,13 @@ import {
 import { createHash } from "node:crypto";
 import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
+import { text } from "@noobot/shared/value";
 
 const EMPTY_CHECKPOINT_STATE = Object.freeze({ checkpointRevision: 0, receipts: [] });
 
 function normalizeMessageUids(values = []) {
   return [
-    ...new Set(
-      (Array.isArray(values) ? values : [])
-        .map((value) => String(value || "").trim())
-        .filter(Boolean),
-    ),
+    ...new Set((Array.isArray(values) ? values : []).map((value) => text(value)).filter(Boolean)),
   ];
 }
 
@@ -55,8 +52,8 @@ function checkpointConflict(message = "", code = "TURN_SUMMARY_CHECKPOINT_CONFLI
 function toolPairKey(message = {}, callId = "") {
   return [
     resolveContextMessageDialogProcessId(message),
-    String(message?.turnScopeId || "").trim(),
-    String(callId || "").trim(),
+    text(message?.turnScopeId),
+    text(callId),
   ].join("\u0000");
 }
 
@@ -65,7 +62,7 @@ function assertSummarizedToolPairClosure(messages = [], summarizedMessageUids = 
   const callOwnerById = new Map();
   const resultUidsByCallId = new Map();
   for (const message of messages) {
-    const messageUid = String(message?.messageUid || "").trim();
+    const messageUid = text(message?.messageUid);
     if (!messageUid) continue;
     for (const call of resolveContextToolCalls(message)) {
       const callId = resolveContextToolCallId(call);
@@ -97,8 +94,8 @@ function normalizeCheckpointRequest(payload) {
     parentSessionId: payload.parentSessionId || "",
     persistenceContext: payload.persistenceContext || null,
     dialogProcessId: normalizeDialogProcessId(payload.dialogProcessId || ""),
-    turnScopeId: String(payload.turnScopeId || "").trim(),
-    checkpointId: String(payload.checkpointId || "").trim(),
+    turnScopeId: text(payload.turnScopeId),
+    checkpointId: text(payload.checkpointId),
     expectedCheckpointRevision: payload.expectedCheckpointRevision,
     persistedMessageUids: normalizeMessageUids(payload.persistedMessageUids),
     summarizedMessageUids: normalizeMessageUids(payload.summarizedMessageUids),
@@ -135,7 +132,7 @@ function assertCheckpointTargetsTurn(session, request) {
       );
     }
   }
-  const activeTurnScopeId = String(lifecycle.activeTurnScopeId || "").trim();
+  const activeTurnScopeId = text(lifecycle.activeTurnScopeId);
   if (activeTurnScopeId && activeTurnScopeId !== request.turnScopeId) {
     throw checkpointConflict(
       "checkpoint does not target the active turn",
@@ -205,7 +202,7 @@ function assertCheckpointMessagesResolved(messages, request) {
   ]);
   const messagesByUid = new Map();
   for (const message of messages) {
-    const messageUid = String(message?.messageUid || "").trim();
+    const messageUid = text(message?.messageUid);
     if (messageUid && requestedUids.has(messageUid)) messagesByUid.set(messageUid, message);
   }
   const unresolvedMessageUids = [...requestedUids].filter(
@@ -225,7 +222,7 @@ function assertCheckpointMessagesResolved(messages, request) {
     const message = messagesByUid.get(messageUid);
     if (
       resolveContextMessageDialogProcessId(message) !== request.dialogProcessId ||
-      String(message?.turnScopeId || "").trim() !== request.turnScopeId
+      text(message?.turnScopeId) !== request.turnScopeId
     ) {
       throw checkpointConflict(
         `persisted checkpoint message is outside the current turn: ${messageUid}`,
@@ -240,7 +237,7 @@ function markCheckpointMessages(messages, request) {
   const retainedSet = new Set(request.retainedMessageUids);
   let markedCount = 0;
   const nextMessages = messages.map((message) => {
-    const messageUid = String(message?.messageUid || "").trim();
+    const messageUid = text(message?.messageUid);
     if (summarizedSet.has(messageUid)) {
       if (message?.summarized === true) return message;
       markedCount += 1;

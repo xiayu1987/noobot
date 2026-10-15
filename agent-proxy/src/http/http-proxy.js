@@ -16,6 +16,7 @@ import {
   writeAgentProxyHttpTraceEvent,
   writeAgentProxyHttpLifecycleEvent,
 } from "../runtime-events/http-runtime-events.js";
+import { text } from "@noobot/shared/value";
 
 function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {
   if (Number(statusCode || 500) < 500) {
@@ -79,7 +80,7 @@ export function normalizeProxyPathname(
   stripPrefix = config.upstreamHttpStripPrefix,
 ) {
   const normalizedPathname = String(pathname || "/").trim() || "/";
-  const normalizedStripPrefix = String(stripPrefix || "").trim();
+  const normalizedStripPrefix = text(stripPrefix);
   if (!normalizedStripPrefix || normalizedStripPrefix === "/") return normalizedPathname;
   if (normalizedPathname === normalizedStripPrefix) return "/";
   if (normalizedPathname.startsWith(`${normalizedStripPrefix}/`)) {
@@ -95,7 +96,7 @@ export function proxyHttpRequest(request, response) {
     String(request?.method || "GET")
       .trim()
       .toUpperCase() || "GET";
-  const traceId = String(request?.headers?.[FILE_TRACE_ID_HEADER] || "").trim();
+  const traceId = text(request?.headers?.[FILE_TRACE_ID_HEADER]);
   let targetUrl = null;
   try {
     targetUrl = new URL(request?.url || "/", config.upstreamHttpBase);

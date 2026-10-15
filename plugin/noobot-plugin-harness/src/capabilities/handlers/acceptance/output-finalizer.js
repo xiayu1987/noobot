@@ -20,6 +20,7 @@ import {
 } from "./deps.js";
 import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
+import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -31,7 +32,7 @@ function attachTransferPayloadToFinalOutputTurn(ctx = {}, transferPayload = {}) 
   const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
   for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
     const item = turnMessages[index] || {};
-    if (String(item?.role || "").trim() !== "assistant") continue;
+    if (text(item?.role) !== "assistant") continue;
     turnMessages[index] = applyTransferPayloadToMessage({ ...item }, normalizedTransferPayload);
     return true;
   }
@@ -78,9 +79,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         mimeType: "text/plain",
         generationSource: "harness_checklist",
         domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-        content: [generatedAt, "[planText]", String(bucket?.planText || "").trim()]
-          .filter(Boolean)
-          .join("\n"),
+        content: [generatedAt, "[planText]", text(bucket?.planText)].filter(Boolean).join("\n"),
       }),
       saveCapabilityOutputAsTransferArtifacts(ctx, {
         purpose: "acceptance_report",
@@ -203,8 +202,8 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
   const latestPhaseReport = Array.isArray(bucket?.phaseAcceptanceReports)
     ? bucket.phaseAcceptanceReports[bucket.phaseAcceptanceReports.length - 1] || null
     : null;
-  const latestPhaseAcceptedAt = String(latestPhaseReport?.acceptedAt || "").trim();
-  const reportPhaseAcceptedAt = String(lastReport?.modelAcceptance?.acceptedAt || "").trim();
+  const latestPhaseAcceptedAt = text(latestPhaseReport?.acceptedAt);
+  const reportPhaseAcceptedAt = text(lastReport?.modelAcceptance?.acceptedAt);
   const shouldRefresh =
     phaseAcceptanceChanged === true ||
     (latestPhaseAcceptedAt && latestPhaseAcceptedAt !== reportPhaseAcceptedAt);
@@ -215,7 +214,7 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
     state,
     ctx,
     mode: lastReport?.mode || ACCEPTANCE_MODE.ACTIVE,
-    forcedReason: String(lastReport?.forcedReason || "").trim(),
+    forcedReason: text(lastReport?.forcedReason),
   });
   bucket.lastAcceptanceReport = refreshedReport;
   if (Array.isArray(bucket.acceptanceReports) && bucket.acceptanceReports.length) {

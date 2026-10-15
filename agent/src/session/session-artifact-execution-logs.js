@@ -15,6 +15,7 @@ import {
   resolveSessionArtifactMutationLock,
   writeJsonArtifactFile,
 } from "./session-artifact-files.js";
+import { text } from "@noobot/shared/value";
 
 export const EXECUTION_EVENT_TURNS_DIR = "turns";
 export const EXECUTION_EVENT_INDEX_FILE = "index.json";
@@ -301,7 +302,7 @@ export async function appendRollingJsonlArtifactLog({
   mutationCoordinator = sessionMutationCoordinator,
   alreadyLocked = false,
 } = {}) {
-  if (!String(sessionDir || "").trim()) {
+  if (!text(sessionDir)) {
     throw new Error("appendRollingJsonlArtifactLog requires sessionDir");
   }
   if (!alreadyLocked && mutationCoordinator?.run) {

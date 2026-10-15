@@ -11,6 +11,7 @@ import {
   resolveExecutionAbortReason,
 } from "@noobot/session-protocol/execution-abort";
 import { resolveErrorHeaderValue } from "../../shared/utils/error-header.js";
+import { text } from "@noobot/shared/value";
 
 function resolveErrorStatus(error = {}) {
   const rawStatus =
@@ -60,7 +61,7 @@ export function buildEngineErrorPayload({
     error?.cause?.type ??
     error?.cause?.error?.type ??
     undefined;
-  const name = String(error?.name || error?.cause?.name || "").trim();
+  const name = text(error?.name || error?.cause?.name);
   const message =
     normalizedClassification === "abort"
       ? resolveExecutionAbortMessage({
@@ -86,7 +87,7 @@ export function buildEngineErrorPayload({
       code,
       type,
       requestId,
-      source: String(metadata?.source || "").trim() || undefined,
+      source: text(metadata?.source) || undefined,
     },
   };
 }

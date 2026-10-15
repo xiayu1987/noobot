@@ -23,6 +23,7 @@ import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
 } from "@noobot/context-protocol/assembly/dual-lane";
+import { text } from "@noobot/shared/value";
 
 function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
@@ -35,7 +36,7 @@ function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
           item?.fileName ||
           tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
-      const mimeType = String(item?.mimeType || "").trim();
+      const mimeType = text(item?.mimeType);
       const parts = [
         `identityRef=${identityRef}`,
         name ? `name=${name}` : "",
@@ -66,14 +67,14 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
       traceCount: 0,
     };
   }
-  const userMessage = String(ctx?.userMessage || "").trim();
+  const userMessage = text(ctx?.userMessage);
   const locale = String(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE).trim();
   const userAttachments = resolveWorkflowInputAttachments(ctx);
   const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachments, ctx);
   const availableToolNames = resolveWorkflowAvailableToolNames(ctx);
   const availableToolsPlanningBlock = buildWorkflowAvailableToolsPlanningBlock(ctx, locale);
   const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx, locale });
-  const availableToolsSystemMessage = String(availableToolsPlanningBlock || "").trim()
+  const availableToolsSystemMessage = text(availableToolsPlanningBlock)
     ? { role: "system", content: availableToolsPlanningBlock }
     : null;
   const semanticTaskMessage = {
@@ -88,7 +89,7 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
         source: sourceText || tWorkflow(locale, WORKFLOW_I18N_KEYSET.SEMANTIC.EMPTY),
       }),
     ]
-      .map((item) => String(item || "").trim())
+      .map((item) => text(item))
       .filter(Boolean)
       .join("\n\n"),
   };
@@ -96,7 +97,7 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
     lane: MODEL_CONTEXT_LANE.AUXILIARY,
     sourceMessages: contextMessages,
     protocolSystemMessages: [
-      String(options?.semanticPrompt || "").trim(),
+      text(options?.semanticPrompt),
       ...(availableToolsSystemMessage ? [availableToolsSystemMessage] : []),
     ].filter(Boolean),
     taskMessages: [semanticTaskMessage],
@@ -115,11 +116,11 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
     contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   });
   throwIfWorkflowAborted(ctx);
-  const resolvedText = String(result?.output?.text || "").trim() || sourceText;
+  const resolvedText = text(result?.output?.text) || sourceText;
   return {
     text: resolvedText,
     invoked: true,
-    model: String(options?.semanticModel || "").trim(),
+    model: text(options?.semanticModel),
     traceCount: Array.isArray(result?.traces) ? result.traces.length : 0,
     requestMessages: semanticMessages,
     toolAllowlist: availableToolNames,

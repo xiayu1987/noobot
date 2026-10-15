@@ -7,6 +7,7 @@ import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { withJsonError } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { isSuperAdminRole } from "#agent/utils";
+import { text } from "@noobot/shared/value";
 
 export function registerConfigAndTemplateRoutes(
   app,
@@ -88,13 +89,13 @@ export function registerConfigAndTemplateRoutes(
         if (scope === "system") {
           payload = await readWorkspaceConfigParams({ createIfMissing: true });
         } else {
-          const userId = String(req?.auth?.userId || "").trim();
+          const userId = text(req?.auth?.userId);
           payload = await readUserConfigParams({ userId, createIfMissing: true });
         }
         const keys =
           scope === "system"
             ? await collectConfigTemplateKeys()
-            : await collectUserConfigTemplateKeys(String(req?.auth?.userId || "").trim());
+            : await collectUserConfigTemplateKeys(text(req?.auth?.userId));
         const catalog = buildConfigParamCatalog({
           keys,
           descriptions: payload?.descriptions || {},

@@ -15,6 +15,7 @@ import {
   formatAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 export function buildWorkflowInputAttachmentSystemMessage({
   ctx = {},
@@ -60,9 +61,9 @@ export function buildWorkflowUpstreamAttachmentResults({
 }
 
 function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults = new Map()) {
-  const nodeId = String(upstreamStep.nodeId || "").trim();
+  const nodeId = text(upstreamStep.nodeId);
   if (!nodeId) return null;
-  const stepId = String(upstreamStep.stepId || "").trim();
+  const stepId = text(upstreamStep.stepId);
   const completed = completedStepResults.get(stepId) || {};
   const transferEnvelopes = getWorkflowTransferPayloadFromResult(completed).transferEnvelopes;
   const status = firstText(completed.status, upstreamStep.status);
@@ -79,7 +80,7 @@ function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults =
     stepIndex: Number.isFinite(stepIndex) ? stepIndex : -1,
     transition: Number(completed.transition ?? 0),
     nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(completed),
-    nodeSessionId: String(completed.nodeSessionId || "").trim(),
+    nodeSessionId: text(completed.nodeSessionId),
     status,
     stepFailure,
     transferEnvelopes,
@@ -152,10 +153,10 @@ function resolveUpstreamNodeLabel(result, locale) {
 
 function buildUpstreamFailureLine(result, nodeLabel, locale) {
   const failed =
-    String(result?.status || "").trim() === "failed" ||
+    text(result?.status) === "failed" ||
     (result?.stepFailure && typeof result.stepFailure === "object");
   if (!failed) return "";
-  const task = String(result?.nodeTask || result?.task || "").trim();
+  const task = text(result?.nodeTask || result?.task);
   const message = String(
     result?.stepFailure?.message ||
       tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK),
@@ -183,14 +184,14 @@ function appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale) {
 function buildCustomUpstreamMessage(options, ctx, pendingStep, upstreamNodeResults) {
   if (typeof options?.workflowNodeSystemMessageBuilder !== "function") return "";
   try {
-    return String(
+    return text(
       options.workflowNodeSystemMessageBuilder({
         ctx,
         pendingStep,
         upstreamNodeResults,
         attachments: [],
-      }) || "",
-    ).trim();
+      }),
+    );
   } catch (error) {
     console.warn("[workflow] workflowNodeSystemMessageBuilder failed:", error);
     return "";
@@ -234,7 +235,7 @@ async function transferUpstreamSemanticContent({
       content: message,
       producer: { type: "plugin", id: `workflow-upstream:${pendingName}` },
       meta: {
-        pendingNodeId: String(pendingStep?.nodeId || "").trim(),
+        pendingNodeId: text(pendingStep?.nodeId),
         pendingNodeName: pendingName,
         upstreamResultCount: normalizedResults.length,
         upstreamAttachmentLineCount: lines.length,

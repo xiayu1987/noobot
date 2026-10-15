@@ -7,6 +7,7 @@ import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
 import { TURN_EVENT } from "./turn-event.js";
 import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./turn-state.js";
 import { TURN_EXECUTION_STATE, normalizeTurnExecutionState } from "./turn-execution-state.js";
+import { text } from "@noobot/shared/value";
 
 const EVENT_STATE = Object.freeze({
   [TURN_EVENT.ACTION_ACCEPTED]: TURN_STATE.ACTION_REQUESTING,
@@ -32,11 +33,9 @@ export function deriveTurnState(eventType = "", phase = "") {
 }
 
 export function deriveTurnEventType(state = "", { action = "" } = {}) {
-  const normalizedState = String(state || "").trim();
+  const normalizedState = text(state);
   if (normalizedState === TURN_STATE.ACTION_REQUESTING) {
-    return String(action || "").trim() === "stop"
-      ? TURN_EVENT.STOP_ACCEPTED
-      : TURN_EVENT.ACTION_ACCEPTED;
+    return text(action) === "stop" ? TURN_EVENT.STOP_ACCEPTED : TURN_EVENT.ACTION_ACCEPTED;
   }
   if (normalizedState === TURN_STATE.PROCESSING) return TURN_EVENT.PROCESSING_STARTED;
   if (normalizedState === TURN_STATE.COMPLETION_REQUESTING) {

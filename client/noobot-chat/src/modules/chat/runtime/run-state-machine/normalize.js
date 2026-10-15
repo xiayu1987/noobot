@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { BackendChannelState, FrontendRunState } from "./constants.js";
+import { text } from "@noobot/shared/value";
 
 export function trim(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function normalizeState(state = "") {

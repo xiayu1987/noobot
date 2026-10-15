@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { text } from "@noobot/shared/value";
 
 export const SESSION_GENERATED_DATA_DIRS = Object.freeze({
   executeScriptForeground: ".execute-script-foreground",
@@ -12,8 +13,8 @@ export const SESSION_GENERATED_DATA_DIRS = Object.freeze({
 });
 
 export function resolveSessionGeneratedDataRoot(sessionDir = "", kind = "") {
-  const normalizedSessionDir = String(sessionDir || "").trim();
-  const relativeDir = String(SESSION_GENERATED_DATA_DIRS[kind] || "").trim();
+  const normalizedSessionDir = text(sessionDir);
+  const relativeDir = text(SESSION_GENERATED_DATA_DIRS[kind]);
   if (!normalizedSessionDir) throw new Error("session directory is required");
   if (!relativeDir)
     throw new Error(`unsupported session generated data kind: ${String(kind || "")}`);

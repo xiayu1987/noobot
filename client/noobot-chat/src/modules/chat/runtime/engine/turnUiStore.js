@@ -6,6 +6,7 @@
 import { reactive } from "vue";
 import { createTurnKey, parseTurnKey, resolveTurnIdentity } from "./turnIdentity.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
+import { text } from "@noobot/shared/value";
 
 const states = reactive(Object.create(null));
 
@@ -66,7 +67,7 @@ export function clearTurnUiState(value = {}) {
 }
 
 export function clearSessionTurnUiStates(sessionId = "") {
-  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedSessionId = text(sessionId);
   if (!normalizedSessionId) return 0;
   let removed = 0;
   Object.keys(states).forEach((key) => {

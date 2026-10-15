@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const CONTEXT_BUILD_STATUS = Object.freeze({
   BUILDING: "building",
   READY: "ready",
@@ -24,12 +26,12 @@ export function createContextBuildReceipt({
   const receipt = {
     protocolVersion: 1,
     scope,
-    mode: String(mode || "").trim(),
-    sourceRevision: String(sourceRevision || "").trim(),
-    policyFingerprint: String(policyFingerprint || "").trim(),
-    startedAt: String(startedAt || "").trim(),
-    completedAt: String(completedAt || "").trim(),
-    status: String(status || "").trim(),
+    mode: text(mode),
+    sourceRevision: text(sourceRevision),
+    policyFingerprint: text(policyFingerprint),
+    startedAt: text(startedAt),
+    completedAt: text(completedAt),
+    status: text(status),
     messageCount: Number.isFinite(Number(messageCount)) ? Number(messageCount) : 0,
     ...(error
       ? {

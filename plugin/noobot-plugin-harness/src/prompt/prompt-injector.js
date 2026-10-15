@@ -15,7 +15,7 @@ import {
   writeMessageBlocks,
 } from "../core/message-store.js";
 import { isContextSystemMessage } from "@noobot/context-protocol/message/codec";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const injectedPromptCache = new WeakMap();
 
@@ -69,7 +69,7 @@ export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
 function normalizePromptEntries(prompts = []) {
   return (Array.isArray(prompts) ? prompts : [])
     .map((item = {}) => ({
-      id: String(item?.id || "").trim(),
+      id: text(item?.id),
       content: String(item?.content || ""),
       priority: Number.isFinite(Number(item?.priority)) ? Number(item.priority) : 50,
       mode: String(item?.mode || "prepend")
@@ -83,7 +83,7 @@ function normalizePromptEntries(prompts = []) {
 }
 
 function isPromptMessage(message = {}, id = "") {
-  const promptId = String(id || "").trim();
+  const promptId = text(id);
   if (!promptId) return false;
   return resolvePromptInjectionIdFromMetadata(message) === promptId;
 }
@@ -107,7 +107,7 @@ function removePromptMessagesFromList(messages = [], id = "", { removeSystem = f
 }
 
 function normalizeSystemPromptPlacement(ctx = {}, id = "") {
-  const promptId = String(id || "").trim();
+  const promptId = text(id);
   if (!promptId) return;
   removePromptMessagesFromList(resolveModelMessages(ctx), promptId, { removeSystem: false });
   const blocks = resolveModelMessageBlocks(ctx);

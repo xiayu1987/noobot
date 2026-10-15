@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 export function resolvePlanningGuidanceMode(meta = {}) {
   return String(meta?.harness?.planningGuidanceMode || "separate_model")
     .trim()
@@ -24,7 +26,7 @@ function normalizeCapabilityModelMap(source = {}) {
   return Object.fromEntries(
     Object.entries(source)
       .map(([key, value]) => [
-        String(key || "").trim(),
+        text(key),
         String(
           value && typeof value === "object" && !Array.isArray(value) ? value.model : value || "",
         ).trim(),
@@ -38,8 +40,8 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
     ...normalizeCapabilityModelMap(meta?.harness?.capabilityModelByPurpose),
     ...normalizeCapabilityModelMap(meta?.harness?.stepModels),
   };
-  const normalizedPurpose = String(purpose || "").trim();
-  const normalizedDomain = String(domain || "").trim();
+  const normalizedPurpose = text(purpose);
+  const normalizedDomain = text(domain);
   const lowerPurpose = normalizedPurpose.toLowerCase();
   const candidates = [
     normalizedPurpose,
@@ -66,7 +68,7 @@ export function resolveCapabilityModelMessages(meta = {}, { ctx = {}, purpose = 
   }
   const resolved = resolver({
     ctx,
-    purpose: String(purpose || "").trim(),
+    purpose: text(purpose),
   });
   if (!Array.isArray(resolved)) {
     throw new Error("authoritative modelContext resolver must return a message array");
@@ -75,7 +77,7 @@ export function resolveCapabilityModelMessages(meta = {}, { ctx = {}, purpose = 
 }
 
 export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {
-  const normalizedPurpose = String(purpose || "").trim();
+  const normalizedPurpose = text(purpose);
   const byPurpose =
     meta?.harness?.capabilityToolAllowlistByPurpose &&
     typeof meta.harness.capabilityToolAllowlistByPurpose === "object"
@@ -85,14 +87,14 @@ export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {
     ? byPurpose[normalizedPurpose]
     : null;
   if (scoped) {
-    const normalized = scoped.map((item) => String(item || "").trim()).filter(Boolean);
+    const normalized = scoped.map((item) => text(item)).filter(Boolean);
     if (normalized.includes("*")) return ["*"];
     return normalized;
   }
   const globalAllowlist = Array.isArray(meta?.harness?.capabilityToolAllowlist)
     ? meta.harness.capabilityToolAllowlist
     : [];
-  const normalized = globalAllowlist.map((item) => String(item || "").trim()).filter(Boolean);
+  const normalized = globalAllowlist.map((item) => text(item)).filter(Boolean);
   if (normalized.includes("*")) return ["*"];
   return normalized;
 }

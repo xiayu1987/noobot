@@ -14,10 +14,11 @@ import {
   createSessionDeletedError,
   normalizeParentSessionId,
 } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 class SessionCrudMethods {
   async registerSessionTreeNode(userId, sessionId, parentSessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
@@ -201,7 +202,7 @@ class SessionCrudMethods {
     );
     if (!(await this.storageService.exists(sessionFile))) return [];
     const manifest = await this.storageService.readJson(sessionFile, null);
-    if (String(manifest?.sessionId || "").trim() !== String(sessionId || "").trim()) {
+    if (text(manifest?.sessionId) !== text(sessionId)) {
       const error = new Error("Session manifest identity does not match its storage scope");
       error.code = "SESSION_MANIFEST_IDENTITY_MISMATCH";
       throw error;
@@ -215,7 +216,7 @@ class SessionCrudMethods {
     parentSessionId = "",
     { expectedAggregateVersion, createOnly = false, persistenceContext = null } = {},
   ) {
-    const sessionId = String(session?.sessionId || "").trim();
+    const sessionId = text(session?.sessionId);
     if (!sessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,

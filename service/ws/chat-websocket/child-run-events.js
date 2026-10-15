@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function isChildRunEventData(eventData = {}, { rootSessionId = "" } = {}) {
-  return String(eventData?.sessionId || "").trim() !== String(rootSessionId || "").trim();
+  return text(eventData?.sessionId) !== text(rootSessionId);
 }

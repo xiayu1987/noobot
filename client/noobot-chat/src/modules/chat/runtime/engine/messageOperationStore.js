@@ -5,13 +5,14 @@
  */
 import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
 import { nowIso } from "../../model/timeFields.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeOperationId(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function normalizeSessionId(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function createOperationId(type = "op") {

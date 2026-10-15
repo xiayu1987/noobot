@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const UPSTREAM_TRANSPORT_PHASE = Object.freeze({
   IDLE: "idle",
   CONNECTING: "connecting",
@@ -40,7 +42,7 @@ export class UpstreamTransportSupervisor {
     const generation = ++this.generation;
     this.socket = socket;
     this.handlers = handlers;
-    this.purpose = String(purpose || "").trim() || "run";
+    this.purpose = text(purpose) || "run";
     this.phase = UPSTREAM_TRANSPORT_PHASE.CONNECTING;
     this.everConnected = true;
     this.lastSeenAtMs = Date.now();
@@ -82,13 +84,13 @@ export class UpstreamTransportSupervisor {
 
   claimPurpose(purpose = "run") {
     if (!this.socket || this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return false;
-    this.purpose = String(purpose || "").trim() || "run";
+    this.purpose = text(purpose) || "run";
     return true;
   }
 
   closeOwnedConnection(connection = null, code = 1000, reason = "closed", { purpose = "" } = {}) {
     if (!connection || !this.isCurrent(connection.socket, connection.generation)) return false;
-    const requiredPurpose = String(purpose || "").trim();
+    const requiredPurpose = text(purpose);
     if (requiredPurpose && this.purpose !== requiredPurpose) return false;
     return this.close(code, reason);
   }

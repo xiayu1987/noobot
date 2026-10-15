@@ -20,6 +20,7 @@ import {
   getModelContextRuntime,
 } from "../assembly/model-runtime.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
+import { text } from "@noobot/shared/value";
 
 const CONTEXT_MUTATION_PROTOCOL_VERSION = 2;
 
@@ -48,7 +49,7 @@ function requireDocument(document) {
 
 export function createContextMutation(document, commandType, payload = {}) {
   requireDocument(document);
-  const normalizedType = String(commandType || "").trim();
+  const normalizedType = text(commandType);
   if (!Object.values(CONTEXT_MUTATION_TYPES).includes(normalizedType)) {
     throw new TypeError(`unsupported context mutation command: ${normalizedType}`);
   }
@@ -68,7 +69,7 @@ export function dispatchContextMutation(document, command = {}) {
       `context mutation protocolVersion must equal ${CONTEXT_MUTATION_PROTOCOL_VERSION}`,
     );
   }
-  const commandId = String(command?.commandId || "").trim();
+  const commandId = text(command?.commandId);
   if (!commandId) throw new TypeError("context mutation commandId is required");
   const expectedRevision = Number(command?.expectedRevision);
   const actualRevision = getModelContextRevision(document);

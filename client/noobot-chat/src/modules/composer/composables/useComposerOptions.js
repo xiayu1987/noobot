@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
+import { text } from "@noobot/shared/value";
 
 export function useComposerOptions(props, emit, translate) {
   const selectedConnectorNames = computed(() => {
@@ -18,7 +19,7 @@ export function useComposerOptions(props, emit, translate) {
         : []
     )
       .filter((item) => selectedIds.has(item?.connectorId))
-      .map((item) => String(item?.name || "").trim())
+      .map((item) => text(item?.name))
       .filter(Boolean);
   });
 
@@ -28,28 +29,26 @@ export function useComposerOptions(props, emit, translate) {
     const sourceOptions = Array.isArray(props.scenarioOptions) ? props.scenarioOptions : [];
     return sourceOptions
       .map((scenarioItem) => ({
-        key: String(scenarioItem?.key || "").trim(),
-        label: String(scenarioItem?.label || "").trim(),
-        description: String(scenarioItem?.description || "").trim(),
-        model: String(scenarioItem?.model || "").trim(),
+        key: text(scenarioItem?.key),
+        label: text(scenarioItem?.label),
+        description: text(scenarioItem?.description),
+        model: text(scenarioItem?.model),
       }))
       .filter((scenarioItem) => Boolean(scenarioItem.key));
   });
 
   function resolveScenarioLabel(scenarioItem = {}) {
-    const scenarioKey = String(scenarioItem?.key || "")
-      .trim()
-      .toLowerCase();
-    const customLabel = String(scenarioItem?.label || "").trim();
+    const scenarioKey = text(scenarioItem?.key).toLowerCase();
+    const customLabel = text(scenarioItem?.label);
     if (customLabel) return customLabel;
     if (scenarioKey === "programming") return translate("composer.scenarioProgramming");
     if (scenarioKey === "text") return translate("composer.scenarioText");
     if (scenarioKey === "full") return translate("composer.scenarioFull");
-    return String(scenarioItem?.key || "").trim();
+    return text(scenarioItem?.key);
   }
 
   const selectedScenarioLabel = computed(() => {
-    const currentScenario = String(props.botScenario || "").trim();
+    const currentScenario = text(props.botScenario);
     if (!currentScenario) return "";
     const matchedScenario = normalizedScenarioOptions.value.find(
       (scenarioItem) => scenarioItem.key === currentScenario,
@@ -62,20 +61,20 @@ export function useComposerOptions(props, emit, translate) {
   });
 
   const selectedScenarioDescription = computed(() => {
-    const currentScenario = String(props.botScenario || "").trim();
+    const currentScenario = text(props.botScenario);
     if (!currentScenario) return "";
     const matchedScenario = normalizedScenarioOptions.value.find(
       (scenarioItem) => scenarioItem.key === currentScenario,
     );
-    return String(matchedScenario?.description || "").trim();
+    return text(matchedScenario?.description);
   });
 
   const normalizedPluginOptions = computed(() => {
     const sourcePlugins = Array.isArray(props.availablePlugins) ? props.availablePlugins : [];
     return sourcePlugins
       .map((pluginItem) => ({
-        key: String(pluginItem?.key || "").trim(),
-        description: String(pluginItem?.description || "").trim(),
+        key: text(pluginItem?.key),
+        description: text(pluginItem?.description),
         enabled: pluginItem?.enabled === true,
       }))
       .filter((pluginItem) => Boolean(pluginItem.key));
@@ -85,7 +84,7 @@ export function useComposerOptions(props, emit, translate) {
     () =>
       new Set(
         (Array.isArray(props.selectedPlugins) ? props.selectedPlugins : [])
-          .map((pluginKey) => String(pluginKey || "").trim())
+          .map((pluginKey) => text(pluginKey))
           .filter(Boolean),
       ),
   );
@@ -100,17 +99,17 @@ export function useComposerOptions(props, emit, translate) {
     emit(
       "update:selectedPlugins",
       (Array.isArray(pluginKeys) ? pluginKeys : [])
-        .map((pluginKey) => String(pluginKey || "").trim())
+        .map((pluginKey) => text(pluginKey))
         .filter(Boolean),
     );
   }
 
   function onPluginToggle(pluginKey = "") {
-    const key = String(pluginKey || "").trim();
+    const key = text(pluginKey);
     if (!key) return;
     const current = new Set(
       (Array.isArray(props.selectedPlugins) ? props.selectedPlugins : [])
-        .map((item) => String(item || "").trim())
+        .map((item) => text(item))
         .filter(Boolean),
     );
     if (current.has(key)) current.delete(key);
@@ -119,12 +118,12 @@ export function useComposerOptions(props, emit, translate) {
   }
 
   function onProgrammingScenarioToggle() {
-    const currentScenario = String(props.botScenario || "").trim();
+    const currentScenario = text(props.botScenario);
     emit("update:botScenario", currentScenario === "programming" ? "" : "programming");
   }
 
   function onScenarioSelect(scenarioKey = "") {
-    const normalizedScenarioKey = String(scenarioKey || "").trim();
+    const normalizedScenarioKey = text(scenarioKey);
     if (!normalizedScenarioKey) return;
     emit("update:botScenario", normalizedScenarioKey);
   }

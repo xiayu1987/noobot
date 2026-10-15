@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { text } from "@noobot/shared/value";
 
 export const HARNESS_FSM_STATES = Object.freeze({
   IDLE: "idle",
@@ -53,9 +54,7 @@ export const HARNESS_FSM_EFFECTS = Object.freeze({
 });
 
 export function normalizeFsmState(state = "") {
-  const value = String(state || "")
-    .trim()
-    .toLowerCase();
+  const value = text(state).toLowerCase();
   return HARNESS_FSM_STATE_SET.has(value) ? value : HARNESS_FSM_STATES.IDLE;
 }
 
@@ -65,11 +64,11 @@ function isAllowedFsmTransition(from, to) {
 }
 
 function resolveChecklistLength(ctx = {}) {
-  const planText = String(ctx?.agentContext?.bindings?.extensions?.harness?.planText || "").trim();
+  const planText = text(ctx?.agentContext?.bindings?.extensions?.harness?.planText);
   if (planText) {
     const mainLineCount = planText
       .split(/\r?\n/)
-      .map((line) => String(line || "").trim())
+      .map((line) => text(line))
       .filter((line) => /^\d+\.\s+/.test(line)).length;
     return mainLineCount || 1;
   }

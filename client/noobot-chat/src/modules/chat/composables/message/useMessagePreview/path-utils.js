@@ -5,6 +5,7 @@
  */
 import { isAbsolutePathForPlatform } from "@noobot/path-resolver/syntax";
 import { createSecureId } from "../../../../../shared/identity/secureIdentity.js";
+import { text } from "@noobot/shared/value";
 
 export function parseContentDisposition(contentDisposition = "") {
   if (!contentDisposition) return "";
@@ -17,15 +18,11 @@ export function parseContentDisposition(contentDisposition = "") {
     }
   }
   const basicMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
-  return String(basicMatch?.[1] || "").trim();
+  return text(basicMatch?.[1]);
 }
 
 function sanitizeWorkspaceRelativePath(pathValue = "") {
-  const normalized = String(pathValue || "")
-    .trim()
-    .replaceAll("\\", "/")
-    .replace(/^\.\//, "")
-    .replace(/^\/+/, "");
+  const normalized = text(pathValue).replaceAll("\\", "/").replace(/^\.\//, "").replace(/^\/+/, "");
   if (!normalized) return "";
   if (normalized.startsWith("../")) return "";
   if (normalized.includes("/../")) return "";
@@ -34,14 +31,12 @@ function sanitizeWorkspaceRelativePath(pathValue = "") {
 }
 
 function resolveWorkspaceRelativePath(pathValue = "", userId = "") {
-  const normalizedPath = String(pathValue || "")
-    .trim()
-    .replaceAll("\\", "/");
+  const normalizedPath = text(pathValue).replaceAll("\\", "/");
   if (!normalizedPath) return "";
   if (!isAbsolutePathForPlatform(normalizedPath)) {
     return sanitizeWorkspaceRelativePath(normalizedPath);
   }
-  const normalizedUserId = String(userId || "").trim();
+  const normalizedUserId = text(userId);
   if (normalizedUserId) {
     const marker = `/workspace/${normalizedUserId}/`;
     const markerIndex = normalizedPath.indexOf(marker);
@@ -68,19 +63,20 @@ export function resolveFileItemRelativePath(fileItem = {}, userId = "") {
 
 export function resolveFileItemHostPath(fileItem = {}) {
   for (const value of [fileItem?.hostPath, fileItem?.resolvedPath, fileItem?.path]) {
-    const normalized = String(value || "").trim();
+    const normalized = text(value);
     if (normalized && isAbsolutePathForPlatform(normalized)) return normalized;
   }
   return "";
 }
 
 export function resolveFileItemName(fileItem = {}, relativePath = "") {
-  const explicitName = String(fileItem?.fileName || fileItem?.name || "").trim();
+  const explicitName = text(fileItem?.fileName || fileItem?.name);
   if (explicitName) return explicitName;
-  const normalizedPath = String(relativePath || fileItem?.resolvedPath || fileItem?.path || "")
-    .trim()
-    .replaceAll("\\", "/");
-  return String(normalizedPath.split("/").pop() || "").trim();
+  const normalizedPath = text(relativePath || fileItem?.resolvedPath || fileItem?.path).replaceAll(
+    "\\",
+    "/",
+  );
+  return text(normalizedPath.split("/").pop());
 }
 
 export function createFileAccessTraceId(prefix = "preview") {
@@ -88,9 +84,7 @@ export function createFileAccessTraceId(prefix = "preview") {
 }
 
 export function maskWorkspacePath(pathValue = "") {
-  const normalized = String(pathValue || "")
-    .trim()
-    .replaceAll("\\", "/");
+  const normalized = text(pathValue).replaceAll("\\", "/");
   if (!normalized) return "";
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return normalized;
@@ -98,9 +92,7 @@ export function maskWorkspacePath(pathValue = "") {
 }
 
 export function maskHostPath(pathValue = "") {
-  const normalized = String(pathValue || "")
-    .trim()
-    .replaceAll("\\", "/");
+  const normalized = text(pathValue).replaceAll("\\", "/");
   if (!normalized) return "";
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return normalized;

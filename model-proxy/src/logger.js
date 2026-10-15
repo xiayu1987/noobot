@@ -8,6 +8,7 @@ import path from "node:path";
 import { pad, tryParseJson } from "./common.js";
 import { normalizeUsageCacheDiagnostics } from "./cache-diagnostics.js";
 import { sanitizeHeaders, sanitizeUrl } from "@noobot/sanitize";
+import { text } from "@noobot/shared/value";
 
 function createLogger({
   logDir,
@@ -29,7 +30,7 @@ function createLogger({
   }
 
   function sanitizePathSegment(value = "", fallback = "") {
-    const normalizedValue = String(value || "").trim();
+    const normalizedValue = text(value);
     if (!normalizedValue) return fallback;
 
     return (
@@ -58,7 +59,7 @@ function createLogger({
     const modelFlowDir = getModelFlowLogDir(modelName, flowName);
     const safeSessionId = sanitizePathSegment(sessionId, unknownSessionId);
     const safeParentSessionId = sanitizePathSegment(parentSessionId, unknownSessionId);
-    const hasParent = String(parentSessionId || "").trim().length > 0;
+    const hasParent = text(parentSessionId).length > 0;
 
     return hasParent
       ? path.join(modelFlowDir, safeParentSessionId, "children", safeSessionId)

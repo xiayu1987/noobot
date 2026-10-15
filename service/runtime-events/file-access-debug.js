@@ -9,9 +9,10 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 export function recordFileAccessDebug(req, { event, traceEvent, data = {} } = {}) {
-  const traceId = String(req?.headers?.[FILE_TRACE_ID_HEADER] || "").trim();
+  const traceId = text(req?.headers?.[FILE_TRACE_ID_HEADER]);
   if (!traceId) return;
   void writeRuntimeEvent({
     scope: "system",

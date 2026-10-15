@@ -9,6 +9,7 @@ import {
   createChatConnectionHandler,
 } from "../ws/chat-websocket/connection-handler.js";
 import { AUTHORITY_EVENT_CONSUMER } from "../ws/chat-websocket/authority-event-dispatcher.js";
+import { text } from "@noobot/shared/value";
 
 const SOCKET_OPEN = 1;
 const SOCKET_CLOSED = 3;
@@ -23,7 +24,7 @@ const IN_PROCESS_EXIT_CODE = Object.freeze({
 });
 
 export function resolveInProcessExitCode(reason = "") {
-  const key = String(reason || "").trim();
+  const key = text(reason);
   return Object.prototype.hasOwnProperty.call(IN_PROCESS_EXIT_CODE, key)
     ? IN_PROCESS_EXIT_CODE[key]
     : 1;
@@ -79,7 +80,7 @@ export function createInProcessChatTransport({ appDependencies, connectorAccessP
   });
 
   function openConnection({ authInfo, locale = "", onEvent = () => {} } = {}) {
-    if (!String(authInfo?.userId || "").trim()) {
+    if (!text(authInfo?.userId)) {
       throw new TypeError("in-process connection requires authInfo.userId");
     }
     const socket = new InProcessSocket((packet) => {

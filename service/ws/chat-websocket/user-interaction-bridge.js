@@ -19,6 +19,7 @@ import {
   rejectPendingInteractionsForTurn,
   unregisterPendingInteraction,
 } from "./pending-interaction-registry.js";
+import { text } from "@noobot/shared/value";
 
 const USER_INTERACTION_TIMEOUT_MS = resolveUserInteractionTimeoutMs();
 
@@ -117,7 +118,7 @@ async function handleInteractionTimeout({
 
 function createInteractionPayload(input, authority, requestId, effectiveTimeoutMs) {
   return {
-    interactionId: String(input.interactionId || "").trim(),
+    interactionId: text(input.interactionId),
     requestId,
     content: String(input.content || ""),
     fields: Array.isArray(input.fields) ? input.fields : [],
@@ -125,22 +126,14 @@ function createInteractionPayload(input, authority, requestId, effectiveTimeoutM
     requireEncryption: Boolean(input.requireEncryption),
     sessionId: authority.session.sessionId,
     turnScopeId: authority.turn.turnScopeId,
-    toolName: String(input.toolName || "").trim(),
+    toolName: text(input.toolName),
     needConnectionInfo: Boolean(input.needConnectionInfo),
-    connectorName: String(input.connectorName || "").trim(),
-    connectorType: String(input.connectorType || "").trim(),
-    interactionType: String(input.interactionType || "").trim(),
-    lifecycle:
-      String(input.lifecycle || "")
-        .trim()
-        .toLowerCase() || "pending",
-    ackMode:
-      String(input.ackMode || "")
-        .trim()
-        .toLowerCase() || "manual",
-    resolvedBy: String(input.resolvedBy || "")
-      .trim()
-      .toLowerCase(),
+    connectorName: text(input.connectorName),
+    connectorType: text(input.connectorType),
+    interactionType: text(input.interactionType),
+    lifecycle: text(input.lifecycle).toLowerCase() || "pending",
+    ackMode: text(input.ackMode).toLowerCase() || "manual",
+    resolvedBy: text(input.resolvedBy).toLowerCase(),
     notification:
       input.notification &&
       typeof input.notification === "object" &&
@@ -162,7 +155,7 @@ export function createUserInteractionBridge({
   getCurrentLocale = () => "",
   interactionTimeoutMs = USER_INTERACTION_TIMEOUT_MS,
 } = {}) {
-  const interactionOwnerUserId = String(ownerUserId || "").trim();
+  const interactionOwnerUserId = text(ownerUserId);
   if (!interactionOwnerUserId) throw new TypeError("ownerUserId is required");
   if (typeof commitInteractionRequest !== "function") {
     throw new TypeError("commitInteractionRequest is required");
@@ -192,7 +185,7 @@ export function createUserInteractionBridge({
     requestUserInteraction: (input = {}) => {
       const interactionAuthority = normalizeInteractionAuthority(input.authority);
       const { interactionId = "", timeoutMs = undefined } = input;
-      const normalizedInteractionId = String(interactionId || "").trim();
+      const normalizedInteractionId = text(interactionId);
       const normalizedSessionId = interactionAuthority.session.sessionId;
       const interactionIdentityKey = normalizedInteractionId
         ? `${normalizedSessionId}::${normalizedInteractionId}`

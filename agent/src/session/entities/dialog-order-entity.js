@@ -6,9 +6,10 @@
 
 import { isInjectedOrPluginMessage } from "@noobot/context-protocol/policy/message";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import { text } from "@noobot/shared/value";
 
 function normalizeText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function isDialogAnchor(message = {}) {

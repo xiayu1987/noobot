@@ -5,6 +5,7 @@
  */
 
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 export const WORKFLOW_DIALOG_PROCESS_QUERY_KEY = "workflowDialogProcessId";
 export const WORKFLOW_ROOT_SESSION_QUERY_KEY = "workflowRootSessionId";
@@ -29,14 +30,14 @@ export function buildWorkflowDrawerRoute(nodeItem = {}, workflowPayload = {}, pa
 export function readWorkflowDrawerQuery() {
   const params = new URLSearchParams(window.location.search || "");
   return {
-    dialogProcessId: String(params.get(WORKFLOW_DIALOG_PROCESS_QUERY_KEY) || "").trim(),
-    rootSessionId: String(params.get(WORKFLOW_ROOT_SESSION_QUERY_KEY) || "").trim(),
+    dialogProcessId: text(params.get(WORKFLOW_DIALOG_PROCESS_QUERY_KEY)),
+    rootSessionId: text(params.get(WORKFLOW_ROOT_SESSION_QUERY_KEY)),
   };
 }
 
 export function writeWorkflowDrawerQuery(route = {}) {
-  const dialogProcessId = String(route?.dialogProcessId || "").trim();
-  const rootSessionId = String(route?.rootSessionId || "").trim();
+  const dialogProcessId = text(route?.dialogProcessId);
+  const rootSessionId = text(route?.rootSessionId);
   const params = new URLSearchParams(window.location.search || "");
   if (dialogProcessId && rootSessionId) {
     params.set(WORKFLOW_DIALOG_PROCESS_QUERY_KEY, dialogProcessId);
@@ -73,18 +74,17 @@ export function useWorkflowDrawerHistory({ workflowPayload, flowNodes }) {
   }
 
   function findWorkflowSessionTarget(route = {}) {
-    const dialogProcessId = String(route?.dialogProcessId || "").trim();
-    const rootSessionId = String(route?.rootSessionId || "").trim();
+    const dialogProcessId = text(route?.dialogProcessId);
+    const rootSessionId = text(route?.rootSessionId);
     if (!dialogProcessId || !rootSessionId) return null;
     return (
       collectWorkflowSessionTargets().find((target = {}) => {
         const targetDialogProcessId = resolveWorkflowDialogProcessId(target);
-        const targetRootSessionId = String(
+        const targetRootSessionId = text(
           target?.rootSessionId ||
             workflowPayload.value?.planningDialog?.sessionId ||
-            workflowPayload.value?.runMeta?.sessionId ||
-            "",
-        ).trim();
+            workflowPayload.value?.runMeta?.sessionId,
+        );
         return targetDialogProcessId === dialogProcessId && targetRootSessionId === rootSessionId;
       }) || null
     );

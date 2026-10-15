@@ -10,6 +10,7 @@ import {
   syncUserWorkspace,
 } from "../../workspace-lifecycle/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { text } from "@noobot/shared/value";
 
 export class WorkspaceService {
   constructor({ globalConfig = {}, globalConfigRaw = null } = {}) {
@@ -18,7 +19,7 @@ export class WorkspaceService {
   }
 
   getWorkspacePath(userId) {
-    const normalizedUserId = String(userId || "").trim();
+    const normalizedUserId = text(userId);
     if (!normalizedUserId) {
       throw new Error(tSystem("common.workspaceRootUserIdRequired"));
     }

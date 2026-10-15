@@ -5,6 +5,7 @@
  */
 
 import { resolveContextMessageId } from "../message/codec.js";
+import { text } from "@noobot/shared/value";
 
 export const AUXILIARY_SEQUENCE_IDENTITY_FIELD = "noobotAuxiliarySequenceIdentity";
 
@@ -53,8 +54,8 @@ function requireCheckpointRevision(value) {
 }
 
 export function declareAuxiliarySequenceIdentity(message = {}, identity = {}) {
-  const kind = String(identity?.kind || "").trim();
-  const key = String(identity?.key || "").trim();
+  const kind = text(identity?.kind);
+  const key = text(identity?.key);
   if (!Object.values(AUXILIARY_SEQUENCE_MESSAGE_KIND).includes(kind)) {
     throw new TypeError(`unsupported auxiliary sequence message kind: ${kind || "<empty>"}`);
   }
@@ -73,8 +74,8 @@ export function declareAuxiliarySequenceIdentity(message = {}, identity = {}) {
 export function resolveAuxiliarySequenceIdentity(message = {}) {
   const identity = message?.[AUXILIARY_SEQUENCE_IDENTITY_FIELD];
   if (!identity || typeof identity !== "object" || Array.isArray(identity)) return null;
-  const kind = String(identity.kind || "").trim();
-  const key = String(identity.key || "").trim();
+  const kind = text(identity.kind);
+  const key = text(identity.key);
   if (!Object.values(AUXILIARY_SEQUENCE_MESSAGE_KIND).includes(kind)) return null;
   if (kind !== AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST && !key) return null;
   return { kind, ...(key ? { key } : {}) };

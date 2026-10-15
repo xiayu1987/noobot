@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
@@ -39,10 +39,8 @@ export function getOpenVSCodeConfig(globalConfig = {}) {
     : isPlainObject(globalConfig?.openvscode)
       ? globalConfig.openvscode
       : {};
-  const envArgs = String(process.env.OPENVSCODE_SERVER_EXTRA_ARGS || "").trim();
-  const configuredCommand = String(
-    process.env.OPENVSCODE_SERVER_COMMAND || source.command || "",
-  ).trim();
+  const envArgs = text(process.env.OPENVSCODE_SERVER_EXTRA_ARGS);
+  const configuredCommand = text(process.env.OPENVSCODE_SERVER_COMMAND || source.command);
   return {
     command: configuredCommand || resolveManagedOpenVSCodeCommand() || DEFAULT_COMMAND,
     host:
@@ -65,7 +63,7 @@ export function getOpenVSCodeConfig(globalConfig = {}) {
       min: 0,
     }),
     extraArgs: Array.isArray(source.extraArgs)
-      ? source.extraArgs.map((item) => String(item || "").trim()).filter(Boolean)
+      ? source.extraArgs.map((item) => text(item)).filter(Boolean)
       : envArgs
         ? envArgs
             .split(" ")

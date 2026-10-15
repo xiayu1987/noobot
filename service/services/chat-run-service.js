@@ -12,14 +12,15 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { recordServiceAgentTransportDebug } from "../runtime-events/agent-transport-debug.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+import { text } from "@noobot/shared/value";
 
 export async function resolveAuthoritativeConnectorSelection({
   bot,
   connectorAccessPort,
   request,
 } = {}) {
-  const userId = String(request?.userId || "").trim();
-  const sessionId = String(request?.sessionId || "").trim();
+  const userId = text(request?.userId);
+  const sessionId = text(request?.sessionId);
   if (
     !userId ||
     !sessionId ||
@@ -34,7 +35,7 @@ export async function resolveAuthoritativeConnectorSelection({
     const connectedConnectorIds = new Set(
       (Array.isArray(connectors) ? connectors : [])
         .filter((connector) => connector?.status === "connected")
-        .map((connector) => String(connector?.connectorId || "").trim())
+        .map((connector) => text(connector?.connectorId))
         .filter(Boolean),
     );
     const invalidIds = selectedConnectorIds.filter((id) => !connectedConnectorIds.has(id));
@@ -65,9 +66,7 @@ export function createChatRunService({
   connectorAccessPort,
 } = {}) {
   function normalizeStringArray(input = []) {
-    return Array.isArray(input)
-      ? input.map((item) => String(item || "").trim()).filter(Boolean)
-      : [];
+    return Array.isArray(input) ? input.map((item) => text(item)).filter(Boolean) : [];
   }
 
   function mapAgentRunCommand(command, { userId = "" } = {}) {
@@ -93,8 +92,8 @@ export function createChatRunService({
       ...(preferences.summaryPolicy ? { summaryPolicy: preferences.summaryPolicy } : {}),
       selectedPlugins,
       turnScopeId: identity.turnScopeId,
-      userMessageId: String(command.presentation?.userMessageId || "").trim(),
-      presentationMessageId: String(command.presentation?.assistantMessageId || "").trim(),
+      userMessageId: text(command.presentation?.userMessageId),
+      presentationMessageId: text(command.presentation?.assistantMessageId),
       commandId: String(command.commandId).trim(),
       expectedAggregateVersion: command.concurrency.expectedAggregateVersion,
       transportCommand: {
@@ -112,7 +111,7 @@ export function createChatRunService({
         : {}),
     };
     return {
-      userId: String(userId || "").trim(),
+      userId: text(userId),
       sessionId: identity.sessionId,
       parentSessionId: identity.parentSessionId || "",
       dialogProcessId: identity.dialogProcessId || "",

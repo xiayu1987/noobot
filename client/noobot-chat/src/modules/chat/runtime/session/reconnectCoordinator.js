@@ -13,6 +13,7 @@ import {
   summarizeTurnLifecycleSnapshot,
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { createExecutionQueryCommand } from "@noobot/agent-transport-protocol";
+import { text } from "@noobot/shared/value";
 
 export function createReconnectCoordinator({
   activeSession,
@@ -31,7 +32,7 @@ export function createReconnectCoordinator({
     let reconnectReplayQueue = Promise.resolve();
     const reconnectReplayFailures = [];
     const directExecutionRestoreCommandIds = new Set();
-    const reconnectSessionId = String(activeSession.value?.sessionId || "").trim();
+    const reconnectSessionId = text(activeSession.value?.sessionId);
     if (!reconnectSessionId) return false;
     const knownLifecycleSequence = Number(
       turnRuntimeRegistry.value?.sessions?.[reconnectSessionId]?.authoritativeSequence || 0,
@@ -49,10 +50,8 @@ export function createReconnectCoordinator({
     return chatWebSocketClient
       .reconnect({
         currentSessionId: reconnectSessionId,
-        currentParentSessionId: String(activeSession.value?.parentSessionId || "").trim(),
-        currentParentDialogProcessId: String(
-          activeSession.value?.parentDialogProcessId || "",
-        ).trim(),
+        currentParentSessionId: text(activeSession.value?.parentSessionId),
+        currentParentDialogProcessId: text(activeSession.value?.parentDialogProcessId),
         knownLifecycleSequenceMap,
         onReconnectData: (reconnectPayload) => {
           logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", () => ({
@@ -96,11 +95,7 @@ export function createReconnectCoordinator({
               result = await reconnectReplay.applyReconnectData(reconnectPayload);
             }
             if (!(reconnectPayload?.event && reconnectPayload?.data)) return result;
-            if (
-              directExecutionRestoreCommandIds.has(
-                String(reconnectPayload.data?.commandId || "").trim(),
-              )
-            ) {
+            if (directExecutionRestoreCommandIds.has(text(reconnectPayload.data?.commandId))) {
               return { applied: false, reason: "direct_execution_restore_owned" };
             }
             result = await reconnectReplay.applyReconnectEvent(
@@ -184,19 +179,17 @@ export function createReconnectCoordinator({
           activeTurnAfter: summarizeStateMachineTurn(replayRuntime),
         }));
         if (typeof chatWebSocketClient.requestJson !== "function") return;
-        const sessionId = String(activeSession.value?.sessionId || "").trim();
+        const sessionId = text(activeSession.value?.sessionId);
         const currentTurn = resolveSessionTurnRuntime(
           turnRuntimeRegistry.value,
           sessionId,
           resolveActiveTurnScopeIdentity(),
         );
-        const executionId = String(
+        const executionId = text(
           turnRuntimeRegistry.value?.executionIdByTurnScopeId?.[
             `${sessionId}::${currentTurn?.turnScopeId || ""}`
-          ] ||
-            currentTurn?.executionId ||
-            "",
-        ).trim();
+          ] || currentTurn?.executionId,
+        );
         if (!executionId) return;
         const execution = turnRuntimeRegistry.value?.executions?.[executionId] || {};
         const rootExecutionId = String(execution?.rootExecutionId || executionId).trim();

@@ -6,6 +6,7 @@
 
 import { DSL_PROTOCOL } from "./constants.js";
 import { tWorkflow, WORKFLOW_I18N_KEYSET } from "../core/i18n.js";
+import { text } from "@noobot/shared/value";
 
 export const DSL_ERROR_MESSAGE = Object.freeze({
   EMPTY_TEXT: "EMPTY_TEXT",
@@ -41,9 +42,7 @@ const DSL_ERROR_I18N_KEY_BY_CODE = Object.freeze({
 });
 
 export function normalizeDslLocale(input = "") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   return value.startsWith("en") ? "en-US" : "zh-CN";
 }
 
@@ -57,7 +56,7 @@ function resolveDslErrorPrefix(locale = "zh-CN") {
 
 export function dslMessage(key = "", { locale = "zh-CN", params = {} } = {}) {
   const normalized = normalizeDslLocale(locale);
-  const i18nKey = String(DSL_ERROR_I18N_KEY_BY_CODE[key] || "").trim();
+  const i18nKey = text(DSL_ERROR_I18N_KEY_BY_CODE[key]);
   if (!i18nKey) return "";
   const resolvedParams = {
     header: DSL_PROTOCOL.HEADER,
@@ -69,7 +68,7 @@ export function dslMessage(key = "", { locale = "zh-CN", params = {} } = {}) {
 }
 
 export function dslError(message = "", { locale = "zh-CN" } = {}) {
-  return `${resolveDslErrorPrefix(locale)}: ${String(message || "").trim()}`;
+  return `${resolveDslErrorPrefix(locale)}: ${text(message)}`;
 }
 
 export function dslLineError(lineNo = 0, message = "", { locale = "zh-CN" } = {}) {
@@ -77,15 +76,15 @@ export function dslLineError(lineNo = 0, message = "", { locale = "zh-CN" } = {}
   const lineText =
     tWorkflow(normalized, WORKFLOW_I18N_KEYSET.DSL_ERROR.LINE_LABEL, { lineNo }) ||
     `line ${lineNo}`;
-  return `${resolveDslErrorPrefix(locale)} (${lineText}): ${String(message || "").trim()}`;
+  return `${resolveDslErrorPrefix(locale)} (${lineText}): ${text(message)}`;
 }
 
 export function dslEdgeUndefinedNode(from = "", to = "", { locale = "zh-CN" } = {}) {
   return dslMessage(DSL_ERROR_MESSAGE.EDGE_UNDEFINED_NODE, {
     locale,
     params: {
-      from: String(from || "").trim(),
-      to: String(to || "").trim(),
+      from: text(from),
+      to: text(to),
     },
   });
 }

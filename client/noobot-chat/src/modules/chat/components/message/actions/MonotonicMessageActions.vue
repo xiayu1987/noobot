@@ -10,6 +10,7 @@ import { overlayMessageBox } from "../../../../../shared/composables/overlayMess
 import { useMonotonicEditAttachments } from "../../../model/message-actions/useMonotonicEditAttachments.js";
 import MonotonicActionBar from "./MonotonicActionBar.vue";
 import MonotonicEditCard from "./MonotonicEditCard.vue";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -75,7 +76,7 @@ function handleCancelEdit() {
 }
 
 async function handleSendEdited() {
-  const nextContent = String(draftContent.value || "").trim();
+  const nextContent = text(draftContent.value);
   if (!nextContent) {
     ElMessage.error(t("message.contentRequired"));
     return;

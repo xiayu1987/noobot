@@ -4,25 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildCapabilityProtocolModelMessages } from "./message-factory.js";
+import { text } from "@noobot/shared/value";
 
 export function createMessagePlan(items = []) {
   return (Array.isArray(items) ? items : [])
     .map((item = {}) => ({
-      kind: String(item?.kind || "").trim(),
-      content: String(item?.content || "").trim(),
-      injectRole: String(item?.injectRole || "").trim() || "system",
-      separateRole: String(item?.separateRole || "").trim() || "constraint",
+      kind: text(item?.kind),
+      content: text(item?.content),
+      injectRole: text(item?.injectRole) || "system",
+      separateRole: text(item?.separateRole) || "constraint",
     }))
     .filter((item = {}) => item.kind && item.content);
 }
 
 export function renderMessagePlanForInject(plan = []) {
   return (Array.isArray(plan) ? plan : [])
-    .filter((item = {}) => String(item?.separateRole || "").trim() !== "workflow_policy")
+    .filter((item = {}) => text(item?.separateRole) !== "workflow_policy")
     .map((item = {}) => ({
-      kind: String(item.kind || "").trim(),
-      role: String(item.injectRole || "").trim() || "system",
-      content: String(item.content || "").trim(),
+      kind: text(item.kind),
+      role: text(item.injectRole) || "system",
+      content: text(item.content),
     }));
 }
 
@@ -37,8 +38,8 @@ export function renderMessagePlanForSeparateModel({
   const tasks = [];
   const workflowPolicies = [];
   for (const item of normalizedPlan) {
-    const role = String(item?.separateRole || "").trim();
-    const content = String(item?.content || "").trim();
+    const role = text(item?.separateRole);
+    const content = text(item?.content);
     if (!content) continue;
     if (role === "task") {
       tasks.push(content);

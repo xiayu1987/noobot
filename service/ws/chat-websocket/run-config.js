@@ -18,6 +18,7 @@ import {
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { text } from "@noobot/shared/value";
 
 const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
 const MIN_RUN_TIMEOUT_MS = TIME_THRESHOLDS.agent.minRunTimeoutMs;
@@ -68,7 +69,7 @@ export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runCo
     });
   }
 
-  const normalizedUserId = String(userId || "").trim();
+  const normalizedUserId = text(userId);
   const globalConfig =
     bot?.globalConfig && typeof bot.globalConfig === "object" ? bot.globalConfig : {};
   if (!normalizedUserId || typeof bot?.loadUserConfig !== "function") {

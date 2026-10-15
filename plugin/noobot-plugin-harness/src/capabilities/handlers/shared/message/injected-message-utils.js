@@ -19,7 +19,7 @@ import {
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
 import { createMessageUid } from "@noobot/context-protocol/message/identity";
 import { readMessageField } from "@noobot/context-protocol/policy/message";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 const HARNESS_PROMPT_INJECTED_TYPE_PREFIX = "harness_prompt:";
 
@@ -50,9 +50,7 @@ export function buildHarnessInjectedMessage(
     preserveSystemMessage = false,
   } = {},
 ) {
-  const normalizedRole = String(role || "")
-    .trim()
-    .toLowerCase();
+  const normalizedRole = text(role).toLowerCase();
   const message = {
     messageUid: createMessageUid(),
     role: normalizedRole || HARNESS_INJECTION_MESSAGE_ROLE,
@@ -60,27 +58,27 @@ export function buildHarnessInjectedMessage(
     [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
     [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
   };
-  const normalizedInjectedMessageType = String(injectedMessageType || injectionType || "").trim();
+  const normalizedInjectedMessageType = text(injectedMessageType || injectionType);
   if (normalizedInjectedMessageType) {
     message[HARNESS_INJECTED_MESSAGE_TYPE_FIELD] = normalizedInjectedMessageType;
   }
-  const normalizedPurpose = String(purpose || "").trim();
+  const normalizedPurpose = text(purpose);
   if (normalizedPurpose) {
     message.purpose = normalizedPurpose;
   }
-  const normalizedPluginFlow = String(pluginFlow || "").trim();
+  const normalizedPluginFlow = text(pluginFlow);
   if (normalizedPluginFlow) {
     message.pluginFlow = normalizedPluginFlow;
   }
-  const normalizedChain = String(chain || "").trim();
+  const normalizedChain = text(chain);
   if (normalizedChain) {
     message.chain = normalizedChain;
   }
-  const normalizedRelayCorrelationId = String(relayCorrelationId || "").trim();
+  const normalizedRelayCorrelationId = text(relayCorrelationId);
   if (normalizedRelayCorrelationId) {
     message.relayCorrelationId = normalizedRelayCorrelationId;
   }
-  const normalizedPromptInjectionId = String(promptInjectionId || "").trim();
+  const normalizedPromptInjectionId = text(promptInjectionId);
   if (normalizedPromptInjectionId) {
     message[HARNESS_PROMPT_INJECTION_ID_FIELD] = normalizedPromptInjectionId;
   }

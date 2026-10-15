@@ -8,6 +8,7 @@ import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { parsePluginManifest } from "@noobot/plugin-protocol/manifest";
+import { text } from "@noobot/shared/value";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
@@ -107,7 +108,7 @@ async function discoverFrontendPluginEntries() {
     if (!sourceManifest || typeof sourceManifest !== "object") continue;
     const manifest = parsePluginManifest(sourceManifest);
     if (!manifest.contributes.frontend) continue;
-    const frontendEntry = String(manifest?.entries?.frontend || "").trim();
+    const frontendEntry = text(manifest?.entries?.frontend);
     if (!frontendEntry) continue;
     const entryPath = path.resolve(pluginDir, frontendEntry);
     try {
@@ -138,8 +139,8 @@ async function discoverFrontendPluginEntries() {
     }
     output.push({
       pluginId: String(manifest.id || dirent.name).trim(),
-      name: String(manifest.name || "").trim(),
-      version: String(manifest.version || "").trim(),
+      name: text(manifest.name),
+      version: text(manifest.version),
       manifest,
       entryPath,
       pluginDir,

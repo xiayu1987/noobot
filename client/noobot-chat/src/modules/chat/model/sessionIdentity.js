@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function normalizeSessionId(sessionId = "") {
-  return String(sessionId || "").trim();
+  return text(sessionId);
 }
 
 function getSessionIdentityList(sessionItem = {}) {

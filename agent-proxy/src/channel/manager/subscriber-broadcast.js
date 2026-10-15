@@ -19,6 +19,7 @@ import {
   getAgentTransportEventSessionId,
 } from "@noobot/agent-transport-protocol";
 import { isTransientMessageEvent } from "@noobot/event-protocol/message-event";
+import { text } from "@noobot/shared/value";
 
 const LIFECYCLE_SUPERSEDED = "superseded";
 const isAcceptedChannelDelivery = (result = {}) =>
@@ -47,8 +48,8 @@ function terminalLogIdentity({ eventData, lifecycle }) {
 
 function terminalEventFields({ eventData, lifecycle }) {
   return {
-    eventId: String(eventData?.identity?.eventId || "").trim(),
-    eventType: String(lifecycle.eventType || "").trim(),
+    eventId: text(eventData?.identity?.eventId),
+    eventType: text(lifecycle.eventType),
   };
 }
 
@@ -261,9 +262,9 @@ class SubscriberBroadcastMethods {
     }
     const eventEnvelope = envelope?.data || {};
     const eventData = eventEnvelope?.payload || {};
-    const eventId = String(eventEnvelope?.identity?.eventId || "").trim();
-    const sessionId = String(eventEnvelope?.identity?.sessionId || "").trim();
-    const turnScopeId = String(eventEnvelope?.identity?.turnScopeId || "").trim();
+    const eventId = text(eventEnvelope?.identity?.eventId);
+    const sessionId = text(eventEnvelope?.identity?.sessionId);
+    const turnScopeId = text(eventEnvelope?.identity?.turnScopeId);
     if (!channel || !eventId || !sessionId || !turnScopeId) {
       return { result: "failed", reason: "invalid_lifecycle_delivery_identity" };
     }
@@ -283,7 +284,7 @@ class SubscriberBroadcastMethods {
         category: "transport",
         event: "agentProxy.channel.lifecycle.superseded",
         sessionId,
-        dialogProcessId: String(eventData.dialogProcessId || "").trim(),
+        dialogProcessId: text(eventData.dialogProcessId),
         turnScopeId,
         data: {
           connectionId: ensureConnectionId(targetSocket),
@@ -291,7 +292,7 @@ class SubscriberBroadcastMethods {
           supersededEventType: inFlight.eventType,
           supersededLifecycleSequence: inFlight.lifecycleSequence,
           eventId,
-          eventType: String(eventData.eventType || "").trim(),
+          eventType: text(eventData.eventType),
           lifecycleSequence,
         },
       });
@@ -300,10 +301,10 @@ class SubscriberBroadcastMethods {
       channel,
       envelope: deliveryEnvelope,
       eventId,
-      eventType: String(eventData.eventType || "").trim(),
+      eventType: text(eventData.eventType),
       sessionId,
       turnScopeId,
-      dialogProcessId: String(eventData.dialogProcessId || "").trim(),
+      dialogProcessId: text(eventData.dialogProcessId),
       lifecycleSequence,
       transportSequence: Number(envelope?.sequence || 0),
       turnKey,
@@ -481,23 +482,21 @@ class SubscriberBroadcastMethods {
   }
 
   _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
-    const state = String(stateItem?.state || "").trim();
-    const dialogProcessId = String(stateItem?.dialogProcessId || "").trim();
+    const state = text(stateItem?.state);
+    const dialogProcessId = text(stateItem?.dialogProcessId);
     const createdAtMs = Number(stateItem?.createdAtMs || stateItem?.updatedAtMs || nowMs());
     const updatedAtMs = Number(overrides?.updatedAtMs ?? stateItem?.updatedAtMs ?? nowMs());
     return {
       sessionId: String(stateItem?.sessionId || ""),
       dialogProcessId,
-      turnScopeId: String(stateItem?.turnScopeId || "").trim(),
+      turnScopeId: text(stateItem?.turnScopeId),
       state,
       sourceEvent: String(stateItem?.sourceEvent || ""),
       seq: Number(stateItem?.seq || 0),
       createdAtMs,
       createdAt: new Date(createdAtMs).toISOString(),
       updatedAtMs,
-      ...(String(stateItem?.requestId || "").trim()
-        ? { requestId: String(stateItem.requestId).trim() }
-        : {}),
+      ...(text(stateItem?.requestId) ? { requestId: String(stateItem.requestId).trim() } : {}),
     };
   }
 
@@ -536,7 +535,7 @@ class SubscriberBroadcastMethods {
   sendSocketError(targetSocket, errorMessage = "", options = {}) {
     const localizedError = localizeAgentProxyMessage(
       String(errorMessage || ""),
-      String(targetSocket?.__agentProxyLocale || "").trim(),
+      text(targetSocket?.__agentProxyLocale),
     );
     this.sendSocketEvent(targetSocket, {
       event: AGENT_TRANSPORT_EVENT.ERROR,

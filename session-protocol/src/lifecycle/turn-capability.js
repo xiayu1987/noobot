@@ -5,9 +5,10 @@
  */
 import { isSettledTurn, TURN_STATE } from "./turn-state.js";
 import { TURN_EXECUTION_STATE, normalizeTurnExecutionState } from "./turn-execution-state.js";
+import { text } from "@noobot/shared/value";
 
 export function deriveAuthoritativeTurnCapabilities(turn = {}) {
-  const state = String(turn?.state || "").trim();
+  const state = text(turn?.state);
   const executionState = normalizeTurnExecutionState(turn?.executionState);
   return Object.freeze({
     actionLocked: Boolean(state) && !isSettledTurn(turn),

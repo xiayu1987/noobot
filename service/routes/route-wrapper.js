@@ -5,6 +5,7 @@
  */
 
 import { HTTP_STATUS } from "#agent/constants";
+import { text } from "@noobot/shared/value";
 
 export function withJsonError(
   handler,
@@ -20,7 +21,7 @@ export function withJsonError(
         Number.isInteger(errorStatusCode) && errorStatusCode >= 400 && errorStatusCode < 600
           ? errorStatusCode
           : statusCode;
-      const errorCode = String(error?.code || "").trim();
+      const errorCode = text(error?.code);
       const hasCurrentVersion =
         error?.currentVersion !== undefined &&
         error?.currentVersion !== null &&

@@ -5,6 +5,7 @@
  */
 
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 export function makeActionStateKey(item = {}, index = 0) {
   return String(
@@ -37,12 +38,11 @@ export function makeRuntimeStep({
     dialogProcessId,
     stepId,
     stepIndex,
-    rootSessionId: String(
+    rootSessionId: text(
       item?.rootSessionId ||
         workflowPayload.value?.planningDialog?.sessionId ||
-        workflowPayload.value?.runMeta?.sessionId ||
-        "",
-    ).trim(),
+        workflowPayload.value?.runMeta?.sessionId,
+    ),
   };
   return {
     ...merged,
@@ -53,15 +53,15 @@ export function makeRuntimeStep({
 
 export function stripRuntimeInternal(runtime = {}) {
   return {
-    nodeId: String(runtime?.nodeId || "").trim(),
-    nodeName: String(runtime?.nodeName || "").trim(),
+    nodeId: text(runtime?.nodeId),
+    nodeName: text(runtime?.nodeName),
     actionNodeStates: Array.isArray(runtime?.actionNodeStates)
       ? runtime.actionNodeStates.map((stateBox = {}, stateIndex) => ({
           actionNodeStateId: String(
             stateBox?.actionNodeStateId || `node_box_${stateIndex + 1}`,
           ).trim(),
-          nodeId: String(stateBox?.nodeId || runtime?.nodeId || "").trim(),
-          nodeName: String(stateBox?.nodeName || runtime?.nodeName || "").trim(),
+          nodeId: text(stateBox?.nodeId || runtime?.nodeId),
+          nodeName: text(stateBox?.nodeName || runtime?.nodeName),
           steps: Array.isArray(stateBox?.steps) ? stateBox.steps : [],
         }))
       : [],

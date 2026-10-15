@@ -5,6 +5,7 @@
  */
 import { AIMessage } from "@langchain/core/messages";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { text } from "@noobot/shared/value";
 
 function clonePlainObjectWithoutToolCalls(value = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -57,7 +58,7 @@ function buildAssistantAdditionalKwargs(ai = {}, noobotMessageId = "") {
   if (ai?.responseReasoning && typeof ai.responseReasoning === "object") {
     additionalKwargs.reasoning = ai.responseReasoning;
   }
-  const canonicalMessageId = String(noobotMessageId || "").trim();
+  const canonicalMessageId = text(noobotMessageId);
   if (canonicalMessageId) additionalKwargs.noobotMessageId = canonicalMessageId;
   return additionalKwargs;
 }

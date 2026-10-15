@@ -11,6 +11,7 @@ import {
 } from "../../session-summary-builders.js";
 import { readJsonArtifactFile } from "../../session-artifact-store.js";
 import { PERSISTED_JSON_READ_ERROR_CODE } from "../../../shared/storage/json-file-reader.js";
+import { text } from "@noobot/shared/value";
 
 class SessionSummaryMethods {
   _basePath(userId = "") {
@@ -38,14 +39,14 @@ class SessionSummaryMethods {
   }
 
   _withSummaryDepth(session = {}, sessionTree = null) {
-    const sessionId = String(session?.sessionId || "").trim();
+    const sessionId = text(session?.sessionId);
     if (!sessionId || !sessionTree?.nodes?.[sessionId])
       return buildSessionSummary(session, { depth: 0 });
     return buildSessionSummary(session, { depth: this._getSummaryDepth(sessionId, sessionTree) });
   }
 
   async readSessionsSummary(userId = "") {
-    const normalizedUserId = String(userId || "").trim();
+    const normalizedUserId = text(userId);
     const payload = await this.storageService.readJson(
       this._sessionsSummaryFile(normalizedUserId),
       { sessions: [], updatedAt: this.now() },
@@ -57,7 +58,7 @@ class SessionSummaryMethods {
   }
 
   async writeSessionsSummary(userId = "", sessions = []) {
-    const normalizedUserId = String(userId || "").trim();
+    const normalizedUserId = text(userId);
     const payload = normalizeSessionsSummaryPayload(
       { sessions: this._sortSummaries(sessions), updatedAt: this.now() },
       this.now,
@@ -84,7 +85,7 @@ class SessionSummaryMethods {
     parentSessionId = "",
     error = null,
   ) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return null;
     const metadata = await this._readSessionSummaryMetadata(
       userId,
@@ -115,7 +116,7 @@ class SessionSummaryMethods {
   async removeSessionSummaries(userId = "", sessionIds = []) {
     const ids = new Set(
       (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
-        .map((item) => String(item || "").trim())
+        .map((item) => text(item))
         .filter(Boolean),
     );
     if (!ids.size) return 0;
@@ -134,7 +135,7 @@ class SessionSummaryMethods {
     const sessionIds = await this.listSessionIds(userId);
     const summaries = [];
     for (const sessionId of sessionIds) {
-      const parentSessionId = String(tree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+      const parentSessionId = text(tree?.nodes?.[sessionId]?.parentSessionId);
       try {
         const session = await this.findById(userId, sessionId, parentSessionId);
         if (!session) {
@@ -172,7 +173,7 @@ class SessionSummaryMethods {
     while (currentId && !visited.has(currentId) && tree?.nodes?.[currentId]) {
       visited.add(currentId);
       depth += 1;
-      currentId = String(tree.nodes[currentId]?.parentSessionId || "").trim();
+      currentId = text(tree.nodes[currentId]?.parentSessionId);
     }
     return depth;
   }
@@ -182,10 +183,10 @@ class SessionSummaryMethods {
       const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId);
       const manifest = await readJsonArtifactFile(scope.sessionFile, null);
       return {
-        title: String(manifest?.customTitle || "").trim(),
+        title: text(manifest?.customTitle),
         caller: String(manifest?.caller || "user").trim() || "user",
-        createdAt: String(manifest?.createdAt || "").trim(),
-        updatedAt: String(manifest?.updatedAt || "").trim(),
+        createdAt: text(manifest?.createdAt),
+        updatedAt: text(manifest?.updatedAt),
       };
     } catch (error) {
       if (error?.code !== PERSISTED_JSON_READ_ERROR_CODE.CORRUPTED) throw error;

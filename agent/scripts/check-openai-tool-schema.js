@@ -21,6 +21,7 @@ import { loadGlobalConfig } from "../src/config/core/global-config-loader.js";
 import { createAgentContextEnvelope, createModelContext } from "@noobot/context-protocol";
 import { createAgentExecutionScope } from "../src/context/agent-execution-scope.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
+import { text } from "@noobot/shared/value";
 
 function parseArgs(argv = []) {
   const out = {
@@ -34,7 +35,7 @@ function parseArgs(argv = []) {
     workspaceRoot: "",
   };
   for (let argIndex = 0; argIndex < argv.length; argIndex += 1) {
-    const arg = String(argv[argIndex] || "").trim();
+    const arg = text(argv[argIndex]);
     if (arg === "--live") {
       out.live = true;
       continue;
@@ -49,7 +50,7 @@ function parseArgs(argv = []) {
       "--workspace-root",
     ].includes(arg);
     if (!hasValueFlag) continue;
-    const value = String(argv[argIndex + 1] || "").trim();
+    const value = text(argv[argIndex + 1]);
     if (arg === "--userId") out.userId = value || out.userId;
     else if (arg === "--bind-name") out.bindName = value;
     else if (arg === "--model") out.model = value;
@@ -73,12 +74,10 @@ function parseArgs(argv = []) {
 
 function filterToolsByNames(tools = [], toolNames = []) {
   const requested = new Set(
-    (Array.isArray(toolNames) ? toolNames : [])
-      .map((item) => String(item || "").trim())
-      .filter(Boolean),
+    (Array.isArray(toolNames) ? toolNames : []).map((item) => text(item)).filter(Boolean),
   );
   if (!requested.size) return tools;
-  return tools.filter((tool) => requested.has(String(tool?.name || "").trim()));
+  return tools.filter((tool) => requested.has(text(tool?.name)));
 }
 
 function formatSchemaIssues(error) {
@@ -123,10 +122,8 @@ async function readOptionalJson(filePath) {
 
 function dedupeToolsByName(tools = []) {
   return Array.from(
-    new Map(
-      (Array.isArray(tools) ? tools : []).map((tool) => [String(tool?.name || "").trim(), tool]),
-    ).values(),
-  ).filter((tool) => String(tool?.name || "").trim());
+    new Map((Array.isArray(tools) ? tools : []).map((tool) => [text(tool?.name), tool])).values(),
+  ).filter((tool) => text(tool?.name));
 }
 
 function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig = {} } = {}) {
@@ -183,7 +180,7 @@ function resolveModelSpecAllowDisabled({
   globalConfig = {},
   userConfig = {},
 } = {}) {
-  const input = String(modelName || "").trim();
+  const input = text(modelName);
   if (!input) return null;
   const globalProviders =
     globalConfig?.providers && typeof globalConfig.providers === "object"
@@ -210,7 +207,7 @@ async function selectToolsInteractive(tools = []) {
   const source = Array.isArray(tools) ? tools : [];
   if (!source.length) return source;
   if (!process.stdin.isTTY || !process.stdout.isTTY) return source;
-  const toolNames = source.map((tool) => String(tool?.name || "").trim());
+  const toolNames = source.map((tool) => text(tool?.name));
   console.log("[tool-schema-check] 可选工具：");
   toolNames.forEach((name, index) => {
     console.log(`${index + 1}. ${name}`);
@@ -238,7 +235,7 @@ async function selectToolsInteractive(tools = []) {
       if (hit) selectedNames.add(hit);
     }
     if (!selectedNames.size) return source;
-    return source.filter((tool) => selectedNames.has(String(tool?.name || "").trim()));
+    return source.filter((tool) => selectedNames.has(text(tool?.name)));
   } finally {
     rl.close();
   }
@@ -339,8 +336,8 @@ async function main() {
       );
     }
   }
-  const resolvedApiKey = String(modelSpec?.api_key || "").trim();
-  const resolvedBaseUrl = String(modelSpec?.base_url || "").trim();
+  const resolvedApiKey = text(modelSpec?.api_key);
+  const resolvedBaseUrl = text(modelSpec?.base_url);
   if (!modelSpec?.model || !resolvedApiKey) {
     console.error("[tool-schema-check] live check requires model+api_key");
     console.error(
@@ -364,11 +361,11 @@ async function main() {
   const liveErrors = [];
   for (const item of targetTools) {
     try {
-      const toolName = String(item?.name || "").trim();
+      const toolName = text(item?.name);
       const boundTool = args.bindName
         ? Object.assign(Object.create(Object.getPrototypeOf(item)), item, { name: args.bindName })
         : item;
-      const boundToolName = String(boundTool?.name || "").trim();
+      const boundToolName = text(boundTool?.name);
       const displayName = boundToolName === toolName ? toolName : `${toolName} as ${boundToolName}`;
       const result = await modelPort.invoke({
         model: modelSpec,
@@ -402,15 +399,11 @@ async function main() {
         },
       });
       const toolCalls = result.output.toolCalls;
-      const hasExpectedToolCall = toolCalls.some(
-        (call) => String(call?.name || "").trim() === boundToolName,
-      );
+      const hasExpectedToolCall = toolCalls.some((call) => text(call?.name) === boundToolName);
       if (!hasExpectedToolCall) {
         throw new Error("model did not choose expected tool");
       }
-      const expectedCall = toolCalls.find(
-        (call) => String(call?.name || "").trim() === boundToolName,
-      );
+      const expectedCall = toolCalls.find((call) => text(call?.name) === boundToolName);
       await assertToolCallMatchesSchema(item, expectedCall);
       console.log(`[tool-schema-check] live pass: ${displayName}`);
     } catch (error) {

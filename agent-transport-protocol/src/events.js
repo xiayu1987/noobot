@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { text as clean } from "@noobot/shared/value";
+import { text } from "@noobot/shared/value";
 
 export const AGENT_TRANSPORT_EVENT = Object.freeze({
   READY: "transport_ready",
@@ -25,7 +25,7 @@ const EXACT_PAYLOAD_EVENTS = new Set([
 ]);
 
 export function usesExactAgentTransportPayload(eventName) {
-  return EXACT_PAYLOAD_EVENTS.has(clean(eventName));
+  return EXACT_PAYLOAD_EVENTS.has(text(eventName));
 }
 
 export const AGENT_COMMAND_RECEIPT_OUTCOME = Object.freeze({
@@ -46,14 +46,14 @@ export function createAgentTransportError({
 } = {}) {
   const errorEvent = {
     protocolVersion: 1,
-    code: clean(code),
-    message: String(message || "").trim(),
-    occurredAt: clean(occurredAt),
-    ...(clean(commandId) ? { commandId: clean(commandId) } : {}),
+    code: text(code),
+    message: text(message),
+    occurredAt: text(occurredAt),
+    ...(text(commandId) ? { commandId: text(commandId) } : {}),
     identity: {
-      sessionId: clean(identity.sessionId),
-      turnScopeId: clean(identity.turnScopeId),
-      dialogProcessId: clean(identity.dialogProcessId),
+      sessionId: text(identity.sessionId),
+      turnScopeId: text(identity.turnScopeId),
+      dialogProcessId: text(identity.dialogProcessId),
     },
   };
   const validation = validateAgentTransportError(errorEvent);
@@ -78,8 +78,8 @@ export function validateAgentTransportError(errorEvent = {}) {
     if (!allowed.has(key)) errors.push(`unknown_transport_error_field:${key}`);
   }
   if (Number(errorEvent.protocolVersion) !== 1) errors.push("unsupported_transport_error_version");
-  if (!clean(errorEvent.code)) errors.push("missing_transport_error_code");
-  if (!String(errorEvent.message || "").trim()) errors.push("missing_transport_error_message");
+  if (!text(errorEvent.code)) errors.push("missing_transport_error_code");
+  if (!text(errorEvent.message)) errors.push("missing_transport_error_message");
   if (
     !errorEvent.identity ||
     typeof errorEvent.identity !== "object" ||
@@ -92,7 +92,7 @@ export function validateAgentTransportError(errorEvent = {}) {
       if (!identityAllowed.has(key)) errors.push(`unknown_transport_error_identity_field:${key}`);
     }
   }
-  if (!clean(errorEvent.occurredAt) || Number.isNaN(Date.parse(errorEvent.occurredAt))) {
+  if (!text(errorEvent.occurredAt) || Number.isNaN(Date.parse(errorEvent.occurredAt))) {
     errors.push("invalid_transport_error_occurred_at");
   }
   return { valid: errors.length === 0, errors };
@@ -108,19 +108,19 @@ export function createAgentCommandReceipt({
 } = {}) {
   const receipt = {
     protocolVersion: 1,
-    commandId: clean(commandId),
-    commandType: clean(commandType),
-    outcome: clean(outcome).toLowerCase(),
+    commandId: text(commandId),
+    commandType: text(commandType),
+    outcome: text(outcome).toLowerCase(),
     identity: {
-      sessionId: clean(identity.sessionId),
-      turnScopeId: clean(identity.turnScopeId),
-      dialogProcessId: clean(identity.dialogProcessId),
+      sessionId: text(identity.sessionId),
+      turnScopeId: text(identity.turnScopeId),
+      dialogProcessId: text(identity.dialogProcessId),
     },
-    occurredAt: clean(occurredAt),
+    occurredAt: text(occurredAt),
     ...(error
       ? {
           error: {
-            code: clean(error.code),
+            code: text(error.code),
             message: String(error.message || ""),
           },
         }
@@ -149,9 +149,9 @@ export function validateAgentCommandReceipt(receipt = {}) {
     if (!allowed.has(key)) errors.push(`unknown_receipt_field:${key}`);
   }
   if (Number(receipt.protocolVersion) !== 1) errors.push("unsupported_receipt_version");
-  if (!clean(receipt.commandId)) errors.push("missing_command_id");
-  if (!clean(receipt.commandType)) errors.push("missing_command_type");
-  if (!COMMAND_RECEIPT_OUTCOMES.has(clean(receipt.outcome).toLowerCase()))
+  if (!text(receipt.commandId)) errors.push("missing_command_id");
+  if (!text(receipt.commandType)) errors.push("missing_command_type");
+  if (!COMMAND_RECEIPT_OUTCOMES.has(text(receipt.outcome).toLowerCase()))
     errors.push("invalid_outcome");
   if (
     !receipt.identity ||
@@ -164,15 +164,15 @@ export function validateAgentCommandReceipt(receipt = {}) {
     for (const key of Object.keys(receipt.identity)) {
       if (!identityAllowed.has(key)) errors.push(`unknown_identity_field:${key}`);
     }
-    if (!clean(receipt.identity.sessionId)) errors.push("missing_session_id");
+    if (!text(receipt.identity.sessionId)) errors.push("missing_session_id");
   }
-  if (!clean(receipt.occurredAt) || Number.isNaN(Date.parse(receipt.occurredAt))) {
+  if (!text(receipt.occurredAt) || Number.isNaN(Date.parse(receipt.occurredAt))) {
     errors.push("invalid_occurred_at");
   }
-  if (clean(receipt.outcome).toLowerCase() === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
+  if (text(receipt.outcome).toLowerCase() === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
     if (!receipt.error || typeof receipt.error !== "object" || Array.isArray(receipt.error)) {
       errors.push("missing_failure_error");
-    } else if (!String(receipt.error.message || "").trim()) {
+    } else if (!text(receipt.error.message)) {
       errors.push("missing_failure_message");
     }
   } else if (receipt.error !== undefined) {
@@ -182,12 +182,12 @@ export function validateAgentCommandReceipt(receipt = {}) {
 }
 
 export function createAgentTransportEvent({ event, data, channelSessionId = "" } = {}) {
-  const normalizedEvent = clean(event);
+  const normalizedEvent = text(event);
   if (!normalizedEvent) throw new TypeError("missing_transport_event");
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new TypeError("invalid_transport_event_data");
   }
-  const normalizedChannelSessionId = clean(channelSessionId);
+  const normalizedChannelSessionId = text(channelSessionId);
   return Object.freeze({
     event: normalizedEvent,
     data,
@@ -196,5 +196,5 @@ export function createAgentTransportEvent({ event, data, channelSessionId = "" }
 }
 
 export function getAgentTransportEventSessionId(envelope = {}) {
-  return clean(envelope?.channelSessionId);
+  return text(envelope?.channelSessionId);
 }

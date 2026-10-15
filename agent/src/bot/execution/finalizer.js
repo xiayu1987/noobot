@@ -18,6 +18,7 @@ import {
   emitContextIdentityDebug,
 } from "../../observability/context-identity-debug.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "../../runtime/turn/final-assistant-artifact-projection.js";
+import { text } from "@noobot/shared/value";
 
 function summarizedMessageIds(messages = []) {
   return (Array.isArray(messages) ? messages : [])
@@ -82,28 +83,24 @@ export class SessionExecutionFinalizer {
         ? persistedTurnMessages
         : [];
     const durableMessageUids = new Set(
-      durableMessages
-        .map((message = {}) => String(message.messageUid || "").trim())
-        .filter(Boolean),
+      durableMessages.map((message = {}) => text(message.messageUid)).filter(Boolean),
     );
     const persistedUidSet = new Set(
       [
         ...(Array.isArray(persistedTurnMessageUids) ? persistedTurnMessageUids : []),
         ...durableMessageUids,
       ]
-        .map((uid) => String(uid || "").trim())
+        .map((uid) => text(uid))
         .filter(Boolean),
     );
     const activeMessageUids = new Set(
-      activeTurnMessages
-        .map((message = {}) => String(message.messageUid || "").trim())
-        .filter(Boolean),
+      activeTurnMessages.map((message = {}) => text(message.messageUid)).filter(Boolean),
     );
     const rawTurnMessages = hasRecoveredPersistedPrefix
       ? persistedUidSet.size > 0
         ? [
             ...persistedTurnMessages.filter((message = {}) => {
-              const messageUid = String(message.messageUid || "").trim();
+              const messageUid = text(message.messageUid);
               return !messageUid || !activeMessageUids.has(messageUid);
             }),
             ...activeTurnMessages,
@@ -126,7 +123,7 @@ export class SessionExecutionFinalizer {
     const promotedTurnMessages = promotedMessages.slice(promotionSourceCount);
     const persistedMessagesByUid = new Map(
       (Array.isArray(durableMessages) ? durableMessages : [])
-        .map((message = {}) => [String(message.messageUid || "").trim(), message])
+        .map((message = {}) => [text(message.messageUid), message])
         .filter(([messageUid]) => messageUid),
     );
     for (const messageUid of persistedUidSet) {
@@ -139,7 +136,7 @@ export class SessionExecutionFinalizer {
     const messagesToPersist =
       persistedUidSet.size > 0
         ? promotedTurnMessages.filter((message = {}) => {
-            const messageUid = String(message.messageUid || "").trim();
+            const messageUid = text(message.messageUid);
             if (!messageUid || !persistedUidSet.has(messageUid)) return true;
             const persistedMessage = persistedMessagesByUid.get(messageUid);
             return JSON.stringify(persistedMessage) !== JSON.stringify(message);
@@ -163,7 +160,7 @@ export class SessionExecutionFinalizer {
       messages: messagesToPersist,
       dialogProcessId,
       parentDialogProcessId,
-      turnScopeId: String(turnScopeId || "").trim(),
+      turnScopeId: text(turnScopeId),
       thinkingStartedAt,
       thinkingFinishedAt,
       eventListener: runtimeEventListener,
@@ -250,7 +247,7 @@ export class SessionExecutionFinalizer {
       messages: turnMessages,
       turnTasks: agentResult?.turnTasks || [],
       dialogProcessId,
-      turnScopeId: String(turnScopeId || "").trim(),
+      turnScopeId: text(turnScopeId),
     };
   }
 

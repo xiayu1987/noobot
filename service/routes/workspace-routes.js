@@ -19,6 +19,7 @@ import {
 } from "@noobot/runtime-events";
 import { projectUserVisibleConfigDeclarations } from "@noobot/agent-config-protocol";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { text } from "@noobot/shared/value";
 
 const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
   WORKSPACE_LAYOUT.MEMORY_DIR,
@@ -34,7 +35,7 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
   const entries = await readdir(root, { withFileTypes: true });
   const userDirs = [];
   for (const entry of entries) {
-    const userId = String(entry?.name || "").trim();
+    const userId = text(entry?.name);
     if (!entry.isDirectory() || !userId || userId.startsWith(".")) continue;
     if (userId.endsWith(".mutation-lock") || userId.endsWith(".mutation-locks")) continue;
     if (RESERVED_WORKSPACE_ROOT_DIRS.has(userId)) continue;
@@ -75,9 +76,7 @@ export function registerWorkspaceRoutes(
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
   const maskHostPath = (pathValue = "") => {
-    const normalized = String(pathValue || "")
-      .trim()
-      .replaceAll("\\", "/");
+    const normalized = text(pathValue).replaceAll("\\", "/");
     if (!normalized) return "";
     const parts = normalized.split("/").filter(Boolean);
     if (parts.length <= 2) return normalized;
@@ -92,9 +91,7 @@ export function registerWorkspaceRoutes(
     });
 
   const assertHostAccessAllowed = (req) => {
-    const isSandbox = String(req?.query?.isSandbox || "")
-      .trim()
-      .toLowerCase();
+    const isSandbox = text(req?.query?.isSandbox).toLowerCase();
     if (isSandbox !== "false") {
       const error = new Error("Host file access requires non-sandbox attachment metadata.");
       error.status = 403;
@@ -104,7 +101,7 @@ export function registerWorkspaceRoutes(
   };
 
   const resolveHostFilePath = async (req) => {
-    const hostPath = String(req?.query?.path || "").trim();
+    const hostPath = text(req?.query?.path);
     if (!hostPath) {
       const error = new Error(translateText("common.pathRequired", req.locale));
       error.code = "missing_path";
@@ -130,7 +127,7 @@ export function registerWorkspaceRoutes(
     "/internal/host-file/file",
     jsonRoute(
       async (req, res) => {
-        const requestedPath = String(req?.query?.path || "").trim();
+        const requestedPath = text(req?.query?.path);
         logHostFileAccess(req, "file.request", {
           hasPath: Boolean(requestedPath),
           hostPath: maskHostPath(requestedPath),
@@ -162,7 +159,7 @@ export function registerWorkspaceRoutes(
     "/internal/host-file/download",
     jsonRoute(
       async (req, res) => {
-        const requestedPath = String(req?.query?.path || "").trim();
+        const requestedPath = text(req?.query?.path);
         logHostFileAccess(req, "download.request", {
           hasPath: Boolean(requestedPath),
           hostPath: maskHostPath(requestedPath),
@@ -225,22 +222,19 @@ export function registerWorkspaceRoutes(
 
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/workspace/:userId",
-    resolveRootPath: (req) =>
-      workspaceService.ensureUserWorkspace(String(req?.params?.userId || "").trim()),
+    resolveRootPath: (req) => workspaceService.ensureUserWorkspace(text(req?.params?.userId)),
     buildWorkspaceTree,
     buildDirectoryArchiveFile,
     translateText,
     trackMutations: false,
     readMutations: true,
     resolveMutationRoot: async (req) => {
-      const userId = String(req?.params?.userId || "").trim();
-      const sessionId = String(req?.query?.sessionId || req?.body?.sessionId || "").trim();
-      const parentSessionId = String(
-        req?.query?.parentSessionId || req?.body?.parentSessionId || "",
-      ).trim();
-      const scopeId = String(req?.query?.scopeId || req?.body?.scopeId || "").trim();
-      const relativeDir = String(req?.query?.relativeDir || req?.body?.relativeDir || "").trim();
-      const allowedRoot = String(req?.query?.allowedRoot || req?.body?.allowedRoot || "").trim();
+      const userId = text(req?.params?.userId);
+      const sessionId = text(req?.query?.sessionId || req?.body?.sessionId);
+      const parentSessionId = text(req?.query?.parentSessionId || req?.body?.parentSessionId);
+      const scopeId = text(req?.query?.scopeId || req?.body?.scopeId);
+      const relativeDir = text(req?.query?.relativeDir || req?.body?.relativeDir);
+      const allowedRoot = text(req?.query?.allowedRoot || req?.body?.allowedRoot);
       if (!userId || !sessionId) throw new Error("session id is required for file mutations");
       const scopeValues = [scopeId, relativeDir, allowedRoot];
       const hasPersistenceScope = scopeValues.some(Boolean);
@@ -266,7 +260,7 @@ export function registerWorkspaceRoutes(
     responseBuilders: {
       tree: ({ req, root, tree }) => ({
         ok: true,
-        userId: String(req?.params?.userId || "").trim(),
+        userId: text(req?.params?.userId),
         root,
         tree,
       }),

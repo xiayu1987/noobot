@@ -10,6 +10,7 @@ import {
   collectSessionTreeBranch,
   resolveSessionTreeDepth,
 } from "@noobot/workspace-protocol/session-tree";
+import { text } from "@noobot/shared/value";
 
 export class SessionTreeService {
   constructor({ sessionRepo, treeRepo } = {}) {
@@ -35,13 +36,13 @@ export class SessionTreeService {
   }
 
   resolveDepthInTree(sessionId = "", sessionTree = null) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId || !sessionTree?.nodes?.[normalizedSessionId]) return 0;
     return resolveSessionTreeDepth(sessionTree, normalizedSessionId);
   }
 
   async deleteSessionBranch({ userId, sessionId }) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,

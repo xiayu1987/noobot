@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function normalizeDependencyProxyUrl(proxyUrl = "") {
-  const value = String(proxyUrl || "").trim();
+  const value = text(proxyUrl);
   if (!value) return "";
   let parsed;
   try {
@@ -25,7 +27,7 @@ export function normalizeDependencyProxyUrl(proxyUrl = "") {
 }
 
 export function maskDependencyProxyUrl(proxyUrl = "") {
-  const value = String(proxyUrl || "").trim();
+  const value = text(proxyUrl);
   if (!value) return "";
   try {
     const parsed = new URL(value);
@@ -98,9 +100,7 @@ export async function validateDependencyProxy({
     );
   }
   if (!result.ok) {
-    const detail = String(result.stderr || result.stdout || result.error || "")
-      .trim()
-      .slice(0, 500);
+    const detail = text(result.stderr || result.stdout || result.error).slice(0, 500);
     return {
       ok: false,
       proxyUrl: normalized,

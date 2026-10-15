@@ -9,9 +9,10 @@ import {
   requireWorkspaceRootEnv,
   resolveWorkspaceRootPath,
 } from "@noobot/runtime-topology-protocol/workspace-root";
+import { text } from "@noobot/shared/value";
 
 function requireConfiguredPath(value, key) {
-  const configured = String(value || "").trim();
+  const configured = text(value);
   if (!configured) throw new TypeError(`global config ${key} is required`);
   return configured;
 }

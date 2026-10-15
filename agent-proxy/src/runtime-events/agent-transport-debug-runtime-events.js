@@ -12,6 +12,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 function resolveEventIdentity({ summary, socket, channel }) {
   const channelIdentity = channel?.identity || null;
@@ -22,7 +23,7 @@ function resolveEventIdentity({ summary, socket, channel }) {
     };
   }
   return {
-    userId: String(socket?.__agentProxyUserId || channelIdentity?.userId || "").trim(),
+    userId: text(socket?.__agentProxyUserId || channelIdentity?.userId),
     parentSessionId: summary.parentSessionId,
   };
 }

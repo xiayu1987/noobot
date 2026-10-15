@@ -13,6 +13,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 const DEFAULT_API_KEY_TTL_MS = TIME_THRESHOLDS.service.apiKeyTtlMs;
 
@@ -36,7 +37,7 @@ export function createAuthService({
   function issueApiKey({ userId, role = "user" }) {
     const apiKey = randomBytes(24).toString("hex");
     apiKeyStore.set(apiKey, {
-      userId: String(userId || "").trim(),
+      userId: text(userId),
       role: isSuperAdminRole(role) ? SUPER_ADMIN_ROLE : "user",
       issuedAt: Date.now(),
     });
@@ -44,15 +45,13 @@ export function createAuthService({
   }
 
   function resolveAuthByApiKey(req = {}) {
-    const headerApiKey = String(req?.headers?.["x-api-key"] || "").trim();
-    const bearer = String(req?.headers?.authorization || "").trim();
+    const headerApiKey = text(req?.headers?.["x-api-key"]);
+    const bearer = text(req?.headers?.authorization);
     const bearerApiKey = bearer.startsWith("Bearer ") ? bearer.slice(7).trim() : "";
-    let queryApiKey = String(req?.query?.apikey || "").trim();
+    let queryApiKey = text(req?.query?.apikey);
     if (!queryApiKey && req?.url) {
       try {
-        queryApiKey = String(
-          new URL(req.url, "http://localhost").searchParams.get("apikey") || "",
-        ).trim();
+        queryApiKey = text(new URL(req.url, "http://localhost").searchParams.get("apikey"));
       } catch (error) {
         void writeRuntimeEvent({
           scope: "system",
@@ -85,7 +84,7 @@ export function createAuthService({
   }
 
   function isForbiddenUserScope(authInfo, requestUserId = "") {
-    const normalizedRequestUserId = String(requestUserId || "").trim();
+    const normalizedRequestUserId = text(requestUserId);
     if (!normalizedRequestUserId) return false;
     if (isSuperAdminRole(authInfo?.role)) return false;
     return String(authInfo?.userId || "") !== normalizedRequestUserId;
@@ -101,9 +100,7 @@ export function createAuthService({
     }
     req.auth = authInfo;
     const requestUserId =
-      String(req.params?.userId || "").trim() ||
-      String(req.body?.userId || "").trim() ||
-      String(req.query?.userId || "").trim();
+      text(req.params?.userId) || text(req.body?.userId) || text(req.query?.userId);
     if (isForbiddenUserScope(authInfo, requestUserId)) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         ok: false,

@@ -10,6 +10,7 @@ import {
   MODEL_CONTEXT_PROTOCOL_VERSION,
 } from "./schema.js";
 import { validateAgentContextIdentity } from "./identity.js";
+import { text } from "@noobot/shared/value";
 
 function findSerializationError(value, path = "context", seen = new Set()) {
   if (value == null || ["string", "number", "boolean"].includes(typeof value)) return "";
@@ -58,12 +59,12 @@ export function validateAgentContextEnvelope(context = {}) {
       errors.push("modelContext.userMetaBackwrites must be an array");
     }
     const active = modelContext.activeTurnIdentity || {};
-    if (String(active.dialogProcessId || "").trim() !== identityResult.identity.dialogProcessId) {
+    if (text(active.dialogProcessId) !== identityResult.identity.dialogProcessId) {
       errors.push(
         "modelContext.activeTurnIdentity.dialogProcessId must match identity.dialogProcessId",
       );
     }
-    if (String(active.turnScopeId || "").trim() !== identityResult.identity.turnScopeId) {
+    if (text(active.turnScopeId) !== identityResult.identity.turnScopeId) {
       errors.push("modelContext.activeTurnIdentity.turnScopeId must match identity.turnScopeId");
     }
     if (!modelContext.messageBlocks || typeof modelContext.messageBlocks !== "object") {

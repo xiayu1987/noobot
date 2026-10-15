@@ -10,6 +10,7 @@ import {
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
 import { logTransportDiagnostics } from "../../../debug/loggers/transportDiagnosticsLogger.js";
+import { text } from "@noobot/shared/value";
 
 function logProjectionOutcome(
   context,
@@ -47,8 +48,8 @@ function logRouteEvaluation(event, messageEvent, shouldProjectMain, context) {
 }
 
 function isMessageAuthorityOwnedByChannel(messageEvent, channelSessionId = "") {
-  const authoritySessionId = String(messageEvent?.identity?.sessionId || "").trim();
-  const routeSessionId = String(channelSessionId || "").trim();
+  const authoritySessionId = text(messageEvent?.identity?.sessionId);
+  const routeSessionId = text(channelSessionId);
   return !routeSessionId || authoritySessionId === routeSessionId;
 }
 
@@ -85,7 +86,7 @@ function addLiveBotProjection(targetMessages, targetSessionId, identity, context
 function resolveProjectionTargets(messageEvent, context) {
   const { identity = {}, payload = {} } = messageEvent;
   const presentationMessageId = resolveMessageEventPresentationId(payload);
-  const targetSessionId = String(identity.sessionId || context.sessionId || "").trim();
+  const targetSessionId = text(identity.sessionId || context.sessionId);
   const targetMessages =
     context.findCanonicalMessagesById?.(targetSessionId, presentationMessageId) ||
     [context.findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);

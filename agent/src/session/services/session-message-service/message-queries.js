@@ -6,6 +6,7 @@
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { repairOrphanedTerminalTurns } from "@noobot/authoritative-state/application";
+import { text } from "@noobot/shared/value";
 
 export async function getSessionTurns({
   userId,
@@ -55,7 +56,7 @@ export async function getTurnSummaryCheckpointState({
   turnScopeId = "",
 } = {}) {
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  const normalizedTurnScopeId = text(turnScopeId);
   if (!userId || !sessionId || !normalizedDialogProcessId || !normalizedTurnScopeId) return null;
   const { session } = await this._findSession(
     userId,
@@ -64,8 +65,7 @@ export async function getTurnSummaryCheckpointState({
     persistenceContext,
   );
   const state = session?.turnSummaryCheckpoints?.[normalizedTurnScopeId];
-  if (!state || String(state?.dialogProcessId || "").trim() !== normalizedDialogProcessId)
-    return null;
+  if (!state || text(state?.dialogProcessId) !== normalizedDialogProcessId) return null;
   return structuredClone(state);
 }
 

@@ -14,6 +14,7 @@ import { CommandRegistry } from "./command-registry.js";
 import { config } from "../shared/config.js";
 import { ChannelEventJournal } from "./channel-event-journal.js";
 import { resolveOptionalSessionId } from "@noobot/runtime-events/session-id";
+import { text } from "@noobot/shared/value";
 
 const CHANNEL_LOG_RESERVED_KEYS = [
   "sessionId",
@@ -54,7 +55,7 @@ export class ChannelManager {
   }
 
   recordSuccessfulDataPlaneOperation(operation = "", count = 1) {
-    const key = String(operation || "").trim();
+    const key = text(operation);
     if (!DATA_PLANE_METRIC_KEYS.has(key)) return false;
     this.successfulDataPlaneMetrics[key] += Math.max(0, Number(count || 0));
     return true;

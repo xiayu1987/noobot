@@ -13,9 +13,9 @@ import { text } from "@noobot/shared/value";
 const items = (value) => (Array.isArray(value) ? value : []);
 
 function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
-  const turnScopeId = String(turn?.turnScopeId || "").trim();
+  const turnScopeId = text(turn?.turnScopeId);
   if (!turnScopeId) throw new TypeError("Turn presentation invariant failed: turn_scope_missing");
-  const presentationMessageId = String(turn?.presentationMessageId || "").trim();
+  const presentationMessageId = text(turn?.presentationMessageId);
   if (!presentationMessageId) {
     throw new TypeError("Turn presentation invariant failed: presentation_message_id_missing");
   }
@@ -27,10 +27,10 @@ function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
     content: "",
     sessionId,
     turnScopeId,
-    dialogProcessId: String(turn.dialogProcessId || "").trim(),
+    dialogProcessId: text(turn.dialogProcessId),
     chatPresentation: true,
     turnPlaceholder: true,
-    ts: String(turn.updatedAt || turn.startedAt || turn.createdAt || "").trim(),
+    ts: text(turn.updatedAt || turn.startedAt || turn.createdAt),
   };
 }
 
@@ -42,7 +42,7 @@ export function buildLifecycleTurnPresentations(lifecycle = null, sessionId = ""
 
 function createArtifactProjectionContext(sessionId) {
   const routeKeyOf = (message = {}) => {
-    const turnScopeId = String(message?.turnScopeId || "").trim();
+    const turnScopeId = text(message?.turnScopeId);
     return sessionId && turnScopeId ? `${sessionId}::${turnScopeId}` : "";
   };
   return {
@@ -53,7 +53,7 @@ function createArtifactProjectionContext(sessionId) {
     routeKeyOf,
     callKeyOf(message = {}, toolCallId = "") {
       const routeKey = routeKeyOf(message);
-      const normalizedToolCallId = String(toolCallId || "").trim();
+      const normalizedToolCallId = text(toolCallId);
       return routeKey && normalizedToolCallId ? `${routeKey}::${normalizedToolCallId}` : "";
     },
   };
@@ -169,7 +169,7 @@ function buildTimelineByRoute(context) {
 }
 
 export function buildToolArtifactTimelineProjection(session = {}) {
-  const context = createArtifactProjectionContext(String(session?.sessionId || "").trim());
+  const context = createArtifactProjectionContext(text(session?.sessionId));
   for (const message of session.messages) {
     collectTimelineArtifacts(message, context);
     collectToolCalls(message, context);

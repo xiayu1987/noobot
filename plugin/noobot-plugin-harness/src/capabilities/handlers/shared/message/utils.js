@@ -9,15 +9,16 @@ import {
   resolveContextToolCalls,
 } from "@noobot/context-protocol/message/codec";
 import { isInjectedMessage, readMessageField } from "@noobot/context-protocol/policy/message";
+import { text } from "@noobot/shared/value";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
-  const expectedRole = String(role || "").trim();
-  const expectedType = String(type || "").trim();
+  const expectedRole = text(role);
+  const expectedType = text(type);
   return (
     isInjectedMessage(message) &&
     readMessageField(message, "injectedBy") === "harness-plugin" &&
-    (!expectedRole || String(message?.role || "").trim() === expectedRole) &&
-    (!expectedType || String(message?.injectedMessageType || "").trim() === expectedType)
+    (!expectedRole || text(message?.role) === expectedRole) &&
+    (!expectedType || text(message?.injectedMessageType) === expectedType)
   );
 }
 
@@ -48,7 +49,7 @@ export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
     const toolCalls = resolveContextToolCalls(message);
     if (!toolCalls.length) return false;
     const content = resolveContextMessageContent(message);
-    return Boolean(String(content || "").trim());
+    return Boolean(text(content));
   }
   return false;
 }

@@ -8,6 +8,7 @@ import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
 import { isLegacyTerminalDiscoveryState } from "../run-state-machine/constants.js";
+import { text } from "@noobot/shared/value";
 
 export function installSessionLifecycleHydration({
   sessions,
@@ -23,16 +24,16 @@ export function installSessionLifecycleHydration({
       turnTimings: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings : [],
     });
     logThinkingReplayDebug("frontend.lifecycle.hydrateStarted", () => ({
-      requestedSessionId: String(sessionItem?.sessionId || "").trim(),
+      requestedSessionId: text(sessionItem?.sessionId),
       runtimeSessionId: sessionId,
-      snapshotSessionId: String(snapshot?.sessionId || "").trim(),
+      snapshotSessionId: text(snapshot?.sessionId),
       snapshotSequence: Number(snapshot?.sequence || 0),
-      activeTurnScopeId: String(snapshot?.activeTurnScopeId || "").trim(),
+      activeTurnScopeId: text(snapshot?.activeTurnScopeId),
       recentTerminalCount: Array.isArray(snapshot?.recentTerminalTurns)
         ? snapshot.recentTerminalTurns.length
         : 0,
       replacedTurnScopeIds: (Array.isArray(snapshot?.replacedTurns) ? snapshot.replacedTurns : [])
-        .map((replacement) => String(replacement?.turnScopeId || "").trim())
+        .map((replacement) => text(replacement?.turnScopeId))
         .filter(Boolean),
       turnTimingsCount: Array.isArray(sessionItem?.turnTimings)
         ? sessionItem.turnTimings.length
@@ -43,12 +44,8 @@ export function installSessionLifecycleHydration({
     if (snapshot && typeof snapshot === "object") {
       const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
       const activeTurn = snapshot.activeTurn;
-      const activeTurnState = String(activeTurn?.state || "")
-        .trim()
-        .toLowerCase();
-      const activeTurnScopeId = String(
-        activeTurn?.turnScopeId || snapshot.activeTurnScopeId || "",
-      ).trim();
+      const activeTurnState = text(activeTurn?.state).toLowerCase();
+      const activeTurnScopeId = text(activeTurn?.turnScopeId || snapshot.activeTurnScopeId);
       const isTerminal = isLegacyTerminalDiscoveryState(activeTurnState);
 
       if (result?.applied === true && activeTurn && activeTurnScopeId && !isTerminal) {
@@ -63,9 +60,9 @@ export function installSessionLifecycleHydration({
         });
       }
       logThinkingReplayDebug("frontend.lifecycle.hydrateApplied", () => ({
-        requestedSessionId: String(sessionItem?.sessionId || "").trim(),
+        requestedSessionId: text(sessionItem?.sessionId),
         runtimeSessionId: sessionId,
-        snapshotSessionId: String(snapshot?.sessionId || "").trim(),
+        snapshotSessionId: text(snapshot?.sessionId),
         resultApplied: result?.applied === true,
         resultReason: result?.reason || "",
         replacedTurnScopeIds: result?.replacedTurnScopeIds || [],

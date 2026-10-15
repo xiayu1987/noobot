@@ -9,6 +9,7 @@ import { overlayMessageBox } from "../../../shared/composables/overlayMessageBox
 import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { selectSessionTurnRuntime } from "../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   sessions: { type: Array, default: () => [] },
@@ -111,14 +112,12 @@ const statusKeyMap = {
 };
 
 function formatSessionStatus(status = "") {
-  const normalized = String(status || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(status).toLowerCase();
   return translate(statusKeyMap[normalized] || "common.statusIdle");
 }
 
 function sessionRuntimeStatus(sessionItem = {}) {
-  const sessionId = String(sessionItem.sessionId || "").trim();
+  const sessionId = text(sessionItem.sessionId);
   const sessionStatus = selectSessionTurnRuntime(props.turnRuntimeRegistry, sessionId);
   if (sessionStatus.terminal === "error") return "error";
   if (sessionStatus.terminal) return "done";
@@ -133,7 +132,7 @@ function formatSessionTime(value = "") {
 }
 
 async function promptRenameSession(sessionItem = {}) {
-  const currentTitle = String(sessionItem?.title || "").trim();
+  const currentTitle = text(sessionItem?.title);
   try {
     const { value } = await overlayMessageBox.prompt(
       translate("common.renameSessionPlaceholder"),
@@ -143,7 +142,7 @@ async function promptRenameSession(sessionItem = {}) {
         cancelButtonText: translate("infra.cancel"),
         inputValue: currentTitle,
         inputValidator: (value) => {
-          const nextTitle = String(value || "").trim();
+          const nextTitle = text(value);
           if (!nextTitle) return translate("common.sessionTitleRequired");
           if (nextTitle.length > 80) return translate("common.sessionTitleTooLong");
           if (nextTitle === currentTitle) return translate("common.sessionTitleUnchanged");
@@ -151,7 +150,7 @@ async function promptRenameSession(sessionItem = {}) {
         },
       },
     );
-    emit("rename-session", { sessionId: sessionItem.sessionId, title: String(value || "").trim() });
+    emit("rename-session", { sessionId: sessionItem.sessionId, title: text(value) });
   } catch (error) {
     if (error !== "cancel" && error !== "close") {
       console.warn("[noobot:session] rename dialog failed", error);

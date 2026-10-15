@@ -14,6 +14,7 @@ import { safeId } from "../data/record-builders.js";
 import { normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION, resolveHarnessRunsRelativePath } from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
+import { text } from "@noobot/shared/value";
 
 function normalizePlanningGuidance(options = {}) {
   if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
@@ -22,12 +23,11 @@ function normalizePlanningGuidance(options = {}) {
 }
 
 export function extractBasePath(ctx = {}, options = {}) {
-  return String(
+  return text(
     options.basePath ||
       ctx.basePath ||
-      ctx?.agentContext?.context?.environment?.workspace?.basePath ||
-      "",
-  ).trim();
+      ctx?.agentContext?.context?.environment?.workspace?.basePath,
+  );
 }
 
 function extractRunId(ctx = {}) {
@@ -61,9 +61,7 @@ export async function ensureRunDir(paths) {
 export { resolveHookClientEmitter };
 
 export function isPrimaryExecutionScope(ctx = {}) {
-  const scope = String(ctx?.executionScope || "")
-    .trim()
-    .toLowerCase();
+  const scope = text(ctx?.executionScope).toLowerCase();
   return !scope || scope === "primary";
 }
 
@@ -71,7 +69,7 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
   const emit = resolveHookClientEmitter(ctx);
   if (!emit) return;
   try {
-    emit(`harness.${String(event || "").trim() || "progress"}`, {
+    emit(`harness.${text(event) || "progress"}`, {
       plugin: PLUGIN_NAME,
       version: PLUGIN_VERSION,
       ...(data && typeof data === "object" ? data : {}),

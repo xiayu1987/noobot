@@ -12,6 +12,7 @@ import {
   WORKFLOW_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { resolveWorkflowParentRunConfig } from "../hooks/runtime.js";
+import { text } from "@noobot/shared/value";
 
 function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
   return {
@@ -29,10 +30,10 @@ function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } =
 
 function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = null) {
   payload.planningDialog = {
-    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-    sessionId: String(ctx?.sessionId || "").trim(),
-    storagePath: String(planningPersistResult?.outputDir || "").trim(),
-    storageFile: String(planningPersistResult?.outputFile || "").trim(),
+    dialogProcessId: text(ctx?.dialogProcessId),
+    sessionId: text(ctx?.sessionId),
+    storagePath: text(planningPersistResult?.outputDir),
+    storageFile: text(planningPersistResult?.outputFile),
   };
   return payload;
 }
@@ -40,13 +41,11 @@ function attachPlanningDialog(payload = {}, ctx = {}, planningPersistResult = nu
 function resolvePlanningIdentity(ctx = {}, workflowMessage = null) {
   const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
   return {
-    turnScopeId: String(ctx?.turnScopeId || parentRunConfig?.turnScopeId || "").trim(),
-    messageId: String(
-      ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId || "",
-    ).trim(),
-    presentationMessageId: String(
-      workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId || "",
-    ).trim(),
+    turnScopeId: text(ctx?.turnScopeId || parentRunConfig?.turnScopeId),
+    messageId: text(ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId),
+    presentationMessageId: text(
+      workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId,
+    ),
   };
 }
 
@@ -130,8 +129,8 @@ export async function prepareWorkflowPlanningMessage({
   const identity = resolvePlanningIdentity(ctx, workflowMessage);
   const { turnScopeId, messageId, presentationMessageId } = identity;
   const runtimeData = {
-    sessionId: String(ctx?.sessionId || "").trim(),
-    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    sessionId: text(ctx?.sessionId),
+    dialogProcessId: text(ctx?.dialogProcessId),
     turnScopeId,
     messageId,
     presentationMessageId,

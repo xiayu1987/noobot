@@ -13,9 +13,10 @@ import {
 } from "../../../runtime/lifecycle/state-machine.js";
 import { resolveRunTurnScopeId } from "../turn-command.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./plugin-runtime.js";
+import { text } from "@noobot/shared/value";
 
 function applyCanonicalRunMessageIdentity(runConfig = {}) {
-  const turnScopeId = String(runConfig?.turnScopeId || "").trim();
+  const turnScopeId = text(runConfig?.turnScopeId);
   const presentationMessageId = String(
     runConfig?.presentationMessageId || `msg_${turnScopeId}`,
   ).trim();
@@ -56,7 +57,7 @@ export async function initializeSessionRun({
 }) {
   const normalizedMessage = normalizeRunMessage(message);
   validateRunInput({ userId, sessionId, caller, parentSessionId });
-  if (runConfig?.reuseExistingUserTurn === true && !String(requestedDialogProcessId || "").trim()) {
+  if (runConfig?.reuseExistingUserTurn === true && !text(requestedDialogProcessId)) {
     const error = new Error("reused Turn requires its precommitted dialogProcessId");
     error.statusCode = 400;
     error.code = "MISSING_REUSED_TURN_DIALOG_PROCESS_ID";
@@ -70,8 +71,8 @@ export async function initializeSessionRun({
       userId,
       sessionId,
       parentSessionId,
-      turnScopeId: String(requestedTurnScopeId || runConfig?.turnScopeId || "").trim(),
-      dialogProcessId: String(requestedDialogProcessId || "").trim(),
+      turnScopeId: text(requestedTurnScopeId || runConfig?.turnScopeId),
+      dialogProcessId: text(requestedDialogProcessId),
       ...(persistenceContext ? { persistenceContext } : {}),
     });
   }
@@ -93,7 +94,7 @@ export async function initializeSessionRun({
     eventListener,
     dialogProcessId: requestedDialogProcessId,
     turnScopeId: normalizedRequestTurnScopeId,
-    thinkingStartedAt: String(runConfig?.thinkingStartedAt || "").trim(),
+    thinkingStartedAt: text(runConfig?.thinkingStartedAt),
     persistenceContext,
   });
   const {
@@ -127,21 +128,19 @@ export async function initializeSessionRun({
       dialogProcessId,
       turnScopeId,
       resumeFromStoppedSnapshot,
-      executionId: String(resolvedRunConfig?.executionId || "").trim(),
+      executionId: text(resolvedRunConfig?.executionId),
       executionKind: String(resolvedRunConfig?.executionKind || "agent").trim(),
-      parentExecutionId: String(resolvedRunConfig?.parentExecutionId || "").trim(),
-      rootExecutionId: String(
-        resolvedRunConfig?.rootExecutionId || resolvedRunConfig?.executionId || "",
-      ).trim(),
+      parentExecutionId: text(resolvedRunConfig?.parentExecutionId),
+      rootExecutionId: text(resolvedRunConfig?.rootExecutionId || resolvedRunConfig?.executionId),
     },
   });
   lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));
   if (
-    !String(resolvedRunConfig?.runtimeModel || "").trim() &&
-    !String(resolvedRunConfig?.selectedModel || "").trim() &&
-    String(currentSessionModelAlias || "").trim()
+    !text(resolvedRunConfig?.runtimeModel) &&
+    !text(resolvedRunConfig?.selectedModel) &&
+    text(currentSessionModelAlias)
   ) {
-    resolvedRunConfig.runtimeModel = String(currentSessionModelAlias || "").trim();
+    resolvedRunConfig.runtimeModel = text(currentSessionModelAlias);
   }
   const botHookRuntime = {
     eventListener: runtimeEventListener,

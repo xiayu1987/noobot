@@ -12,6 +12,7 @@ import {
   validateFileAccessContext,
 } from "./file-access-context.js";
 import { readHttpResponseErrorText } from "./http-response.js";
+import { text } from "@noobot/shared/value";
 
 export function createFilePreviewController({
   userId,
@@ -24,7 +25,7 @@ export function createFilePreviewController({
   async function openFilePreview(fileItem = {}) {
     const desktopRead = window?.noobotDesktop?.readHostFile;
     const context = createFileAccessContext("preview", fileItem, userId, desktopRead);
-    const mimeType = String(fileItem?.mimeType || fileItem?.type || "").trim();
+    const mimeType = text(fileItem?.mimeType || fileItem?.type);
     if (isPreviewOverLimit(fileItem, context.fileName, mimeType, isImageMime)) {
       notify({ type: "warning", message: translate("message.previewFileTooLarge") });
       return;

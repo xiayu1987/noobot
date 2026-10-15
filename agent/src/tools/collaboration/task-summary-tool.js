@@ -26,6 +26,7 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { text } from "@noobot/shared/value";
 
 const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
 const TASK_SUMMARY_RECEIPT_TEXT_KEY = Object.freeze({
@@ -53,7 +54,7 @@ export function createTaskSummaryTool(ctx = {}) {
           code: ERROR_CODE.RECOVERABLE_CONTROL_TOOL_NOT_REQUESTED,
         });
       }
-      const summaryText = String(summaryContent || "").trim();
+      const summaryText = text(summaryContent);
       if (!summaryText) {
         throw recoverableToolError(tTool(runtime, "tools.task_summary.summaryContentRequired"), {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,

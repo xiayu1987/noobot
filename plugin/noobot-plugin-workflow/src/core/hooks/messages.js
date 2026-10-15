@@ -10,27 +10,28 @@ import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } fro
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { projectAuxiliaryHistoryMessages } from "@noobot/context-protocol/assembly/auxiliary-history";
+import { text } from "@noobot/shared/value";
 
 function resolveAssistantOutput(agentResult = {}) {
-  const direct = String(agentResult?.output || agentResult?.answer || "").trim();
+  const direct = text(agentResult?.output || agentResult?.answer);
   if (direct) return direct;
   const messages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index] || {};
-    const content = String(messageItem?.content || "").trim();
+    const content = text(messageItem?.content);
     if (content) return content;
   }
   return "";
 }
 
 export function resolveWorkflowSourceText(ctx = {}, agentResult = {}, hookPoint = "") {
-  const normalizedHookPoint = String(hookPoint || "").trim();
+  const normalizedHookPoint = text(hookPoint);
   const outputFromAgent = resolveAssistantOutput(agentResult);
   if (outputFromAgent) return outputFromAgent;
   if (normalizedHookPoint === HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH) {
-    return String(ctx?.userMessage || "").trim();
+    return text(ctx?.userMessage);
   }
-  return String(ctx?.userMessage || "").trim();
+  return text(ctx?.userMessage);
 }
 
 function compactWorkflowText(
@@ -55,7 +56,7 @@ function resolveWorkflowAvailableToolCatalog(ctx = {}) {
   const catalog = [];
   const seenNames = new Set();
   for (const item of registry) {
-    const name = String(item?.name || "").trim();
+    const name = text(item?.name);
     if (!name || seenNames.has(name)) continue;
     catalog.push({
       name,

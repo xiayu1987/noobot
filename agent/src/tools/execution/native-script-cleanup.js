@@ -6,9 +6,10 @@
 import { rm } from "node:fs/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { text } from "@noobot/shared/value";
 
 export async function cleanupNativeTaskDirectory(directory, { rmImpl = rm } = {}) {
-  if (!String(directory || "").trim()) return;
+  if (!text(directory)) return;
   await rmImpl(directory, {
     recursive: true,
     force: true,

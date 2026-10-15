@@ -5,6 +5,7 @@
  */
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { createConnectorPanelState } from "../../../modules/session/model/sessionModel.js";
+import { text } from "@noobot/shared/value";
 
 export function createConnectorService({
   ensureConnected = () => false,
@@ -36,7 +37,7 @@ export function createConnectorService({
   }
 
   function enqueueSessionTask(sessionId = "", operation) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId || typeof operation !== "function") return Promise.resolve();
     const previous = sessionTasks.get(normalizedSessionId) || Promise.resolve();
     const task = previous.then(operation).finally(() => {
@@ -50,7 +51,7 @@ export function createConnectorService({
 
   async function refreshSessionConnectors({ sessionId = "", sessions = [] } = {}) {
     if (!ensureConnected()) return;
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     const sessionItem = sessions.find((item) => item?.sessionId === normalizedSessionId);
     if (!normalizedSessionId || !sessionItem) return;
     return enqueueSessionTask(normalizedSessionId, async () => {
@@ -71,7 +72,7 @@ export function createConnectorService({
   }
 
   function refreshSessionConnectorsAsync(options = {}) {
-    const sessionId = String(options.sessionId || "").trim();
+    const sessionId = text(options.sessionId);
     if (!sessionId) return Promise.resolve();
     return refreshSessionConnectors(options);
   }
@@ -113,7 +114,7 @@ export function createConnectorService({
   }
 
   function waitForSessionConnectorState(sessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     return normalizedSessionId ? sessionTasks.get(normalizedSessionId) : undefined;
   }
 

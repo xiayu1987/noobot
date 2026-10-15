@@ -21,6 +21,7 @@ import { createRuntimeConfigService } from "../services/runtime-config-service.j
 import { createWorkspacePathService } from "../services/workspace-path-service.js";
 import { createWorkspaceUsersService } from "../services/workspace-users-service.js";
 import { createOpenVSCodeService } from "../services/openvscode-service.js";
+import { text } from "@noobot/shared/value";
 
 export async function createAppDependencies({
   serviceDir,
@@ -155,10 +156,7 @@ export async function createAppDependencies({
     const superAdminUserId = resolveConfiguredSuperUserId(globalConfig);
     return [
       ...new Set(
-        [
-          ...workspaceUsers.map((user) => String(user?.userId || "").trim()),
-          superAdminUserId,
-        ].filter(Boolean),
+        [...workspaceUsers.map((user) => text(user?.userId)), superAdminUserId].filter(Boolean),
       ),
     ];
   }
@@ -177,7 +175,7 @@ export async function createAppDependencies({
     readSessionUserIds,
     openVSCodeService,
     buildHttpModuleDependencies: () => ({
-      pluginRootDir: String(startupContext?.paths?.pluginRootDir || "").trim(),
+      pluginRootDir: text(startupContext?.paths?.pluginRootDir),
       bot,
       openVSCodeService,
       globalConfigProvider: () => globalConfig,

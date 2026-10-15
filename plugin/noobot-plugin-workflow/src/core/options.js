@@ -6,10 +6,11 @@
 
 import { WORKFLOW_PLUGIN_DEFAULTS } from "./constants.js";
 import { getWorkflowDefaultSemanticPrompt, normalizeWorkflowLocale } from "./i18n.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeToolNameList(input = []) {
   if (!Array.isArray(input)) return [];
-  return input.map((item) => String(item || "").trim()).filter(Boolean);
+  return input.map((item) => text(item)).filter(Boolean);
 }
 
 export function resolveWorkflowDenyToolNames(input = null) {
@@ -63,7 +64,7 @@ export function normalizeOptions(input = {}) {
       typeof source?.semanticPrompt === "string" && source.semanticPrompt.trim()
         ? source.semanticPrompt.trim()
         : getWorkflowDefaultSemanticPrompt(locale),
-    semanticModel: String(source?.semanticModel || "").trim(),
+    semanticModel: text(source?.semanticModel),
     maxAutoTransitions:
       Number.isFinite(maxAutoTransitions) && maxAutoTransitions > 0
         ? Math.floor(maxAutoTransitions)

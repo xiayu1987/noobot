@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { text } from "@noobot/shared/value";
 
 export const CAPABILITY_HOOK_MAP = Object.freeze({
   planning: [
@@ -42,7 +43,7 @@ export const CAPABILITY_HOOK_MAP = Object.freeze({
 });
 
 export function resolveCapabilitiesForHook(point = "") {
-  const hook = String(point || "").trim();
+  const hook = text(point);
   if (!hook) return [];
   return Object.entries(CAPABILITY_HOOK_MAP)
     .filter(([, hooks]) => Array.isArray(hooks) && hooks.includes(hook))

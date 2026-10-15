@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   resolveTransferIntent,
@@ -34,8 +34,8 @@ export async function transferAgentPluginStageMessage({
   identity = null,
   userId = "",
 } = {}) {
-  const normalizedSummary = String(summary || "").trim();
-  const normalizedDetail = String(detail || "").trim();
+  const normalizedSummary = text(summary);
+  const normalizedDetail = text(detail);
   const intent = resolveTransferIntent({
     source,
     reason,
@@ -112,8 +112,8 @@ export function composeAgentPluginFinalMessage({
   header = "",
   locale,
 } = {}) {
-  const resultText = String(resultInfo || "").trim();
-  const validationText = String(validationInfo || "").trim();
+  const resultText = text(resultInfo);
+  const validationText = text(validationInfo);
   const detailLines = (Array.isArray(detailEnvelopes) ? detailEnvelopes : [])
     .flatMap((envelope = {}) =>
       Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : [],

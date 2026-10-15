@@ -6,6 +6,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readOptionalJsonObjectConfigSync } from "@noobot/shared/config-file";
+import { text } from "@noobot/shared/value";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -56,7 +57,7 @@ function normalizeProxyEntries(rawEntries = []) {
 
   for (let index = 0; index < rawEntries.length; index += 1) {
     const item = rawEntries[index] || {};
-    const rawTarget = String(item.targetUrl || "").trim();
+    const rawTarget = text(item.targetUrl);
     if (!rawTarget) continue;
 
     let localPort = Number(item.localPort);
@@ -86,11 +87,7 @@ function normalizeHeaderKeyCandidates(primaryKeys = [], fallbackKeys = []) {
     ...(Array.isArray(primaryKeys) ? primaryKeys : [primaryKeys]),
     ...(Array.isArray(fallbackKeys) ? fallbackKeys : [fallbackKeys]),
   ]
-    .map((key) =>
-      String(key || "")
-        .trim()
-        .toLowerCase(),
-    )
+    .map((key) => text(key).toLowerCase())
     .filter(Boolean);
   return Array.from(new Set(keys));
 }

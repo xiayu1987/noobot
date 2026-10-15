@@ -6,6 +6,7 @@
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { tScript } from "./script-i18n.js";
+import { text } from "@noobot/shared/value";
 
 export function missingCommandError(mode, commandName = "", runtime = {}) {
   return recoverableToolError(tScript(runtime, "commandNotInstalled", { commandName }), {
@@ -19,7 +20,7 @@ export function missingCommandError(mode, commandName = "", runtime = {}) {
 }
 
 export function scriptRuntimeError(message = "", options = {}) {
-  return recoverableToolError(String(message || "").trim(), {
+  return recoverableToolError(text(message), {
     code: String(options?.code || ERROR_CODE.RECOVERABLE_SCRIPT_RUNTIME_ERROR),
     details: options?.details && typeof options.details === "object" ? options.details : {},
   });

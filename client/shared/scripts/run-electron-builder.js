@@ -12,6 +12,7 @@ import {
   maskDependencyProxyUrl,
   normalizeDependencyProxyUrl,
 } from "../electron/dependencies/proxy.js";
+import { text } from "@noobot/shared/value";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../../..");
@@ -25,7 +26,7 @@ const STANDARD_PROXY_KEYS = Object.freeze([
 ]);
 
 async function readJson(filePath = "") {
-  if (!String(filePath || "").trim()) return null;
+  if (!text(filePath)) return null;
   try {
     const value = JSON.parse(await readFile(filePath, "utf8"));
     return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -35,16 +36,16 @@ async function readJson(filePath = "") {
 }
 
 export async function resolveDesktopBuildProxy({ env = process.env, root = repoRoot } = {}) {
-  const standardKey = STANDARD_PROXY_KEYS.find((key) => String(env[key] || "").trim());
+  const standardKey = STANDARD_PROXY_KEYS.find((key) => text(env[key]));
   if (standardKey) {
     return {
       source: `environment:${standardKey}`,
-      proxyUrl: String(env[standardKey] || "").trim(),
+      proxyUrl: text(env[standardKey]),
       inherited: true,
     };
   }
 
-  const explicitProxy = String(env.NOOBOT_DEPENDENCY_PROXY_URL || "").trim();
+  const explicitProxy = text(env.NOOBOT_DEPENDENCY_PROXY_URL);
   if (explicitProxy) {
     return {
       source: "environment:NOOBOT_DEPENDENCY_PROXY_URL",
@@ -53,11 +54,11 @@ export async function resolveDesktopBuildProxy({ env = process.env, root = repoR
     };
   }
 
-  const globalConfigPath = String(env.NOOBOT_GLOBAL_CONFIG_PATH || "").trim()
+  const globalConfigPath = text(env.NOOBOT_GLOBAL_CONFIG_PATH)
     ? path.resolve(env.NOOBOT_GLOBAL_CONFIG_PATH)
     : path.join(root, "service", "config", "global.config.json");
   const config = await readJson(globalConfigPath);
-  const configuredProxy = String(config?.desktop?.dependency_proxy_url || "").trim();
+  const configuredProxy = text(config?.desktop?.dependency_proxy_url);
   return {
     source: configuredProxy ? `config:${globalConfigPath}` : "none",
     proxyUrl: configuredProxy ? normalizeDependencyProxyUrl(configuredProxy) : "",

@@ -9,13 +9,14 @@ import {
 } from "../../../../../shared/utils/markdown-copy.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
+import { text } from "@noobot/shared/value";
 
 export function buildNoCopyableSet(translate, key) {
   return new Set([
     key,
-    String(zhCNMessages?.message?.[key] || "").trim(),
-    String(enUSMessages?.message?.[key] || "").trim(),
-    String(translate(`message.${key}`) || "").trim(),
+    text(zhCNMessages?.message?.[key]),
+    text(enUSMessages?.message?.[key]),
+    text(translate(`message.${key}`)),
   ]);
 }
 
@@ -36,7 +37,7 @@ export async function handleCopyMarkdown({
 }) {
   try {
     if (rich) {
-      const rawHtmlContent = String(textContent || renderMarkdown(textContent) || "").trim();
+      const rawHtmlContent = text(textContent || renderMarkdown(textContent));
       await copyMarkdownRichAsHtmlPage(rawHtmlContent);
       notify({ type: "success", message: translate("message.copiedHtml") });
     } else {

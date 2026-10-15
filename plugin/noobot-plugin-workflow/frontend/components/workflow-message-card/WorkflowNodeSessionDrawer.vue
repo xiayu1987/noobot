@@ -8,6 +8,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { BaseEmptyHint, BaseMessageErrorAlert, useMobileViewport } from "noobot-chat/plugin-api/ui";
 import { AgentExecutionView } from "noobot-chat/plugin-api/chat-ui";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 function resolveDialogProcessId(item = {}) {
   return resolveWorkflowDialogProcessId(item);
@@ -57,17 +58,17 @@ const stopError = ref("");
 const executionTreeRows = computed(() => {
   const items = Array.isArray(props.executionDirectory) ? props.executionDirectory : [];
   const byId = new Map(
-    items.map((item = {}) => [String(item.executionId || "").trim(), item]).filter(([id]) => id),
+    items.map((item = {}) => [text(item.executionId), item]).filter(([id]) => id),
   );
   const children = new Map();
   for (const [id, item] of byId) {
-    const parentId = String(item.parentExecutionId || "").trim();
+    const parentId = text(item.parentExecutionId);
     if (!byId.has(parentId) || parentId === id) continue;
     if (!children.has(parentId)) children.set(parentId, []);
     children.get(parentId).push(id);
   }
   const roots = [...byId.keys()].filter((id) => {
-    const parentId = String(byId.get(id)?.parentExecutionId || "").trim();
+    const parentId = text(byId.get(id)?.parentExecutionId);
     return !parentId || !byId.has(parentId) || parentId === id;
   });
   const rows = [];
@@ -86,10 +87,10 @@ const executionTreeRows = computed(() => {
 });
 
 const selectedExecution = computed(() => {
-  const selectedId = String(props.selectedExecutionId || "").trim();
+  const selectedId = text(props.selectedExecutionId);
   return (
     (Array.isArray(props.executionDirectory) ? props.executionDirectory : []).find(
-      (item = {}) => String(item.executionId || "").trim() === selectedId,
+      (item = {}) => text(item.executionId) === selectedId,
     ) || null
   );
 });
@@ -105,7 +106,7 @@ const canStopSelectedExecution = computed(() =>
 );
 
 async function stopSelectedExecution() {
-  const executionId = String(props.selectedExecutionId || "").trim();
+  const executionId = text(props.selectedExecutionId);
   if (!executionId || !canStopSelectedExecution.value || stopPendingExecutionId.value) return false;
   stopError.value = "";
   stopPendingExecutionId.value = executionId;
@@ -129,7 +130,7 @@ watch(
 );
 
 function toggleExecution(executionId = "") {
-  const id = String(executionId || "").trim();
+  const id = text(executionId);
   if (!id) return;
   const next = new Set(expandedExecutionIds.value);
   if (next.has(id)) next.delete(id);
@@ -142,7 +143,7 @@ watch(
   (items = []) => {
     const next = new Set(expandedExecutionIds.value);
     for (const item of items) {
-      const id = String(item?.executionId || "").trim();
+      const id = text(item?.executionId);
       if (id && (id === props.selectedExecutionId || !item?.parentExecutionId)) next.add(id);
     }
     expandedExecutionIds.value = next;

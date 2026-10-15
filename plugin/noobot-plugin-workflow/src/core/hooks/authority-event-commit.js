@@ -6,14 +6,13 @@
 
 import { WORKFLOW_RUNTIME_FAMILY } from "@noobot/event-protocol/workflow-runtime-event";
 import { PLUGIN_ID } from "../constants.js";
+import { text } from "@noobot/shared/value";
 
 function resolveWorkflowCommitScope({ ctx, runtime, payload }) {
   return {
-    userId: String(runtime?.userId || ctx?.userId || "").trim(),
-    sessionId: String(ctx?.sessionId || "").trim(),
-    turnScopeId: String(
-      payload?.turnScopeId || ctx?.turnScopeId || runtime?.runConfig?.turnScopeId || "",
-    ).trim(),
+    userId: text(runtime?.userId || ctx?.userId),
+    sessionId: text(ctx?.sessionId),
+    turnScopeId: text(payload?.turnScopeId || ctx?.turnScopeId || runtime?.runConfig?.turnScopeId),
   };
 }
 
@@ -30,27 +29,25 @@ function projectWorkflowEventIdentity({
   ctx,
 }) {
   return {
-    eventType: String(eventType || "").trim(),
+    eventType: text(eventType),
     turnScopeId,
-    messageId: String(messageId || payload?.messageId || "").trim(),
-    executionId: String(
-      executionId || payload?.nodeExecutionId || ctx?.workflowExecutionId || "",
-    ).trim(),
+    messageId: text(messageId || payload?.messageId),
+    executionId: text(executionId || payload?.nodeExecutionId || ctx?.workflowExecutionId),
   };
 }
 
 function projectWorkflowEventOrdering({ orderingDomain, orderingScopeId, revision, payload }) {
   return {
-    domain: String(orderingDomain || "").trim(),
-    scopeId: String(orderingScopeId || payload?.workflowRunId || "").trim(),
+    domain: text(orderingDomain),
+    scopeId: text(orderingScopeId || payload?.workflowRunId),
     revision: Number(revision),
   };
 }
 
 function projectWorkflowEventCausality({ payload, runtime }) {
   return {
-    commandId: String(payload?.commandId || runtime?.runConfig?.commandId || "").trim(),
-    correlationId: String(payload?.workflowRunId || "").trim(),
+    commandId: text(payload?.commandId || runtime?.runConfig?.commandId),
+    correlationId: text(payload?.workflowRunId),
   };
 }
 

@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function isPluginInjectedMessage(messageItem = {}) {
-  return (
-    messageItem?.injectedMessage === true && Boolean(String(messageItem?.injectedBy || "").trim())
-  );
+  return messageItem?.injectedMessage === true && Boolean(text(messageItem?.injectedBy));
 }
 
 function findVisibleLastMessage(messages = []) {

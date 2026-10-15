@@ -7,6 +7,7 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { projectToolOperationSubject } from "@noobot/event-protocol/tool-presentation";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { resolveData, resolveTimestampMs, resolveToolName } from "./execution-log-fields.js";
+import { text } from "@noobot/shared/value";
 
 const SLOWEST_TOOL_CALL_LIMIT = QUANTITY_THRESHOLDS.diagnostics.executionReportSlowestToolCalls;
 
@@ -39,7 +40,7 @@ function createAccumulator() {
 }
 
 function trackToolCall(acc, log, data, phase) {
-  const toolCallId = String(data.toolCallId || "").trim();
+  const toolCallId = text(data.toolCallId);
   if (!toolCallId) return;
   const entry = acc.toolCalls.get(toolCallId) || { tool: resolveToolName(log) };
   const ts = resolveTimestampMs(log);
@@ -65,7 +66,7 @@ const EVENT_HANDLERS = {
   },
   "model.invocation.started"(acc, log, data) {
     acc.invocations += 1;
-    increment(acc.models, String(data?.model?.alias || data?.model?.model || "").trim());
+    increment(acc.models, text(data?.model?.alias || data?.model?.model));
   },
   "model.invocation.completed"(acc, log, data) {
     acc.retries += Math.max(0, (Number(data.attemptCount) || 1) - 1);

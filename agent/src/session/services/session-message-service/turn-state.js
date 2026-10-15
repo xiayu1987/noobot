@@ -33,11 +33,12 @@ import {
 } from "../../authority-outbox-store/outbox-journal.js";
 import { requireOutboxSessionDir } from "./outbox-scope.js";
 import { resolveDeletedSessionAs } from "./session-deleted-result.js";
+import { text } from "@noobot/shared/value";
 
 function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
   if (!assistantMessage || typeof assistantMessage !== "object" || Array.isArray(assistantMessage))
     return assistantMessage;
-  const clean = (value) => String(value || "").trim();
+  const clean = (value) => text(value);
   const turn = session?.turnLifecycle?.turns?.[clean(turnScopeId)] || {};
   return normalizeMessageEntity({
     ...assistantMessage,
@@ -48,7 +49,7 @@ function bindTerminalAssistantIdentity(session, turnScopeId, assistantMessage) {
 }
 
 async function appendCommittedTurnLifecycleEvent(sessionDir, committedEvent) {
-  const eventId = String(committedEvent?.eventId || "").trim();
+  const eventId = text(committedEvent?.eventId);
   if (!sessionDir || !eventId) return;
   await withAuthorityOutboxMutation(sessionDir, () =>
     appendAuthorityOutboxRecords(sessionDir, [authorityOutboxCommitRecord(committedEvent)]),
@@ -63,14 +64,14 @@ function validateAcceptedUserMessage(event = {}) {
 function resolveTurnAcceptance(service, session, event = {}) {
   const lifecycleEvent = { ...event };
   if (
-    String(lifecycleEvent.eventType || "").trim() === TURN_EVENT.ACTION_ACCEPTED &&
-    String(lifecycleEvent.action || "").trim() !== "resend" &&
-    !String(lifecycleEvent.dialogProcessId || "").trim()
+    text(lifecycleEvent.eventType) === TURN_EVENT.ACTION_ACCEPTED &&
+    text(lifecycleEvent.action) !== "resend" &&
+    !text(lifecycleEvent.dialogProcessId)
   ) {
-    const turnScopeId = String(lifecycleEvent.turnScopeId || "").trim();
-    const existingDialogProcessId = String(
-      session?.turnLifecycle?.turns?.[turnScopeId]?.dialogProcessId || "",
-    ).trim();
+    const turnScopeId = text(lifecycleEvent.turnScopeId);
+    const existingDialogProcessId = text(
+      session?.turnLifecycle?.turns?.[turnScopeId]?.dialogProcessId,
+    );
     lifecycleEvent.dialogProcessId =
       existingDialogProcessId || String(service.allocateDialogProcessId()).trim();
   }
@@ -81,12 +82,10 @@ function resolveTurnAcceptance(service, session, event = {}) {
 }
 
 function findTurnScopeUserMessage(session, turnScopeId) {
-  const scope = String(turnScopeId || "").trim();
+  const scope = text(turnScopeId);
   return (
     session.messages.find(
-      (message) =>
-        String(message?.role || "").trim() === "user" &&
-        String(message?.turnScopeId || "").trim() === scope,
+      (message) => text(message?.role) === "user" && text(message?.turnScopeId) === scope,
     ) || null
   );
 }
@@ -167,21 +166,19 @@ function materializeAcceptedUserMessage({
       userName: String(userId),
       sessionId,
       parentSessionId,
-      dialogProcessId: String(event.dialogProcessId || "").trim(),
+      dialogProcessId: text(event.dialogProcessId),
       parentDialogProcessId: input.parentDialogProcessId,
-      turnScopeId: String(event.turnScopeId || "").trim(),
-      messageOrigin: String(input.messageOrigin || "")
-        .trim()
-        .toLowerCase(),
+      turnScopeId: text(event.turnScopeId),
+      messageOrigin: text(input.messageOrigin).toLowerCase(),
       userMetaMaterialized: input.userMetaMaterialized === true,
       attachments: [],
       turnCommit: {
         action: resolveTurnCommitAction(event.action),
-        commandId: String(event.causationId || event.commandId || "").trim(),
+        commandId: text(event.causationId || event.commandId),
         ...(event.continuationSource
           ? {
-              resumeDialogProcessId: String(event.continuationSource.dialogProcessId || "").trim(),
-              resumeTurnScopeId: String(event.continuationSource.turnScopeId || "").trim(),
+              resumeDialogProcessId: text(event.continuationSource.dialogProcessId),
+              resumeTurnScopeId: text(event.continuationSource.turnScopeId),
             }
           : {}),
       },
@@ -216,7 +213,7 @@ function acceptCommittedTurn({
         ...result,
         session: rejectedSession,
         userMessage,
-        dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
+        dialogProcessId: text(result.turn?.dialogProcessId),
         aggregateVersion: actualVersion,
       },
     };
@@ -357,7 +354,7 @@ export async function applyTurnLifecycleEvent({
         ...result,
         session,
         userMessage,
-        dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
+        dialogProcessId: text(result.turn?.dialogProcessId),
         turnStatus: result.turn?.terminalStatus || null,
         aggregateVersion: resolveAggregateVersion(session),
       };
@@ -441,7 +438,7 @@ async function provisionSessionWithInitialTurn({
         ...result,
         session,
         userMessage,
-        dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
+        dialogProcessId: text(result.turn?.dialogProcessId),
         aggregateVersion: resolveAggregateVersion(session),
         sessionCreated: isNew,
       };
@@ -506,7 +503,7 @@ export async function assertReusedUserTurnIdentity({
   attachments = undefined,
 } = {}) {
   if (!userId || !sessionId) throw new TypeError("reused Turn session identity is required");
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  const normalizedTurnScopeId = text(turnScopeId);
   if (!normalizedTurnScopeId) throw new TypeError("reused Turn turnScopeId is required");
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) throw new TypeError("reused Turn dialogProcessId is required");
@@ -521,8 +518,8 @@ export async function assertReusedUserTurnIdentity({
   const targetIndex = (() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const messageItem = messages[index];
-      if (String(messageItem?.role || "").trim() !== "user") continue;
-      if (String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId) continue;
+      if (text(messageItem?.role) !== "user") continue;
+      if (text(messageItem?.turnScopeId) !== normalizedTurnScopeId) continue;
       if (isInjectedOrPluginMessage(messageItem)) continue;
       return index;
     }

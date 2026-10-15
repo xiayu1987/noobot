@@ -11,13 +11,14 @@ import {
   resolveAuxiliarySequenceIdentity,
 } from "@noobot/context-protocol/assembly/auxiliary-sequence";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { text } from "@noobot/shared/value";
 
 const snapshots = new Map();
 const maxEntries = QUANTITY_THRESHOLDS.harness.incrementalMessageCacheEntries;
 
 function snapshotKey(ctx = {}, purpose = "") {
-  const sessionId = String(ctx?.sessionId || "").trim();
-  const normalizedPurpose = String(purpose || "").trim();
+  const sessionId = text(ctx?.sessionId);
+  const normalizedPurpose = text(purpose);
   return sessionId && normalizedPurpose ? `${sessionId}::${normalizedPurpose}` : "";
 }
 
@@ -28,11 +29,7 @@ function buildCurrentContext(ctx = {}, messages = []) {
     if (!identity) throw new TypeError("Harness auxiliary message requires sequence identity");
     if (identity.kind === AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST) {
       messageBlocks.incremental.push(message);
-    } else if (
-      String(message?.role || "")
-        .trim()
-        .toLowerCase() === "system"
-    ) {
+    } else if (text(message?.role).toLowerCase() === "system") {
       messageBlocks.system.push(message);
     } else {
       messageBlocks.history.push(message);
@@ -62,7 +59,7 @@ export function resolveAuxiliarySnapshotMessages({ ctx = {}, purpose = "", messa
 }
 
 export function clearAuxiliarySnapshotsForContext(ctx = {}) {
-  const sessionId = String(ctx?.sessionId || "").trim();
+  const sessionId = text(ctx?.sessionId);
   if (!sessionId) return 0;
   let deleted = 0;
   for (const key of snapshots.keys()) {

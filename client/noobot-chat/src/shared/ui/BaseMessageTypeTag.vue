@@ -5,12 +5,13 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   type: { type: String, default: "" },
 });
 
-const normalizedType = computed(() => String(props.type || "").trim());
+const normalizedType = computed(() => text(props.type));
 const visible = computed(
   () => Boolean(normalizedType.value) && normalizedType.value !== "tool_call",
 );

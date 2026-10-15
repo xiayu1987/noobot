@@ -33,6 +33,7 @@ import {
   isTurnRuntimeDeleted,
 } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { normalizeSessionDetailApplyMode } from "../../../chat/runtime/engine/messageStateGuards.js";
+import { text } from "@noobot/shared/value";
 
 export function createSessionDetailApplicator({
   sessions,
@@ -79,12 +80,12 @@ export function createSessionDetailApplicator({
       applyMode,
       currentMessages: summarizeDebugMessages(sessionItem.messages),
     }));
-    const detailSessionId = String(detail.sessionId || "").trim();
+    const detailSessionId = text(detail.sessionId);
     const deletedTurnScopeIds = [
       ...(Array.isArray(options.deletedTurnScopeIds) ? options.deletedTurnScopeIds : []),
       options.deleteFromTurnScopeId,
     ]
-      .map((value) => String(value || "").trim())
+      .map((value) => text(value))
       .filter(Boolean);
     if (deletedTurnScopeIds.length) {
       confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, deletedTurnScopeIds, {
@@ -110,9 +111,9 @@ export function createSessionDetailApplicator({
       currentCandidates: summarizeWorkflowMessages(sessionItem.messages),
       persistedCandidates: summarizeWorkflowMessages(mainSessionDoc.messages),
     }));
-    const serverSessionTitle = String(
-      mainSessionDoc.title || mainSessionDoc.customTitle || detail.title || "",
-    ).trim();
+    const serverSessionTitle = text(
+      mainSessionDoc.title || mainSessionDoc.customTitle || detail.title,
+    );
     const hasMessageSnapshot = Array.isArray(mainSessionDoc.messages);
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
 
@@ -174,9 +175,9 @@ export function createSessionDetailApplicator({
       projectedTerminalPresentations: detailProjection.messages
         .filter((messageItem) => messageItem?.turnStatusPlaceholder === true)
         .map((messageItem) => ({
-          messageId: String(messageItem?.messageId || "").trim(),
-          turnScopeId: String(messageItem?.turnScopeId || "").trim(),
-          status: String(messageItem?.status || messageItem?.turnStatus?.status || "").trim(),
+          messageId: text(messageItem?.messageId),
+          turnScopeId: text(messageItem?.turnScopeId),
+          status: text(messageItem?.status || messageItem?.turnStatus?.status),
           contentLength: typeof messageItem?.content === "string" ? messageItem.content.length : 0,
         })),
     }));

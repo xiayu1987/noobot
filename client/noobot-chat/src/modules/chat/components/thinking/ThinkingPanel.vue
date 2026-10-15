@@ -11,6 +11,7 @@ import { normalizeTurnScopeIdKey } from "../../model/messageIdentity.js";
 import { getTurnUiState, setTurnThinkingOpenNames } from "../../runtime/engine/turnUiStore.js";
 import ThinkingPanelRealtime from "./ThinkingPanelRealtime.vue";
 import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
@@ -34,9 +35,9 @@ const detailMessageItem = computed(
 );
 const thinkingIdentity = computed(() =>
   [
-    String(props.messageItem?.sessionId || "").trim(),
+    text(props.messageItem?.sessionId),
     normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
-    String(props.messageItem?.dialogProcessId || props.messageItem?.messageId || "").trim(),
+    text(props.messageItem?.dialogProcessId || props.messageItem?.messageId),
   ].join("::"),
 );
 const panelVisible = computed(() =>

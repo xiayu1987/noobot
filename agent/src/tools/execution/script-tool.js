@@ -46,6 +46,7 @@ import {
 } from "./script-tool/workspace-meta.js";
 import { runDockerCommand } from "./script-tool/docker-runner.js";
 import { buildScriptToolDescription } from "./script-tool/description.js";
+import { text } from "@noobot/shared/value";
 
 export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
 
@@ -57,7 +58,7 @@ export function createScriptTool({ agentContext }) {
 
   const workspace = basePath;
   const userRoot = basePath;
-  const userId = String(runtime?.userId || "").trim();
+  const userId = text(runtime?.userId);
   const executionPolicy = resolveToolExecutionPolicy({
     toolName: EXECUTE_SCRIPT_TOOL_NAME,
     globalConfig,
@@ -123,7 +124,7 @@ export function createScriptTool({ agentContext }) {
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
       const abortSignal = toolConfig?.signal || null;
-      const generatedDataRoot = String(runtime?.systemRuntime?.sessionDir || "").trim();
+      const generatedDataRoot = text(runtime?.systemRuntime?.sessionDir);
       if (!generatedDataRoot) throw new Error("session directory is required for script output");
       const identity = toolConfig?.configurable?.transferIdentity;
       if (!identity || typeof identity !== "object") {

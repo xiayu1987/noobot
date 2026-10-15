@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const MAIN_FLOW_CONTROL_ACTION = Object.freeze({
   FINAL_NO_TOOLS_TURN: "final_no_tools_turn",
   SUMMARY_CHECKPOINT: "summary_checkpoint",
@@ -36,30 +38,30 @@ function ensureSystemRuntime(runtime = {}) {
 function normalizeFinalNoToolsInstruction(instruction = null) {
   const value = asObject(instruction);
   if (!value) return null;
-  const action = String(value.action || "").trim();
+  const action = text(value.action);
   if (action !== MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN) return null;
   return {
     action,
     reason: String(value.reason || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY).trim(),
-    source: String(value.source || "").trim(),
-    requestedAt: String(value.requestedAt || "").trim(),
+    source: text(value.source),
+    requestedAt: text(value.requestedAt),
     detail: asObject(value.detail) || {},
   };
 }
 
 function normalizeSummaryCheckpointInstruction(instruction = null) {
   const value = asObject(instruction);
-  if (!value || String(value.action || "").trim() !== MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT) {
+  if (!value || text(value.action) !== MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT) {
     return null;
   }
   return {
     action: MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
-    source: String(value.source || "").trim(),
+    source: text(value.source),
     summarizedMessageIds: (Array.isArray(value.summarizedMessageIds)
       ? value.summarizedMessageIds
       : []
     )
-      .map((id) => String(id || "").trim())
+      .map((id) => text(id))
       .filter(Boolean),
   };
 }
@@ -125,7 +127,7 @@ export function requestMainFlowFinalNoToolsTurn(
   const instruction = {
     action: MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN,
     reason: String(reason || MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY).trim(),
-    source: String(source || "").trim(),
+    source: text(source),
     requestedAt: new Date().toISOString(),
     detail: asObject(detail) || {},
   };

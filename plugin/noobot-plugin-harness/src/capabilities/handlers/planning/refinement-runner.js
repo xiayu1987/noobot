@@ -33,6 +33,7 @@ import {
   formatOperationDirectoryForRelay,
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
+import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -123,7 +124,7 @@ export async function runPlanningRefinementBySeparateModel(
     bucket,
     ctx,
   })
-    .map((item = {}) => String(item?.content || "").trim())
+    .map((item = {}) => text(item?.content))
     .filter(Boolean);
   const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
@@ -186,7 +187,7 @@ export async function runPlanningRefinementBySeparateModel(
       error: String(error?.message || error || ""),
     };
   }
-  const refinementText = String(refinementResponse?.output?.text || "").trim();
+  const refinementText = text(refinementResponse?.output?.text);
   const refinementAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_refinement",
     content: refinementText,

@@ -17,6 +17,7 @@ import {
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "./codec.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];
@@ -25,9 +26,7 @@ function normalizeList(value) {
 const ROUND_IDENTITY_FIELDS = ["dialogProcessId", "turnScopeId"];
 
 function normalizeRoundIdentity(identity = {}) {
-  return Object.fromEntries(
-    ROUND_IDENTITY_FIELDS.map((field) => [field, String(identity?.[field] || "").trim()]),
-  );
+  return Object.fromEntries(ROUND_IDENTITY_FIELDS.map((field) => [field, text(identity?.[field])]));
 }
 
 function requireCompleteRoundIdentity(identity = {}, label = "round identity") {
@@ -63,7 +62,7 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
 
 function resolveMessageId(message = {}) {
   const canonicalMessageId = readContextMessageField(message, "noobotMessageId");
-  const persistedMessageUid = String(message?.messageUid || "").trim();
+  const persistedMessageUid = text(message?.messageUid);
   if (canonicalMessageId && persistedMessageUid && canonicalMessageId !== persistedMessageUid) {
     throw new Error("persisted messageUid conflicts with canonical noobotMessageId");
   }
@@ -83,7 +82,7 @@ function ensureMessageMetadata(message = {}) {
 }
 
 function assignMessageId(message = {}, id = "") {
-  const normalizedId = String(id || "").trim();
+  const normalizedId = text(id);
   if (!message || typeof message !== "object" || !normalizedId) return "";
   const additionalKwargs = ensureMessageMetadata(message);
   additionalKwargs.noobotMessageId = normalizedId;
@@ -151,7 +150,7 @@ function nextMessageId(store = {}) {
 
 function bumpNextMessageId(store = {}, id = "") {
   if (!store || typeof store !== "object") return;
-  const normalizedId = String(id || "").trim();
+  const normalizedId = text(id);
   const match = normalizedId.match(/^am_([0-9a-z]+)$/i);
   if (!match) return;
   const numeric = Number.parseInt(match[1], 36);
@@ -277,7 +276,7 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
   }
   const normalizedIds = new Set(
     normalizeList(messageIds)
-      .map((value) => String(value || "").trim())
+      .map((value) => text(value))
       .filter(Boolean),
   );
   if (normalizedIds.size === 0) {
@@ -313,7 +312,7 @@ export function updateMessageById(holder = {}, messageId = "", patch = {}) {
   if (!holder || typeof holder !== "object") {
     throw new TypeError("modelContext document is required");
   }
-  const normalizedId = String(messageId || "").trim();
+  const normalizedId = text(messageId);
   if (!normalizedId) throw new TypeError("messageId is required");
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
     throw new TypeError("message patch must be an object");
@@ -331,7 +330,7 @@ export function updateMessageById(holder = {}, messageId = "", patch = {}) {
 export function resolveMessagesByIds(holder = {}, ids = []) {
   const store = resolveStore(holder);
   return normalizeList(ids)
-    .map((id) => store.byId.get(String(id || "").trim()))
+    .map((id) => store.byId.get(text(id)))
     .filter(Boolean);
 }
 
@@ -469,7 +468,7 @@ export function appendMessage(holder = {}, message = {}, { block = "" } = {}) {
   const canonicalMessage = canonicalizeMessage(store, identifiedMessage);
   if (!Array.isArray(holder.messages)) holder.messages = [];
   if (!holder.messages.includes(canonicalMessage)) holder.messages.push(canonicalMessage);
-  const blockName = String(block || "").trim();
+  const blockName = text(block);
   if (["system", "history", "incremental"].includes(blockName)) {
     const currentBlocks =
       holder.messageBlocks &&

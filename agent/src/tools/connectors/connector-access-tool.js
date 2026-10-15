@@ -19,9 +19,10 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tToolDescription, tToolParamDescription } from "../core/tool-schema-i18n.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 function assertSelectedConnector(selectedConnectorIds = [], connectorId = "") {
-  const normalizedId = String(connectorId || "").trim();
+  const normalizedId = text(connectorId);
   if (!normalizedId || !selectedConnectorIds.includes(normalizedId)) {
     throw recoverableToolError("connector_id is not selected for this session", {
       code: ERROR_CODE.RECOVERABLE_SELECTED_CONNECTOR_MISMATCH,
@@ -31,8 +32,8 @@ function assertSelectedConnector(selectedConnectorIds = [], connectorId = "") {
 }
 
 function createArtifactSink(runtime = {}) {
-  const userId = String(runtime?.userId || "").trim();
-  const sessionId = String(runtime?.systemRuntime?.sessionId || "").trim();
+  const userId = text(runtime?.userId);
+  const sessionId = text(runtime?.systemRuntime?.sessionId);
   const attachmentService = runtime?.attachmentService || null;
   if (!userId || !sessionId || !attachmentService) return null;
   return async (artifacts = [], options = {}) => {
@@ -61,7 +62,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   if (effectiveConfig?.tools?.[TOOL_NAME.ACCESS_CONNECTOR]?.enabled === false) return [];
-  const userId = String(runtime?.userId || agentContext?.userId || "").trim();
+  const userId = text(runtime?.userId || agentContext?.userId);
   const selectedConnectorIds = normalizeSelectedConnectorIds(
     runtime?.systemRuntime?.config?.selectedConnectorIds,
   );
@@ -98,7 +99,7 @@ export function createConnectorAccessTool({ agentContext }) {
           request: { connectorId, operation, input },
           context: {
             artifactSink: createArtifactSink(runtime),
-            sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
+            sessionId: text(runtime?.systemRuntime?.sessionId),
             abortSignal: runtime?.abortSignal || null,
           },
         });

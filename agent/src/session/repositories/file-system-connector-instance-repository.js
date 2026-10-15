@@ -8,22 +8,23 @@ import { filePath as path } from "@noobot/path-resolver";
 import { normalizeConnectorSecretEnvelope } from "@noobot/connector-protocol";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
 import { writeFileAtomic } from "../../shared/storage/atomic-file-write.js";
+import { text } from "@noobot/shared/value";
 
 const REGISTRY_FILE_NAME = "connector-instances.json";
 const REGISTRY_VERSION = 3;
 const LEGACY_REGISTRY_VERSION = 2;
 
 const requiredText = (value, label) => {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   if (!normalized) throw new TypeError(`${label} is required`);
   return normalized;
 };
 
 function normalizeRecord(record = {}) {
-  const connectorId = String(record.connectorId || "").trim();
-  const ownerUserId = String(record.ownerUserId || "").trim();
-  const name = String(record.name || "").trim();
-  const instanceType = String(record.instanceType || "").trim();
+  const connectorId = text(record.connectorId);
+  const ownerUserId = text(record.ownerUserId);
+  const name = text(record.name);
+  const instanceType = text(record.instanceType);
   const sealedParameters = normalizeConnectorSecretEnvelope(record.sealedParameters);
   if (!connectorId || !ownerUserId || !name || !instanceType) return null;
   return Object.freeze({
@@ -32,8 +33,8 @@ function normalizeRecord(record = {}) {
     name,
     instanceType,
     sealedParameters,
-    createdAt: String(record.createdAt || "").trim(),
-    updatedAt: String(record.updatedAt || "").trim(),
+    createdAt: text(record.createdAt),
+    updatedAt: text(record.updatedAt),
   });
 }
 
@@ -88,8 +89,8 @@ export class FileSystemConnectorInstanceRepository {
           !Array.isArray(record.parameters)
             ? Object.freeze({ ...record.parameters })
             : Object.freeze({}),
-        createdAt: String(record?.createdAt || "").trim(),
-        updatedAt: String(record?.updatedAt || "").trim(),
+        createdAt: text(record?.createdAt),
+        updatedAt: text(record?.updatedAt),
       })),
     };
   }

@@ -13,6 +13,7 @@ import {
 } from "@noobot/file-mutation-protocol";
 import { assertFileMutationVersion, withFileMutationLocks } from "./file-mutation-state.js";
 import { resolveSessionGeneratedDataRoot } from "../../session/session-generated-data.js";
+import { text } from "@noobot/shared/value";
 
 export function resolveFileMutationRoot(sessionDir) {
   return resolveSessionGeneratedDataRoot(sessionDir, "fileMutations");
@@ -35,7 +36,7 @@ async function readExisting(filePath) {
 }
 
 function normalizeMutationScope(scopeId, operation) {
-  const normalized = String(scopeId || "").trim();
+  const normalized = text(scopeId);
   if (operation === "update" && !normalized) {
     throw new TypeError("file mutation scope is required for update");
   }
@@ -130,9 +131,9 @@ function normalizeMutationRequest({ logicalPath, operation, scopeId, mutationRoo
   if (!FILE_MUTATION_OPERATIONS.includes(normalizedOperation))
     throw new TypeError(`unsupported file mutation operation: ${normalizedOperation}`);
   const normalizedScopeId = normalizeMutationScope(scopeId, normalizedOperation);
-  const normalizedLogicalPath = String(logicalPath || "").trim();
+  const normalizedLogicalPath = text(logicalPath);
   if (!normalizedLogicalPath) throw new TypeError("file mutation logical path is required");
-  const root = String(mutationRoot || "").trim();
+  const root = text(mutationRoot);
   if (!root) throw new Error("file mutation repository root is required");
   if (typeof writeText !== "function") {
     throw new TypeError("file mutation write capability is required");
@@ -353,7 +354,7 @@ export async function applyFileMutation(options = {}) {
 }
 
 export async function readFileMutation({ mutationRoot, mutationId } = {}) {
-  const id = String(mutationId || "").trim();
+  const id = text(mutationId);
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
     const error = new Error("invalid file mutation id");
     error.status = 400;
@@ -372,7 +373,7 @@ async function rollbackFileMutationInternal({
   writeText = async (target, value) => writeFile(target, value, "utf8"),
   removeFile = async (target) => unlink(target),
 } = {}) {
-  const root = String(mutationRoot || "").trim();
+  const root = text(mutationRoot);
   const record = await readFileMutation({ mutationRoot: root, mutationId });
   if (
     restoreState?.committedRecord &&

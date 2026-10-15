@@ -34,6 +34,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 
 function reportPluginEvent(record = {}) {
   void writeRuntimeEvent({
@@ -87,7 +88,7 @@ export function createServicePluginHost({
 } = {}) {
   const runtimeOptions = {
     surface: PLUGIN_SURFACE.SERVICE,
-    ...(String(pluginRootDir || "").trim() ? { pluginRootDir: String(pluginRootDir).trim() } : {}),
+    ...(text(pluginRootDir) ? { pluginRootDir: String(pluginRootDir).trim() } : {}),
   };
   let runtimePromise = null;
   let activationPromise = null;
@@ -275,13 +276,11 @@ export function createServicePluginHost({
     } = {}) {
       if (!activeScope) throw new Error("service plugins must be activated during HTTP startup");
       const basePath =
-        bot && typeof bot.getWorkspacePath === "function"
-          ? String(bot.getWorkspacePath(userId) || "").trim()
-          : "";
+        bot && typeof bot.getWorkspacePath === "function" ? text(bot.getWorkspacePath(userId)) : "";
       if (!basePath) return collectSessionDeletionHookResult();
       const hookResult = await activeHookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
-        userId: String(userId || "").trim(),
-        sessionId: String(sessionId || "").trim(),
+        userId: text(userId),
+        sessionId: text(sessionId),
         deletedSessionIds: mergeSessionDeletionIds(deletedSessionIds),
         remainingSessionIds: mergeSessionDeletionIds(remainingSessionIds),
         basePath,

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const CONNECTOR_FIELD_KINDS = new Set(["text", "number", "boolean", "workspace_path"]);
 const CONNECTOR_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 
@@ -11,8 +13,8 @@ export const connectorField = (
   name,
   { required = false, secret = false, kind = "text", defaultValue } = {},
 ) => {
-  const normalizedName = String(name || "").trim();
-  const normalizedKind = String(kind || "").trim();
+  const normalizedName = text(name);
+  const normalizedKind = text(kind);
   if (!normalizedName) throw new TypeError("connector field name is required");
   if (!CONNECTOR_FIELD_KINDS.has(normalizedKind)) {
     throw new TypeError(`connector field kind is invalid: ${normalizedKind}`);
@@ -30,8 +32,8 @@ export function connectorOperation(
   name,
   { description = "", inputSchema = { type: "object", properties: {} } } = {},
 ) {
-  const normalizedName = String(name || "").trim();
-  const normalizedDescription = String(description || "").trim();
+  const normalizedName = text(name);
+  const normalizedDescription = text(description);
   if (!CONNECTOR_IDENTIFIER_PATTERN.test(normalizedName)) {
     throw new TypeError(`connector operation name is invalid: ${normalizedName}`);
   }
@@ -54,12 +56,12 @@ export function connectorOperation(
 }
 
 function normalizeConnectorType(value = "") {
-  const normalized = String(value || "").trim();
+  const normalized = text(value);
   return CONNECTOR_IDENTIFIER_PATTERN.test(normalized) ? normalized : "";
 }
 
 export function createConnectorInstanceDefinition(input = {}) {
-  const instanceType = String(input.instanceType || "").trim();
+  const instanceType = text(input.instanceType);
   const type = normalizeConnectorType(input.type);
   const subType = normalizeConnectorType(input.subType);
   if (!instanceType || !type || !subType) {
@@ -77,7 +79,7 @@ export function createConnectorInstanceDefinition(input = {}) {
     throw new TypeError("connector instance operations must have unique names");
   }
   const fields = [...(input.fields || [])].map((item) => connectorField(item?.name, item));
-  const fieldNames = fields.map((item) => String(item?.name || "").trim());
+  const fieldNames = fields.map((item) => text(item?.name));
   if (fieldNames.some((name) => !name) || new Set(fieldNames).size !== fieldNames.length) {
     throw new TypeError("connector instance fields must have unique names");
   }
@@ -123,10 +125,10 @@ export function normalizeConnectorParameters(definition, parameters = {}) {
 
 export function projectConnectorInstanceDefinition(definition = {}) {
   return Object.freeze({
-    instanceType: String(definition.instanceType || "").trim(),
+    instanceType: text(definition.instanceType),
     type: normalizeConnectorType(definition.type),
-    subType: String(definition.subType || "").trim(),
-    displayName: String(definition.displayName || "").trim(),
+    subType: text(definition.subType),
+    displayName: text(definition.displayName),
     fields: Object.freeze([...(definition.fields || [])]),
     operations: Object.freeze([...(definition.operations || [])]),
   });

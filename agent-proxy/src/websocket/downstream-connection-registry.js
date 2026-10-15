@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export class DownstreamConnectionRegistry {
   constructor({ now = () => Date.now() } = {}) {
     this.now = now;
@@ -11,7 +13,7 @@ export class DownstreamConnectionRegistry {
   }
 
   register(socket, { connectionId = "", onFinalize = null } = {}) {
-    const id = String(connectionId || socket?.__agentProxySocketId || "").trim();
+    const id = text(connectionId || socket?.__agentProxySocketId);
     if (!socket || !id) return null;
     const existing = this.connections.get(id);
     if (existing && !existing.finalized) return existing;
@@ -73,7 +75,7 @@ export class DownstreamConnectionRegistry {
   resolve(socketOrId) {
     if (!socketOrId) return null;
     if (typeof socketOrId === "string") return this.connections.get(socketOrId) || null;
-    const id = String(socketOrId.__agentProxySocketId || "").trim();
+    const id = text(socketOrId.__agentProxySocketId);
     return id ? this.connections.get(id) || null : null;
   }
 

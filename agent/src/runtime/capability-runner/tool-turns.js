@@ -5,6 +5,7 @@
  */
 import { normalizeToolCalls } from "../../models/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { text } from "@noobot/shared/value";
 
 export function createCapabilityToolBinding(adapted = {}) {
   const tools = Array.isArray(adapted.tools) ? adapted.tools : [];
@@ -13,9 +14,7 @@ export function createCapabilityToolBinding(adapted = {}) {
     options:
       adapted.bindOptions && typeof adapted.bindOptions === "object" ? adapted.bindOptions : {},
     toolMap: new Map(
-      tools
-        .map((tool) => [String(tool?.name || "").trim(), tool])
-        .filter(([name]) => Boolean(name)),
+      tools.map((tool) => [text(tool?.name), tool]).filter(([name]) => Boolean(name)),
     ),
   };
 }

@@ -25,6 +25,7 @@ import {
   createBotDispatchHandled,
   createBotDispatchPass,
 } from "@noobot/agent-transport-protocol/bot-dispatch";
+import { text } from "@noobot/shared/value";
 
 export async function handleBeforeAgentDispatch({
   hookManager,
@@ -32,8 +33,7 @@ export async function handleBeforeAgentDispatch({
   ctx = {},
   hookPoint = "",
 } = {}) {
-  const beforeDispatchMode =
-    String(hookPoint || "").trim() === HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
+  const beforeDispatchMode = text(hookPoint) === HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
   const sourceAgentResult =
     ctx?.agentResult && typeof ctx.agentResult === "object" ? ctx.agentResult : {};
   const agentResult = beforeDispatchMode

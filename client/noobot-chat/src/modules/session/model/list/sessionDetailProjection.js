@@ -6,6 +6,7 @@
 import { buildNormalizedDetailMessages } from "./detailMessages.js";
 import { foldConversationMessages } from "../../../chat/model/messageModel.js";
 import { selectTurnPresentations } from "../../../chat/runtime/engine/turnPresentation.js";
+import { text } from "@noobot/shared/value";
 
 export function buildSessionDetailProjection({
   sessionDetail = {},
@@ -26,7 +27,7 @@ export function buildSessionDetailProjection({
     : Array.isArray(summary.turnTimings)
       ? summary.turnTimings
       : [];
-  const sessionId = String(sessionDetail?.sessionId || summary.sessionId || "").trim();
+  const sessionId = text(sessionDetail?.sessionId || summary.sessionId);
   const normalizedMessages = buildNormalizedDetailMessages({
     detailMessages: messages,
     sessionDocs,

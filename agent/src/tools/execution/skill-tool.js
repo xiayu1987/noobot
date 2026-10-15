@@ -17,6 +17,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
+import { text } from "@noobot/shared/value";
 
 function getBasePath(agentContext) {
   const runtime = getRuntimeFromAgentContext(agentContext);
@@ -24,7 +25,7 @@ function getBasePath(agentContext) {
 }
 
 function skillRelativePath(parentSkill = "") {
-  const parent = String(parentSkill || "").trim();
+  const parent = text(parentSkill);
   return parent ? `skills/${parent}` : "skills";
 }
 

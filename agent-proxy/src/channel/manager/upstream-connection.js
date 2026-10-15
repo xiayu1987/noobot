@@ -26,6 +26,7 @@ import {
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
 import { assertLocatableDataPlaneEvent } from "./data-plane-event-validator.js";
+import { text } from "@noobot/shared/value";
 
 const EXECUTION_QUERY_WIRE_EVENTS = new Set(
   Object.values(EXECUTION_QUERY_CONTRACT).map((contract) => contract.wireEvent),
@@ -80,7 +81,7 @@ class UpstreamConnectionMethods {
     void writeAgentProxyRouteLifecycleEvent({
       event: "agentProxy.route.upstreamConnect.started",
       channel,
-      data: { localePresent: Boolean(String(locale || "").trim()) },
+      data: { localePresent: Boolean(text(locale)) },
     });
     channel._errorHandled = false;
     const upstreamUrl = buildUpstreamUrl(config.upstreamWsUrl, apiKey);
@@ -103,8 +104,8 @@ class UpstreamConnectionMethods {
       this.broadcastChannelEvent(channel, errorEnvelope);
       return;
     }
-    channel.apiKey = String(apiKey || "").trim();
-    channel.locale = String(locale || "").trim();
+    channel.apiKey = text(apiKey);
+    channel.locale = text(locale);
     channel.updatedAtMs = nowMs();
     this.logChannelEvent(channel, {
       category: "transport",
@@ -283,10 +284,10 @@ class UpstreamConnectionMethods {
 
   parseUpstreamMessage(channel, rawData) {
     const parsed = JSON.parse(String(rawData || "{}"));
-    const eventName = String(parsed?.event || "").trim();
+    const eventName = text(parsed?.event);
     if (!eventName) throw new TypeError("missing_upstream_event");
     const eventData = parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
-    const queryCommandId = String(eventData?.commandId || "").trim();
+    const queryCommandId = text(eventData?.commandId);
     const isQueryResponse =
       eventName === TURN_SNAPSHOT_WIRE_EVENT ||
       Boolean(
@@ -325,13 +326,13 @@ class UpstreamConnectionMethods {
   logUpstreamActionAccepted(channel, eventName, eventData) {
     const lifecycle = eventData?.payload || {};
     if (eventName !== TURN_LIFECYCLE_WIRE_EVENT) return;
-    if (String(lifecycle?.eventType || "").trim() !== TURN_EVENT.ACTION_ACCEPTED) return;
+    if (text(lifecycle?.eventType) !== TURN_EVENT.ACTION_ACCEPTED) return;
     const summary = summarizeAgentTransportCommand(channel.startPayload, {
       accepted: true,
       consumedByService: true,
       transport: "websocket",
       lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
-      lifecycleEventId: String(eventData?.identity?.eventId || "").trim(),
+      lifecycleEventId: text(eventData?.identity?.eventId),
       lifecycleRevision: Number(eventData?.ordering?.revision || 0),
     });
     this.logChannelEvent(channel, {
@@ -347,7 +348,7 @@ class UpstreamConnectionMethods {
   }
 
   routeUpstreamSnapshot(channel, eventName, eventData) {
-    const commandId = String(eventData?.causality?.commandId || "").trim();
+    const commandId = text(eventData?.causality?.commandId);
     const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
     if (!requester) return;
     channel.pendingSnapshotRequests.delete(commandId, "delivered");
@@ -398,7 +399,7 @@ class UpstreamConnectionMethods {
       this.routeUpstreamSnapshot(channel, eventName, eventData);
       return;
     }
-    const commandId = String(eventData?.commandId || "").trim();
+    const commandId = text(eventData?.commandId);
     if (
       eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
       this.resolvePendingSnapshotFailure(

@@ -12,6 +12,7 @@ import {
   resolveBrowserProfileRoot,
   supportsHeadedBrowser,
 } from "@noobot/platform-compatibility/process";
+import { text } from "@noobot/shared/value";
 
 export const DEFAULT_BROWSER_PROFILE_NAME = "default";
 const DEVTOOLS_PORT_FILE = "DevToolsActivePort";
@@ -25,7 +26,7 @@ function sessionKey({ userId, profileName }) {
 }
 
 export function resolveBrowserProfileName(value) {
-  const name = String(value || "").trim() || DEFAULT_BROWSER_PROFILE_NAME;
+  const name = text(value) || DEFAULT_BROWSER_PROFILE_NAME;
   if (!isBrowserProfileNameAllowed(name)) {
     throw new Error(`browser profile name is not allowed: ${name}`);
   }
@@ -33,9 +34,9 @@ export function resolveBrowserProfileName(value) {
 }
 
 export function resolveBrowserProfileDirectory({ profileRoot, userId, profileName }) {
-  const root = String(profileRoot || "").trim();
+  const root = text(profileRoot);
   if (!root) throw new Error("browser profile root is not configured");
-  const owner = String(userId || "").trim();
+  const owner = text(userId);
   if (!owner) throw new Error("browser profile owner is required");
   if (!isBrowserProfileNameAllowed(owner)) {
     throw new Error("browser profile owner is not allowed");
@@ -48,7 +49,7 @@ async function readDevToolsEndpoint(profileDirectory) {
   for (let attempt = 0; attempt < DEVTOOLS_PORT_READ_ATTEMPTS; attempt += 1) {
     try {
       const [port] = (await readFile(portFile, "utf8")).split("\n");
-      const parsed = Number(String(port || "").trim());
+      const parsed = Number(text(port));
       if (Number.isInteger(parsed) && parsed > 0) return `http://127.0.0.1:${parsed}`;
     } catch {
       void 0;
@@ -88,7 +89,7 @@ export async function acquireBrowserSession({
   platform = process.platform,
   playwrightModule = null,
 } = {}) {
-  if (!String(executablePath || "").trim()) {
+  if (!text(executablePath)) {
     throw new Error("Playwright Chromium executable is not configured");
   }
   if (headed && !supportsHeadedBrowser({ platform, sourceEnv })) {
@@ -107,7 +108,7 @@ export async function acquireBrowserSession({
     return { endpoint: session.endpoint, profileName: resolvedProfileName, headed: session.headed };
   }
   const profileDirectory = resolveBrowserProfileDirectory({
-    profileRoot: String(profileRoot || "").trim() || resolveBrowserProfileRoot({ sourceEnv }),
+    profileRoot: text(profileRoot) || resolveBrowserProfileRoot({ sourceEnv }),
     userId,
     profileName: resolvedProfileName,
   });

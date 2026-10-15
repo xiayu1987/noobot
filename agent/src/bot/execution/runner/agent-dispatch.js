@@ -19,11 +19,10 @@ import {
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
 import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
+import { text } from "@noobot/shared/value";
 
 function messageIdentity(message = {}) {
-  const messageId = String(
-    message?.messageId || message?.additional_kwargs?.noobotMessageId || "",
-  ).trim();
+  const messageId = text(message?.messageId || message?.additional_kwargs?.noobotMessageId);
   return messageId;
 }
 
@@ -80,8 +79,8 @@ function buildDispatchModelContext({
     messages: history,
     checkpointRevision: Math.max(0, Number(dispatchRuntime?.summaryCheckpointRevision) || 0),
     activeTurnIdentity: {
-      dialogProcessId: String(dialogProcessId || "").trim(),
-      turnScopeId: String(resolvedTurnScopeId || "").trim(),
+      dialogProcessId: text(dialogProcessId),
+      turnScopeId: text(resolvedTurnScopeId),
     },
     onCanonicalMessageAdded(message, meta) {
       emitContextIdentityDebug(
@@ -96,14 +95,14 @@ function buildDispatchModelContext({
 
 function normalizeDispatchOwner({ owner, source, executionKind, origin, stage }) {
   return {
-    owner: String(owner || "").trim(),
+    owner: text(owner),
     source: String(source || "agent_dispatch").trim() || "agent_dispatch",
     executionKind:
       String(executionKind || "agent")
         .trim()
         .toLowerCase() || "agent",
     origin: origin && typeof origin === "object" && !Array.isArray(origin) ? { ...origin } : {},
-    stage: String(stage || "").trim(),
+    stage: text(stage),
   };
 }
 
@@ -125,10 +124,10 @@ function createDispatchClaim({ lifecycle, dispatchRuntime, syncLifecycleRuntimeS
     lifecycle.enterRunning({
       executionOwner: state.owner.owner,
       source: state.owner.source,
-      executionId: String(executionId || "").trim(),
+      executionId: text(executionId),
       executionKind: state.owner.executionKind,
-      parentExecutionId: String(parentExecutionId || "").trim(),
-      rootExecutionId: String(rootExecutionId || "").trim(),
+      parentExecutionId: text(parentExecutionId),
+      rootExecutionId: text(rootExecutionId),
       origin: state.owner.origin,
       stage: state.owner.stage,
     });
@@ -182,7 +181,7 @@ function emitDispatchRouted(runtimeEventListener, dispatchOutcome, claimState) {
     claimedSource: claimOwner?.source || "",
     executionKind: claimOwner?.executionKind || "agent",
     stage: claimOwner?.stage || "",
-    failureCode: String(dispatchOutcome?.failure?.code || "").trim(),
+    failureCode: text(dispatchOutcome?.failure?.code),
   });
 }
 
@@ -255,7 +254,7 @@ function acceptAgentResultMessages({
   emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
     disposition: dispatchOutcome.disposition,
     owner: dispatchOutcome.owner || "root_agent",
-    assistantMessageId: String(agentResult?.assistantMessageId || "").trim(),
+    assistantMessageId: text(agentResult?.assistantMessageId),
     outputChars: String(agentResult?.output || "").length,
     resultAttachmentCount: Array.isArray(agentResult?.attachments)
       ? agentResult.attachments.length

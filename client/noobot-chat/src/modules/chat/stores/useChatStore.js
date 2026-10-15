@@ -12,6 +12,7 @@ import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatSt
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
 import { createTurnRuntimeStoreCallbacks } from "./turnRuntimeStoreCallbacks.js";
 import { isFinalTurnState } from "../runtime/run-state-machine/turnReducer.js";
+import { text } from "@noobot/shared/value";
 
 export const useChatStore = defineStore("chat", () => {
   const input = ref("");
@@ -34,22 +35,22 @@ export const useChatStore = defineStore("chat", () => {
   let subSessions = null;
   function closePendingInteractionsForTerminalTurn(turn = {}) {
     if (!isFinalTurnState(turn?.state, turn)) return 0;
-    const sessionId = String(turn?.sessionId || "").trim();
-    const dialogProcessId = String(turn?.dialogProcessId || "").trim();
-    const turnScopeId = String(turn?.turnScopeId || "").trim();
+    const sessionId = text(turn?.sessionId);
+    const dialogProcessId = text(turn?.dialogProcessId);
+    const turnScopeId = text(turn?.turnScopeId);
     if (!sessionId || !turnScopeId) return 0;
     const before = pendingInteractionRequests.value.length;
     pendingInteractionRequests.value = pendingInteractionRequests.value.filter((request = {}) => {
-      if (String(request?.sessionId || "").trim() !== sessionId) return true;
-      const requestDialogProcessId = String(request?.dialogProcessId || "").trim();
+      if (text(request?.sessionId) !== sessionId) return true;
+      const requestDialogProcessId = text(request?.dialogProcessId);
       if (dialogProcessId && requestDialogProcessId !== dialogProcessId) return true;
-      const requestTurnScopeId = String(request?.turnScopeId || "").trim();
+      const requestTurnScopeId = text(request?.turnScopeId);
       return requestTurnScopeId !== turnScopeId;
     });
-    const activeId = String(activeSessionId.value || "").trim();
+    const activeId = text(activeSessionId.value);
     pendingInteractionRequest.value =
       pendingInteractionRequests.value.find(
-        (request = {}) => String(request?.channelSessionId || "").trim() === activeId,
+        (request = {}) => text(request?.channelSessionId) === activeId,
       ) || null;
     if (!pendingInteractionRequest.value) interactionSubmitting.value = false;
     return before - pendingInteractionRequests.value.length;

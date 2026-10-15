@@ -15,11 +15,12 @@ import {
   getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { resolveControlToolOutcome } from "../control-tool-outcome.js";
+import { text } from "@noobot/shared/value";
 
 function updateToolFailureState({ modelState, loopState, toolCallResult }) {
   const runtime = modelState?.runtime || {};
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const toolName = String(toolCallResult?.call?.name || "").trim();
+  const toolName = text(toolCallResult?.call?.name);
   if (!toolName) return;
   const nextFailureCount = toolCallResult?.success
     ? 0
@@ -77,9 +78,7 @@ export async function processToolResults({
   const toolCallResults = toolCallSettlements.map((settlement) => settlement.result);
 
   const taskSummaryOutcome = resolveControlToolOutcome(toolCallResults, TOOL_NAME.TASK_SUMMARY);
-  const hasHelpCall = toolCallResults.some(
-    (result) => String(result?.call?.name || "").trim() === HELP_TOOL_NAME,
-  );
+  const hasHelpCall = toolCallResults.some((result) => text(result?.call?.name) === HELP_TOOL_NAME);
 
   if (taskSummaryOutcome.accepted) {
     loopState.taskSummaryTriggered = true;

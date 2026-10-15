@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const cleanupIntervals = new Map();
 
 export function ensureIntervalCleanupTask(
@@ -12,7 +14,7 @@ export function ensureIntervalCleanupTask(
   intervalMs = 0,
   { unref = true } = {},
 ) {
-  const taskName = String(name || "").trim();
+  const taskName = text(name);
   if (!taskName || typeof task !== "function") return null;
   const normalizedInterval = Number(intervalMs);
   if (!Number.isFinite(normalizedInterval) || normalizedInterval <= 0) return null;

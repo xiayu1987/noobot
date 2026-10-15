@@ -9,11 +9,12 @@ import { pathToFileURL } from "node:url";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
+import { text } from "@noobot/shared/value";
 
 const moduleCache = new Map();
 
 function normalizeName(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function resolveBasePath({ globalConfig = {}, userId = "" }) {
@@ -109,7 +110,7 @@ export async function invokeServiceHandler({
     endpointName,
     serviceCfg,
     endpointCfg,
-    custom_param: String(customParam || "").trim(),
+    custom_param: text(customParam),
     queryString,
     body,
     abortSignal: runtime?.abortSignal || null,

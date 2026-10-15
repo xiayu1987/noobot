@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export class CommandRegistry {
   constructor({
     now = () => Date.now(),
@@ -24,12 +26,12 @@ export class CommandRegistry {
     commandId,
     { channelKey = "", commandType = "command", requester = null, ttlMs = this.defaultTtlMs } = {},
   ) {
-    const id = String(commandId || "").trim();
+    const id = text(commandId);
     if (!id) return null;
     const createdAtMs = this.now();
     const record = {
       commandId: id,
-      channelKey: String(channelKey || "").trim(),
+      channelKey: text(channelKey),
       commandType: String(commandType || "command").trim(),
       requester,
       createdAtMs,
@@ -40,7 +42,7 @@ export class CommandRegistry {
   }
 
   get(commandId) {
-    return this.commands.get(String(commandId || "").trim()) || null;
+    return this.commands.get(text(commandId)) || null;
   }
 
   consume(commandId) {
@@ -52,7 +54,7 @@ export class CommandRegistry {
   }
 
   remove(commandId, reason = "deleted") {
-    const id = String(commandId || "").trim();
+    const id = text(commandId);
     const record = this.commands.get(id) || null;
     if (!record) return null;
     this.commands.delete(id);
@@ -88,14 +90,14 @@ export class CommandRegistry {
   }
 
   lastRemoval(commandId) {
-    return this.removals.get(String(commandId || "").trim()) || null;
+    return this.removals.get(text(commandId)) || null;
   }
 
   registerRoute(requestId, { channelKey = "", createdAtMs = this.now() } = {}) {
-    const id = String(requestId || "").trim();
+    const id = text(requestId);
     if (!id) return null;
     const route = {
-      channelKey: String(channelKey || "").trim(),
+      channelKey: text(channelKey),
       createdAtMs: Number(createdAtMs || this.now()),
     };
     this.routes.set(id, route);

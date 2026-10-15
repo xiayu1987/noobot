@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 const TURN_COMMAND_TYPE = Object.freeze({ SEND: "send", CONTINUE: "continue" });
 const TURN_COMMAND_ORIGIN = Object.freeze({ USER: "user", INTERNAL: "internal" });
 
-const trim = (value = "") => String(value || "").trim();
+const trim = (value = "") => text(value);
 
 export function resolveRunTurnScopeId({ caller = "user", turnScopeId = "" } = {}) {
   const requested = trim(turnScopeId);
@@ -40,7 +41,7 @@ export function createTurnCommand({
     dialogProcessId: trim(dialogProcessId),
     parentDialogProcessId: trim(parentDialogProcessId),
     turnScopeId: trim(turnScopeId),
-    message: String(message || "").trim(),
+    message: text(message),
     messageId: trim(runConfig?.userMessageId),
     expectedAggregateVersion: runConfig?.expectedAggregateVersion,
     commandId: trim(runConfig?.commandId || turnScopeId),

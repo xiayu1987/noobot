@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { decodeExecutionReport } from "@noobot/session-protocol/execution-report";
+import { text } from "@noobot/shared/value";
 
 function requireSessionMethod(props, method) {
   const service = props?.workflowSessionService;
@@ -31,12 +32,12 @@ function createExecutionDetailContext({
   dialogProcessId,
   traceId,
 }) {
-  const requestedChildSessionId = String(sessionId || "").trim();
+  const requestedChildSessionId = text(sessionId);
   const request = {
     userId: props.userId,
-    sessionId: String(rootSessionId || "").trim(),
-    dialogProcessId: String(dialogProcessId || "").trim(),
-    traceId: String(traceId || "").trim(),
+    sessionId: text(rootSessionId),
+    dialogProcessId: text(dialogProcessId),
+    traceId: text(traceId),
   };
   if (
     !request.userId ||
@@ -224,7 +225,7 @@ export function hydrateExecutionSessionDetail(
     sessionSummary: {
       ...sessionSummaryWithoutMutableRuntime(detail?.sessionSummary),
       messages,
-      executionId: String(executionId || "").trim(),
+      executionId: text(executionId),
     },
   };
 }
@@ -253,7 +254,7 @@ export async function fetchExecutionSessionDetail({
 
 function requireTurnTarget(translate, values) {
   const normalized = Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [key, String(value || "").trim()]),
+    Object.entries(values).map(([key, value]) => [key, text(value)]),
   );
   if (!normalized.userId || !normalized.rootSessionId || !normalized.routeDialogProcessId) {
     throw new Error(translate("workflow.nodeSessionMissing"));

@@ -9,10 +9,11 @@ import {
   pickTransferEnvelopeList,
 } from "@noobot/semantic-transfer-protocol";
 import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeRuntimeStatusInput(item = {}) {
   const canonical = item && typeof item === "object" ? item : {};
-  return { ...canonical, status: String(canonical.status || "").trim() };
+  return { ...canonical, status: text(canonical.status) };
 }
 
 function objectOr(value, fallback) {
@@ -20,7 +21,7 @@ function objectOr(value, fallback) {
 }
 
 function firstText(...values) {
-  return String(values.find(Boolean) || "").trim();
+  return text(values.find(Boolean));
 }
 
 function finiteNumberOrUndefined(primary, fallback) {
@@ -70,12 +71,11 @@ function getRegistryValue(registry) {
 }
 
 function resolveWorkflowRunId(workflowPayload) {
-  return String(
+  return text(
     workflowPayload.value?.workflowRunId ||
       workflowPayload.value?.execution?.workflowRunId ||
-      workflowPayload.value?.execution?.instanceId ||
-      "",
-  ).trim();
+      workflowPayload.value?.execution?.instanceId,
+  );
 }
 
 function finiteNumberFrom(value) {
@@ -147,7 +147,7 @@ function rememberRuntimeEntryKeys(entryIndexByKey, item = {}, index = 0) {
     item?.stepId,
     item?.actionNodeStateId,
   ]
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .filter(Boolean);
   for (const key of keys) {
     if (!entryIndexByKey.has(key)) entryIndexByKey.set(key, index);
@@ -163,7 +163,7 @@ function findRuntimeEntryIndex(entryIndexByKey, item = {}) {
     item?.stepId,
     item?.actionNodeStateId,
   ]
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .filter(Boolean);
   for (const key of keys) {
     if (entryIndexByKey.has(key)) return entryIndexByKey.get(key);
@@ -186,7 +186,7 @@ export function createRuntimeNodeSessions({
 
     for (const item of nodeSessions.value) {
       const canonicalItem = normalizeRuntimeStatusInput(item);
-      const nodeExecutionId = String(canonicalItem?.nodeExecutionId || "").trim();
+      const nodeExecutionId = text(canonicalItem?.nodeExecutionId);
       const committed = nodeExecutionId
         ? normalizeCommittedNodeFact(committedNodes[nodeExecutionId])
         : null;

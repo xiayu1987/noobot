@@ -18,6 +18,7 @@ import {
   isTextPreviewFile,
   isTextPreviewMime,
 } from "./file-type.js";
+import { text } from "@noobot/shared/value";
 
 export function createAttachmentPreviewController({
   userId,
@@ -27,7 +28,7 @@ export function createAttachmentPreviewController({
   isImageMime,
   attachmentPreview,
 }) {
-  const normalizedUserId = () => String(userId || "").trim();
+  const normalizedUserId = () => text(userId);
   const accessOptions = () => ({ userId: normalizedUserId() });
   const resolveAttachmentUrl = (item) => resolveAttachmentAccessMeta(item, accessOptions()).url;
   const resolveParsedResultUrl = (item) =>
@@ -97,8 +98,8 @@ export function createAttachmentPreviewController({
 }
 
 function createAttachmentDescriptor(item, isImageMime) {
-  const mimeType = String(item?.mimeType || "").trim();
-  const name = String(item?.name || "").trim();
+  const mimeType = text(item?.mimeType);
+  const name = text(item?.name);
   const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
   return {
     name,
@@ -163,8 +164,8 @@ async function fetchPreview(url, attachmentService, translate) {
 }
 
 function isOfficeAttachmentWithParsedResult(attachmentItem, accessOptions) {
-  const mimeType = String(attachmentItem?.mimeType || "").trim();
-  const name = String(attachmentItem?.name || "").trim();
+  const mimeType = text(attachmentItem?.mimeType);
+  const name = text(attachmentItem?.name);
   return (
     (isOfficeMime(mimeType) || isOfficeFile(name)) &&
     Boolean(resolveParsedResultAccessMeta(attachmentItem, accessOptions))

@@ -8,6 +8,7 @@ import {
   logResendDebug,
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
+import { text } from "@noobot/shared/value";
 
 function sessionIdentity(value = {}) {
   return _trimStr(value?.sessionId);
@@ -34,7 +35,7 @@ export async function renderActiveSessionBeforeReplay({
   if (!activeSession?.value) return false;
   const existingPromise = getReplayHydrationPromise();
   if (existingPromise) return existingPromise;
-  const sessionId = String(activeSession.value?.sessionId || "").trim();
+  const sessionId = text(activeSession.value?.sessionId);
   if (
     !sessionId ||
     typeof chatList?.fetchSessionDetail !== "function" ||

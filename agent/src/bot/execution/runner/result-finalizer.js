@@ -5,6 +5,7 @@
  */
 
 import { emitEvent } from "../../../events/index.js";
+import { text } from "@noobot/shared/value";
 
 export async function finalizeAgentTurn({
   resolvedRunConfig,
@@ -25,7 +26,7 @@ export async function finalizeAgentTurn({
   lifecycle,
   persistenceContext,
 }) {
-  const finalizeThinkingStartedAt = String(resolvedRunConfig?.thinkingStartedAt || "").trim();
+  const finalizeThinkingStartedAt = text(resolvedRunConfig?.thinkingStartedAt);
   emitEvent(runtimeEventListener, "debug_resend_runner_finalize", {
     resolvedThinkingStartedAt: finalizeThinkingStartedAt,
   });
@@ -56,7 +57,7 @@ export async function finalizeAgentTurn({
         : []),
       ...durablePersistedMessageUids,
     ]
-      .map((uid) => String(uid || "").trim())
+      .map((uid) => text(uid))
       .filter(Boolean),
   );
 
@@ -68,26 +69,23 @@ export async function finalizeAgentTurn({
   });
   const scopedPersistedTurnMessages = persistedSessionMessages.filter(
     (message) =>
-      String(message?.turnScopeId || "").trim() === resolvedTurnScopeId &&
-      (!String(message?.dialogProcessId || "").trim() ||
-        String(message?.dialogProcessId || "").trim() === String(dialogProcessId || "").trim()),
+      text(message?.turnScopeId) === resolvedTurnScopeId &&
+      (!text(message?.dialogProcessId) || text(message?.dialogProcessId) === text(dialogProcessId)),
   );
   const persistedTurnMessages =
     checkpointPersistedMessageUids.size > 0
       ? scopedPersistedTurnMessages.filter((message) =>
-          checkpointPersistedMessageUids.has(String(message?.messageUid || "").trim()),
+          checkpointPersistedMessageUids.has(text(message?.messageUid)),
         )
       : checkpointPersistedTotal > 0
         ? scopedPersistedTurnMessages.slice(-checkpointPersistedTotal)
         : [];
   const durableTurnMessageUids = new Set(
-    scopedPersistedTurnMessages
-      .map((message) => String(message?.messageUid || "").trim())
-      .filter(Boolean),
+    scopedPersistedTurnMessages.map((message) => text(message?.messageUid)).filter(Boolean),
   );
   let recoveredActivePrefixCount = 0;
   for (const message of Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : []) {
-    const messageUid = String(message?.messageUid || "").trim();
+    const messageUid = text(message?.messageUid);
     if (!messageUid || !checkpointPersistedMessageUids.has(messageUid)) break;
     recoveredActivePrefixCount += 1;
   }
@@ -119,7 +117,7 @@ export async function finalizeAgentTurn({
     runtimeEventListener,
     userConfig: {
       ...(userConfig && typeof userConfig === "object" ? userConfig : {}),
-      ...(String(resolvedRunConfig?.memoryModel || "").trim()
+      ...(text(resolvedRunConfig?.memoryModel)
         ? { memoryModel: String(resolvedRunConfig.memoryModel).trim() }
         : {}),
     },

@@ -11,6 +11,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { text } from "@noobot/shared/value";
 
 const REPO_API = "https://api.github.com/repos/gitpod-io/openvscode-server";
 const MAX_ARCHIVE_BYTES = LENGTH_THRESHOLDS.installers.openVscodeArchiveBytes;
@@ -24,19 +25,13 @@ const installDir = path.resolve(
 );
 const version = String(process.env.OPENVSCODE_SERVER_VERSION || "latest").trim() || "latest";
 const force = ["1", "true", "yes", "on"].includes(
-  String(process.env.OPENVSCODE_SERVER_INSTALL_FORCE || "")
-    .trim()
-    .toLowerCase(),
+  text(process.env.OPENVSCODE_SERVER_INSTALL_FORCE).toLowerCase(),
 );
 const checkUpdate = ["1", "true", "yes", "on"].includes(
-  String(process.env.OPENVSCODE_SERVER_CHECK_UPDATE || "")
-    .trim()
-    .toLowerCase(),
+  text(process.env.OPENVSCODE_SERVER_CHECK_UPDATE).toLowerCase(),
 );
 const skipUpdateCheckIfUnreachable = ["1", "true", "yes", "on", ""].includes(
-  String(process.env.OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE || "")
-    .trim()
-    .toLowerCase(),
+  text(process.env.OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE).toLowerCase(),
 );
 
 function resolvePlatform() {
@@ -98,8 +93,8 @@ function pickAsset(release) {
       `No OpenVSCode Server asset matched *${suffix} in ${release?.tag_name || "release"}`,
     );
   }
-  const tagName = String(release?.tag_name || "").trim();
-  const assetName = String(asset.name || "").trim();
+  const tagName = text(release?.tag_name);
+  const assetName = text(asset.name);
   if (
     !tagName ||
     tagName.length > 100 ||
@@ -114,9 +109,7 @@ function pickAsset(release) {
   if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_ARCHIVE_BYTES) {
     throw new Error("OpenVSCode Server release asset size is invalid");
   }
-  const digest = String(asset.digest || "")
-    .trim()
-    .toLowerCase();
+  const digest = text(asset.digest).toLowerCase();
   if (!/^sha256:[a-f0-9]{64}$/.test(digest)) {
     throw new Error("OpenVSCode Server release asset has no valid SHA-256 digest");
   }
@@ -295,7 +288,7 @@ async function inspectExistingInstallation(binaryPath) {
     try {
       const release = await resolveRelease();
       const installedTagName = await readInstalledTagName(binaryPath);
-      if (installedTagName && installedTagName === String(release?.tag_name || "").trim()) {
+      if (installedTagName && installedTagName === text(release?.tag_name)) {
         console.log(`[openvscode] already up to date: ${installedTagName}`);
         return { done: true, release, asset: null };
       }

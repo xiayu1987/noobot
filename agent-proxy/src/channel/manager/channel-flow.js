@@ -16,6 +16,7 @@ import { normalizeApiKey, createChannelKey, buildFingerprint } from "../../share
 import { writeAgentProxyRouteDebugEvent } from "../../runtime-events/route-debug-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
 import { AGENT_COMMAND, RUN_COMMAND_TYPES } from "@noobot/agent-transport-protocol";
+import { text } from "@noobot/shared/value";
 
 function projectForwardCommandType(payload) {
   const envelope = payload ?? {};
@@ -44,9 +45,9 @@ function projectResolvedInteractionIdentity(resolvedEnvelope) {
   const identity = envelope.identity ?? {};
   const ordering = envelope.ordering ?? {};
   return {
-    dialogProcessId: String((envelope.payload ?? {}).dialogProcessId || "").trim(),
-    turnScopeId: String(identity.turnScopeId || "").trim(),
-    sessionId: String(identity.sessionId || "").trim(),
+    dialogProcessId: text((envelope.payload ?? {}).dialogProcessId),
+    turnScopeId: text(identity.turnScopeId),
+    sessionId: text(identity.sessionId),
     sequence: Number(ordering.sequence || 0),
   };
 }
@@ -61,7 +62,7 @@ function buildInteractionConversationPatch({
   return {
     sessionId: resolved.sessionId,
     dialogProcessId: resolved.dialogProcessId,
-    turnScopeId: resolved.turnScopeId || String(current.turnScopeId || "").trim(),
+    turnScopeId: resolved.turnScopeId || text(current.turnScopeId),
     state: hasRemainingInteraction
       ? CONVERSATION_STATE.INTERACTION_PENDING
       : CONVERSATION_STATE.SENDING,
@@ -74,9 +75,7 @@ function buildInteractionConversationPatch({
 
 class ChannelFlowMethods {
   resolveChannelFromSocketMessage(socket, payload = {}) {
-    const commandType = String(payload?.commandType || "")
-      .trim()
-      .toLowerCase();
+    const commandType = text(payload?.commandType).toLowerCase();
     if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
       const channel = this.getChannelByRequestId(payload?.interaction?.requestId);
       if (channel) {
@@ -92,8 +91,8 @@ class ChannelFlowMethods {
     }
     const identity =
       payload?.identity && typeof payload.identity === "object" ? payload.identity : {};
-    const sessionId = String(identity.sessionId || payload?.sessionId || "").trim();
-    const explicitChannelKey = String(payload?.channelKey || "").trim();
+    const sessionId = text(identity.sessionId || payload?.sessionId);
+    const explicitChannelKey = text(payload?.channelKey);
     if (explicitChannelKey && this.hasChannel(explicitChannelKey)) {
       if (sessionId && this.getChannel(explicitChannelKey).identity.sessionId !== sessionId) {
         void writeAgentProxyRouteDebugEvent({
@@ -114,7 +113,7 @@ class ChannelFlowMethods {
       });
       return channel;
     }
-    const userId = String(socket?.__agentProxyUserId || "").trim();
+    const userId = text(socket?.__agentProxyUserId);
     if (sessionId && userId) {
       const constructedKey = createChannelKey({
         userId,
@@ -140,7 +139,7 @@ class ChannelFlowMethods {
         data: { routeSource: "constructed_key", usedSocketUserId: true },
       });
     }
-    const activeChannelKey = String(socket?.__agentProxyActiveChannelKey || "").trim();
+    const activeChannelKey = text(socket?.__agentProxyActiveChannelKey);
     if (activeChannelKey && this.hasChannel(activeChannelKey)) {
       if (sessionId && this.getChannel(activeChannelKey).identity.sessionId !== sessionId) {
         void writeAgentProxyRouteDebugEvent({
@@ -258,7 +257,7 @@ class ChannelFlowMethods {
   }
 
   settleForwardedInteractionResponse(channel, payload = {}) {
-    const requestId = String((payload?.interaction ?? {}).requestId || "").trim();
+    const requestId = text((payload?.interaction ?? {}).requestId);
     if (!requestId) return;
     const resolvedEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
     channel.pendingInteractionRequests.delete(requestId);
@@ -268,8 +267,7 @@ class ChannelFlowMethods {
     const stateKey = resolved.dialogProcessId || CONVERSATION_SCOPE_KEY;
     const currentState = channel.conversationStateByDialogProcessId.get(stateKey) || null;
     const hasRemainingInteraction = Array.from(channel.pendingInteractionRequests.values()).some(
-      (envelope) =>
-        String((envelope?.payload ?? {}).dialogProcessId || "").trim() === resolved.dialogProcessId,
+      (envelope) => text((envelope?.payload ?? {}).dialogProcessId) === resolved.dialogProcessId,
     );
     this.updateConversationState(
       channel,
@@ -287,9 +285,7 @@ class ChannelFlowMethods {
       this.logForwardSkipped(channel, payload);
       return false;
     }
-    const commandType = String(payload?.commandType || "")
-      .trim()
-      .toLowerCase();
+    const commandType = text(payload?.commandType).toLowerCase();
     try {
       channel.upstreamSocket.send(JSON.stringify(payload || {}));
       if (RUN_COMMAND_TYPES.includes(commandType)) channel.transport.claimPurpose("run");
@@ -313,8 +309,8 @@ class ChannelFlowMethods {
     const identity =
       payload?.identity && typeof payload.identity === "object" ? payload.identity : {};
     const identityItem = this.resolveApiKeyIdentity(normalizedConnectionApiKey);
-    const userId = String(socket?.__agentProxyUserId || identityItem?.userId || "").trim();
-    const sessionId = String(identity.sessionId || "").trim();
+    const userId = text(socket?.__agentProxyUserId || identityItem?.userId);
+    const sessionId = text(identity.sessionId);
     if (!userId || !sessionId) {
       this.sendSocketError(socket, AGENT_PROXY_ERROR.REQUIRES_USERID_SESSIONID);
       return;
@@ -327,8 +323,7 @@ class ChannelFlowMethods {
     });
     const channel = this.ensureChannel(channelKey, payload);
     if (!channel) return;
-    const requesterUserId =
-      String(socket?.__agentProxyUserId || "").trim() || String(identityItem?.userId || "").trim();
+    const requesterUserId = text(socket?.__agentProxyUserId) || text(identityItem?.userId);
     if (!channel.ownerApiKey) {
       channel.ownerApiKey = normalizedConnectionApiKey;
     }
@@ -410,11 +405,7 @@ class ChannelFlowMethods {
       });
     }
     this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.RESTART);
-    this.connectUpstreamChannel(
-      channel,
-      normalizedConnectionApiKey,
-      String(connectionLocale || "").trim(),
-    );
+    this.connectUpstreamChannel(channel, normalizedConnectionApiKey, text(connectionLocale));
   }
 }
 

@@ -31,6 +31,7 @@ import {
   parseExperienceMetadataText,
   renderExperienceMetadataText,
 } from "@noobot/memory-protocol/experience/metadata";
+import { text } from "@noobot/shared/value";
 
 export class ExperienceManager {
   constructor(storage) {
@@ -106,7 +107,7 @@ export class ExperienceManager {
     const entries = await this.storage.safeReadDirEntries(lessonsDir);
     return entries
       .filter((entry) => entry.isDirectory())
-      .map((entry) => String(entry.name || "").trim())
+      .map((entry) => text(entry.name))
       .filter((key) => /^\d{4}-\d{2}-\d{2}$/.test(key))
       .sort();
   }
@@ -116,7 +117,7 @@ export class ExperienceManager {
     const entries = await this.storage.safeReadDirEntries(weeklyDir);
     return entries
       .filter((entry) => entry.isDirectory())
-      .map((entry) => String(entry.name || "").trim())
+      .map((entry) => text(entry.name))
       .filter((key) => /^\d{4}-W\d{2}$/.test(key))
       .sort();
   }
@@ -126,7 +127,7 @@ export class ExperienceManager {
     const entries = await this.storage.safeReadDirEntries(monthlyDir);
     return entries
       .filter((entry) => entry.isDirectory())
-      .map((entry) => String(entry.name || "").trim())
+      .map((entry) => text(entry.name))
       .filter((key) => /^\d{4}-\d{2}$/.test(key))
       .sort();
   }

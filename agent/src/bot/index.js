@@ -14,6 +14,7 @@ import { WorkspaceService } from "./workspace-infra/workspace-service.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { rm } from "node:fs/promises";
 import { resolveAttachments } from "../context/providers/attachment-resolver.js";
+import { text } from "@noobot/shared/value";
 
 export * as hook from "./hook/index.js";
 
@@ -80,8 +81,8 @@ export class BotManager {
   }
 
   async replaceSessionTurn(payload = {}) {
-    const userId = String(payload?.userId || "").trim();
-    const sessionId = String(payload?.sessionId || "").trim();
+    const userId = text(payload?.userId);
+    const sessionId = text(payload?.sessionId);
     const attachments = Array.isArray(payload?.attachments) ? payload.attachments : undefined;
     let canonicalAttachments = attachments;
     if (attachments?.length) {
@@ -136,12 +137,10 @@ export class BotManager {
   }
 
   async deleteSemanticTransferBySessionIds({ userId, sessionIds = [] } = {}) {
-    const basePath = String(this.getWorkspacePath(userId) || "").trim();
+    const basePath = text(this.getWorkspacePath(userId));
     const normalizedIds = [
       ...new Set(
-        (Array.isArray(sessionIds) ? sessionIds : [])
-          .map((sid) => String(sid || "").trim())
-          .filter(Boolean),
+        (Array.isArray(sessionIds) ? sessionIds : []).map((sid) => text(sid)).filter(Boolean),
       ),
     ];
     if (!basePath || !normalizedIds.length) {

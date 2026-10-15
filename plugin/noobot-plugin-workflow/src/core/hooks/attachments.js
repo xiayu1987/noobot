@@ -13,7 +13,7 @@ import {
   mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
 import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
   return mergeAttachmentsByIdentity(existing, incoming, {
@@ -43,13 +43,11 @@ export function resolveWorkflowInputAttachments(ctx = {}) {
 
 function normalizeAttachmentRefs(input = []) {
   const source = Array.isArray(input) ? input : String(input || "").split(/[,;，；]/);
-  return source.map((item) => String(item || "").trim()).filter(Boolean);
+  return source.map((item) => text(item)).filter(Boolean);
 }
 
 function isAllUserAttachmentRef(ref = "") {
-  const normalized = String(ref || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(ref).toLowerCase();
   return WORKFLOW_ATTACHMENT_SCOPE.USER_ALL_TOKENS.includes(normalized);
 }
 

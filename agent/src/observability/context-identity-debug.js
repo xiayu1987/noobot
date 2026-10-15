@@ -5,26 +5,24 @@
  */
 
 import { emitEvent } from "../events/index.js";
+import { text } from "@noobot/shared/value";
 
 export function canonicalMessageId(message = {}) {
-  return String(
-    message?.messageUid || message?.messageId || message?.additional_kwargs?.noobotMessageId || "",
-  ).trim();
+  return text(
+    message?.messageUid || message?.messageId || message?.additional_kwargs?.noobotMessageId,
+  );
 }
 
 function messageField(message = {}, field = "") {
-  return String(
+  return text(
     message?.[field] ||
       message?.additional_kwargs?.[field] ||
-      message?.lc_kwargs?.additional_kwargs?.[field] ||
-      "",
-  ).trim();
+      message?.lc_kwargs?.additional_kwargs?.[field],
+  );
 }
 
 export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
-  const rawRole = String(message?.role || message?.type || "")
-    .trim()
-    .toLowerCase();
+  const rawRole = text(message?.role || message?.type).toLowerCase();
   const role = rawRole === "ai" ? "assistant" : rawRole === "human" ? "user" : rawRole;
   const toolCalls = Array.isArray(message?.tool_calls)
     ? message.tool_calls
@@ -34,8 +32,8 @@ export function canonicalMessageIdentityDebugData(message = {}, meta = {}) {
   return {
     messageId: canonicalMessageId(message),
     role,
-    operation: String(meta?.operation || "").trim(),
-    block: String(meta?.block || "").trim(),
+    operation: text(meta?.operation),
+    block: text(meta?.block),
     messageDialogProcessId: messageField(message, "dialogProcessId"),
     messageTurnScopeId: messageField(message, "turnScopeId"),
     toolCallId: messageField(message, "tool_call_id") || messageField(message, "toolCallId"),

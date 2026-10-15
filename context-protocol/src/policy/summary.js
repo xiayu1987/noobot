@@ -19,6 +19,7 @@ import { markContextMessageSummarized, resolveContextMessageSummarized } from ".
 import { SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES } from "../message/injected-types.js";
 import { isContextControlMessage } from "./injected-message.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
+import { text } from "@noobot/shared/value";
 
 const summaryAlwaysRetainedInjectedTypes = new Set(SUMMARY_ALWAYS_RETAINED_INJECTED_MESSAGE_TYPES);
 
@@ -41,7 +42,7 @@ function collectRetainedInjectedMessageIndexes(messages = []) {
 }
 
 function resolveToolCallName(call = {}) {
-  return String(call?.name || call?.function?.name || "").trim();
+  return text(call?.name || call?.function?.name);
 }
 
 function hasToolCallWithFlowControlRole(message = {}, role = "") {
@@ -315,7 +316,7 @@ export function resolveSummaryScope(
     retentionMessages: sourceMessages,
   });
   const wantedIds = Array.isArray(messageIds)
-    ? new Set(messageIds.map((id) => String(id || "").trim()).filter(Boolean))
+    ? new Set(messageIds.map((id) => text(id)).filter(Boolean))
     : null;
   const selectedCheckpointMessages = wantedIds
     ? checkpointMessages.filter((message) => wantedIds.has(resolveMessageId(message)))

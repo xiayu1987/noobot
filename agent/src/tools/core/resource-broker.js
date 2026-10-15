@@ -17,6 +17,7 @@ import {
   getRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { DEFAULT_MIME_TYPE, resolveMimeTypeFromFileName } from "@noobot/attachment-protocol/mime";
+import { text } from "@noobot/shared/value";
 
 const registries = new WeakMap();
 
@@ -37,14 +38,13 @@ function getRegistry(agentContext = null, runtime = null) {
 
 function ownerOf(agentContext = null, runtime = null, explicitOwner = "") {
   const resolvedRuntime = resolveRuntime(agentContext, runtime);
-  return String(
+  return text(
     explicitOwner ||
       resolvedRuntime?.userId ||
       resolvedRuntime?.systemRuntime?.userId ||
       agentContext?.context?.identity?.userId ||
-      agentContext?.userId ||
-      "",
-  ).trim();
+      agentContext?.userId,
+  );
 }
 
 function registerCanonicalResource({
@@ -77,7 +77,7 @@ function registerCanonicalResource({
   });
   registry.set(key, {
     ref,
-    executionPath: String(executionPath || previous?.executionPath || "").trim(),
+    executionPath: text(executionPath || previous?.executionPath),
   });
   return projectResourceRef(ref);
 }
@@ -122,7 +122,7 @@ export function registerAttachmentResource({
   capabilities = { read: true, write: false, scriptInput: true },
 } = {}) {
   const identity = attachment?.identity || attachment;
-  const logicalPath = String(attachment?.name || "").trim();
+  const logicalPath = text(attachment?.name);
   if (!logicalPath) throw new TypeError("attachment resource name is required");
   return registerCanonicalResource({
     agentContext,

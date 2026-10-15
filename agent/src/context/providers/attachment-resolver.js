@@ -5,6 +5,7 @@
  */
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
 import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
+import { text } from "@noobot/shared/value";
 
 export async function resolveAttachments({
   attachmentService = null,
@@ -22,10 +23,10 @@ export async function resolveAttachments({
   const sourceAttachments = Array.isArray(userMessageAttachments) ? userMessageAttachments : [];
   if (!sourceAttachments.length) return [];
   const isCanonical = (attachmentItem) =>
-    String(attachmentItem?.attachmentId || "").trim() &&
-    String(attachmentItem?.sessionId || "").trim() &&
-    String(attachmentItem?.attachmentSource || "").trim() &&
-    String(attachmentItem?.path || "").trim();
+    text(attachmentItem?.attachmentId) &&
+    text(attachmentItem?.sessionId) &&
+    text(attachmentItem?.attachmentSource) &&
+    text(attachmentItem?.path);
   const mapCanonical = (attachmentItem) => mapAttachmentRecordsToMetas([attachmentItem])[0] || null;
   const rawAttachments = sourceAttachments.filter((attachmentItem) => !isCanonical(attachmentItem));
   const ingested = rawAttachments.length

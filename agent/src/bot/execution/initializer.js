@@ -7,6 +7,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { createExecutionEventListener, emitEvent } from "../../events/index.js";
 import { CALLER_ROLE } from "../config/constants.js";
+import { text } from "@noobot/shared/value";
 
 export class SessionExecutionInitializer {
   constructor({ session = null, configService = null, workspaceService = null } = {}) {
@@ -30,7 +31,7 @@ export class SessionExecutionInitializer {
     const upstreamListener = eventListener;
     const basePath = await this.workspaceService.ensureUserWorkspace(userId);
 
-    const resolvedDialogProcessId = String(dialogProcessId || "").trim() || uuidv4();
+    const resolvedDialogProcessId = text(dialogProcessId) || uuidv4();
     const sessionBundle = await this.session.getSessionBundle({
       userId,
       sessionId: usedSessionId,
@@ -92,7 +93,7 @@ export class SessionExecutionInitializer {
       dialogProcessId: resolvedDialogProcessId,
       sessionLoadState,
       userConfig,
-      currentSessionModelAlias: String(sessionBundle?.session?.modelAlias || "").trim(),
+      currentSessionModelAlias: text(sessionBundle?.session?.modelAlias),
       sessionDir: sessionScope.sessionDir,
       runtimeEventListener,
     };

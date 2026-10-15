@@ -11,6 +11,7 @@ import {
   SESSION_TREE_ERROR,
   resolveSessionTreeChain,
 } from "@noobot/workspace-protocol/session-tree";
+import { text } from "@noobot/shared/value";
 
 export class FileSystemSessionTreeRepository {
   constructor({ pathResolver, storageService } = {}) {
@@ -28,7 +29,7 @@ export class FileSystemSessionTreeRepository {
   }
 
   resolveRootSessionIdFromTree(sessionId, tree) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,

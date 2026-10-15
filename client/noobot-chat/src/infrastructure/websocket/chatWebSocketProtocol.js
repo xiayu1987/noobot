@@ -9,9 +9,10 @@ import {
   getAgentCommandIdentity,
   validateAgentCommandReceipt,
 } from "@noobot/agent-transport-protocol";
+import { text } from "@noobot/shared/value";
 
 export function normalizeTrimmedString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function normalizeErrorMessage(value, fallback = "") {

@@ -8,6 +8,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRuntimeEvent,
 } from "@noobot/runtime-events";
+import { text } from "@noobot/shared/value";
 export { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 export { recordServiceAgentTransportDebug } from "../../runtime-events/agent-transport-debug.js";
 
@@ -19,7 +20,7 @@ export function recordServiceWebSocketSendFailure({
   turnScopeId = "",
   error = null,
 } = {}) {
-  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedSessionId = text(sessionId);
   if (!normalizedSessionId) return Promise.resolve({ ok: true, skipped: true });
   return writeRuntimeEvent({
     scope: "session",
@@ -28,9 +29,9 @@ export function recordServiceWebSocketSendFailure({
     category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
     event: "service.websocket.sendEvent.failed",
     sessionId: normalizedSessionId,
-    userId: String(userId || "").trim(),
-    dialogProcessId: String(dialogProcessId || "").trim(),
-    turnScopeId: String(turnScopeId || "").trim(),
+    userId: text(userId),
+    dialogProcessId: text(dialogProcessId),
+    turnScopeId: text(turnScopeId),
     data: {
       eventName: String(eventName || ""),
       error: error?.message || String(error || ""),
@@ -38,7 +39,7 @@ export function recordServiceWebSocketSendFailure({
   });
 }
 
-const trimRuntimeText = (value) => String(value || "").trim();
+const trimRuntimeText = (value) => text(value);
 
 function describeRuntimeError(error) {
   return error?.message || String(error || "");
@@ -85,7 +86,7 @@ export function recordServiceWebSocketLifecycle({
   debugType = "",
   data = {},
 } = {}) {
-  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedSessionId = text(sessionId);
   return writeRuntimeEvent({
     scope: normalizedSessionId ? "session" : "system",
     source: "service",

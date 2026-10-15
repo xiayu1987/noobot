@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function createConfigScopeService({
   readWorkspaceConfigParams,
   readUserConfigParams,
@@ -27,7 +29,7 @@ export function createConfigScopeService({
       const payload = await readWorkspaceConfigParams({ createIfMissing });
       return { scope, userId: "", payload };
     }
-    const userId = String(req?.auth?.userId || "").trim();
+    const userId = text(req?.auth?.userId);
     if (!userId) throw new Error(translateText("auth.missingUserAuth", req?.locale));
     const payload = await readUserConfigParams({ userId, createIfMissing });
     return { scope, userId, payload };
@@ -84,7 +86,7 @@ export function createConfigScopeService({
     return {
       ok: true,
       scope,
-      userId: String(userId || "").trim(),
+      userId: text(userId),
       values: payload.values || {},
       descriptions: payload.descriptions || {},
       keys,

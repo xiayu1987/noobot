@@ -9,6 +9,7 @@ import {
   parseAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol/identity";
+import { text } from "@noobot/shared/value";
 
 const ATTACHMENT_INLINE_TOKEN = "noobot_attachment_ref";
 const REF_TERMINATOR_RE = /[\s<>"'`)\]}]/;
@@ -51,7 +52,7 @@ export function buildAttachmentRefIndex(attachmentItems = []) {
     }
     index.set(attachmentIdentityKey(identity), {
       ...identity,
-      name: String(attachmentItem?.name || attachmentItem?.fileName || "").trim(),
+      name: text(attachmentItem?.name || attachmentItem?.fileName),
     });
   }
   return index;

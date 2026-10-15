@@ -15,27 +15,20 @@ import {
   pickLightPluginMeta,
   pickLightTransferEnvelopes,
 } from "./message-metadata-projection.js";
+import { text } from "@noobot/shared/value";
 
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 
 export function compactThinkingTimeline(items = []) {
   const compactFact = (fact = {}, summary = "", result = null) => ({
-    eventId: String(fact.eventId || "").trim(),
+    eventId: text(fact.eventId),
     sequence: fact.sequence,
-    ...(String(fact.sequenceScopeId || "").trim()
-      ? { sequenceScopeId: String(fact.sequenceScopeId).trim() }
-      : {}),
-    ...(String(fact.authority || "").trim() ? { authority: String(fact.authority).trim() } : {}),
-    ...(String(fact.sequenceDomain || "").trim()
-      ? { sequenceDomain: String(fact.sequenceDomain).trim() }
-      : {}),
-    ...(String(fact.sessionId || "").trim() ? { sessionId: String(fact.sessionId).trim() } : {}),
-    ...(String(fact.dialogProcessId || "").trim()
-      ? { dialogProcessId: String(fact.dialogProcessId).trim() }
-      : {}),
-    ...(String(fact.turnScopeId || "").trim()
-      ? { turnScopeId: String(fact.turnScopeId).trim() }
-      : {}),
+    ...(text(fact.sequenceScopeId) ? { sequenceScopeId: String(fact.sequenceScopeId).trim() } : {}),
+    ...(text(fact.authority) ? { authority: String(fact.authority).trim() } : {}),
+    ...(text(fact.sequenceDomain) ? { sequenceDomain: String(fact.sequenceDomain).trim() } : {}),
+    ...(text(fact.sessionId) ? { sessionId: String(fact.sessionId).trim() } : {}),
+    ...(text(fact.dialogProcessId) ? { dialogProcessId: String(fact.dialogProcessId).trim() } : {}),
+    ...(text(fact.turnScopeId) ? { turnScopeId: String(fact.turnScopeId).trim() } : {}),
     ...(Array.isArray(fact.attachments) && fact.attachments.length
       ? { attachments: fact.attachments }
       : {}),
@@ -43,11 +36,11 @@ export function compactThinkingTimeline(items = []) {
     ...(summary ? { summary } : {}),
   });
   return (Array.isArray(items) ? items : []).map((item = {}) => ({
-    key: String(item.key || item.toolCallId || "").trim(),
-    toolCallId: String(item.toolCallId || "").trim(),
-    tool: String(item.tool || "").trim(),
-    status: String(item.status || "").trim(),
-    ...(String(item.riskLevel || "").trim() ? { riskLevel: String(item.riskLevel).trim() } : {}),
+    key: text(item.key || item.toolCallId),
+    toolCallId: text(item.toolCallId),
+    tool: text(item.tool),
+    status: text(item.status),
+    ...(text(item.riskLevel) ? { riskLevel: String(item.riskLevel).trim() } : {}),
     ...(item.call
       ? {
           call: compactFact(
@@ -79,17 +72,17 @@ function compactMessageSummary(summary = {}) {
 export function buildMessageSummary(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) return null;
   const summary = {
-    role: String(message?.role || "").trim(),
+    role: text(message?.role),
     content: message?.content || "",
-    type: String(message?.type || "").trim(),
-    dialogProcessId: String(message?.dialogProcessId || "").trim(),
-    parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
-    taskId: String(message?.taskId || "").trim(),
-    taskStatus: String(message?.taskStatus || "").trim(),
-    modelAlias: String(message?.modelAlias || "").trim(),
-    modelName: String(message?.modelName || "").trim(),
+    type: text(message?.type),
+    dialogProcessId: text(message?.dialogProcessId),
+    parentDialogProcessId: text(message?.parentDialogProcessId),
+    taskId: text(message?.taskId),
+    taskStatus: text(message?.taskStatus),
+    modelAlias: text(message?.modelAlias),
+    modelName: text(message?.modelName),
     summarized: message?.summarized === true,
-    ts: String(message?.ts || "").trim(),
+    ts: text(message?.ts),
   };
   for (const key of [
     "injectedMessage",
@@ -119,8 +112,8 @@ export function buildThinkingDetailCountByMessage(messages = []) {
   const factsByRoute = new Map();
   messages.forEach((message, index) => {
     if (!message || typeof message !== "object" || Array.isArray(message)) return;
-    const turnScopeId = String(message?.turnScopeId || "").trim();
-    const dialogProcessId = String(message?.dialogProcessId || "").trim();
+    const turnScopeId = text(message?.turnScopeId);
+    const dialogProcessId = text(message?.dialogProcessId);
     const route = turnScopeId
       ? `turn:${turnScopeId}`
       : dialogProcessId
@@ -134,11 +127,9 @@ export function buildThinkingDetailCountByMessage(messages = []) {
     );
     for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      const key = String(item?.key || item?.toolCallId || "").trim();
+      const key = text(item?.key || item?.toolCallId);
       const existingIndex = key
-        ? facts.toolTimeline.findIndex(
-            (entry) => String(entry?.key || entry?.toolCallId || "").trim() === key,
-          )
+        ? facts.toolTimeline.findIndex((entry) => text(entry?.key || entry?.toolCallId) === key)
         : -1;
       if (existingIndex >= 0) {
         facts.toolTimeline[existingIndex] = { ...facts.toolTimeline[existingIndex], ...item };
@@ -161,7 +152,7 @@ const DISPLAY_PASSTHROUGH_KEYS = ["pluginMessage", "done", "pending", "error"];
 
 function readDisplayRole(message) {
   if (!message || typeof message !== "object" || Array.isArray(message)) return "";
-  const role = String(message.role || "").trim();
+  const role = text(message.role);
   if (!role || isInjectedMessage(message)) return "";
   return DISPLAY_ROLES.has(role) ? role : "";
 }
@@ -177,8 +168,8 @@ function isSuppressedDisplayMessage({ message, role, type, presentationMessageId
 function resolveDisplayPresentation(message) {
   const role = readDisplayRole(message);
   if (!role) return null;
-  const type = String(message.type || "").trim();
-  const presentationMessageId = String(message.presentationMessageId || "").trim();
+  const type = text(message.type);
+  const presentationMessageId = text(message.presentationMessageId);
   const hasActivity =
     role === "assistant" &&
     Boolean(presentationMessageId) &&
@@ -188,8 +179,8 @@ function resolveDisplayPresentation(message) {
 }
 
 function applyDisplayIdentity(summary, message, presentationMessageId) {
-  const messageUid = String(message.messageUid || "").trim();
-  const sourceMessageId = String(message.messageId || "").trim();
+  const messageUid = text(message.messageUid);
+  const sourceMessageId = text(message.messageId);
   const messageId = presentationMessageId || sourceMessageId || messageUid;
   if (messageId) summary.messageId = messageId;
   if (!presentationMessageId) {
@@ -205,8 +196,8 @@ function applyDisplayIdentity(summary, message, presentationMessageId) {
 function projectDisplayToolCalls(toolCalls) {
   return toolCalls
     .map((toolCall = {}) => ({
-      id: String(toolCall?.id || "").trim(),
-      name: String(toolCall?.function?.name || toolCall?.name || "").trim(),
+      id: text(toolCall?.id),
+      name: text(toolCall?.function?.name || toolCall?.name),
     }))
     .filter((item) => item.id || item.name);
 }

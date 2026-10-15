@@ -11,6 +11,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   createAgentCommandReceipt,
 } from "@noobot/agent-transport-protocol";
+import { text } from "@noobot/shared/value";
 
 export function snapshotRunState({
   runMeta = null,
@@ -149,9 +150,7 @@ export function createTurnFinalizer({
   };
 
   const finalizeCompleted = async (state, { result = {}, commandId = "" } = {}) => {
-    const rootCommandId = String(
-      commandId || state.runMeta?.commandId || state.runMeta?.turnScopeId || "",
-    ).trim();
+    const rootCommandId = text(commandId || state.runMeta?.commandId || state.runMeta?.turnScopeId);
     const completionCommitId = createTurnLifecycleCommandId({
       commandId: rootCommandId,
       eventType: TURN_EVENT.COMPLETED,
@@ -221,7 +220,7 @@ export function createTurnFinalizer({
       data: {
         abortReasonType:
           state.abortSignal?.reason && typeof state.abortSignal.reason === "object"
-            ? String(state.abortSignal.reason?.type || "").trim()
+            ? text(state.abortSignal.reason?.type)
             : "",
       },
     });

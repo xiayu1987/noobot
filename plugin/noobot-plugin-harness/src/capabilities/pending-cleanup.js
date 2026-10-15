@@ -10,6 +10,7 @@ import {
 } from "./handlers/shared/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { text } from "@noobot/shared/value";
 
 const DEFAULT_PENDING_TTL_HOOK_TURNS = TURN_THRESHOLDS.harness.pendingTtlHookTurns;
 const WARN_COOLDOWN_TURNS = TURN_THRESHOLDS.harness.pendingWarnCooldownTurns;
@@ -133,7 +134,7 @@ export function setCaptureFlagStateWithMeta(state = {}, key = "", active = false
 }
 
 function shouldTickHookTurn(point = "") {
-  return HOOK_TURN_TICK_POINTS.has(String(point || "").trim());
+  return HOOK_TURN_TICK_POINTS.has(text(point));
 }
 
 export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {

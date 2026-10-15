@@ -16,33 +16,27 @@ import {
   resolveModelMessageBlocks,
   resolveModelMessages,
 } from "../../../../core/message-store.js";
+import { text } from "@noobot/shared/value";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const msg = messages[index] || {};
-    const role = String(msg?.role || "")
-      .trim()
-      .toLowerCase();
+    const role = text(msg?.role).toLowerCase();
     if (role !== "assistant") continue;
     const calls = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
     if (!calls.length) return false;
     const callIds = new Set(
       calls
-        .map((call = {}) => String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim())
+        .map((call = {}) => text(call?.id || call?.tool_call_id || call?.toolCallId))
         .filter(Boolean),
     );
     if (!callIds.size) return false;
     const matchedToolIds = new Set();
     for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
       const next = messages[cursor] || {};
-      if (
-        String(next?.role || "")
-          .trim()
-          .toLowerCase() !== "tool"
-      )
-        continue;
-      const toolCallId = String(next?.tool_call_id || "").trim();
+      if (text(next?.role).toLowerCase() !== "tool") continue;
+      const toolCallId = text(next?.tool_call_id);
       if (toolCallId && callIds.has(toolCallId)) matchedToolIds.add(toolCallId);
     }
     return matchedToolIds.size < callIds.size;
@@ -56,12 +50,12 @@ function resolveSystemContextMessages(ctx = {}) {
 }
 
 function dedupeExists(messages = [], target = {}) {
-  const role = String(target?.role || "").trim();
-  const content = String(target?.content || "").trim();
+  const role = text(target?.role);
+  const content = text(target?.content);
   if (!Array.isArray(messages) || !role || !content) return false;
   return messages.some((item = {}) => {
-    const itemRole = String(item?.role || "").trim();
-    const itemContent = String(item?.content || "").trim();
+    const itemRole = text(item?.role);
+    const itemContent = text(item?.content);
     return itemRole === role && itemContent === content;
   });
 }
@@ -94,7 +88,7 @@ export function injectMessageWithPolicy(
   } = {},
 ) {
   const messages = resolveModelMessages(ctx);
-  const normalizedContent = String(content || "").trim();
+  const normalizedContent = text(content);
   if (!normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
     return { injected: false, target: "none", blockedByTurnEnded: true };

@@ -58,6 +58,7 @@ import ThinkingPanel from "../thinking/ThinkingPanel.vue";
 import MutationDiffSplit from "../thinking/MutationDiffSplit.vue";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
 import { fileMutationPreviewService } from "../../../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
+import { text } from "@noobot/shared/value";
 
 const emit = defineEmits(["open-thinking-details"]);
 
@@ -230,7 +231,7 @@ async function downloadMutation(mutation = {}) {
 watch(
   () =>
     displayedAttachments.value.map((attachment) => ({
-      attachmentId: String(attachment?.attachmentId || "").trim(),
+      attachmentId: text(attachment?.attachmentId),
       parsedResultTargetIdentity:
         resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
     })),
@@ -290,7 +291,7 @@ const unifiedRuntimePanelsRunning = computed(
 );
 const workflowChildRenderDiagnosticsSignature = computed(() => {
   const turnScopeId = getMessageTurnScopeId(props.messageItem);
-  const parentSessionId = String(props.messageItem?.parentSessionId || "").trim();
+  const parentSessionId = text(props.messageItem?.parentSessionId);
   if (!parentSessionId && !isWorkflowNodeTurnScopeId(turnScopeId)) return "";
   const runtime = messageRuntime.value || {};
   return JSON.stringify({
@@ -326,10 +327,8 @@ const showMessageTypeTag = computed(
   () =>
     !(
       getMessageRole(props.messageItem) === "assistant" &&
-      String(props.messageItem?.type || "")
-        .trim()
-        .toLowerCase() === "message" &&
-      !String(props.messageItem?.content || "").trim() &&
+      text(props.messageItem?.type).toLowerCase() === "message" &&
+      !text(props.messageItem?.content) &&
       Boolean(
         getMessageTurnScopeId(props.messageItem) || getMessageDialogProcessId(props.messageItem),
       )
@@ -368,7 +367,7 @@ const defaultMonotonicMessageActionProps = computed(() =>
 
 function resolveRendererContext() {
   const selectSessionMessages = (sessionId = "") => {
-    const id = String(sessionId || "").trim();
+    const id = text(sessionId);
     if (!id) return null;
 
     const subSession = chatStore.selectSubSessionMessages?.(id);

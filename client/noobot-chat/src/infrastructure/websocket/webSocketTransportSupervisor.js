@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { closeWebSocket } from "./closeWebSocket.js";
+import { text } from "@noobot/shared/value";
 
 export const WEB_SOCKET_TRANSPORT_PHASE = Object.freeze({
   IDLE: "idle",
@@ -54,7 +55,7 @@ export function createWebSocketTransportSupervisor({
 
   function resolveConnectionUrl() {
     try {
-      return String(resolveWebSocketUrl() || "").trim();
+      return text(resolveWebSocketUrl());
     } catch (error) {
       reconnectAttempt += 1;
       lastFailureReason = String(error?.name || "websocket_url_resolution_failed").trim();
@@ -63,7 +64,7 @@ export function createWebSocketTransportSupervisor({
   }
 
   function resolveOwner() {
-    return String(resolveTransportOwner() || "").trim();
+    return text(resolveTransportOwner());
   }
 
   function createAttempt(resolvedUrl = "", resolvedOwner = resolveOwner()) {
@@ -140,7 +141,7 @@ export function createWebSocketTransportSupervisor({
 
   function markReady(candidate, { nextServerInstanceId = "" } = {}) {
     if (!markOpen(candidate)) return false;
-    serverInstanceId = String(nextServerInstanceId || "").trim();
+    serverInstanceId = text(nextServerInstanceId);
     return true;
   }
 

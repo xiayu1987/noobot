@@ -106,7 +106,7 @@ function stringifyToolDetail(value) {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return String(value || "").trim();
+    return text(value);
   }
 }
 

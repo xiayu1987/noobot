@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 function normalizeTaskStatus(value = "") {
-  const status = String(value || "").trim();
+  const status = text(value);
   return status === "start" || status === "completed" ? status : "";
 }
 
@@ -15,13 +17,13 @@ function normalizeTaskMeta(value = null) {
 
 export function normalizeTaskEntity(task = {}) {
   return {
-    taskId: String(task?.taskId || "").trim(),
-    skillName: String(task?.skillName || "").trim(),
-    taskName: String(task?.taskName || "").trim(),
+    taskId: text(task?.taskId),
+    skillName: text(task?.skillName),
+    taskName: text(task?.taskName),
     taskStatus: normalizeTaskStatus(task?.taskStatus),
-    startedAt: String(task?.startedAt || "").trim(),
-    endedAt: String(task?.endedAt || "").trim(),
-    result: String(task?.result || "").trim(),
+    startedAt: text(task?.startedAt),
+    endedAt: text(task?.endedAt),
+    result: text(task?.result),
     meta: normalizeTaskMeta(task?.meta),
   };
 }

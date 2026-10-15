@@ -10,9 +10,10 @@ import {
   extensionRegistryRevision,
   provideExtensionValues,
 } from "../../../extensions/extension-registry.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeRenderer(value = {}) {
-  const activityKind = String(value?.activityKind || "").trim();
+  const activityKind = text(value?.activityKind);
   if (!activityKind || typeof value?.label !== "function") return null;
   return [activityKind, Object.freeze({ activityKind, label: value.label })];
 }
@@ -27,7 +28,7 @@ export function useThinkingContentItemRenderers() {
     );
   });
   function rendererFor(item = {}) {
-    return renderers.value.get(String(item?.activityKind || "").trim()) || null;
+    return renderers.value.get(text(item?.activityKind)) || null;
   }
   function isRenderable(item = {}) {
     if (item?.contentKind !== THINKING_DETAIL_CONTENT_KIND.PLUGIN_ACTIVITY) return true;

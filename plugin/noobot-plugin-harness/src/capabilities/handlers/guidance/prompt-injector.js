@@ -20,6 +20,7 @@ import {
   getGuidanceMarker,
   getGuidanceSummaryMarker,
 } from "../shared/workflow/prompts.js";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
@@ -145,7 +146,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),
-    injectedMessageType: `guidance_failure:${String(reason || "").trim() || "unknown"}`,
+    injectedMessageType: `guidance_failure:${text(reason) || "unknown"}`,
     injectAt: "append",
     avoidBreakToolCallContinuity: true,
   });

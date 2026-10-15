@@ -5,6 +5,7 @@
  */
 
 import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./hooks/runtime.js";
+import { text } from "@noobot/shared/value";
 
 const WORKFLOW_LOCALE = Object.freeze({
   ZH_CN: "zh-CN",
@@ -299,9 +300,7 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
 });
 
 export function normalizeWorkflowLocale(locale = "") {
-  const value = String(locale || "")
-    .trim()
-    .toLowerCase();
+  const value = text(locale).toLowerCase();
   return value.startsWith("en") ? WORKFLOW_LOCALE.EN_US : WORKFLOW_LOCALE.ZH_CN;
 }
 
@@ -321,27 +320,24 @@ export function resolveWorkflowLocaleFromContext(ctx = {}, fallbackLocale = WORK
     runtime?.globalConfig?.locale,
     fallbackLocale,
   ];
-  const first = localeCandidates.map((item) => String(item || "").trim()).find(Boolean);
+  const first = localeCandidates.map((item) => text(item)).find(Boolean);
   return normalizeWorkflowLocale(first || fallbackLocale);
 }
 
 export function tWorkflow(locale = WORKFLOW_LOCALE.ZH_CN, key = "", params = {}) {
   const normalizedLocale = normalizeWorkflowLocale(locale);
   const dict = WORKFLOW_I18N_TEXT[normalizedLocale] || WORKFLOW_I18N_TEXT[WORKFLOW_LOCALE.ZH_CN];
-  const template = String(
-    dict?.[key] || WORKFLOW_I18N_TEXT[WORKFLOW_LOCALE.ZH_CN]?.[key] || "",
-  ).trim();
+  const template = text(dict?.[key] || WORKFLOW_I18N_TEXT[WORKFLOW_LOCALE.ZH_CN]?.[key]);
   if (!template) return "";
   return template.replace(/\{(\w+)\}/g, (_all, token) => String(params?.[token] ?? ""));
 }
 
 export function getWorkflowDefaultSemanticPrompt(locale = WORKFLOW_LOCALE.ZH_CN) {
   const normalizedLocale = normalizeWorkflowLocale(locale);
-  return String(
+  return text(
     DEFAULT_SEMANTIC_PROMPT_BY_LOCALE[normalizedLocale] ||
-      DEFAULT_SEMANTIC_PROMPT_BY_LOCALE[WORKFLOW_LOCALE.ZH_CN] ||
-      "",
-  ).trim();
+      DEFAULT_SEMANTIC_PROMPT_BY_LOCALE[WORKFLOW_LOCALE.ZH_CN],
+  );
 }
 
 export function getWorkflowDslDefaultNodeNames(locale = WORKFLOW_LOCALE.ZH_CN) {
@@ -355,7 +351,7 @@ export function getWorkflowDslDefaultNodeNames(locale = WORKFLOW_LOCALE.ZH_CN) {
     tWorkflow(WORKFLOW_LOCALE.EN_US, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.END_NAME) ||
     "End";
   return {
-    startName: String(startName || "").trim(),
-    endName: String(endName || "").trim(),
+    startName: text(startName),
+    endName: text(endName),
   };
 }

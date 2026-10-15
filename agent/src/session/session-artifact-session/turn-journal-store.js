@@ -8,6 +8,7 @@ import { SESSION_ARTIFACT_SCHEMA_VERSION } from "@noobot/session-protocol";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
+import { text } from "@noobot/shared/value";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = SESSION_ARTIFACT_SCHEMA_VERSION;
 
@@ -32,14 +33,14 @@ export function messageHash(message) {
 
 function assertIncrementalJournalRecords(records, file) {
   for (const record of records) {
-    const uid = String(record?.messageUid || "").trim();
+    const uid = text(record?.messageUid);
     const validRemove = record?.op === "remove" && uid;
     const validUpsert =
       record?.op === "upsert" &&
       uid &&
       record.message &&
       typeof record.message === "object" &&
-      String(record.message.messageUid || "").trim() === uid &&
+      text(record.message.messageUid) === uid &&
       record.hash === messageHash(record.message);
     if (!validRemove && !validUpsert) {
       const error = new Error(`summary snapshot contains an invalid incremental record: ${file}`);
@@ -50,40 +51,40 @@ function assertIncrementalJournalRecords(records, file) {
 }
 
 export function turnKey(turn = {}) {
-  return String(turn.turnScopeId || "").trim();
+  return text(turn.turnScopeId);
 }
 
 export function turnIdOrdinal(turnId = "") {
-  const match = /^turn-(\d+)$/.exec(String(turnId || "").trim());
+  const match = /^turn-(\d+)$/.exec(text(turnId));
   return match ? Number(match[1]) : 0;
 }
 
 export function isTerminalTurn(session, turn) {
-  const scope = String(turn?.turnScopeId || "").trim();
-  const dialog = String(turn?.dialogProcessId || "").trim();
+  const scope = text(turn?.turnScopeId);
+  const dialog = text(turn?.dialogProcessId);
   const lifecycleTurn = session?.turnLifecycle?.turns?.[scope];
-  if (!lifecycleTurn || String(lifecycleTurn.dialogProcessId || "").trim() !== dialog) return false;
+  if (!lifecycleTurn || text(lifecycleTurn.dialogProcessId) !== dialog) return false;
   return Boolean(lifecycleTurn.terminalStatus);
 }
 
 export function resolveTurnSummaryReceipts(session = {}, turn = {}) {
-  const state = session?.turnSummaryCheckpoints?.[String(turn?.turnScopeId || "").trim()];
+  const state = session?.turnSummaryCheckpoints?.[text(turn?.turnScopeId)];
   return Array.isArray(state?.receipts) ? state.receipts : [];
 }
 
 export function summarySnapshotRecord(receipt = {}, turn = {}, file = "", contentHash = "") {
   return {
     op: "summary_snapshot",
-    checkpointId: String(receipt?.checkpointId || "").trim(),
+    checkpointId: text(receipt?.checkpointId),
     checkpointRevision: Number(receipt?.checkpointRevision || 0),
-    turnScopeId: String(turn?.turnScopeId || "").trim(),
-    dialogProcessId: String(turn?.dialogProcessId || "").trim(),
+    turnScopeId: text(turn?.turnScopeId),
+    dialogProcessId: text(turn?.dialogProcessId),
     file,
     contentHash,
     messageUids: Array.isArray(receipt?.summarizedMessageUids)
-      ? receipt.summarizedMessageUids.map((uid) => String(uid || "").trim()).filter(Boolean)
+      ? receipt.summarizedMessageUids.map((uid) => text(uid)).filter(Boolean)
       : [],
-    committedAt: String(receipt?.committedAt || "").trim(),
+    committedAt: text(receipt?.committedAt),
   };
 }
 
@@ -104,7 +105,7 @@ export async function readSummarySnapshots(sessionDir, records = []) {
   const snapshots = [];
   let previousCheckpointHash = "";
   for (const record of collectSummarySnapshotRecords(records)) {
-    const file = String(record?.file || "").trim();
+    const file = text(record?.file);
     const payload = await readJsonArtifactFile(resolveSummarySnapshotPath(sessionDir, file), null);
     if (
       !payload ||
@@ -170,18 +171,18 @@ export async function readJournalRecords(file, committedBytes) {
 function materializeJournal(records, order = [], baseMessages = []) {
   const byUid = new Map(
     (Array.isArray(baseMessages) ? baseMessages : [])
-      .map((message) => [String(message?.messageUid || "").trim(), message])
+      .map((message) => [text(message?.messageUid), message])
       .filter(([uid]) => uid),
   );
   for (const record of records) {
-    const uid = String(record?.messageUid || "").trim();
+    const uid = text(record?.messageUid);
     if (!uid) continue;
     if (record.op === "remove") byUid.delete(uid);
     else if (record.op === "upsert" && record.message && typeof record.message === "object")
       byUid.set(uid, record.message);
   }
   const ordered = (Array.isArray(order) ? order : [])
-    .map((uid) => byUid.get(String(uid || "").trim()))
+    .map((uid) => byUid.get(text(uid)))
     .filter(Boolean);
   const remaining = [...byUid.entries()]
     .filter(([uid]) => !order.includes(uid))

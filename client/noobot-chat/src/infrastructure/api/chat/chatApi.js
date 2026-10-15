@@ -5,6 +5,7 @@
  */
 import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 import { FILE_TRACE_ID_HEADER } from "@noobot/shared/runtime-events-config";
+import { text } from "@noobot/shared/value";
 function resolveFetcher(fetcher) {
   return fetcher || fetch;
 }
@@ -55,25 +56,22 @@ export function buildAttachmentUrl({
   sessionId = "",
   attachmentSource = "",
 }) {
-  const normalizedUserIdValue = String(userId || "").trim();
-  const normalizedAttachmentIdValue = String(attachmentId || "").trim();
+  const normalizedUserIdValue = text(userId);
+  const normalizedAttachmentIdValue = text(attachmentId);
   if (!normalizedUserIdValue || !normalizedAttachmentIdValue) return "";
   const normalizedUserId = encodeURIComponent(normalizedUserIdValue);
   const normalizedAttachmentId = encodeURIComponent(normalizedAttachmentIdValue);
   const queryParams = [];
-  if (sessionId)
-    queryParams.push(`sessionId=${encodeURIComponent(String(sessionId || "").trim())}`);
+  if (sessionId) queryParams.push(`sessionId=${encodeURIComponent(text(sessionId))}`);
   if (attachmentSource)
-    queryParams.push(
-      `attachmentSource=${encodeURIComponent(String(attachmentSource || "").trim())}`,
-    );
+    queryParams.push(`attachmentSource=${encodeURIComponent(text(attachmentSource))}`);
   const query = queryParams.length ? `?${queryParams.join("&")}` : "";
   return `/api/internal/attachment/${normalizedUserId}/${normalizedAttachmentId}${query}`;
 }
 
 export async function connectApi({ userId = "", connectCode = "", locale = "" }, { fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
-  const normalizedLocale = String(locale || "").trim();
+  const normalizedLocale = text(locale);
   return runFetch("/api/internal/connect", {
     method: "POST",
     headers: {
@@ -81,8 +79,8 @@ export async function connectApi({ userId = "", connectCode = "", locale = "" },
       ...(normalizedLocale ? { "x-noobot-locale": normalizedLocale } : {}),
     },
     body: JSON.stringify({
-      userId: String(userId || "").trim(),
-      connectCode: String(connectCode || "").trim(),
+      userId: text(userId),
+      connectCode: text(connectCode),
       locale: normalizedLocale,
     }),
   });
@@ -125,7 +123,7 @@ export async function renameSessionApi(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: String(title || "").trim() }),
+      body: JSON.stringify({ title: text(title) }),
     },
   );
 }
@@ -158,8 +156,8 @@ export async function getSessionThinkingDetailApi(
 ) {
   const runFetch = resolveFetcher(fetcher);
   const queryParams = [];
-  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  const normalizedDialogProcessId = text(dialogProcessId);
+  const normalizedTurnScopeId = text(turnScopeId);
   if (normalizedDialogProcessId) {
     queryParams.push(`dialogProcessId=${encodeURIComponent(normalizedDialogProcessId)}`);
   }
@@ -177,7 +175,7 @@ export async function getSessionExecutionReportApi(
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
-  const query = `?dialogProcessId=${encodeURIComponent(String(dialogProcessId || "").trim())}`;
+  const query = `?dialogProcessId=${encodeURIComponent(text(dialogProcessId))}`;
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/execution-report${query}`,
   );
@@ -234,8 +232,8 @@ export async function replaceSessionTurnApi(
     expectedAggregateVersion,
     payload: {
       anchor,
-      newContent: String(newContent || "").trim(),
-      turnScopeId: String(turnScopeId || "").trim(),
+      newContent: text(newContent),
+      turnScopeId: text(turnScopeId),
       ...(Array.isArray(attachments) ? { attachments } : {}),
     },
   });
@@ -265,7 +263,7 @@ export function buildChatWebSocketUrl({ apiKey = "" } = {}) {
 }
 
 export function buildLogWebSocketUrl({ apiKey = "" } = {}) {
-  const normalizedApiKey = String(apiKey || "").trim();
+  const normalizedApiKey = text(apiKey);
   if (!normalizedApiKey) return "";
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;

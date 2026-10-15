@@ -23,6 +23,7 @@ import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 import { validateSessionPersistenceScope } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 export class SessionExecutionRunner {
   constructor({
@@ -115,7 +116,7 @@ export class SessionExecutionRunner {
       userId,
       sessionId,
       parentSessionId,
-      scopeId: String(runConfig?.executionId || "").trim(),
+      scopeId: text(runConfig?.executionId),
     });
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     let resolvedRunConfig = runConfig;
@@ -273,7 +274,7 @@ export class SessionExecutionRunner {
         lifecycleRuntime = dispatchRuntime;
       }
       emitEvent(runtimeEventListener, "debug_resend_runner_prepared", {
-        resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
+        resolvedThinkingStartedAt: text(resolvedRunConfig?.thinkingStartedAt),
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
         requestAttachments: summarizeDebugAttachments(attachments),
         userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),

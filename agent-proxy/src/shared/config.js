@@ -11,6 +11,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { text } from "@noobot/shared/value";
 
 export function loadFileConfig(
   configPath = path.resolve(
@@ -74,12 +75,12 @@ function envList(name, fileKey, defaultValue = "") {
   if (!raw) return [];
   return raw
     .split(",")
-    .map((item) => String(item || "").trim())
+    .map((item) => text(item))
     .filter(Boolean);
 }
 
 function normalizePathPrefix(value) {
-  const normalizedValue = String(value || "").trim();
+  const normalizedValue = text(value);
   if (!normalizedValue || normalizedValue === "/") return "";
   return normalizedValue.startsWith("/") ? normalizedValue : `/${normalizedValue}`;
 }

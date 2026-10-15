@@ -8,6 +8,7 @@ import {
   assertUniqueAttachmentIdentities,
   mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 export function mergeAttachments(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
@@ -49,7 +50,7 @@ export function resolveRootDialogProcessIdByChain({
   rootDialogProcessIdSet = new Set(),
   parentByDialogProcessId = new Map(),
 } = {}) {
-  let currentDialogProcessId = String(startDialogProcessId || "").trim();
+  let currentDialogProcessId = text(startDialogProcessId);
   if (!currentDialogProcessId) return "";
   const visited = new Set();
   while (currentDialogProcessId) {
@@ -60,9 +61,7 @@ export function resolveRootDialogProcessIdByChain({
       return "";
     }
     visited.add(currentDialogProcessId);
-    currentDialogProcessId = String(
-      parentByDialogProcessId.get(currentDialogProcessId) || "",
-    ).trim();
+    currentDialogProcessId = text(parentByDialogProcessId.get(currentDialogProcessId));
   }
   return "";
 }

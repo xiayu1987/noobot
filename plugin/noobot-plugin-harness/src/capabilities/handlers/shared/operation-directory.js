@@ -11,13 +11,12 @@ import {
   resolveExecutionIsolation,
   resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
+import { text } from "@noobot/shared/value";
 
 const DEFAULT_OPERATION_RELATIVE_PATH = WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE;
 
 function normalizePath(value = "") {
-  return String(value || "")
-    .trim()
-    .replaceAll("\\", "/");
+  return text(value).replaceAll("\\", "/");
 }
 
 function resolveRuntime(ctx = {}) {
@@ -80,8 +79,8 @@ export function compactOperationDirectoryForPrompt(operationDirectory = {}) {
     operationDirectory && typeof operationDirectory === "object" ? operationDirectory : {};
   return {
     relativePath: String(source.relativePath || DEFAULT_OPERATION_RELATIVE_PATH).trim(),
-    absolutePath: String(source.absolutePath || "").trim(),
-    view: String(source.view || "").trim() === "sandbox" ? "sandbox" : "non_sandbox",
+    absolutePath: text(source.absolutePath),
+    view: text(source.view) === "sandbox" ? "sandbox" : "non_sandbox",
   };
 }
 

@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { HARNESS_FILES, resolveHarnessRunsRelativePath } from "../core/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { text } from "@noobot/shared/value";
 
 function isMissingPathError(error) {
   return error?.code === "ENOENT" || error?.code === "ENOTDIR";
@@ -14,9 +15,9 @@ function isMissingPathError(error) {
 
 function normalizeSessionIds(input = []) {
   if (Array.isArray(input)) {
-    return input.map((item) => String(item || "").trim()).filter(Boolean);
+    return input.map((item) => text(item)).filter(Boolean);
   }
-  const single = String(input || "").trim();
+  const single = text(input);
   return single ? [single] : [];
 }
 
@@ -170,9 +171,9 @@ export async function cleanupRunsBySessionIds(basePath, sessionIds = [], options
     for (const runDirName of dirs) {
       const manifestPath = path.join(harnessRunsDir, runDirName, "harness-run.json");
       const manifest = await resolveRunManifest(manifestPath);
-      const manifestSessionId = String(manifest?.sessionId || "").trim();
-      const manifestParentSessionId = String(manifest?.parentSessionId || "").trim();
-      const manifestWorkflowSessionId = String(manifest?.metadata?.workflowSessionId || "").trim();
+      const manifestSessionId = text(manifest?.sessionId);
+      const manifestParentSessionId = text(manifest?.parentSessionId);
+      const manifestWorkflowSessionId = text(manifest?.metadata?.workflowSessionId);
       const shouldDelete =
         normalizedIds.has(runDirName) ||
         (manifestSessionId && normalizedIds.has(manifestSessionId)) ||

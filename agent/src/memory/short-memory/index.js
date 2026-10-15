@@ -12,6 +12,7 @@ import {
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { filePath as path } from "@noobot/path-resolver";
 import { readSessionArtifact } from "../../session/session-artifact-store.js";
+import { text } from "@noobot/shared/value";
 
 export class ShortMemoryManager {
   constructor(storage) {
@@ -69,7 +70,7 @@ export class ShortMemoryManager {
 
     const items = await this.readItems(basePath);
     items.push({
-      sessionId: String(sessionId || "").trim(),
+      sessionId: text(sessionId),
       parentSessionId: normalizedParentSessionId,
       records,
       createdAt: new Date().toISOString(),

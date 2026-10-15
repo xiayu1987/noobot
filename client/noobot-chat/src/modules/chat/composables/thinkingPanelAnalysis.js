@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { selectLatestAnalysisActivities } from "../runtime/engine/activityTimeline.js";
+import { text } from "@noobot/shared/value";
 
 function getAnalysisLogOutput(logItem = {}) {
-  return String(logItem?.text || "").trim();
+  return text(logItem?.text);
 }
 
 export function createThinkingAnalysisProjection({

@@ -10,10 +10,9 @@ import {
   isTurnTerminalNotice,
 } from "../../runtime/sessionRunStateMachine.js";
 import { areTurnScopeIdsEquivalent } from "../messageIdentity.js";
+import { text } from "@noobot/shared/value";
 function normalizeText(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+  return text(value).toLowerCase();
 }
 
 function normalizeMessageRole(messageItem = {}) {
@@ -27,17 +26,12 @@ function normalizeMessageRole(messageItem = {}) {
   if (explicitRole === "ai" || explicitRole === "bot") return "assistant";
   if (explicitRole === "function") return "tool";
   if (explicitRole) return explicitRole;
-  if (
-    String(messageItem?.messageOrigin || "")
-      .trim()
-      .toLowerCase() === "natural"
-  )
-    return "user";
+  if (text(messageItem?.messageOrigin).toLowerCase() === "natural") return "user";
   return "";
 }
 
 function normalizeIdentityValue(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 function firstIdentityValue(...values) {
   for (const value of values) if (value) return value;

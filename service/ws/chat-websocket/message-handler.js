@@ -30,6 +30,7 @@ import { createMessageQueryHandlers } from "./message-query-handlers.js";
 import { createMessageStopHandler } from "./message-stop-handler.js";
 import { createMessageRunHandler } from "./message-run-handler.js";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
+import { text } from "@noobot/shared/value";
 
 export function createMessageHandler({
   state,
@@ -54,7 +55,7 @@ export function createMessageHandler({
   dispatchAuthorityEvents,
   turnRecovery,
 }) {
-  const canonicalRunOwnerId = String(authInfo?.userId || "").trim();
+  const canonicalRunOwnerId = text(authInfo?.userId);
 
   const { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize } =
     createMessageQueryHandlers({
@@ -208,8 +209,7 @@ function findInterjectTarget({ sendEvent, canonicalRunOwnerId }, command) {
     return null;
   }
   const identityMatches = INTERJECT_IDENTITY_FIELDS.every(
-    (field) =>
-      String(activeRun[field] || "").trim() === String(command.identity[field] || "").trim(),
+    (field) => text(activeRun[field]) === text(command.identity[field]),
   );
   if (identityMatches) return activeRun;
   sendFailedCommandReceipt(sendEvent, command, {

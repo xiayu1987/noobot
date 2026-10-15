@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { canonicalizeTurnScopeId } from "../../model/messageIdentity.js";
+import { text } from "@noobot/shared/value";
 
 export function runtimeText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function canonicalTurnScopeId(value) {

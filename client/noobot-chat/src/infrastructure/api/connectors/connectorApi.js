@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 const endpoint = (userId = "", suffix = "") =>
-  `/api/internal/connectors/${encodeURIComponent(String(userId || "").trim())}${suffix}`;
+  `/api/internal/connectors/${encodeURIComponent(text(userId))}${suffix}`;
 
 export function getConnectorCatalog({ fetcher }) {
   return fetcher("/api/internal/connectors/catalog");

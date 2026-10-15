@@ -13,6 +13,7 @@ import { createServicePluginHost } from "../services/service-plugin-host.js";
 import { createPluginServicePorts } from "../services/plugin-service-ports.js";
 import { rateLimit } from "express-rate-limit";
 import { createHttpAdmissionOptions } from "../security/http-admission.js";
+import { text } from "@noobot/shared/value";
 
 export async function registerHttpModules(
   app,
@@ -59,7 +60,7 @@ export async function registerHttpModules(
   };
 
   const loadUserConfigForUser = async (userId = "") => {
-    const normalizedUserId = String(userId || "").trim();
+    const normalizedUserId = text(userId);
     if (!normalizedUserId) return {};
     if (typeof bot?.getWorkspacePath !== "function") return {};
     if (typeof bot?.loadUserConfig !== "function") return {};

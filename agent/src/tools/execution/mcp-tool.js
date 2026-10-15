@@ -29,14 +29,15 @@ import {
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
+import { text } from "@noobot/shared/value";
 
 function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset }) {
   const subResult = detachedRun?.result || {};
-  const subAnswer = String(subResult?.answer || "").trim();
+  const subAnswer = text(subResult?.answer);
   const subTraces = Array.isArray(subResult?.traces) ? subResult.traces : [];
   const subMessages = Array.isArray(subResult?.messages) ? subResult.messages : [];
   const traceToolNames = Array.from(
-    new Set(subTraces.map((item) => String(item?.tool || "").trim()).filter(Boolean)),
+    new Set(subTraces.map((item) => text(item?.tool)).filter(Boolean)),
   );
   return toToolJsonResult(
     TOOL_NAME.CALL_MCP_TASK,
@@ -44,7 +45,7 @@ function buildMcpTaskResult({ detachedRun, mcpName, parentSessionId, mcpToolset 
       ok: true,
       mcpName,
       status: TOOL_RESULT_STATUS.COMPLETED,
-      sessionId: String(detachedRun?.sessionId || "").trim(),
+      sessionId: text(detachedRun?.sessionId),
       parentSessionId,
       tools: mcpToolset.toolNames || [],
       answer: subAnswer,
@@ -71,8 +72,8 @@ export function createMcpTool({ agentContext }) {
       task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
     }),
     func: async ({ mcpName, task }) => {
-      const normalizedMcpName = String(mcpName || "").trim();
-      const normalizedTask = String(task || "").trim();
+      const normalizedMcpName = text(mcpName);
+      const normalizedTask = text(task);
       if (!normalizedMcpName) {
         throw recoverableToolError(tTool(runtime, "tools.mcp.errorMcpNameRequired"), {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -91,8 +92,8 @@ export function createMcpTool({ agentContext }) {
       const botManager = runtime?.botManager || null;
       const eventListener = runtime?.eventListener || null;
       const signal = runtime?.abortSignal || null;
-      const basePath = String(runtime.basePath || "").trim();
-      const workspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
+      const basePath = text(runtime.basePath);
+      const workspaceRoot = text(globalConfig?.workspaceRoot);
       const contextIdentity = getSessionIdsFromAgentContext(agentContext);
       const userId = contextIdentity.userId;
       const sessionId = contextIdentity.sessionId;

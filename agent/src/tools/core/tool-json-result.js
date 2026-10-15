@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { Buffer } from "node:buffer";
 import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
@@ -11,7 +11,7 @@ import { projectAttachmentMetaForModel } from "../../artifacts/meta-ops.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 function normalizeString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function isCanonicalBase64(value = "") {
@@ -219,7 +219,7 @@ export function toToolJsonResult(toolName, payload = {}, pretty = false) {
   const normalizedPayload = buildToolResultPayload(payload);
   return JSON.stringify(
     {
-      toolName: String(toolName || "").trim(),
+      toolName: text(toolName),
       ...normalizedPayload,
     },
     null,

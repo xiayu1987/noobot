@@ -6,6 +6,7 @@
 import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRoute.js";
 import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
+import { text } from "@noobot/shared/value";
 
 function routeWorkflowRuntimeEvent({ envelope, descriptor, context = {} } = {}) {
   if (descriptor?.family !== EVENT_FAMILY.WORKFLOW_RUNTIME) return false;
@@ -54,9 +55,7 @@ function createWorkflowSessionService(authenticatedRequest) {
   const request = requireAuthenticatedRequest(authenticatedRequest);
   return Object.freeze({
     getDetail({ userId = "", sessionId = "", dialogProcessId = "", traceId = "" } = {}) {
-      const query = String(traceId || "").trim()
-        ? `?traceId=${encodeURIComponent(String(traceId).trim())}`
-        : "";
+      const query = text(traceId) ? `?traceId=${encodeURIComponent(String(traceId).trim())}` : "";
       return request(
         `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogProcessId)}${query}`,
         { method: "GET" },
@@ -93,24 +92,16 @@ function createWorkflowSessionService(authenticatedRequest) {
 }
 
 function isWorkflowMessageLike(messageItem = {}) {
-  const type = String(messageItem?.type || "")
-    .trim()
-    .toLowerCase();
+  const type = text(messageItem?.type).toLowerCase();
   const pluginMeta =
     messageItem?.pluginMeta &&
     typeof messageItem.pluginMeta === "object" &&
     !Array.isArray(messageItem.pluginMeta)
       ? messageItem.pluginMeta
       : null;
-  const source = String(pluginMeta?.source || "")
-    .trim()
-    .toLowerCase();
-  const kind = String(pluginMeta?.kind || "")
-    .trim()
-    .toLowerCase();
-  const phase = String(pluginMeta?.phase || "")
-    .trim()
-    .toLowerCase();
+  const source = text(pluginMeta?.source).toLowerCase();
+  const kind = text(pluginMeta?.kind).toLowerCase();
+  const phase = text(pluginMeta?.phase).toLowerCase();
   return (
     type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase)
   );
@@ -159,11 +150,10 @@ export async function activate(ctx = {}) {
       logWorkflowDiagnostics:
         typeof context?.logWorkflowDiagnostics === "function"
           ? (event, payload = {}) => {
-              const parentSessionId = String(
+              const parentSessionId = text(
                 context?.messageItem?.sessionId ||
-                  context?.messageItem?.pluginMeta?.payload?.planningDialog?.sessionId ||
-                  "",
-              ).trim();
+                  context?.messageItem?.pluginMeta?.payload?.planningDialog?.sessionId,
+              );
               context.logWorkflowDiagnostics(
                 event,
                 routeWorkflowDiagnosticsPayload(parentSessionId, payload),

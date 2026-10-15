@@ -13,6 +13,7 @@ import {
   resolveModelFamilyId,
   resolveModelOperatorId,
 } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 const SAMPLING_NEUTRAL_DEFAULT_FIELDS = Object.freeze({
   temperature: 0.7,
@@ -67,8 +68,8 @@ function assertContractValue(key, value) {
 export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   const out = { ...input };
   delete out.providerId;
-  out.model = String(out.model || "").trim();
-  out.alias = String(out.alias || "").trim();
+  out.model = text(out.model);
+  out.alias = text(out.alias);
   if (!out.model) throw new TypeError("model spec.model is required");
 
   delete out.adapterId;

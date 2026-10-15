@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ref } from "vue";
+import { text } from "@noobot/shared/value";
 
 const PSEUDO_ROUTE_SESSION_KEY = "session";
 export const PSEUDO_ROUTE_PANEL_KEY = "panel";
@@ -35,16 +36,16 @@ function getSafeHistory() {
 }
 
 export function normalizePseudoPanel(panel = "", allowedPanels = DEFAULT_ALLOWED_PANELS) {
-  const value = String(panel || "").trim();
+  const value = text(panel);
   const allowedSet = allowedPanels instanceof Set ? allowedPanels : new Set(allowedPanels || []);
   return allowedSet.has(value) ? value : "";
 }
 
 function normalizePseudoRoute(route = {}, { allowedPanels = DEFAULT_ALLOWED_PANELS } = {}) {
   return {
-    sessionId: String(route?.sessionId || "").trim(),
+    sessionId: text(route?.sessionId),
     panel: normalizePseudoPanel(route?.panel || "", allowedPanels),
-    anchor: String(route?.anchor || "").trim(),
+    anchor: text(route?.anchor),
   };
 }
 

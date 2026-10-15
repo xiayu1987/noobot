@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export async function resolveOutboxSessionDir(
   service,
   userId,
@@ -17,7 +19,7 @@ export async function resolveOutboxSessionDir(
     resolvedParentSessionId,
     persistenceContext,
   );
-  return String(scope?.sessionDir || "").trim();
+  return text(scope?.sessionDir);
 }
 
 export async function requireOutboxSessionDir(

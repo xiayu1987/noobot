@@ -26,6 +26,7 @@ import { selectActivityTimelineLogs } from "../../modules/chat/runtime/engine/ac
 import { selectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
 import { logThinkingReplayDebug } from "../../modules/debug/loggers/thinkingReplayDebugLogger.js";
 import { logStateMachineDebug } from "../../modules/debug/loggers/stateMachineLogger.js";
+import { text } from "@noobot/shared/value";
 
 function hasCanonicalTimeline(messageItem = {}) {
   return (
@@ -37,8 +38,8 @@ function hasCanonicalTimeline(messageItem = {}) {
 
 function isSameThinkingTurn(left = {}, right = {}) {
   if (getMessageRole(left) !== "assistant" || getMessageRole(right) !== "assistant") return false;
-  const leftPresentationMessageId = String(left?.presentationMessageId || "").trim();
-  const rightPresentationMessageId = String(right?.presentationMessageId || "").trim();
+  const leftPresentationMessageId = text(left?.presentationMessageId);
+  const rightPresentationMessageId = text(right?.presentationMessageId);
   return Boolean(
     leftPresentationMessageId && leftPresentationMessageId === rightPresentationMessageId,
   );
@@ -47,7 +48,7 @@ function isSameThinkingTurn(left = {}, right = {}) {
 function summarizeThinkingTimeline(messageItem = {}) {
   const toolTimeline = Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline : [];
   return {
-    presentationMessageId: String(messageItem?.presentationMessageId || "").trim(),
+    presentationMessageId: text(messageItem?.presentationMessageId),
     dialogProcessId: getMessageDialogProcessId(messageItem),
     turnScopeId: getMessageTurnScopeId(messageItem),
     pending: messageItem?.pending === true,
@@ -126,12 +127,12 @@ export function useThinkingDetailsPanel({
   }
 
   function expectedThinkingDetailRevision(messageItem = {}) {
-    return String(messageItem?.thinkingDetailRef?.contentHash || "").trim();
+    return text(messageItem?.thinkingDetailRef?.contentHash);
   }
 
   async function fetchThinkingDetailForMessage(messageItem = {}, fetchDetailOverride = null) {
     const dialogProcessId = normalizeDialogProcessId(messageItem);
-    const turnScopeId = String(messageItem?.turnScopeId || "").trim();
+    const turnScopeId = text(messageItem?.turnScopeId);
     if (!dialogProcessId && !turnScopeId) return null;
     const runFetchDetail =
       typeof fetchDetailOverride === "function"
@@ -204,7 +205,7 @@ export function useThinkingDetailsPanel({
     const expectedRevision = expectedThinkingDetailRevision(initialMessageItem);
     const cachedCandidate = getCachedThinkingDetail(cachedIdentity);
     const cachedThinkingDetail =
-      expectedRevision && String(cachedCandidate?.revision || "").trim() === expectedRevision
+      expectedRevision && text(cachedCandidate?.revision) === expectedRevision
         ? cachedCandidate
         : null;
     const initialDetailMessage = cachedThinkingDetail?.messageItem || initialMessageItem;
@@ -256,7 +257,7 @@ export function useThinkingDetailsPanel({
     }
     const currentMessage = thinkingDetailsMessageItem.value;
     const dialogProcessId = normalizeDialogProcessId(currentMessage);
-    const turnScopeId = String(currentMessage?.turnScopeId || "").trim();
+    const turnScopeId = text(currentMessage?.turnScopeId);
     if (!dialogProcessId && !turnScopeId) return;
     const sourceMessage = findActiveCanonicalMessage(currentMessage);
     if (sourceMessage?.pending === true) {
@@ -281,7 +282,7 @@ export function useThinkingDetailsPanel({
         requestVersion !== detailRequestVersion ||
         !detail ||
         normalizeDialogProcessId(latestMessage) !== dialogProcessId ||
-        String(latestMessage?.turnScopeId || "").trim() !== turnScopeId
+        text(latestMessage?.turnScopeId) !== turnScopeId
       )
         return;
       thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;

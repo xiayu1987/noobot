@@ -13,6 +13,7 @@ import {
 import { hasOwnConfigKey, normalizeBoolean } from "../../config/index.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { isConfiguredSuperUser } from "../../shared/utils/super-user.js";
+import { text } from "@noobot/shared/value";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -68,7 +69,7 @@ function applyIdentityToStaticPathInfo(staticInfo = {}, identityInfo = {}) {
 
 export function resolveContextIdentityInfo({ userId = "", globalConfig = {} } = {}) {
   return {
-    userId: String(userId || "").trim(),
+    userId: text(userId),
     isSuperUser: isConfiguredSuperUser({ globalConfig, userId }),
   };
 }
@@ -95,7 +96,7 @@ export function buildDynamicInfo({
   runConfig = {},
   now = new Date().toISOString(),
 } = {}) {
-  const normalizedTurnScopeId = String(runConfig?.turnScopeId || "").trim();
+  const normalizedTurnScopeId = text(runConfig?.turnScopeId);
   const toolPolicy =
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
       ? { ...runConfig.toolPolicy }
@@ -116,10 +117,10 @@ export function buildDynamicInfo({
     selectedConnectorIds,
   };
   return {
-    userId: String(userId || "").trim(),
-    sessionId: String(sessionId || "").trim(),
+    userId: text(userId),
+    sessionId: text(sessionId),
     parentSessionId: normalizeParentSessionId(parentSessionId),
-    rootSessionId: String(rootSessionId || "").trim(),
+    rootSessionId: text(rootSessionId),
     caller: String(caller || "user").trim(),
     dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     turnScopeId: normalizedTurnScopeId,

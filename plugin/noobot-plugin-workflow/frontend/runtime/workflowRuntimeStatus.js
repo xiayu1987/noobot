@@ -5,22 +5,21 @@
  */
 
 function normalizeStatus(value = "") {
-  const status = String(value || "")
-    .trim()
-    .toLowerCase();
+  const status = text(value).toLowerCase();
   if (status === "error") return "failed";
   if (status === "done" || status === "completed" || status === "succeeded") return "success";
   return status;
 }
 
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
+import { text } from "@noobot/shared/value";
 
 export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
   return function resolveStepStatus(stepItem = {}) {
     const failure = stepItem?.stepFailure;
     if (failure && typeof failure === "object") {
-      if (String(failure?.message || failure?.error || "").trim()) return "failed";
-    } else if (String(failure || "").trim()) {
+      if (text(failure?.message || failure?.error)) return "failed";
+    } else if (text(failure)) {
       return "failed";
     }
 

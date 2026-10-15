@@ -7,6 +7,7 @@ import { CAPABILITY_DOMAIN } from "./shared/constants.js";
 import { ensureHarnessBucket } from "./shared/bucket-utils.js";
 import { appendCapabilityLog } from "./shared/attachment-log-utils.js";
 import { extractRawTextContent } from "./shared/message/utils.js";
+import { text } from "@noobot/shared/value";
 
 export function scheduleInjectTask(
   ctx = {},
@@ -24,7 +25,7 @@ export function scheduleInjectTask(
   if (!result) return false;
   appendCapabilityLog(ctx, {
     domain,
-    event: String(scheduledEvent || "").trim() || "inject_task_scheduled",
+    event: text(scheduledEvent) || "inject_task_scheduled",
     detail:
       typeof buildScheduledDetail === "function"
         ? buildScheduledDetail({ bucket, state, ctx, result })
@@ -67,7 +68,7 @@ export async function captureInjectedResult(
   if (applied) {
     appendCapabilityLog(ctx, {
       domain,
-      event: String(completedEvent || "").trim() || "inject_capture_completed",
+      event: text(completedEvent) || "inject_capture_completed",
       detail:
         typeof buildCompletedDetail === "function"
           ? buildCompletedDetail({ result, captureMeta })
@@ -77,7 +78,7 @@ export async function captureInjectedResult(
   }
   appendCapabilityLog(ctx, {
     domain,
-    event: String(failedEvent || "").trim() || "inject_capture_failed",
+    event: text(failedEvent) || "inject_capture_failed",
     detail:
       typeof buildFailedDetail === "function"
         ? buildFailedDetail({ result, captureMeta, responseText })

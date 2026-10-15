@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function normalizeToolCallArgs(rawArgs = null) {
   if (isPlainObject(rawArgs)) return rawArgs;
-  const rawText = String(rawArgs || "").trim();
+  const rawText = text(rawArgs);
   if (!rawText) return {};
   try {
     const parsed = JSON.parse(rawText);
@@ -38,10 +38,10 @@ export function resolveRawToolCalls(ai = {}) {
   if (functionCall?.name) {
     return [
       {
-        id: String(functionCall?.id || "").trim(),
+        id: text(functionCall?.id),
         type: "function",
         function: {
-          name: String(functionCall?.name || "").trim(),
+          name: text(functionCall?.name),
           arguments: String(functionCall?.arguments || ""),
         },
       },

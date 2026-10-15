@@ -41,6 +41,7 @@ import {
   SECURITY_EVIDENCE_SOURCE,
   classifyResourceSetRisk,
 } from "@noobot/security-assessment-protocol";
+import { text } from "@noobot/shared/value";
 
 function buildPatchFailurePayload({ error, original = "", pathRef = null } = {}) {
   const details = error?.details && typeof error.details === "object" ? error.details : {};
@@ -57,7 +58,7 @@ function buildPatchFailurePayload({ error, original = "", pathRef = null } = {})
 }
 
 function resolvePatchProtocol({ format = "", patch = "", strip = 1 } = {}) {
-  const requestedFormat = String(format || "").trim();
+  const requestedFormat = text(format);
   const trimmedPatch = String(patch || "").trimStart();
   const detectedFormat = trimmedPatch.startsWith("*** Begin Patch")
     ? "apply_patch"
@@ -83,7 +84,7 @@ async function preparePatchExecution({
     protocol.format === "apply_patch"
       ? parseApplyPatch(patch)
       : parseUnifiedDiff(patch, protocol.strip);
-  const normalizedRoot = String(root || "").trim();
+  const normalizedRoot = text(root);
   const targets = await resolvePatchTargetsWithOptions({
     patches: parsed,
     agentContext,

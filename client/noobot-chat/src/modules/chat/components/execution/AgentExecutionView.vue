@@ -8,6 +8,7 @@ import SharedChatMessageItem from "../message/SharedChatMessageItem.vue";
 import { BaseEmptyHint } from "../../../../shared/public-api/ui.js";
 import { getMessageTurnScopeId, normalizeTurnScopeIdKey } from "../../model/messageIdentity.js";
 import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   executionId: { type: String, required: true },
@@ -29,7 +30,7 @@ function openThinkingDetails(payload = {}, messageItem = {}) {
 }
 
 function messageRenderKey(messageItem = {}, messageIndex = 0) {
-  const explicitId = String(messageItem?.messageId || "").trim();
+  const explicitId = text(messageItem?.messageId);
   if (explicitId) return `${props.executionId}-message-${explicitId}`;
   const turnScopeKey = normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
   const role = String(messageItem?.role || "message").trim();
@@ -37,9 +38,9 @@ function messageRenderKey(messageItem = {}, messageIndex = 0) {
 }
 
 function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
-  if (String(messageItem?.role || "").trim() !== "assistant") return false;
+  if (text(messageItem?.role) !== "assistant") return false;
   for (let index = props.messages.length - 1; index >= 0; index -= 1) {
-    if (String(props.messages[index]?.role || "").trim() === "assistant") {
+    if (text(props.messages[index]?.role) === "assistant") {
       return index === messageIndex;
     }
   }

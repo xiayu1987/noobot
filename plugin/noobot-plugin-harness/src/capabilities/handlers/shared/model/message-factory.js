@@ -14,6 +14,7 @@ import {
 } from "@noobot/context-protocol/assembly/auxiliary-sequence";
 import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 import { isSystemLikeMessageRole } from "@noobot/context-protocol/policy/message";
+import { text } from "@noobot/shared/value";
 
 function markContextMessage(message = {}, source = {}) {
   const sourceMessageId = resolveContextMessageId(source);
@@ -45,16 +46,12 @@ function markRequestMessage(message = {}) {
 }
 
 function normalizeModelMessageRole(role = "", fallback = "user") {
-  const normalized = String(role || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(role).toLowerCase();
   return normalized || fallback;
 }
 
 function normalizeTextList(items = []) {
-  return (Array.isArray(items) ? items : [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
+  return (Array.isArray(items) ? items : []).map((item) => text(item)).filter(Boolean);
 }
 
 export function buildCapabilityModelMessages({
@@ -67,7 +64,7 @@ export function buildCapabilityModelMessages({
   taskRole = "user",
   postTaskRole = "user",
 } = {}) {
-  const normalizedTask = String(task || "").trim();
+  const normalizedTask = text(task);
   const normalizedPostTaskSystemMessages = normalizeTextList(postTaskSystemMessages);
   const normalizedPostTaskMessages = normalizeTextList(postTaskMessages);
   const flattenedAgentMessages = projectAuxiliaryHistoryMessages(agentMessages, {

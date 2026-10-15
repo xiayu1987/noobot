@@ -13,6 +13,7 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { ACTIVITY_KIND, MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { createModelActivity } from "../../models/runtime/model-manager.js";
+import { text } from "@noobot/shared/value";
 
 export async function createMcpAgentTools({
   globalConfig = {},
@@ -50,7 +51,7 @@ export async function executeMcpTask({
   signal = null,
   fetchImpl = null,
 }) {
-  const normalizedTask = String(task || "").trim();
+  const normalizedTask = text(task);
   if (!normalizedTask) {
     throw recoverableToolError(tSystem("common.taskRequired"));
   }
@@ -136,7 +137,7 @@ export async function executeMcpTask({
       };
     }
     for (const call of calls) {
-      const tool = toolMap.get(String(call?.name || "").trim());
+      const tool = toolMap.get(text(call?.name));
       if (!tool) {
         const notFoundMsg = `${tSystem("mcp.toolNotFound")}: ${String(call?.name || "")}`;
         traces.push({ tool: call?.name || "", args: call?.args || {}, result: notFoundMsg });

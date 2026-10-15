@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -56,8 +56,7 @@ async function upsertConfigParams({
   overwriteKeys = [],
 } = {}) {
   const filePath =
-    String(configParamsFilePath || "").trim() ||
-    path.join(workspaceRootAbsolutePath, "config-params.json");
+    text(configParamsFilePath) || path.join(workspaceRootAbsolutePath, "config-params.json");
   const currentPayload = normalizeConfigParamsDocument((await readJsonRelaxed(filePath, {})) || {});
   const values = { ...currentPayload.values };
   const descriptions = { ...currentPayload.descriptions };
@@ -140,7 +139,7 @@ async function readWorkspaceDirectoryEntries(workspaceRootAbsolutePath) {
 async function collectWorkspaceUserIds({ workspaceRootAbsolutePath } = {}) {
   const entries = await readWorkspaceDirectoryEntries(workspaceRootAbsolutePath);
   return entries
-    .filter((entry) => entry.isDirectory() && String(entry.name || "").trim())
+    .filter((entry) => entry.isDirectory() && text(entry.name))
     .map((entry) => String(entry.name).trim())
     .sort((leftUserId, rightUserId) => leftUserId.localeCompare(rightUserId));
 }
@@ -162,8 +161,8 @@ export async function syncUserConfigs({
   locale = "zh",
 } = {}) {
   await mkdir(workspaceRootAbsolutePath, { recursive: true });
-  const normalizedLanguage = String(language || "").trim();
-  const normalizedProviderAlias = String(providerAlias || "").trim();
+  const normalizedLanguage = text(language);
+  const normalizedProviderAlias = text(providerAlias);
   const transform = (document) => {
     const aligned = normalizedProviderAlias
       ? alignInitialModelReferences({
@@ -195,7 +194,7 @@ export async function ensureWorkspaceConfigParamsCatalog({
     collectConfigTemplateKeys(globalDocument).map((key) => [key, ""]),
   );
   for (const [key, value] of Object.entries(explicitEntries || {})) {
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = text(key);
     if (!normalizedKey) continue;
     entries[normalizedKey] = String(value ?? "").trim();
   }

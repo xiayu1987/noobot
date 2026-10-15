@@ -4,21 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function normalizeExecutionLogEntity(
   executionLog = {},
   now = () => new Date().toISOString(),
 ) {
   const data = executionLog?.data && typeof executionLog.data === "object" ? executionLog.data : {};
   return {
-    userId: String(executionLog?.userId || "").trim(),
-    sessionId: String(executionLog?.sessionId || "").trim(),
-    parentSessionId: String(executionLog?.parentSessionId || "").trim(),
-    dialogProcessId: String(executionLog?.dialogProcessId || "").trim(),
-    turnScopeId: String(executionLog?.turnScopeId || "").trim(),
-    event: String(executionLog?.event || "").trim(),
-    category: String(executionLog?.category || "").trim(),
-    type: String(executionLog?.type || "").trim(),
+    userId: text(executionLog?.userId),
+    sessionId: text(executionLog?.sessionId),
+    parentSessionId: text(executionLog?.parentSessionId),
+    dialogProcessId: text(executionLog?.dialogProcessId),
+    turnScopeId: text(executionLog?.turnScopeId),
+    event: text(executionLog?.event),
+    category: text(executionLog?.category),
+    type: text(executionLog?.type),
     data,
-    ts: String(executionLog?.ts || "").trim() || now(),
+    ts: text(executionLog?.ts) || now(),
   };
 }

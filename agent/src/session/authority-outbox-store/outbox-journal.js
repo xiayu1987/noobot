@@ -10,6 +10,7 @@ import {
 } from "@noobot/event-protocol/outbox";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename } from "node:fs/promises";
+import { text } from "@noobot/shared/value";
 
 const AUTHORITY_OUTBOX_DIR = "authority-outbox";
 const AUTHORITY_OUTBOX_JOURNAL_FILE = "outbox.jsonl";
@@ -20,11 +21,11 @@ const mutationTails = new Map();
 const mutationContext = new AsyncLocalStorage();
 
 export function authorityOutboxSequenceKey(orderingDomain = "", orderingScopeId = "") {
-  return `${String(orderingDomain || "").trim()}\u0000${String(orderingScopeId || "").trim()}`;
+  return `${text(orderingDomain)}\u0000${text(orderingScopeId)}`;
 }
 
 export async function withAuthorityOutboxMutation(sessionDir = "", operation) {
-  const key = String(sessionDir || "").trim();
+  const key = text(sessionDir);
   const inheritedContext = mutationContext.getStore();
   if (inheritedContext?.key === key && inheritedContext.active) return operation();
   const previous = mutationTails.get(key) || Promise.resolve();
@@ -50,7 +51,7 @@ export async function withAuthorityOutboxMutation(sessionDir = "", operation) {
 }
 
 export function authorityOutboxDir(sessionDir = "") {
-  return path.join(String(sessionDir || "").trim(), AUTHORITY_OUTBOX_DIR);
+  return path.join(text(sessionDir), AUTHORITY_OUTBOX_DIR);
 }
 
 export function authorityOutboxJournalPath(sessionDir = "") {
@@ -193,9 +194,9 @@ export async function replaceAuthorityOutboxRecords(sessionDir = "", records = [
 export function authorityOutboxCommitRecord(entry = {}) {
   return {
     op: AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT,
-    eventId: String(entry?.eventId || "").trim(),
+    eventId: text(entry?.eventId),
     envelope: entry?.envelope,
-    committedAt: String(entry?.committedAt || "").trim(),
+    committedAt: text(entry?.committedAt),
   };
 }
 
@@ -203,7 +204,7 @@ export async function readCommittedAuthorityEventIds(sessionDir = "") {
   const records = await readAuthorityOutboxRecords(sessionDir);
   const eventIds = new Set();
   for (const record of records) {
-    const eventId = String(record?.eventId || "").trim();
+    const eventId = text(record?.eventId);
     if (!eventId) continue;
     if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.COMMIT) eventIds.add(eventId);
     else if (record.op === AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE) eventIds.delete(eventId);
@@ -213,14 +214,12 @@ export async function readCommittedAuthorityEventIds(sessionDir = "") {
 
 export async function removeAuthorityOutboxTurnScopes(sessionDir = "", turnScopeIds = []) {
   const scopes = new Set(
-    (Array.isArray(turnScopeIds) ? turnScopeIds : [])
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
+    (Array.isArray(turnScopeIds) ? turnScopeIds : []).map((value) => text(value)).filter(Boolean),
   );
   if (!scopes.size) return 0;
   const outbox = await readAuthorityOutbox(sessionDir);
   const records = outbox
-    .filter((item) => scopes.has(String(item?.envelope?.identity?.turnScopeId || "").trim()))
+    .filter((item) => scopes.has(text(item?.envelope?.identity?.turnScopeId)))
     .map((item) => ({ op: AUTHORITY_OUTBOX_JOURNAL_OP.REMOVE, eventId: item.eventId }));
   if (!records.length) return 0;
   return appendAuthorityOutboxRecords(sessionDir, records);
@@ -229,7 +228,7 @@ export async function removeAuthorityOutboxTurnScopes(sessionDir = "", turnScope
 export function authorityOutboxRecordsFromOutbox(outbox = []) {
   const records = [];
   for (const item of Array.isArray(outbox) ? outbox : []) {
-    const eventId = String(item?.eventId || "").trim();
+    const eventId = text(item?.eventId);
     if (!eventId) continue;
     records.push(authorityOutboxCommitRecord(item));
     const deliveries =
@@ -241,18 +240,18 @@ export function authorityOutboxRecordsFromOutbox(outbox = []) {
           op: AUTHORITY_OUTBOX_JOURNAL_OP.ATTEMPT,
           eventId,
           consumerId,
-          attemptedAt: String(delivery.lastAttemptAt || "").trim(),
+          attemptedAt: text(delivery.lastAttemptAt),
         });
       }
-      if (String(delivery?.deliveredAt || "").trim()) {
+      if (text(delivery?.deliveredAt)) {
         records.push({
           op: AUTHORITY_OUTBOX_JOURNAL_OP.ACK,
           eventId,
           consumerId,
-          orderingDomain: String(delivery.orderingDomain || "").trim(),
-          orderingScopeId: String(delivery.orderingScopeId || "").trim(),
+          orderingDomain: text(delivery.orderingDomain),
+          orderingScopeId: text(delivery.orderingScopeId),
           sequence: Number(delivery.sequence) || 0,
-          deliveredAt: String(delivery.deliveredAt || "").trim(),
+          deliveredAt: text(delivery.deliveredAt),
         });
       }
     }

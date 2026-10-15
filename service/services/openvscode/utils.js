@@ -4,15 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function normalizeUserId(userId = "") {
-  return String(userId || "").trim();
+  return text(userId);
 }
 export function normalizeBasePath(basePath = "") {
-  return String(basePath || "")
-    .trim()
-    .replace(/^\/+|\/+$/g, "");
+  return text(basePath).replace(/^\/+|\/+$/g, "");
 }
 export function sleep(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms || 0))));

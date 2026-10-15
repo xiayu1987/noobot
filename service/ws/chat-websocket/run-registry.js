@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 const activeRunRegistry = new Map();
 let nextRunHandleId = 0;
 let nextTransportBindingId = 0;
@@ -33,7 +35,7 @@ function initializeInterjectionQueue(handle) {
 }
 
 export function normalizeRunIdentityPart(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function buildRunRegistryKeys({
@@ -80,7 +82,7 @@ export function enqueueUserInterjection(handle = {}, interjection = {}, commitAu
     throw error;
   }
   const commandId = normalizeRunIdentityPart(interjection.commandId);
-  const message = String(interjection.message || "").trim();
+  const message = text(interjection.message);
   if (!commandId || !message) throw new TypeError("invalid_user_interjection");
   if (typeof commitAuthority !== "function") {
     throw new TypeError("user interjection authority commit is required");
@@ -187,14 +189,12 @@ export function isRunTransportAttached(handle = {}, binding = null) {
 export async function publishRunEvent(handle = {}, eventName, data = {}) {
   const binding = handle?.transportBinding;
   const diagnostic = {
-    eventId: String(data?.event?.eventId || data?.eventId || "").trim(),
-    eventType: String(data?.event?.eventType || data?.eventType || eventName || "").trim(),
-    messageId: String(data?.event?.messageId || data?.messageId || "").trim(),
-    presentationMessageId: String(
-      data?.event?.presentationMessageId || data?.presentationMessageId || "",
-    ).trim(),
-    runHandleId: String(handle?.runHandleId || "").trim(),
-    bindingId: String(binding?.id || "").trim(),
+    eventId: text(data?.event?.eventId || data?.eventId),
+    eventType: text(data?.event?.eventType || data?.eventType || eventName),
+    messageId: text(data?.event?.messageId || data?.messageId),
+    presentationMessageId: text(data?.event?.presentationMessageId || data?.presentationMessageId),
+    runHandleId: text(handle?.runHandleId),
+    bindingId: text(binding?.id),
     bindingCurrent: Boolean(binding && handle?.transportBinding === binding),
   };
   if (!binding || typeof binding.send !== "function") return false;

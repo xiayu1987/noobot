@@ -6,9 +6,10 @@
 import { pickLocaleText, resolveLocaleFromRuntime } from "noobot-i18n/shared";
 import { BACKEND_I18N } from "noobot-i18n/agent/backend-messages";
 import { ENGINE_I18N_KEY_MAP } from "./constants/index.js";
+import { text } from "@noobot/shared/value";
 
 export function tEngine(runtime = {}, key = "", params = {}) {
   const locale = resolveLocaleFromRuntime(runtime);
-  const mappedKey = String(ENGINE_I18N_KEY_MAP[String(key || "").trim()] || key || "").trim();
+  const mappedKey = text(ENGINE_I18N_KEY_MAP[String(key || "").trim()] || key);
   return pickLocaleText({ locale, dict: BACKEND_I18N, key: mappedKey, params });
 }

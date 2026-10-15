@@ -65,7 +65,7 @@ export function createUserInterjectionContentFact({
     contentId: `message:${sourceMessageUid}`,
     contentKind: THINKING_DETAIL_CONTENT_KIND.USER_INTERJECTION,
     sourceMessageUid,
-    text: String(message || "").trim(),
+    text: text(message),
     timestamp: text(receivedAt),
     sequence: Number(sequence),
     sessionId: text(sessionId),

@@ -15,6 +15,7 @@ import {
   getSystemRuntimeFromRuntime,
   resolveRuntimeTurnScopeId,
 } from "../../context/agent-context-accessor.js";
+import { text } from "@noobot/shared/value";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -22,20 +23,14 @@ export function extractGeneratedMediaCandidates(aiContent) {
   let mediaIndex = 0;
   for (const contentPart of aiContent) {
     if (!isModelOutputArtifactContentBlock(contentPart)) continue;
-    const partType = String(contentPart?.type || "")
-      .trim()
-      .toLowerCase();
+    const partType = text(contentPart?.type).toLowerCase();
 
-    const imageUrl = String(contentPart?.image_url?.url || "").trim();
-    const videoUrl = String(contentPart?.video_url?.url || "").trim();
-    const directUrl = String(contentPart?.url || "").trim();
-    const sourceType = String(contentPart?.source?.type || "")
-      .trim()
-      .toLowerCase();
-    const sourceMediaType = String(contentPart?.source?.media_type || "")
-      .trim()
-      .toLowerCase();
-    const sourceData = String(contentPart?.source?.data || "").trim();
+    const imageUrl = text(contentPart?.image_url?.url);
+    const videoUrl = text(contentPart?.video_url?.url);
+    const directUrl = text(contentPart?.url);
+    const sourceType = text(contentPart?.source?.type).toLowerCase();
+    const sourceMediaType = text(contentPart?.source?.media_type).toLowerCase();
+    const sourceData = text(contentPart?.source?.data);
     const chosenUrl = imageUrl || videoUrl || directUrl;
     mediaIndex += 1;
 
@@ -77,7 +72,7 @@ export async function fetchRemoteMediaArtifact(
   mediaIndex = 1,
   runtime = {},
 ) {
-  const normalizedUrl = String(url || "").trim();
+  const normalizedUrl = text(url);
   if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
   if (typeof fetchImpl !== "function") return null;
 
@@ -124,7 +119,7 @@ function resolveGeneratedArtifactOwnership(runtime = {}, dialogProcessId = "") {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const turnScopeId = resolveRuntimeTurnScopeId(runtime);
   const resolvedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
-  const sessionId = String(systemRuntime?.sessionId || systemRuntime?.rootSessionId || "").trim();
+  const sessionId = text(systemRuntime?.sessionId || systemRuntime?.rootSessionId);
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
 }
 
@@ -136,7 +131,7 @@ export async function persistModelGeneratedArtifacts({
   messageId = "",
 }) {
   const attachmentService = runtime?.attachmentService || null;
-  const userId = String(runtime?.userId || "").trim();
+  const userId = text(runtime?.userId);
   if (!attachmentService || !userId) return [];
   const fetchImpl =
     typeof runtime?.sharedTools?.fetch === "function"
@@ -152,9 +147,9 @@ export async function persistModelGeneratedArtifacts({
     const fetchPromises = [];
     for (const contentPart of aiContent) {
       if (!isModelOutputArtifactContentBlock(contentPart)) continue;
-      const imageUrl = String(contentPart?.image_url?.url || "").trim();
-      const videoUrl = String(contentPart?.video_url?.url || "").trim();
-      const directUrl = String(contentPart?.url || "").trim();
+      const imageUrl = text(contentPart?.image_url?.url);
+      const videoUrl = text(contentPart?.video_url?.url);
+      const directUrl = text(contentPart?.url);
       const remoteUrl = imageUrl || videoUrl || directUrl;
       if (!/^https?:\/\//i.test(remoteUrl)) continue;
       remoteMediaIndex += 1;
@@ -172,7 +167,7 @@ export async function persistModelGeneratedArtifacts({
   const allMediaCandidates = [...localMediaCandidates, ...remoteMediaCandidates];
   if (!allMediaCandidates.length) return [];
   const ownership = resolveGeneratedArtifactOwnership(runtime, dialogProcessId);
-  if (!String(messageId || "").trim() || !ownership.sessionId || !ownership.turnScopeId) {
+  if (!text(messageId) || !ownership.sessionId || !ownership.turnScopeId) {
     throw new Error("model_generated_artifact_ownership_incomplete");
   }
   const attachmentRecords = await attachmentService.ingestGeneratedArtifacts({

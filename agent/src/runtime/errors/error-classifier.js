@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { isAbortError } from "../../shared/utils/error-utils.js";
+import { text } from "@noobot/shared/value";
 
 export function classifyEngineError(error = null, abortSignal = null) {
   if (abortSignal?.aborted || isAbortError(error) || isAbortError(error?.cause)) {
     return "abort";
   }
 
-  const level = String(error?.level || "")
-    .trim()
-    .toLowerCase();
-  const code = String(error?.code || "").trim();
+  const level = text(error?.level).toLowerCase();
+  const code = text(error?.code);
   if (error?.fatal === true || level === "fatal" || code.startsWith("FATAL_")) {
     return "fatal";
   }

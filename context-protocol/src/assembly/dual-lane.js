@@ -7,6 +7,7 @@
 import { isContextSystemMessage, readDeclaredContextMessageRole } from "../message/codec.js";
 import { resolveModelFinalMessages } from "../policy/window.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
+import { text } from "@noobot/shared/value";
 
 export const MODEL_CONTEXT_LANE = Object.freeze({
   PRIMARY: "primary",
@@ -69,7 +70,7 @@ export function buildDualLaneModelContext({
   projectPrimaryMessage = null,
   primaryHistoryLimit = Number.POSITIVE_INFINITY,
 } = {}) {
-  const normalizedLane = String(lane || "").trim();
+  const normalizedLane = text(lane);
   if (normalizedLane === MODEL_CONTEXT_LANE.PRIMARY) {
     if (Number(modelContext?.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
       throw new TypeError(

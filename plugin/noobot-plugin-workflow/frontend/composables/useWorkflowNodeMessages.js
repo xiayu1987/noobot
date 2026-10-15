@@ -8,6 +8,7 @@ import {
   buildSessionDetailProjection,
   buildViewMessage,
 } from "noobot-chat/plugin-api/session-domain";
+import { text } from "@noobot/shared/value";
 
 export function useWorkflowNodeMessages({
   props,
@@ -43,17 +44,15 @@ export function useWorkflowNodeMessages({
       !Array.isArray(selectedNodeSessionSummary.value)
         ? selectedNodeSessionSummary.value
         : {};
-    const sessionId = String(
-      selectedNodeSessionId.value || summary?.sessionId || selectedNode.value?.sessionId || "",
-    ).trim();
+    const sessionId = text(
+      selectedNodeSessionId.value || summary?.sessionId || selectedNode.value?.sessionId,
+    );
     if (!sessionId) return [];
     return [
       {
         ...summary,
         sessionId,
-        parentSessionId: String(
-          summary?.parentSessionId || selectedNode.value?.rootSessionId || "",
-        ).trim(),
+        parentSessionId: text(summary?.parentSessionId || selectedNode.value?.rootSessionId),
         caller: String(summary?.caller || "bot").trim() || "bot",
         depth: Number.isFinite(Number(summary?.depth)) ? Number(summary.depth) : 1,
 
@@ -105,20 +104,20 @@ export function useWorkflowNodeMessages({
       : []
     ).map((messageItem = {}) => ({
       ...normalizeNodeMessageForDisplay(messageItem),
-      sessionId: String(messageItem?.sessionId || selectedNodeSessionId.value || "").trim(),
+      sessionId: text(messageItem?.sessionId || selectedNodeSessionId.value),
     })),
   );
 
   function summarizeMessage(messageItem = {}) {
     return {
-      id: String(messageItem?.messageId || "").trim(),
-      messageUid: String(messageItem?.messageUid || "").trim(),
-      presentationMessageId: String(messageItem?.presentationMessageId || "").trim(),
-      role: String(messageItem?.role || "").trim(),
-      type: String(messageItem?.type || "").trim(),
-      sessionId: String(messageItem?.sessionId || "").trim(),
-      dialogProcessId: String(messageItem?.dialogProcessId || "").trim(),
-      turnScopeId: String(messageItem?.turnScopeId || "").trim(),
+      id: text(messageItem?.messageId),
+      messageUid: text(messageItem?.messageUid),
+      presentationMessageId: text(messageItem?.presentationMessageId),
+      role: text(messageItem?.role),
+      type: text(messageItem?.type),
+      sessionId: text(messageItem?.sessionId),
+      dialogProcessId: text(messageItem?.dialogProcessId),
+      turnScopeId: text(messageItem?.turnScopeId),
       pending: messageItem?.pending === true,
       contentLength: String(messageItem?.content || "").length,
       rawEventCount: Array.isArray(messageItem?.rawEvents) ? messageItem.rawEvents.length : 0,
@@ -142,9 +141,9 @@ export function useWorkflowNodeMessages({
     }),
     (projection) => {
       props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.displayProjected", {
-        sessionId: String(projection.sessionId || "").trim(),
-        dialogProcessId: String(selectedNode.value?.dialogProcessId || "").trim(),
-        turnScopeId: String(selectedNode.value?.turnScopeId || "").trim(),
+        sessionId: text(projection.sessionId),
+        dialogProcessId: text(selectedNode.value?.dialogProcessId),
+        turnScopeId: text(selectedNode.value?.turnScopeId),
         sourceMessageCount: projection.source.length,
         displayMessageCount: projection.display.length,
         sourceMessages: projection.source,
@@ -172,24 +171,22 @@ export function useWorkflowNodeMessages({
 
   watch(
     () => ({
-      sessionId: String(selectedNodeSessionId.value || "").trim(),
-      nodeExecutionId: String(selectedRuntimeNode.value?.nodeExecutionId || "").trim(),
-      nodeId: String(selectedRuntimeNode.value?.nodeId || "").trim(),
+      sessionId: text(selectedNodeSessionId.value),
+      nodeExecutionId: text(selectedRuntimeNode.value?.nodeExecutionId),
+      nodeId: text(selectedRuntimeNode.value?.nodeId),
       boxCount: selectedRuntimeBoxes.value.length,
       stepCount: selectedRuntimeBoxes.value.reduce(
         (count, box = {}) => count + (Array.isArray(box?.steps) ? box.steps.length : 0),
         0,
       ),
-      boxIds: selectedRuntimeBoxes.value.map((box = {}) =>
-        String(box?.actionNodeStateId || "").trim(),
-      ),
+      boxIds: selectedRuntimeBoxes.value.map((box = {}) => text(box?.actionNodeStateId)),
     }),
     (projection) => {
       props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.runtimeBoxesProjected", {
         sessionId: projection.sessionId,
-        dialogProcessId: String(selectedRuntimeNode.value?.dialogProcessId || "").trim(),
-        turnScopeId: String(selectedRuntimeNode.value?.turnScopeId || "").trim(),
-        workflowRunId: String(selectedRuntimeNode.value?.workflowRunId || "").trim(),
+        dialogProcessId: text(selectedRuntimeNode.value?.dialogProcessId),
+        turnScopeId: text(selectedRuntimeNode.value?.turnScopeId),
+        workflowRunId: text(selectedRuntimeNode.value?.workflowRunId),
         ...projection,
       });
     },

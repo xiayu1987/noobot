@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function normalizeConfigParamList(input = []) {
   const source = Array.isArray(input) ? input : [];
   const values = new Map();
   for (const item of source) {
-    const key = String(item?.key || "").trim();
+    const key = text(item?.key);
     if (!key) continue;
     values.set(key, String(item?.value ?? "").trim());
   }
@@ -20,7 +22,7 @@ export function normalizeConfigParamList(input = []) {
 export function configParamsFromCatalog({ catalog = [], values = {} } = {}) {
   return normalizeConfigParamList(
     (Array.isArray(catalog) ? catalog : []).map((item) => ({
-      key: String(item?.key || "").trim(),
+      key: text(item?.key),
       value: String(values?.[item?.key] ?? "").trim(),
     })),
   );
@@ -28,9 +30,7 @@ export function configParamsFromCatalog({ catalog = [], values = {} } = {}) {
 
 export function assertConfigParamListMatchesCatalog(list = [], catalog = []) {
   const allowedKeys = new Set(
-    (Array.isArray(catalog) ? catalog : [])
-      .map((item) => String(item?.key || "").trim())
-      .filter(Boolean),
+    (Array.isArray(catalog) ? catalog : []).map((item) => text(item?.key)).filter(Boolean),
   );
   const unknownKeys = normalizeConfigParamList(list)
     .map((item) => item.key)

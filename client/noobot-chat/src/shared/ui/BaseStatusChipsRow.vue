@@ -4,6 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { text } from "@noobot/shared/value";
+
 const props = defineProps({
   items: { type: Array, default: () => [] },
 });
@@ -12,7 +14,7 @@ function normalizedItems() {
   return (Array.isArray(props.items) ? props.items : [])
     .map((item = {}) => ({
       key: String(item?.key || item?.text || ""),
-      text: String(item?.text || "").trim(),
+      text: text(item?.text),
       done: Boolean(item?.done),
     }))
     .filter((item) => item.text);

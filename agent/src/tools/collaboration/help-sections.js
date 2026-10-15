@@ -28,6 +28,7 @@ import {
 } from "../../context/agent-context-accessor.js";
 import { mergeConfig } from "../../config/index.js";
 import { resolveModelSection } from "../../context/providers/model-provider.js";
+import { text } from "@noobot/shared/value";
 
 export const TOOL_SOURCE = Object.freeze({
   RUNTIME_BINDINGS: "runtime_bindings",
@@ -130,13 +131,13 @@ export function buildContextSection(agentContext) {
   const identity = Object.fromEntries(
     CONTEXT_IDENTITY_FIELDS.map((field) => [
       field,
-      String(systemRuntime?.[field] || sessionIds?.[field] || "").trim(),
+      text(systemRuntime?.[field] || sessionIds?.[field]),
     ]).filter(([, value]) => value),
   );
   return {
     identity,
-    caller: String(systemRuntime?.caller || "").trim(),
-    timestamp: String(systemRuntime?.now || "").trim(),
+    caller: text(systemRuntime?.caller),
+    timestamp: text(systemRuntime?.now),
     isSuperUser: systemRuntime?.isSuperUser === true,
   };
 }
@@ -151,7 +152,7 @@ export function resolveAvailableTools(agentContext) {
     const toolNames = [
       ...new Set(
         tools
-          .map((tool) => String(tool?.name || "").trim())
+          .map((tool) => text(tool?.name))
           .filter((name) => name)
           .sort(),
       ),

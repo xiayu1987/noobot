@@ -18,6 +18,7 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { resolveUserInteractionAuthority } from "../core/user-interaction-authority.js";
+import { text } from "@noobot/shared/value";
 
 const toolRiskAssessmentStorage = new AsyncLocalStorage();
 
@@ -46,7 +47,7 @@ function assessToolOperation({ toolName, declaredRiskLevel, serverEvidence }) {
   const assessment =
     activeAssessment ||
     createToolRiskAssessment({ name: toolName, args: { riskLevel: declaredRiskLevel } });
-  if (assessment.current.toolName !== String(toolName || "").trim()) {
+  if (assessment.current.toolName !== text(toolName)) {
     throw new TypeError("security assessment toolName does not match the active tool call");
   }
   if (
@@ -72,14 +73,14 @@ function confirmationContent(
 ) {
   const formatTarget = (value) => {
     if (Array.isArray(value)) return value.map(formatTarget).filter(Boolean).join(", ");
-    if (!value || typeof value !== "object") return String(value || "").trim();
+    if (!value || typeof value !== "object") return text(value);
     if (value.view === "attachment" && value.identity) {
       return formatAttachmentIdentityRef(value.identity);
     }
     if (value.view && value.path) return String(value.path).trim();
     if (value.path) {
       const pathText = formatTarget(value.path);
-      return [String(value.action || "").trim(), pathText].filter(Boolean).join(": ");
+      return [text(value.action), pathText].filter(Boolean).join(": ");
     }
     return "";
   };

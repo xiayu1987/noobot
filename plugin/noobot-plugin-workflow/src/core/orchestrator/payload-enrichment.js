@@ -124,7 +124,7 @@ function buildWorkflowNodeSessions({
 } = {}) {
   const nodeStates = new Map(
     (Array.isArray(nodeStateSnapshot?.nodes) ? nodeStateSnapshot.nodes : [])
-      .map((item = {}) => [String(item?.nodeExecutionId || "").trim(), item])
+      .map((item = {}) => [text(item?.nodeExecutionId), item])
       .filter(([nodeExecutionId]) => nodeExecutionId),
   );
   return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : [])
@@ -152,10 +152,10 @@ export function enrichWorkflowPayload({
   planningPersistResult = null,
 } = {}) {
   workflowPayload.planningDialog = {
-    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-    sessionId: String(ctx?.sessionId || "").trim(),
-    storagePath: String(planningPersistResult?.outputDir || "").trim(),
-    storageFile: String(planningPersistResult?.outputFile || "").trim(),
+    dialogProcessId: text(ctx?.dialogProcessId),
+    sessionId: text(ctx?.sessionId),
+    storagePath: text(planningPersistResult?.outputDir),
+    storageFile: text(planningPersistResult?.outputFile),
   };
   workflowPayload.nodeSessions = buildWorkflowNodeSessions({
     ctx,

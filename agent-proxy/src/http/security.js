@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { timingSafeEqual } from "node:crypto";
+import { text } from "@noobot/shared/value";
 
 function normalizeProxyAddress(input = "") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   const mappedPrefix = "::ffff:";
   if (value.startsWith(mappedPrefix) && value.includes(".")) {
     return value.slice(mappedPrefix.length);
@@ -32,7 +31,7 @@ function parseForwardedFor(headerValue = "") {
 }
 
 export function getClientIp(request = null, trustedProxies = []) {
-  const remoteAddress = String(request?.socket?.remoteAddress || "").trim();
+  const remoteAddress = text(request?.socket?.remoteAddress);
   if (!isTrustedProxy(remoteAddress, trustedProxies)) return remoteAddress;
   const hops = parseForwardedFor(request?.headers?.["x-forwarded-for"]);
   for (let index = hops.length - 1; index >= 0; index -= 1) {
@@ -42,8 +41,8 @@ export function getClientIp(request = null, trustedProxies = []) {
 }
 
 function matchTrustedRule(value = "", rule = "") {
-  const normalizedValue = String(value || "").trim();
-  const normalizedRule = String(rule || "").trim();
+  const normalizedValue = text(value);
+  const normalizedRule = text(rule);
   if (!normalizedValue || !normalizedRule) return false;
   if (normalizedRule === "*") return true;
   if (normalizedRule.endsWith("*")) {
@@ -59,15 +58,13 @@ export function isIpTrusted(clientIp = "", trustedIps = []) {
 
 export function isOriginTrusted(origin = "", trustedOrigins = []) {
   if (!Array.isArray(trustedOrigins) || !trustedOrigins.length) return true;
-  const normalizedOrigin = String(origin || "").trim();
+  const normalizedOrigin = text(origin);
   if (!normalizedOrigin) return false;
   return trustedOrigins.some((rule) => matchTrustedRule(normalizedOrigin, rule));
 }
 
 export function isLoopbackAddress(input = "") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
+  const value = text(input).toLowerCase();
   return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(value);
 }
 
@@ -113,15 +110,13 @@ export function createFixedWindowRateLimiter({ windowMs = 60000, maxRequests = 1
 
 function normalizeHeaderValue(value = "") {
   if (Array.isArray(value)) {
-    return String(value[0] || "").trim();
+    return text(value[0]);
   }
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function resolveHeaderValue(request = null, headerName = "") {
-  const normalizedHeaderName = String(headerName || "")
-    .trim()
-    .toLowerCase();
+  const normalizedHeaderName = text(headerName).toLowerCase();
   if (!normalizedHeaderName) return "";
   return normalizeHeaderValue(request?.headers?.[normalizedHeaderName]);
 }

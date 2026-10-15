@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import path from "node:path";
 import process from "node:process";
 import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
@@ -138,7 +138,7 @@ async function syncWhenGlobalConfigExists({
   });
   const mergedGlobal = globalRepair.document;
 
-  const existingConfigLanguage = String(mergedGlobal?.preferences?.language || "").trim();
+  const existingConfigLanguage = text(mergedGlobal?.preferences?.language);
   const mergedGlobalLocalized = existingConfigLanguage
     ? localizeConfigTextTree(
         mergedGlobal,
@@ -163,7 +163,7 @@ async function syncWhenGlobalConfigExists({
   await syncUserConfigs({
     workspaceRootAbsolutePath,
     baseValues: mergedGlobalLocalized,
-    language: String(mergedGlobalLocalized?.preferences?.language || "").trim(),
+    language: text(mergedGlobalLocalized?.preferences?.language),
     locale: normalizeSetupLocale(
       process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG,
       "zh",

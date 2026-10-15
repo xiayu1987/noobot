@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function resolveFirstMatchedRuleResult(rules = [], context = {}, fallbackResult = null) {
   for (const rule of Array.isArray(rules) ? rules : []) {
     if (typeof rule?.matches !== "function" || typeof rule?.resolve !== "function") {
@@ -20,7 +22,7 @@ export function collectRuleCodes(rules = [], context = {}) {
   for (const rule of Array.isArray(rules) ? rules : []) {
     if (typeof rule?.when !== "function") continue;
     if (rule.when(context) !== true) continue;
-    codes.push(String(rule?.code || "").trim());
+    codes.push(text(rule?.code));
   }
   return codes.filter(Boolean);
 }

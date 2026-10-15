@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+import { text } from "@noobot/shared/value";
 
 export function resolveDesktopClientUrl(env = process.env) {
-  const explicitUrl = String(env.NOOBOT_CLIENT_URL || "").trim();
+  const explicitUrl = text(env.NOOBOT_CLIENT_URL);
   if (explicitUrl) return explicitUrl;
   const topology = resolveRuntimeTopology(env);
   return `http://${topology.loopbackHost}:${addressPort(topology.clientAddr)}`;

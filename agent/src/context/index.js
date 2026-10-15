@@ -27,10 +27,11 @@ import { emitEvent } from "../events/index.js";
 import { isAbortError } from "../shared/utils/error-utils.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../bot/config/constants.js";
 import { MEMORY_SUMMARY_STAGE } from "../memory/stage-runner.js";
+import { text } from "@noobot/shared/value";
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
-  return input.map((item) => String(item || "").trim()).filter(Boolean);
+  return input.map((item) => text(item)).filter(Boolean);
 }
 
 export class ContextBuilder {
@@ -190,7 +191,7 @@ export class ContextBuilder {
       staticInfo: runtimeStaticInfo,
     });
     const effectiveConfig = this._getEffectiveConfig();
-    const runtimeModel = String(this.runConfig?.runtimeModel || "").trim();
+    const runtimeModel = text(this.runConfig?.runtimeModel);
     const allEnabledProviders = resolveAllEnabledProviders(effectiveConfig);
     const systemRuntime = {
       ...buildSystemRuntime({
@@ -253,7 +254,7 @@ export class ContextBuilder {
       parentSessionId: normalizeParentSessionId(this.parentSessionId),
       userConfig: this.userConfig,
       currentDialogProcessId: dialogProcessId,
-      currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
+      currentTurnScopeId: text(this.runConfig?.turnScopeId),
     });
   }
 

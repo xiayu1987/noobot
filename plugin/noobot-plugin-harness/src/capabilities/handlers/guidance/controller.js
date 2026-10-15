@@ -50,6 +50,7 @@ import {
   normalizePositiveInteger,
   resolveGatedThresholdWithSource,
 } from "../shared/threshold-utils.js";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -183,7 +184,7 @@ function isPlanningCapabilityEnabled(meta = {}) {
 function isMainPlanReadyForGuidanceAnalysis(bucket = {}, state = {}, meta = {}) {
   if (!isPlanningCapabilityEnabled(meta)) return true;
   if (state?.flags?.planningCaptured !== true) return false;
-  if (String(bucket?.planText || "").trim()) return true;
+  if (text(bucket?.planText)) return true;
   if (Array.isArray(bucket?.planDocument?.mainPlans) && bucket.planDocument.mainPlans.length > 0) {
     return true;
   }
@@ -230,13 +231,9 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
 }
 
 function resolveWorkflowActionName(action = "", stage = "", mode = "inject") {
-  const normalizedMode =
-    String(mode || "").trim() === "separate_model" ? "separate_model" : "inject";
+  const normalizedMode = text(mode) === "separate_model" ? "separate_model" : "inject";
   if (action === GUIDANCE_DECISION.action.planUpdate) {
-    const revisionStage =
-      String(stage || "")
-        .trim()
-        .toLowerCase() === GUIDANCE_DECISION.stage.revision;
+    const revisionStage = text(stage).toLowerCase() === GUIDANCE_DECISION.stage.revision;
     if (revisionStage) {
       return normalizedMode === "separate_model"
         ? GUIDANCE_DECISION.requestedAction.planUpdateRevisionSeparateModel
@@ -403,8 +400,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
           "";
         const locale = holder.state?.locale || LOCALE.ZH_CN;
         const parsedSummary = parseSummaryOverviewAndDetailFromText(rawSummaryText);
-        const summaryOverviewText =
-          String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
+        const summaryOverviewText = text(parsedSummary?.overviewText) || rawSummaryText;
         const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
         const summaryTransferPayload =
           persistSummaryAttachment && rawSummaryText

@@ -29,9 +29,10 @@ import {
   toWorkspaceRelativePath,
 } from "../file-utils.js";
 import { getBasePathFromAgentContext } from "../../../context/agent-context-accessor.js";
+import { text } from "@noobot/shared/value";
 
 function normalizePatchPathInput(rawPath = "") {
-  const trimmed = String(rawPath || "").trim();
+  const trimmed = text(rawPath);
   if (!trimmed) return "";
   return normalizePathForPlatform(trimmed);
 }

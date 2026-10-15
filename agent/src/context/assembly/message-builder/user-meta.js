@@ -20,6 +20,7 @@ import {
   resolveContextUserMetaMaterialized,
 } from "@noobot/context-protocol/message/codec";
 import { CONTEXT_INTERNAL_MESSAGE_TYPE } from "@noobot/context-protocol/message/internal-types";
+import { text } from "@noobot/shared/value";
 
 export function resolveAttachments(msg = {}, fallbackAttachments = []) {
   const transferAttachments = getTransferAttachments(
@@ -69,17 +70,17 @@ function buildUserMetaInfoContent(
   const fallbackParentSessionId = normalizeParentSessionId(identityFallback?.parentSessionId);
   const messageParentSessionId = normalizeParentSessionId(msg?.parentSessionId);
   const payload = {
-    userName: String(msg?.userName || identityFallback?.userName || "").trim(),
-    sessionId: String(msg?.sessionId || identityFallback?.sessionId || "").trim(),
+    userName: text(msg?.userName || identityFallback?.userName),
+    sessionId: text(msg?.sessionId || identityFallback?.sessionId),
     parentSessionId: messageParentSessionId ? messageParentSessionId : fallbackParentSessionId,
     dialogProcessId:
       resolveContextMessageDialogProcessId(msg) ||
       (allowFallbackRoundIdentity
         ? normalizeDialogProcessId(identityFallback?.dialogProcessId)
         : ""),
-    parentDialogProcessId: String(
-      msg?.parentDialogProcessId || identityFallback?.parentDialogProcessId || "",
-    ).trim(),
+    parentDialogProcessId: text(
+      msg?.parentDialogProcessId || identityFallback?.parentDialogProcessId,
+    ),
     turnScopeId:
       resolveMessageTurnScopeId(msg) ||
       String(allowFallbackRoundIdentity ? identityFallback?.turnScopeId || "" : "").trim(),
@@ -148,13 +149,12 @@ export function isDerivedUserMetaMessage(msg = {}) {
 }
 
 function resolveMessageTurnScopeId(msg = {}) {
-  return String(
+  return text(
     msg?.turnScopeId ||
       msg?.additional_kwargs?.turnScopeId ||
       msg?.lc_kwargs?.turnScopeId ||
-      msg?.lc_kwargs?.additional_kwargs?.turnScopeId ||
-      "",
-  ).trim();
+      msg?.lc_kwargs?.additional_kwargs?.turnScopeId,
+  );
 }
 
 function parseUserMetaPayload(content = "") {
@@ -179,10 +179,10 @@ export function appendUserMetaParsedResult(content = "", result = {}) {
   const currentResults = Array.isArray(parsed.payload.parsedResults)
     ? parsed.payload.parsedResults
     : [];
-  const resultRef = String(result.sourceAttachmentRef || "").trim();
+  const resultRef = text(result.sourceAttachmentRef);
   if (!resultRef) throw new TypeError("user_meta parsed result requires sourceAttachmentRef");
   const nextResults = currentResults.filter(
-    (item) => String(item?.sourceAttachmentRef || "").trim() !== resultRef,
+    (item) => text(item?.sourceAttachmentRef) !== resultRef,
   );
   nextResults.push({ ...result });
   parsed.payload.parsedResults = nextResults;

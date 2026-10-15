@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export const TURN_PHASE = Object.freeze({
   ACTION: "action",
   PROCESSING: "processing",
@@ -50,18 +52,15 @@ const failedStates = new Set(TURN_FAILED_STATES);
 const finalizeFailureStates = new Set(TURN_FINALIZE_FAILURE_STATES);
 
 export function isTerminalTurnState(state = "") {
-  return terminalStates.has(String(state || "").trim());
+  return terminalStates.has(text(state));
 }
 
 export function isFailedTurnState(state = "") {
-  return failedStates.has(String(state || "").trim());
+  return failedStates.has(text(state));
 }
 
 export function isRetryableFinalizeFailure(turn = {}) {
-  return (
-    finalizeFailureStates.has(String(turn?.state || "").trim()) &&
-    turn?.finalizeIntent?.retryable === true
-  );
+  return finalizeFailureStates.has(text(turn?.state)) && turn?.finalizeIntent?.retryable === true;
 }
 
 export function isSettledTurn(turn = {}) {

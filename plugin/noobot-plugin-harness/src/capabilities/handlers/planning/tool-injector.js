@@ -23,6 +23,7 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { text } from "@noobot/shared/value";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -122,14 +123,12 @@ export function synchronizePlanRefinementTool(ctx = {}, meta = {}) {
   const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return false;
   if (state?.flags?.planRefinementRequested === true) {
-    const next = registry.filter(
-      (tool) => String(tool?.name || "").trim() !== PLAN_REFINEMENT_TOOL_NAME,
-    );
+    const next = registry.filter((tool) => text(tool?.name) !== PLAN_REFINEMENT_TOOL_NAME);
     if (next.length === registry.length) return false;
     registry.splice(0, registry.length, ...next);
     return true;
   }
-  if (registry.some((tool) => String(tool?.name || "").trim() === PLAN_REFINEMENT_TOOL_NAME)) {
+  if (registry.some((tool) => text(tool?.name) === PLAN_REFINEMENT_TOOL_NAME)) {
     return false;
   }
   registry.push(createPlanRefinementTool({ state, ctx, meta }));

@@ -42,6 +42,7 @@ import {
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
+import { text } from "@noobot/shared/value";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
@@ -147,7 +148,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
       : buildPlanningRefinementPrompt(locale, bucket, state, "");
   const userInjection = injectMessageWithPolicy(ctx, {
     role: "user",
-    content: String(promptContent || "").trim(),
+    content: text(promptContent),
     injectedMessageType:
       pendingData.stage === "revision" ? "planning_revision_prompt" : "planning_refinement_prompt",
     injectAt: "append",

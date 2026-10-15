@@ -6,6 +6,7 @@
 import { computed } from "vue";
 import { resolveActionRuntimeStatus } from "../runtime/workflowRuntimeStatus.js";
 import { firstRuntimeStep, stripRuntimeInternal } from "../runtime/workflowRuntimeSteps.js";
+import { text } from "@noobot/shared/value";
 
 function buildFlowNodeFromSemantic({
   nodeItem = {},
@@ -15,8 +16,8 @@ function buildFlowNodeFromSemantic({
   actionRuntimeBySemanticKey,
   resolveStepStatus,
 }) {
-  const nodeId = String(nodeItem?.id || "").trim();
-  const nodeName = String(nodeItem?.name || nodeId || "").trim();
+  const nodeId = text(nodeItem?.id);
+  const nodeName = text(nodeItem?.name || nodeId);
   const matchedRuntime =
     actionRuntimeBySemanticKey.value.get(`id:${nodeId}`) ||
     actionRuntimeBySemanticKey.value.get(`name:${nodeName}`) ||
@@ -26,9 +27,7 @@ function buildFlowNodeFromSemantic({
     : { actionNodeStates: [] };
   const firstStep = firstRuntimeStep(cleanRuntime.actionNodeStates) || {};
   const completed = executionMeta.value?.completed === true;
-  const nodeType = String(nodeItem?.type || "")
-    .trim()
-    .toLowerCase();
+  const nodeType = text(nodeItem?.type).toLowerCase();
   const isAction = nodeType === "action";
   const runtimeStatus = resolveActionRuntimeStatus(
     cleanRuntime.actionNodeStates,
@@ -48,16 +47,15 @@ function buildFlowNodeFromSemantic({
     nodeId,
     nodeName,
     nodeType: isAction ? 2 : 0,
-    type: String(nodeItem?.type || "").trim(),
+    type: text(nodeItem?.type),
     stateType: Number.isFinite(Number(nodeItem?.stateType))
       ? Number(nodeItem.stateType)
       : undefined,
-    rootSessionId: String(
+    rootSessionId: text(
       firstStep?.rootSessionId ||
         workflowPayload.value?.planningDialog?.sessionId ||
-        workflowPayload.value?.runMeta?.sessionId ||
-        "",
-    ).trim(),
+        workflowPayload.value?.runMeta?.sessionId,
+    ),
     actionNodeStates: isAction ? cleanRuntime.actionNodeStates : [],
     runtimeBoxes: isAction ? cleanRuntime.actionNodeStates : [],
     status: restoredStatus,

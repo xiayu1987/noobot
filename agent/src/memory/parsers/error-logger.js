@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { text } from "@noobot/shared/value";
 
 export async function appendParseErrorLog({
   storage,
@@ -22,8 +23,8 @@ export async function appendParseErrorLog({
     const rawText =
       typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent ?? "", null, 2);
     const block = [
-      `[${new Date().toISOString()}] stage=${String(stage || "").trim() || "unknown"}`,
-      `error=${String(error || "").trim() || "unknown_parse_error"}`,
+      `[${new Date().toISOString()}] stage=${text(stage) || "unknown"}`,
+      `error=${text(error) || "unknown_parse_error"}`,
       `candidate=${String(candidate || "").slice(0, LENGTH_THRESHOLDS.memory.parserCandidatePreviewChars)}`,
       "raw:",
       String(rawText || "").slice(0, LENGTH_THRESHOLDS.memory.parserRawPreviewChars),

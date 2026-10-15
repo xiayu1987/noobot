@@ -6,6 +6,7 @@
 <script setup>
 import { computed } from "vue";
 import { MoreFilled } from "@element-plus/icons-vue";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   actions: { type: Array, default: () => [] },
@@ -16,9 +17,9 @@ const emit = defineEmits(["command"]);
 const normalizedActions = computed(() =>
   (Array.isArray(props.actions) ? props.actions : [])
     .map((item) => ({
-      command: String(item?.command || "").trim(),
-      label: String(item?.label || "").trim(),
-      type: String(item?.type || "").trim(),
+      command: text(item?.command),
+      label: text(item?.label),
+      type: text(item?.type),
       className: item?.className || "",
       loading: item?.loading === true,
       disabled: item?.disabled === true,
@@ -27,7 +28,7 @@ const normalizedActions = computed(() =>
 );
 
 function handleCommand(command = "") {
-  emit("command", String(command || "").trim());
+  emit("command", text(command));
 }
 </script>
 

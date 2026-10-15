@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 function compactObject(value = {}) {
@@ -25,7 +25,7 @@ export function firstNormalizedString(...values) {
 }
 
 export function normalizeString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function validateAndDedupeEnvelopes(value) {

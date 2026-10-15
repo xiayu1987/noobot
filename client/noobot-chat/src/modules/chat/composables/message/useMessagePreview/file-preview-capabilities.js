@@ -9,12 +9,13 @@ import {
   resolveFileItemName,
   resolveFileItemRelativePath,
 } from "./path-utils.js";
+import { text } from "@noobot/shared/value";
 
 export function canPreviewFileItem(fileItem, userId, isImageMime) {
-  const normalizedUserId = String(userId || "").trim();
+  const normalizedUserId = text(userId);
   const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
   const fileName = resolveFileItemName(fileItem, relativePath);
-  const mimeType = String(fileItem?.mimeType || fileItem?.type || "").trim();
+  const mimeType = text(fileItem?.mimeType || fileItem?.type);
   const hasPreviewPath = Boolean(
     relativePath || resolveFileItemHostPath(fileItem) || fileItem?.resolvedPath || fileItem?.path,
   );

@@ -9,6 +9,7 @@ import {
   dedupeAttachmentsByIdentity,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 function normalizeAttachmentMeta(attachment = {}) {
   if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) return null;
@@ -79,7 +80,7 @@ export function enrichPersistedAttachmentsWithDraftMetadata(
 export function resolveKeptAttachments(userTargetMessage = {}, options = {}) {
   const removedAttachmentKeys = new Set(
     (Array.isArray(options?.removedAttachmentKeys) ? options.removedAttachmentKeys : [])
-      .map((key) => String(key || "").trim())
+      .map((key) => text(key))
       .filter(Boolean),
   );
   const authoritativeAttachments = dedupeAttachmentMetas(

@@ -7,6 +7,7 @@
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { safeNum } from "../shared/utils/shared-utils.js";
+import { text } from "@noobot/shared/value";
 
 export function createAgentContextEnvelopeInput({
   userId = "",
@@ -32,9 +33,9 @@ export function createAgentContextEnvelopeInput({
       rootSessionId,
       parentSessionId: normalizeParentSessionId(parentSessionId),
       dialogProcessId,
-      turnScopeId: String(runConfig?.turnScopeId || "").trim(),
-      runId: String(runConfig?.executionId || "").trim(),
-      messageId: String(runConfig?.messageId || "").trim(),
+      turnScopeId: text(runConfig?.turnScopeId),
+      runId: text(runConfig?.executionId),
+      messageId: text(runConfig?.messageId),
     },
     environment: {
       os: {
@@ -57,7 +58,7 @@ export function createAgentContextEnvelopeInput({
       permissions: { isSuperUser: systemRuntime.isSuperUser === true },
     },
     execution: {
-      timestamp: String(systemRuntime.now || contextBuild.startedAt || "").trim(),
+      timestamp: text(systemRuntime.now || contextBuild.startedAt),
       caller: String(systemRuntime.caller || caller || "user").trim(),
       flags: {
         allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,

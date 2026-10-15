@@ -28,6 +28,7 @@ import {
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
 import { getRuntimeFromAgentContext } from "../context/agent-context-accessor.js";
+import { text } from "@noobot/shared/value";
 export {
   setToolBuilderAdapter,
   getToolBuilderAdapter,
@@ -35,7 +36,7 @@ export {
 } from "./adapter.js";
 
 function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled = true) {
-  const normalized = String(toolName || "").trim();
+  const normalized = text(toolName);
   if (!normalized) return defaultEnabled;
   const toolConfig = effectiveConfig?.tools?.[normalized];
   if (!toolConfig || typeof toolConfig !== "object") return defaultEnabled;
@@ -43,7 +44,7 @@ function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled 
 }
 
 function normalizeToolName(toolDefinition = {}) {
-  return String(toolDefinition?.name || "").trim();
+  return text(toolDefinition?.name);
 }
 
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
@@ -99,8 +100,8 @@ async function buildToolsDefault(ctx) {
     Array.isArray(runtime?.runConfig?.pluginTools) ? runtime.runConfig.pluginTools : []
   ).map((contribution) => {
     const tool = contribution.factory(ctx);
-    const declaredName = String(contribution.name || "").trim();
-    if (!tool || String(tool.name || "").trim() !== declaredName) {
+    const declaredName = text(contribution.name);
+    if (!tool || text(tool.name) !== declaredName) {
       throw new TypeError(`plugin tool does not match its declaration: ${contribution.id}`);
     }
     return tool;

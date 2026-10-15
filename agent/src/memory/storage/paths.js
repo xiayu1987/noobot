@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { WORKSPACE_LAYOUT } from "@noobot/workspace-protocol";
+import { text } from "@noobot/shared/value";
 
 const MEMORY_DIR_RELATIVE_PATH = WORKSPACE_LAYOUT.MEMORY_DIR;
 const SESSION_DIR_RELATIVE_PATH = WORKSPACE_LAYOUT.SESSION_DIR;
@@ -25,7 +26,7 @@ export const MEMORY_RELATIVE_PATHS = Object.freeze({
 });
 
 export function resolveBasePath({ workspaceRoot = "", userId = "" } = {}) {
-  return path.resolve(String(workspaceRoot || "").trim(), String(userId || "").trim());
+  return path.resolve(text(workspaceRoot), text(userId));
 }
 
 function joinBasePath(basePath, relativePath) {

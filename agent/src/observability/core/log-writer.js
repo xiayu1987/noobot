@@ -9,6 +9,7 @@ import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 function nowIso() {
   return new Date().toISOString();
@@ -28,14 +29,14 @@ export function resolveLogFilePath({ basePath, fileName = "" } = {}) {
 }
 
 function resolveWorkspaceRootLogFilePath({ workspaceRoot = "", fileName = "" } = {}) {
-  const root = path.resolve(String(workspaceRoot || "").trim());
+  const root = path.resolve(text(workspaceRoot));
   return path.join(root, fileName);
 }
 
 export function resolveTargetLogFiles({ basePath, workspaceRoot = "", fileName = "" } = {}) {
   const logFile = resolveLogFilePath({ basePath, fileName });
   const targetFiles = new Set([logFile]);
-  if (String(workspaceRoot || "").trim()) {
+  if (text(workspaceRoot)) {
     targetFiles.add(
       resolveWorkspaceRootLogFilePath({
         workspaceRoot,

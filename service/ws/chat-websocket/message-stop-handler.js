@@ -13,8 +13,9 @@ import {
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
+import { text } from "@noobot/shared/value";
 
-const trimmed = (value) => String(value || "").trim();
+const trimmed = (value) => text(value);
 
 const stopLifecycleCommandId = (stopCommandId, eventType) =>
   createTurnLifecycleCommandId({ commandId: stopCommandId, eventType, phase: TURN_PHASE.STOP });

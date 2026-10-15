@@ -8,6 +8,7 @@ import { computed, ref, watch } from "vue";
 import { DocumentAdd, Download, EditPen } from "@element-plus/icons-vue";
 import { BaseFileCardList } from "../../../../shared/public-api/ui.js";
 import MutationDiffSplit from "./MutationDiffSplit.vue";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -29,12 +30,10 @@ const error = ref("");
 const loading = ref(false);
 let requestGeneration = 0;
 const selectedMutation = computed(() => props.mutations[selectedIndex.value] || null);
-const mutationId = computed(() => String(selectedMutation.value?.id || "").trim());
+const mutationId = computed(() => text(selectedMutation.value?.id));
 const mutationIcon = computed(() => (props.previewKind === "diff" ? EditPen : DocumentAdd));
 function translateOperation(operation = "") {
-  const normalized = String(operation || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(operation).toLowerCase();
   return props.translate(`message.mutationOperationType.${normalized}`);
 }
 function mutationSummary(mutation = {}) {
@@ -45,7 +44,7 @@ async function loadTab(tab) {
   const mutation = selectedMutation.value;
   if (!mutation) return;
   const generation = ++requestGeneration;
-  const requestedMutationId = String(mutation.id || "").trim();
+  const requestedMutationId = text(mutation.id);
   const requestedSessionId = props.sessionId;
   const requestedSessionScope = mutation.sessionScope;
   loading.value = true;

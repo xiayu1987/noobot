@@ -23,6 +23,7 @@ import {
   logStateMachineDebug,
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { useThinkingContentItemRenderers } from "../../composables/thinkingContentItemRenderers.js";
+import { text } from "@noobot/shared/value";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
@@ -108,7 +109,7 @@ const detailTimelineIdentity = computed(() =>
     props.messageItem?.dialogProcessId,
     props.messageItem?.presentationMessageId,
   ]
-    .map((value) => String(value || "").trim())
+    .map((value) => text(value))
     .join("::"),
 );
 async function synchronizeToolViewport({ alignStart = false } = {}) {
@@ -173,7 +174,7 @@ const taskCheckItems = computed(() =>
     .map((receipt = {}, index) => ({
       key: `${String(receipt.contentHash || "task-check")}-${index}`,
       title: `${index + 1}. ${props.translate("message.taskCheck")}${receipt.timestamp ? ` · ${receipt.timestamp}` : ""}`,
-      content: String(receipt.abstract || "").trim(),
+      content: text(receipt.abstract),
     }))
     .filter((item) => item.content),
 );
@@ -189,7 +190,7 @@ function toggleDetail(detailKey = "") {
   expandedDetailKeys.value = next;
 }
 function formatThinkingContentTitle(item = {}, index = 0) {
-  const source = String(item?.contentKind || "").trim();
+  const source = text(item?.contentKind);
   const sourceKeyByKind = {
     user_interjection: "message.userInterjection",
     injected_message: "message.injectedMessage",
@@ -202,7 +203,7 @@ function formatThinkingContentTitle(item = {}, index = 0) {
     : sourceKeyByKind[source]
       ? props.translate(sourceKeyByKind[source])
       : source;
-  const timestamp = String(item?.timestamp || "").trim();
+  const timestamp = text(item?.timestamp);
   return `${index + 1}. ${sourceLabel}${timestamp ? ` · ${timestamp}` : ""}`;
 }
 watch(

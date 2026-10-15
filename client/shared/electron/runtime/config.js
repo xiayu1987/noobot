@@ -17,6 +17,7 @@ import {
   synchronizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions } from "@noobot/model-protocol";
+import { text } from "@noobot/shared/value";
 
 export function createDesktopConfigManager({
   repoRoot,
@@ -76,7 +77,7 @@ export function createDesktopConfigManager({
   }
 
   function normalizeProxyUrl(proxyUrl = "") {
-    const value = String(proxyUrl || "").trim();
+    const value = text(proxyUrl);
     if (!value) return "";
     return new URL(value).toString();
   }
@@ -95,10 +96,10 @@ export function createDesktopConfigManager({
     const providers = isPlainObject(payload.providers) ? payload.providers : {};
     const configuredOptions = Object.entries(providers)
       .map(([key, value]) => ({
-        key: String(key || "").trim(),
-        model: String(value?.model || "").trim(),
-        format: String(value?.format || "").trim(),
-        description: String(value?.description || "").trim(),
+        key: text(key),
+        model: text(value?.model),
+        format: text(value?.format),
+        description: text(value?.description),
         enabled: value?.enabled !== false,
         usedForConversation: value?.used_for_conversation !== false,
       }))
@@ -296,7 +297,7 @@ export function createDesktopConfigManager({
     const isFirstGlobalConfig = !fs.existsSync(targetPath);
     const currentConfig = isFirstGlobalConfig ? {} : readJsonFileForRepair(targetPath);
     const hasConfiguredExecutionIsolationMode = Boolean(
-      String(currentConfig?.security?.execution_isolation?.mode || "").trim(),
+      text(currentConfig?.security?.execution_isolation?.mode),
     );
     const globalRepair = repairConfigDocument({
       scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,

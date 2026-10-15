@@ -12,6 +12,7 @@ import {
   SESSION_TREE_ERROR,
   resolveSessionTreePlacement,
 } from "@noobot/workspace-protocol/session-tree";
+import { text } from "@noobot/shared/value";
 
 const SESSION_TREE_FATAL_CODE = Object.freeze({
   [SESSION_TREE_ERROR.NODE_MISSING]: ERROR_CODE.FATAL_SESSION_TREE_NODE_MISSING,
@@ -43,7 +44,7 @@ export class SessionPathResolver {
   }
 
   async resolveParentSessionId(userId, sessionId, parentSessionId = "") {
-    const hintedParentSessionId = String(parentSessionId || "").trim();
+    const hintedParentSessionId = text(parentSessionId);
     if (hintedParentSessionId) {
       const tree = await this.treeRepository.getTree(userId);
       if (!tree?.nodes?.[hintedParentSessionId]) {
@@ -58,15 +59,15 @@ export class SessionPathResolver {
       return hintedParentSessionId;
     }
 
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return "";
 
     const tree = await this.treeRepository.getTree(userId);
-    return String(tree?.nodes?.[normalizedSessionId]?.parentSessionId || "").trim();
+    return text(tree?.nodes?.[normalizedSessionId]?.parentSessionId);
   }
 
   async resolveSessionDir(userId, sessionId, parentSessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return this._sessionRoot(userId);
     const tree = await this.treeRepository.getTree(userId);
     let chain;

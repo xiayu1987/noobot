@@ -15,6 +15,7 @@ import {
   WEB_SOCKET_TRANSPORT_PHASE,
 } from "./webSocketTransportSupervisor.js";
 import { closeWebSocket } from "./closeWebSocket.js";
+import { text } from "@noobot/shared/value";
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 const MAX_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
@@ -140,8 +141,8 @@ export function createSessionLogWebSocketClient({
     }
     const currentSocket = attempt.socket;
     if (attempt.identityChanged) {
-      const nextOwner = String(attempt.transportOwner || "").trim();
-      const retainOwner = (entry) => String(entry?.record?.userId || "").trim() === nextOwner;
+      const nextOwner = text(attempt.transportOwner);
+      const retainOwner = (entry) => text(entry?.record?.userId) === nextOwner;
       const retainedReliable = reliableQueue.filter(retainOwner);
       const retainedDebug = debugQueue.filter(retainOwner);
       rejectedReliableCount += reliableQueue.length - retainedReliable.length;
@@ -209,9 +210,7 @@ export function createSessionLogWebSocketClient({
   }
 
   function isEnabled(debugType = "") {
-    const type = String(debugType || "")
-      .trim()
-      .toLowerCase();
+    const type = text(debugType).toLowerCase();
     return Boolean(type && policy.debug?.[type] === true);
   }
 

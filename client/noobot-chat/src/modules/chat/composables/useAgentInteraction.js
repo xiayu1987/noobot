@@ -9,6 +9,7 @@ import { useChatStore } from "../stores/useChatStore.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
 import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugLogger.js";
+import { text } from "@noobot/shared/value";
 
 export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}) {
   const { translate } = useLocale();
@@ -23,7 +24,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
   const handledInteractionRequestSignatures = new Set();
 
   function normalizeRequestId(requestId = "") {
-    return String(requestId || "").trim();
+    return text(requestId);
   }
 
   function buildInteractionRequestSignature(request = {}) {
@@ -37,7 +38,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
       request?.connectorName,
       request?.content,
     ]
-      .map((item) => String(item || "").trim())
+      .map((item) => text(item))
       .join("|");
   }
 
@@ -81,12 +82,11 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     if (queue.length !== pendingInteractionRequests.value.length) {
       pendingInteractionRequests.value = queue;
     }
-    const currentSessionId = String(activeSessionId.value || "").trim();
+    const currentSessionId = text(activeSessionId.value);
 
     pendingInteractionRequest.value = currentSessionId
-      ? queue.find(
-          (requestItem) => String(requestItem?.channelSessionId || "").trim() === currentSessionId,
-        ) || null
+      ? queue.find((requestItem) => text(requestItem?.channelSessionId) === currentSessionId) ||
+        null
       : queue[0] || null;
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;
@@ -100,7 +100,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     );
     syncCurrentPendingInteraction();
     logThinkingReplayDebug("frontend.interaction.queueChanged", {
-      sessionId: String(activeSessionId.value || "").trim(),
+      sessionId: text(activeSessionId.value),
       removed: beforeLength - pendingInteractionRequests.value.length,
       pendingCount: pendingInteractionRequests.value.length,
     });
@@ -162,17 +162,17 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     turnScopeId = "",
     requestId = "",
   } = {}) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    const normalizedSessionId = text(sessionId);
+    const normalizedDialogProcessId = text(dialogProcessId);
+    const normalizedTurnScopeId = text(turnScopeId);
     const normalizedRequestId = normalizeRequestId(requestId || "");
     const removed = removePendingInteraction((requestItem) => {
       if (!requestItem || typeof requestItem !== "object") return false;
       const pendingRequestId = normalizeRequestId(requestItem?.requestId || "");
       if (normalizedRequestId) return pendingRequestId === normalizedRequestId;
-      const pendingSessionId = String(requestItem?.sessionId || "").trim();
-      const pendingDialogProcessId = String(requestItem?.dialogProcessId || "").trim();
-      const pendingTurnScopeId = String(requestItem?.turnScopeId || "").trim();
+      const pendingSessionId = text(requestItem?.sessionId);
+      const pendingDialogProcessId = text(requestItem?.dialogProcessId);
+      const pendingTurnScopeId = text(requestItem?.turnScopeId);
       if (pendingSessionId && normalizedSessionId && pendingSessionId !== normalizedSessionId) {
         return false;
       }
@@ -203,10 +203,10 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     }
     if (isInteractionRequestHandled(request)) return;
     logThinkingReplayDebug("frontend.interaction.requestMaterialization", {
-      sessionId: String(request?.sessionId || "").trim(),
-      channelSessionId: String(request?.channelSessionId || "").trim(),
-      dialogProcessId: String(request?.dialogProcessId || "").trim(),
-      turnScopeId: String(request?.turnScopeId || "").trim(),
+      sessionId: text(request?.sessionId),
+      channelSessionId: text(request?.channelSessionId),
+      dialogProcessId: text(request?.dialogProcessId),
+      turnScopeId: text(request?.turnScopeId),
       requestId: normalizeRequestId(request?.requestId),
       source: "authoritative-replay-or-stream",
     });
@@ -232,7 +232,7 @@ export function useAgentInteraction({ encryptPayloadBySessionId, sendJson } = {}
     }
     interactionSubmitting.value = true;
     const requireEncryption = request?.requireEncryption === true;
-    const sessionId = String(request?.sessionId || "").trim();
+    const sessionId = text(request?.sessionId);
     const responsePayload =
       requireEncryption && sessionId
         ? {

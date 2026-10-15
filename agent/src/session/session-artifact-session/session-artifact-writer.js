@@ -32,6 +32,7 @@ import {
   turnKey,
   writeSummarySnapshot,
 } from "./turn-journal-store.js";
+import { text } from "@noobot/shared/value";
 
 function ignoreMissingDirectory(error) {
   if (error?.code !== "ENOENT") throw error;
@@ -64,7 +65,7 @@ function assignArtifactTurnIds(turns, previousV5) {
   const usedTurnIds = new Set();
   const artifactTurns = turns.map(({ sourceIndices, ...turn }, index) => {
     const previous = previousByKey.get(turnKey(turn))?.shift();
-    let turnId = String(previous?.turnId || "").trim();
+    let turnId = text(previous?.turnId);
     if (!turnId || usedTurnIds.has(turnId)) {
       turnArtifactSequence += 1;
       turnId = `turn-${String(turnArtifactSequence).padStart(6, "0")}`;
@@ -91,7 +92,7 @@ function diffTurnMessages(messages, previousHashes) {
 }
 
 function receiptCheckpoint(receipt, previousCheckpointIds) {
-  const checkpointId = String(receipt?.checkpointId || "").trim();
+  const checkpointId = text(receipt?.checkpointId);
   const checkpointRevision = Number(receipt?.checkpointRevision || 0);
   const valid =
     checkpointId &&
@@ -117,13 +118,13 @@ function buildSummarySnapshotPayload({
     schemaVersion: 2,
     checkpointId: checkpoint.checkpointId,
     checkpointRevision: checkpoint.checkpointRevision,
-    sessionId: String(sessionPayload.sessionId || "").trim(),
+    sessionId: text(sessionPayload.sessionId),
     turnId: turn.turnId,
     turnScopeId: turn.turnScopeId,
     dialogProcessId: turn.dialogProcessId,
     persistedMessageUids: arrayOrEmpty(receipt?.persistedMessageUids),
     summarizedMessageUids: arrayOrEmpty(receipt?.summarizedMessageUids),
-    committedAt: String(receipt?.committedAt || "").trim(),
+    committedAt: text(receipt?.committedAt),
     previousCheckpointHash,
     records,
   };
@@ -148,7 +149,7 @@ async function writeTurnSummarySnapshots({
 }) {
   const summaryRecords = collectSummarySnapshotRecords(previousRecords);
   const previousCheckpointIds = new Set(
-    summaryRecords.map((record) => String(record?.checkpointId || "").trim()).filter(Boolean),
+    summaryRecords.map((record) => text(record?.checkpointId)).filter(Boolean),
   );
   let checkpointRecords = [
     ...previousRecords.filter((record) => record?.op !== "summary_snapshot"),

@@ -29,11 +29,12 @@ import {
   projectPathFields,
   resolveAvailableTools,
 } from "./help-sections.js";
+import { text } from "@noobot/shared/value";
 
 export const HELP_TOOL_NAME = TOOL_NAME.HELP;
 
 function normalizeName(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function completed(command, payload) {

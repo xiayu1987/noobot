@@ -27,6 +27,7 @@ import {
 } from "../../model/messageIdentity.js";
 import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
 import SessionArtifactPanel from "../artifacts/SessionArtifactPanel.vue";
+import { text } from "@noobot/shared/value";
 
 defineEmits(["open-thinking-details"]);
 
@@ -116,8 +117,8 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   const turnScopeId = getMessageTurnScopeId(messageItem);
   const sessionId = getMessageSessionId(messageItem);
   const turnScopeKey = turnScopeId ? `${sessionId || "active"}::${turnScopeId}` : "";
-  const taskId = String(messageItem?.taskId || "").trim();
-  const toolCallId = String(messageItem?.tool_call_id || "").trim();
+  const taskId = text(messageItem?.taskId);
+  const toolCallId = text(messageItem?.tool_call_id);
   const stablePrimaryId = turnScopeKey || taskId || toolCallId || String(stableIndex);
   return [role, stablePrimaryId, stableIndex]
     .map((item) => String(item ?? "").replaceAll("|", "/"))
@@ -169,7 +170,7 @@ function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
 
 function scrollToMessageAnchor(anchorId = "") {
   const wrapRef = getWrapRef();
-  const id = String(anchorId || "").trim();
+  const id = text(anchorId);
   if (!wrapRef || !id) return false;
   const target = wrapRef.querySelector?.(`#${CSS.escape(id)}`);
   if (!target) return false;

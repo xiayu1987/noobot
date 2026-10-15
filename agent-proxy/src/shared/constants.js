@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { text } from "@noobot/shared/value";
+
 export const CHANNEL_STATUS = {
   IDLE: "idle",
   CONNECTING: "connecting",
@@ -74,13 +76,12 @@ export const UPSTREAM_CLOSE_REASON = {
 export const AGENT_PROXY_ERROR = {
   DEFAULT: "agentProxy error",
   INVALID_JSON_PAYLOAD: "agentProxy invalid json payload",
-  UNSUPPORTED_ACTION: (action = "") =>
-    `agentProxy unsupported action: ${String(action || "").trim()}`,
+  UNSUPPORTED_ACTION: (action = "") => `agentProxy unsupported action: ${text(action)}`,
   CHANNEL_NOT_FOUND_FOR_STOP: "agentProxy channel not found for stop",
   CHANNEL_NOT_FOUND_FOR_INTERACTION: "agentProxy channel not found for interaction",
   CHANNEL_NOT_FOUND_FOR_JOIN: "agentProxy channel not found for join",
   PERMISSION_DENIED_FOR_ACTION: (action = "") =>
-    `agentProxy permission denied for action: ${String(action || "").trim()}`,
+    `agentProxy permission denied for action: ${text(action)}`,
   UPSTREAM_NOT_RUNNING: "agentProxy upstream not running",
   UPSTREAM_UNAVAILABLE: "agentProxy upstream is unavailable",
   REQUIRES_APIKEY: "agentProxy requires apikey",

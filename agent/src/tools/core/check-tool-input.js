@@ -30,6 +30,7 @@ import {
   resolveExecutionIsolation,
 } from "@noobot/execution-isolation-protocol";
 import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapter.js";
+import { text } from "@noobot/shared/value";
 
 function tCheckInput(agentContext = {}, key = "") {
   const keyMap = {
@@ -41,7 +42,7 @@ function tCheckInput(agentContext = {}, key = "") {
     pathOutOfScope: "common.pathOutOfScope",
     fileNotFound: "common.fileNotFound",
   };
-  return tTool(agentContext, keyMap[String(key || "").trim()] || "");
+  return tTool(agentContext, keyMap[text(key)] || "");
 }
 
 function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName = "filePath") {
@@ -88,7 +89,7 @@ function resolveRuntimeBasePath(agentContext = {}) {
 
 function resolveWorkspaceRoot(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
+  const workspaceRoot = text(runtime?.globalConfig?.workspaceRoot);
   return workspaceRoot ? path.resolve(workspaceRoot) : "";
 }
 
@@ -116,7 +117,7 @@ export function projectToolPathRef(pathRef = {}) {
 }
 
 function assertValidSimpleFileName({ fileName = "", fieldName = "fileName" }) {
-  const normalizedFileName = String(fileName || "").trim();
+  const normalizedFileName = text(fileName);
   if (!normalizedFileName) {
     throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fieldRequired")}`, {
       code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -139,7 +140,7 @@ function assertValidSimpleFileName({ fileName = "", fieldName = "fileName" }) {
 }
 
 export function assertValidFileNameFromPath({ filePath = "", fieldName = "filePath" }) {
-  const normalizedPath = String(filePath || "").trim();
+  const normalizedPath = text(filePath);
   if (!normalizedPath) {
     throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fieldRequired")}`, {
       code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -168,7 +169,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
   capability = PATH_CAPABILITIES.FILE_READ,
   requiredExecutionRoot = "",
 }) {
-  const normalizedPath = String(filePath || "").trim();
+  const normalizedPath = text(filePath);
   if (!normalizedPath) {
     throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
       code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -211,7 +212,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
     });
   }
   const resolvedTargetPath = resolvedToolPath.resolvedPath;
-  const normalizedRequiredExecutionRoot = String(requiredExecutionRoot || "").trim()
+  const normalizedRequiredExecutionRoot = text(requiredExecutionRoot)
     ? path.resolve(requiredExecutionRoot)
     : "";
   if (

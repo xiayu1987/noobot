@@ -9,15 +9,14 @@ import {
   createWorkflowNodeTurnScopeId,
 } from "@noobot/session-protocol/turn-scope-identity";
 import { deriveAgentExecutionId } from "@noobot/session-protocol";
+import { text } from "@noobot/shared/value";
 
 function safeId(value = "") {
-  return String(value || "")
-    .trim()
-    .replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  return text(value).replaceAll(/[^a-zA-Z0-9_-]/g, "_");
 }
 
 export function resolveWorkflowRunId(ctx = {}) {
-  const provided = String(
+  const provided = text(
     ctx?.workflowRunId ||
       ctx?.workflowInstanceId ||
       ctx?.runConfig?.workflowRunId ||
@@ -25,9 +24,8 @@ export function resolveWorkflowRunId(ctx = {}) {
       ctx?.executionId ||
       ctx?.turnScopeId ||
       ctx?.runConfig?.executionId ||
-      ctx?.runConfig?.turnScopeId ||
-      "",
-  ).trim();
+      ctx?.runConfig?.turnScopeId,
+  );
   if (provided) return provided;
   const dialog = safeId(ctx?.dialogProcessId || ctx?.turnScopeId || ctx?.sessionId || "session");
   const generated = `wf_run_${dialog}_${randomUUID()}`;
@@ -46,7 +44,7 @@ export function createWorkflowNodeIdentity({
   const dialogProcessId = createWorkflowNodeDialogProcessId(nodeExecutionId);
   const turnScopeId = createWorkflowNodeTurnScopeId(nodeExecutionId);
   return {
-    workflowRunId: String(workflowRunId || "").trim(),
+    workflowRunId: text(workflowRunId),
     nodeExecutionId,
     nodeId,
     attempt: Math.max(1, Number(attempt) || 1),
@@ -60,17 +58,15 @@ export function createWorkflowNodeIdentity({
 export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic = {} } = {}) {
   const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
   const flowtos = Array.isArray(semantic?.flowtos) ? semantic.flowtos : [];
-  const nodeById = new Map(nodes.map((node = {}) => [String(node?.id || "").trim(), node]));
+  const nodeById = new Map(nodes.map((node = {}) => [text(node?.id), node]));
   const now = new Date().toISOString();
   return nodes.map((node = {}, index) => {
     const identity = createWorkflowNodeIdentity({ workflowRunId, node, index });
-    const nodeType = String(node?.type || "")
-      .trim()
-      .toLowerCase();
+    const nodeType = text(node?.type).toLowerCase();
     const executable = nodeType === "action";
     const dependencies = flowtos
-      .filter((edge = {}) => String(edge?.to || "").trim() === identity.nodeId)
-      .map((edge = {}) => String(edge?.from || "").trim())
+      .filter((edge = {}) => text(edge?.to) === identity.nodeId)
+      .map((edge = {}) => text(edge?.from))
       .filter((dependencyId) => nodeById.get(dependencyId)?.type === "action");
     return {
       ...identity,

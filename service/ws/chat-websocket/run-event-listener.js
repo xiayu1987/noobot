@@ -19,11 +19,12 @@ import {
   assertTurnAttachmentsBoundEventData,
 } from "@noobot/session-protocol/turn-attachment-bind";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { text } from "@noobot/shared/value";
 
 const AUDIT_LIST_LIMIT = QUANTITY_THRESHOLDS.diagnostics.eventAuditListLimit;
 
 function trimmedText(value) {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function countOf(value) {
@@ -137,15 +138,13 @@ function syncRunState({
 }) {
   if (
     eventName === AGENT_RUN_EVENT.LIFECYCLE_STATE_CHANGED &&
-    String(eventData?.state || "")
-      .trim()
-      .toLowerCase() === "running" &&
+    text(eventData?.state).toLowerCase() === "running" &&
     !childRunEvent
   ) {
-    const eventSessionId = String(eventData?.sessionId || "").trim();
-    const eventTurnScopeId = String(eventData?.turnScopeId || "").trim();
+    const eventSessionId = text(eventData?.sessionId);
+    const eventTurnScopeId = text(eventData?.turnScopeId);
     if (
-      eventSessionId === String(sessionId || "").trim() &&
+      eventSessionId === text(sessionId) &&
       eventTurnScopeId &&
       eventTurnScopeId === resolveTurnScopeId() &&
       typeof onRootRunning === "function"
@@ -153,7 +152,7 @@ function syncRunState({
       onRootRunning(eventData);
     }
   }
-  const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
+  const eventDialogProcessId = text(eventData?.dialogProcessId);
   if (eventDialogProcessId && currentRunMeta && !childRunEvent) {
     currentRunMeta.dialogProcessId = eventDialogProcessId;
     if (currentRunHandle) {
@@ -182,7 +181,7 @@ export function createRunEventListener({
   return {
     ...(typeof onDeliveryTiming === "function" ? { onDeliveryTiming } : {}),
     onEvent: (eventPayload) => {
-      const eventName = String(eventPayload?.event || "").trim();
+      const eventName = text(eventPayload?.event);
       if (!AGENT_RUN_EVENTS.has(eventName)) {
         throw new Error(`unsupported agent run event: ${eventName || "missing"}`);
       }

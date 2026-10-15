@@ -24,6 +24,7 @@ import {
 } from "../../model/messageIdentity.js";
 import { normalizeTimePair } from "../../model/timeFields.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
+import { text } from "@noobot/shared/value";
 
 export function createChatEngineConversationState({
   activeSession,
@@ -47,7 +48,7 @@ export function createChatEngineConversationState({
     if (!isAutoResolvedInteraction(request)) {
       return false;
     }
-    const requestId = String(request?.requestId || "").trim();
+    const requestId = text(request?.requestId);
     if (requestId && connectorConnectedAckedRequestIds.has(requestId)) {
       return true;
     }
@@ -56,7 +57,7 @@ export function createChatEngineConversationState({
         submitInteractionResponse(
           {
             confirmed: true,
-            response: String(request?.interactionType || "").trim()
+            response: text(request?.interactionType)
               ? `${String(request.interactionType).trim()}_ack`
               : "interaction_auto_ack",
           },
@@ -77,7 +78,7 @@ export function createChatEngineConversationState({
   }
 
   function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
-    return `${String(sessionId || "").trim()}::${normalizeTrimmedString(dialogProcessId)}`;
+    return `${text(sessionId)}::${normalizeTrimmedString(dialogProcessId)}`;
   }
 
   function clearMissingInteractionPayloadTimer({ sessionId = "", dialogProcessId = "" } = {}) {
@@ -111,11 +112,11 @@ export function createChatEngineConversationState({
   }
 
   function isStateForActiveSession(sessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     if (!normalizedSessionId) return true;
     return (
-      normalizedSessionId === String(activeSession.value?.sessionId || "").trim() ||
-      normalizedSessionId === String(activeSession.value?.sessionId || "").trim()
+      normalizedSessionId === text(activeSession.value?.sessionId) ||
+      normalizedSessionId === text(activeSession.value?.sessionId)
     );
   }
 
@@ -204,9 +205,9 @@ export function createChatEngineConversationState({
     statePayload = {},
     { botMessage = null, fallbackDialogProcessId = "", fallbackTurnScopeId = "" } = {},
   ) {
-    const state = String(statePayload?.state || "").trim();
+    const state = text(statePayload?.state);
     if (!state) return;
-    const sessionId = String(statePayload?.sessionId || "").trim();
+    const sessionId = text(statePayload?.sessionId);
     const { createdAtMs, updatedAtMs, createdAt, updatedAt } = normalizeTimePair(statePayload);
     const messageList = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
@@ -218,17 +219,15 @@ export function createChatEngineConversationState({
     );
     const forActiveSession = isStateForActiveSession(sessionId) || botMessageInActiveSession;
     const turnMeta = normalizeTurnMeta(statePayload);
-    const explicitDialogProcessId = String(statePayload?.dialogProcessId || "").trim();
-    const fallbackDialogProcessIdValue = String(fallbackDialogProcessId || "").trim();
+    const explicitDialogProcessId = text(statePayload?.dialogProcessId);
+    const fallbackDialogProcessIdValue = text(fallbackDialogProcessId);
     const canUseFallbackTurnScopeId = Boolean(
       explicitDialogProcessId || fallbackDialogProcessIdValue,
     );
-    const turnScopeId = String(
-      turnMeta.turnScopeId || (canUseFallbackTurnScopeId ? fallbackTurnScopeId : "") || "",
-    ).trim();
-    const dialogProcessId = String(
-      explicitDialogProcessId || fallbackDialogProcessIdValue || "",
-    ).trim();
+    const turnScopeId = text(
+      turnMeta.turnScopeId || (canUseFallbackTurnScopeId ? fallbackTurnScopeId : ""),
+    );
+    const dialogProcessId = text(explicitDialogProcessId || fallbackDialogProcessIdValue);
     if (typeof onConversationState === "function") {
       onConversationState({
         source: "stream",
@@ -236,7 +235,7 @@ export function createChatEngineConversationState({
         sessionId,
         dialogProcessId,
         turnScopeId,
-        sourceEvent: String(statePayload?.sourceEvent || "").trim(),
+        sourceEvent: text(statePayload?.sourceEvent),
         seq: Number(statePayload?.seq || 0),
         createdAtMs,
         updatedAtMs,
@@ -277,19 +276,17 @@ export function createChatEngineConversationState({
           sessionId,
           dialogProcessId,
           turnScopeId,
-          sourceEvent: String(statePayload?.sourceEvent || "").trim(),
+          sourceEvent: text(statePayload?.sourceEvent),
           targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
         }));
         return;
       }
       if (
         state === BackendChannelState.SENDING &&
-        String(statePayload?.sourceEvent || "")
-          .trim()
-          .toLowerCase() === "interaction_response" &&
+        text(statePayload?.sourceEvent).toLowerCase() === "interaction_response" &&
         typeof clearPendingInteractionIfObsolete === "function"
       ) {
-        const responseRequestId = String(statePayload?.requestId || "").trim();
+        const responseRequestId = text(statePayload?.requestId);
         if (responseRequestId) {
           clearPendingInteractionIfObsolete({ requestId: responseRequestId });
         }
@@ -324,7 +321,7 @@ export function createChatEngineConversationState({
     eventData = {},
     { botMessage = null, fallbackDialogProcessId = "", fallbackTurnScopeId = "" } = {},
   ) {
-    const normalizedEvent = String(eventName || "").trim();
+    const normalizedEvent = text(eventName);
     if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return;
     applyConversationState(eventData, {
       botMessage,

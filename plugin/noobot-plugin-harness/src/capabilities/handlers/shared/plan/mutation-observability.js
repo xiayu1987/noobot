@@ -6,6 +6,7 @@
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { resolveLocale } from "../i18n.js";
 import { LOCALE } from "../constants.js";
+import { text } from "@noobot/shared/value";
 
 const PLAN_MUTATION_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -41,7 +42,7 @@ function resolveMutationLocale(ctx = {}) {
 }
 
 function resolveReasonLabel(reason = "", locale = LOCALE.ZH_CN) {
-  const key = String(reason || "").trim();
+  const key = text(reason);
   if (!key) return "";
   const dict = PLAN_MUTATION_REASON_LABELS[locale] || PLAN_MUTATION_REASON_LABELS[LOCALE.ZH_CN];
   return String(dict?.[key] || key).trim();
@@ -49,9 +50,9 @@ function resolveReasonLabel(reason = "", locale = LOCALE.ZH_CN) {
 
 function buildBaseDetail({ stage = "", source = "", mutationResult = {} } = {}) {
   return {
-    stage: String(stage || "").trim(),
-    source: String(source || "").trim(),
-    mutationClassification: String(mutationResult?.classification?.type || "").trim(),
+    stage: text(stage),
+    source: text(source),
+    mutationClassification: text(mutationResult?.classification?.type),
   };
 }
 
@@ -84,7 +85,7 @@ export function emitPlanMutationApplied({
     event: PLAN_MUTATION_EVENTS.planMutationApplied,
     detail: {
       ...buildBaseDetail({ stage, source, mutationResult }),
-      mode: String(mode || mutationResult?.mode || "").trim(),
+      mode: text(mode || mutationResult?.mode),
     },
   });
 }
@@ -98,7 +99,7 @@ export function emitPlanMutationRejected({
   mutationResult = {},
 } = {}) {
   const locale = resolveMutationLocale(ctx);
-  const reason = String(mutationResult?.rejectedReason || "").trim();
+  const reason = text(mutationResult?.rejectedReason);
   appendCapabilityLog?.(ctx, {
     domain,
     event: reason.includes("invariant")
@@ -125,9 +126,9 @@ export function emitPlanMutationStageMismatchAutocoerced({
     domain,
     event: PLAN_MUTATION_EVENTS.planMutationStageMismatchAutocoerced,
     detail: {
-      stage: String(stage || "").trim(),
-      source: String(source || "").trim(),
-      reason: String(reason || "").trim(),
+      stage: text(stage),
+      source: text(source),
+      reason: text(reason),
       reasonLabel: resolveReasonLabel(reason, locale),
     },
   });

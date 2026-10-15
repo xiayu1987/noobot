@@ -4,42 +4,38 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageRole, getMessageTurnScopeId } from "./messageIdentity.js";
+import { text } from "@noobot/shared/value";
 
 function resolveStableMessageIdentity(messageItem = {}) {
-  const presentationMessageId = String(messageItem?.presentationMessageId || "").trim();
+  const presentationMessageId = text(messageItem?.presentationMessageId);
   if (getMessageRole(messageItem) === "assistant" && presentationMessageId) {
     return presentationMessageId;
   }
-  return String(messageItem?.messageId || "").trim();
+  return text(messageItem?.messageId);
 }
 
 function resolveMessageTurnScopeMergeKey(messageItem = {}) {
   const turnScopeId = getMessageTurnScopeId(messageItem);
   if (!turnScopeId) return "";
-  const sessionId = String(messageItem?.sessionId || "").trim();
+  const sessionId = text(messageItem?.sessionId);
   return sessionId ? `${sessionId}::${turnScopeId}` : turnScopeId;
 }
 
 function buildModelRunLabel(messageItem = {}) {
-  const modelAlias = String(messageItem?.modelAlias || "").trim();
-  const modelName = String(messageItem?.modelName || "").trim();
+  const modelAlias = text(messageItem?.modelAlias);
+  const modelName = text(messageItem?.modelName);
   if (modelAlias && modelName) return `${modelAlias} (${modelName})`;
   return modelAlias || modelName || "";
 }
 
 function resolveFoldedPresentationMessageId(sourceMessage, projectedMessage) {
-  return String(
-    projectedMessage?.presentationMessageId || sourceMessage?.presentationMessageId || "",
-  ).trim();
+  return text(projectedMessage?.presentationMessageId || sourceMessage?.presentationMessageId);
 }
 
 function resolveFoldedSourceMessageId(sourceMessage, projectedMessage) {
-  return String(
-    projectedMessage?.sourceMessageId ||
-      sourceMessage?.sourceMessageId ||
-      sourceMessage?.messageId ||
-      "",
-  ).trim();
+  return text(
+    projectedMessage?.sourceMessageId || sourceMessage?.sourceMessageId || sourceMessage?.messageId,
+  );
 }
 
 function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage = {}) {

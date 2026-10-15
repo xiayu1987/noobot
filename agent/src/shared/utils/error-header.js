@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function resolveErrorHeaderValue(headers = null, name = "") {
   if (!headers || !name) return undefined;
-  const normalizedName = String(name || "").trim();
+  const normalizedName = text(name);
   if (!normalizedName) return undefined;
   if (typeof headers?.get === "function") {
     return headers.get(normalizedName) || headers.get(normalizedName.toLowerCase()) || undefined;

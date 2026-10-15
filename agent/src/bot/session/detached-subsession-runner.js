@@ -21,6 +21,7 @@ import {
 } from "./detached-subsession-events.js";
 import { createExecutionFailure } from "../../shared/errors/index.js";
 import { transferCanonicalAttachmentsToSubSession } from "./detached-subsession-attachments.js";
+import { text } from "@noobot/shared/value";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
 
@@ -33,7 +34,7 @@ function assertDetachedSubSessionStrategy(strategy = {}) {
     "relativeDir",
     "allowedRoot",
   ];
-  if (required.some((key) => !String(strategy?.[key] || "").trim())) {
+  if (required.some((key) => !text(strategy?.[key]))) {
     throw new TypeError(
       "detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, relativeDir and allowedRoot",
     );
@@ -132,11 +133,9 @@ function resolveDetachedIdentity(request, inheritedRuntime) {
     request.parentContext && typeof request.parentContext === "object" ? request.parentContext : {};
   const strategy = request.strategy || {};
   const identity = {
-    userId: String(strategy.userId || sourceContext.userId || "").trim(),
-    parentSessionId: String(strategy.parentSessionId || sourceContext.sessionId || "").trim(),
-    parentDialogProcessId: String(
-      strategy.parentDialogProcessId || sourceContext.dialogProcessId || "",
-    ).trim(),
+    userId: text(strategy.userId || sourceContext.userId),
+    parentSessionId: text(strategy.parentSessionId || sourceContext.sessionId),
+    parentDialogProcessId: text(strategy.parentDialogProcessId || sourceContext.dialogProcessId),
   };
   identity.abortSignal =
     request.abortSignal || sourceContext.abortSignal || inheritedRuntime?.abortSignal || null;
@@ -160,12 +159,12 @@ function resolveDetachedIdentity(request, inheritedRuntime) {
 
 function resolveChildStrategyIdentity(strategy) {
   return {
-    subSessionId: String(strategy.sessionId || "").trim(),
-    subDialogProcessId: String(strategy.dialogProcessId || "").trim(),
-    turnScopeId: String(strategy.turnScopeId || "").trim(),
-    executionId: String(strategy.executionId || "").trim(),
-    relativeDir: String(strategy.relativeDir || "").trim(),
-    allowedRoot: String(strategy.allowedRoot || "").trim(),
+    subSessionId: text(strategy.sessionId),
+    subDialogProcessId: text(strategy.dialogProcessId),
+    turnScopeId: text(strategy.turnScopeId),
+    executionId: text(strategy.executionId),
+    relativeDir: text(strategy.relativeDir),
+    allowedRoot: text(strategy.allowedRoot),
   };
 }
 
@@ -228,17 +227,15 @@ function createDetachedRunConfig(
     disabledPlugins: strategy.disabledPlugins || [],
   });
   const runtimeModel =
-    String(runConfigPatch.runtimeModel || "").trim() ||
-    String(config.selectedModel || "").trim() ||
-    String(inheritedRunConfig.runtimeModel || "").trim() ||
-    String(inheritedRuntime?.runtimeModel || "").trim();
+    text(runConfigPatch.runtimeModel) ||
+    text(config.selectedModel) ||
+    text(inheritedRunConfig.runtimeModel) ||
+    text(inheritedRuntime?.runtimeModel);
   if (runtimeModel) config.runtimeModel = runtimeModel;
   else delete config.runtimeModel;
   config.executionId = identity.executionId;
   config.executionKind = "agent";
-  config.parentExecutionId = String(
-    strategy.parentExecutionId || metadata.parentExecutionId || "",
-  ).trim();
+  config.parentExecutionId = text(strategy.parentExecutionId || metadata.parentExecutionId);
   config.rootExecutionId = String(
     strategy.rootExecutionId || metadata.rootExecutionId || identity.executionId,
   ).trim();
@@ -246,7 +243,7 @@ function createDetachedRunConfig(
   config.presentationMessageId = presentationMessageId;
   config.messageId = `msg_event_${presentationMessageId}`;
   delete config.assistantMessageId;
-  if (!String(config.thinkingStartedAt || "").trim()) {
+  if (!text(config.thinkingStartedAt)) {
     config.thinkingStartedAt = String(dependencies.now()).trim();
   }
   for (const key of ["hookManager", "hooks", "botHookManager", "botHooks"]) delete config[key];
@@ -385,8 +382,8 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
     createSessionIfAbsent: true,
     expectedRevision: 0,
     userMessage: {
-      content: String(request.message || "").trim(),
-      messageId: String(runConfig?.userMessageId || "").trim(),
+      content: text(request.message),
+      messageId: text(runConfig?.userMessageId),
       parentDialogProcessId: identity.parentDialogProcessId,
       messageOrigin: "internal",
       userMetaMaterialized: false,
@@ -434,7 +431,7 @@ async function executeDetachedSession(
 }
 
 function assertDetachedDialogIdentity(result, identity, lifecycle) {
-  const returnedDialogProcessId = String(result?.dialogProcessId || "").trim();
+  const returnedDialogProcessId = text(result?.dialogProcessId);
   if (!returnedDialogProcessId || returnedDialogProcessId === identity.subDialogProcessId) return;
   const error = new Error(
     "detached sub-session returned a dialogProcessId different from its authoritative turn identity",
@@ -518,7 +515,7 @@ function emitDetachedTerminalEvent(factListener, identity, terminalLifecycle, er
       ...(stopped
         ? { reason: "user_stop" }
         : { errorCode: String(error?.code || "detached_sub_session_failed").trim() }),
-      state: String(terminalLifecycle?.turn?.state || "").trim(),
+      state: text(terminalLifecycle?.turn?.state),
       revision: Number(terminalLifecycle?.turn?.revision || 0),
       sequence: Number(terminalLifecycle?.turn?.sequence || 0),
     },
@@ -561,7 +558,7 @@ function projectDetachedResult(result, identity, prepared, terminalLifecycle) {
       parentSessionId: identity.parentSessionId,
       parentDialogProcessId: identity.parentDialogProcessId,
       caller: CALLER_ROLE.BOT,
-      answer: String(result?.output || result?.answer || "").trim(),
+      answer: text(result?.output || result?.answer),
       traces: readArray(result?.traces),
       messages: readArray(result?.turnMessages),
       ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
@@ -638,9 +635,7 @@ function buildRuntimePluginState({ effectiveRunConfig = {}, disabledPlugins = []
         pluginId,
         {
           enabled: plugins?.[pluginId]?.enabled === true,
-          mode: String(plugins?.[pluginId]?.mode || "")
-            .trim()
-            .toLowerCase(),
+          mode: text(plugins?.[pluginId]?.mode).toLowerCase(),
         },
       ]),
     ),

@@ -8,10 +8,11 @@ import { randomUUID } from "node:crypto";
 import { CLIENT_ROLE, TRANSPORT_TRACE_PROTOCOL_KIND } from "./constants.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { text } from "@noobot/shared/value";
 
 export function ensureConnectionId(socket = null) {
   if (!socket) return "";
-  const existing = String(socket.__agentProxyConnectionId || "").trim();
+  const existing = text(socket.__agentProxyConnectionId);
   if (existing) return existing;
   const connectionId = randomUUID();
   socket.__agentProxyConnectionId = connectionId;
@@ -19,7 +20,7 @@ export function ensureConnectionId(socket = null) {
 }
 
 export function resolveMessageEventTrace(eventName = "", data = {}, transportSequence = 0) {
-  const normalizedEventName = String(eventName || "").trim();
+  const normalizedEventName = text(eventName);
   const validation =
     normalizedEventName === MESSAGE_EVENT_WIRE_EVENT
       ? validateProtocolEvent(data)
@@ -34,18 +35,18 @@ export function resolveMessageEventTrace(eventName = "", data = {}, transportSeq
       : TRANSPORT_TRACE_PROTOCOL_KIND.NON_MESSAGE_EVENT,
     transportEvent: normalizedEventName,
     transportSequence: Number(transportSequence || 0),
-    eventId: String(authoritative?.identity?.eventId || "").trim(),
-    eventType: String(authoritative?.identity?.eventType || "").trim(),
-    messageId: String(authoritative?.identity?.messageId || "").trim(),
+    eventId: text(authoritative?.identity?.eventId),
+    eventType: text(authoritative?.identity?.eventType),
+    messageId: text(authoritative?.identity?.messageId),
     authoritativeSequence: Number(authoritative?.ordering?.sequence || 0),
-    sessionId: String(authoritative?.identity?.sessionId || "").trim(),
-    turnScopeId: String(authoritative?.identity?.turnScopeId || "").trim(),
-    dialogProcessId: String(authoritative?.payload?.dialogProcessId || "").trim(),
+    sessionId: text(authoritative?.identity?.sessionId),
+    turnScopeId: text(authoritative?.identity?.turnScopeId),
+    dialogProcessId: text(authoritative?.payload?.dialogProcessId),
   };
 }
 
 export function normalizeApiKey(input = "") {
-  return String(input || "").trim();
+  return text(input);
 }
 
 const CHANNEL_KEY_SEPARATOR = "::";
@@ -63,7 +64,7 @@ function assertChannelKeyIdentity(identity, source) {
 
 export function createChannelKey(identity = {}) {
   const normalized = Object.fromEntries(
-    CHANNEL_KEY_FIELDS.map((field) => [field, String(identity?.[field] || "").trim()]),
+    CHANNEL_KEY_FIELDS.map((field) => [field, text(identity?.[field])]),
   );
   assertChannelKeyIdentity(normalized, "createChannelKey");
   return CHANNEL_KEY_FIELDS.map((field) => normalized[field]).join(CHANNEL_KEY_SEPARATOR);
@@ -84,9 +85,9 @@ export function parseRequestQuery(request = null) {
   try {
     const requestUrl = new URL(request?.url || "", "http://localhost");
     return {
-      pathname: String(requestUrl.pathname || "").trim(),
-      apiKey: String(requestUrl.searchParams.get("apikey") || "").trim(),
-      locale: String(requestUrl.searchParams.get("locale") || "").trim(),
+      pathname: text(requestUrl.pathname),
+      apiKey: text(requestUrl.searchParams.get("apikey")),
+      locale: text(requestUrl.searchParams.get("locale")),
     };
   } catch {
     return { pathname: "", apiKey: "", locale: "" };
@@ -96,7 +97,7 @@ export function parseRequestQuery(request = null) {
 export function parseRequestPathname(request = null) {
   try {
     const requestUrl = new URL(request?.url || "", "http://localhost");
-    return String(requestUrl.pathname || "").trim();
+    return text(requestUrl.pathname);
   } catch {
     return "";
   }
@@ -126,8 +127,8 @@ export function buildFingerprint(payload = {}) {
 }
 
 export function buildUpstreamUrl(baseUrl = "", apiKey = "") {
-  const normalizedBaseUrl = String(baseUrl || "").trim();
-  const normalizedApiKey = String(apiKey || "").trim();
+  const normalizedBaseUrl = text(baseUrl);
+  const normalizedApiKey = text(apiKey);
   if (!normalizedBaseUrl) return "";
   if (!normalizedApiKey) return normalizedBaseUrl;
   const upstreamUrl = new URL(normalizedBaseUrl);

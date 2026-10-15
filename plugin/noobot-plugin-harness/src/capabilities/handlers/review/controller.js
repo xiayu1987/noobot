@@ -12,6 +12,7 @@ import { ensureHarnessBucket } from "../shared/bucket-utils.js";
 import { translateI18nText } from "../shared/i18n.js";
 import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
+import { text } from "@noobot/shared/value";
 
 const REVIEW_DECISION = WORKFLOW_PARAMS.review.decisions;
 const REVIEW_HOOKS = new Set(
@@ -24,14 +25,14 @@ const REVIEW_REASON_LABEL_KEY = Object.freeze({
 });
 
 function resolveReviewReasonLabel(locale = "zh-CN", reason = "") {
-  const key = REVIEW_REASON_LABEL_KEY[String(reason || "").trim()];
-  if (!key) return String(reason || "").trim();
-  return translateI18nText(locale, key) || String(reason || "").trim();
+  const key = REVIEW_REASON_LABEL_KEY[text(reason)];
+  if (!key) return text(reason);
+  return translateI18nText(locale, key) || text(reason);
 }
 
 export function createReviewHandler() {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
-    const hook = String(point || "").trim();
+    const hook = text(point);
     if (!REVIEW_HOOKS.has(hook)) {
       return { capability, point, status: "active", changed: false };
     }

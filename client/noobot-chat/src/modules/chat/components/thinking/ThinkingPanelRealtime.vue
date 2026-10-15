@@ -27,6 +27,7 @@ import { isThinkingReplayDebugEnabled } from "../../../debug/loggers/thinkingRep
 import { toolLogDetailKey } from "../../model/toolLogIdentity.js";
 import { useThinkingContentItemRenderers } from "../../composables/thinkingContentItemRenderers.js";
 import ExecutionReportDrawer from "./ExecutionReportDrawer.vue";
+import { text } from "@noobot/shared/value";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   userId: { type: String, default: "" },
@@ -55,7 +56,7 @@ const latestPluginActivity = computed(() => {
   for (let index = activities.length - 1; index >= 0; index -= 1) {
     const activity = activities[index] || {};
     const renderer = rendererFor(activity);
-    const content = String(activity.text || "").trim();
+    const content = text(activity.text);
     if (renderer && content) {
       return {
         activityKind: renderer.activityKind,
@@ -92,11 +93,11 @@ const executionLogSignature = computed(() => {
 function executionLogKey(logItem = {}) {
   const toolKey = toolLogDetailKey(logItem);
   if (toolKey) return toolKey;
-  const eventId = String(logItem.eventId || "").trim();
+  const eventId = text(logItem.eventId);
   return eventId ? `event:${eventId}` : "";
 }
 function isToolLog(logItem = {}) {
-  return ["tool_call", "tool_result"].includes(String(logItem.event || "").trim());
+  return ["tool_call", "tool_result"].includes(text(logItem.event));
 }
 function detailKey(logItem = {}) {
   return isToolLog(logItem) ? props.getDetailKey({ key: "tool-timeline" }, logItem) : "";

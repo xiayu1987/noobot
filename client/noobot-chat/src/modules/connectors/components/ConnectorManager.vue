@@ -30,6 +30,7 @@ import {
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { DESKTOP_DRAWER_SIZE } from "../../../shared/composables/useMobileViewport.js";
 import { useOverlayHistory } from "../../../shared/composables/useOverlayHistory.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -93,7 +94,7 @@ function replaceConnectors(payload) {
 
 async function refresh() {
   const revision = ++refreshRevision;
-  const requestedUserId = String(props.userId || "").trim();
+  const requestedUserId = text(props.userId);
   if (!props.connected || !requestedUserId) {
     catalog.value = [];
     connectors.value = [];
@@ -106,7 +107,7 @@ async function refresh() {
       parseResponse(await getConnectorCatalog({ fetcher: props.fetcher })),
       parseResponse(await listUserConnectors({ userId: requestedUserId, fetcher: props.fetcher })),
     ]);
-    if (revision !== refreshRevision || requestedUserId !== String(props.userId || "").trim()) {
+    if (revision !== refreshRevision || requestedUserId !== text(props.userId)) {
       return;
     }
     catalog.value = Array.isArray(catalogPayload.catalog) ? catalogPayload.catalog : [];

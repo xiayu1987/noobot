@@ -7,6 +7,7 @@
 import { nextTick, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   request: { type: Object, default: null },
@@ -29,7 +30,7 @@ function resetForm() {
     delete formData[key];
   }
   for (const fieldItem of fields) {
-    const key = String(fieldItem?.name || "").trim();
+    const key = text(fieldItem?.name);
     if (!key) continue;
     const defaultValue = fieldItem?.defaultValue ?? "";
     formData[key] = String(defaultValue || "");
@@ -42,7 +43,7 @@ function onConfirm() {
   if (fields.length) {
     const payload = {};
     for (const fieldItem of fields) {
-      const key = String(fieldItem?.name || "").trim();
+      const key = text(fieldItem?.name);
       if (!key) continue;
       const value = String(formData[key] || "");
       if (fieldItem?.required && !value.trim()) {

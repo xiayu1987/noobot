@@ -14,13 +14,14 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import { EXECUTE_SCRIPT_TOOL_NAME, SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { buildOutputTransferDeclaration } from "./output-transfer-declaration.js";
+import { text } from "@noobot/shared/value";
 
 function compactObject(value = {}) {
   return Object.fromEntries(
     Object.entries(value && typeof value === "object" ? value : {}).filter(([, item]) => {
       if (Array.isArray(item)) return item.length > 0;
       if (item && typeof item === "object") return Object.keys(item).length > 0;
-      return item !== undefined && item !== null && String(item || "").trim() !== "";
+      return item !== undefined && item !== null && text(item) !== "";
     }),
   );
 }
@@ -72,12 +73,9 @@ export function buildScriptExecutionMeta({
 }
 
 function resolveRuntimeUserId(runtime = {}, agentContext = null) {
-  return String(
-    runtime?.systemRuntime?.userId ||
-      runtime?.userId ||
-      agentContext?.context?.identity?.userId ||
-      "",
-  ).trim();
+  return text(
+    runtime?.systemRuntime?.userId || runtime?.userId || agentContext?.context?.identity?.userId,
+  );
 }
 
 async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = "" } = {}) {

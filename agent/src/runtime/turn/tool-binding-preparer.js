@@ -6,10 +6,11 @@
 import { adaptToolsForBinding, appendToolCompatibilityLog } from "../../models/index.js";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { emitEvent } from "../../events/index.js";
+import { text } from "@noobot/shared/value";
 
 export function prepareToolBinding({ tools, modelState, runtime, eventListener, turn }) {
   const adaptedBinding = adaptToolsForBinding(tools, modelState.activeModelSpec);
-  const configuredToolChoice = String(adaptedBinding?.bindOptions?.tool_choice || "").trim();
+  const configuredToolChoice = text(adaptedBinding?.bindOptions?.tool_choice);
   if (configuredToolChoice === "required") {
     emitEvent(eventListener, "tool_choice_required_forced_non_thinking_model", {
       turn,
@@ -49,7 +50,7 @@ export function prepareToolBinding({ tools, modelState, runtime, eventListener, 
   emitEvent(eventListener, "tool_binding_ready", {
     turn,
     toolCount: boundTools.length,
-    toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
+    toolNames: boundTools.map((tool) => text(tool?.name)).filter(Boolean),
     bindOptions: adaptedBinding?.bindOptions || {},
   });
 

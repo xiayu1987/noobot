@@ -32,6 +32,7 @@ import {
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { clearTurnUiState } from "./turnUiStore.js";
 import { logMessageMutationDiagnostics } from "../../../debug/loggers/messageMutationDiagnosticsLogger.js";
+import { text } from "@noobot/shared/value";
 
 const delay = (ms) =>
   new Promise((resolve) => {
@@ -68,7 +69,7 @@ function syncSessionMessageSummary(session) {
 
 function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
   const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
-  if (Array.isArray(source.sessions) && String(source.sessionId || "").trim()) {
+  if (Array.isArray(source.sessions) && text(source.sessionId)) {
     return source;
   }
   const session =

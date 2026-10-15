@@ -28,6 +28,7 @@ import {
 } from "./validation-runner.js";
 import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
 import { clearPendingSummaryState } from "../../pending-cleanup.js";
+import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -38,8 +39,8 @@ function buildAcceptanceReceipt(report = {}) {
       ? report.semanticValidation
       : null;
   const receipt = {
-    mode: String(report?.mode || "").trim(),
-    acceptedAt: String(report?.acceptedAt || "").trim(),
+    mode: text(report?.mode),
+    acceptedAt: text(report?.acceptedAt),
     summary: {
       total: Number(summary.total || 0),
       completed: Number(summary.completed || 0),
@@ -47,11 +48,11 @@ function buildAcceptanceReceipt(report = {}) {
       pending: Number(summary.pending || 0),
     },
   };
-  const statusAuthority = String(report?.statusAuthority || "").trim();
+  const statusAuthority = text(report?.statusAuthority);
   if (statusAuthority) receipt.statusAuthority = statusAuthority;
   if (semanticValidation) {
     const validationReceipt = {};
-    const validationStatus = String(semanticValidation.status || "").trim();
+    const validationStatus = text(semanticValidation.status);
     if (validationStatus) validationReceipt.status = validationStatus;
     if (typeof semanticValidation.consistent === "boolean") {
       validationReceipt.consistent = semanticValidation.consistent;
@@ -139,9 +140,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         state.flags.acceptanceCompleted =
           Number(summary.pending || 0) === 0 &&
           Number(summary.inProgress || 0) === 0 &&
-          String(semanticValidation.status || "")
-            .trim()
-            .toLowerCase() !== "fail" &&
+          text(semanticValidation.status).toLowerCase() !== "fail" &&
           semanticValidation.consistent !== false;
         deferCapabilityLogs(
           toolCtx,
@@ -170,14 +169,12 @@ export function synchronizeTaskAcceptanceTool(ctx = {}, meta = {}) {
   const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return false;
   if (state?.flags?.acceptanceRequested === true) {
-    const next = registry.filter(
-      (tool) => String(tool?.name || "").trim() !== TASK_ACCEPTANCE_TOOL_NAME,
-    );
+    const next = registry.filter((tool) => text(tool?.name) !== TASK_ACCEPTANCE_TOOL_NAME);
     if (next.length === registry.length) return false;
     registry.splice(0, registry.length, ...next);
     return true;
   }
-  if (registry.some((tool) => String(tool?.name || "").trim() === TASK_ACCEPTANCE_TOOL_NAME)) {
+  if (registry.some((tool) => text(tool?.name) === TASK_ACCEPTANCE_TOOL_NAME)) {
     return false;
   }
   registry.push(createRequestTaskAcceptanceTool({ bucket, state, ctx, meta }));

@@ -6,6 +6,7 @@
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { recoverableToolError } from "../../errors/index.js";
 import { ERROR_CODE } from "../../errors/constants.js";
+import { text } from "@noobot/shared/value";
 
 const DEFAULT_BROWSER_HEADERS = {
   "User-Agent":
@@ -28,7 +29,7 @@ const DEFAULT_BROWSER_HEADERS = {
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 
 function withDefaultReferer(urlValue = "", referer = "") {
-  if (String(referer || "").trim()) return String(referer).trim();
+  if (text(referer)) return String(referer).trim();
   try {
     const parsedUrl = new URL(String(urlValue || ""));
     return `${parsedUrl.protocol}//${parsedUrl.host}/`;
@@ -76,7 +77,7 @@ export async function browserLikeFetch(url, options = {}) {
     return doFetch(url, normalizedMethod, redirect);
   }
 
-  let currentUrl = String(url || "").trim();
+  let currentUrl = text(url);
   let currentMethod = normalizedMethod;
   let hops = 0;
   while (true) {
@@ -87,7 +88,7 @@ export async function browserLikeFetch(url, options = {}) {
         code: ERROR_CODE.RECOVERABLE_TOO_MANY_REDIRECTS,
       });
     }
-    const location = String(res.headers.get("location") || "").trim();
+    const location = text(res.headers.get("location"));
     if (!location) return res;
     try {
       currentUrl = new URL(location, currentUrl).toString();

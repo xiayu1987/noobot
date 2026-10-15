@@ -45,6 +45,7 @@ import {
   getAcceptanceSemanticValidationMarker,
 } from "../shared/workflow/prompts.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
+import { text } from "@noobot/shared/value";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -55,7 +56,7 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
     scheduledEvent: ACCEPTANCE_EVENTS.semanticValidationScheduledByInject,
     setPendingData: ({ bucket, state }) => {
       const locale = state?.locale || LOCALE.ZH_CN;
-      const finalOutput = String(ctx?.result?.output || "").trim();
+      const finalOutput = text(ctx?.result?.output);
       const reportIndex = Array.isArray(bucket.acceptanceReports)
         ? bucket.acceptanceReports.lastIndexOf(baseReport)
         : -1;
@@ -233,7 +234,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     return false;
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const finalOutput = String(ctx?.result?.output || "").trim();
+  const finalOutput = text(ctx?.result?.output);
   const promptPayload = buildSemanticValidationPromptPayload({
     bucket,
     state,
@@ -314,7 +315,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     });
     return false;
   }
-  const responseText = String(response?.output?.text || "").trim();
+  const responseText = text(response?.output?.text);
   const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "acceptance_semantic_validation",
     content: responseText,

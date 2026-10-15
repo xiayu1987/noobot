@@ -7,6 +7,7 @@
 import { nextTick, ref, watch } from "vue";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import noobotIcon from "../../../../shared/assets/noobot.svg";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -21,7 +22,7 @@ const navigatorRef = ref(null);
 
 function syncCurrentNavigatorItemIntoView() {
   const root = navigatorRef.value?.$el || navigatorRef.value;
-  const currentId = String(props.currentId || "").trim();
+  const currentId = text(props.currentId);
   if (!root || !currentId) return;
   const currentLink = root.querySelector?.(`[data-chat-message-nav-id="${CSS.escape(currentId)}"]`);
   currentLink?.scrollIntoView?.({

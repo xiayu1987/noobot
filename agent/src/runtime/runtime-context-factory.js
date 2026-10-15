@@ -8,6 +8,7 @@ import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
 } from "./turn/current-turn-ledger.js";
+import { text } from "@noobot/shared/value";
 
 export function createRuntimeContext({
   userId = "",
@@ -32,8 +33,8 @@ export function createRuntimeContext({
     runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
   const normalizedAbortSignal = abortSignal || null;
   return {
-    userId: String(userId || "").trim(),
-    basePath: String(basePath || "").trim(),
+    userId: text(userId),
+    basePath: text(basePath),
     globalConfig,
     userConfig,
     eventListener,
@@ -43,7 +44,7 @@ export function createRuntimeContext({
     userInteractionBridge,
     abortSignal: normalizedAbortSignal,
     cancellationScope: createExecutionCancellationScope({ abortSignal: normalizedAbortSignal }),
-    runtimeModel: String(runtimeModel || "").trim(),
+    runtimeModel: text(runtimeModel),
     runConfig: normalizedRunConfig,
     allEnabledProviders:
       allEnabledProviders && typeof allEnabledProviders === "object" ? allEnabledProviders : {},

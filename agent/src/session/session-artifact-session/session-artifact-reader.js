@@ -13,6 +13,7 @@ import {
   readJournalRecords,
   readSummarySnapshots,
 } from "./turn-journal-store.js";
+import { text } from "@noobot/shared/value";
 
 export async function readSessionArtifact({
   storageService = null,
@@ -42,7 +43,7 @@ export async function readSessionArtifact({
       messagesByUid.set(message.messageUid, message);
   }
   const restoredMessages = (Array.isArray(session.messageOrder) ? session.messageOrder : [])
-    .map((reference) => messagesByUid.get(String(reference?.messageUid || "").trim()))
+    .map((reference) => messagesByUid.get(text(reference?.messageUid)))
     .filter(Boolean);
   return { ...session, messages: restoredMessages };
 }

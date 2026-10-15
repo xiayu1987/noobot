@@ -40,6 +40,7 @@ import {
   normalizeErrorMessage,
   normalizeTrimmedString,
 } from "./chatWebSocketProtocol.js";
+import { text } from "@noobot/shared/value";
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
@@ -667,9 +668,9 @@ export function createChatWebSocketClient({
             JSON.stringify({
               action: "reconnect",
               requestId,
-              currentSessionId: String(currentSessionId || "").trim(),
-              currentParentSessionId: String(currentParentSessionId || "").trim(),
-              currentParentDialogProcessId: String(currentParentDialogProcessId || "").trim(),
+              currentSessionId: text(currentSessionId),
+              currentParentSessionId: text(currentParentSessionId),
+              currentParentDialogProcessId: text(currentParentDialogProcessId),
               knownLifecycleSequenceMap:
                 knownLifecycleSequenceMap && typeof knownLifecycleSequenceMap === "object"
                   ? knownLifecycleSequenceMap

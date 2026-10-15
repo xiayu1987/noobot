@@ -21,6 +21,7 @@ import {
 } from "./request-context.js";
 import { createCapabilityModelStep } from "./model-step.js";
 import { createCapabilityToolBinding, runCapabilityToolTurns } from "./tool-turns.js";
+import { text } from "@noobot/shared/value";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 
@@ -74,7 +75,7 @@ export function createAgentCapabilityModelInvoker({
       flowPrefix,
       sessionMeta: execution,
     });
-    const normalizedModelName = String(modelName || "").trim();
+    const normalizedModelName = text(modelName);
     const modelSpec = normalizedModelName
       ? resolveModelSpecByNameFn({
           modelName: normalizedModelName,

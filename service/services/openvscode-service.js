@@ -27,6 +27,7 @@ import {
   stopInstanceBestEffort,
 } from "./openvscode/process.js";
 import { createOpenVSCodeProxy } from "./openvscode/proxy.js";
+import { text } from "@noobot/shared/value";
 
 export function createOpenVSCodeService({
   getGlobalConfig = () => ({}),
@@ -120,8 +121,7 @@ export function createOpenVSCodeService({
   }
 
   async function restorePersistedInstances() {
-    const workspaceRoot =
-      typeof workspaceRootPath === "function" ? String(workspaceRootPath() || "").trim() : "";
+    const workspaceRoot = typeof workspaceRootPath === "function" ? text(workspaceRootPath()) : "";
     if (!workspaceRoot) return { restored: 0 };
     let restored = 0;
     let entries = [];
@@ -133,7 +133,7 @@ export function createOpenVSCodeService({
     }
     for (const entry of entries) {
       if (!entry?.isDirectory?.() || String(entry.name || "").startsWith(".")) continue;
-      const userId = String(entry.name || "").trim();
+      const userId = text(entry.name);
       const workspacePath = path.join(workspaceRoot, userId);
       const instance = await loadPersistedInstance(userId, workspacePath);
       if (!instance) continue;
@@ -164,18 +164,18 @@ export function createOpenVSCodeService({
   }
 
   function isInstanceTokenCompatible(instance = {}) {
-    const connectionToken = String(instance?.connectionToken || "").trim();
+    const connectionToken = text(instance?.connectionToken);
     if (!connectionToken) return false;
     const args = Array.isArray(instance?.args)
       ? instance.args.map((item) => String(item || ""))
       : [];
     const tokenIndex = args.indexOf("--connection-token");
-    return tokenIndex >= 0 && String(args[tokenIndex + 1] || "").trim() === connectionToken;
+    return tokenIndex >= 0 && text(args[tokenIndex + 1]) === connectionToken;
   }
 
   function isInstanceForWorkspace(instance = {}, workspacePath = "") {
     const normalizedWorkspacePath = path.resolve(String(workspacePath || ""));
-    const defaultFolder = String(instance?.defaultFolder || "").trim();
+    const defaultFolder = text(instance?.defaultFolder);
     if (defaultFolder && path.resolve(defaultFolder) === normalizedWorkspacePath) return true;
     const args = Array.isArray(instance?.args)
       ? instance.args.map((item) => String(item || ""))

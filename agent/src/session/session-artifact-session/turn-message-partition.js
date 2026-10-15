@@ -6,19 +6,20 @@
 import { resolveScopedArtifactPath } from "@noobot/path-resolver";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
+import { text } from "@noobot/shared/value";
 
 export function splitSessionMessages(messages = [], dialogOrder = []) {
   const source = Array.isArray(messages) ? messages : [];
   const logicalOrder = new Map(
     (Array.isArray(dialogOrder) ? dialogOrder : []).map((entry, index) => [
-      String(entry?.dialogProcessId || "").trim(),
+      text(entry?.dialogProcessId),
       Number(entry?.dialogOrdinal) || index + 1,
     ]),
   );
   const buckets = new Map();
   source.forEach((message, sourceIndex) => {
     const dialogProcessId = resolveContextMessageDialogProcessId(message);
-    const turnScopeId = String(message?.turnScopeId || "").trim();
+    const turnScopeId = text(message?.turnScopeId);
     if (!turnScopeId || !dialogProcessId) {
       const error = new TypeError(
         `session message is missing Turn identity at index ${sourceIndex}`,

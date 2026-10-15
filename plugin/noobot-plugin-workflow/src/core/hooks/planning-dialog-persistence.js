@@ -7,14 +7,15 @@
 import { isWorkflowNodeDialogProcessId } from "@noobot/session-protocol/turn-scope-identity";
 import { normalizeString } from "./runtime.js";
 import { WORKFLOW_DATA_SCOPE, resolveWorkflowDataRelativePath } from "../constants.js";
+import { text } from "@noobot/shared/value";
 
 export function buildWorkflowDialogRelativeDir({
   ctx = {},
   dialogProcessId = "",
   scope = "auto",
 } = {}) {
-  const sessionId = String(ctx?.sessionId || "").trim();
-  const resolvedDialogProcessId = String(dialogProcessId || ctx?.dialogProcessId || "").trim();
+  const sessionId = text(ctx?.sessionId);
+  const resolvedDialogProcessId = text(dialogProcessId || ctx?.dialogProcessId);
   if (!sessionId || !resolvedDialogProcessId) return "";
   const normalizedScope = String(scope || "auto")
     .trim()

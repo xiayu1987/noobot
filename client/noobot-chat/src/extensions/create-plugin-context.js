@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { text } from "@noobot/shared/value";
+
 export function createPluginContext({ pluginId = "", getConfig, updateConfig } = {}) {
-  const namespace = String(pluginId || "").trim();
+  const namespace = text(pluginId);
   if (!namespace) throw new Error("plugin context id is required");
   return Object.freeze({
     pluginId: namespace,

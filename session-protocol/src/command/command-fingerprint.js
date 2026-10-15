@@ -5,6 +5,7 @@
  */
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import { text } from "@noobot/shared/value";
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -27,9 +28,9 @@ export function createCommandRequestHash(value = {}) {
 export function canonicalAttachmentIdentities(attachments = []) {
   return (Array.isArray(attachments) ? attachments : [])
     .map((item = {}) => ({
-      attachmentId: String(item.attachmentId || "").trim(),
-      sessionId: String(item.sessionId || "").trim(),
-      attachmentSource: String(item.attachmentSource || "").trim(),
+      attachmentId: text(item.attachmentId),
+      sessionId: text(item.sessionId),
+      attachmentSource: text(item.attachmentSource),
     }))
     .sort((a, b) => canonicalizeCommandRequest(a).localeCompare(canonicalizeCommandRequest(b)));
 }

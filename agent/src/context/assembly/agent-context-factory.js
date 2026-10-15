@@ -12,6 +12,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
+import { text } from "@noobot/shared/value";
 
 export class AgentContextFactory {
   constructor({
@@ -139,10 +140,10 @@ export class AgentContextFactory {
     dialogProcessId = "",
   } = {}) {
     return {
-      mode: String(mode || "").trim(),
-      userId: String(userId || "").trim(),
-      sessionId: String(sessionId || "").trim(),
-      caller: String(caller || "").trim(),
+      mode: text(mode),
+      userId: text(userId),
+      sessionId: text(sessionId),
+      caller: text(caller),
       parentSessionId: normalizeParentSessionId(parentSessionId),
       dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     };

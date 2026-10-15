@@ -23,6 +23,7 @@ import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { resolveExtensionPoint } from "../../extensions/extension-registry.js";
 import { resolveDrawerSize } from "../../shared/composables/useMobileViewport.js";
 import { useOverlayHistory } from "../../shared/composables/useOverlayHistory.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   ...sharedSidebarProps,
@@ -119,7 +120,7 @@ const featurePanelContext = computed(() => ({
   updatePluginModelConfig: (pluginId = "", next = {}) =>
     emit("update:pluginModelConfig", {
       ...(props.pluginModelConfig || {}),
-      [String(pluginId || "").trim()]: next && typeof next === "object" ? next : {},
+      [text(pluginId)]: next && typeof next === "object" ? next : {},
     }),
 }));
 const hasFeaturePanel = computed(
@@ -141,7 +142,7 @@ const featurePanelTitle = computed(() => {
       ...featurePanelContext.value,
       translate: props.translate,
     });
-    if (String(resolved || "").trim()) return String(resolved).trim();
+    if (text(resolved)) return String(resolved).trim();
   }
   return contribution?.title || props.translate("common.extensionFeatures");
 });

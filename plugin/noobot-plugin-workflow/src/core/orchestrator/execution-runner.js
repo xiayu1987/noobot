@@ -35,16 +35,17 @@ import {
   resolveCommittedChildTerminal,
   settleUnstartedWorkflowNodes,
 } from "./node-state-commit.js";
+import { text } from "@noobot/shared/value";
 
 function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = {} } = {}) {
-  const nodeId = String(pendingStep?.nodeId || "").trim();
+  const nodeId = text(pendingStep?.nodeId);
   if (!nodeId || !Array.isArray(planningNodeSessions) || !planningNodeSessions.length) return null;
   const attempt = Math.max(
     1,
     Math.floor(Number(pendingStep?.attempt || pendingStep?.attemptIndex || 1) || 1),
   );
   const matches = planningNodeSessions.filter((item = {}) => {
-    const itemNodeId = String(item?.nodeId || "").trim();
+    const itemNodeId = text(item?.nodeId);
     const itemAttempt = Math.max(1, Math.floor(Number(item?.attempt || 1) || 1));
     return itemNodeId === nodeId && itemAttempt === attempt;
   });
@@ -63,7 +64,7 @@ function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = 
     "dialogProcessId",
     "turnScopeId",
   ];
-  const missingFields = requiredFields.filter((field) => !String(identity?.[field] || "").trim());
+  const missingFields = requiredFields.filter((field) => !text(identity?.[field]));
   if (missingFields.length) {
     throw new Error(
       `incomplete workflow node identity for ${nodeId} attempt ${attempt}: ${missingFields.join(",")}`,
@@ -91,7 +92,7 @@ function resolveItemStepFailure(item = {}) {
   for (const action of candidates) {
     const failure = action?.stepFailure;
     if (failure && typeof failure === "object") return failure;
-    const message = String(failure || "").trim();
+    const message = text(failure);
     if (message) return { message };
   }
   return null;
@@ -213,10 +214,8 @@ function resolveWaveNodeIdentity({ planningNodeSessions = [], step = {} } = {}) 
 }
 
 function findNodeStateByExecutionId(snapshot = null, nodeExecutionId = "") {
-  const target = String(nodeExecutionId || "").trim();
-  return (
-    snapshot?.nodes?.find?.((node) => String(node?.nodeExecutionId || "").trim() === target) || null
-  );
+  const target = text(nodeExecutionId);
+  return snapshot?.nodes?.find?.((node) => text(node?.nodeExecutionId) === target) || null;
 }
 
 async function commitWaveNodeState({ nodeState, nodeIdentity, ctx, ...fields } = {}) {
@@ -415,7 +414,7 @@ export async function runWorkflowExecution({
   workflowRunId = "",
   planningNodeSessions = [],
 } = {}) {
-  const instanceId = String(workflowRunId || "").trim();
+  const instanceId = text(workflowRunId);
   if (!instanceId) throw new Error("workflowRunId is required");
   if (!Array.isArray(planningNodeSessions) || !planningNodeSessions.length) {
     throw new Error("workflow planning node identities are required");
@@ -425,9 +424,9 @@ export async function runWorkflowExecution({
     semantic,
     options,
     meta: {
-      userId: String(ctx?.userId || "").trim(),
-      sessionId: String(ctx?.sessionId || "").trim(),
-      dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+      userId: text(ctx?.userId),
+      sessionId: text(ctx?.sessionId),
+      dialogProcessId: text(ctx?.dialogProcessId),
     },
   });
   const { maxTransitions, maxParallelNodeAgents, parallelEnabled } =

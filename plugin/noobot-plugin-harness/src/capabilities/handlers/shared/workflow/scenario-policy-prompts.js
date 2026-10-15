@@ -6,6 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { DYNAMIC_POLICY_PROMPT_BLOCK } from "./dynamic-policy-prompt.js";
+import { text } from "@noobot/shared/value";
 
 const SCENARIO_POLICY_I18N_KEY_BY_SCENARIO = Object.freeze({
   general: HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SCENARIO_POLICY_GENERAL,
@@ -31,7 +32,7 @@ export function buildScenarioPolicyPromptText(
   { programmingMode = false, textMode = false, dynamicPolicyPrompt = "" } = {},
 ) {
   const scenario = resolveScenarioPolicyScenario({ programmingMode, textMode });
-  const dynamicPrompt = String(dynamicPolicyPrompt || "").trim();
+  const dynamicPrompt = text(dynamicPolicyPrompt);
   const body =
     dynamicPrompt || buildDefaultScenarioPolicyText(locale, { programmingMode, textMode });
   if (!body) return "";
@@ -47,9 +48,7 @@ export function buildScenarioPolicyPromptText(
 }
 
 function shouldIncludeScenarioMismatchProtocol(stage = "") {
-  const normalized = String(stage || "")
-    .trim()
-    .toLowerCase();
+  const normalized = text(stage).toLowerCase();
   return normalized === "planning" || normalized.includes("revision");
 }
 

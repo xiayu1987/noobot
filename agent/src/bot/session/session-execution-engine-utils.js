@@ -10,7 +10,7 @@ import {
   readMessageField,
   resolveInjectedMessageType,
 } from "@noobot/context-protocol";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 export function resolveTransferEnvelopesFromMessage(message = {}) {
   return resolveTransferEnvelopeListFromMessage(message);
@@ -35,9 +35,7 @@ export function resolvePreferredAttachments(message = {}) {
 }
 
 export function normalizeTrimmedStringList(input = []) {
-  return (Array.isArray(input) ? input : [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
+  return (Array.isArray(input) ? input : []).map((item) => text(item)).filter(Boolean);
 }
 
 export function applyNormalizedMessageFlags(normalized = {}, messageItem = {}) {

@@ -10,6 +10,7 @@ import {
   resolveRawAttachmentFile,
   serializeAttachments,
 } from "../runtime/engine/attachmentSerialization.js";
+import { text } from "@noobot/shared/value";
 
 export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   const chatStore = useChatStore();
@@ -34,10 +35,10 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   function getUploadEntryKey(fileItem = {}) {
     const rawFile = resolveRawAttachmentFile(fileItem) || fileItem;
     return [
-      String(rawFile?.name || fileItem?.name || "").trim(),
+      text(rawFile?.name || fileItem?.name),
       String(rawFile?.size || fileItem?.size || 0),
       String(rawFile?.lastModified || fileItem?.lastModified || 0),
-      String(rawFile?.type || fileItem?.mimeType || "").trim(),
+      text(rawFile?.type || fileItem?.mimeType),
     ].join("|");
   }
 
@@ -69,7 +70,7 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   }
 
   function removeUpload(draftAttachmentId = "") {
-    const normalizedId = String(draftAttachmentId || "").trim();
+    const normalizedId = text(draftAttachmentId);
     if (!normalizedId) return;
     const removedFile = uploadFiles.value.find(
       (fileItem) => fileItem?.draftAttachmentId === normalizedId,

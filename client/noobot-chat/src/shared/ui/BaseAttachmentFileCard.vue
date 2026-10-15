@@ -7,6 +7,7 @@
 import { computed } from "vue";
 import { Document, Download } from "@element-plus/icons-vue";
 import { resolveParsedResultAccessMeta } from "../../infrastructure/api/attachments/attachmentAccess.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   attachmentItem: { type: Object, required: true },
@@ -37,15 +38,13 @@ const emit = defineEmits([
   "download-parsed-result",
 ]);
 
-const mimeType = computed(() => String(props.attachmentItem?.mimeType || "").trim());
-const hasThumbnail = computed(() => Boolean(String(props.thumbnailUrl || "").trim()));
+const mimeType = computed(() => text(props.attachmentItem?.mimeType));
+const hasThumbnail = computed(() => Boolean(text(props.thumbnailUrl)));
 const isImage = computed(() => props.isImageMime(mimeType.value));
 const isVideo = computed(() => mimeType.value.startsWith("video/"));
-const ownerType = computed(() => String(props.attachmentItem?.owner?.type || "").trim());
-const resolvedName = computed(() =>
-  String(props.nameText || props.attachmentItem?.name || "").trim(),
-);
-const resolvedTitle = computed(() => String(props.titleText || resolvedName.value || "").trim());
+const ownerType = computed(() => text(props.attachmentItem?.owner?.type));
+const resolvedName = computed(() => text(props.nameText || props.attachmentItem?.name));
+const resolvedTitle = computed(() => text(props.titleText || resolvedName.value));
 const resolvedSize = computed(() =>
   props.sizeValue === null ? Number(props.attachmentItem?.size || 0) : Number(props.sizeValue || 0),
 );
@@ -59,7 +58,7 @@ const showPluginBadge = computed(
     props.badgeMode === "plugin" || (props.badgeMode === "auto" && ownerType.value === "plugin"),
 );
 const showAgentBadge = computed(() => props.badgeMode === "auto" && ownerType.value === "agent");
-const showCustomBadge = computed(() => Boolean(String(props.customBadgeText || "").trim()));
+const showCustomBadge = computed(() => Boolean(text(props.customBadgeText)));
 const hasParsedResult = computed(
   () =>
     props.showParsedResult &&

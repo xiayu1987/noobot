@@ -5,6 +5,7 @@
  */
 
 import { ACTIVITY_EVENT_TYPES } from "@noobot/event-protocol/message-event";
+import { text } from "@noobot/shared/value";
 
 const ERROR_EVENT_SUFFIX_RE = /(_error|_aborted)$/i;
 const SEMANTIC_TRANSFER_EVENTS = new Set([
@@ -33,7 +34,7 @@ export function classifyExecutionEvent(event = "") {
   if (event === "model_context_trace") {
     return { category: "model_context_trace", type: "model_context_trace_debug" };
   }
-  if (SEMANTIC_TRANSFER_EVENTS.has(String(event || "").trim())) {
+  if (SEMANTIC_TRANSFER_EVENTS.has(text(event))) {
     return { category: "semantic_transfer", type: "semantic_transfer" };
   }
   if (event === "tool_call_start") return { category: "tool", type: "tool_call" };

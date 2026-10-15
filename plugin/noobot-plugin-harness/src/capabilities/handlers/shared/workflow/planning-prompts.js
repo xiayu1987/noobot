@@ -14,6 +14,7 @@ import {
 import { buildDynamicPolicyPromptProtocolInstruction } from "./dynamic-policy-prompt.js";
 import { normalizePromptOptions } from "./prompt-options.js";
 import { buildScenarioPolicyPromptText } from "./scenario-policy-prompts.js";
+import { text } from "@noobot/shared/value";
 
 const PLAN_UPDATE_POLICY = Object.freeze({
   MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
@@ -40,9 +41,9 @@ export function buildPlanningMainPrompt(options = {}) {
   const { locale, marker, data, programmingMode, textMode, dynamicPolicyPrompt } =
     normalizePromptOptions(options);
   const includeWorkflowPolicy = options?.includeWorkflowPolicy === true;
-  const userGoal = String(data.userGoal || options?.userGoal || "").trim();
+  const userGoal = text(data.userGoal || options?.userGoal);
   const goal =
-    String(userGoal || "").trim() ||
+    text(userGoal) ||
     translateI18nText(
       locale,
       HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK,
@@ -57,7 +58,7 @@ export function buildPlanningMainPrompt(options = {}) {
       ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_TEXT
       : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_ACTION;
   return [
-    String(marker || "").trim(),
+    text(marker),
     translateI18nText(locale, goalPromptKey),
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_USER_GOAL_HEADER),
@@ -89,7 +90,7 @@ export function buildPlanningRevisionPromptText(options = {}) {
   const includeCurrentMainPlans =
     data.includeCurrentMainPlans ?? options?.includeCurrentMainPlans ?? true;
   const mainPlansText =
-    String(currentMainPlansText || "").trim() ||
+    text(currentMainPlansText) ||
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
   const revisionCount = Number.isFinite(Number(globalRevisionCount))
     ? Number(globalRevisionCount)
@@ -105,7 +106,7 @@ export function buildPlanningRevisionPromptText(options = {}) {
           mainPlansText,
         ];
   return [
-    String(marker || "").trim(),
+    text(marker),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_PROMPT_GOAL),
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_STATUS_HEADER),
@@ -149,14 +150,14 @@ export function buildPlanningRefinementPromptText(options = {}) {
   const targetContent = data.targetContent ?? options?.targetContent ?? "";
   const existingSubPlansText = data.existingSubPlansText ?? options?.existingSubPlansText ?? "";
   const id = Number.isFinite(Number(targetId)) ? Number(targetId) : 1;
-  const content = String(targetContent || "").trim();
+  const content = text(targetContent);
   const targetIdListText = targetIds.length ? `[${targetIds.join(",")}]` : `[${id}]`;
-  const targetPlans = String(targetPlansText || "").trim() || `${id}. ${content}`.trim();
+  const targetPlans = text(targetPlansText) || `${id}. ${content}`.trim();
   const subPlans =
-    String(existingSubPlansText || "").trim() ||
+    text(existingSubPlansText) ||
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
   return [
-    String(marker || "").trim(),
+    text(marker),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_PROMPT_GOAL),
     "",
     translateI18nText(

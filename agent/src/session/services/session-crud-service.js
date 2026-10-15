@@ -15,6 +15,7 @@ import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
 import { reconcileSessionSummaryIndex } from "@noobot/session-repair";
 import { projectSessionAttachmentState } from "./session-attachment-projection.js";
+import { text } from "@noobot/shared/value";
 
 function projectSessionTreeDepth(summary = {}, depth = 0) {
   const normalizedDepth = Number.isFinite(Number(depth)) ? Number(depth) : 0;
@@ -137,7 +138,7 @@ export class SessionCrudService {
   }
 
   async getSessionData({ userId, sessionId }) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     let sessionBundle;
     try {
       sessionBundle = await this.getSessionBundle({
@@ -224,7 +225,7 @@ export class SessionCrudService {
   }
 
   async getSessionThinkingDetail({ userId, sessionId, turnScopeId = "", dialogProcessId = "" }) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     const [turn, displaySummary] = await Promise.all([
       this.sessionRepo.readSessionTurn(userId, normalizedSessionId, {
         turnScopeId,
@@ -236,11 +237,10 @@ export class SessionCrudService {
       Array.isArray(displaySummary?.messages) ? displaySummary.messages : []
     ).find(
       (message = {}) =>
-        String(message?.turnScopeId || "").trim() === String(turnScopeId || "").trim() &&
-        (!dialogProcessId ||
-          String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim()),
+        text(message?.turnScopeId) === text(turnScopeId) &&
+        (!dialogProcessId || text(message?.dialogProcessId) === String(dialogProcessId).trim()),
     );
-    const detailContentHash = String(summaryMessage?.thinkingDetailRef?.contentHash || "").trim();
+    const detailContentHash = text(summaryMessage?.thinkingDetailRef?.contentHash);
     return buildThinkingDetailPayload(
       {
         sessionId: normalizedSessionId,
@@ -261,9 +261,9 @@ export class SessionCrudService {
     persistenceScope = null,
     persistenceContext = null,
   }) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
-    const normalizedCommandId = String(commandId || "").trim();
+    const normalizedSessionId = text(sessionId);
+    const normalizedTurnScopeId = text(turnScopeId);
+    const normalizedCommandId = text(commandId);
     if (!userId || !normalizedSessionId || !normalizedTurnScopeId || !normalizedCommandId) {
       return createTurnTerminalResolution({
         commandId: normalizedCommandId || "invalid",
@@ -275,7 +275,7 @@ export class SessionCrudService {
     const bundle = await this.getSessionBundle({
       userId,
       sessionId: normalizedSessionId,
-      parentSessionId: String(parentSessionId || persistenceScope?.parentSessionId || "").trim(),
+      parentSessionId: text(parentSessionId || persistenceScope?.parentSessionId),
       persistenceContext,
     });
     if (!bundle.exists || !bundle.session) {
@@ -287,10 +287,9 @@ export class SessionCrudService {
       });
     }
     if (
-      String(bundle.session.sessionId || "").trim() !== normalizedSessionId ||
+      text(bundle.session.sessionId) !== normalizedSessionId ||
       (persistenceScope?.parentSessionId &&
-        String(bundle.session.parentSessionId || "").trim() !==
-          String(persistenceScope.parentSessionId).trim())
+        text(bundle.session.parentSessionId) !== String(persistenceScope.parentSessionId).trim())
     ) {
       return createTurnTerminalResolution({
         commandId: normalizedCommandId,
@@ -310,7 +309,7 @@ export class SessionCrudService {
   }
 
   async getSessionDisplayData({ userId, sessionId }) {
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = text(sessionId);
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
     if (!sessionTree?.nodes?.[normalizedSessionId]) {
       return {
@@ -385,7 +384,7 @@ export class SessionCrudService {
     const migratedSessionIds = [];
     const failures = [];
     for (const sessionId of sessionIds) {
-      const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+      const parentSessionId = text(sessionTree?.nodes?.[sessionId]?.parentSessionId);
       try {
         const result = await this.sessionRepo.ensureSessionDisplaySummary(
           userId,
@@ -453,11 +452,9 @@ export class SessionCrudService {
   async getAllSessionSummaries({ userId }) {
     const sessionTree = await this.sessionTreeService.getSessionTree({ userId });
     const sessionIds = await this.listSessionIds({ userId });
-    const expectedIds = new Set(
-      sessionIds.map((item) => String(item || "").trim()).filter(Boolean),
-    );
+    const expectedIds = new Set(sessionIds.map((item) => text(item)).filter(Boolean));
     for (const sessionId of sessionIds) {
-      const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+      const parentSessionId = text(sessionTree?.nodes?.[sessionId]?.parentSessionId);
       try {
         await this.sessionRepo.ensureSessionDisplaySummary(userId, sessionId, parentSessionId);
       } catch (error) {
@@ -472,16 +469,14 @@ export class SessionCrudService {
     let payload = await this.sessionRepo.readSessionsSummary(userId);
     const summaries = Array.isArray(payload?.sessions) ? payload.sessions : [];
     const summaryIndex = reconcileSessionSummaryIndex({ sessions: summaries, sessionIds });
-    const summaryIds = new Set(
-      summaries.map((item) => String(item?.sessionId || "").trim()).filter(Boolean),
-    );
+    const summaryIds = new Set(summaries.map((item) => text(item?.sessionId)).filter(Boolean));
     const needsRebuild =
       summaryIndex.changed ||
       !summaries.length ||
       summaryIds.size !== expectedIds.size ||
       [...expectedIds].some((sessionId) => !summaryIds.has(sessionId)) ||
       summaries.some((summary) => {
-        const sessionId = String(summary?.sessionId || "").trim();
+        const sessionId = text(summary?.sessionId);
         if (!expectedIds.has(sessionId)) return true;
         if (!sessionTree?.nodes?.[sessionId]) return false;
         return (
@@ -493,7 +488,7 @@ export class SessionCrudService {
       payload = await this.sessionRepo.rebuildSessionsSummary(userId, { sessionTree });
     }
     const sessions = (Array.isArray(payload?.sessions) ? payload.sessions : [])
-      .filter((item) => expectedIds.has(String(item?.sessionId || "").trim()))
+      .filter((item) => expectedIds.has(text(item?.sessionId)))
       .sort(
         (leftSession, rightSession) =>
           new Date(rightSession.updatedAt || 0).getTime() -
@@ -519,7 +514,7 @@ export class SessionCrudService {
   }
 
   async renameSession({ userId, sessionId, title }) {
-    const normalizedTitle = String(title || "").trim();
+    const normalizedTitle = text(title);
     if (!normalizedTitle) {
       const error = new Error("Session title is required");
       error.statusCode = 400;

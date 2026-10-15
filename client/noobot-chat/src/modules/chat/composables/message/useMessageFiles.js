@@ -17,14 +17,14 @@ import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../../runtime/sessionRunStateM
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { resolveParsedResultAccessMeta } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
-import { isPlainObject } from "@noobot/shared/value";
+import { isPlainObject, text } from "@noobot/shared/value";
 
 function getMessageAttachments(messageItem = {}) {
   return resolveRenderableMessageAttachments(messageItem);
 }
 
 function trim(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 function getMessageScopeIdentity(messageItem = {}) {
@@ -147,15 +147,13 @@ export function useMessageFiles({
     const result = sourceAttachments;
     logWorkflowDiagnostics("frontend.workflowRender.displayedAttachmentsProjected", () => ({
       ...getMessageScopeIdentity(messageItem),
-      messageId: String(messageItem?.messageId || "").trim(),
+      messageId: text(messageItem?.messageId),
       role: getMessageRole(messageItem),
       attachments: result.map((attachment) => ({
-        attachmentId: String(attachment?.attachmentId || "").trim(),
-        clientAttachmentId: String(
-          attachment?.clientAttachmentId || attachment?.draftAttachmentId || "",
-        ).trim(),
-        sessionId: String(attachment?.sessionId || "").trim(),
-        attachmentSource: String(attachment?.attachmentSource || "").trim(),
+        attachmentId: text(attachment?.attachmentId),
+        clientAttachmentId: text(attachment?.clientAttachmentId || attachment?.draftAttachmentId),
+        sessionId: text(attachment?.sessionId),
+        attachmentSource: text(attachment?.attachmentSource),
         parsedResultTargetIdentity:
           resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
       })),

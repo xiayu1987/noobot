@@ -5,6 +5,7 @@
  */
 import process from "node:process";
 import { resolveServiceGlobalConfigPath } from "../../services/global-config-source.js";
+import { text } from "@noobot/shared/value";
 
 export function parseCliOptions(argv = []) {
   const items = Array.isArray(argv) ? argv : [];
@@ -15,13 +16,13 @@ export function parseCliOptions(argv = []) {
   };
 
   for (let index = 0; index < items.length; index += 1) {
-    const item = String(items[index] || "").trim();
+    const item = text(items[index]);
     if (item.startsWith("--lang=")) {
       options.lang = item.slice("--lang=".length).trim();
       continue;
     }
     if (item === "--lang") {
-      options.lang = String(items[index + 1] || "").trim();
+      options.lang = text(items[index + 1]);
       index += 1;
     }
     if (item.startsWith("--global-config-path=")) {
@@ -29,7 +30,7 @@ export function parseCliOptions(argv = []) {
       continue;
     }
     if (item === "--global-config-path") {
-      options.globalConfigPath = String(items[index + 1] || "").trim();
+      options.globalConfigPath = text(items[index + 1]);
       index += 1;
     }
   }

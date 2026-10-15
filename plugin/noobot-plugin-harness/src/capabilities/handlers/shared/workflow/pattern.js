@@ -6,6 +6,7 @@
 import { appendCapabilityLog } from "../attachment-log-utils.js";
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { text } from "@noobot/shared/value";
 
 const WORKFLOW_EVENTS = WORKFLOW_PARAMS.workflow.events;
 
@@ -39,13 +40,13 @@ function appendWorkflowPriorityDecision(
     domain,
     event: WORKFLOW_EVENTS.priorityDecision,
     detail: {
-      point: String(point || "").trim() || undefined,
-      mode: String(mode || "").trim() || undefined,
-      category: String(category || "").trim() || undefined,
+      point: text(point) || undefined,
+      mode: text(mode) || undefined,
+      category: text(category) || undefined,
       chosenAction,
       chosenReason,
-      chosenReasonLabel: String(chosenReasonLabel || "").trim() || undefined,
-      chosenStage: String(chosenStage || "").trim() || undefined,
+      chosenReasonLabel: text(chosenReasonLabel) || undefined,
+      chosenStage: text(chosenStage) || undefined,
       candidateActions: normalizedCandidateActions,
       deferredActions: Array.isArray(deferredActions) ? deferredActions : [],
       triggeredActions: normalizedTriggeredActions.length
@@ -80,17 +81,17 @@ function appendWorkflowExecutionResult(
 ) {
   const normalizedDuration = Number.isFinite(Number(durationMs)) ? Number(durationMs) : undefined;
   const normalizedRetryCount = Number.isFinite(Number(retryCount)) ? Number(retryCount) : undefined;
-  const normalizedErrorCode = String(errorCode || "").trim() || undefined;
+  const normalizedErrorCode = text(errorCode) || undefined;
   return appendCapabilityLog(ctx, {
     domain,
     event: WORKFLOW_EVENTS.executionResult,
     detail: {
-      point: String(point || "").trim() || undefined,
-      mode: String(mode || "").trim() || undefined,
-      category: String(category || "").trim() || undefined,
+      point: text(point) || undefined,
+      mode: text(mode) || undefined,
+      category: text(category) || undefined,
       chosenAction,
       chosenReason,
-      chosenReasonLabel: String(chosenReasonLabel || "").trim() || undefined,
+      chosenReasonLabel: text(chosenReasonLabel) || undefined,
       requestedAction,
       executedPrimary: executedPrimary === true,
       executedFollowup: executedFollowup === true,
@@ -110,7 +111,7 @@ function captureWorkflowLogCursor(ctx = {}, domain = "") {
 }
 
 function resolveEventErrorCode(eventName = "") {
-  const normalized = String(eventName || "").trim();
+  const normalized = text(eventName);
   if (!normalized) return "";
   if (normalized.endsWith("_failed") || normalized.endsWith("_error")) {
     return normalized.toUpperCase();
@@ -120,7 +121,7 @@ function resolveEventErrorCode(eventName = "") {
 
 function resolveThrownErrorCode(error = null) {
   if (!error || typeof error !== "object") return "";
-  const code = String(error?.code || error?.name || "").trim();
+  const code = text(error?.code || error?.name);
   if (!code) return "";
   return code
     .replaceAll(/[^a-zA-Z0-9]+/g, "_")
@@ -138,7 +139,7 @@ function resolveWorkflowExecutionMetrics(ctx = {}, { domain = "", startCursor = 
   let retryCount = 0;
   let errorCode = "";
   for (const item of slice) {
-    const eventName = String(item?.event || "").trim();
+    const eventName = text(item?.event);
     if (!eventName) continue;
     if (eventName === WORKFLOW_EVENTS.reasoningRetryScheduled) {
       retryCount += 1;

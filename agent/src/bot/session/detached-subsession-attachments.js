@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ATTACHMENT_SOURCE } from "@noobot/attachment-protocol";
+import { text } from "@noobot/shared/value";
 
 export async function transferCanonicalAttachmentsToSubSession({
   attachmentService = null,
@@ -39,10 +40,10 @@ async function transferCanonicalAttachment({
   attachment,
   attachmentPolicy,
 }) {
-  const attachmentId = String(attachment?.attachmentId || "").trim();
-  const path = String(attachment?.path || "").trim();
+  const attachmentId = text(attachment?.attachmentId);
+  const path = text(attachment?.path);
   if (!attachmentId || !path) return attachment;
-  const attachmentSessionId = String(attachment?.sessionId || "").trim();
+  const attachmentSessionId = text(attachment?.sessionId);
   if (attachmentSessionId === subSessionId) return attachment;
   assertParentAttachmentOwnership(attachmentSessionId, parentSessionId);
   assertCanonicalAttachmentService(attachmentService);
@@ -72,7 +73,7 @@ async function transferCanonicalAttachment({
       createTransferredAttachment(attachment, parentRecord, sourceContent, attachmentId),
     ],
   });
-  if (!transferred || String(transferred?.sessionId || "").trim() !== subSessionId) {
+  if (!transferred || text(transferred?.sessionId) !== subSessionId) {
     throw new Error("detached sub-session attachment transfer did not create child ownership");
   }
   return transferred;

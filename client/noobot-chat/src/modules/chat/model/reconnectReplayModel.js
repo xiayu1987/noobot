@@ -19,14 +19,15 @@ import {
 import { parseTimeMs } from "./timeFields.js";
 import { isAuthoritativeTerminalState } from "../runtime/sessionRunStateMachine.js";
 import { hydrateTurnSnapshot } from "../runtime/engine/turnProjectionStore.js";
+import { text } from "@noobot/shared/value";
 
 function isSessionEntryRunning(sessionEntry = {}) {
-  const sessionId = String(sessionEntry?.sessionId || "").trim();
+  const sessionId = text(sessionEntry?.sessionId);
   const snapshot = sessionEntry?.replayBatch?.snapshot || {};
   const activeTurn = snapshot?.activeTurn || snapshot?.payload?.activeTurn || {};
-  const activeTurnSessionId = String(activeTurn?.sessionId || snapshot?.sessionId || "").trim();
-  const activeTurnScopeId = String(activeTurn?.turnScopeId || "").trim();
-  const activeTurnState = String(activeTurn?.state || "").trim();
+  const activeTurnSessionId = text(activeTurn?.sessionId || snapshot?.sessionId);
+  const activeTurnScopeId = text(activeTurn?.turnScopeId);
+  const activeTurnState = text(activeTurn?.state);
   if (!activeTurnState || isAuthoritativeTerminalState(activeTurnState)) return false;
   return Boolean(sessionId && activeTurnSessionId === sessionId && activeTurnScopeId);
 }
@@ -44,16 +45,16 @@ function isDialogProcessRecoverable(sessionEntry = {}) {
 }
 
 function findRecoverableReconnectSessionId(sessionsPayload = [], preferredSessionId = "") {
-  const preferred = String(preferredSessionId || "").trim();
+  const preferred = text(preferredSessionId);
   if (preferred) {
     const preferredEntry = (Array.isArray(sessionsPayload) ? sessionsPayload : []).find(
-      (sessionEntry) => String(sessionEntry?.sessionId || "").trim() === preferred,
+      (sessionEntry) => text(sessionEntry?.sessionId) === preferred,
     );
 
     if (preferredEntry) return preferred;
   }
   for (const sessionEntry of Array.isArray(sessionsPayload) ? sessionsPayload : []) {
-    const sessionId = String(sessionEntry?.sessionId || "").trim();
+    const sessionId = text(sessionEntry?.sessionId);
     if (!sessionId) continue;
     if (isSessionEntryRunning(sessionEntry)) return sessionId;
     if (hasPendingInteractions(sessionEntry)) return sessionId;
@@ -86,7 +87,7 @@ function findLatestPendingAssistantAfterLastUser(messages = []) {
 }
 
 function normalizeMessageContentForCompare(content = "") {
-  return String(content || "").trim();
+  return text(content);
 }
 
 function hasArrayItems(value = null) {
@@ -106,7 +107,7 @@ function messageCompareKey(messageItem = {}) {
     const attachmentKey = getMessageAttachments(messageItem)
       .map((attachmentItem) =>
         [attachmentItem?.name, attachmentItem?.attachmentId, attachmentItem?.size]
-          .map((item) => String(item || "").trim())
+          .map((item) => text(item))
           .join(":"),
       )
       .join(",");
@@ -157,13 +158,13 @@ function mergeCurrentUserMessagesIntoFoldedMessages({
 function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   const nextRole = getMessageRole(nextMessage);
   if (nextRole === RoleEnum.ASSISTANT) {
-    const presentationMessageId = String(nextMessage?.presentationMessageId || "").trim();
+    const presentationMessageId = text(nextMessage?.presentationMessageId);
     if (!presentationMessageId) return null;
     return (
       existingMessages.find(
         (existingMessage) =>
           getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
-          String(existingMessage?.presentationMessageId || "").trim() === presentationMessageId,
+          text(existingMessage?.presentationMessageId) === presentationMessageId,
       ) || null
     );
   }
@@ -220,7 +221,7 @@ function patchMessageObjectPreservingUiState(
   const exactTurnSnapshot = Boolean(
     sourceTurnScopeId &&
     sourceTurnScopeId === getMessageTurnScopeId(targetMessage) &&
-    String(sourceMessage?.sessionId || "").trim() === String(targetMessage?.sessionId || "").trim(),
+    text(sourceMessage?.sessionId) === text(targetMessage?.sessionId),
   );
   if (exactTurnSnapshot) {
     hydrateTurnSnapshot({
@@ -232,7 +233,7 @@ function patchMessageObjectPreservingUiState(
     });
   } else {
     patchNonTurnMessageMetadata(targetMessage, sourceMessage);
-    if (existingContent.trim() && !String(sourceMessage?.content || "").trim()) {
+    if (existingContent.trim() && !text(sourceMessage?.content)) {
       targetMessage.content = existingContent;
     }
     if (existingAttachments.length && !getMessageAttachments(sourceMessage).length) {
@@ -251,13 +252,13 @@ function patchMessageObjectPreservingUiState(
     const transferAttachments = getMessageTransferAttachments(targetMessage);
     const existingAttachmentKeys = new Set(
       (Array.isArray(targetMessage.attachments) ? targetMessage.attachments : [])
-        .map((item) => String(item?.attachmentId || item?.identity?.attachmentId || "").trim())
+        .map((item) => text(item?.attachmentId || item?.identity?.attachmentId))
         .filter(Boolean),
     );
     targetMessage.attachments = [
       ...(Array.isArray(targetMessage.attachments) ? targetMessage.attachments : []),
       ...transferAttachments.filter((item) => {
-        const key = String(item?.attachmentId || item?.identity?.attachmentId || "").trim();
+        const key = text(item?.attachmentId || item?.identity?.attachmentId);
         if (!key || existingAttachmentKeys.has(key)) return false;
         existingAttachmentKeys.add(key);
         return true;

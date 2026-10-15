@@ -16,6 +16,7 @@ import {
 } from "@noobot/context-protocol/assembly/hook-context";
 import { emitAgentContextProtocolDebug } from "../../observability/agent-context-protocol-debug.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { text } from "@noobot/shared/value";
 
 const STATE_COMMIT_HOOK_POINTS = new Set([
   HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
@@ -48,8 +49,8 @@ function toFiniteNumberOrNull(value) {
 }
 
 function resolveToolName(raw = {}, call = null) {
-  if (raw?.toolName) return String(raw.toolName || "").trim();
-  return String(call?.name || "").trim() || null;
+  if (raw?.toolName) return text(raw.toolName);
+  return text(call?.name) || null;
 }
 
 function assertNoForbiddenHookFields(safeRaw = {}) {
@@ -70,14 +71,14 @@ function normalizeToolCallFields(raw = {}) {
     calls: resolveCalls(raw),
     call,
     toolName: resolveToolName(raw, call),
-    commitType: raw?.commitType ? String(raw.commitType || "").trim() : null,
+    commitType: raw?.commitType ? text(raw.commitType) : null,
   };
 }
 
 function normalizeHookFields(point = "", safeRaw = {}, hookFields = {}) {
   return {
     ...hookFields,
-    point: String(point || safeRaw?.point || "").trim(),
+    point: text(point || safeRaw?.point),
     ...pickNullable(safeRaw, ["phase", "status", "startedAt", "endedAt"]),
     durationMs: toFiniteNumberOrNull(safeRaw?.durationMs),
     ...pickNullable(safeRaw, ["agentContext", "result", "error"]),
@@ -100,7 +101,7 @@ function emitHookDocumentConsumed(runtime = {}, context = {}) {
 }
 
 function emitHookContextTrace(point = "", runtime = {}, context = {}) {
-  const normalizedPoint = String(point || "").trim();
+  const normalizedPoint = text(point);
   if (normalizedPoint !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
   emitModelContextTrace(runtime.eventListener, "hook_context_built", {
     point: normalizedPoint,
@@ -135,7 +136,7 @@ function isValidationEnabled(runtime = {}) {
 
 function validateHookContext(point = "", runtime = {}, context = {}) {
   if (!isValidationEnabled(runtime)) return;
-  const normalizedPoint = String(point || "").trim();
+  const normalizedPoint = text(point);
   if (!normalizedPoint) return;
   const warnings = [...validateHookContextProtocol(context, { point: normalizedPoint }).warnings];
   if (STATE_COMMIT_HOOK_POINTS.has(normalizedPoint) && context?.payload == null) {

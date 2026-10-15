@@ -34,20 +34,19 @@ import {
   throwIfWorkflowAborted,
   withTimeout,
 } from "./runtime.js";
+import { text } from "@noobot/shared/value";
 
 function buildWorkflowNodeInstruction(step = {}) {
-  const locale = String(step?.locale || "").trim();
-  const taskText = String(
-    step?.nodeTask || step?.task || step?.instruction || step?.mission || "",
-  ).trim();
+  const locale = text(step?.locale);
+  const taskText = text(step?.nodeTask || step?.task || step?.instruction || step?.mission);
   if (taskText) return taskText;
-  const nodeName = String(step?.nodeName || "").trim();
+  const nodeName = text(step?.nodeName);
   if (nodeName) {
     return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_NAME, {
       name: nodeName,
     });
   }
-  const nodeId = String(step?.nodeId || "").trim();
+  const nodeId = text(step?.nodeId);
   if (nodeId)
     return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_ID, {
       id: nodeId,
@@ -56,34 +55,30 @@ function buildWorkflowNodeInstruction(step = {}) {
 }
 
 function resolveNodeTaskForPendingStep({ semantic = {}, pendingStep = {} } = {}) {
-  const pendingNodeId = String(pendingStep?.nodeId || "").trim();
-  const pendingNodeName = String(pendingStep?.nodeName || "").trim();
+  const pendingNodeId = text(pendingStep?.nodeId);
+  const pendingNodeName = text(pendingStep?.nodeName);
   const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
   const matchedNode = nodes.find((node = {}) => {
-    const nodeId = String(node?.id || "").trim();
-    const nodeName = String(node?.name || "").trim();
+    const nodeId = text(node?.id);
+    const nodeName = text(node?.name);
     if (pendingNodeId && nodeId && pendingNodeId === nodeId) return true;
     if (pendingNodeName && nodeName && pendingNodeName === nodeName) return true;
     return false;
   });
   if (!matchedNode) return "";
-  return String(
-    matchedNode?.task ||
-      matchedNode?.taskText ||
-      matchedNode?.instruction ||
-      matchedNode?.mission ||
-      "",
-  ).trim();
+  return text(
+    matchedNode?.task || matchedNode?.taskText || matchedNode?.instruction || matchedNode?.mission,
+  );
 }
 
 export function resolveSemanticNodeForPendingStep({ semantic = {}, pendingStep = {} } = {}) {
-  const pendingNodeId = String(pendingStep?.nodeId || "").trim();
-  const pendingNodeName = String(pendingStep?.nodeName || "").trim();
+  const pendingNodeId = text(pendingStep?.nodeId);
+  const pendingNodeName = text(pendingStep?.nodeName);
   const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
   return (
     nodes.find((node = {}) => {
-      const nodeId = String(node?.id || "").trim();
-      const nodeName = String(node?.name || "").trim();
+      const nodeId = text(node?.id);
+      const nodeName = text(node?.name);
       if (pendingNodeId && nodeId && pendingNodeId === nodeId) return true;
       if (pendingNodeName && nodeName && pendingNodeName === nodeName) return true;
       return false;
@@ -163,9 +158,9 @@ function resolveNodeAgentIdentity({ nodeIdentity, instanceId, pendingStep, ctx }
   if (!nodeIdentity || typeof nodeIdentity !== "object") {
     throw new TypeError("workflow node identity is required");
   }
-  const dialogProcessId = String(nodeIdentity.dialogProcessId || "").trim();
-  const turnScopeId = String(nodeIdentity.turnScopeId || "").trim();
-  const activeChildExecutionId = String(nodeIdentity.activeChildExecutionId || "").trim();
+  const dialogProcessId = text(nodeIdentity.dialogProcessId);
+  const turnScopeId = text(nodeIdentity.turnScopeId);
+  const activeChildExecutionId = text(nodeIdentity.activeChildExecutionId);
   if (!dialogProcessId || !turnScopeId || !activeChildExecutionId) {
     throw new TypeError(
       "workflow node identity requires dialogProcessId, turnScopeId and activeChildExecutionId",
@@ -313,7 +308,7 @@ function createWorkflowNodeSubSessionRequest(params) {
 function buildWorkflowNodeRunConfigPatch(ctx, identity) {
   const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
   const selectedPlugins = Array.isArray(parentRunConfig.selectedPlugins)
-    ? parentRunConfig.selectedPlugins.map((item) => String(item || "").trim()).filter(Boolean)
+    ? parentRunConfig.selectedPlugins.map((item) => text(item)).filter(Boolean)
     : [];
   const harness =
     parentRunConfig.plugins?.harness && typeof parentRunConfig.plugins.harness === "object"
@@ -322,9 +317,7 @@ function buildWorkflowNodeRunConfigPatch(ctx, identity) {
   const harnessEnabled =
     selectedPlugins.includes("harness") ||
     harness.enabled === true ||
-    String(harness.mode || "")
-      .trim()
-      .toLowerCase() === "on";
+    text(harness.mode).toLowerCase() === "on";
   const patch = {
     ...(hasOwnObjectKey(parentRunConfig, "streaming")
       ? { streaming: parentRunConfig.streaming }
@@ -345,8 +338,8 @@ function buildWorkflowNodeRunConfigPatch(ctx, identity) {
 function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
   return {
     sessionId: identity.sessionId,
-    parentSessionId: String(ctx?.sessionId || "").trim(),
-    parentDialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    parentSessionId: text(ctx?.sessionId),
+    parentDialogProcessId: text(ctx?.dialogProcessId),
     dialogProcessId: identity.dialogProcessId,
     turnScopeId: identity.turnScopeId,
     commandId: identity.commandId,
@@ -363,7 +356,7 @@ function buildWorkflowNodeSubSessionMetadata(params) {
   const { ctx, resolvedNodeIdentity: identity } = params;
   return {
     scope: "workflow_node",
-    instanceId: String(params.instanceId || "").trim(),
+    instanceId: text(params.instanceId),
     workflowRunId: identity.workflowRunId,
     executionId: identity.activeChildExecutionId,
     parentExecutionId: identity.workflowExecutionId,
@@ -380,7 +373,7 @@ function buildWorkflowNodeSubSessionMetadata(params) {
     nodeName: identity.nodeName,
     transition: Number(params.transition || 0),
     turnScopeId: identity.turnScopeId,
-    workflowSessionId: String(ctx?.sessionId || "").trim(),
+    workflowSessionId: text(ctx?.sessionId),
     workflowDialogProcessId: identity.dialogProcessId,
     upstreamWorkflowNodeResults: params.upstreamNodeResults,
   };
@@ -411,7 +404,7 @@ async function persistWorkflowNodeSubSession(params, subSession) {
     transition: params.transition,
     nodeIdentity: {
       ...params.resolvedNodeIdentity,
-      sessionId: String(subSession.sessionId || "").trim(),
+      sessionId: text(subSession.sessionId),
     },
   });
 }
@@ -453,7 +446,7 @@ function createNodeAgentResult(action, subSession, identity) {
     action,
     subSession,
     nodeDialogProcessId: identity.dialogProcessId,
-    nodeIdentity: { ...identity, sessionId: String(subSession?.sessionId || "").trim() },
+    nodeIdentity: { ...identity, sessionId: text(subSession?.sessionId) },
   };
 }
 
@@ -473,7 +466,7 @@ function createFailedNodeAgentResult(pendingStep, subSession, failure, identity)
 }
 
 function buildPendingStepKey(step = {}) {
-  return `${String(step?.nodeName || "").trim()}::${Number(step?.nodeType || 0)}`;
+  return `${text(step?.nodeName)}::${Number(step?.nodeType || 0)}`;
 }
 
 export function resolveStepIndexForAction({

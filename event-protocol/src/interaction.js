@@ -122,7 +122,7 @@ export function validateInteractionRequestPayload(data = {}) {
   }
   const lifecycle = normalizeInteractionLifecycle(data.lifecycle);
   if (
-    String(data.lifecycle || "").trim() &&
+    text(data.lifecycle) &&
     lifecycle === INTERACTION_LIFECYCLE.PENDING &&
     text(data.lifecycle).toLowerCase() !== lifecycle
   ) {

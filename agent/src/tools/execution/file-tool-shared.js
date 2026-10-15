@@ -10,6 +10,7 @@ import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapt
 import { resolveFileMutationRoot } from "./file-mutation-service.js";
 import { formatLinesWithNumbers, splitLines, toPositiveInt } from "./file-utils.js";
 import { tTool } from "../core/tool-i18n.js";
+import { text } from "@noobot/shared/value";
 
 export function buildLineNumberedNearbyContent(content = "", targetLine = 1, radius = 3) {
   const rawContent = String(content || "");
@@ -31,7 +32,7 @@ export function buildLineNumberedNearbyContent(content = "", targetLine = 1, rad
 }
 
 export function resourceFileName(resource) {
-  return path.basename(String(resource?.logical?.path || "").trim());
+  return path.basename(text(resource?.logical?.path));
 }
 
 export function mutationLogicalPath(pathRef) {
@@ -68,7 +69,7 @@ export function buildFileToolDescription(agentContext = {}, descriptionKey = "")
       ? []
       : [tTool(agentContext, "tools.file.symbolicLinkRule")]),
   ]
-    .map((item) => String(item || "").trim())
+    .map((item) => text(item))
     .filter(Boolean)
     .join(" ");
 }
@@ -96,7 +97,7 @@ export function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
     return "";
   })();
   return [baseText, modeText]
-    .map((item) => String(item || "").trim())
+    .map((item) => text(item))
     .filter(Boolean)
     .join(" ");
 }

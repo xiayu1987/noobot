@@ -28,6 +28,7 @@ import {
   NATIVE_SCRIPT_IPC_RESULT_CHANNEL,
   isNativeScriptIpcMessage,
 } from "./native-script-ipc.js";
+import { text } from "@noobot/shared/value";
 
 function createHostBridge() {
   const pending = new Map();
@@ -202,9 +203,7 @@ export function buildLibreOfficeUserInstallationUrl(tempRoot) {
 }
 
 export function resolveLibreOfficeOutputFormat(outputFormat) {
-  const format = String(outputFormat || "")
-    .trim()
-    .toLowerCase();
+  const format = text(outputFormat).toLowerCase();
   if (!/^[a-z0-9_-]{1,32}$/i.test(format)) {
     throw new Error("LibreOffice output format is invalid");
   }
@@ -257,8 +256,8 @@ function normalizeInteractionFields(value) {
     if (!field || typeof field !== "object" || Array.isArray(field)) {
       throw new TypeError(`ui.waitForUser field ${index} must be an object`);
     }
-    const name = String(field.name || "").trim();
-    const displayName = String(field.displayName || "").trim();
+    const name = text(field.name);
+    const displayName = text(field.displayName);
     if (!name) throw new TypeError(`ui.waitForUser field ${index} requires name`);
     if (!displayName) throw new TypeError(`ui.waitForUser field ${index} requires displayName`);
     return {
@@ -437,8 +436,8 @@ export async function createNativeScriptRuntime({
     return createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative });
   };
   const tempFile = async (parentOrRelative, name = "") => {
-    const parent = String(parentOrRelative || "").trim();
-    const child = String(name || "").trim();
+    const parent = text(parentOrRelative);
+    const child = text(name);
     if (child && isTaskPath(child, { allowRoot: true })) {
       throw new Error("output.tempFile requires tempDirectoryToken before fileName");
     }
@@ -469,7 +468,7 @@ export async function createNativeScriptRuntime({
     return token;
   };
   const resolveWritableTaskPath = async (reference, { allowRoot = false, label }) => {
-    const value = String(reference || "").trim();
+    const value = text(reference);
     const kind = isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT, allowRoot })
       ? TASK_PATH_KINDS.OUTPUT
       : isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP, allowRoot })
@@ -489,7 +488,7 @@ export async function createNativeScriptRuntime({
     return { kind, target, token: parsed.token };
   };
   const resolveReadableFile = async (reference, label) => {
-    const value = String(reference || "").trim();
+    const value = text(reference);
     let target;
     if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT })) {
       target = await resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
@@ -570,7 +569,7 @@ export async function createNativeScriptRuntime({
         );
       }
       const { target: source } = await resolveReadableFile(inputPath, "libreoffice.convert input");
-      const outputDirectoryValue = String(outputDirectory || "").trim();
+      const outputDirectoryValue = text(outputDirectory);
       if (
         !["", "."].includes(outputDirectoryValue) &&
         !declaredDirectoryTokens.has(outputDirectoryValue)
@@ -591,7 +590,7 @@ export async function createNativeScriptRuntime({
       const targetDir = targetDirectory.target;
       await mkdir(targetDir, { recursive: true });
       const format = resolveLibreOfficeOutputFormat(outputFormat);
-      const executable = String(libreOfficeExecutable || "").trim();
+      const executable = text(libreOfficeExecutable);
       if (!executable) {
         throw new Error("LibreOffice executable was not resolved by native process policy");
       }

@@ -60,6 +60,7 @@ import {
   beginAssistantMessageEventStream,
   currentAssistantPresentationMessageId,
 } from "../../events/message-event-stream.js";
+import { text } from "@noobot/shared/value";
 export {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForLangChain,
@@ -304,7 +305,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     status: HOOK_PHASE_STATUS.RUNNING,
     startedAt: llmStartedAt,
     toolChoice: configuredToolChoice || "",
-    toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
+    toolNames: boundTools.map((tool) => text(tool?.name)).filter(Boolean),
     modelContext,
     maxTurns: Number(loopState?.maxTurns || 0),
     agentContext: modelState.agentContext,

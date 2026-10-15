@@ -6,6 +6,7 @@
 <script setup>
 import { computed } from "vue";
 import { useWorkflowLocale } from "../i18n/index.js";
+import { text } from "@noobot/shared/value";
 
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },
@@ -17,11 +18,11 @@ const pluginConfig = computed(() => props.pluginContext.config.get());
 const { translate } = useWorkflowLocale();
 
 function getWorkflowSemanticModel() {
-  return String(pluginConfig.value?.semanticModel || "").trim();
+  return text(pluginConfig.value?.semanticModel);
 }
 
 function onWorkflowSemanticModelChange(value = "") {
-  const nextValue = String(value || "").trim();
+  const nextValue = text(value);
   props.pluginContext.config.patch({ semanticModel: nextValue });
 }
 </script>

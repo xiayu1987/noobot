@@ -5,12 +5,13 @@
  */
 import { TRANSFER_SOURCE } from "../constants.js";
 import { TRANSFER_REASON, TRANSFER_REASON_ALIAS } from "../vocabulary.js";
+import { text } from "@noobot/shared/value";
 
 const KNOWN_SOURCES = new Set(Object.values(TRANSFER_SOURCE));
 const KNOWN_REASONS = new Set(Object.values(TRANSFER_REASON));
 
 function normalizeString(value = "") {
-  return String(value || "").trim();
+  return text(value);
 }
 
 export function normalizeTransferSource(value = "", { fallback = TRANSFER_SOURCE.SERVICE } = {}) {
